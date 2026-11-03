@@ -28,11 +28,14 @@ import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/compos
 import type { LegacyTaskRunComposition } from '@/modules/task-execution/composition/localTaskRunSelection'
 import { composeTaskWorkspaceExcludeProfilesFor } from '@/modules/task-execution/composition/localTaskRunSelection'
 import {
-  selectTaskRunRootSelection,
+  bindTaskRunRootSelection,
   type TaskRunRootSelection,
 } from '@/modules/task-execution/composition/taskRunSelection'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import {
+  createFileRepositoryWorkspaceReadQueries,
+  createFileWorkspacePresenceQueries,
+} from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
@@ -175,7 +178,10 @@ export async function createEachProviderTaskExecution(
   } = {},
 ) {
   const completionMode = options.completionMode ?? 'await-settle'
-  const taskRunRoot = selectTaskRunRootSelection(options.taskRunSelection)
+  const taskRunRoot =
+    options.taskRunSelection === undefined
+      ? undefined
+      : bindTaskRunRootSelection(options.taskRunSelection)
   const runBinding =
     taskRunRoot === undefined
       ? {
@@ -305,6 +311,8 @@ export async function createEachProviderTaskExecution(
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        // RFC-431: the provider runtime takes the deployment's workspace reads as stated.
+        workspaceReads: createFileRepositoryWorkspaceReadQueries(),
         persistence,
         execution: composeProcessTaskExecutionBinding(sqlite),
         log: createLogger('task'),
@@ -478,6 +486,7 @@ export async function createEachProviderTaskExecution(
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      workspaceReads: createFileRepositoryWorkspaceReadQueries(),
       persistence,
       execution: composeSessionTaskExecutionBinding({
         daemonGeneration: `rfc359-execution-chain-${ulid()}`,

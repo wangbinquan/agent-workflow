@@ -1,4 +1,5 @@
 // RFC-392: select one development purpose binding for all application participants.
+// RFC-431: every deployment selects all three purposes; the standalone ones are composed here.
 import type {
   ApprovalAdapterBinding,
   RequirementAdapterBinding,
@@ -6,10 +7,9 @@ import type {
 import { createLocalDevelopmentAdapterEffects } from '@/modules/integration/composition/developmentAdapterProgram'
 import type { EvidenceStagingFactory } from '@/modules/development-automation/public/types'
 import {
-  createLocalEvidenceArtifactPort,
   createLocalEvidenceStagingFactory,
   createLocalEvidenceStagingNamespace,
-  createFileEvidenceDocumentCommands,
+  createFileEvidenceDocumentCommandsOnFirstWrite,
 } from '@/modules/development-automation/composition/evidenceStaging'
 import { assertEvidenceStagingFactory } from '@/modules/development-automation/public/participants'
 import { join } from 'node:path'
@@ -50,16 +50,15 @@ function assertPurposePair(
   }
 }
 
-/** Bootstrap selects each whole purpose pair once and forwards it to every subcomposition. */
-export function composeDevelopmentPurposeRoot(input: {
+/**
+ * RFC-431: the standalone purposes — the local adapter programs, staging into the selected evidence store.
+ * Nothing here touches the disk: the evidence store and the requirement document writer open on first use.
+ */
+export function composeLocalDevelopmentPurposes(input: {
   readonly appHome: string
-  readonly selection?: DevelopmentPurposeSelection
-  readonly evidenceArtifacts?: EvidenceArtifactPort
-}): SelectedDevelopmentPurposeRoot {
-  let evidence = input.evidenceArtifacts
-  const artifacts = (): EvidenceArtifactPort =>
-    (evidence ??= createLocalEvidenceArtifactPort(input.appHome))
-  const content = createLocalEvidenceStagingNamespace(artifacts)
+  readonly evidenceArtifacts: EvidenceArtifactPort
+}): DevelopmentPurposeSelection {
+  const content = createLocalEvidenceStagingNamespace(input.evidenceArtifacts)
   const native = createLocalDevelopmentAdapterEffects({
     namespace: content.namespace,
     resolveStaging: (reference) => content.resolve(reference),
@@ -77,57 +76,61 @@ export function composeDevelopmentPurposeRoot(input: {
       },
     }
   }
-  const requirement = input.selection?.requirement ?? {
-    ...nativeBinding('AW_REQUIREMENT_MOCK_URL'),
-    effects: native.requirement,
-    staging: createLocalEvidenceStagingFactory(content, {
-      kind: 'requirement',
-      root: join(input.appHome, 'evidence', 'staging'),
-    }),
-    // RFC-429: a deployment with its own document commands selects the whole requirement purpose.
-    get documentCommands() {
-      return createFileEvidenceDocumentCommands({
-        evidence: artifacts(),
-        stagingRoot: join(input.appHome, 'evidence', 'staging'),
-      })
-    },
-  }
-  const pipeline = input.selection?.pipeline ?? {
-    ...nativeBinding('AW_PIPELINE_MOCK_URL'),
-    effects: native.pipeline,
-    staging: {
-      collect: createLocalEvidenceStagingFactory(content, {
-        kind: 'temporary',
-        prefix: 'aw-pipeline-sink-',
+  const stagingRoot = join(input.appHome, 'evidence', 'staging')
+  return {
+    requirement: {
+      ...nativeBinding('AW_REQUIREMENT_MOCK_URL'),
+      effects: native.requirement,
+      staging: createLocalEvidenceStagingFactory(content, {
+        kind: 'requirement',
+        root: stagingRoot,
       }),
-      trigger: createLocalEvidenceStagingFactory(content, {
-        kind: 'temporary',
-        prefix: 'aw-pipeline-trigger-',
-      }),
-      rerun: createLocalEvidenceStagingFactory(content, {
-        kind: 'temporary',
-        prefix: 'aw-pipeline-rerun-',
+      documentCommands: createFileEvidenceDocumentCommandsOnFirstWrite({
+        evidence: input.evidenceArtifacts,
+        stagingRoot,
       }),
     },
+    pipeline: {
+      ...nativeBinding('AW_PIPELINE_MOCK_URL'),
+      effects: native.pipeline,
+      staging: {
+        collect: createLocalEvidenceStagingFactory(content, {
+          kind: 'temporary',
+          prefix: 'aw-pipeline-sink-',
+        }),
+        trigger: createLocalEvidenceStagingFactory(content, {
+          kind: 'temporary',
+          prefix: 'aw-pipeline-trigger-',
+        }),
+        rerun: createLocalEvidenceStagingFactory(content, {
+          kind: 'temporary',
+          prefix: 'aw-pipeline-rerun-',
+        }),
+      },
+    },
+    approval: {
+      ...nativeBinding('AW_APPROVAL_MOCK_URL'),
+      effects: native.approval,
+      staging: createLocalEvidenceStagingFactory(content, {
+        kind: 'temporary',
+        prefix: 'aw-approval-adapter-',
+      }),
+    },
   }
-  const approval = input.selection?.approval ?? {
-    ...nativeBinding('AW_APPROVAL_MOCK_URL'),
-    effects: native.approval,
-    staging: createLocalEvidenceStagingFactory(content, {
-      kind: 'temporary',
-      prefix: 'aw-approval-adapter-',
-    }),
-  }
+}
+
+/** Bootstrap checks each selected purpose pair once and forwards it to every subcomposition. */
+export function composeDevelopmentPurposeRoot(input: {
+  readonly selection: DevelopmentPurposeSelection
+  readonly evidenceArtifacts: EvidenceArtifactPort
+}): SelectedDevelopmentPurposeRoot {
+  const { requirement, pipeline, approval } = input.selection
   assertPurposePair(
     requirement,
     ['acquire', 'questionsWriteback', 'answersCollect'],
     [requirement.staging],
   )
-  // The selected writer is checked without evaluating the default native writer early.
-  if (
-    input.selection?.requirement !== undefined &&
-    typeof requirement.documentCommands?.writeDocument !== 'function'
-  ) {
+  if (typeof requirement.documentCommands?.writeDocument !== 'function') {
     throw new Error('development-purpose-document-commands-incomplete')
   }
   assertPurposePair(
@@ -136,12 +139,5 @@ export function composeDevelopmentPurposeRoot(input: {
     [pipeline.staging.collect, pipeline.staging.trigger, pipeline.staging.rerun],
   )
   assertPurposePair(approval, ['submit', 'lookup', 'observe'], [approval.staging])
-  return {
-    requirement,
-    pipeline,
-    approval,
-    get evidenceArtifacts() {
-      return artifacts()
-    },
-  }
+  return { requirement, pipeline, approval, evidenceArtifacts: input.evidenceArtifacts }
 }

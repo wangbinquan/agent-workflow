@@ -53,7 +53,6 @@ import {
   composeDaemonFusionModules,
   type DaemonFusionModules,
 } from '@/bootstrap/daemonModules/fusion'
-import { standaloneModuleAdapters } from '@/bootstrap/daemonModules/adapters'
 import { composeDaemonMemoryModules } from '@/bootstrap/daemonModules/memory'
 import { composeDaemonObservationModules } from '@/bootstrap/daemonModules/observation'
 import {
@@ -71,28 +70,15 @@ import {
 } from '@/bootstrap/daemonLifecycleProgram'
 import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
 import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
-import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { composeDevelopmentPurposeRoot } from './developmentPurposeRoot'
-import {
-  composeLocalTaskRunRootSelection,
-  composeTaskWorkspaceExcludeProfilesFor,
-} from '@/modules/task-execution/composition/localTaskRunSelection'
-import { selectTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
-import {
-  selectWorkspaceUploadContentFactory,
-  selectIsolationWorkspaceFactory,
-  selectRepositoryGitWorkspaceFactory,
-} from '@/modules/source-control/public/participants'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { bindTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
 import {
   composeLocalExecutionAuthority,
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
-import { type ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DigitalEmployeeModuleWithRuntime } from '@/modules/digital-employee/composition'
@@ -101,10 +87,8 @@ import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
-import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import type { Config } from '@agent-workflow/shared'
-import { join } from 'node:path'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
@@ -118,7 +102,6 @@ import {
   type SelectedTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeResourceLimitOperations } from './resourceLimits'
@@ -182,7 +165,6 @@ export interface DaemonApplicationInput<
   readonly token: string
   readonly appHome: string
   readonly configPath: string
-  readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
   readonly daemonInfoPath: string
   readonly daemonRuntime?: DaemonRuntimeQueries
@@ -314,35 +296,18 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     content,
     installation: installation.history,
   })
+  // RFC-431: the deployment states every selection below; nothing here substitutes a default.
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
-    appHome: input.appHome,
     selection: input.developmentPurposes,
     evidenceArtifacts: input.evidenceArtifacts,
   })
-  const selectedTaskRuns = selectTaskRunRootSelection(input.taskRunSelection)
-  const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
-    input.workspaceExcludeProfiles,
-  )
-  const nodeRunPrompts =
-    selectedTaskRuns === undefined
-      ? composeNodeRunPromptOperations(undefined, join(input.appHome, 'runs'))
-      : selectedTaskRuns.nodeRunPrompts
-  const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
-  const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
-  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(input.repositoryGitWorkspaces)
-  const workspaceReads = selectRepositoryWorkspaceReadQueries(input.workspaceReads)
+  const taskRunRoot = bindTaskRunRootSelection(input.taskRunSelection)
+  const { nodeRunPrompts, portArtifacts } = taskRunRoot
+  const workspaceExcludeProfilesFor = () => input.workspaceExcludeProfiles
+  const { workspaceUploads, isolationWorkspaces, repositoryGitWorkspaces, workspaceReads } = input
   const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
     actionWorkspaceEffects: input.actionWorkspaceEffects,
-    conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
   })
-  const portArtifacts =
-    selectedTaskRuns === undefined
-      ? composePortArtifactOperations(undefined, input.appHome)
-      : selectedTaskRuns.portArtifacts
-  const taskRunRoot =
-    selectedTaskRuns === undefined
-      ? composeLocalTaskRunRootSelection({ nodeRunPrompts, portArtifacts })
-      : selectedTaskRuns
   const applicationConfiguration = input.applicationConfiguration
   const configuration = applicationConfiguration.queries
   const taskLaunchConfiguration = input.taskLaunchConfiguration
@@ -361,7 +326,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const selectedCore = composeDaemonProviderCore({
     daemonToken: input.token,
     db: input.db,
-    ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
+    credentials: input.credentials,
     sourceWriteWindow: input.sourceWriteWindow,
     adapters: adapter.core(input),
     appHome: input.appHome,
@@ -397,7 +362,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   }
 
   const identityAccess = core.identityAccess
-  const standalone = standaloneModuleAdapters()
   const observationModules = composeDaemonObservationModules({
     db: input.db,
     appHome: input.appHome,
@@ -408,14 +372,11 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     runtimeRegistry: core.runtimeRegistry,
     mcpCatalog: () => mcpCatalog,
     adapters: {
-      ...standalone,
-      systemAgentRunFamily: input.systemAgentRunFamily ?? standalone.systemAgentRunFamily,
+      systemAgentRunFamily: input.systemAgentRunFamily,
       mcpDiagnostics:
-        phase.kind === 'daemon'
-          ? (input.mcpDiagnostics ?? standalone.mcpDiagnostics)
-          : phase.scope.createMcpRuntimeTests,
-      runtimeManagement: input.runtimeManagement ?? standalone.runtimeManagement,
-      workspacePresence: () => input.workspacePresence ?? standalone.workspacePresence(),
+        phase.kind === 'daemon' ? input.mcpDiagnostics : phase.scope.createMcpRuntimeTests,
+      runtimeManagement: input.runtimeManagement,
+      workspacePresence: input.workspacePresence,
     },
     mcpRuntimeTestDependencies: input.testSeams?.mcpRuntimeTestDependencies,
     runtimeDiagnosticTestDependencies: input.testSeams?.runtimeDiagnosticTestDependencies,
@@ -497,13 +458,12 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       reviewArtifacts,
       reviewRollbackSnapshots: input.reviewRollbackSnapshots,
       workspaceUploads,
-      inputFiles: input.taskInputFiles,
+      inputFiles: input.taskInputFiles === null ? undefined : input.taskInputFiles,
       preparationEffects: input.repositoryPreparationEffects,
       scratchEffects: input.scratchWorkspaceEffects,
-      recoverySelection: input.taskRecovery?.(identityAccess),
-      fusionWorkspaces:
-        input.fusionWorkspaceEffects ??
-        createFileFusionWorkspaceEffects({ appHome: input.appHome }),
+      recoverySelection:
+        input.taskRecovery === null ? undefined : input.taskRecovery(identityAccess),
+      fusionWorkspaces: input.fusionWorkspaceEffects,
     },
     alerts: {
       onAlert(row, transition) {
@@ -614,6 +574,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     workspaceEffects: developmentWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceArtifacts: input.evidenceArtifacts,
+    graphDevelopmentArtifacts: input.graphDevelopmentArtifacts,
     repositoryCandidateEffects: input.repositoryCandidateEffects,
     conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
     adapters: {
@@ -860,7 +821,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
     'task-execution-recovery': async () => {
       await runTaskExecutionBootRecovery({
-        recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
+        recoveryEffects: input.bootExecutionRecovery,
         persistence: taskExecutionPersistence,
         runtimeSessionLeases,
         lockProof: createDaemonRecoveryAuthorityProof(
@@ -897,7 +858,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       await digitalEmployee.maintenance.settleAutomaticUpgrades()
     },
     'hosted-targeted-resume': async () => {
-      const recoveredTaskIds = input.recoveredExecutionTaskIds?.() ?? []
+      const recoveredTaskIds = input.recoveredExecutionTaskIds()
       if (recoveredTaskIds.length > 0) {
         await taskExecutionProvider.autoResume.run({
           taskIds: recoveredTaskIds,

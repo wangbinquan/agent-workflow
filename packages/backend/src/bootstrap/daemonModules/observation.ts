@@ -9,8 +9,14 @@ import { composeSystemAgentObservations } from '@/modules/task-execution/composi
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
-import { type DaemonModuleAdapters } from './adapters'
+import type { DeploymentSelections } from '../deploymentProfile'
 import { type DaemonProviderCore } from './providerCore'
+
+/** RFC-431: the observation adapters are the deployment's own selections (standalone: the local families). */
+export type DaemonObservationAdapters = Pick<
+  DeploymentSelections,
+  'systemAgentRunFamily' | 'mcpDiagnostics' | 'runtimeManagement' | 'workspacePresence'
+>
 
 export interface DaemonObservationInput {
   readonly db: PersistenceDb
@@ -21,15 +27,15 @@ export interface DaemonObservationInput {
   readonly identityAccess: DaemonProviderCore['identityAccess']
   readonly runtimeRegistry: DaemonProviderCore['runtimeRegistry']
   readonly mcpCatalog: () => McpCatalogModule
-  readonly adapters: DaemonModuleAdapters
+  readonly adapters: DaemonObservationAdapters
   readonly mcpRuntimeTestDependencies?: Partial<
     Pick<
-      Parameters<DaemonModuleAdapters['mcpDiagnostics']>[0],
+      Parameters<DaemonObservationAdapters['mcpDiagnostics']>[0],
       'runFn' | 'now' | 'capacity' | 'appHome'
     >
   >
   readonly runtimeDiagnosticTestDependencies?: Parameters<
-    DaemonModuleAdapters['runtimeManagement']
+    DaemonObservationAdapters['runtimeManagement']
   >[0]['runtimeDiagnosticTestDependencies']
 }
 
@@ -46,7 +52,7 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
   const intentSystemAgentBinding = family()
   const narrativeSystemAgentBinding = family()
   const intentHttpSystemAgentBinding = family()
-  const workspacePresence = input.adapters.workspacePresence()
+  const workspacePresence = input.adapters.workspacePresence
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(input.db)
   const mcpRuntimeTests = input.adapters.mcpDiagnostics({
     observe:

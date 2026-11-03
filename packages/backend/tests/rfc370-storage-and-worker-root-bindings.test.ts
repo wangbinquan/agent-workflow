@@ -172,7 +172,11 @@ test('CLI initial and replacement sessions forward the same selected storage obj
   expect(compact(initializer.expression, source)).toBe('Object.freeze')
   const value = objectArgument(initializer)
   expect(compact(value, source)).toContain('...profile.selections,')
-  expectDeploymentSelection('maintenanceEffectsBootstrap', 'MaintenanceWorkerEffectsDescriptor')
+  // RFC-431: a hosted-only capability; the standalone profile states null.
+  expectDeploymentSelection(
+    'maintenanceEffectsBootstrap',
+    'MaintenanceWorkerEffectsDescriptor | null',
+  )
   const sessions = namedCalls(source, source, 'composeDaemonSession')
   expect(sessions).toHaveLength(2)
   for (const call of sessions) {
@@ -199,9 +203,10 @@ test('CLI initial and replacement sessions forward the same selected storage obj
   }
 })
 
-test('both actual HTTP composers select complete workspace and package owners with lazy native defaults', () => {
+// RFC-431: the profile states both owners (standalone: local workspace content and the local plugin root).
+test('both actual HTTP composers take the stated workspace and package owners', () => {
   for (const [path, receiver, workspaceReceiver] of [
-    ['bootstrap/daemonHttpComposition.ts', 'input.selections?', 'input.selections?'],
+    ['bootstrap/daemonHttpComposition.ts', 'input.selections', 'input.selections'],
   ] as const) {
     const source = load(path)
     const workspace = oneRoot(source, 'composeTaskWorkspaceQueries')
@@ -228,32 +233,11 @@ test('both actual HTTP composers select complete workspace and package owners wi
     expect(compact(property(packages, source, 'skillPackageContent'), source)).toBe(
       `${receiver}.resourcePackageSkillContent`,
     )
-    const spreads = packages.properties.filter(ts.isSpreadAssignment)
-    expect(spreads).toHaveLength(1)
-    const selection = spreads[0]!.expression
-    if (
-      !ts.isParenthesizedExpression(selection) ||
-      !ts.isConditionalExpression(selection.expression)
-    )
-      throw new Error('native package construction must stay inside its lazy branch')
-    const choice = selection.expression
-    expect(compact(choice.condition, source)).toBe(
-      `${receiver}.resourcePackagePluginArtifacts===undefined`,
-    )
-    if (
-      !ts.isObjectLiteralExpression(choice.whenTrue) ||
-      !ts.isObjectLiteralExpression(choice.whenFalse)
-    )
-      throw new Error('complete selected and native owner branches required')
-    expect(choice.whenTrue.properties).toHaveLength(1)
-    expect(choice.whenFalse.properties).toHaveLength(1)
-    expect(property(choice.whenTrue, source, 'pluginInstaller')).toBeDefined()
-    expect(compact(property(choice.whenFalse, source, 'pluginArtifacts'), source)).toBe(
+    expect(packages.properties.filter(ts.isSpreadAssignment)).toHaveLength(0)
+    expect(compact(property(packages, source, 'pluginArtifacts'), source)).toBe(
       `${receiver}.resourcePackagePluginArtifacts`,
     )
-    expect(
-      namedCalls(choice.whenFalse, source, 'createResourcePackagePluginInstaller'),
-    ).toHaveLength(0)
+    expect(namedCalls(source, source, 'createResourcePackagePluginInstaller')).toHaveLength(0)
   }
 })
 
@@ -295,7 +279,7 @@ test('RFC-383 one employee case participant supplies workspace and platform work
   expect(calls).toHaveLength(1)
   expectLexicalInput(calls[0]!, source, 'composeDaemonDigitalEmployeeModules')
   expect(compact(property(objectArgument(calls[0]!), source, 'effects'), source)).toBe(
-    'input.adapters?.employeeCaseWorkspaceEffects',
+    'input.adapters.employeeCaseWorkspaceEffects',
   )
   expect(compact(oneRoot(source, 'composeDevelopmentEmployeeWorkspace'), source)).toContain(
     'sourceControl,',
@@ -334,7 +318,11 @@ test('all three original checkpoint consumers await the selected receipt before 
 test('public root types expose existing complete contracts without adding partial callback ports', () => {
   for (const [key, type] of Object.entries(fields))
     expectDeploymentSelection(key as keyof DeploymentSelections, type)
-  expectDeploymentSelection('maintenanceEffectsBootstrap', 'MaintenanceWorkerEffectsDescriptor')
+  // RFC-431: a hosted-only capability; the standalone profile states null.
+  expectDeploymentSelection(
+    'maintenanceEffectsBootstrap',
+    'MaintenanceWorkerEffectsDescriptor | null',
+  )
   // RFC-430: derived from skillContent.packageContent and actionWorkspaceEffects.contents.
   expectNoDeploymentSelection('resourcePackageSkillContent')
   expectNoDeploymentSelection('automationWorkspaceEffects')
@@ -355,9 +343,14 @@ test('RFC-383 workspace selection reaches the three shared consumers and the HTT
     expect(compact(property(selection, source, 'actionWorkspaceEffects'), source)).toBe(
       receiver + '.actionWorkspaceEffects',
     )
-    expect(compact(property(selection, source, 'conflictWorkspaceSelected'), source)).toBe(
-      receiver + '.conflictMergeWorkspaceEffects!==undefined',
-    )
+    // RFC-431: every deployment selects the action workspace; no conflict pairing flag remains.
+    expect(
+      selection.properties.some(
+        (node) =>
+          ts.isPropertyAssignment(node) &&
+          compact(node.name, source) === 'conflictWorkspaceSelected',
+      ),
+    ).toBe(false)
     for (const name of [
       'composeDaemonDigitalEmployeeModules',
       'composeDaemonDevelopmentAutomationModules',

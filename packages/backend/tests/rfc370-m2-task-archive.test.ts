@@ -147,7 +147,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     )
     const result = await command.runSweep(
       { enabled: true, retentionDays: 1 },
-      { ...binding.locations, now: 100 * 86400_000 },
+      { ...binding.locations!, now: 100 * 86400_000 },
     )
     expect(result.archived).toHaveLength(1)
     expect([...result.archived[0]!.taskIds].sort()).toEqual(['child', 'parent'])
@@ -199,7 +199,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     )
     await command.runSweep(
       { enabled: true, retentionDays: 1 },
-      { ...first.locations, now: 100 * 86400_000 },
+      { ...first.locations!, now: 100 * 86400_000 },
     )
     expect(lost).toBe(true)
     expect(await readTaskFixtures(f.db)).toHaveLength(2)
@@ -209,7 +209,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
       o2Ports(f.db).collaborationReads.archive,
       second,
     )
-    await recovery.recover({ ...second.locations, now: 101 * 86400_000 })
+    await recovery.recover({ ...second.locations!, now: 101 * 86400_000 })
     expect(await readTaskFixtures(f.db)).toHaveLength(0)
     expect(await second.readText('cs-archive:tasks/parent/runs/child/node/prompt.md')).toBe(
       'task file child',

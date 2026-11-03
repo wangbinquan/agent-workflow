@@ -103,7 +103,6 @@ describeEachProvider('RFC-370 published purpose programs and coherent staging', 
       return binding.configurationFor(configured)
     }
     const root = composeDevelopmentPurposeRoot({
-      appHome: 'unused-selected-home',
       evidenceArtifacts: content.evidence,
       selection: { requirement, pipeline, approval },
     })

@@ -20,9 +20,11 @@ import { composeRunObservationCalls } from '@/modules/run-observability/composit
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 import {
-  composeLocalTaskRunRootSelection,
+  composeLocalTaskRunSelection,
   composeTaskWorkspaceExcludeProfilesFor,
 } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { bindTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
@@ -76,6 +78,7 @@ export function taskBundleInput(
     runtimeProfiles: { get: (name) => runtimeRegistry.getRuntime(name) },
     mcpRuntime: { prepareDelete: async () => {}, reconcileDurableIntents: async () => {} },
   })
+  const standalone = standaloneSelections({ appHome })
   const nodeRunPrompts = composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
   const portArtifacts = composePortArtifactOperations(undefined, appHome)
   const driven: TaskDriveRequest[] = []
@@ -138,10 +141,19 @@ export function taskBundleInput(
       repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
     },
     selection: {
-      taskRunBinding: composeLocalTaskRunRootSelection({ nodeRunPrompts, portArtifacts }).drive,
+      taskRunBinding: bindTaskRunRootSelection(
+        composeLocalTaskRunSelection({ nodeRunPrompts, portArtifacts }),
+      ).drive,
       workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
       nodeRunPrompts,
       portArtifacts,
+      // RFC-431: the bundle receives the standalone profile's selections.
+      archive: standalone.taskArchive,
+      workspaceReads: standalone.workspaceReads,
+      effects: standalone.taskDeletionEffects,
+      archivedEvents: standalone.archivedNodeEvents,
+      reviewRollbackSnapshots: standalone.reviewRollbackSnapshots,
+      workspaceUploads: standalone.workspaceUploads,
       fusionWorkspaces: createFileFusionWorkspaceEffects({ appHome }),
     },
     finalizeWorkspace: async () => {},

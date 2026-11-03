@@ -4,6 +4,7 @@ import { expect, mock, spyOn, test } from 'bun:test'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { startCommand } from '@/bootstrap/daemonStart'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import type { DeploymentProfile, DeploymentSelections } from '@/bootstrap/deploymentProfile'
 import type { DevelopmentOverlay } from '@/bootstrap/developmentReload'
 import * as sessionGraph from '@/bootstrap/daemonSession'
@@ -53,7 +54,9 @@ function fixture(input: {
     frontendMarker: input.deployment === undefined ? null : input.deployment.frontendMarker,
     requiredProvider: null,
     listen: input.listen ?? {},
+    // RFC-431: a standalone profile states its selections; the fixture replaces three of them.
     selections: {
+      ...standaloneSelections({ appHome: '/unused/rfc394' }),
       applicationConfiguration,
       taskArchive,
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 39)),

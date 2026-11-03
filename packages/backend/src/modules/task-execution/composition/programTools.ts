@@ -7,4 +7,6 @@ export {
   type ProgramArtifactReader,
 } from '../infrastructure/adapters/programArtifactToolSource'
 export { createHostedScriptFixtureProcess } from '../infrastructure/crewstation/scriptFixtureProcess'
+/** RFC-431: the standalone selection runs contract fixtures on this host. */
+export { createLocalScriptFixtureProcess } from '../infrastructure/local/localScriptFixtureProcess'
 export type { ProgramToolSource, ScriptFixtureProcess } from '../application/ports/scriptFixture'

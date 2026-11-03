@@ -334,10 +334,11 @@ export function composeDaemonLifecycle(input: DaemonLifecycleInput) {
     backgroundWriterFactories,
     providerCloseParticipants,
     runPhase,
-    initialize(initializeExecution?: (work: () => Promise<void>) => Promise<void>) {
+    /** RFC-431: a null wrapper (standalone) runs execution recovery inline after `prepare`. */
+    initialize(initializeExecution: ((work: () => Promise<void>) => Promise<void>) | null = null) {
       return (initialization ??= (async () => {
         await runPhase('prepare')
-        if (initializeExecution === undefined) await runPhase('execution-recovery')
+        if (initializeExecution === null) await runPhase('execution-recovery')
         else
           await initializeExecution(() =>
             closed ? Promise.resolve() : runPhase('execution-recovery'),

@@ -19,6 +19,7 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { taskBundleInput } from './daemonTaskExecutionBundle'
 import type { ProviderDatabaseHarness } from './eachProvider'
@@ -27,6 +28,8 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   const binding = harness.applicationBinding,
     db = harness.db
   const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 8))
+  // RFC-431: the bundles receive the standalone profile's selections.
+  const standalone = standaloneSelections({ appHome })
   const adapters =
     binding.provider === 'sqlite'
       ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
@@ -48,6 +51,7 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     appHome,
     secretBox,
     daemonToken: 'rfc383',
+    credentials: standalone.credentials,
     adapters,
     realtimePolicy: {
       resourceVisibility: { canViewResource: async () => false },
@@ -61,7 +65,10 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   })
   const tasks = taskBundleInput(harness, appHome)
   const taskExecution = tasks.compose()
-  const developmentPurposeRoot = composeDevelopmentPurposeRoot({ appHome })
+  const developmentPurposeRoot = composeDevelopmentPurposeRoot({
+    selection: standalone.developmentPurposes,
+    evidenceArtifacts: standalone.evidenceArtifacts,
+  })
   const repository = composeDaemonRepositoryCredentials({
     db,
     appHome,
@@ -101,9 +108,13 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     digitalEmployeeWorkStart: { launch: (request) => employee.workStart.launch(request) },
     developmentDeliveryProvider: repository.developmentDeliveryProvider,
     developmentPurposeRoot,
+    adapters: {
+      customObserverPrograms: standalone.customObserverPrograms,
+      beforeEventObservationWrite: standalone.beforeEventObservationWrite,
+    },
   })
   const workspaceEffects = selectDevelopmentWorkspaceEffectBinding({
-    conflictWorkspaceSelected: false,
+    actionWorkspaceEffects: standalone.actionWorkspaceEffects,
   })
   const employeeInput: DaemonDigitalEmployeeInput = {
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -129,6 +140,17 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     taskExecution,
     developmentPurposeRoot,
     workspaceEffects,
+    verificationCommands: standalone.verificationCommands,
+    repositoryRevisionContent: standalone.repositoryRevisionContent,
+    repositoryBaselines: standalone.repositoryBaselines,
+    evidenceArtifacts: standalone.evidenceArtifacts,
+    graphDevelopmentArtifacts: standalone.graphDevelopmentArtifacts,
+    adapters: {
+      employeePrograms: standalone.employeePrograms,
+      employeeInputArtifacts: standalone.employeeInputArtifacts,
+      employeeCaseWorkspaceEffects: standalone.employeeCaseWorkspaceEffects,
+      programFixtureProcess: standalone.programFixtureProcess,
+    },
   }
   const employee = composeDaemonDigitalEmployeeModules(employeeInput)
   const automationInput = {
@@ -141,6 +163,10 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     writerCutover: employee.writerCutover,
     developmentPurposeRoot,
     workspaceEffects,
+    verificationCommands: standalone.verificationCommands,
+    repositoryBaselines: standalone.repositoryBaselines,
+    evidenceArtifacts: standalone.evidenceArtifacts,
+    actionWorkspaceEntries: standalone.actionWorkspaceEntries,
   }
   return {
     core,

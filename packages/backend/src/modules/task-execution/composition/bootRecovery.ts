@@ -16,7 +16,7 @@ import type {
   TaskExecutionBootRecoveryInput,
   TaskExecutionBootRecoveryReport,
 } from '../application/ports/bootExecutionRecovery'
-import { selectLocalBootExecutionRecoveryFactory } from './localBootExecutionRecovery'
+import { createLocalBootExecutionRecoveryFactory } from './localBootExecutionRecovery'
 
 export type {
   BootExecutionRecoveryFactory,
@@ -63,8 +63,9 @@ export function createDaemonRecoveryAuthorityProof(input: {
 export async function runTaskExecutionBootRecovery(
   input: TaskExecutionBootRecoveryInput,
 ): Promise<TaskExecutionBootRecoveryReport> {
+  // RFC-431: the daemon always passes its deployment's selection; direct module callers keep the local family.
   return runBootExecutionRecovery(
-    selectLocalBootExecutionRecoveryFactory(input.recoveryEffects),
+    input.recoveryEffects ?? createLocalBootExecutionRecoveryFactory(),
     input,
   )
 }

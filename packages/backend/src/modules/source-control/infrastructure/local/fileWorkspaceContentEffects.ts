@@ -4,7 +4,10 @@ import { lstat, open, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, normalize, resolve, sep } from 'node:path'
 import { WORKTREE_FILE_MAX_BYTES, type WorktreeTreeEntry } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import type { WorkspaceContentEffects } from '../../application/ports/workspaceContentEffects'
+import type {
+  WorkspaceContentEffects,
+  WorkspaceContentEffectsFactory,
+} from '../../application/ports/workspaceContentEffects'
 import type {
   WorkspaceListRequest,
   WorkspaceReadRequest,
@@ -256,4 +259,9 @@ export function createFileWorkspaceContentEffects(workspaceRef: string): Workspa
     list: (request: WorkspaceListRequest) => listWorkspaceDirectory(workspaceRef, request),
     read: (request: WorkspaceReadRequest) => readWorkspaceBytes(workspaceRef, request),
   })
+}
+
+/** RFC-431: the standalone selection — each workspace reference binds the local file effects. */
+export function createFileWorkspaceContentEffectsFactory(): WorkspaceContentEffectsFactory {
+  return Object.freeze({ bind: createFileWorkspaceContentEffects })
 }

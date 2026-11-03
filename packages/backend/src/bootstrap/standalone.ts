@@ -1,7 +1,133 @@
 // RFC-394: the standalone profile owns local dependency probes and their existing diagnostics.
+// RFC-431: it is also the standalone assembly root — it states every selection a standalone daemon uses.
+import { join } from 'node:path'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
-import type { DeploymentProfile } from './deploymentProfile'
+import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
+import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
+import { createFileArchivedEventsReader } from '@/platform/background/eventsArchiveReader'
+import { Paths } from '@/util/paths'
+import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
+import {
+  composeLocalWorkspaceExcludeProfiles,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createFileFusionWorkspaceEffects,
+  createFileRepositoryGitWorkspaceFactory,
+  createFileRepositoryWorkspaceReadQueries,
+  createFileWorkspaceContentEffectsFactory,
+  createFileWorkspacePresenceQueries,
+  createFileWorkspaceUploadContentFactory,
+  createLocalIsolationWorkspaceFactory,
+  createNodeWorkspaceMaintenanceFilesystem,
+} from '@/modules/source-control/composition'
+import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
+import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
+import { composeLocalTaskRunSelection } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { createLocalTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
+import { createLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
+import { createLocalScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
+import { localActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionEnvironment'
+import { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalWorkspaceRollbackSnapshots } from '@/modules/collaboration/composition'
+import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
+import { createFileResourcePackagePluginArtifactOwner } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import { composeLocalCredentialAdapters } from '@/modules/identity-access/composition/authentication'
+import { createLocalCustomObserverProgramFactory } from '@/modules/event-center/composition'
+import {
+  createEmployeeInputArtifactStore,
+  createProgramArtifactStore,
+} from '@/modules/digital-employee/composition'
+import {
+  createLocalEvidenceArtifactPort,
+  createLocalGraphDevelopmentArtifactPort,
+} from '@/modules/development-automation/composition/evidenceStaging'
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
+import {
+  createFileActionWorkspaceEffects,
+  createFileRepositoryBaselineEffectsFactory,
+} from '@/modules/development-automation/composition'
+import { composeLocalDevelopmentPurposes } from './developmentPurposeRoot'
+import type { DeploymentProfile, DeploymentSelections } from './deploymentProfile'
+
+/**
+ * RFC-431: every selection a standalone daemon makes, rooted at `appHome`. The hosted capabilities are
+ * stated as `null`; the selections that still need the session graph or are a deployment switch stay
+ * unset (`DeploymentSelections`, optional group). Construction performs no IO: the profile is built
+ * before the startup lock, and the stores that create directories open on first use.
+ */
+export function standaloneSelections(input: { readonly appHome: string }): DeploymentSelections {
+  const { appHome } = input
+  const evidenceArtifacts = createLocalEvidenceArtifactPort(appHome)
+  return {
+    applicationConfiguration: composeApplicationConfigurationBinding({
+      kind: 'file',
+      configPath: join(appHome, 'config.json'),
+    }),
+    workspaceUploads: createFileWorkspaceUploadContentFactory(),
+    isolationWorkspaces: createLocalIsolationWorkspaceFactory(),
+    repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
+    workspaceReads: createFileRepositoryWorkspaceReadQueries(),
+    workspaceContent: createFileWorkspaceContentEffectsFactory(),
+    workspacePresence: createFileWorkspacePresenceQueries(),
+    fusionWorkspaceEffects: createFileFusionWorkspaceEffects({ appHome }),
+    workspaceMaintenanceFilesystem: createNodeWorkspaceMaintenanceFilesystem({
+      appHome,
+      isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
+      invalidateWorkspacePath: invalidateCallGraphIndex,
+    }),
+    workspaceExcludeProfiles: composeLocalWorkspaceExcludeProfiles({ appHome }),
+    employeeCaseWorkspaceEffects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    repositoryRevisionContent: composeLocalRepositoryRevisionContent(),
+    codeReviewArtifacts: composeLocalCodeReviewArtifacts(),
+    taskRunSelection: composeLocalTaskRunSelection({
+      nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+      portArtifacts: composePortArtifactOperations(undefined, appHome),
+    }),
+    taskArchive: { content: createFileTaskArchiveContent() },
+    taskDeletionEffects: composeLocalTaskDeletionEffects(),
+    archivedNodeEvents: createFileArchivedEventsReader(),
+    reviewRollbackSnapshots: composeLocalWorkspaceRollbackSnapshots(),
+    runtimeInventoryContent: createLocalTaskRuntimeInventoryContent(),
+    bootExecutionRecovery: createLocalBootExecutionRecoveryFactory(),
+    programFixtureProcess: createLocalScriptFixtureProcess(),
+    actionWorkspaceEntries: localActionWorkspaceEntries,
+    recoveredExecutionTaskIds: () => [],
+    hostedBackgroundOwners: [],
+    runtimeManagement: composeLocalRuntimeManagement,
+    systemAgentRunFamily: composeLocalSystemAgentRunFamily,
+    mcpDiagnostics: composeLocalMcpDiagnostics,
+    credentials: composeLocalCredentialAdapters,
+    customObserverPrograms: createLocalCustomObserverProgramFactory(),
+    pluginInstaller: createLocalPluginInstaller(),
+    resourcePackagePluginArtifacts: createFileResourcePackagePluginArtifactOwner({
+      pluginsDir: join(appHome, 'plugins'),
+      installer: createResourcePackagePluginInstaller(),
+    }),
+    employeePrograms: createProgramArtifactStore(appHome),
+    employeeInputArtifacts: createEmployeeInputArtifactStore(
+      join(appHome, 'artifacts', 'employee-inputs'),
+    ),
+    evidenceArtifacts,
+    graphDevelopmentArtifacts: createLocalGraphDevelopmentArtifactPort(appHome),
+    developmentPurposes: composeLocalDevelopmentPurposes({ appHome, evidenceArtifacts }),
+    verificationCommands: createLocalVerificationCommandEffectsFactory(),
+    repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
+    actionWorkspaceEffects: createFileActionWorkspaceEffects(),
+    taskInputFiles: null,
+    humanGateArtifactRecovery: null,
+    beforeEventObservationWrite: null,
+    taskRecovery: null,
+    maintenanceEffectsBootstrap: null,
+    initializeExecution: null,
+  }
+}
 
 export function composeStandaloneProfile(): DeploymentProfile {
   return {
@@ -9,7 +135,7 @@ export function composeStandaloneProfile(): DeploymentProfile {
     frontendMarker: null,
     requiredProvider: null,
     listen: {},
-    selections: {},
+    selections: standaloneSelections({ appHome: Paths.root }),
     async probeHost({ log, config }) {
       // 4. git version probe — RFC-130 D7: every node run merge-backs via
       // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots

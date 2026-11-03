@@ -20,6 +20,9 @@ import type {
 // RFC-415: the deployment profile selects a workspace's entry check through this composition export.
 export type { ActionWorkspaceEntries } from '../application/ports/actionExecution'
 import { localActionWorkspaceEntries } from '../infrastructure/local/localActionWorkspaceEntries'
+
+/** RFC-431: the standalone selection checks entries below a host action workspace. */
+export { localActionWorkspaceEntries }
 import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'

@@ -9,6 +9,9 @@ import type {
 import { createTaskArchiveContentCoordinator } from '../infrastructure/taskArchiveContentCoordinator'
 import { createFileTaskArchiveContent } from '../infrastructure/local/fileTaskArchiveContent'
 
+/** RFC-431: the standalone selection's archive content (local files; the caller still chooses the roots). */
+export { createFileTaskArchiveContent }
+
 export {
   ARCHIVED_TABLES,
   ARCHIVE_EXEMPT_TABLES,
@@ -23,10 +26,13 @@ export type {
   TaskArchiveSweepReceipt,
 } from '../application/ports/taskArchiveMaintenanceCommand'
 
-/** A selected store and its logical roots travel together through every archive consumer. */
+/**
+ * A selected store and its logical roots travel together through every archive consumer. RFC-431: the
+ * standalone binding pins no roots — each caller keeps passing its own (`Paths` archive, runs and logs).
+ */
 export interface TaskArchiveContentBinding {
   readonly content: TaskArchiveContentPort
-  readonly locations: Readonly<
+  readonly locations?: Readonly<
     Pick<TaskArchiveMaintenanceOptions, 'archiveDir' | 'runsDir' | 'logsDir'>
   >
 }

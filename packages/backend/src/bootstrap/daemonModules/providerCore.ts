@@ -13,10 +13,7 @@ import {
   createIdentityAccessRuntime,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
-import {
-  composeLocalCredentialAdapters,
-  type CredentialAdapterSelection,
-} from '@/modules/identity-access/composition/authentication'
+import { type CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import { type HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { composeRuntimeProfileParticipants } from '@/modules/resource-catalog/composition/runtimeProfileParticipants'
 import {
@@ -80,8 +77,8 @@ export interface DaemonProviderCoreCommonInput {
   readonly presenceProjection: DaemonPresenceProjectionSink
   readonly identityId?: () => string
   readonly now?: () => number
-  /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone by default. */
-  readonly credentials?: CredentialAdapterSelection
+  /** RFC-370 v2 §3.6 / RFC-431 — the deployment's credential mechanism (standalone: local sessions). */
+  readonly credentials: CredentialAdapterSelection
 }
 
 /**
@@ -169,7 +166,7 @@ export function composeDaemonProviderCore<P extends DatabaseProvider>(
     db: input.db,
     ...daemonIdentityOptions(input),
   })
-  const credentials = (input.credentials ?? composeLocalCredentialAdapters)({
+  const credentials = input.credentials({
     db: input.db,
     auth: authRuntime,
     daemonToken: input.daemonToken,

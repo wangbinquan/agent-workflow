@@ -100,12 +100,9 @@ export function unifiedTestEntryViolations(units: readonly SourceUnit[]): string
     const seamInput = input?.members.find((member) => member.name?.getText() === 'testSeams')
     if (!seamInput || !ts.isPropertySignature(seamInput) || !seamInput.questionToken)
       errors.push('test seams must be optional')
-    for (const key of [
-      'log',
-      'applicationConfiguration',
-      'taskLaunchConfiguration',
-      'sourceWriteWindow',
-    ]) {
+    // RFC-431: the configuration binding is required through the inherited `DeploymentSelections` contract
+    // (the profile states it); `rfc431-standalone-selections` locks that partition.
+    for (const key of ['log', 'taskLaunchConfiguration', 'sourceWriteWindow']) {
       const member = input?.members.find((member) => member.name?.getText() === key)
       if (!member || !ts.isPropertySignature(member) || member.questionToken)
         errors.push('required input: ' + key)
@@ -172,19 +169,14 @@ test('required deployment inputs and graph contracts have positive and negative 
   expect(unifiedTestEntryViolations([server('')])).not.toContain('server test fallback')
   expect(unifiedTestEntryViolations([server(" ?? 'standalone'")])).toContain('server test fallback')
   const graph = `interface DaemonApplicationInput {
-    log: unknown; applicationConfiguration: unknown; taskLaunchConfiguration: unknown;
+    log: unknown; taskLaunchConfiguration: unknown;
     sourceWriteWindow: unknown; testSeams?: DaemonApplicationTestSeams
   }
   interface DaemonApplicationTestSeams { ${SEAMS.map((key) => key + '?: unknown').join(';')} }`
   const errors = (source: string) => unifiedTestEntryViolations([sourceUnit(GRAPH, source)])
   expect(errors(graph)).not.toContain('test seams contract')
   expect(errors(graph)).not.toContain('test seams must be optional')
-  for (const key of [
-    'log',
-    'applicationConfiguration',
-    'taskLaunchConfiguration',
-    'sourceWriteWindow',
-  ])
+  for (const key of ['log', 'taskLaunchConfiguration', 'sourceWriteWindow'])
     expect(errors(graph.replace(key + ':', key + '?:'))).toContain('required input: ' + key)
   expect(errors(graph.replace('testSeams?:', 'testSeams:'))).toContain(
     'test seams must be optional',

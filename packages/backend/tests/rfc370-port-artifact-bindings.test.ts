@@ -560,10 +560,16 @@ test('the real drive binds its exact selected artifact receiver into the family 
 
 test('CLI initial and replacement sessions carry raw content selection into the real SQLite and PG composers', () => {
   const sf = source('bootstrap/daemonStart.ts')
-  const sqlite = calls(sf, sf, 'composePortArtifactOperations')
-  expect(sqlite).toHaveLength(1)
-  // RFC-428: no deployment selects artifact content; the local root composes the module's file default.
-  expect(sqlite[0]!.arguments.map((arg) => arg.getText(sf))).toEqual(['undefined', 'input.appHome'])
+  // RFC-428: no deployment selects artifact content. RFC-431: the standalone profile composes the module's
+  // file default inside its task-run selection; the daemon graph binds whichever selection it is given.
+  expect(calls(sf, sf, 'composePortArtifactOperations')).toHaveLength(0)
+  const standalone = source('bootstrap/standalone.ts')
+  const local = calls(standalone, standalone, 'composePortArtifactOperations')
+  expect(local).toHaveLength(1)
+  expect(local[0]!.arguments.map((arg) => arg.getText(standalone))).toEqual([
+    'undefined',
+    'appHome',
+  ])
   const pg = calls(sf, sf, 'composeDaemonApplication')
   expect(pg).toHaveLength(1)
   expect(pg[0]!.arguments[0]!.getText(sf)).toContain('...deploymentSelectionsOf(input)')
@@ -577,12 +583,10 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   const pg = source('bootstrap/daemonApplication.ts'),
     server = source('server.ts'),
     owner = source('bootstrap/daemonHttpComposition.ts')
-  const pgSelection = calls(pg, pg, 'composePortArtifactOperations')
-  expect(pgSelection).toHaveLength(1)
-  expect(pgSelection[0]!.arguments.map((arg) => arg.getText(pg))).toEqual([
-    'undefined',
-    'input.appHome',
-  ])
+  // RFC-431: the application binds the deployment's task-run selection and takes its artifact receiver.
+  expect(calls(pg, pg, 'composePortArtifactOperations')).toHaveLength(0)
+  expect(pg.text).toContain('const taskRunRoot = bindTaskRunRootSelection(input.taskRunSelection)')
+  expect(pg.text).toContain('const { nodeRunPrompts, portArtifacts } = taskRunRoot')
   expect(pg.text).toContain('taskRunBinding: taskRunRoot.drive')
   const bundle = source('bootstrap/daemonModules/taskExecution.ts')
   const pgBundle = calls(pg, pg, 'composeDaemonTaskExecutionModules')

@@ -1,5 +1,7 @@
 import { eventArchivePath } from '@/platform/content/locations/eventArchive'
+import { Paths } from '@/util/paths'
 import { existsSync } from 'node:fs'
+import type { ArchivedEventsReader } from './eventsArchiveContent'
 
 export interface ArchivedNodeRunEvent {
   readonly id: number
@@ -71,4 +73,12 @@ export async function readArchivedEvents(
   pending += decoder.decode()
   if (pending !== '' && out.length < limit) appendLine(pending, since, limit, out)
   return out
+}
+
+/** RFC-431: the standalone selection — the append-only archive under `Paths.logsDir`, resolved per read. */
+export function createFileArchivedEventsReader(): ArchivedEventsReader {
+  return Object.freeze({
+    read: (taskId: string, nodeRunId: string, since: number, limit: number) =>
+      readArchivedEvents(Paths.logsDir, taskId, nodeRunId, since, limit),
+  })
 }

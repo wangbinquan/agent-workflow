@@ -21,6 +21,7 @@ export const DEPLOYMENT_SELECTION_KEYS = {
   crewStationEvents: true,
   intentArtifacts: true,
   evidenceArtifacts: true,
+  graphDevelopmentArtifacts: true,
   resourcePackageSkillArtifacts: true,
   resourcePackagePluginArtifacts: true,
   workspaceContent: true,

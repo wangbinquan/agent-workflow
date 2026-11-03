@@ -708,7 +708,8 @@ describe('RFC-370 verification command composition contract', () => {
       'input',
     ],
   ] as const) {
-    test(`${name} selects the complete native factory only for an absent override`, () => {
+    // RFC-431: the bundle forwards the deployment's stated factory; the standalone profile states the native one.
+    test(`${name} forwards the stated factory; the standalone profile states the native one`, () => {
       const source = readSource(path)
       const calls = descendants(bodyOf(source, name), ts.isCallExpression).filter(
         (call) => call.expression.getText(source) === 'composeDevelopmentAutomation',
@@ -720,9 +721,14 @@ describe('RFC-370 verification command composition contract', () => {
       expect(selected).toHaveLength(1)
       expect(selected[0]!.parent).toBe(arg)
       expect(selected[0]!.initializer.getText(source).replace(/\s/g, '')).toBe(
-        `${receiver}.verificationCommands??createLocalVerificationCommandEffectsFactory()`,
+        `${receiver}.verificationCommands`,
       )
-      expect(source.text).toContain(
+      expect(source.text).not.toContain('createLocalVerificationCommandEffectsFactory')
+      const standalone = readSource('bootstrap/standalone.ts')
+      expect(standalone.text).toContain(
+        'verificationCommands: createLocalVerificationCommandEffectsFactory(),',
+      )
+      expect(standalone.text).toContain(
         "from '@/modules/development-automation/composition/localVerificationCommands'",
       )
     })

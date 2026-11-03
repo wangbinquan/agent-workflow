@@ -337,6 +337,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/bootstrap/deploymentProfile.ts -> @/modules/identity-access/composition/authentication',
       // RFC-395: the schema-only composition entry is imported and re-exported at the collection root.
       'packages/backend/src/bootstrap/persistenceSchema.ts -> @/modules/identity-access/composition/schema',
+      // RFC-431: the standalone profile states the local credential adapters as its selection.
+      'packages/backend/src/bootstrap/standalone.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',

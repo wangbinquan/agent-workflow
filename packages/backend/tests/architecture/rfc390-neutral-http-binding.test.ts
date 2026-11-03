@@ -25,7 +25,6 @@ const HTTP_OWNERS = [
   'composeLegacyCodeReadProviders',
   'createTaskCodeWorkspaceQueries',
   'composeClarifyFollowupGenerator',
-  'composeTaskRuntimeInventoryContent',
   'composeRuntimeProbeConfigFence',
   'createTaskObservationFacts',
   'composeWebhookIngressTransport',
@@ -190,7 +189,10 @@ describe('RFC-390 neutral HTTP binding', () => {
     const server = units.find(
       (unit) => unit.path === PREFIX + 'bootstrap/daemonHttpComposition.ts',
     )!
-    expect(calls(server.source, 'createResourcePackagePluginInstaller')).toHaveLength(1)
+    // RFC-431: the HTTP graph takes the stated plugin owner; the standalone profile builds the one installer.
+    expect(calls(server.source, 'createResourcePackagePluginInstaller')).toHaveLength(0)
+    const standalone = units.find((unit) => unit.path === PREFIX + 'bootstrap/standalone.ts')!
+    expect(calls(standalone.source, 'createResourcePackagePluginInstaller')).toHaveLength(1)
     expect(calls(server.source, 'composeConfigConcurrencyHotApply')).toHaveLength(1)
     expect(server.source.text).toMatch(
       /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope/,

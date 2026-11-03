@@ -6,10 +6,7 @@ import type {
 import type { TaskDriveCoordinatorFactory } from '../application/drive/taskDriveCoordinatorFactory'
 import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import type { TaskRecoveryProviderSelection } from '../infrastructure/taskRecoverySelection'
-import {
-  selectRepositoryWorkspaceReadQueries,
-  type RepositoryWorkspaceReadQueries,
-} from '@/modules/source-control/public/queries'
+import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import { composePortArtifactOperations } from './portArtifacts'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from './nodeRunPrompts'
@@ -197,7 +194,8 @@ export interface TaskExecutionProviderRuntimeDependencies<
   readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archive?: TaskArchiveContentBinding
   readonly recoverySelection?: TaskRecoveryProviderSelection
-  readonly workspaceReads?: RepositoryWorkspaceReadQueries
+  /** RFC-431: the deployment's selection, never re-defaulted here. */
+  readonly workspaceReads: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
     TaskExecutionRuntimeParticipantsInput,
     | 'db'
@@ -235,7 +233,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
   dependencies: TaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedTaskExecutionProviderRuntime<C> {
   const { db, persistence, execution, finalizeWorkspace, log } = dependencies
-  const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
+  const workspaceReads = dependencies.workspaceReads
   const executionModule = execution.module
   const driverLifecycle = createTaskDriverLifecyclePort({
     db,

@@ -523,22 +523,19 @@ describe('DA action workspace keeps the selected reference interpreter and origi
     )
     expect(effects.calls).toEqual([])
   })
-  test('paired bootstrap rejects missing DA and explicit null factory before SC allocation', () => {
+  // RFC-431: every deployment selects the action workspace, so a selected conflict scene always has
+  // its paired owner; the binding still rejects an explicit null factory before any allocation.
+  test('paired bootstrap rejects an explicit null factory before SC allocation', () => {
     const conflict = new OpaqueConflictEffects(codec)
     const contents = new OpaqueContentFactory(codec)
     const action = new OpaqueActionEffects(codec, contents)
     expect(() =>
-      selectDevelopmentWorkspaceEffectBinding({ conflictWorkspaceSelected: true }),
-    ).toThrow('conflict-workspace-action-effects-required')
-    expect(() =>
       selectDevelopmentWorkspaceEffectBinding({
-        conflictWorkspaceSelected: true,
         actionWorkspaceEffects: action,
         automationWorkspaceEffects: null as unknown as AutomationWorkspaceEffectsFactory,
       }),
     ).toThrow('automation-workspace-effects-factory-incomplete')
     const binding = selectDevelopmentWorkspaceEffectBinding({
-      conflictWorkspaceSelected: true,
       actionWorkspaceEffects: action,
     })
     expect(binding.actionWorkspaceEffects).toBe(action)

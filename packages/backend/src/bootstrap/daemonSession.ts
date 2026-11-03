@@ -772,7 +772,7 @@ export async function composeDaemonSession(
       'task-execution-graceful-shutdown': gracefulTaskShutdown,
       'webhook-terminal-control': webhookTerminalClose,
     },
-    profileJobs: (input.hostedBackgroundOwners ?? []).map((owner) =>
+    profileJobs: input.hostedBackgroundOwners.map((owner) =>
       createSignalledDaemonRuntimeHandleFactory(owner, DAEMON_SHUTDOWN_ABORT_REASON),
     ),
   })

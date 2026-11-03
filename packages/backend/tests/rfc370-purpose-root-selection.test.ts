@@ -28,12 +28,18 @@ function choices() {
   }
 }
 
+// RFC-431: every deployment selects all three purposes; a case varies one member of a complete selection.
+const complete = (c: ReturnType<typeof choices>) => ({
+  requirement: c.requirement,
+  pipeline: c.pipeline,
+  approval: c.approval,
+})
+
 describe('RFC-370 complete purpose root selection', () => {
   test('every purpose and content receiver keeps its exact selected identity', () => {
     const c = choices()
     const selection = { requirement: c.requirement, pipeline: c.pipeline, approval: c.approval }
     const root = composeDevelopmentPurposeRoot({
-      appHome: 'unused-selected-home',
       selection,
       evidenceArtifacts: c.content.evidence,
     })
@@ -58,13 +64,12 @@ describe('RFC-370 complete purpose root selection', () => {
         Object.defineProperty(incomplete, member, { value: undefined })
         const selection =
           purpose === 'requirement'
-            ? { requirement: { ...c.requirement, effects: incomplete } }
+            ? { ...complete(c), requirement: { ...c.requirement, effects: incomplete } }
             : purpose === 'pipeline'
-              ? { pipeline: { ...c.pipeline, effects: incomplete } }
-              : { approval: { ...c.approval, effects: incomplete } }
+              ? { ...complete(c), pipeline: { ...c.pipeline, effects: incomplete } }
+              : { ...complete(c), approval: { ...c.approval, effects: incomplete } }
         expect(() =>
           composeDevelopmentPurposeRoot({
-            appHome: 'unused-selected-home',
             selection,
             evidenceArtifacts: c.content.evidence,
           }),
@@ -80,15 +85,14 @@ describe('RFC-370 complete purpose root selection', () => {
       other = new MemoryPurposeContent()
     expect(() =>
       composeDevelopmentPurposeRoot({
-        appHome: 'unused-selected-home',
-        selection: { requirement: { ...c.requirement, staging: other.staging } },
+        selection: { ...complete(c), requirement: { ...c.requirement, staging: other.staging } },
         evidenceArtifacts: c.content.evidence,
       }),
     ).toThrow('development-purpose-staging-namespace-mismatch')
     expect(() =>
       composeDevelopmentPurposeRoot({
-        appHome: 'unused-selected-home',
         selection: {
+          ...complete(c),
           pipeline: { ...c.pipeline, staging: { ...c.pipeline.staging, trigger: other.staging } },
         },
         evidenceArtifacts: c.content.evidence,
@@ -96,8 +100,7 @@ describe('RFC-370 complete purpose root selection', () => {
     ).toThrow('development-purpose-staging-namespace-mismatch')
     expect(() =>
       composeDevelopmentPurposeRoot({
-        appHome: 'unused-selected-home',
-        selection: { approval: { ...c.approval, staging: other.staging } },
+        selection: { ...complete(c), approval: { ...c.approval, staging: other.staging } },
         evidenceArtifacts: c.content.evidence,
       }),
     ).toThrow('development-purpose-staging-namespace-mismatch')
@@ -107,8 +110,7 @@ describe('RFC-370 complete purpose root selection', () => {
     } as unknown as typeof c.requirement
     expect(() =>
       composeDevelopmentPurposeRoot({
-        appHome: 'unused-selected-home',
-        selection: { requirement: missingWriter },
+        selection: { ...complete(c), requirement: missingWriter },
         evidenceArtifacts: c.content.evidence,
       }),
     ).toThrow('development-purpose-document-commands-incomplete')

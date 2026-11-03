@@ -21,6 +21,8 @@ import {
   type CustomObserverProgramFactory,
 } from './composition/customObserverProgram'
 import { selectLocalCustomObserverProgramFactory } from './composition/localCustomObserverProgram'
+/** RFC-431: the standalone selection runs custom observer programs on this host. */
+export { createLocalCustomObserverProgramFactory } from './composition/localCustomObserverProgram'
 import { createCustomEventSourceStore } from './infrastructure/customEventSourceStore'
 import { createEventStore } from './infrastructure/eventStore'
 import { createEventResponseRuleStore } from './infrastructure/eventResponseRuleStore'
@@ -256,7 +258,8 @@ export type EventCenterAutomationCapability =
     }>
 
 export interface ComposeEventCenterOptions {
-  readonly beforeObservationWrite?: (tx: PersistenceDb) => Promise<void>
+  /** RFC-431: `null` (standalone) — the observation transaction runs without a pre-write check. */
+  readonly beforeObservationWrite?: ((tx: PersistenceDb) => Promise<void>) | null
   readonly db: PersistenceDb
   readonly typePackageDescriptorJsons: readonly string[]
   /**

@@ -12,6 +12,7 @@ import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import { taskExecutionResourceBinding } from './integrationTriggerResourceBinding'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 
@@ -31,6 +32,7 @@ export function integrationBundleFixture(
     configPath: `${appHome}/config.json`,
   })
 
+  const standalone = standaloneSelections({ appHome })
   const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db,
     assertAgentIntegrity: async () => {},
@@ -63,7 +65,15 @@ export function integrationBundleFixture(
     },
     // These tests never execute an external code-host observer.
     developmentDeliveryProvider: {} as IntegrationInput['developmentDeliveryProvider'],
-    developmentPurposeRoot: composeDevelopmentPurposeRoot({ appHome }),
+    // RFC-431: the bundle receives the standalone profile's selections.
+    developmentPurposeRoot: composeDevelopmentPurposeRoot({
+      selection: standalone.developmentPurposes,
+      evidenceArtifacts: standalone.evidenceArtifacts,
+    }),
+    adapters: {
+      customObserverPrograms: standalone.customObserverPrograms,
+      beforeEventObservationWrite: standalone.beforeEventObservationWrite,
+    },
     ...overrides,
   })
   const fusionModules = composeDaemonFusionModules({

@@ -57,21 +57,15 @@ function requireTaskRunRootSelection(selected: TaskRunRootSelection): void {
   }
 }
 
-/** The local bridge can retain legacy per-drive content factory timing. */
-export function bindTaskRunRootSelection(
-  selected: TaskRunRootSelection,
-  contentsFor?: (
-    request: TaskDriveRequest,
-  ) => Pick<BoundTaskRunFamilies, 'nodeRunPrompts' | 'portArtifacts'>,
-): TaskRunRootBinding {
+/** Every drive binds the selection's own root content receivers (RFC-431: both deployments select one). */
+export function bindTaskRunRootSelection(selected: TaskRunRootSelection): TaskRunRootBinding {
   requireTaskRunRootSelection(selected)
   const runs = selected.runs
   const nodeRunPrompts = runs.nodeRunPrompts
   const portArtifacts = runs.portArtifacts
   const drive = Object.freeze<TaskRunDriveBinding>({
     bind(request, owners) {
-      const contents =
-        contentsFor === undefined ? { nodeRunPrompts, portArtifacts } : contentsFor(request)
+      const contents = { nodeRunPrompts, portArtifacts }
       const configuration = selected.configurationFor(request)
       if (
         configuration?.kind !== 'task-run-configuration' ||
@@ -104,11 +98,4 @@ export function bindTaskRunRootSelection(
     },
   })
   return Object.freeze({ nodeRunPrompts, portArtifacts, drive })
-}
-
-/** An absent whole selection lets bootstrap retain its native content construction timing. */
-export function selectTaskRunRootSelection(
-  selected?: TaskRunRootSelection,
-): TaskRunRootBinding | undefined {
-  return selected === undefined ? undefined : bindTaskRunRootSelection(selected)
 }

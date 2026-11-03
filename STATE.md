@@ -1,3 +1,12 @@
+## 2026-11-03 RFC-431 单机部署选择项的默认值集中到单机 profile（In Progress；`design/RFC-431-standalone-selection-defaults/`）
+
+- **来由**：RFC-294 S2c 余项第 1 项的第二步（RFC-428 inventory 后继分步第 2 条）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构
+  进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`standaloneSelections({ appHome })` 给出单机全部可直接构造的选择项；`DeploymentSelections` 分为 39 必填 + 6 必填可空（托管独有
+  能力，单机 `null`）+ 17 可选（第三步 10 项需会话图，第四步 7 项是部署开关或有无分支）；装配层不再补缺省。新增 `graphDevelopmentArtifacts`：
+  单机图开发证据自 RFC-396（v0.19.3）起存在 `appHome` 根下，与其余证据（`appHome/evidence`）分开，统一需数据迁移，另行立项。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-02 RFC-401 资源写入栈合一与 AtomicApply 持久租约（Done；`design/RFC-401-single-resource-write-stack/`）
 
 - **确认**：用户 2026-11-02 按四组确认 proposal §5 的 12 项与 §7 两项，全部按推荐（记录见 proposal §7）：

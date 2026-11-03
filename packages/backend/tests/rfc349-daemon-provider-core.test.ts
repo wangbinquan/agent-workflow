@@ -21,6 +21,7 @@ import {
   type DaemonProviderCore,
 } from '@/bootstrap/daemonModules/providerCore'
 import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/bootstrap/daemonModules/adapters'
+import { composeLocalCredentialAdapters } from '@/modules/identity-access/composition/authentication'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -158,6 +159,8 @@ describe('RFC-349 daemon provider core', () => {
     const core = composeDaemonProviderCore({
       sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       daemonToken: 'fixture-daemon',
+      // RFC-431: the deployment's credential selection (standalone: local sessions).
+      credentials: composeLocalCredentialAdapters,
       db,
       appHome,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
@@ -199,6 +202,8 @@ describe('RFC-349 daemon provider core', () => {
     const core = composeDaemonProviderCore({
       sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       daemonToken: 'fixture-daemon',
+      // RFC-431: the deployment's credential selection (standalone: local sessions).
+      credentials: composeLocalCredentialAdapters,
       db: fake.db,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
         contract: logicalSchemaContract,

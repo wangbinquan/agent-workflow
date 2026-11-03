@@ -200,7 +200,10 @@ test('every daemon root reads program tools from the selected store', () => {
     'utf8',
   )
   expect(postgresql).toContain('createArtifactProgramToolSource(employeePrograms)')
-  expect(postgresql).toContain('process: input.adapters?.programFixtureProcess')
+  // RFC-431: the bundle takes the stated fixture process; the standalone profile states the local one.
+  expect(postgresql).toContain('process: input.adapters.programFixtureProcess')
+  const standalone = readFileSync(join(import.meta.dir, '../src/bootstrap/standalone.ts'), 'utf8')
+  expect(standalone).toContain('programFixtureProcess: createLocalScriptFixtureProcess(),')
   const hosted = readFileSync(join(import.meta.dir, '../src/bootstrap/crewstation.ts'), 'utf8')
   expect(hosted).toContain('programFixtureProcess: createHostedScriptFixtureProcess(')
 })

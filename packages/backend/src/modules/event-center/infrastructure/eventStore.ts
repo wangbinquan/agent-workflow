@@ -275,7 +275,7 @@ function rotatingSubjectBatch(
 
 export function createEventStore(
   db: PersistenceDb,
-  beforeObservationWrite?: (tx: PersistenceDb) => Promise<void>,
+  beforeObservationWrite?: ((tx: PersistenceDb) => Promise<void>) | null,
 ): EventStorePort {
   return {
     async registerSource(descriptor, digest, now) {

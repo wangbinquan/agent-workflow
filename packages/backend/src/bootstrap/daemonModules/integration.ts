@@ -1,4 +1,5 @@
 import type { SecretBox } from '@/auth/secretBox'
+import type { DeploymentSelections } from '../deploymentProfile'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
@@ -86,13 +87,11 @@ export function composeDaemonIntegrationModules(input: {
   readonly developmentPurposeRoot: {
     readonly approval: Parameters<typeof composeSelectedApprovalGatewayRunnerFor>[1]
   }
-  readonly adapters?: {
-    readonly customObserverPrograms?: Parameters<
-      typeof composeEventCenter
-    >[0]['customObserverPrograms']
-    readonly beforeEventObservationWrite?: Parameters<
-      typeof composeEventCenter
-    >[0]['beforeObservationWrite']
+  // RFC-431: the observer programs and the observation write hook are the deployment's selections.
+  readonly adapters: Pick<
+    DeploymentSelections,
+    'customObserverPrograms' | 'beforeEventObservationWrite'
+  > & {
     readonly crewStationEvents?: CrewStationEventIngress
     readonly webhookDispatcher?: WebhookDispatcher
     readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl>
@@ -111,7 +110,7 @@ export function composeDaemonIntegrationModules(input: {
     }
   }
   const webhookTerminalControl =
-    input.adapters?.webhookTerminalControl ??
+    input.adapters.webhookTerminalControl ??
     composeMrTerminalControl({
       db: input.db,
       taskTermination: composeTaskSourceTermination({
@@ -127,7 +126,7 @@ export function composeDaemonIntegrationModules(input: {
   )
   const webhookDeliveryPersistence = dispatchCore.deliveryPersistence
   const webhookDispatcher =
-    input.adapters?.webhookDispatcher ??
+    input.adapters.webhookDispatcher ??
     createWebhookDispatcher({
       ...dispatchCore,
       identityAccess: input.identityAccess,
@@ -163,8 +162,8 @@ export function composeDaemonIntegrationModules(input: {
   const eventCenter = deferEventCenterModule(
     composeEventCenter({
       db: input.db,
-      beforeObservationWrite: input.adapters?.beforeEventObservationWrite,
-      customObserverPrograms: input.adapters?.customObserverPrograms,
+      beforeObservationWrite: input.adapters.beforeEventObservationWrite,
+      customObserverPrograms: input.adapters.customObserverPrograms,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
         graphEmployeeTypePackage.descriptorJson,
@@ -232,7 +231,7 @@ export function composeDaemonIntegrationModules(input: {
     eventCenter,
     developmentApprovalGateway,
     developmentToolConnections: composeDevelopmentToolConnectionCatalog(input.db),
-    crewStationEvents: input.adapters?.crewStationEvents,
+    crewStationEvents: input.adapters.crewStationEvents,
     finalizeClaimedWorkspace,
   })
 }

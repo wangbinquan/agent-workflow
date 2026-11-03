@@ -18,14 +18,16 @@ export function requireTaskDeletionContentEffects(
   }
 }
 
+/** RFC-431: the standalone selection — local run files and the git worktree / snapshot-ref participant. */
+export function composeLocalTaskDeletionEffects(): TaskDeletionEffects {
+  return Object.freeze({
+    content: createFileTaskDeletionContentEffects(),
+    repositories: createGitTaskDeletionRepositoryEffects(),
+  })
+}
+
 export function selectedTaskDeletionEffects(selected?: TaskDeletionEffects): TaskDeletionEffects {
-  const effects =
-    selected === undefined
-      ? Object.freeze({
-          content: createFileTaskDeletionContentEffects(),
-          repositories: createGitTaskDeletionRepositoryEffects(),
-        })
-      : selected
+  const effects = selected === undefined ? composeLocalTaskDeletionEffects() : selected
   if (effects === null || typeof effects !== 'object')
     throw new TypeError('Task deletion requires complete effects')
   requireTaskDeletionContentEffects(effects.content)

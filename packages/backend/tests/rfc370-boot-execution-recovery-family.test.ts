@@ -3,7 +3,6 @@
 import { describe, expect, test } from 'bun:test'
 import { runBootExecutionRecovery } from '@/modules/task-execution/application/bootExecutionRecovery'
 import { runTaskExecutionBootRecovery } from '@/modules/task-execution/composition/bootRecovery'
-import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { createLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/infrastructure/local/bootExecutionRecovery'
 import type {
   BootExecutionRecoveryFactory,
@@ -292,7 +291,6 @@ describe('RFC-370 selected boot recovery family', () => {
         return factory
       },
     })
-    expect(selectLocalBootExecutionRecoveryFactory(factory)).toBe(factory)
     expect((await runTaskExecutionBootRecovery(input)).finalization).toBe(family.finalization)
     expect(reads).toBe(1)
     expect(factory.creates).toBe(1)

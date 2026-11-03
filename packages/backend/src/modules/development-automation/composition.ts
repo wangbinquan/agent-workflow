@@ -8,6 +8,9 @@ import type { ActionWorkspaceEffects } from './application/ports/actionWorkspace
 import { selectActionWorkspaceEffects } from './infrastructure/actionWorkspaceEffects'
 export type { ActionWorkspaceEffects }
 export { selectDevelopmentWorkspaceEffectBinding } from './infrastructure/actionWorkspaceEffects'
+// RFC-431: the standalone profile's local selections (the hosted profile selects its own).
+export { createFileActionWorkspaceEffects } from './infrastructure/local/fileActionWorkspaceEffects'
+export { createFileRepositoryBaselineEffectsFactory } from './infrastructure/local/fileRepositoryBaselineEffects'
 import type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
 import type { VerificationCommandEffectsFactory } from './application/ports/verificationCommandEffects'
 export type { VerificationCommandEffectsFactory }
@@ -525,10 +528,11 @@ export interface PipelinePurposeSelection extends PipelineAdapterBinding {
   readonly staging: PipelineStagingFactories
 }
 
+/** RFC-431: each deployment selects all three purposes (standalone: `composeLocalDevelopmentPurposes`). */
 export interface DevelopmentPurposeSelection {
-  readonly requirement?: RequirementPurposeSelection
-  readonly pipeline?: PipelinePurposeSelection
-  readonly approval?: ApprovalAdapterBinding
+  readonly requirement: RequirementPurposeSelection
+  readonly pipeline: PipelinePurposeSelection
+  readonly approval: ApprovalAdapterBinding
 }
 
 export interface SelectedDevelopmentPurposeRoot {

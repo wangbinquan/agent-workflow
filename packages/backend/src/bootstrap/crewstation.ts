@@ -327,6 +327,8 @@ export async function composeCrewStationProfile(
       }),
       // RFC-429: reads, attempt contexts and mission input blobs are members of evidenceArtifacts.
       evidenceArtifacts: evidence.evidenceArtifacts,
+      // RFC-431: graph-development artifacts share the hosted evidence store (standalone keeps its own root).
+      graphDevelopmentArtifacts: evidence.evidenceArtifacts,
       reviewArtifacts,
       // §10 V16: structural diffs and change narratives as object publications;
       // the code-review reads themselves arrive with the workspace selections.

@@ -32,6 +32,8 @@ export type {
   ResourcePackagePluginArtifactOwner,
   SkillPackageContentReader,
 }
+/** RFC-431: the standalone selection — plugin generations under a local plugin root. */
+export { createFileResourcePackagePluginArtifactOwner }
 
 export interface PostgresqlResourcePackageProviderComposition extends ResourcePackageProviderComposition {
   readonly mutationSessionFactory: PostgresqlResourcePackageMutationSessionFactory

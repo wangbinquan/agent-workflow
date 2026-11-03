@@ -69,8 +69,12 @@ describe('RFC-364 production bindings', () => {
             'loadVisibleMcp:(authority,id)=>input.mcpCatalog().queries.get(authority,{id}),}',
         )
         expect(source.text).not.toContain('getMcpRuntimeTestService')
-        expect(parse('bootstrap/daemonModules/adapters.ts').text).toContain(
+        // RFC-431: the standalone profile states the local diagnostics family as its selection.
+        expect(parse('bootstrap/standalone.ts').text).toContain(
           'mcpDiagnostics: composeLocalMcpDiagnostics',
+        )
+        expect(parse('bootstrap/daemonModules/adapters.ts').text).not.toContain(
+          'composeLocalMcpDiagnostics',
         )
         expect(parse('bootstrap/daemonApplication.ts').text).toContain(
           'phase.scope.createMcpRuntimeTests',

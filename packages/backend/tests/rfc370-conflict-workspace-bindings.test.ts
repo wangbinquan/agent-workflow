@@ -85,9 +85,15 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
             entry.name.getText(source) === 'automationWorkspaceEffects',
         ),
     ).toBe(false)
-    expect(property(source, selection[0]!, 'conflictWorkspaceSelected')).toBe(
-      `${receiver}.conflictMergeWorkspaceEffects !== undefined`,
-    )
+    // RFC-431: every deployment selects the action workspace; no conflict pairing flag remains.
+    expect(
+      ts.isObjectLiteralExpression(selected) &&
+        selected.properties.some(
+          (entry) =>
+            ts.isPropertyAssignment(entry) &&
+            entry.name.getText(source) === 'conflictWorkspaceSelected',
+        ),
+    ).toBe(false)
   }
   for (const path of [
     'bootstrap/daemonModules/digitalEmployee.ts',
@@ -131,17 +137,15 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-conflict-root-',
   },
   (scope) => {
-    test('missing action owner fails before allocation, and a complete pair assembles without launching an effect', async () => {
+    // RFC-431: every deployment states its action workspace, so a selected conflict owner always has its pair
+    // (with only the conflict owner selected, the standalone profile's local action workspace).
+    test('a selected conflict owner always has its action owner, and a complete pair assembles without launching an effect', async () => {
       const codec = new WorkspaceReferenceCodec()
       const contents = new OpaqueContentFactory(codec)
       const conflict = new OpaqueConflictEffects(codec)
       const action = new OpaqueActionEffects(codec, contents)
-      const error: unknown = await scope.open({ conflictMergeWorkspaceEffects: conflict }).then(
-        () => undefined,
-        (error: unknown) => error,
-      )
-      expect(error).toBeInstanceOf(Error)
-      expect((error as Error).message).toBe('conflict-workspace-action-effects-required')
+      const paired = await scope.open({ conflictMergeWorkspaceEffects: conflict })
+      expect(paired.app).toBeDefined()
       expect(conflict.allocations).toEqual([])
       expect(action.allocations).toEqual([])
       const evidenceRoot = mkdtempSync(join(tmpdir(), 'aw-conflict-root-evidence-'))
@@ -169,9 +173,12 @@ describeEachProviderHttpApplication(
         conflictMergeWorkspaceEffects: conflict,
         actionWorkspaceEffects: action,
       })
+      // The native evidence store is still the one the application composes: development automation binds its
+      // readers at composition, which opens it. RFC-431: only the requirement writer's staging root waits for
+      // the first document write.
       expect(existsSync(join(opened.appHome, 'evidence', 'blobs'))).toBe(true)
       expect(existsSync(join(opened.appHome, 'evidence', 'bundles'))).toBe(true)
-      expect(existsSync(join(opened.appHome, 'evidence', 'staging'))).toBe(true)
+      expect(existsSync(join(opened.appHome, 'evidence', 'staging'))).toBe(false)
       expect(conflict.allocations).toEqual([])
       expect(action.allocations).toEqual([])
       expect(contents.calls).toEqual([])

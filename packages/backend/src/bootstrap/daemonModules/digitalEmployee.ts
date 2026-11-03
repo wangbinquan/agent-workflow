@@ -4,10 +4,8 @@ import type { DigitalEmployeeWriterInstallation as ImportedDigitalEmployeeWriter
 // RFC-383: one digital-employee module and its satellites per provider session.
 import {
   composeDigitalEmployee,
-  createProgramArtifactStore,
   composeDigitalEmployeeWriterCutoverFor,
   createEmployeeReactionRoundQueries,
-  createEmployeeInputArtifactStore,
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeTaskCatalogSource,
@@ -63,7 +61,6 @@ import { canManageCaseMembers } from '@/services/employeeCaseMembers'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { ValidationError, ForbiddenError } from '@/util/errors'
-import { join } from 'node:path'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { ResourceAcl, UpdateResourceAclBody } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -89,12 +86,7 @@ import { composeBuiltinWorkflowCatalog } from '@/modules/resource-catalog/compos
 import { createCommittedHumanInputQueries } from '@/modules/collaboration/composition'
 import { createEmployeeExecutionArtifactQueries } from '@/modules/task-execution/composition'
 import { composeDesignAssistGeneration } from '@/modules/task-execution/composition/designAssistGeneration'
-import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
-import {
-  createGraphDevelopmentArtifactBinding,
-  createGraphDevelopmentVerificationBinding,
-  graphDevelopmentRequestArtifacts,
-} from '@/modules/development-automation/composition/graphDevelopmentBindings'
+import { graphDevelopmentRequestArtifacts } from '@/modules/development-automation/composition/graphDevelopmentBindings'
 import { composeBuiltinEmployeeJobs } from '@/modules/digital-employee/composition/builtinJobTemplates'
 import { buildGraphDeliveryJobs } from '@/modules/development-automation/composition/graphDeliveryJob'
 import {
@@ -102,13 +94,15 @@ import {
   composeGraphDeliveryLifecycleRuntimeCodec,
 } from '@/modules/development-automation/composition/graphDeliveryLifecycle'
 
+import type { DeploymentSelections } from '../deploymentProfile'
+
 type EmployeeOptions = Parameters<typeof composeDigitalEmployee>[0]
-type WorkItemsInput = Parameters<typeof composeDevelopmentEmployeePlatformWorkItems>[0]
 export interface DaemonDigitalEmployeeInput {
   readonly historyRestrictions: HistoryRestrictionPort
   readonly graphAssist: Parameters<typeof composeDesignAssistGeneration>[0]
-  readonly verificationCommands?: Parameters<typeof createGraphDevelopmentVerificationBinding>[0]
-  readonly repositoryRevisionContent?: Parameters<typeof composeGraphDevelopment>[0]['content']
+  // RFC-431: the deployment's selections arrive stated; this bundle substitutes no default.
+  readonly verificationCommands: DeploymentSelections['verificationCommands']
+  readonly repositoryRevisionContent: Parameters<typeof composeGraphDevelopment>[0]['content']
   readonly content: Parameters<typeof createCommittedHumanInputQueries>[0]['content']
   readonly writerInstallation: ImportedDigitalEmployeeWriterInstallation
   readonly db: PersistenceDb
@@ -138,24 +132,22 @@ export interface DaemonDigitalEmployeeInput {
   >
   readonly developmentPurposeRoot: Pick<SelectedDevelopmentPurposeRoot, 'pipeline'>
   readonly workspaceEffects: ReturnType<typeof selectDevelopmentWorkspaceEffectBinding>
-  readonly repositoryBaselines?: WorkItemsInput['repositoryBaselines']
-  readonly evidenceArtifacts?: WorkItemsInput['evidenceArtifacts']
+  readonly repositoryBaselines: DeploymentSelections['repositoryBaselines']
+  readonly evidenceArtifacts: DeploymentSelections['evidenceArtifacts']
+  readonly graphDevelopmentArtifacts: DeploymentSelections['graphDevelopmentArtifacts']
   readonly repositoryCandidateEffects?: NonNullable<
     Parameters<typeof bindChangeCandidateParticipant>[0]
   >['candidateEffects']
   readonly conflictMergeWorkspaceEffects?: NonNullable<
     Parameters<typeof bindConflictMergeParticipant>[0]
   >['effects']
-  readonly adapters?: {
-    readonly employeePrograms?: EmployeeOptions['programArtifacts']
-    readonly employeeInputArtifacts?: EmployeeOptions['inputArtifacts']
-    readonly employeeCaseWorkspaceEffects?: NonNullable<
-      Parameters<typeof bindEmployeeCaseWorkspaceParticipant>[0]
-    >['effects']
-    readonly programFixtureProcess?: Parameters<
-      typeof createExecutionContractProgramFixtureAdapter
-    >[0]['process']
-  }
+  readonly adapters: Pick<
+    DeploymentSelections,
+    | 'employeePrograms'
+    | 'employeeInputArtifacts'
+    | 'employeeCaseWorkspaceEffects'
+    | 'programFixtureProcess'
+  >
 }
 
 /** RFC-383: the authoring, HTTP, work-start and OS worker all share this passive session graph. */
@@ -163,7 +155,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const { db, appHome, resources, repository, integration, taskExecution, log } = input
   const graphDeliveryTypePackage =
     composeGraphDeliveryLifecycleTypePackage(graphEmployeeTypePackage)
-  const employeePrograms = input.adapters?.employeePrograms ?? createProgramArtifactStore(appHome)
+  const employeePrograms = input.adapters.employeePrograms
   const programToolSource = createArtifactProgramToolSource(employeePrograms)
   const executionContracts = composeExecutionContract({
     resources: createExecutionContractResourceAdapter(
@@ -177,7 +169,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     programFixtures: createExecutionContractProgramFixtureAdapter({
       appHome,
       programs: programToolSource,
-      process: input.adapters?.programFixtureProcess,
+      process: input.adapters.programFixtureProcess,
     }),
   })
   const legacyPlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
@@ -221,16 +213,14 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     },
   }
   const writerCutover = composeDigitalEmployeeWriterCutoverFor(db, input.writerInstallation)
-  const employeeInputArtifacts =
-    input.adapters?.employeeInputArtifacts ??
-    createEmployeeInputArtifactStore(join(appHome, 'artifacts', 'employee-inputs'))
+  const employeeInputArtifacts = input.adapters.employeeInputArtifacts
   const reactionRounds = createEmployeeReactionRoundQueries(db)
   const conflictMerge = bindConflictMergeParticipant({
     effects: input.conflictMergeWorkspaceEffects,
   })
   const sourceControl = bindEmployeeCaseWorkspaceParticipant({
     publicationTransport: repository.repositoryPublicationTransport,
-    effects: input.adapters?.employeeCaseWorkspaceEffects,
+    effects: input.adapters.employeeCaseWorkspaceEffects,
   })
   const candidates = {
     ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
@@ -243,7 +233,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     db,
     content: input.content,
   })
-  const graphArtifacts = createGraphDevelopmentArtifactBinding(appHome, input.evidenceArtifacts)
+  const graphArtifacts = input.graphDevelopmentArtifacts
   const graphCases = createGraphCaseIntake({
     readCase: (caseId) => module.runtime.queries.getCase(caseId),
     owner: (caseId) => module.runtime.queries.getCaseAcl(caseId),
@@ -276,8 +266,8 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
         return binding.remoteUrl
       },
     },
-    content: input.repositoryRevisionContent ?? composeLocalRepositoryRevisionContent(),
-    verification: createGraphDevelopmentVerificationBinding(input.verificationCommands),
+    content: input.repositoryRevisionContent,
+    verification: input.verificationCommands,
     assist: composeDesignAssistGeneration(input.graphAssist),
     changed: (caseId) => {
       void Promise.all([

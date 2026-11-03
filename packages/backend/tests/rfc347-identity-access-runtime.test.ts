@@ -277,6 +277,8 @@ describe('RFC-347 exact production source locks', () => {
       //（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上）。
       'src/bootstrap/deploymentProfile.ts',
       'src/bootstrap/persistenceSchema.ts',
+      // RFC-431: the standalone profile states the local credential adapters as its selection.
+      'src/bootstrap/standalone.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',
       'src/services/ownerScopedName.ts',

@@ -1,7 +1,7 @@
 // RFC-429: evidence reads, attempt contexts and mission input capture are members of the deployment's
 // evidenceArtifacts, and requirement document commands belong to the requirement purpose. Root-binding tests that
 // used to inject the retired `evidenceRead` / `evidenceDocumentCommands` selections inject through these shapes.
-import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
+import { composeLocalDevelopmentPurposes } from '@/bootstrap/developmentPurposeRoot'
 import type { EvidenceDocumentCommands } from '@/modules/development-automation/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/application/ports/evidenceArtifacts'
@@ -44,7 +44,8 @@ export function requirementPurposeWith(input: {
   readonly evidenceArtifacts: EvidenceArtifactPort
   readonly documentCommands: EvidenceDocumentCommands
 }) {
-  const local = composeDevelopmentPurposeRoot({
+  // RFC-431: the standalone purposes are composed by the standalone profile's purpose builder.
+  const local = composeLocalDevelopmentPurposes({
     appHome: input.appHome,
     evidenceArtifacts: input.evidenceArtifacts,
   }).requirement

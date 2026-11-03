@@ -3,6 +3,7 @@ import { expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import type { DeploymentSelections } from '@/bootstrap/deploymentProfile'
+import { deploymentSelectionGroup } from './deploymentSelectionPartition'
 
 const read = (path: string) =>
   readFileSync(new URL('../../src/bootstrap/' + path, import.meta.url), 'utf8')
@@ -19,7 +20,10 @@ export function expectDeploymentSelection(key: keyof DeploymentSelections, type?
   expect(contract).toHaveLength(1)
   const field = contract[0]!.members.find((node) => node.name?.getText(source) === key)
   if (!field || !ts.isPropertySignature(field)) throw new Error('missing selection: ' + key)
-  expect(field.questionToken).toBeDefined()
+  // RFC-431: a selection is optional only while its standalone default is still pending (steps 3–4).
+  const group = deploymentSelectionGroup(key)
+  expect(group).toBeDefined()
+  expect(field.questionToken !== undefined).toBe(group === 'optional')
   if (type !== undefined)
     expect(field.type?.getText(source).replace(/\s/g, '')).toBe(type.replace(/\s/g, ''))
   for (const [path, name] of [

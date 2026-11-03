@@ -1,18 +1,5 @@
-import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
-import type { VerificationCommandEffectsFactory } from '../application/ports/verificationCommandEffects'
-import { EvidenceStore } from '../infrastructure/evidenceStore'
-import { createLocalVerificationCommandEffectsFactory } from '../infrastructure/local/verificationCommandEffects'
+// RFC-431: the graph-development artifact store and verification commands are deployment selections
+// (`graphDevelopmentArtifacts`, `verificationCommands`); only the request-artifact view is composed here.
 import { createGraphDesignArtifacts } from '../infrastructure/graph-development/designArtifacts'
 
-export function createGraphDevelopmentArtifactBinding(
-  appHome: string,
-  selected?: EvidenceArtifactPort,
-): EvidenceArtifactPort {
-  return selected ?? new EvidenceStore(appHome)
-}
-export function createGraphDevelopmentVerificationBinding(
-  selected?: VerificationCommandEffectsFactory,
-) {
-  return selected ?? createLocalVerificationCommandEffectsFactory()
-}
 export const graphDevelopmentRequestArtifacts = createGraphDesignArtifacts

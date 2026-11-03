@@ -3,12 +3,6 @@ import type { DeploymentKind, DeploymentSelections } from './deploymentProfile'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import type {
-  WorkspaceUploadContentFactory,
-  IsolationWorkspaceFactory,
-  RepositoryGitWorkspaceFactory,
-} from '@/modules/source-control/public/types'
-import type { ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { SecretBox } from '@/auth/secretBox'
 import type { loadConfig } from '@/config'
@@ -20,7 +14,6 @@ import type { composeDatabaseMigrationModule } from '@/modules/system-operations
 import type { DaemonProviderListenerRuntimeSession } from './daemonProviderRuntimeRouter'
 import type { DaemonProviderSessionLifecycleInput } from './daemonProviderSession'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
-import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 
 type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModule>[0]['admission']
 
@@ -34,12 +27,7 @@ export interface DaemonProviderSessionComposeInput extends DeploymentSelections 
   readonly lifecycle: DaemonProviderSessionLifecycleInput
   readonly config: ReturnType<typeof loadConfig>
   readonly configuration: ApplicationConfigurationQueries
-  readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
-  readonly workspaceUploads: WorkspaceUploadContentFactory
-  readonly isolationWorkspaces: IsolationWorkspaceFactory
-  readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
-  readonly workspaceReads: RepositoryWorkspaceReadQueries
   readonly daemonRuntime: DaemonRuntimeQueries
   readonly token: string
   readonly secretBox: SecretBox

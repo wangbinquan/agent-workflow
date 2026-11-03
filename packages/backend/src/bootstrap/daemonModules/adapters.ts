@@ -1,5 +1,3 @@
-import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import {
   composePostgresqlSystemOperations,
   composeSystemOperations,
@@ -8,8 +6,6 @@ import {
   composePostgresqlMaintenanceDiskOperations,
   composeSqliteMaintenanceDiskOperations,
 } from '@/modules/system-operations/composition/maintenanceDisk'
-import { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DaemonProviderCoreAdapters } from './providerCore'
 import type { DbClient } from '@/db/client'
@@ -54,16 +50,6 @@ export const DAEMON_PROVIDER_CORE_ADAPTERS = {
 } satisfies {
   readonly [P in DatabaseProvider]: (input: CoreAdapterInput[P]) => DaemonProviderCoreAdapters<P>
 }
-
-export function standaloneModuleAdapters() {
-  return Object.freeze({
-    systemAgentRunFamily: composeLocalSystemAgentRunFamily,
-    mcpDiagnostics: composeLocalMcpDiagnostics,
-    runtimeManagement: composeLocalRuntimeManagement,
-    workspacePresence: createFileWorkspacePresenceQueries,
-  })
-}
-export type DaemonModuleAdapters = ReturnType<typeof standaloneModuleAdapters>
 
 type TaskAdapterInput = {
   readonly sqlite: { readonly db: DbClient }

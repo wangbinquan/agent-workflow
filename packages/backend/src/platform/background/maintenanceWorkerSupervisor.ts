@@ -36,7 +36,8 @@ interface MaintenanceWorkerSupervisorCommonOptions {
   readonly onDelta?: (runId: string, job: MaintenanceJobKey, delta: MaintenanceWorkerDelta) => void
   readonly onEvent?: (event: MaintenanceWorkerEvent) => void
   readonly workerFactory?: () => WorkerLike
-  readonly effectsBootstrap?: MaintenanceWorkerEffectsDescriptor
+  /** RFC-431: `null` (standalone) starts the plain worker, which composes its own local effects. */
+  readonly effectsBootstrap?: MaintenanceWorkerEffectsDescriptor | null
   readonly now?: () => number
   readonly heartbeatTimeoutMs?: number
   readonly setTimer?: (fn: () => void, ms: number) => unknown
@@ -354,8 +355,9 @@ export function startMaintenanceWorkerSupervisor(
         appHome: options.appHome,
         ...options.databaseInit,
       }
-      if (options.effectsBootstrap === undefined) post(init)
-      else next.postMessage(createMaintenanceWorkerEffectsInit(init, options.effectsBootstrap))
+      const effectsBootstrap = options.effectsBootstrap ?? undefined
+      if (effectsBootstrap === undefined) post(init)
+      else next.postMessage(createMaintenanceWorkerEffectsInit(init, effectsBootstrap))
       handshakeTimer = setTimer(
         () => scheduleRestart('maintenance worker handshake timed out', true),
         10_000,

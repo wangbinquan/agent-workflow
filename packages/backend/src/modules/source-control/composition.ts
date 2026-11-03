@@ -55,6 +55,14 @@ export {
 } from './composition/repositoryPublicationTransport'
 export { composeWorkspaceMaintenanceCommand } from './composition/workspaceMaintenance'
 export { createFileWorkspacePresenceQueries } from './infrastructure/local/fileWorkspacePresence'
+// RFC-431: the standalone profile's local selections (the hosted profile selects its own).
+export { createFileWorkspaceUploadContentFactory } from './infrastructure/local/fileWorkspaceUploadContent'
+export { createLocalIsolationWorkspaceFactory } from './infrastructure/local/localIsolationWorkspace'
+export { createFileRepositoryGitWorkspaceFactory } from './infrastructure/local/fileRepositoryGitWorkspace'
+export { createFileRepositoryWorkspaceReadQueries } from './infrastructure/local/fileRepositoryWorkspaceReadQueries'
+export { createNodeWorkspaceMaintenanceFilesystem } from './infrastructure/nodeWorkspaceMaintenanceFilesystem'
+export { createFileEmployeeCaseWorkspaceEffectsFactory } from './infrastructure/local/fileEmployeeCaseWorkspaceEffects'
+export { composeLocalWorkspaceExcludeProfiles } from './composition/workspaceExcludeProfiles'
 export { buildRepositoryTransportConnectionProjection } from './application/repositoryTransportConnectionProjection'
 // RFC-359 W4-B6：仓库工作区存储只有一份；两个 bootstrap 与存量调用方仍经各自的具名绑定装配。
 export {
@@ -379,7 +387,10 @@ export type {
 
 export { createWorkspaceContentScope } from './infrastructure/workspaceContent'
 /** The standalone workspace content (local files); hosted roots select their own. */
-export { createFileWorkspaceContentEffects } from './infrastructure/local/fileWorkspaceContentEffects'
+export {
+  createFileWorkspaceContentEffects,
+  createFileWorkspaceContentEffectsFactory,
+} from './infrastructure/local/fileWorkspaceContentEffects'
 export type {
   WorkspaceContentEffects,
   WorkspaceContentEffectsFactory,

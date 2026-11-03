@@ -1,5 +1,6 @@
 export {
   createLocalEvidenceArtifactPort,
+  createLocalGraphDevelopmentArtifactPort,
   createLocalEvidenceStagingFactory,
   createLocalEvidenceStagingNamespace,
   type LocalEvidenceStagingNamespace,
@@ -18,7 +19,10 @@ import {
   createLocalEvidenceStagingFactory,
   createLocalEvidenceStagingNamespace,
 } from '../infrastructure/local/evidenceStaging'
-import { createFileEvidenceDocumentCommands } from '../infrastructure/local/fileEvidenceDocumentCommands'
+import {
+  createFileEvidenceDocumentCommands,
+  createFileEvidenceDocumentCommandsOnFirstWrite,
+} from '../infrastructure/local/fileEvidenceDocumentCommands'
 import { assertEvidenceStagingFactory } from '../application/evidenceStaging'
 
 /** Owner composition selects the writer, artifact receiver and staging together. */
@@ -54,4 +58,4 @@ export function composeRequirementMaterializerContent(input: {
   return { staging, documentCommands }
 }
 
-export { createFileEvidenceDocumentCommands }
+export { createFileEvidenceDocumentCommands, createFileEvidenceDocumentCommandsOnFirstWrite }

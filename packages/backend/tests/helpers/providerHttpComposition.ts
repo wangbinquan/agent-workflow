@@ -13,6 +13,7 @@ import { composeDatabaseMigrationModule } from '@/modules/system-operations/comp
 import { composeLocalExecutionAuthority } from '@/modules/system-operations/composition'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { join } from 'node:path'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { ProviderDatabaseHarness } from './eachProvider'
 import {
@@ -84,6 +85,8 @@ export async function createProviderHttpCompositionFixture(
           taskExecutionResources: modules.taskExecution.resources,
         },
         modules,
+        // RFC-431: the composition reads the standalone profile's selections.
+        selections: standaloneSelections({ appHome: application.appHome }),
       })
       return {
         composition: http.composition,

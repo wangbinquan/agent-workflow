@@ -25,17 +25,12 @@ const RETIRED = [
   'executionHost',
   'DaemonProviderSessionComposer',
 ]
-// Only startup-derived values may strengthen a selection from optional to required.
+// Only startup-derived values may strengthen a selection from optional to required. RFC-431: the
+// configuration binding and the four workspace factories are required in the contract itself (the
+// standalone profile states them), so only the secret box — created after the startup lock — remains.
 const REQUIRED_OVERRIDES = {
-  DaemonProviderSessionComposeInput: [
-    'applicationConfiguration',
-    'workspaceUploads',
-    'isolationWorkspaces',
-    'repositoryGitWorkspaces',
-    'workspaceReads',
-    'secretBox',
-  ],
-  DaemonApplicationInput: ['applicationConfiguration', 'secretBox'],
+  DaemonProviderSessionComposeInput: ['secretBox'],
+  DaemonApplicationInput: ['secretBox'],
 } as const
 function descendants<T extends ts.Node>(root: ts.Node, match: (node: ts.Node) => node is T): T[] {
   const found: T[] = []

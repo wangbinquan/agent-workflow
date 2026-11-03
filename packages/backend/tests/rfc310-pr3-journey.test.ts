@@ -74,6 +74,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -289,7 +290,12 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   requirementOnlyPolicyId = requirementOnlyPolicy.id
   // 与应用同一个 app home：evidence 根 = `<appHome>/evidence`，用例最后要 unlink
   // 应用刚经 HTTP 落盘的那个 blob，两个 EvidenceStore 必须指向同一棵目录。
-  const purposeRoot = composeDevelopmentPurposeRoot({ appHome: opened.appHome })
+  // RFC-431: the standalone profile's purposes and evidence store for the same app home.
+  const standalone = standaloneSelections({ appHome: opened.appHome })
+  const purposeRoot = composeDevelopmentPurposeRoot({
+    selection: standalone.developmentPurposes,
+    evidenceArtifacts: standalone.evidenceArtifacts,
+  })
   automation = composeDevelopmentAutomation({
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db,

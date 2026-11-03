@@ -647,16 +647,6 @@ function binding(root: ts.Node, sf: ts.SourceFile, name: string): ts.Expression 
   expect(found).toHaveLength(1)
   const expression = found[0]!.initializer
   if (expression === undefined) throw new Error('missing initializer: ' + name)
-  if (
-    name === 'nodeRunPrompts' &&
-    ts.isConditionalExpression(expression) &&
-    compact(expression.condition, sf) === 'selectedTaskRuns===undefined'
-  ) {
-    if (compact(expression.whenFalse, sf) !== 'selectedTaskRuns.nodeRunPrompts') {
-      throw new Error('the complete run selection must own the root prompt reader')
-    }
-    return expression.whenTrue
-  }
   return expression
 }
 
@@ -699,18 +689,52 @@ function factoryResult(value: ts.Expression): ts.Expression {
   return returns[0]!.expression
 }
 
+/** RFC-431: the standalone profile's task-run selection composes the module's file prompt default once. */
+function expectStandalonePromptSelection(): void {
+  const standalone = source('bootstrap/standalone.ts')
+  const selected = onlyCall(standalone, standalone, 'composeNodeRunPromptOperations')
+  expect(selected.arguments.map((value) => compact(value, standalone))).toEqual([
+    'undefined',
+    "join(appHome,'runs')",
+  ])
+  const member = selected.parent
+  if (!ts.isPropertyAssignment(member) || member.name.getText(standalone) !== 'nodeRunPrompts')
+    throw new Error('the prompt default must be a member of the task-run selection')
+  const selection = member.parent.parent
+  expect(ts.isCallExpression(selection) && selection.expression.getText(standalone)).toBe(
+    'composeLocalTaskRunSelection',
+  )
+}
+
+/** RFC-431: the application binds the deployment's task-run selection and takes its root prompt reader. */
+function expectPromptsFromBoundSelection(body: ts.Node, sf: ts.SourceFile): void {
+  expect(compact(binding(body, sf, 'taskRunRoot'), sf)).toBe(
+    'bindTaskRunRootSelection(input.taskRunSelection)',
+  )
+  const destructured: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined &&
+      compact(node.initializer, sf) === 'taskRunRoot'
+    )
+      destructured.push(...node.name.elements.map((element) => element.name.getText(sf)))
+    ts.forEachChild(node, visit)
+  }
+  visit(body)
+  expect(destructured).toContain('nodeRunPrompts')
+}
+
 test('CLI initial and replacement sessions carry one prompt selection through SQLite and PG', () => {
   const sf = source('bootstrap/daemonStart.ts'),
-    body = compositionBody(sf, 'composeDaemonApplication'),
-    selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  // RFC-428: no deployment selects prompt content; the local root composes the module's file default.
+    body = compositionBody(sf, 'composeDaemonApplication')
+  // RFC-428: no deployment selects prompt content. RFC-431: the standalone profile composes the module's file
+  // default inside its task-run selection, and the application takes the reader from the bound selection.
   expectNoDeploymentSelection('nodeRunPromptContentEffects')
-  expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
-    'undefined',
-    "join(input.appHome,'runs')",
-  ])
-  expect(binding(body, sf, 'nodeRunPrompts')).toBe(selected)
-  expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(1)
+  expectStandalonePromptSelection()
+  expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(0)
+  expectPromptsFromBoundSelection(body, sf)
   expect(
     compact(
       properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
@@ -757,16 +781,12 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
 
 test('PG application carries its one prompt receiver through memory, runtime and the actual HTTP graph', () => {
   const sf = source('bootstrap/daemonApplication.ts'),
-    body = compositionBody(sf, 'composeDaemonApplication'),
-    selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  // RFC-428: no deployment selects prompt content; the local root composes the module's file default.
+    body = compositionBody(sf, 'composeDaemonApplication')
+  // RFC-428: no deployment selects prompt content; RFC-431: the standalone profile composes the file default.
   expectNoDeploymentSelection('nodeRunPromptContentEffects')
-  expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
-    'undefined',
-    "join(input.appHome,'runs')",
-  ])
-  expect(binding(body, sf, 'nodeRunPrompts')).toBe(selected)
-  expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(1)
+  expectStandalonePromptSelection()
+  expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(0)
+  expectPromptsFromBoundSelection(body, sf)
   expect(
     compact(
       properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(

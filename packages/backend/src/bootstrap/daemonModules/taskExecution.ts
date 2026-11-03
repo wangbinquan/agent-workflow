@@ -124,13 +124,16 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
     Pick<ProviderDependencies['runtime'], 'isolationWorkspaces' | 'repositoryGitWorkspaces'> & {
       readonly nodeRunPrompts: RouteInputs['nodeRunPrompts']
       readonly portArtifacts: ReturnType<typeof composePortArtifactOperations>
-      readonly archive?: ProviderDependencies['archive']
-      readonly workspaceReads?: ProviderDependencies['workspaceReads']
-      readonly effects?: RouteInputs['effects']
-      readonly archivedEvents?: RouteInputs['archivedEvents']
+      // RFC-431: the deployment's selections arrive stated (the optional ones are steps 3–4 or hosted-only).
+      readonly archive: NonNullable<ProviderDependencies['archive']>
+      readonly workspaceReads: ProviderDependencies['workspaceReads']
+      readonly effects: NonNullable<RouteInputs['effects']>
+      readonly archivedEvents: NonNullable<RouteInputs['archivedEvents']>
       readonly reviewArtifacts?: ReviewInputs['reviewArtifacts']
-      readonly reviewRollbackSnapshots?: ReviewInputs['rollbackSnapshots']
-      readonly workspaceUploads?: ProviderDependencies['routeLaunch']['workspaceUploads']
+      readonly reviewRollbackSnapshots: NonNullable<ReviewInputs['rollbackSnapshots']>
+      readonly workspaceUploads: NonNullable<
+        ProviderDependencies['routeLaunch']['workspaceUploads']
+      >
       readonly inputFiles?: ProviderDependencies['routeLaunch']['inputFiles']
       readonly preparationEffects?: PreparationInput['preparationEffects']
       readonly scratchEffects?: PreparationInput['scratchEffects']

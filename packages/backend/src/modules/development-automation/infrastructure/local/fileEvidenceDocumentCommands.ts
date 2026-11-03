@@ -23,3 +23,18 @@ export function createFileEvidenceDocumentCommands(deps: {
     },
   }
 }
+
+/**
+ * RFC-431: the standalone requirement purpose's writer. The standalone profile is built before the
+ * startup lock and its selections perform no IO, so the staging root is created by the first write.
+ */
+export function createFileEvidenceDocumentCommandsOnFirstWrite(deps: {
+  readonly stagingRoot: string
+  readonly evidence: Pick<EvidenceStore, 'importStagedTree'>
+}): EvidenceDocumentCommands {
+  let commands: EvidenceDocumentCommands | undefined
+  return Object.freeze<EvidenceDocumentCommands>({
+    writeDocument: (input) =>
+      (commands ??= createFileEvidenceDocumentCommands(deps)).writeDocument(input),
+  })
+}

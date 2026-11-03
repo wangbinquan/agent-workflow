@@ -33,6 +33,7 @@ import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { composeUnstartedApplication } from './helpers/providerHttpApplication'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
 
 function fixture(harness: ProviderDatabaseHarness) {
@@ -61,6 +62,8 @@ function fixture(harness: ProviderDatabaseHarness) {
     configPath,
   })
   const input: DaemonApplicationInput = {
+    // RFC-431: the application graph receives the standalone profile's selections.
+    ...standaloneSelections({ appHome }),
     requiredProvider: null,
     deploymentKind: 'standalone',
     frontendMarker: null,

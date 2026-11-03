@@ -57,11 +57,11 @@ test('the deployment is selected explicitly; standalone needs nothing', async ()
   // Platform variables alone never switch the deployment.
   expect(readDeploymentMode(HOSTED_ENV)).toBe('standalone')
   expect(() => readDeploymentMode({ AW_DEPLOYMENT_MODE: 'cloud' })).toThrow(DeploymentModeError)
+  // RFC-431: the standalone profile states its own selections (rfc394-deployment-profile locks the set).
   expect(await selectDeployment({}).profile()).toMatchObject({
     kind: 'standalone',
     requiredProvider: null,
     listen: {},
-    selections: {},
   })
 })
 

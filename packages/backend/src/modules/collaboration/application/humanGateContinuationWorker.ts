@@ -19,7 +19,8 @@ export interface HumanGateContinuationWorkerCycle {
 }
 
 export function createHumanGateContinuationWorkerDefinition(input: {
-  readonly artifacts?: HumanGateArtifactRecovery
+  /** RFC-431: `null` (standalone) — the deployment has no artifact recovery. */
+  readonly artifacts?: HumanGateArtifactRecovery | null
   readonly listPending: () => Promise<readonly PendingHumanGateContinuation[]>
   readonly drive: (continuation: PendingHumanGateContinuation) => Promise<void>
   readonly reconcileMs?: number
@@ -44,7 +45,11 @@ export function createHumanGateContinuationWorkerDefinition(input: {
   let artifactFailures = 0
 
   const runCycle = async (): Promise<HumanGateContinuationWorkerCycle> => {
-    if (input.artifacts !== undefined && now() - artifactRecoveryAt >= 60_000) {
+    if (
+      input.artifacts !== undefined &&
+      input.artifacts !== null &&
+      now() - artifactRecoveryAt >= 60_000
+    ) {
       const report = await input.artifacts.runOnce()
       artifactRecoveryAt = now()
       artifactFailures += report.failed

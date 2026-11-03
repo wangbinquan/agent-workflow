@@ -408,9 +408,9 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
     visit(sf)
     return result
   }
-  expect(values(cli, 'workspaceUploads')).toEqual([
-    'selectWorkspaceUploadContentFactory(profile.selections.workspaceUploads)',
-  ])
+  // RFC-431: the profile states the factory (standalone: the local files); startup forwards it unchanged.
+  expect(values(cli, 'workspaceUploads')).toEqual([])
+  expect(cli).toContain('...profile.selections,')
   expect(session).toContain('...deploymentSelectionsOf(input)')
   expect(values(pg, 'workspaceUploads')).toEqual(['workspaceUploads'])
   // RFC-382 shares the selected receiver with the bundle and the HTTP dependency record.

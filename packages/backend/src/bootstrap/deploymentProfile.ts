@@ -106,80 +106,100 @@ export interface Deployment {
   verifyDatabaseMigration(): Promise<string>
 }
 
+/**
+ * RFC-431: every deployment states each selection. The standalone profile builds its values in
+ * `standaloneSelections` (`./standalone.ts`), the hosted profile in `./crewstation.ts`; consumers never
+ * substitute a default. Three groups:
+ * - required: both profiles give a value;
+ * - required, nullable: a capability only the hosted deployment has; standalone states `null`;
+ * - optional: the defaults that still need the session graph (RFC-294 S2c step 3) or that are a deployment
+ *   switch or an absent-only behaviour (step 4).
+ */
 export interface DeploymentSelections {
-  readonly contentStore?: ImportedContentStore
+  // ── Required ──
+  applicationConfiguration: ApplicationConfigurationBinding
+  workspaceUploads: WorkspaceUploadContentFactory
+  isolationWorkspaces: IsolationWorkspaceFactory
+  repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
+  workspaceReads: RepositoryWorkspaceReadQueries
+  workspaceContent: WorkspaceContentEffectsFactory
+  readonly workspacePresence: WorkspacePresenceQueries
+  /** RFC-370 §10 V20 — hosted: the fusion engine task's volume workspace. */
+  readonly fusionWorkspaceEffects: FusionWorkspaceEffects
+  readonly workspaceMaintenanceFilesystem: WorkspaceMaintenanceFilesystem
+  workspaceExcludeProfiles: WorkspaceExcludeProfileFactory
+  employeeCaseWorkspaceEffects: EmployeeCaseWorkspaceEffectsFactory
+  /** RFC-370 §10 V16: code-review reads (hosted: of the task volumes). */
+  repositoryRevisionContent: RepositoryRevisionContentFactory
+  /** RFC-370 §10 V16: code-review artifacts (hosted: as object publications). */
+  codeReviewArtifacts: CodeReviewArtifactStore
+  taskRunSelection: TaskRunRootSelection
+  taskArchive: TaskArchiveContentBinding
+  taskDeletionEffects: TaskDeletionEffects
+  archivedNodeEvents: TaskArchivedEventsReader
+  readonly reviewRollbackSnapshots: WorkspaceRollbackSnapshotInspector
+  runtimeInventoryContent: TaskRuntimeInventoryContent
+  bootExecutionRecovery: BootExecutionRecoveryFactory
+  /** RFC-370 §10 V19: where a program tool's contract fixture runs. */
+  programFixtureProcess: ScriptFixtureProcess
+  /** RFC-370 §10 V18: entry checks below an action workspace. */
+  actionWorkspaceEntries: ActionWorkspaceEntries
+  readonly recoveredExecutionTaskIds: () => readonly string[]
+  /** RFC-370 §9.2 V1 — deployment workers started with execution authority (standalone: none). */
+  readonly hostedBackgroundOwners: readonly SignalledDaemonRuntimeOwner[]
+  readonly runtimeManagement: typeof composeLocalRuntimeManagement
+  readonly systemAgentRunFamily: typeof composeLocalSystemAgentRunFamily
+  readonly mcpDiagnostics: typeof composeLocalMcpDiagnostics
+  /** RFC-370 v2 §3.6 — the deployment's credential mechanism. */
+  credentials: CredentialAdapterSelection
+  customObserverPrograms: CustomObserverProgramFactory
+  pluginInstaller: PluginInstallerPort
+  resourcePackagePluginArtifacts: ResourcePackagePluginArtifactOwner
+  employeePrograms: ProgramArtifactPort
+  employeeInputArtifacts: EmployeeInputArtifactPort
+  evidenceArtifacts: EvidenceArtifactPort
+  /**
+   * RFC-431: the graph-development (RFC-396) design artifacts. Hosted: the evidence store itself;
+   * standalone: the app home root, where v0.19.3 and later already keep them.
+   */
+  graphDevelopmentArtifacts: EvidenceArtifactPort
+  readonly developmentPurposes: DevelopmentPurposeSelection
+  verificationCommands: VerificationCommandEffectsFactory
+  repositoryBaselines: RepositoryBaselineEffectsFactory
+  actionWorkspaceEffects: ActionWorkspaceEffects
 
-  applicationConfiguration?: ApplicationConfigurationBinding
-  databaseInstallation?: DaemonDatabaseInstallationPort
-  taskArchive?: TaskArchiveContentBinding
+  // ── Required, nullable: hosted-only capabilities; standalone states null ──
+  taskInputFiles: TaskInputFiles | null
+  humanGateArtifactRecovery: HumanGateArtifactRecovery | null
+  beforeEventObservationWrite: ((tx: PersistenceDb) => Promise<void>) | null
+  taskRecovery: TaskRecoveryDeploymentSelection | null
+  maintenanceEffectsBootstrap: MaintenanceWorkerEffectsDescriptor | null
+  readonly initializeExecution: ((initialize: () => Promise<void>) => Promise<void>) | null
+
+  // ── Optional, step 3: the standalone default needs the session graph ──
+  readonly contentStore?: ImportedContentStore
   skillContent?: SkillContentBinding
-  employeePrograms?: ProgramArtifactPort
-  /** RFC-370 §10 V19: where a program tool's contract fixture runs (hosted only). */
-  programFixtureProcess?: ScriptFixtureProcess
-  /** RFC-370 §10 V18: entry checks below a hosted action workspace (hosted only). */
-  actionWorkspaceEntries?: ActionWorkspaceEntries
-  /** RFC-370 §10 V16: code-review reads of hosted task volumes (hosted only). */
-  repositoryRevisionContent?: RepositoryRevisionContentFactory
-  /** RFC-370 §10 V16: code-review artifacts as object publications (hosted only). */
-  codeReviewArtifacts?: CodeReviewArtifactStore
-  employeeInputArtifacts?: EmployeeInputArtifactPort
-  pluginInstaller?: PluginInstallerPort
-  beforeEventObservationWrite?: (tx: PersistenceDb) => Promise<void>
-  humanGateArtifactRecovery?: HumanGateArtifactRecovery
-  databaseBackup?: DatabaseBackupEffects
-  archivedNodeEvents?: TaskArchivedEventsReader
-  crewStationEvents?: CrewStationEventIngress
-  intentArtifacts?: IntentArtifactSelection
-  evidenceArtifacts?: EvidenceArtifactPort
-  resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
-  resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
-  workspaceContent?: WorkspaceContentEffectsFactory
-  /** RFC-370 §10 V17: hosted repository remote reads; absent, local mirrors. */
-  repositoryRemote?: RepositoryRemoteEffects
-  workspaceUploads?: WorkspaceUploadContentFactory
-  isolationWorkspaces?: IsolationWorkspaceFactory
-  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
-  repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
-  workspaceReads?: RepositoryWorkspaceReadQueries
-  employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
-  repositoryBaselines?: RepositoryBaselineEffectsFactory
-  verificationCommands?: VerificationCommandEffectsFactory
-  customObserverPrograms?: CustomObserverProgramFactory
-  bootExecutionRecovery?: BootExecutionRecoveryFactory
-  actionWorkspaceEffects?: ActionWorkspaceEffects
-  conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
-  taskDeletionEffects?: TaskDeletionEffects
-  /** RFC-370 §9.2 V3 — hosted only: publication network Git in the task volume. */
-  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
-  runtimeInventoryContent?: TaskRuntimeInventoryContent
-  taskRunSelection?: TaskRunRootSelection
-  taskRecovery?: TaskRecoveryDeploymentSelection
-  taskInputFiles?: TaskInputFiles
+  readonly reviewArtifacts?: ReviewArtifactSelection
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
-  /** RFC-370 §10 V20 — hosted only: the fusion engine task's volume workspace. */
-  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
-  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
-  readonly workspacePresence?: WorkspacePresenceQueries
-  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
-  readonly recoveredExecutionTaskIds?: () => readonly string[]
-  /** RFC-370 §9.2 V1 — deployment workers started with execution authority. */
-  readonly hostedBackgroundOwners?: readonly SignalledDaemonRuntimeOwner[]
-  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
-  readonly reviewArtifacts?: ReviewArtifactSelection
-  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
-  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
-  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
-  readonly developmentPurposes?: DevelopmentPurposeSelection
+  /** RFC-370 §9.2 V3 — hosted only: publication network Git in the task volume. */
+  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
   readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
     typeof createDevelopmentWorkspaceRepositoryPreparation
   >
-  workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
-  maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
-  /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
-  executionAuthority?: ExecutionAuthorityPort
-  /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone sessions by default. */
-  credentials?: CredentialAdapterSelection
+  resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+  intentArtifacts?: IntentArtifactSelection
+  databaseBackup?: DatabaseBackupEffects
+
+  // ── Optional, step 4: a deployment switch or an absent-only behaviour ──
+  databaseInstallation?: DaemonDatabaseInstallationPort
   /** RFC-370 M0 — a platform-provided master key instead of the local secret.key file. */
   secretBox?: SecretBox
+  /** RFC-370 §10 V17: hosted repository remote reads; absent, local mirrors. */
+  repositoryRemote?: RepositoryRemoteEffects
+  crewStationEvents?: CrewStationEventIngress
+  /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
+  executionAuthority?: ExecutionAuthorityPort
+  repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
+  conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
 }

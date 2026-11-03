@@ -13,12 +13,6 @@ import type { DevelopmentOverlay } from './developmentReload'
 import { composeDaemonSession } from './daemonSession'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import {
-  selectWorkspaceUploadContentFactory,
-  selectIsolationWorkspaceFactory,
-  selectRepositoryGitWorkspaceFactory,
-} from '@/modules/source-control/public/participants'
-import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createSecretBox } from '@/auth/secretBox'
@@ -50,7 +44,6 @@ import {
   selectDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
-import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 
 /**
  * RFC-359 W3-T14 —— 监听器与关机序列只有一份，两个 provider 共用。
@@ -232,16 +225,12 @@ export async function startCommand(
     })
 
     // 3. Load config; honor logLevel if user set non-default in config.
-    const applicationConfiguration =
-      profile.selections.applicationConfiguration ??
-      composeApplicationConfigurationBinding({
-        kind: 'file',
-        configPath: Paths.config,
-      })
+    // RFC-431: the profile states its configuration source (standalone: the local config file).
+    const applicationConfiguration = profile.selections.applicationConfiguration
     const configuration = applicationConfiguration.queries
+    // Only the local file binding reads synchronously; a selected source is read asynchronously.
     const taskLaunchConfiguration = composeTaskLaunchConfiguration(
-      profile.selections.applicationConfiguration !== undefined ||
-        applicationConfiguration.synchronousQueries === undefined
+      applicationConfiguration.synchronousQueries === undefined
         ? { kind: 'selected', queries: configuration }
         : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
     )
@@ -396,14 +385,7 @@ export async function startCommand(
       frontendMarker: profile.frontendMarker,
       config,
       configuration,
-      applicationConfiguration,
       taskLaunchConfiguration,
-      workspaceUploads: selectWorkspaceUploadContentFactory(profile.selections.workspaceUploads),
-      isolationWorkspaces: selectIsolationWorkspaceFactory(profile.selections.isolationWorkspaces),
-      repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(
-        profile.selections.repositoryGitWorkspaces,
-      ),
-      workspaceReads: selectRepositoryWorkspaceReadQueries(profile.selections.workspaceReads),
       daemonRuntime: daemonHost,
       token,
       secretBox,

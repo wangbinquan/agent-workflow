@@ -42,12 +42,17 @@ test('real boot and HTTP roots choose one complete input receiver for both intak
     expect(calls(root, 'createEmployeeInputArtifactStore')).toHaveLength(0)
   }
   const source = load('bootstrap/daemonModules/digitalEmployee.ts')
-  const defaults = calls(source, 'createEmployeeInputArtifactStore')
+  // RFC-431: the bundle takes the deployment's selection; the standalone profile states the local store.
+  expect(calls(source, 'createEmployeeInputArtifactStore')).toHaveLength(0)
+  expect(source.text).toContain(
+    'const employeeInputArtifacts = input.adapters.employeeInputArtifacts',
+  )
+  const standalone = load('bootstrap/standalone.ts')
+  const defaults = calls(standalone, 'createEmployeeInputArtifactStore')
   expect(defaults).toHaveLength(1)
-  const selection = defaults[0]!.parent
-  if (!ts.isBinaryExpression(selection)) throw new Error('selected input store is missing')
-  expect(selection.left.getText(source)).toBe('input.adapters?.employeeInputArtifacts')
-  expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
+  expect(defaults[0]!.arguments.map((node) => node.getText(standalone).replace(/\s/g, ''))).toEqual(
+    ["join(appHome,'artifacts','employee-inputs')"],
+  )
   for (const expression of ['composeDigitalEmployee', 'composeDevelopmentEmployeeWorkspace']) {
     const consumers = calls(source, expression)
     expect(consumers).toHaveLength(1)

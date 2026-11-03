@@ -11,7 +11,6 @@ import type {
 import {
   bindTaskRunRootSelection,
   type TaskRunDriveBinding,
-  type TaskRunRootBinding,
   type TaskRunRootSelection,
 } from './taskRunSelection'
 import {
@@ -88,19 +87,19 @@ function localConfigurationBridge(
   }
 }
 
-/** Root readers and every native drive use the same already selected content receivers. */
-export function composeLocalTaskRunRootSelection(input: {
+/**
+ * RFC-431: the standalone task-run selection. Root readers and every native drive use the same content
+ * receivers; the application binds it exactly as it binds a hosted selection.
+ */
+export function composeLocalTaskRunSelection(input: {
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
-}): TaskRunRootBinding {
-  const local: LegacyTaskRunComposition = {
-    nodeRunPromptsFor: () => input.nodeRunPrompts,
-    portArtifactsFor: () => input.portArtifacts,
+}): TaskRunRootSelection {
+  const bridge = localConfigurationBridge({
     taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
     taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-  }
-  const bridge = localConfigurationBridge(local)
-  const selected: TaskRunRootSelection = {
+  })
+  return {
     runs: {
       contentNamespace: bridge.contentNamespace,
       nodeRunPrompts: input.nodeRunPrompts,
@@ -110,10 +109,6 @@ export function composeLocalTaskRunRootSelection(input: {
     },
     configurationFor: (request) => bridge.configurationFor(request),
   }
-  return bindTaskRunRootSelection(selected, (request) => ({
-    nodeRunPrompts: local.nodeRunPromptsFor(request.appHome),
-    portArtifacts: local.portArtifactsFor(request.appHome),
-  }))
 }
 
 /** Direct legacy fixtures still bind prompt→archive→Agent→script at every drive. */

@@ -11,9 +11,48 @@ import type {
   EvidenceStagingReference,
 } from '../../application/ports/evidenceStaging'
 
-/** Bootstrap owns selection; the native content adapter owns physical construction. */
+/**
+ * RFC-431: a local evidence store opened on first use. The store creates its `blobs/` and `bundles/`
+ * directories when constructed; the standalone profile is built before the startup lock and its
+ * selections perform no IO, so the store is constructed by the first member access.
+ */
+function openedOnFirstUse(root: string): EvidenceArtifactPort {
+  let store: EvidenceStore | undefined
+  const open = (): EvidenceStore => (store ??= new EvidenceStore(root))
+  return Object.freeze<EvidenceArtifactPort>({
+    get contents() {
+      return open().contents
+    },
+    get documents() {
+      return open().documents
+    },
+    get downloads() {
+      return open().downloads
+    },
+    get contexts() {
+      return open().contexts
+    },
+    putFile: (absolutePath) => open().putFile(absolutePath),
+    putBlobFromFile: (absolutePath) => open().putBlobFromFile(absolutePath),
+    importStagedTree: (stagedRoot, budget) => open().importStagedTree(stagedRoot, budget),
+    getBundle: (bundleRef) => open().getBundle(bundleRef),
+    materializeBundle: (bundleRef, destination) => open().materializeBundle(bundleRef, destination),
+    materializeBlob: (blobRef, destination) => open().materializeBlob(blobRef, destination),
+    hasBlob: (blobRef) => open().hasBlob(blobRef),
+  })
+}
+
+/** Bootstrap owns selection; the native content adapter owns physical construction (`appHome/evidence`). */
 export function createLocalEvidenceArtifactPort(appHome: string): EvidenceArtifactPort {
-  return new EvidenceStore(join(appHome, 'evidence'))
+  return openedOnFirstUse(join(appHome, 'evidence'))
+}
+
+/**
+ * RFC-431: the standalone graph-development (RFC-396) artifact store. Since v0.19.3 standalone keeps these
+ * under the app home root itself (`appHome/blobs`, `appHome/bundles`), apart from `appHome/evidence`.
+ */
+export function createLocalGraphDevelopmentArtifactPort(appHome: string): EvidenceArtifactPort {
+  return openedOnFirstUse(appHome)
 }
 
 export interface LocalEvidenceStagingNamespace {

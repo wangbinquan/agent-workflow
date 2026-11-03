@@ -29,42 +29,47 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 import type { DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import { standaloneSelections } from '@/bootstrap/standalone'
+import { composeLocalDevelopmentPurposes } from '@/bootstrap/developmentPurposeRoot'
 import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import type { ProviderDatabaseHarness, ProviderApplicationBinding } from './eachProvider'
 
-export type ProviderHttpApplicationInput = Pick<
-  DaemonApplicationInput,
-  | 'token'
-  | 'reviewArtifacts'
-  | 'contentStore'
-  | 'recoveredExecutionTaskIds'
-  | 'taskArchive'
-  | 'skillContent'
-  | 'employeePrograms'
-  | 'employeeInputArtifacts'
-  | 'pluginInstaller'
-  | 'runtimeInventoryContent'
-  | 'taskRunSelection'
-  | 'developmentPurposes'
-  | 'workspaceExcludeProfiles'
-  | 'evidenceArtifacts'
-  | 'resourcePackageSkillArtifacts'
-  | 'resourcePackagePluginArtifacts'
-  | 'workspaceContent'
-  | 'workspaceUploads'
-  | 'workspaceReads'
-  | 'repositoryCandidateEffects'
-  | 'employeeCaseWorkspaceEffects'
-  | 'repositoryBaselines'
-  | 'verificationCommands'
-  | 'actionWorkspaceEffects'
-  | 'conflictMergeWorkspaceEffects'
-  | 'daemonRuntime'
-  | 'dbVersion'
-  | 'maintenanceStatus'
-  | 'executionAuthority'
-> &
+// RFC-431: the application starts from the standalone profile's selections; a case overrides any of them.
+export type ProviderHttpApplicationInput = Pick<DaemonApplicationInput, 'token' | 'dbVersion'> &
+  Partial<
+    Pick<
+      DaemonApplicationInput,
+      | 'reviewArtifacts'
+      | 'contentStore'
+      | 'recoveredExecutionTaskIds'
+      | 'taskArchive'
+      | 'skillContent'
+      | 'employeePrograms'
+      | 'employeeInputArtifacts'
+      | 'pluginInstaller'
+      | 'runtimeInventoryContent'
+      | 'taskRunSelection'
+      | 'workspaceExcludeProfiles'
+      | 'evidenceArtifacts'
+      | 'resourcePackageSkillArtifacts'
+      | 'resourcePackagePluginArtifacts'
+      | 'workspaceContent'
+      | 'workspaceUploads'
+      | 'workspaceReads'
+      | 'repositoryCandidateEffects'
+      | 'employeeCaseWorkspaceEffects'
+      | 'repositoryBaselines'
+      | 'verificationCommands'
+      | 'actionWorkspaceEffects'
+      | 'conflictMergeWorkspaceEffects'
+      | 'daemonRuntime'
+      | 'maintenanceStatus'
+      | 'executionAuthority'
+    >
+  > &
   Omit<DaemonApplicationTestSeams, 'workflowRuntime'> & {
+    /** A case may select single purposes; the others stay local, over the case's evidence store. */
+    readonly developmentPurposes?: Partial<DaemonApplicationInput['developmentPurposes']>
     readonly requiredProvider?: DaemonApplicationInput['requiredProvider']
     readonly appHome?: string
     readonly configPath?: string
@@ -281,8 +286,27 @@ export async function createProviderHttpApplicationFromBinding(
       workflowExactOperationHook,
       ...selections
     } = input
+    const standalone = standaloneSelections({ appHome })
+    // A case that selects its own evidence store stands for a deployment with a single store, as the
+    // hosted profile is: the local purposes stage into it and graph-development artifacts share it.
+    const localPurposes =
+      selections.evidenceArtifacts === undefined
+        ? standalone.developmentPurposes
+        : composeLocalDevelopmentPurposes({
+            appHome,
+            evidenceArtifacts: selections.evidenceArtifacts,
+          })
     application = await compose({
+      ...standalone,
+      ...(selections.evidenceArtifacts === undefined
+        ? {}
+        : { graphDevelopmentArtifacts: selections.evidenceArtifacts }),
       ...selections,
+      developmentPurposes: {
+        requirement: selections.developmentPurposes?.requirement ?? localPurposes.requirement,
+        pipeline: selections.developmentPurposes?.pipeline ?? localPurposes.pipeline,
+        approval: selections.developmentPurposes?.approval ?? localPurposes.approval,
+      },
       requiredProvider: input.requiredProvider ?? null,
       // RFC-425: the test application is a standalone deployment.
       deploymentKind: 'standalone',

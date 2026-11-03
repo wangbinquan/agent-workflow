@@ -10,10 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDaemonProviderCore } from '@/bootstrap/daemonModules/providerCore'
-import {
-  DAEMON_PROVIDER_CORE_ADAPTERS,
-  standaloneModuleAdapters,
-} from '@/bootstrap/daemonModules/adapters'
+import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/bootstrap/daemonModules/adapters'
+import { standaloneSelections } from '@/bootstrap/standalone'
 import { composeDaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
 import {
   composeDaemonResourceCatalogModules,
@@ -33,6 +31,8 @@ function graph(
 ) {
   const db = binding.db
   const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 8))
+  // RFC-431: the bundles receive the standalone profile's selections.
+  const standalone = standaloneSelections({ appHome })
   const adapters =
     binding.provider === 'sqlite'
       ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
@@ -54,6 +54,7 @@ function graph(
     appHome,
     secretBox,
     daemonToken: 'bundle-token',
+    credentials: standalone.credentials,
     adapters,
     realtimePolicy: {
       resourceVisibility: { canViewResource: async () => false },
@@ -69,7 +70,6 @@ function graph(
     kind: 'file',
     configPath: join(appHome, 'config.json'),
   })
-  const standalone = standaloneModuleAdapters()
   const observationModules = composeDaemonObservationModules({
     db,
     appHome,
@@ -80,7 +80,9 @@ function graph(
     runtimeRegistry: core.runtimeRegistry,
     mcpCatalog: () => resourceCatalogModules.mcpCatalog,
     adapters: {
-      ...standalone,
+      systemAgentRunFamily: standalone.systemAgentRunFamily,
+      runtimeManagement: standalone.runtimeManagement,
+      workspacePresence: standalone.workspacePresence,
       mcpDiagnostics(input) {
         diagnosticsCreated()
         return standalone.mcpDiagnostics(input)
@@ -96,7 +98,10 @@ function graph(
       reconcileDurableIntents: () => observationModules.mcpRuntimeTests.reconcileDurableIntents(),
     },
   })
-  const developmentPurposeRoot = composeDevelopmentPurposeRoot({ appHome })
+  const developmentPurposeRoot = composeDevelopmentPurposeRoot({
+    selection: standalone.developmentPurposes,
+    evidenceArtifacts: standalone.evidenceArtifacts,
+  })
   const repositoryCredentials = composeDaemonRepositoryCredentials({
     db,
     secretBox,

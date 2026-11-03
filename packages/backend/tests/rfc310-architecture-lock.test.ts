@@ -55,6 +55,8 @@ const COMPOSITION_CONSUMERS: string[] = [
   // RFC-399 B1: the maintenance job table takes the owner handlers through composition.
   'bootstrap/maintenanceJobBindings.ts',
   'bootstrap/maintenanceWorkerGraph.ts',
+  // RFC-431: the standalone profile states the local development-automation selections.
+  'bootstrap/standalone.ts',
 ]
 const REQUIRED_PORTS_CONSUMERS: string[] = []
 

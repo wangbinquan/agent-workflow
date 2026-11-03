@@ -22,7 +22,6 @@ import {
 } from '@/services/developmentDeliveryDeps'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
@@ -34,7 +33,7 @@ import type { DaemonTaskExecutionModules } from './taskExecution'
 import type { DaemonRepositoryCredentials } from './repositoryCredentials'
 import type { DaemonIntegrationModules } from './integration'
 
-type AutomationInput = Parameters<typeof composeDevelopmentAutomation>[0]
+import type { DeploymentSelections } from '../deploymentProfile'
 export interface DaemonDevelopmentAutomationInput {
   readonly db: PersistenceDb
   readonly appHome: string
@@ -48,20 +47,17 @@ export interface DaemonDevelopmentAutomationInput {
   readonly integration: Pick<DaemonIntegrationModules, 'developmentApprovalGateway'>
   readonly hostTasks: DaemonTaskExecutionModules['hostTasks']
   readonly writerCutover: DevelopmentWriterCutover
-  readonly verificationCommands?: AutomationInput['verificationCommands']
-  readonly repositoryBaselines?: AutomationInput['repositoryBaselines']
+  // RFC-431: the deployment's selections arrive stated; this bundle substitutes no default.
+  readonly verificationCommands: DeploymentSelections['verificationCommands']
+  readonly repositoryBaselines: DeploymentSelections['repositoryBaselines']
   readonly repositoryCandidateEffects?: NonNullable<
     Parameters<typeof bindChangeCandidateParticipant>[0]
   >['candidateEffects']
   readonly conflictMergeWorkspaceEffects?: NonNullable<
     Parameters<typeof bindConflictMergeParticipant>[0]
   >['effects']
-  readonly evidenceArtifacts?: Parameters<
-    typeof composeMissionInputUploadOperations
-  >[0]['artifacts']
-  readonly actionWorkspaceEntries?: Parameters<
-    typeof composeAgentActionExecution
-  >[0]['workspaceEntries']
+  readonly evidenceArtifacts: DeploymentSelections['evidenceArtifacts']
+  readonly actionWorkspaceEntries: DeploymentSelections['actionWorkspaceEntries']
 }
 
 export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopmentAutomationInput) {
@@ -97,8 +93,7 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     },
   })
   const automation = composeDevelopmentAutomation({
-    verificationCommands:
-      input.verificationCommands ?? createLocalVerificationCommandEffectsFactory(),
+    verificationCommands: input.verificationCommands,
     actionWorkspaceEffects: input.workspaceEffects.actionWorkspaceEffects,
     automationWorkspaceEffects: input.workspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,

@@ -14,6 +14,7 @@ import { composeApplicationConfigurationBinding } from '@/modules/system-operati
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
+import { NULLABLE_SELECTIONS, REQUIRED_SELECTIONS } from './helpers/deploymentSelectionPartition'
 
 // The former hosted factory returned 70 keys: listen takes host/port and the host selector retires.
 // This explicit list must not be derived from the production key table.
@@ -40,6 +41,8 @@ const HOSTED_SELECTION_KEYS = [
   'evidenceArtifacts',
   'executionAuthority',
   'fusionWorkspaceEffects',
+  // RFC-431: graph-development artifacts are a selection (hosted: the evidence store itself).
+  'graphDevelopmentArtifacts',
   'hostedBackgroundOwners',
   'humanGateArtifactRecovery',
   'initializeExecution',
@@ -113,14 +116,14 @@ test('standalone selection needs no environment and has exactly the six profile 
     frontendMarker: null,
     requiredProvider: null,
     listen: {},
-    selections: {},
   })
-  expect(await selectDeployment({ CS_PROJECT: 'does-not-select-hosting' }).profile()).toMatchObject(
-    {
-      kind: 'standalone',
-      selections: {},
-    },
-  )
+  // RFC-431: the standalone profile states the required and hosted-only selections, nothing else.
+  const stated = [...REQUIRED_SELECTIONS, ...NULLABLE_SELECTIONS].sort()
+  expect(Object.keys(profile.selections).sort()).toEqual(stated)
+  for (const key of NULLABLE_SELECTIONS) expect(profile.selections[key]).toBeNull()
+  const selected = await selectDeployment({ CS_PROJECT: 'does-not-select-hosting' }).profile()
+  expect(selected.kind).toBe('standalone')
+  expect(Object.keys(selected.selections).sort()).toEqual(stated)
   // RFC-427: the mode is read when the deployment is selected; the hosted profile still checks its inputs.
   expect(() => selectDeployment({ AW_DEPLOYMENT_MODE: 'invalid' })).toThrow('AW_DEPLOYMENT_MODE')
   await expect(selectDeployment({ AW_DEPLOYMENT_MODE: 'crewstation' }).profile()).rejects.toThrow(
@@ -130,7 +133,7 @@ test('standalone selection needs no environment and has exactly the six profile 
 test('selection projection preserves all receivers and excludes session-only fields', () => {
   const values = Object.fromEntries(
     Object.keys(DEPLOYMENT_SELECTION_KEYS).map((key) => [key, Object.freeze({ key })]),
-  ) as DeploymentSelections
+  ) as unknown as DeploymentSelections
   const selected = deploymentSelectionsOf({
     ...values,
     token: 'private-session-input',
@@ -142,8 +145,8 @@ test('selection projection preserves all receivers and excludes session-only fie
   expect('token' in selected).toBe(false)
   expect('requiredProvider' in selected).toBe(false)
   // RFC-428: four dead / shadowed selections retired (72 → 68); RFC-429: the evidence group (68 → 64);
-  // RFC-430: three derivable selections (64 → 61).
-  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(61)
+  // RFC-430: three derivable selections (64 → 61); RFC-431: graph-development artifacts (61 → 62).
+  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(62)
 })
 for (const version of ['git version 2.37.9', null])
   test('incompatible standalone git returns the unchanged fatal message: ' + version, async () => {
@@ -320,8 +323,11 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         expect(Object.keys(profile.selections).sort()).toEqual([...HOSTED_SELECTION_KEYS].sort())
         // RFC-428: the shadowed portArtifactContentEffects left the hosted selections (69 → 68);
         // RFC-429: the evidence group collapsed into evidenceArtifacts (68 → 64);
-        // RFC-430: three derivable selections left (64 → 61).
-        expect(HOSTED_SELECTION_KEYS).toHaveLength(61)
+        // RFC-430: three derivable selections left (64 → 61); RFC-431: graph-development artifacts (62).
+        expect(HOSTED_SELECTION_KEYS).toHaveLength(62)
+        expect(profile.selections.graphDevelopmentArtifacts).toBe(
+          profile.selections.evidenceArtifacts,
+        )
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
         expect(profile.selections.secretBox).toBe(system.secretBox)

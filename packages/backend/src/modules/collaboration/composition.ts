@@ -11,6 +11,12 @@ export { planMembersReplacement } from './infrastructure/taskCollab'
  * selections, passed through the daemon roots unopened. */
 export type { ReviewArtifactSelection } from './application/ports/reviewArtifactSelection'
 export type { WorkspaceRollbackSnapshotInspector } from './application/prepareWorkspaceRollbackPlan'
+import type { WorkspaceRollbackSnapshotInspector } from './application/prepareWorkspaceRollbackPlan'
+import { GitWorkspaceRollbackSnapshotInspector } from './infrastructure/gitWorkspaceRollbackSnapshotInspector'
+/** RFC-431: the standalone selection checks rollback snapshots in the task's git worktree. */
+export function composeLocalWorkspaceRollbackSnapshots(): WorkspaceRollbackSnapshotInspector {
+  return new GitWorkspaceRollbackSnapshotInspector()
+}
 // RFC-388：修复参与者只有中立工厂，两个部署共用。
 export { createClarifyRepairParticipant } from './infrastructure/clarifyRepairParticipant'
 export { createReviewRepairParticipant } from './infrastructure/reviewRepairParticipant'

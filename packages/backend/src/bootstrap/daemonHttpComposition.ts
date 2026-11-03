@@ -21,11 +21,8 @@ import { type DaemonResourceCatalogModules } from '@/bootstrap/daemonModules/res
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDatabaseHealthIdentity } from '@/platform/persistence/databaseHealthIdentity'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
-import type {
-  PortArtifactOperations,
-  TaskRuntimeInventoryContent,
-} from '@/modules/task-execution/public/types'
-import { composeTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
+import type { PortArtifactOperations } from '@/modules/task-execution/public/types'
+import type { DeploymentSelections } from './deploymentProfile'
 import { composeRunObservation } from '@/modules/run-observability/composition/runObservation'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
@@ -57,9 +54,7 @@ import { createOidcProvidersService } from '@/services/oidcProviders'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
   composeRepositoryMirrors,
-  createFileWorkspaceContentEffects,
   createWorkspaceContentScope,
-  type WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import { resolveCollaborationTaskAccess } from '@/modules/collaboration/public/queries'
@@ -71,17 +66,13 @@ import { composeCodeHistoryQueries } from '@/modules/code-capability/composition
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
-import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
-import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
-import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
   type ResourcePackageSkillArtifactOwner,
-  type ResourcePackagePluginArtifactOwner,
   type SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
@@ -135,16 +126,21 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
     developmentAutomation: DaemonDevelopmentAutomationModules
     intent: DaemonIntentModules
   }>
-  readonly selections?: Readonly<{
-    resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
-    resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
-    resourcePackageSkillContent?: SkillPackageContentReader
-    workspaceContent?: WorkspaceContentEffectsFactory
-    runtimeInventoryContent?: TaskRuntimeInventoryContent
-    repositoryRevisionContent?: ReturnType<typeof composeLocalRepositoryRevisionContent>
-    codeReviewArtifacts?: ReturnType<typeof composeLocalCodeReviewArtifacts>
-    repositoryRemote?: NonNullable<Parameters<typeof composeRepositoryMirrors>[0]['remote']>
-  }>
+  /** RFC-431: the deployment's selections this graph reads, stated by the selected profile. */
+  readonly selections: Readonly<
+    Pick<
+      DeploymentSelections,
+      | 'resourcePackagePluginArtifacts'
+      | 'workspaceContent'
+      | 'runtimeInventoryContent'
+      | 'repositoryRevisionContent'
+      | 'codeReviewArtifacts'
+    > & {
+      resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+      resourcePackageSkillContent?: SkillPackageContentReader
+      repositoryRemote?: NonNullable<Parameters<typeof composeRepositoryMirrors>[0]['remote']>
+    }
+  >
   readonly testSeams?: Readonly<{
     workflowRuntime?: ProviderResourceCatalogRouteComposition['workflows']['runtime']
     codeHostRuntime?: ProviderSourceControlRouteComposition['codeHosts']['deps']
@@ -245,20 +241,17 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     workspaceQueries: composeTaskWorkspaceQueries({
       load: taskExecutionProvider.routes.tasks.get,
       contentScope: (workspaceRef) =>
-        createWorkspaceContentScope(workspaceRef, input.selections?.workspaceContent),
+        createWorkspaceContentScope(workspaceRef, input.selections.workspaceContent),
     }),
     taskExecutionReadModels: taskExecutionProvider.readModels,
-    runtimeInventoryContent: composeTaskRuntimeInventoryContent(
-      input.selections?.runtimeInventoryContent,
-    ),
+    runtimeInventoryContent: input.selections.runtimeInventoryContent,
     taskRecoveryOperations: taskExecutionProvider.recovery,
     codeWorkspace,
     // RFC-370 §10 V16: hosted reads answer from the task volume and persist as
     // object publications; standalone PostgreSQL keeps native worktrees and files.
     codeReview: Object.freeze({
-      content:
-        input.selections?.repositoryRevisionContent ?? composeLocalRepositoryRevisionContent(),
-      artifacts: input.selections?.codeReviewArtifacts ?? composeLocalCodeReviewArtifacts(),
+      content: input.selections.repositoryRevisionContent,
+      artifacts: input.selections.codeReviewArtifacts,
     }),
     repositoryWorkspace: createTaskWorktreeLocator(input.db),
     changeNarrative: Object.freeze({
@@ -295,9 +288,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     canViewTask: async (actor: Actor, task: { readonly taskId: string }) =>
       (await collaborationTaskAccess.resolveTask(actor, task.taskId)).visible,
     // RFC-370 §10 V15: the same content the task workspace queries read.
-    content: (workspaceRef: string) =>
-      input.selections?.workspaceContent?.bind(workspaceRef) ??
-      createFileWorkspaceContentEffects(workspaceRef),
+    content: (workspaceRef: string) => input.selections.workspaceContent.bind(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     taskExecutionParticipants: composeTaskExecutionParticipantBindings(
@@ -494,9 +485,9 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         store: core.repositoryWorkspaceStore,
         secretBox: input.secretBox,
         appHome: input.appHome,
-        ...(input.selections?.repositoryRemote === undefined
+        ...(input.selections.repositoryRemote === undefined
           ? {}
-          : { remote: input.selections?.repositoryRemote }),
+          : { remote: input.selections.repositoryRemote }),
       }),
     }),
     workflows: Object.freeze({
@@ -713,11 +704,9 @@ function composeResourcePackageBinding<P extends DatabaseProvider>(
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
       db: input.db,
     }),
-    skillArtifacts: input.selections?.resourcePackageSkillArtifacts,
-    skillPackageContent: input.selections?.resourcePackageSkillContent,
-    ...(input.selections?.resourcePackagePluginArtifacts === undefined
-      ? { pluginInstaller: createResourcePackagePluginInstaller() }
-      : { pluginArtifacts: input.selections?.resourcePackagePluginArtifacts }),
+    skillArtifacts: input.selections.resourcePackageSkillArtifacts,
+    skillPackageContent: input.selections.resourcePackageSkillContent,
+    pluginArtifacts: input.selections.resourcePackagePluginArtifacts,
   })
   const atomicApply = createResourcePackageAtomicApplyOperations({
     db: input.db,

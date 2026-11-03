@@ -20,6 +20,8 @@ import { createPluginOperationDescriptors } from './catalogOperationDescriptors'
 import type { PluginCatalogModule } from '../public/operations'
 
 export type { PluginInstallerPort }
+/** RFC-431: the standalone selection installs plugins under the local plugin root. */
+export { createLocalPluginInstaller }
 
 type PluginAclOperationApplication = Parameters<typeof createPluginOperationDescriptors>[3]
 

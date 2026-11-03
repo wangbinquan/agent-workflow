@@ -13,7 +13,6 @@ import type {
 import type { TaskRunOwnerDependencies } from '@/modules/task-execution/application/ports/taskRunSelection'
 import {
   bindTaskRunRootSelection,
-  selectTaskRunRootSelection,
   taskRunBindingPending,
   type TaskRunRootSelection,
 } from '@/modules/task-execution/composition/taskRunSelection'
@@ -42,10 +41,7 @@ function request(taskId: string): TaskDriveRequest {
 }
 
 describe('RFC-370 complete Task run selection', () => {
-  test('an absent whole choice leaves native bootstrap construction to its original boundary', () => {
-    expect(selectTaskRunRootSelection()).toBeUndefined()
-  })
-
+  // RFC-431: there is no absent choice any more — the standalone profile selects the local task runs.
   test('every incomplete explicit choice fails before binding any family', () => {
     const chosen = chosenTaskRuns(unusedTaskRunContents())
     const runs = chosen.selection.runs
@@ -71,7 +67,7 @@ describe('RFC-370 complete Task run selection', () => {
       { ...chosen.selection, runs: { ...runs, taskScriptRunsFor: undefined } },
     ]
     for (const value of invalid) {
-      expect(() => selectTaskRunRootSelection(value as TaskRunRootSelection)).toThrow(TypeError)
+      expect(() => bindTaskRunRootSelection(value as TaskRunRootSelection)).toThrow(TypeError)
     }
     expect(chosen.agents).toEqual([])
     expect(chosen.scripts).toEqual([])
@@ -271,7 +267,7 @@ describe('RFC-370 complete Task run selection', () => {
         if (
           ts.isCallExpression(node) &&
           ts.isIdentifier(node.expression) &&
-          node.expression.text === 'selectTaskRunRootSelection'
+          node.expression.text === 'bindTaskRunRootSelection'
         ) {
           calls.push(node.arguments[0]!.getText(source))
         }

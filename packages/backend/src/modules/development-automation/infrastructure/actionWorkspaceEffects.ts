@@ -24,18 +24,17 @@ export function selectActionWorkspaceEffects(
   return selected
 }
 
-/** Bootstrap selects paired owners before either can allocate a conflict scene. */
+/**
+ * Bootstrap pairs the selected action workspace with the automation contents it carries. RFC-431: every
+ * deployment selects the action workspace, so a selected conflict scene always has its paired owner.
+ */
 export function selectDevelopmentWorkspaceEffectBinding(input: {
-  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
+  readonly actionWorkspaceEffects: ActionWorkspaceEffects
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
-  readonly conflictWorkspaceSelected: boolean
 }): {
   readonly actionWorkspaceEffects: ActionWorkspaceEffects
   readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
 } {
-  if (input.conflictWorkspaceSelected && input.actionWorkspaceEffects === undefined) {
-    throw new Error('conflict-workspace-action-effects-required')
-  }
   const actionWorkspaceEffects = selectActionWorkspaceEffects(input.actionWorkspaceEffects)
   const automationWorkspaceEffects = selectedAutomationWorkspaceEffects(
     input.automationWorkspaceEffects === undefined

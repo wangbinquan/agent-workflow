@@ -222,7 +222,7 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
       try {
         composeDaemonDigitalEmployeeModules({
           ...f.employeeInput,
-          adapters: { employeePrograms: selected },
+          adapters: { ...f.employeeInput.adapters, employeePrograms: selected },
         })
         const reactionInput = reaction.mock.calls[0]![0],
           fixtureInput = fixtures.mock.calls[0]![0]
