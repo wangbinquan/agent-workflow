@@ -10,7 +10,7 @@
 > **2026-11-02 S7 Done**：[RFC-401](../RFC-401-single-resource-write-stack/proposal.md)（Done）完成 S7——六类资源各一个写入参与者、三入口错误收敛、AtomicApply 持久 claim / lease、技能 / fusion / restore 接入、旧技能 operation 生命周期与零调用 legacy 写函数删除；退出门核对见 §3 S7，§1.1、§1.2、§8 已更新。
 
 - 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增，见 proposal §9）。本文刷新不授权任何未立项的后继。
-- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭，S2c 完成前两步（RFC-393 / 394）与余项第 2、3 项（RFC-425～427），余项第 1 项四步中的第一步完成（RFC-428～430）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型；W7 余项 2026-10-31 核销；S5 由 RFC-399 / RFC-400 两步完成（2026-10-31 Done）；S6 由 RFC-402～424 完成（2026-11-02 Done）；S7 由 RFC-401 完成（2026-11-02 Done）。其余见 §1.1（2026-10-30 对账）。
+- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭，S2c 完成前两步（RFC-393 / 394）与余项第 2、3 项（RFC-425～427），余项第 1 项四步中的前两步完成（RFC-428～431）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型；W7 余项 2026-10-31 核销；S5 由 RFC-399 / RFC-400 两步完成（2026-10-31 Done）；S6 由 RFC-402～424 完成（2026-11-02 Done）；S7 由 RFC-401 完成（2026-11-02 Done）。其余见 §1.1（2026-10-30 对账）。
 - 规划单位：已关闭波次（保留结论）+ 立即整改后继 S1～S8 + 余下波次（W4 余项、W5、W7 余项、W9-C/D/E，W8 可选）。
 
 ## 0. 批准边界与实施纪律
@@ -163,7 +163,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     [RFC-428](../RFC-428-dead-deployment-selections/proposal.md)（Done）删去四个死槽 / 被遮蔽槽（72 → 68）；第二步
     [RFC-429](../RFC-429-evidence-deployment-selections/proposal.md)（Done）把 evidence 一组收拢到 `evidenceArtifacts`（68 → 64）；第三步
     [RFC-430](../RFC-430-derivable-deployment-selections/proposal.md)（Done）删余下三个可派生项（64 → 61）。盘点第 1 步（死槽 / 被遮蔽 /
-    可派生 11 项）至此完成；余下第 2～4 步（单机默认值集中与改必填、需要会话图的工厂型选择项、按有无分支的项）各自另立。
+    可派生 11 项）至此完成。第二步 [RFC-431](../RFC-431-standalone-selection-defaults/proposal.md)（Done，`90e1d0974`）把单机默认值集中到
+    单机 profile：`standaloneSelections({ appHome })` 给出 39 项必填与 6 项托管独有能力（单机 `null`），装配层不再补缺省；新增
+    `graphDevelopmentArtifacts`（61 → 62）保住单机图开发证据的根目录。余下第 3、4 步（需要会话图的 10 项改为工厂、按有无分支的 7 项）
+    各自另立。
 - **退出门**：每模块每进程构造一次；不存在 provider 专属或部署专属的装配函数；入口根只做参数解析与 profile 选择；
   后台作业全部经唯一生命周期程序且都有 stop；两种 provider 的作业清单一致。
 - **前置 / 冲突**：`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts` 正在被 RFC-370 改动，S2 须在其当前在制品
@@ -495,7 +498,7 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
 - [ ] S1～S8 Done（2026-11-02：S1 / S3 / S4 / S5 / S6 / S7 / S8 Done——S6 由 RFC-402～424 落地，退出门核对见 §3 S6；S2 余 S2c 第 1 项——第 2 项
-      （RFC-425 / 426）与第 3 项（RFC-427）Done，第 1 项按 RFC-428 盘点分四步推进、第一步已完成（RFC-428～430）；S7 Done——RFC-401）；
+      （RFC-425 / 426）与第 3 项（RFC-427）Done，第 1 项按 RFC-428 盘点分四步推进、前两步已完成（RFC-428～431）；S7 Done——RFC-401）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

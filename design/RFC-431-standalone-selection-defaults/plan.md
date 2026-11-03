@@ -20,12 +20,12 @@ T1～T6 无先后验证依赖，按文件就近一并完成；T7 在 T1～T6 全
 
 ## 验收清单
 
-- [ ] AC-1 三分区与结构锁（含负例）
-- [ ] AC-2 单机 profile 行为用例
-- [ ] AC-3 装配层无缺省、RFC-394 锁收缩、退役助手不在源码
-- [ ] AC-4 托管键集合 62、`graphDevelopmentArtifacts` 与 `evidenceArtifacts` 同一对象
-- [ ] AC-5 回归用例全部通过
-- [ ] AC-6 exact SHA CI 全绿
+- [x] AC-1 三分区与结构锁（含负例）
+- [x] AC-2 单机 profile 行为用例
+- [x] AC-3 装配层无缺省、RFC-394 锁收缩、退役助手不在源码
+- [x] AC-4 托管键集合 62、`graphDevelopmentArtifacts` 与 `evidenceArtifacts` 同一对象
+- [x] AC-5 回归用例全部通过
+- [x] AC-6 exact SHA CI 全绿
 
 ## PR / 提交
 
@@ -76,3 +76,8 @@ T1～T6 无先后验证依赖，按文件就近一并完成；T7 在 T1～T6 全
 - **观察**：内容盘点的固定清单只覆盖 `skills` / `runs` / `logs` / `evidence` / `config.json`（`platform/content/inventory/manifest.ts:108`），
   图开发证据所在的 `appHome/blobs`、`bundles/` 不在这份固定清单里（是否经索引位置覆盖未核实）。这是改前就有的情况，留给统一证据根目录的后续 RFC 核实。
 - **结论**：PASS。
+
+## CI（AC-6）
+
+`90e1d0974`：主 CI run 41614334877 70/70，windows-platform run 41614334853 与 maintenance-soak-nightly run 41614334952 全绿，
+一次通过，无重跑。

@@ -1,4 +1,4 @@
-## 2026-11-03 RFC-431 单机部署选择项的默认值集中到单机 profile（In Progress；`design/RFC-431-standalone-selection-defaults/`）
+## 2026-11-03 RFC-431 单机部署选择项的默认值集中到单机 profile（Done；`design/RFC-431-standalone-selection-defaults/`）
 
 - **来由**：RFC-294 S2c 余项第 1 项的第二步（RFC-428 inventory 后继分步第 2 条）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构
   进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -6,6 +6,21 @@
   能力，单机 `null`）+ 17 可选（第三步 10 项需会话图，第四步 7 项是部署开关或有无分支）；装配层不再补缺省。新增 `graphDevelopmentArtifacts`：
   单机图开发证据自 RFC-396（v0.19.3）起存在 `appHome` 根下，与其余证据（`appHome/evidence`）分开，统一需数据迁移，另行立项。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`90e1d0974`，部署选择项 62 项 = 39 必填 + 6 必填可空 + 17 可选。
+  - `bootstrap/standalone.ts` 的 `standaloneSelections({ appHome })` 是单机装配根，选择项构造不做 IO。
+  - 装配层删去缺省、`select*` 归一化与只为可选项存在的助手；RFC-394 的 `REQUIRED_OVERRIDES` 收缩为 `secretBox`。
+  - 新结构锁 `rfc431-standalone-selections`。
+  - 消费方账本（RFC-305 / 310 / 347、数字员工 OS 清单）登记单机 profile；event-center 的本地观察程序工厂改由 `composition` 根入口导出。
+- **集中验证**：
+  - 针对性验证集 666 个文件 5591 条，修复后复跑两 provider 通过；
+  - PostgreSQL 专注 lane 80 个文件；
+  - 导出仓库 141 个按已提交源码出报告的用例全部通过；
+  - P0 变异 lane 34 阶段通过。
+  - 全量 SQLite 在负载 158 下撞到分片上限，本 RFC 引起的 9 条锁 / 账本失败已修；其余是负载超时，在 60 s 预算下通过。
+  - 细节见 plan「集中验证」。
+- **CI**：`90e1d0974` 主 CI 70/70、windows-platform、maintenance-soak-nightly 全绿（AC-6）。
+- **时机变化**（非用户可见）：图开发存储的 `appHome/blobs`、`bundles/` 与需求文档暂存 `appHome/evidence/staging/` 改为首次读写时创建。
+- **下一步**：S2c 第 1 项第三步（RFC-432：需要会话图的 10 项改为两侧都给的工厂）。
 
 ## 2026-11-02 RFC-401 资源写入栈合一与 AtomicApply 持久租约（Done；`design/RFC-401-single-resource-write-stack/`）
 
