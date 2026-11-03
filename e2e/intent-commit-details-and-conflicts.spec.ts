@@ -32,7 +32,7 @@
 //   packages/backend/src/services/intent/resolveChangeset.ts:420-435  未豁免的凭据发现 ⇒ intent-secret-value-forbidden
 //   packages/backend/src/services/intent/resolveChangeset.ts:666-678  humanBinding 未绑定 ⇒ 成员被丢弃
 //   packages/backend/src/services/intent/resolveChangeset.ts:491-505  finalName 覆盖名字（并重跑命名文法）
-//   packages/backend/src/services/intent/resolveChangeset.ts:526-538  intent-name-conflict
+//   RFC-401 起名称冲突由资源写入参与者报出 ⇒ agent-name-in-use（「agent 'x' already exists」，与普通 CRUD 同一错误）
 //   packages/backend/src/services/intent/resolveChangeset.ts:373-389  intent-slot-unknown（服务端只认自己签发的槽）
 //   packages/backend/src/services/intent/resolveChangeset.ts:411-415  intent-draft-invalid
 //   packages/backend/src/services/intent/resolveChangeset.ts:144-148  inventory-only 目标 ⇒ 阻断性错误
@@ -54,7 +54,7 @@
 //   顶回来——即「前端凭空造槽」本身不是一条可用的绕过路径。
 //
 // 本文件里**每一次成功提交都必须走 finalName 槽改名**：stub 固定提议
-// `e2e-auditor`，不改名的话前一条用例落地的资源会让后一条撞 intent-name-conflict。
+// `e2e-auditor`，不改名的话前一条用例落地的资源会让后一条撞 agent-name-in-use。
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -757,7 +757,8 @@ test('INTENT-38 提交明细步：重名被服务端挡下，用 finalName 槽�
   await page.getByTestId('intent-commit-submit').click()
   // 这条不成立 ⇒ 要么静默覆盖了别人同名的资源，要么只回一句「提交失败」，
   // 用户既不知道撞的是哪个名字，也不知道该怎么绕过。
-  await expect(await rawErrorText(dialog)).toContainText("agent name 'e2e-auditor' is taken")
+  // RFC-401：Intent 与普通 CRUD 收敛到同一个名称冲突错误（agent-name-in-use），文案照样点名被占的名字。
+  await expect(await rawErrorText(dialog)).toContainText("agent 'e2e-auditor' already exists")
   const occupant = (await api<AgentRow[]>(daemon, '/api/agents')).filter(
     (row) => row.name === 'e2e-auditor',
   )

@@ -769,7 +769,7 @@ test('RFC-319 INTENT-32: 候选历史逐版列出四种生命周期（current / 
   await expect(draftRevisionHeading(page, 3)).toBeVisible({ timeout: 90_000 })
 
   // v3 → 提交（= committed）。stub 固定提议 e2e-auditor，改名以免与同 daemon 的
-  // 其他用例撞 intent-name-conflict。
+  // 其他用例撞 agent-name-in-use。
   const dialog = await openCommitToDetails(page)
   await dialog.getByPlaceholder('New name').fill(landedName)
   await page.getByTestId('intent-commit-next').click()
@@ -868,7 +868,7 @@ test('RFC-319 INTENT-33: 提交记录既给成功回执（落地了什么、是�
   await expect(
     commitCards.first().locator('p.mono'),
     '失败只报个状态不给原文 ⇒ 用户既不知道为什么被拒，也不知道要不要重试',
-  ).toContainText(`agent name '${targetName}' is taken`)
+  ).toContainText(`agent '${targetName}' already exists`)
   await expect(
     commitCards.first().locator('li'),
     '失败的提交却列出了「落地了哪些资源」⇒ 用户以为改动已经进库了',
@@ -901,7 +901,7 @@ test('RFC-319 INTENT-33: 提交记录既给成功回执（落地了什么、是�
 
   // 失败那条必须原样留在下面：记录是流水账，不是「只显示最后一次」。
   await expect(commitCards.nth(1).locator('.status-chip')).toHaveText('Failed')
-  await expect(commitCards.nth(1).locator('p.mono')).toContainText('is taken')
+  await expect(commitCards.nth(1).locator('p.mono')).toContainText('already exists')
 
   // 落地面 + 服务端真值：确实是复制而不是就地改。
   const agents = await listAgents(updateDaemon)
@@ -919,7 +919,8 @@ test('RFC-319 INTENT-33: 提交记录既给成功回执（落地了什么、是�
     '提交记录不是「最新在上」的两条',
   ).toEqual(['committed', 'failed'])
   expect(detail.commits[0]?.receipt?.applied[0]?.fromCopy, '回执里的 fromCopy 标记不对').toBe(true)
-  expect(detail.commits[1]?.error, '失败记录的错误原文没入库').toContain('intent-name-conflict')
+  // RFC-401：名称冲突由资源写入参与者报出，与普通 CRUD 同一错误码。
+  expect(detail.commits[1]?.error, '失败记录的错误原文没入库').toContain('agent-name-in-use')
 })
 
 // ---------------------------------------------------------------------------
