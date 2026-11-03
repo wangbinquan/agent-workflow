@@ -1,6 +1,6 @@
 # RFC-433 按有无区分部署的选择项改为显式（RFC-294 S2c）
 
-- **状态**：In Progress（2026-11-03 落档）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、
+- **状态**：Done（2026-11-03；`7dfa6454d`，exact SHA 主 CI run 41653545859：attempt 1 有一个 e2e 分片撞 job 超时被取消，重跑 attempt 2 全绿，见 plan「CI」）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、
   实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2c 余项第 1 项的第四步，也是最后一步
   （[RFC-428 盘点](../RFC-428-dead-deployment-selections/inventory.md)「后继分步」第 4 条）

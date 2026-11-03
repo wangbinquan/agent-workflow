@@ -1,10 +1,33 @@
-## 2026-11-03 RFC-433 按有无区分部署的选择项改为显式（In Progress；`design/RFC-433-explicit-presence-selections/`）
+## 2026-11-03 RFC-433 按有无区分部署的选择项改为显式（Done；`design/RFC-433-explicit-presence-selections/`）；RFC-294 S2 Done
 
 - **来由**：RFC-294 S2c 余项第 1 项的第四步，也是最后一步（RFC-428 inventory 后继分步第 4 条）。用户 2026-11-02「好，你继续推进RFC294，
   过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
 - **范围**：最后 7 项可选全部改为显式：`executionAuthority` 单机给本地权威（始终 active，门控原样返回工厂），`secretBox` 改为启动锁之后
   调用一次的工厂，其余 5 项是托管独有能力、单机 `null`。合同变为 51 必填 + 11 必填可空 + 0 可选。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`7dfa6454d`。
+  - 新增 `DeploymentSessionSelections`（打开了 `secretBox` 的选择项），会话输入、应用输入与转发助手改用它。
+  - 启动：本地 epoch 安装流程与待定恢复合并进 `databaseInstallation === null` 一个分支。
+  - 会话：本地权威走门控，因已 active 原样返回工厂；CrewStation 事件与子模块刷新以 `null` 显式判定。
+  - 运维可见：`secret box ready` 日志字段由 `keyFile` 改为 `deployment`（入口不按部署种类分叉，RFC-394）。
+  - 结构锁：RFC-431 锁删去可选组；RFC-394 锁要求输入继承 `DeploymentSessionSelections` 并锁住其形状。新增行为用例 `rfc433-explicit-presence-selections`。
+- **集中验证**：
+  - 全量 SQLite 4 分片跑完：2883 个文件、23392 条用例，22 条负载超时，60 s 预算复跑 21 个文件 239/239 通过；
+  - PostgreSQL 专注 lane 97 个文件 1019/1019；
+  - 导出仓库 141 个按已提交源码出报告的用例全部通过；
+  - P0 变异 lane 34 阶段通过；
+  - 验证中修了本人两处缺陷：RFC-394 锁的继承断言、启动日志的部署种类比较。
+- **CI**：`7dfa6454d` windows-platform、maintenance-soak-nightly 一次全绿；主 CI run 41653545859 attempt 1 有一个 Playwright e2e 分片
+  （ubuntu 1/3）跑满 job 超时被取消，无日志可查；同 attempt 其余 10 个 e2e 分片覆盖同一组 spec 全部通过，该分片前 40 次从未超时。
+  原因不明、未认领，重跑 attempt 2 全绿（AC-5，细节见 plan「CI」）。
+- **RFC-294 S2 Done**（退出门按源码核对，记录见 RFC-294 plan §3 S2）：
+  - 每模块每会话构造一次（`rfc380-daemon-module-bundles`）；
+  - 一张应用图、一张会话图、唯一 provider 适配表（`rfc391-neutral-daemon-graph`）；
+  - 部署差异只在两个 profile，合同 62 项无可选、装配层无隐式缺省（`rfc431-standalone-selections`）；
+  - 入口根只做参数解析与 profile 选择（`rfc427-entry-root`、RFC-394「入口不按部署种类分叉」）；
+  - 后台作业全部经唯一生命周期程序且都有 `stop`，两种 provider 作业清单一致（`rfc379-daemon-lifecycle-guard`、`rfc379-daemon-lifecycle` G12）。
+- **下一步**：RFC-294 余下 W4 余项（B/D、E1、E5、E8、E9、E10）、W5 余项、W9-C / W9-E / W9-D。按 plan §5 依赖顺序，S2c 的直接后继是
+  W9-E（物理恢复 generation）；W4 / W5 余项与 W9-C 可并行；W9-D 最后。
 
 ## 2026-11-03 RFC-432 需要会话图的部署选择项改为两侧都给的工厂（Done；`design/RFC-432-session-selection-factories/`）
 

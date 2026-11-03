@@ -21,7 +21,7 @@
 - [x] AC-2 单机 / 托管值与 `secret.key` 构造时机
 - [x] AC-3 装配层对 7 项显式判定
 - [x] AC-4 回归用例全部通过
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿
 
 ## PR / 提交
 
@@ -64,3 +64,17 @@
   - 候选与冲突合并的参与方收到 `undefined`，用各自的逐请求本地效果。
 - **托管**：7 项与改前同一对象，`secretBox` 只多一层闭包。
 - **结论**：PASS。
+
+## CI（AC-5）
+
+`7dfa6454d`：windows-platform run 41653545876 与 maintenance-soak-nightly run 41653545846 一次全绿。主 CI run 41653545859 如下：
+
+- **attempt 1**：conclusion `cancelled`，68 success。Playwright e2e（ubuntu shard 1/3）跑满 job 超时后被取消（14:50:04 → 15:15:04），
+  「CI required」随之 failure。
+  - 该 job 没有留下日志（API 返回 `BlobNotFound`），trace 上传步骤也没有执行，无法定位卡住的用例。
+  - 同一 attempt 里覆盖同一组 spec 的另外 10 个 e2e 分片全部通过（macOS 4、Windows 4、ubuntu 2/3、3/3）。
+  - 前 40 次主 CI 里这个分片从未超时（6～9 分钟）。
+  - 本 RFC 的单机路径不改变 e2e 守护进程的后台启动：本地权威已 active，门控原样返回工厂；其余可空项走改前 `undefined` 的同一路径。
+  - 原因不明、归属依据不足，未认领为本 RFC 缺陷，也未据此改动任何用例。
+- **attempt 2**（`gh run rerun --failed`，只重跑被取消的分片与汇总门）：conclusion `success`，70/70。ubuntu shard 1/3 用时 6.5 分钟
+  （15:20:21 → 15:26:55），与平时相当。
