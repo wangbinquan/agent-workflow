@@ -1120,6 +1120,10 @@ grep -rlE "backendUnits\(|packageSrcUnits\(|srcInventory\(|readSrc\(|readFileSyn
   | grep -v "^tests/architecture/"
 ```
 
+删除或改写一个模块时同样照这条全跑，别改用「按被删文件的完整路径字面量 grep 测试」来缩小范围：有的源码锁用 basename
+动态拼路径（`legacyResourceSrc('workflow.ts')` → `` `…/legacy/${rel}` ``），字面量搜不到它。2026-11-02 RFC-401 T6 收尾就这样漏了
+`rfc285-b6-import-visibility-locks`，推红 backend 一片（run 41585625878）。
+
 ### `describeEachProvider` 只保证「库换了」，**不保证「被测的实现换了」**（2026-09-18 实撞，照出一处真分叉）
 
 一份对拍写成 `describeEachProvider(...)`，两条 lane 都跑，看起来是双引擎判据。但如果用例体里
