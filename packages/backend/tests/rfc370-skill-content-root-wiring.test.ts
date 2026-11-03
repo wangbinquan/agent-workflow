@@ -58,9 +58,11 @@ function selectedCatalog(
   expect(selected).toHaveLength(1)
   const input = compact(selected[0]!.arguments[0]!, file)
   expect(input).toContain('skillContent,')
+  // RFC-432: the deployment's skill content factory, called once for this session's database.
   expect(compact(node, file)).toContain(
-    `constskillContent=${receiver}.skillContent??createFileSkillContentBinding(${receiver}.db,${fallback})`,
+    `constsession=Object.freeze({db:${receiver}.db,appHome:${fallback}})`,
   )
+  expect(compact(node, file)).toContain(`constskillContent=${receiver}.skillContent(session)`)
   expect(input).toContain(`skillContentRoot:${fallback},`)
 }
 

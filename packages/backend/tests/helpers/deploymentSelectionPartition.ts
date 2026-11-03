@@ -43,6 +43,35 @@ export const REQUIRED_SELECTIONS = [
   'verificationCommands',
   'repositoryBaselines',
   'actionWorkspaceEffects',
+  // RFC-432: session-scoped factories (see SESSION_FACTORY_SELECTIONS).
+  'contentStore',
+  'skillContent',
+  'reviewArtifacts',
+  'resourcePackageSkillArtifacts',
+  'intentArtifacts',
+  'databaseBackup',
+  'repositoryPublicationTransport',
+  'developmentWorkspaceRepositoryPreparation',
+  'repositoryPreparationEffects',
+  'scratchWorkspaceEffects',
+] as const
+
+/**
+ * RFC-432: the required selections a standalone deployment can only build from the session graph. Both profiles
+ * state a factory each session calls: standalone gives the module's local constructor, hosted a closure over the
+ * object its profile built.
+ */
+export const SESSION_FACTORY_SELECTIONS = [
+  'contentStore',
+  'skillContent',
+  'reviewArtifacts',
+  'resourcePackageSkillArtifacts',
+  'intentArtifacts',
+  'databaseBackup',
+  'repositoryPublicationTransport',
+  'developmentWorkspaceRepositoryPreparation',
+  'repositoryPreparationEffects',
+  'scratchWorkspaceEffects',
 ] as const
 
 /** Hosted-only capabilities: required, typed `X | null`; the standalone profile states `null`. */
@@ -57,19 +86,6 @@ export const NULLABLE_SELECTIONS = [
 
 /** Still optional, each with the step that removes it (RFC-294 S2c item 1). */
 export const OPTIONAL_SELECTIONS = {
-  /** Step 3: the standalone default needs the session graph (its database or content store). */
-  sessionGraph: [
-    'contentStore',
-    'skillContent',
-    'reviewArtifacts',
-    'repositoryPreparationEffects',
-    'scratchWorkspaceEffects',
-    'repositoryPublicationTransport',
-    'developmentWorkspaceRepositoryPreparation',
-    'resourcePackageSkillArtifacts',
-    'intentArtifacts',
-    'databaseBackup',
-  ],
   /** Step 4: a deployment switch, or a behaviour only the absent case has. */
   presence: [
     'databaseInstallation',
@@ -87,7 +103,6 @@ export type DeploymentSelectionGroup = 'required' | 'nullable' | 'optional'
 export function deploymentSelectionGroup(key: string): DeploymentSelectionGroup | undefined {
   if ((REQUIRED_SELECTIONS as readonly string[]).includes(key)) return 'required'
   if ((NULLABLE_SELECTIONS as readonly string[]).includes(key)) return 'nullable'
-  if ([...OPTIONAL_SELECTIONS.sessionGraph, ...OPTIONAL_SELECTIONS.presence].includes(key as never))
-    return 'optional'
+  if ((OPTIONAL_SELECTIONS.presence as readonly string[]).includes(key)) return 'optional'
   return undefined
 }

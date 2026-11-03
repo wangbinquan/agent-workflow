@@ -75,7 +75,9 @@ function expectLexicalInput(node: ts.Node, source: ts.SourceFile, expected: stri
   )
 }
 const fields = {
-  resourcePackageSkillArtifacts: 'ResourcePackageSkillArtifactOwner',
+  // RFC-432: a session factory each session calls with its own database.
+  resourcePackageSkillArtifacts:
+    '(session: DeploymentSessionStorage,) => ResourcePackageSkillArtifactOwner',
   resourcePackagePluginArtifacts: 'ResourcePackagePluginArtifactOwner',
   workspaceContent: 'WorkspaceContentEffectsFactory',
   employeeCaseWorkspaceEffects: 'EmployeeCaseWorkspaceEffectsFactory',
@@ -257,10 +259,13 @@ test('HTTP callers forward selected workspace and package owners into the neutra
       'workspaceContent',
     ])
       // RFC-430: package content is the selected skill content's own reader, no deployment selection.
+      // RFC-432: the package skill owner is the deployment's session factory, called for this session.
       expect(compact(property(selection, source, key), source)).toBe(
         key === 'resourcePackageSkillContent'
           ? 'skillContent.packageContent'
-          : `${receiver}.${key}`,
+          : key === 'resourcePackageSkillArtifacts'
+            ? `${receiver}.${key}(session)`
+            : `${receiver}.${key}`,
       )
   }
 })

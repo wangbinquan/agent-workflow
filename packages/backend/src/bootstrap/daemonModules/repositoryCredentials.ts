@@ -5,13 +5,12 @@ import { createRepositoryEndpointDiscovery } from '@/modules/integration/composi
 import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import {
   composeRepositoryTransportCredentials,
-  createRepositoryPublicationTransport,
   type RepositoryTransportCredentialRepository,
   type RepositoryWorkspaceOperations,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
-import { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
+import type { DeploymentSelections } from '../deploymentProfile'
 
 export function composeDaemonRepositoryCredentials(input: {
   readonly db: PersistenceDb
@@ -23,10 +22,9 @@ export function composeDaemonRepositoryCredentials(input: {
   readonly developmentPurposeRoot: {
     readonly pipeline: Parameters<typeof composeSelectedPipelineEvidenceRunnerFor>[1]
   }
-  readonly repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>
-  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
-    typeof createDevelopmentWorkspaceRepositoryPreparation
-  >
+  // RFC-432: the deployment's session factories, called once the bundle's own services exist.
+  readonly repositoryPublicationTransport: DeploymentSelections['repositoryPublicationTransport']
+  readonly developmentWorkspaceRepositoryPreparation: DeploymentSelections['developmentWorkspaceRepositoryPreparation']
   readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
 }) {
   const repositoryWorkspaceStore = input.repositoryWorkspaceStore
@@ -51,14 +49,12 @@ export function composeDaemonRepositoryCredentials(input: {
     },
     ...(input.codeHostFetch === undefined ? {} : { fetchImpl: input.codeHostFetch }),
   })
-  const repositoryPublicationTransport =
-    input.repositoryPublicationTransport ??
-    createRepositoryPublicationTransport({
-      repository,
-      secretBox: input.secretBox,
-      appHome: input.appHome,
-      endpointDiscovery: repositoryEndpointDiscovery,
-    })
+  const repositoryPublicationTransport = input.repositoryPublicationTransport({
+    repository,
+    secretBox: input.secretBox,
+    appHome: input.appHome,
+    endpointDiscovery: repositoryEndpointDiscovery,
+  })
   const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
     db: input.db,
     secretBox: input.secretBox,
@@ -68,13 +64,13 @@ export function composeDaemonRepositoryCredentials(input: {
       input.developmentPurposeRoot.pipeline,
     ),
   })
-  const developmentWorkspaceRepositoryPreparation =
-    input.developmentWorkspaceRepositoryPreparation ??
-    createDevelopmentWorkspaceRepositoryPreparation({
+  const developmentWorkspaceRepositoryPreparation = input.developmentWorkspaceRepositoryPreparation(
+    {
       store: repositoryWorkspaceStore,
       appHome: input.appHome,
       secretBox: input.secretBox,
-    })
+    },
+  )
   return Object.freeze({
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,

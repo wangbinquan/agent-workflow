@@ -237,7 +237,14 @@ export async function composeCrewStationProfile(
     transports: { object: createObjectContentTransport(objects) },
     objectPublicationEpoch: () => fence.current().epoch,
   })
-  const workspaceSelections = workspace.bind()
+  // RFC-432: the four session-scoped workspace selections are stated as closures over the objects built here.
+  const {
+    repositoryPublicationTransport,
+    developmentWorkspaceRepositoryPreparation,
+    repositoryPreparationEffects,
+    scratchWorkspaceEffects,
+    ...workspaceSelections
+  } = workspace.bind()
   const developmentWorkspaces = composeCrewStationDevelopmentWorkspaces({
     helper: execution.helper,
     applicationRootReference: workspace.reference('development:shared', '/work'),
@@ -247,6 +254,18 @@ export async function composeCrewStationProfile(
     // RFC-370 §9.2 V3: large tree-operation inputs travel as volume files.
     writeFile: workspace.writeFile,
   })
+  const databaseBackup = composeCrewStationDatabaseBackups({
+    contract: logicalSchemaContract,
+    db,
+    runtime: prepared.runtime.runtime,
+    fence,
+    objects,
+    publications,
+    installation: `${environment.project}/${environment.service}`,
+    objectSpaceId: environment.objectSpaceId,
+    secretKey: environment.secretKey,
+  }).backup
+  const intentArtifacts = composeCrewStationIntentArtifacts(resourceArtifacts.intent)
   return {
     kind: 'crewstation',
     frontendMarker: 'crewstation',
@@ -257,19 +276,10 @@ export async function composeCrewStationProfile(
     },
     listen: { host: '0.0.0.0', port: environment.port },
     selections: {
-      contentStore,
+      // RFC-432: session-scoped selections — closures over the objects this profile built.
+      contentStore: () => contentStore,
       taskInputFiles: composeCrewStationTaskInputFiles({ db, objects, publications }),
-      databaseBackup: composeCrewStationDatabaseBackups({
-        contract: logicalSchemaContract,
-        db,
-        runtime: prepared.runtime.runtime,
-        fence,
-        objects,
-        publications,
-        installation: `${environment.project}/${environment.service}`,
-        objectSpaceId: environment.objectSpaceId,
-        secretKey: environment.secretKey,
-      }).backup,
+      databaseBackup: () => databaseBackup,
       archivedNodeEvents,
       runtimeInventoryContent: composeStreamTaskRuntimeInventoryContent(),
       humanGateArtifactRecovery: composeCrewStationHumanGateRecovery({
@@ -329,7 +339,7 @@ export async function composeCrewStationProfile(
       evidenceArtifacts: evidence.evidenceArtifacts,
       // RFC-431: graph-development artifacts share the hosted evidence store (standalone keeps its own root).
       graphDevelopmentArtifacts: evidence.evidenceArtifacts,
-      reviewArtifacts,
+      reviewArtifacts: () => reviewArtifacts,
       // §10 V16: structural diffs and change narratives as object publications;
       // the code-review reads themselves arrive with the workspace selections.
       codeReviewArtifacts: composeCrewStationCodeReviewArtifacts({ objects, publications }),
@@ -387,15 +397,22 @@ export async function composeCrewStationProfile(
         administratorSubjects: environment.adminSubjects,
       }),
       // RFC-430: package content is skillContent.packageContent; only the skill content is a selection.
-      skillContent: resources.skillContent,
-      ...resourceArtifacts.selections,
-      intentArtifacts: composeCrewStationIntentArtifacts(resourceArtifacts.intent),
+      skillContent: () => resources.skillContent,
+      pluginInstaller: resourceArtifacts.selections.pluginInstaller,
+      resourcePackagePluginArtifacts: resourceArtifacts.selections.resourcePackagePluginArtifacts,
+      resourcePackageSkillArtifacts: () =>
+        resourceArtifacts.selections.resourcePackageSkillArtifacts,
+      intentArtifacts: () => intentArtifacts,
       maintenanceEffectsBootstrap: composeCrewStationMaintenanceDescriptor({
         database: prepared.databaseConfig,
         generationId: prepared.runtime.generation.payload.generationId,
         fence,
       }),
       ...workspaceSelections,
+      repositoryPublicationTransport: () => repositoryPublicationTransport,
+      developmentWorkspaceRepositoryPreparation: () => developmentWorkspaceRepositoryPreparation,
+      repositoryPreparationEffects: () => repositoryPreparationEffects,
+      scratchWorkspaceEffects: () => scratchWorkspaceEffects,
       // RFC-430: automation contents are actionWorkspaceEffects.contents; only the two selections are given.
       actionWorkspaceEffects: developmentWorkspaces.actionWorkspaceEffects,
       repositoryBaselines: developmentWorkspaces.repositoryBaselines,

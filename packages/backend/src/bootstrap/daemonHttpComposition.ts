@@ -136,7 +136,8 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
       | 'repositoryRevisionContent'
       | 'codeReviewArtifacts'
     > & {
-      resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+      /** RFC-432: the deployment's package skill artifact owner, built for this session. */
+      resourcePackageSkillArtifacts: ResourcePackageSkillArtifactOwner
       resourcePackageSkillContent?: SkillPackageContentReader
       repositoryRemote?: NonNullable<Parameters<typeof composeRepositoryMirrors>[0]['remote']>
     }

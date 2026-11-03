@@ -39,11 +39,8 @@ export type ProviderHttpApplicationInput = Pick<DaemonApplicationInput, 'token' 
   Partial<
     Pick<
       DaemonApplicationInput,
-      | 'reviewArtifacts'
-      | 'contentStore'
       | 'recoveredExecutionTaskIds'
       | 'taskArchive'
-      | 'skillContent'
       | 'employeePrograms'
       | 'employeeInputArtifacts'
       | 'pluginInstaller'
@@ -51,7 +48,6 @@ export type ProviderHttpApplicationInput = Pick<DaemonApplicationInput, 'token' 
       | 'taskRunSelection'
       | 'workspaceExcludeProfiles'
       | 'evidenceArtifacts'
-      | 'resourcePackageSkillArtifacts'
       | 'resourcePackagePluginArtifacts'
       | 'workspaceContent'
       | 'workspaceUploads'
@@ -68,6 +64,16 @@ export type ProviderHttpApplicationInput = Pick<DaemonApplicationInput, 'token' 
     >
   > &
   Omit<DaemonApplicationTestSeams, 'workflowRuntime'> & {
+    /**
+     * RFC-432: these deployment selections are session factories; a case gives the session value and the helper
+     * states it as the factory (a closure, as the hosted profile does).
+     */
+    readonly contentStore?: ReturnType<DaemonApplicationInput['contentStore']>
+    readonly skillContent?: ReturnType<DaemonApplicationInput['skillContent']>
+    readonly reviewArtifacts?: ReturnType<DaemonApplicationInput['reviewArtifacts']>
+    readonly resourcePackageSkillArtifacts?: ReturnType<
+      DaemonApplicationInput['resourcePackageSkillArtifacts']
+    >
     /** A case may select single purposes; the others stay local, over the case's evidence store. */
     readonly developmentPurposes?: Partial<DaemonApplicationInput['developmentPurposes']>
     readonly requiredProvider?: DaemonApplicationInput['requiredProvider']
@@ -284,6 +290,10 @@ export async function createProviderHttpApplicationFromBinding(
       webhookTerminalControl,
       systemOperations,
       workflowExactOperationHook,
+      contentStore,
+      skillContent,
+      reviewArtifacts,
+      resourcePackageSkillArtifacts,
       ...selections
     } = input
     const standalone = standaloneSelections({ appHome })
@@ -302,6 +312,12 @@ export async function createProviderHttpApplicationFromBinding(
         ? {}
         : { graphDevelopmentArtifacts: selections.evidenceArtifacts }),
       ...selections,
+      ...(contentStore === undefined ? {} : { contentStore: () => contentStore }),
+      ...(skillContent === undefined ? {} : { skillContent: () => skillContent }),
+      ...(reviewArtifacts === undefined ? {} : { reviewArtifacts: () => reviewArtifacts }),
+      ...(resourcePackageSkillArtifacts === undefined
+        ? {}
+        : { resourcePackageSkillArtifacts: () => resourcePackageSkillArtifacts }),
       developmentPurposes: {
         requirement: selections.developmentPurposes?.requirement ?? localPurposes.requirement,
         pipeline: selections.developmentPurposes?.pipeline ?? localPurposes.pipeline,

@@ -34,6 +34,8 @@ export type {
 }
 /** RFC-431: the standalone selection — plugin generations under a local plugin root. */
 export { createFileResourcePackagePluginArtifactOwner }
+/** RFC-432: the standalone session factory — package skill artifacts in the session's database and app home. */
+export { createFileResourcePackageSkillArtifactOwner }
 
 export interface PostgresqlResourcePackageProviderComposition extends ResourcePackageProviderComposition {
   readonly mutationSessionFactory: PostgresqlResourcePackageMutationSessionFactory

@@ -14,7 +14,11 @@ import { composeApplicationConfigurationBinding } from '@/modules/system-operati
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
-import { NULLABLE_SELECTIONS, REQUIRED_SELECTIONS } from './helpers/deploymentSelectionPartition'
+import {
+  NULLABLE_SELECTIONS,
+  REQUIRED_SELECTIONS,
+  SESSION_FACTORY_SELECTIONS,
+} from './helpers/deploymentSelectionPartition'
 
 // The former hosted factory returned 70 keys: listen takes host/port and the host selector retires.
 // This explicit list must not be derived from the production key table.
@@ -328,6 +332,14 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         expect(profile.selections.graphDevelopmentArtifacts).toBe(
           profile.selections.evidenceArtifacts,
         )
+        // RFC-432: each session-scoped selection is a closure over the one object the profile built.
+        for (const key of SESSION_FACTORY_SELECTIONS) {
+          const factory = profile.selections[key] as (session: never) => unknown
+          expect(typeof factory).toBe('function')
+          const built = factory(undefined as never)
+          expect(built).toBeDefined()
+          expect(factory(undefined as never)).toBe(built)
+        }
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
         expect(profile.selections.secretBox).toBe(system.secretBox)

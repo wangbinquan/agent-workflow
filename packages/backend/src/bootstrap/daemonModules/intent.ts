@@ -54,8 +54,9 @@ export interface DaemonIntentInput {
     'intentSystemAgentBinding' | 'intentHttpSystemAgentBinding'
   >
   readonly digitalEmployee: Pick<DaemonDigitalEmployeeModules, 'platformInventory'>
-  readonly adapters?: {
-    readonly intentArtifacts?: IntentArtifactSelection
+  readonly adapters: {
+    /** RFC-432: the deployment's intent artifact family, built for this session. */
+    readonly intentArtifacts: IntentArtifactSelection
     readonly httpTurnFixture?: Parameters<
       DaemonObservationModules['intentHttpSystemAgentBinding']['withFixture']
     >[0]
@@ -90,12 +91,12 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
   const artifacts = composeIntentApplyArtifactLifecycle({
     db,
     appHome,
-    content: input.adapters?.intentArtifacts?.artifactContent,
+    content: input.adapters.intentArtifacts.artifactContent,
   })
   const applyOperations = composeIntentApplyOperations({
     db,
     appHome,
-    ...input.adapters?.intentArtifacts,
+    ...input.adapters.intentArtifacts,
     aclIdentities: resources.resourceCatalog.persistence.identities,
     artifacts,
   })
@@ -128,7 +129,7 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
   })
   // A fixture replaces only the HTTP family; its paired resolver uses that same binding.
   const httpBinding =
-    input.adapters?.httpTurnFixture === undefined
+    input.adapters.httpTurnFixture === undefined
       ? observation.intentHttpSystemAgentBinding
       : observation.intentHttpSystemAgentBinding.withFixture(input.adapters.httpTurnFixture)
   const routes: IntentSessionRouteDependencies = Object.freeze({

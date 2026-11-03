@@ -81,6 +81,26 @@ export interface IntentArtifactSelection {
 }
 
 /**
+ * RFC-432: the standalone family for one session — the same three local constructions each member falls back
+ * to when a composition is given none (plugins under `appHome/plugins`, skills in the session's database).
+ */
+export function composeLocalIntentArtifacts(input: {
+  readonly db: PersistenceDb
+  readonly appHome: string
+}): IntentArtifactSelection {
+  const pluginsDir = join(input.appHome, 'plugins')
+  return Object.freeze({
+    pluginArtifacts: createFileIntentPluginArtifactOwner({ pluginsDir }),
+    skillArtifacts: createFileIntentSkillArtifactOwner({ appHome: input.appHome, db: input.db }),
+    artifactContent: createFileIntentArtifactContent({
+      appHome: input.appHome,
+      pluginsDir,
+      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+    }),
+  })
+}
+
+/**
  * RFC-355 T6：技能工件的补偿原语归 resource-catalog 所有，intent 只消费端口。
  * 装配发生在 composition 层——engine / application / 兼容门面都不再自己拼 provider。
  */

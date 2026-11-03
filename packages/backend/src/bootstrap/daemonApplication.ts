@@ -1,13 +1,10 @@
 import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
-import { createLocalRuntimeContent } from './contentRuntime'
 import { createHistoryRestrictionBindings } from './historyRestrictions'
-import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import {
   readActiveEpochInstallation,
   createActiveHistoryRestrictionProvider,
 } from '@/modules/system-operations/composition/epochInstallation'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
-import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
 import type { DeploymentKind, DeploymentSelections } from './deploymentProfile'
@@ -276,7 +273,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   if (input.requiredProvider !== null && input.requiredProvider !== input.provider.provider)
     throw new Error('hosted-deployment-requires-postgresql')
   const log = input.log
-  const content = input.contentStore ?? createLocalRuntimeContent(input.db, input.appHome)
+  // RFC-432: the session-scoped selections are built here, from this session's own database.
+  const session = Object.freeze({ db: input.db, appHome: input.appHome })
+  const content = input.contentStore(session)
   // RFC-430: the provider is stateless (each check reads inside the caller's transaction); no deployment selects one.
   const historyRestrictions = createActiveHistoryRestrictionProvider()
   const { nodeRunHistoryRestrictions, gateHistoryRestrictions } =
@@ -287,10 +286,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       error: error instanceof Error ? error.message : String(error),
     })
   })
-  const skillContent = input.skillContent ?? createFileSkillContentBinding(input.db, input.appHome)
-  const reviewArtifacts =
-    input.reviewArtifacts ??
-    createLocalReviewArtifacts({ db: input.db, content, appHome: input.appHome })
+  const skillContent = input.skillContent(session)
+  const reviewArtifacts = input.reviewArtifacts({ ...session, content })
   const codeHistory = createCodeHistoryPackageReader({
     db: input.db,
     content,
@@ -632,7 +629,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     observation: observationModules,
     digitalEmployee: digitalEmployeeModules,
     adapters: {
-      intentArtifacts: input.intentArtifacts,
+      intentArtifacts: input.intentArtifacts(session),
       httpTurnFixture: input.testSeams?.intentTestDependencies?.runFn,
     },
   })
@@ -671,7 +668,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       intent: intentModules,
     },
     selections: {
-      resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
+      resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts(session),
       resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
       // RFC-430: package content is the selected skill content's own reader.
       resourcePackageSkillContent: skillContent.packageContent,

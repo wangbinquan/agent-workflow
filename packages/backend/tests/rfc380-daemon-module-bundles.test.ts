@@ -110,6 +110,9 @@ function graph(
     repositoryWorkspaceStore: core.repositoryWorkspaceStore,
     repositoryWorkspaceOperations: core.repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository: core.repositoryTransportCredentialRepository,
+    // RFC-432: the standalone session factories.
+    repositoryPublicationTransport: standalone.repositoryPublicationTransport,
+    developmentWorkspaceRepositoryPreparation: standalone.developmentWorkspaceRepositoryPreparation,
   })
   const memoryModules = composeDaemonMemoryModules({
     db,

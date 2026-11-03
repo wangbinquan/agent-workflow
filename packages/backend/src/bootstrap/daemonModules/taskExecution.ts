@@ -27,7 +27,10 @@ import {
 } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupTurnsOperations } from '@/modules/task-execution/composition/workgroupTurns'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import {
+  composeRepositoryPreparation,
+  type RepositoryPreparationInput,
+} from '@/modules/source-control/composition/repositoryPreparation'
 import {
   createCollaborationCommandContext,
   createCollaborationRuntimeMechanics,
@@ -76,7 +79,7 @@ import type { DaemonRepositoryCredentials } from './repositoryCredentials'
 import type { DaemonMemoryModules } from './memory'
 
 type ProviderDependencies = TaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>
-type PreparationInput = Parameters<typeof composeRepositoryPreparation>[0]
+import type { DeploymentSelections } from '../deploymentProfile'
 type RouteInputs = ReturnType<ProviderDependencies['routes']>
 type ReviewInputs = Parameters<typeof createReviewDecisionCommand>[0]
 
@@ -135,8 +138,9 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
         ProviderDependencies['routeLaunch']['workspaceUploads']
       >
       readonly inputFiles?: ProviderDependencies['routeLaunch']['inputFiles']
-      readonly preparationEffects?: PreparationInput['preparationEffects']
-      readonly scratchEffects?: PreparationInput['scratchEffects']
+      /** RFC-432: the deployment's session factories, called with this session's preparation input. */
+      readonly preparationEffects: DeploymentSelections['repositoryPreparationEffects']
+      readonly scratchEffects: DeploymentSelections['scratchWorkspaceEffects']
       readonly recoverySelection?: ProviderDependencies['recoverySelection']
       readonly fusionWorkspaces: ProviderDependencies['fusion']['workspaces']
     }
@@ -241,19 +245,22 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     })
   }
   const repositoryPreparationLookup = composeRepositoryPreparationLookup(db)
-  const repositoryPreparation = composeRepositoryPreparation({
+  const preparationInput: RepositoryPreparationInput = {
     taskPorts: composeSourceControlTaskPorts(db),
     db,
     appHome,
     secretBox,
-    preparationEffects: selection.preparationEffects,
-    scratchEffects: selection.scratchEffects,
     preparationConfiguration: {
       async read() {
         const current = await runConfiguration()
         return { cloneTimeoutMs: current.cloneTimeoutMs }
       },
     },
+  }
+  const repositoryPreparation = composeRepositoryPreparation({
+    ...preparationInput,
+    preparationEffects: selection.preparationEffects(preparationInput),
+    scratchEffects: selection.scratchEffects(preparationInput),
   })
   const coordinatorFactory = createTaskDriveCoordinatorFactory({
     runConfiguration,

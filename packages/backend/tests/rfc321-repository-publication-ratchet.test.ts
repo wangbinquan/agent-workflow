@@ -421,8 +421,13 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')).toContain(
       'repositoryTransport: repositoryTransport.adminConnections',
     )
+    // RFC-432: the deployment's transport factory, called with the bundle's own credentials and discovery;
+    // the standalone profile states the local constructor.
     expect(repository).toMatch(
-      /const repositoryPublicationTransport\s*=\s*input.repositoryPublicationTransport \?\?\s*createRepositoryPublicationTransport/,
+      /const repositoryPublicationTransport\s*=\s*input\.repositoryPublicationTransport\(\{/,
+    )
+    expect(read('packages/backend/src/bootstrap/standalone.ts')).toContain(
+      'repositoryPublicationTransport: createRepositoryPublicationTransport,',
     )
   })
 

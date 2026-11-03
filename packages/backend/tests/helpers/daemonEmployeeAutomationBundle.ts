@@ -77,6 +77,9 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     repositoryWorkspaceStore: core.repositoryWorkspaceStore,
     repositoryWorkspaceOperations: core.repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository: core.repositoryTransportCredentialRepository,
+    // RFC-432: the standalone session factories.
+    repositoryPublicationTransport: standalone.repositoryPublicationTransport,
+    developmentWorkspaceRepositoryPreparation: standalone.developmentWorkspaceRepositoryPreparation,
   })
   const scheduled = composeDaemonScheduledTaskModules({
     db,

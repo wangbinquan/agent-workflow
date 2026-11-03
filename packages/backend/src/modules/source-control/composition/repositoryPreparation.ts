@@ -41,25 +41,24 @@ import type {
 } from '../public/types'
 import type { RepositoryWorkspaceTaskPorts } from './required-ports'
 
-/** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
-export function composeRepositoryPreparation(input: {
-  taskPorts: RepositoryWorkspaceTaskPorts
-  db: PersistenceDb
-  appHome: string
-  secretBox?: SecretBox | undefined
-  workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
-  cloneTimeoutMs?: number | undefined
-  preparationConfiguration?: Readonly<{
+/** What the local preparation and scratch effects are built from (the root's own preparation input). */
+export interface RepositoryPreparationInput {
+  readonly taskPorts: RepositoryWorkspaceTaskPorts
+  readonly db: PersistenceDb
+  readonly appHome: string
+  readonly secretBox?: SecretBox | undefined
+  readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
+  readonly cloneTimeoutMs?: number | undefined
+  readonly preparationConfiguration?: Readonly<{
     read(): { readonly cloneTimeoutMs?: number } | Promise<{ readonly cloneTimeoutMs?: number }>
   }>
-  preparationEffects?: RepositoryPreparationEffectFactory
-  scratchEffects?: ScratchWorkspaceEffects
-}) {
-  const journal = createRepositoryPreparationJournal(input.db)
-  const driver = composeRepositoryPreparationParticipant({ journal })
-  const scratch: ScratchWorkspaceEffects =
-    input.scratchEffects ?? createFileScratchWorkspaceEffects(input)
-  const preparationEffects: RepositoryPreparationEffectFactory = input.preparationEffects ?? {
+}
+
+/** RFC-432: the standalone preparation effects — native clones and worktrees under the app home. */
+export function composeLocalRepositoryPreparationEffects(
+  input: RepositoryPreparationInput,
+): RepositoryPreparationEffectFactory {
+  return {
     create(request) {
       const cloneTimeoutMs =
         input.preparationConfiguration === undefined
@@ -81,6 +80,28 @@ export function composeRepositoryPreparation(input: {
       })
     },
   }
+}
+
+/** RFC-432: the standalone scratch effects — throw-away workspaces under `appHome/scratch`. */
+export function composeLocalScratchWorkspaceEffects(
+  input: RepositoryPreparationInput,
+): ScratchWorkspaceEffects {
+  return createFileScratchWorkspaceEffects(input)
+}
+
+/** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
+export function composeRepositoryPreparation(
+  input: RepositoryPreparationInput & {
+    readonly preparationEffects?: RepositoryPreparationEffectFactory
+    readonly scratchEffects?: ScratchWorkspaceEffects
+  },
+) {
+  const journal = createRepositoryPreparationJournal(input.db)
+  const driver = composeRepositoryPreparationParticipant({ journal })
+  const scratch: ScratchWorkspaceEffects =
+    input.scratchEffects ?? composeLocalScratchWorkspaceEffects(input)
+  const preparationEffects: RepositoryPreparationEffectFactory =
+    input.preparationEffects ?? composeLocalRepositoryPreparationEffects(input)
   return {
     async groupName(groupId: string): Promise<string> {
       return (

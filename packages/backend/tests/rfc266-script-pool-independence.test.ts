@@ -199,6 +199,16 @@ describe('RFC-266 script nodes run in their own daemon pool', () => {
       maxConcurrentScriptNodes: 1,
     })
 
+    // 先有界地等任务进入 running，再看它是否一直停在那里。此前固定睡 400 ms 后直接断言 running，
+    // 与 pending → running 的转移赛跑：RFC-432 集中验证时机器负载约 70，400 ms 内任务还是 pending，
+    // 假红。等到 running 之后，脚本被闸住就会一直排队，下面 400 ms 的窗口不受负载影响；
+    // 闸被删掉时任务会直接跑完——要么在这里等不到 running 而超时，要么下面看到 done / 非 pending。
+    const deadline = Date.now() + 20_000
+    while ((await statusOf(h, taskId)) !== 'running') {
+      if (Date.now() > deadline)
+        throw new Error('the task never started while the script pool was full')
+      await Bun.sleep(20)
+    }
     await Bun.sleep(400)
     // 名额没让出来，脚本必须还在排队 —— 任务不可能已经收尾。
     expect(await statusOf(h, taskId)).toBe('running')

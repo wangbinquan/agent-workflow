@@ -20,6 +20,7 @@ import {
   createFileWorkspaceUploadContentFactory,
   createLocalIsolationWorkspaceFactory,
   createNodeWorkspaceMaintenanceFilesystem,
+  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
@@ -54,13 +55,25 @@ import {
   createFileRepositoryBaselineEffectsFactory,
 } from '@/modules/development-automation/composition'
 import { composeLocalDevelopmentPurposes } from './developmentPurposeRoot'
+import { createLocalRuntimeContent } from './contentRuntime'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
+import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
+import { createFileResourcePackageSkillArtifactOwner } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import { composeLocalIntentArtifacts } from '@/modules/intent/composition/apply'
+import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/composition'
+import { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
+import {
+  composeLocalRepositoryPreparationEffects,
+  composeLocalScratchWorkspaceEffects,
+} from '@/modules/source-control/composition/repositoryPreparation'
 import type { DeploymentProfile, DeploymentSelections } from './deploymentProfile'
 
 /**
- * RFC-431: every selection a standalone daemon makes, rooted at `appHome`. The hosted capabilities are
- * stated as `null`; the selections that still need the session graph or are a deployment switch stay
- * unset (`DeploymentSelections`, optional group). Construction performs no IO: the profile is built
- * before the startup lock, and the stores that create directories open on first use.
+ * RFC-431: every selection a standalone daemon makes, rooted at `appHome`. The hosted capabilities are stated as
+ * `null`; the deployment switches stay unset (`DeploymentSelections`, optional group). RFC-432: what a standalone
+ * session can only build from its own graph is stated as the module's local constructor, which each session calls.
+ * Construction performs no IO: the profile is built before the startup lock, and the stores that create
+ * directories open on first use.
  */
 export function standaloneSelections(input: { readonly appHome: string }): DeploymentSelections {
   const { appHome } = input
@@ -120,6 +133,17 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
     actionWorkspaceEffects: createFileActionWorkspaceEffects(),
+    // RFC-432: session-scoped factories — each session builds these from its own database and services.
+    contentStore: (session) => createLocalRuntimeContent(session.db, session.appHome),
+    skillContent: (session) => createFileSkillContentBinding(session.db, session.appHome),
+    reviewArtifacts: createLocalReviewArtifacts,
+    resourcePackageSkillArtifacts: createFileResourcePackageSkillArtifactOwner,
+    intentArtifacts: composeLocalIntentArtifacts,
+    databaseBackup: createPostgresqlAdminBackupCoordinator,
+    repositoryPublicationTransport: createRepositoryPublicationTransport,
+    developmentWorkspaceRepositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation,
+    repositoryPreparationEffects: composeLocalRepositoryPreparationEffects,
+    scratchWorkspaceEffects: composeLocalScratchWorkspaceEffects,
     taskInputFiles: null,
     humanGateArtifactRecovery: null,
     beforeEventObservationWrite: null,

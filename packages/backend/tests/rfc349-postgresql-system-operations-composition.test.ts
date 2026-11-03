@@ -33,11 +33,13 @@ function composeFixture(input: {
 }) {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc426-pg-system-operations-'))
   roots.push(appHome)
+  const selected = input.backup
   return composePostgresqlSystemOperations({
     headContract: logicalSchemaContract,
     runtime: RUNTIME,
     db: {} as PersistenceDb,
-    ...(input.backup === undefined ? {} : { backup: input.backup }),
+    // RFC-432: the deployment selects a coordinator factory; the hosted one returns its platform backup.
+    ...(selected === undefined ? {} : { backup: () => selected }),
     databaseConfig: DATABASE_CONFIG,
     appHome,
     contract: { digest: DIGEST } as LogicalSchemaContract,

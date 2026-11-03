@@ -54,6 +54,7 @@ export async function createProviderHttpCompositionFixture(
     ...application,
     compose(overrides: Partial<ProviderAppOwnerInput<DatabaseProvider>['modules']>) {
       const modules = { ...application.modules, ...overrides }
+      const standalone = standaloneSelections({ appHome: application.appHome })
       const http = composeProviderAppComposition({
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         codeHistory,
@@ -85,8 +86,15 @@ export async function createProviderHttpCompositionFixture(
           taskExecutionResources: modules.taskExecution.resources,
         },
         modules,
-        // RFC-431: the composition reads the standalone profile's selections.
-        selections: standaloneSelections({ appHome: application.appHome }),
+        // RFC-431: the composition reads the standalone profile's selections; RFC-432: the session-scoped
+        // package skill owner is built for this session.
+        selections: {
+          ...standalone,
+          resourcePackageSkillArtifacts: standalone.resourcePackageSkillArtifacts({
+            db: harness.db,
+            appHome: application.appHome,
+          }),
+        },
       })
       return {
         composition: http.composition,

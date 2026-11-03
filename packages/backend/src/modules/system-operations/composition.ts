@@ -122,6 +122,13 @@ import type { AdminRestoreCoordinatorPort } from './application/ports/adminResto
 import { createLegacyPlatformRecoveryAdapter } from './infrastructure/legacyPlatformRecoveryAdapter'
 
 import { createPostgresqlAdminBackupCoordinator } from './infrastructure/postgresqlAdminBackupCoordinator'
+
+/**
+ * RFC-432: a deployment's PostgreSQL backup coordinator, built from the session's own runtime, client and backup
+ * preparation. The standalone selection is the local coordinator itself; a hosted one returns its platform backup.
+ */
+export type PostgresqlBackupCoordinatorFactory = typeof createPostgresqlAdminBackupCoordinator
+export { createPostgresqlAdminBackupCoordinator }
 import { SCHEDULED_BACKUP_REQUEST } from './domain/backup'
 import {
   createPostgresqlAdminRestoreCoordinator,
@@ -333,7 +340,8 @@ export function composePostgresqlSystemOperations(deps: {
    * ——逻辑快照 / 逻辑还原目标与 advisory lock。
    */
   readonly db: PersistenceDb
-  readonly backup?: AdminBackupCoordinatorPort
+  /** RFC-432: the deployment's backup coordinator factory; other callers get the local coordinator. */
+  readonly backup?: PostgresqlBackupCoordinatorFactory
   readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
   readonly repositoryBackupPreparation: RepositoryBackupPreparationParticipant
   readonly appHome?: string
@@ -368,16 +376,14 @@ export function composePostgresqlSystemOperations(deps: {
   })
   // RFC-370 / RFC-426: the hosted platform backup when the deployment selects one, otherwise the local PostgreSQL
   // backup — manual and scheduled backups alike.
-  const backup =
-    deps.backup ??
-    createPostgresqlAdminBackupCoordinator({
-      headContract: deps.headContract,
-      contract,
-      runtime: deps.runtime,
-      db: deps.db,
-      appHome,
-      prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
-    })
+  const backup = (deps.backup ?? createPostgresqlAdminBackupCoordinator)({
+    headContract: deps.headContract,
+    contract,
+    runtime: deps.runtime,
+    db: deps.db,
+    appHome,
+    prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
+  })
   const module = composeSystemOperationsWithArtifacts({
     artifacts,
     adapter: {

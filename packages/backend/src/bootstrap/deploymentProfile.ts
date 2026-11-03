@@ -1,9 +1,8 @@
 import type { ContentStore as ImportedContentStore } from '@/platform/content/contentStore'
 // RFC-394: deployment contracts are declared once, independently of the startup sequence.
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
-import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
+import type { PostgresqlBackupCoordinatorFactory } from '@/modules/system-operations/composition'
 import type { HumanGateArtifactRecovery } from '@/modules/collaboration/public/commands'
 import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -12,8 +11,11 @@ import type { ReviewArtifactSelection } from '@/modules/collaboration/compositio
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
 import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
-import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
-import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
+import type { createRepositoryPublicationTransport } from '@/modules/source-control/composition'
+import type {
+  composeLocalRepositoryPreparationEffects,
+  composeLocalScratchWorkspaceEffects,
+} from '@/modules/source-control/composition/repositoryPreparation'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import type { DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
@@ -106,14 +108,21 @@ export interface Deployment {
   verifyDatabaseMigration(): Promise<string>
 }
 
+/** RFC-432: what a session-scoped selection is built from in a standalone session. */
+export interface DeploymentSessionStorage {
+  readonly db: PersistenceDb
+  readonly appHome: string
+}
+
 /**
  * RFC-431: every deployment states each selection. The standalone profile builds its values in
  * `standaloneSelections` (`./standalone.ts`), the hosted profile in `./crewstation.ts`; consumers never
  * substitute a default. Three groups:
- * - required: both profiles give a value;
+ * - required: both profiles give a value; RFC-432: a value the standalone deployment can only build from the
+ *   session graph is a factory each session calls (standalone: the module's local constructor; hosted: a
+ *   closure over the object its profile built);
  * - required, nullable: a capability only the hosted deployment has; standalone states `null`;
- * - optional: the defaults that still need the session graph (RFC-294 S2c step 3) or that are a deployment
- *   switch or an absent-only behaviour (step 4).
+ * - optional: a deployment switch or an absent-only behaviour (RFC-294 S2c step 4).
  */
 export interface DeploymentSelections {
   // ── Required ──
@@ -176,20 +185,23 @@ export interface DeploymentSelections {
   maintenanceEffectsBootstrap: MaintenanceWorkerEffectsDescriptor | null
   readonly initializeExecution: ((initialize: () => Promise<void>) => Promise<void>) | null
 
-  // ── Optional, step 3: the standalone default needs the session graph ──
-  readonly contentStore?: ImportedContentStore
-  skillContent?: SkillContentBinding
-  readonly reviewArtifacts?: ReviewArtifactSelection
-  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
-  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
-  /** RFC-370 §9.2 V3 — hosted only: publication network Git in the task volume. */
-  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
-  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
-    typeof createDevelopmentWorkspaceRepositoryPreparation
-  >
-  resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
-  intentArtifacts?: IntentArtifactSelection
-  databaseBackup?: DatabaseBackupEffects
+  // ── Required, session-scoped factories (RFC-432): each session calls them with its own graph ──
+  readonly contentStore: (session: DeploymentSessionStorage) => ImportedContentStore
+  readonly skillContent: (session: DeploymentSessionStorage) => SkillContentBinding
+  readonly reviewArtifacts: (
+    session: DeploymentSessionStorage & { readonly content: ImportedContentStore },
+  ) => ReviewArtifactSelection
+  readonly resourcePackageSkillArtifacts: (
+    session: DeploymentSessionStorage,
+  ) => ResourcePackageSkillArtifactOwner
+  readonly intentArtifacts: (session: DeploymentSessionStorage) => IntentArtifactSelection
+  /** Called by a PostgreSQL session only; a SQLite session keeps its legacy recovery adapter. */
+  readonly databaseBackup: PostgresqlBackupCoordinatorFactory
+  /** RFC-370 §9.2 V3 — hosted: publication network Git in the task volume. */
+  readonly repositoryPublicationTransport: typeof createRepositoryPublicationTransport
+  readonly developmentWorkspaceRepositoryPreparation: typeof createDevelopmentWorkspaceRepositoryPreparation
+  readonly repositoryPreparationEffects: typeof composeLocalRepositoryPreparationEffects
+  readonly scratchWorkspaceEffects: typeof composeLocalScratchWorkspaceEffects
 
   // ── Optional, step 4: a deployment switch or an absent-only behaviour ──
   databaseInstallation?: DaemonDatabaseInstallationPort

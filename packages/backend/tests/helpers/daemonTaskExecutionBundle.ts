@@ -154,6 +154,8 @@ export function taskBundleInput(
       archivedEvents: standalone.archivedNodeEvents,
       reviewRollbackSnapshots: standalone.reviewRollbackSnapshots,
       workspaceUploads: standalone.workspaceUploads,
+      preparationEffects: standalone.repositoryPreparationEffects,
+      scratchEffects: standalone.scratchWorkspaceEffects,
       fusionWorkspaces: createFileFusionWorkspaceEffects({ appHome }),
     },
     finalizeWorkspace: async () => {},

@@ -12,6 +12,7 @@ import {
   NULLABLE_SELECTIONS,
   OPTIONAL_SELECTIONS,
   REQUIRED_SELECTIONS,
+  SESSION_FACTORY_SELECTIONS,
 } from '../helpers/deploymentSelectionPartition'
 
 // Reads the whole backend corpus once (as the RFC-394 and RFC-428 locks do); allow the same budget.
@@ -34,11 +35,11 @@ const WORKER_ROOTS = (path: string) =>
   /^packages\/backend\/src\/bootstrap\/maintenanceWorker[A-Za-z]*\.ts$/.test(path)
 const REQUIRED: readonly string[] = REQUIRED_SELECTIONS
 const NULLABLE: readonly string[] = NULLABLE_SELECTIONS
-const OPTIONAL: readonly string[] = [
-  ...OPTIONAL_SELECTIONS.sessionGraph,
-  ...OPTIONAL_SELECTIONS.presence,
-]
+const OPTIONAL: readonly string[] = OPTIONAL_SELECTIONS.presence
 const STATED = [...REQUIRED, ...NULLABLE]
+/** RFC-432: required selections stated as factories each session calls with its own graph. */
+const SESSION_FACTORIES: readonly string[] = SESSION_FACTORY_SELECTIONS
+const HOSTED = PREFIX + 'bootstrap/crewstation.ts'
 const RETIRED = [
   'standaloneModuleAdapters',
   'DaemonModuleAdapters',
@@ -176,7 +177,32 @@ function standaloneViolations(standalone: SourceUnit | undefined): string[] {
     if (value !== undefined && (value.kind === ts.SyntaxKind.NullKeyword || isUndefined(value)))
       errors.push('standalone required unset:' + name)
   }
+  // RFC-432: a session-scoped selection is the constructor itself — the profile builds nothing before the lock.
+  for (const name of SESSION_FACTORIES) {
+    const value = keys.get(name)
+    if (value !== undefined && ts.isCallExpression(value))
+      errors.push('standalone session factory called:' + name)
+  }
   return errors
+}
+
+/** RFC-432: the hosted profile states each session-scoped selection as a closure over the object it built. */
+function hostedViolations(hosted: SourceUnit | undefined): string[] {
+  if (hosted === undefined) return ['missing source: ' + HOSTED]
+  const closures = new Set<string>()
+  walk(hosted.source, (node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(hosted.source) === 'selections' &&
+      ts.isObjectLiteralExpression(node.initializer)
+    )
+      for (const property of node.initializer.properties)
+        if (ts.isPropertyAssignment(property) && ts.isArrowFunction(property.initializer))
+          closures.add(property.name.getText(hosted.source))
+  })
+  return SESSION_FACTORIES.filter((name) => !closures.has(name)).map(
+    (name) => 'hosted session factory not a closure:' + name,
+  )
 }
 
 function consumerViolations(units: readonly SourceUnit[]): string[] {
@@ -241,6 +267,7 @@ export function standaloneSelectionViolations(units: readonly SourceUnit[]): str
   return [
     ...partitionViolations(byPath.get(PROFILE)),
     ...standaloneViolations(byPath.get(STANDALONE)),
+    ...hostedViolations(byPath.get(HOSTED)),
     ...consumerViolations(units),
     ...retiredViolations(units),
   ].sort()
@@ -249,9 +276,12 @@ export function standaloneSelectionViolations(units: readonly SourceUnit[]): str
 test('the partition lists are disjoint and cover the contract once', () => {
   const all = [...STATED, ...OPTIONAL]
   expect(new Set(all).size).toBe(all.length)
-  expect(REQUIRED).toHaveLength(39)
+  // RFC-432: the ten session-scoped selections joined the required group (39 → 49; optional 17 → 7).
+  expect(REQUIRED).toHaveLength(49)
   expect(NULLABLE).toHaveLength(6)
-  expect(OPTIONAL).toHaveLength(17)
+  expect(OPTIONAL).toHaveLength(7)
+  expect(SESSION_FACTORIES).toHaveLength(10)
+  for (const name of SESSION_FACTORIES) expect(REQUIRED).toContain(name)
 })
 
 test('live corpus: the selection contract, the standalone profile and its consumers hold', () => {
@@ -339,6 +369,33 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
     APPLICATION,
     (text) => text + '\nexport const standaloneModuleAdapters = 1\n',
     `retired:${APPLICATION}:standaloneModuleAdapters`,
+  ],
+  // RFC-432: session-scoped selections.
+  [
+    'a standalone session factory built at profile time',
+    STANDALONE,
+    (text) =>
+      text.replace(
+        '    reviewArtifacts: createLocalReviewArtifacts,',
+        '    reviewArtifacts: (() => createLocalReviewArtifacts)(),',
+      ),
+    'standalone session factory called:reviewArtifacts',
+  ],
+  [
+    'a hosted session selection that is not a closure',
+    HOSTED,
+    (text) => text.replace('reviewArtifacts: () => reviewArtifacts,', 'reviewArtifacts,'),
+    'hosted session factory not a closure:reviewArtifacts',
+  ],
+  [
+    'a bootstrap default for a session factory',
+    APPLICATION,
+    (text) =>
+      text.replace(
+        'const content = input.contentStore(session)',
+        'const content = (input.contentStore ?? createLocalRuntimeContent)(session)',
+      ),
+    `default:${APPLICATION}:contentStore`,
   ],
 ]
 for (const [name, path, edit, violation] of NEGATIVES)
