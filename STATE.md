@@ -54,6 +54,9 @@
   创建（动态拼路径，本地按字面量找读源码用例时漏了），本步引入，已改锁 workflow 写入参与者；其余读 resource-catalog 源码的 159 个用例本地补跑全过。
 - **完成**：`cb33528ec`（run 41589242056）主 CI 全绿（AC-6；attempt 1 的 shard 43/44 一条 `scheduler-clarify-dispatch` PostgreSQL 用例
   5.76 s 超 5 s，同代码前一次 run 2.1 s 通过、RFC-401 未改动该文件，归因 runner 时序，只重跑失败 job 一次后全绿），RFC-401 转 Done。
+- **RFC-294 S7 随之 Done**：退出门（lifecycle 1、资源写入栈 1、收敛循环 1、三入口同一错误、旧引擎退役）按源码核对成立，记入 RFC-294
+  plan §3 S7、§1.1、§1.2、§8 与 RFC 索引。HEAD `ffff908ab` 按需架构报告：context 值级 SCC 0、越 DAG 值级对 0、`platform` → `modules` 0、
+  跨 context 内部文件对 56、composition 违规文件 14、部署分支 1、`services/` 业务实现 208 / 薄 facade 40、直接 `setInterval` 14。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 
