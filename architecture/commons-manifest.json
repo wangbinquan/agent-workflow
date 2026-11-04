@@ -487,11 +487,11 @@
       "claimAudit": "Does NOT hold. resourcePackage/closure.ts:62 exports a byte-identical second isBuiltinRow, and its header claim ('only agents + workflows carry the column today', systemResources.ts:24-27) is factually stale — capabilityTemplates carries the column (modules/code-capability/infrastructure/persistence/schema.ts:37). Four other files hand-copy the same stale two-type claim.",
       "core": false,
       "files": [
-        "packages/backend/src/services/systemResources.ts"
+        "packages/backend/src/modules/resource-catalog/domain/systemResources.ts"
       ],
       "guards": [],
       "id": "systemresources-ts",
-      "layer": "application",
+      "layer": "domain",
       "owner": "resource-catalog",
       "singleSourceOf": "isBuiltinRow / assertNotBuiltin / excludeBuiltinAgents / excludeBuiltinWorkflows — the actor-blind built-in lock the generic ACL route mounter calls before every ACL write.",
       "title": "systemResources.ts — the RFC-104 built-in read-only fence"

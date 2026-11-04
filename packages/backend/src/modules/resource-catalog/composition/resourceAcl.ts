@@ -7,7 +7,7 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DbTxSync } from '@/db/txSync'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '../domain/systemResources'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import {
   createResourceAclApplication,

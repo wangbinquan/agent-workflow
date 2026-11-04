@@ -10,7 +10,7 @@
 import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { mcpFromPersistenceRow as rowToMcp } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { pluginFromPersistenceRow as rowToPlugin } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { isSkillInjectableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { skillFilesRel } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import {

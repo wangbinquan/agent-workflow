@@ -33,12 +33,13 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,
-  seedFusionResources,
-} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { excludeBuiltinAgents, excludeBuiltinWorkflows } from '../src/services/systemResources'
+  excludeBuiltinAgents,
+  excludeBuiltinWorkflows,
+} from '../src/modules/resource-catalog/domain/systemResources'
 import { listWorkflows } from '../src/services/workflow'
 import {
   describeEachProviderHttpApplication,

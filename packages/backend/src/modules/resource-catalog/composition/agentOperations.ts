@@ -3,7 +3,7 @@ import type { Agent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
-import { assertNotBuiltin, excludeBuiltinAgents } from '@/services/systemResources'
+import { assertNotBuiltin, excludeBuiltinAgents } from '../domain/systemResources'
 import { createAgentApplication } from '../application/agents/agentApplication'
 import type { AgentAccessPort, AgentPolicyPort, AgentRepository } from '../application/agents/ports'
 import {

@@ -10,7 +10,7 @@ import { runConversion } from '@/platform/persistence/migration/conversion/engin
 import { describeV2Providers, fixtureLookup } from './helpers/rfc395V2Harness'
 import { frozenValues } from './helpers/rfc395V2/contentFixtures'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
-import { QUARANTINED_FUSION_SKILL_ID } from '@/services/systemResources'
+import { QUARANTINED_FUSION_SKILL_ID } from '@/modules/resource-catalog/domain/systemResources'
 
 describeV2Providers('fusion provenance converter preserves the old proof matrix', (h) => {
   test('token/ledger oracles, exact fused versions, terminal status and idempotent retry', async () => {

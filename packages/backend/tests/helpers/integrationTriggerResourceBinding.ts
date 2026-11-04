@@ -13,7 +13,7 @@ import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
-import { assertNotBuiltin } from '../../src/services/systemResources'
+import { assertNotBuiltin } from '../../src/modules/resource-catalog/domain/systemResources'
 import {
   createScheduledTask as createScheduledTaskService,
   deleteScheduledTask as deleteScheduledTaskService,

@@ -39,18 +39,16 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 
-import {
-  SKILL_FUSION_WORKFLOW_NAME,
-  SKILL_MERGER_AGENT_NAME,
-  seedFusionResources,
-} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
+import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import {
   QUARANTINED_FUSION_SKILL_ID,
   SKILL_FUSION_WORKFLOW_ID,
+  SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_ID,
+  SKILL_MERGER_AGENT_NAME,
   assertNotBuiltin,
   isBuiltinRow,
-} from '../src/services/systemResources'
+} from '../src/modules/resource-catalog/domain/systemResources'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { listWorkflows } from '../src/services/workflow'

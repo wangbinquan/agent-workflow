@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
-import { SKILL_FUSION_WORKFLOW_NAME } from '../src/services/systemResources'
+import { SKILL_FUSION_WORKFLOW_NAME } from '../src/modules/resource-catalog/domain/systemResources'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SQL_PATH = resolve(MIGRATIONS, '0085_rfc165_task_space.sql')

@@ -43,7 +43,7 @@ import type {
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
-import { SKILL_MERGER_AGENT_ID } from '@/services/systemResources'
+import { SKILL_MERGER_AGENT_ID } from '@/modules/resource-catalog/public/types'
 // RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).
 import { parseMultipartLaunch, type MultipartFilePart } from '@/services/launchMultipart'

@@ -22,7 +22,7 @@ import {
 } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
 
 function authority(actor: Actor) {
   return new AuthorityClaimRegistry().mintDirectAuthority(

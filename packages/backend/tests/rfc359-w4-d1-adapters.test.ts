@@ -16,7 +16,7 @@ import { createIntegrationTriggerResources } from '@/modules/integration/infrast
 import { createScheduledTaskPersistence } from '@/modules/integration/infrastructure/scheduledTaskPersistence'
 import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 

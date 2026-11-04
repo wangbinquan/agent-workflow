@@ -166,7 +166,7 @@ import {
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { canViewResource } from '@/services/resourceAcl'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import {
   computeWorkflowSyncPreview,
   loadTaskFailureCodes,

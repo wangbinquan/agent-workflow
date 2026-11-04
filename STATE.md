@@ -1,3 +1,14 @@
+## 2026-11-04 RFC-444 内建资源清单归 resource-catalog（In Progress；`design/RFC-444-builtin-resources-into-resource-catalog/`）
+
+- **来由**：RFC-294 W4 B / D 第十步（RFC-443 后 10 个路由仍 import `services/`），并清偿 W4-C 遗留的 KE-03 两条 R2 边。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/systemResources.ts`（内建资源 id / name、列表过滤与 RFC-104 只读锁）原样迁入 resource-catalog `domain/systemResources.ts`，
+    `public/types` 只转出模块外用到的五个符号；task-execution、knowledge-evolution、bootstrap、路由与 legacy service 经 public 取用；
+  - 删去 knowledge-evolution 里生产已无消费者的兼容再导出；`R2` 41 → 39；import `services/` 的路由 10 → 9（`resourceAcl`）。
+- **不做**：内建资源播种改为 participant；其余 9 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-443 OIDC 提供方服务与开通策略归 identity-access 的 auth/oidc（In Progress；`design/RFC-443-oidc-into-auth/`）
 
 - **来由**：RFC-294 W4 B / D 第九步（RFC-442 后 12 个路由仍 import `services/`）。

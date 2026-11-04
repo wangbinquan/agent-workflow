@@ -15,7 +15,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
 /**

@@ -474,6 +474,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-441](./RFC-441-platform-helpers-out-of-services/proposal.md) | API 文档、PlantUML 渲染与外部入口开关归 platform（RFC-294 W4 B / D 第七步）：`services/apiDocs` → `platform/operations`，`services/plantuml` → `platform/http`，`services/mcpSurface` → `platform/configuration`（删去零调用的 `tokenAuditRetentionDays`）；import `services/` 的路由 18 → 15，`mcp/` 不再 import `services/`。纯结构重构，无用户可见变化。 | Done |
 | [RFC-442](./RFC-442-collaboration-facades-out-of-services/proposal.md) | 协作的三个 services/ 兼容层收口（RFC-294 W4 B / D 第八步）：删除 `services/taskFeedback` 与 `services/taskClarifyDirective` 两层转出，提问节点判定与任务问题冲突码迁入 collaboration domain、经 exact public 入口给路由；import `services/` 的路由 15 → 12，`R1` 170 → 169。纯结构重构，无用户可见变化。 | In Progress |
 | [RFC-443](./RFC-443-oidc-into-auth/proposal.md) | OIDC 提供方服务与开通策略归 identity-access 的 auth/oidc（RFC-294 W4 B / D 第九步）：`services/oidcProviders`、`services/oidc/provisioning` 原样迁入 `auth/oidc/`（与 OIDC 其余五个文件同处）；import `services/` 的路由 12 → 10，`auth/` 不再 import `services/`。纯结构重构，无用户可见变化。 | In Progress |
+| [RFC-444](./RFC-444-builtin-resources-into-resource-catalog/proposal.md) | 内建资源清单归 resource-catalog（RFC-294 W4 B / D 第十步）：`services/systemResources` 原样迁入 resource-catalog `domain/systemResources`、`public/types` 转出模块外用到的五个符号；删去 knowledge-evolution 生产已无消费者的兼容再导出，KE-03 两条 R2 边清偿（R2 41 → 39）；import `services/` 的路由 10 → 9。纯结构重构，无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

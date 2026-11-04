@@ -73,7 +73,7 @@
 //   packages/backend/src/services/resourceAcl.ts:897         每次成功 PUT 单调 +1
 //   packages/frontend/src/components/AclPanel.tsx:264-275    保存失败后刷新权威快照、草稿围栏保持冻结
 //   packages/backend/src/routes/resourceAcl.ts:184-185       assertNotBuiltin 在锁内的新鲜行上执行
-//   packages/backend/src/services/systemResources.ts:43-44   两个内置行的确定性 id
+//   packages/backend/src/modules/resource-catalog/domain/systemResources.ts:43-44   两个内置行的确定性 id
 //   packages/backend/src/routes/agents.ts:113                excludeBuiltinAgents 把内置行从用户面列表里剥掉
 //   packages/backend/src/routes/developmentConfig.ts:336-372 requireEditable / requireGovernable 的分档
 //   packages/backend/src/services/resourceAcl.ts:643-660     requireResourceEdit → resource-read-only
@@ -128,7 +128,7 @@ const IDP_CLIENT_SECRET = 'rfc319-iam-fake-idp-secret'
 const IDP_KID = 'rfc319-iam-key-1'
 const PASSWORD = 'Rfc319IamPass!1'
 
-/** RFC-223 PR-4 的确定性内建 id（services/systemResources.ts:43-44）。 */
+/** RFC-223 PR-4 的确定性内建 id（modules/resource-catalog/domain/systemResources.ts:43-44）。 */
 const BUILTIN_MERGER_AGENT_ID = '00000000000000000000000001'
 const BUILTIN_FUSION_WORKFLOW_ID = '00000000000000000000000002'
 

@@ -14,7 +14,7 @@ import type { Actor } from '@/auth/actor'
 // 所以走 legacy transport 那份既有的中立别名——与 `services/taskArchive.ts` 同形。
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canViewResource } from '@/services/resourceAcl'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { getWorkflow } from '@/services/workflow'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { loadWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'

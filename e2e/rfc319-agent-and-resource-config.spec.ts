@@ -82,7 +82,7 @@
 //   packages/frontend/src/components/AgentForm.tsx:688-750   三个能力 Picker + dependsOn Picker
 //   packages/backend/src/routes/agents.ts:80-87          isRuntimeOnlyAgentPatch（按**原始 body** 判）
 //   packages/backend/src/routes/agents.ts:274-276        内置行：非 runtime-only ⇒ assertNotBuiltin
-//   packages/backend/src/services/systemResources.ts:78-86  assertNotBuiltin ⇒ 403 builtin-readonly
+//   packages/backend/src/modules/resource-catalog/domain/systemResources.ts:78-86  assertNotBuiltin ⇒ 403 builtin-readonly
 //   packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#renameAgent       renameAgent：owner 域内重名 ⇒ 409 agent-name-in-use
 //   packages/backend/src/routes/mcps.ts:443-475          MCP rename：govern + expectedConfigHash
 //   packages/backend/src/routes/plugins.ts:223-245       插件 rename：同款双闸

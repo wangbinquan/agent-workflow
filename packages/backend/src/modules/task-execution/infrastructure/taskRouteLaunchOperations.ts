@@ -64,7 +64,7 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'

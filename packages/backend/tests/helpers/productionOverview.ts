@@ -26,7 +26,7 @@ import {
 import { composeSystemOverviewQuery } from '../../src/modules/system-operations/application/overview'
 import type { SystemOverviewQuery } from '../../src/modules/system-operations/public/queries'
 import { createTaskOverviewQuery } from '../../src/modules/task-execution/composition/taskOverview'
-import { assertNotBuiltin } from '../../src/services/systemResources'
+import { assertNotBuiltin } from '../../src/modules/resource-catalog/domain/systemResources'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 
 /** 概览是纯读端口；调度任务 runtime 的写能力在这条路径上永远不会被触到。 */

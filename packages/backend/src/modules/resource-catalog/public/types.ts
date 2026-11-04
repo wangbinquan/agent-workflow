@@ -1142,3 +1142,10 @@ export interface CancelMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef 
 
 // Durable artifact data consumed by Intent and its owner-specific adapters.
 export type { IntentApplyArtifact } from '../application/intent/artifactOwners'
+export {
+  SKILL_FUSION_WORKFLOW_ID,
+  SKILL_FUSION_WORKFLOW_NAME,
+  SKILL_MERGER_AGENT_ID,
+  SKILL_MERGER_AGENT_NAME,
+  assertNotBuiltin,
+} from '../domain/systemResources'

@@ -4,7 +4,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
-import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
+import { assertNotBuiltin, excludeBuiltinWorkflows } from '../domain/systemResources'
 import { createWorkflowApplication } from '../application/workflows/workflowApplication'
 import { createWorkflowValidationApplication } from '../application/workflows/workflowValidation'
 import type {

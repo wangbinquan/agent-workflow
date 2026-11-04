@@ -49,17 +49,15 @@ import type {
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
-// Built-in resource names live in the leaf systemResources module (single
-// source of truth shared with the list-hiding filter); re-exported here so
-// existing `@/services/fusion` importers are unaffected.
-export { SKILL_FUSION_WORKFLOW_NAME, SKILL_MERGER_AGENT_NAME } from '@/services/systemResources'
+// Built-in resource identities live in resource-catalog's domain list (single source of truth
+// shared with the list-hiding filter and the RFC-104 read-only lock).
+import { QUARANTINED_FUSION_SKILL_ID } from '@agent-workflow/shared'
 import {
-  QUARANTINED_FUSION_SKILL_ID,
   SKILL_FUSION_WORKFLOW_ID,
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_ID,
   SKILL_MERGER_AGENT_NAME,
-} from '@/services/systemResources'
+} from '@/modules/resource-catalog/public/types'
 // RFC-353 T4（RFC-294 W4-E3）—— 纯判据 / 纯文本已迁进 knowledge-evolution 的 domain 层。
 // 这里只剩编排；`isValidFusionTransition` 继续从本模块再导出，既有 import 面不变
 // （consumer 在 T8 随路由与恢复入口一起切到 KE public）。
@@ -75,7 +73,7 @@ import {
 export { isValidFusionTransition }
 
 /**
- * 内建融合资源的身份。`services/systemResources` 是它们的单一事实源（同一份清单还喂着
+ * 内建融合资源的身份。`resource-catalog/domain/systemResources` 是它们的单一事实源（同一份清单还喂着
  * 「内建资源不在列表里显示」的过滤器），domain 层不去那里取——由这里注入。
  */
 // 不标注 `FusionBuiltinResourceIdentity`：结构类型在调用处已经把形状校严了，

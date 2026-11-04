@@ -80,7 +80,7 @@
 //   packages/backend/src/services/resourcePackage/preview.ts:250-254    agent 的两段式 CAS token
 //   packages/backend/src/routes/agents.ts:118-135                       内置数字员工模板端点
 //   packages/backend/src/services/digitalEmployeeAgentTemplates.ts:415-423  只回 V2 且 builtin+public
-//   packages/backend/src/services/systemResources.ts:58-60              GET /api/agents 剔除 builtin
+//   packages/backend/src/modules/resource-catalog/domain/systemResources.ts:58-60              GET /api/agents 剔除 builtin
 //   packages/frontend/src/components/mcps/McpRuntimeTestDialog.tsx:341-370  取消 / 结束两颗按钮的渲染条件
 //   packages/backend/src/services/mcpRuntimeTest.ts:1201-1256           cancel：running ⇒ 记 cancelRequestedAt + abort
 //   packages/backend/src/services/mcpRuntimeTest.ts:216-222             cancelRequested && !ending ⇒ turn=canceled

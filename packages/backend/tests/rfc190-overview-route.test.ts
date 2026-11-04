@@ -39,7 +39,7 @@ import { composeResourceCatalogOverviewQuery } from '../src/modules/resource-cat
 import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/composition/scheduledTasks'
 import { composeSystemOverviewQuery } from '../src/modules/system-operations/application/overview'
 import { createTaskOverviewQuery } from '../src/modules/task-execution/composition/taskOverview'
-import { assertNotBuiltin } from '../src/services/systemResources'
+import { assertNotBuiltin } from '../src/modules/resource-catalog/domain/systemResources'
 import { createUser } from './helpers/userFixture'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'

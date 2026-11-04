@@ -2,7 +2,7 @@ import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 

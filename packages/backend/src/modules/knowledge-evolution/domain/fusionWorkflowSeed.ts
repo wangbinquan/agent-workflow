@@ -15,7 +15,7 @@ import { FUSION_WORKFLOW_DESCRIPTION, MERGER_PROMPT_TEMPLATE } from './fusionPro
 /**
  * 内建资源的 id / name 由调用方注入，**domain 不去 legacy 取**。
  *
- * 它们的单一事实源是 `services/systemResources`（同一份清单还喂着「内建资源不在列表里显示」
+ * 它们的单一事实源是 `resource-catalog/domain/systemResources`（同一份清单还喂着「内建资源不在列表里显示」
  * 的过滤器）。domain 直接 import 那里会造出一条「模块内部反向依赖 legacy」的边——
  * RFC-317 R2 明令禁止，而且按 B0 口径这类债只允许落在 application 层，不允许落在 domain。
  * 做成入参之后这一层重新变纯：给什么 id 就画什么图，测试也能随便造。

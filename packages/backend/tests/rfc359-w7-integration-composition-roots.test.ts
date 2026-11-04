@@ -56,7 +56,7 @@ import { composeWebhookTriggerValidation } from '@/modules/integration/compositi
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 

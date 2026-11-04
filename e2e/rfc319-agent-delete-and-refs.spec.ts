@@ -86,7 +86,7 @@
 //   packages/backend/src/services/scheduledTaskRefs.ts:12-27   引用判定**不看** enabled
 //   packages/backend/src/services/resourceAcl.ts:359-370       discloseRefsSync：{visible[], hiddenCount}
 //   packages/backend/src/services/resourceAcl.ts:388-398       discloseScheduleRefs
-//   packages/backend/src/services/systemResources.ts:53-60     isBuiltinRow / excludeBuiltinAgents
+//   packages/backend/src/modules/resource-catalog/domain/systemResources.ts:53-60     isBuiltinRow / excludeBuiltinAgents
 //   packages/shared/src/schemas/agent.ts:448-452               DeleteAgentSchema（strict：confirm + 双 fence）
 //   packages/shared/src/schemas/permission.ts:955-1004         user 预设自带 agents:* / workflows:* / scheduled-tasks:*
 //   packages/system-mocks/src/runtime/mode-slow.ts:62-73       STUB_OPENCODE_HOLD_FILE：把「回合还在飞」做成确定性

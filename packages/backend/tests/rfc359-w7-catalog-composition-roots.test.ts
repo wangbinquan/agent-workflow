@@ -41,7 +41,7 @@ import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalo
 import { composeDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
 import { NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 

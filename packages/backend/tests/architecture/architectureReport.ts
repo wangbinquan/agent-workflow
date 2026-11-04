@@ -538,7 +538,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/stuckTaskDetector.ts': 'task-execution',
   'packages/backend/src/services/submoduleRefresh.ts': 'source-control',
   'packages/backend/src/services/systemAgentRun.ts': 'task-execution',
-  'packages/backend/src/services/systemResources.ts': 'resource-catalog',
   'packages/backend/src/services/task.ts': 'task-execution',
   'packages/backend/src/services/taskAlerts.ts': 'task-execution',
   'packages/backend/src/services/taskArchive.ts': 'task-execution',

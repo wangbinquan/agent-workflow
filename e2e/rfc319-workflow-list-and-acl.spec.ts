@@ -97,7 +97,7 @@
 //   packages/backend/src/services/workflow.ts:1057-1075                       assertPrincipalCanGovernInTx → resource-govern-owner-only
 //   packages/backend/src/services/resourceAccessPolicy.ts:88-102              四值梯子 own > write > read > none
 //   packages/backend/src/services/resourceAcl.ts:747-755                      移交归属时把前任 owner 自动补成 read 档
-//   packages/backend/src/services/systemResources.ts:53-84                    isBuiltinRow / excludeBuiltinWorkflows / assertNotBuiltin
+//   packages/backend/src/modules/resource-catalog/domain/systemResources.ts:53-84                    isBuiltinRow / excludeBuiltinWorkflows / assertNotBuiltin
 //   packages/backend/src/services/fusion.ts:398-450                           aw-skill-fusion 内建行的播种（每次启动幂等）
 //   packages/backend/src/services/demoSeed.ts:100-101                         `.demo-seeded` 标记门
 //   packages/shared/src/schemas/permission.ts:914-922                         guest 预设只有六类资源的 read
@@ -130,7 +130,7 @@ test.setTimeout(120_000)
 
 const PASSWORD = 'Rfc319WorkflowPass!1'
 
-/** RFC-223 PR-4 的确定性内建 id（services/systemResources.ts:44）。 */
+/** RFC-223 PR-4 的确定性内建 id（modules/resource-catalog/domain/systemResources.ts:44）。 */
 const BUILTIN_FUSION_WORKFLOW_ID = '00000000000000000000000002'
 const BUILTIN_FUSION_WORKFLOW_NAME = 'aw-skill-fusion'
 
