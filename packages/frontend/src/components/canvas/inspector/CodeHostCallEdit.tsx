@@ -15,7 +15,7 @@
 //      RFC-253 的脚本面板做成「整块只读 + 横幅」；RFC-270 把「谁能看」与「谁能
 //      写」合并成同一个问题：这里的 path / body / params 就是平台将以管理员
 //      token 发出的请求，服务端已经不再把它们下发给无权限的调用方
-//      （services/tokenRedaction.ts），面板渲染出来只会是一排 `***`。「不可改」
+//      （packages/backend/src/auth/tokenRedaction.ts），面板渲染出来只会是一排 `***`。「不可改」
 //      那一半没变，而且现在是构造保证的 —— 没有控件可以输入。
 
 import { useRef } from 'react'

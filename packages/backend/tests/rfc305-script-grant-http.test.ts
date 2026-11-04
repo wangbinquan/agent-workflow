@@ -13,7 +13,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { REDACTED } from '../src/services/tokenRedaction'
+import { REDACTED } from '../src/auth/tokenRedaction'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
 const SCRIPT_BODY = 'echo current-authority'

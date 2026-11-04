@@ -20,7 +20,7 @@ import type {
 } from '../../src/modules/runtime-management/public/participants'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { batchOwnerUserId } from '../../src/services/repoBatchImport'
-import { redactEventPayload } from '../../src/services/tokenRedaction'
+import { redactEventPayload } from '../../src/auth/tokenRedaction'
 import { memoryCatalogOf } from './memoryCatalog'
 
 export const STUB_REALTIME_CHANNELS: RealtimeChannelAccess = Object.freeze({

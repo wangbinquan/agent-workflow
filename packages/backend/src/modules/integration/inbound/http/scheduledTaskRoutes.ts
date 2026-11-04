@@ -20,8 +20,8 @@ import type { Hono } from 'hono'
 
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import {
   createScheduledTask,
   deleteScheduledTask,
@@ -295,7 +295,7 @@ export function mountScheduledTaskRoutes(
       )
       await requireScheduleGovern(deps.scheduledTaskRuntime.operations, actor, existing)
       // RFC-247 T20 — a token must name what it deletes; the web flow keeps its
-      // lighter yes/no confirmation (see services/deleteConfirm.ts).
+      // lighter yes/no confirmation (see platform/http/deleteConfirm.ts).
       assertTokenDeleteConfirm(
         await readDeleteBody(c),
         existing.name,

@@ -123,7 +123,7 @@ import type { DatabaseMigrationModule } from '@/modules/system-operations/compos
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
-import { redactEventPayload } from '@/services/tokenRedaction'
+import { redactEventPayload } from '@/auth/tokenRedaction'
 import {
   composeProviderAppDeps,
   createComposedApp,

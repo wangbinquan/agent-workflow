@@ -22,7 +22,7 @@ import { createPat } from './helpers/auth/patStore'
 
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { assertTokenDeleteConfirm } from '../src/services/deleteConfirm'
+import { assertTokenDeleteConfirm } from '../src/platform/http/deleteConfirm'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import {
   describeEachProviderHttpApplication,

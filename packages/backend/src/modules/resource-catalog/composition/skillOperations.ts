@@ -1,6 +1,6 @@
 import type { Skill } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { assertDeleteConfirm, assertTokenDeleteConfirm } from '@/services/deleteConfirm'
+import { assertDeleteConfirm, assertTokenDeleteConfirm } from '@/platform/http/deleteConfirm'
 import {
   canViewResource,
   composeResourceAclOperationApplication,

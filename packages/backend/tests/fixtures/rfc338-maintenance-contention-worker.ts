@@ -1,5 +1,6 @@
 import { openDb, type DbClient } from '../../src/db/client'
-import { pruneTokenAuditSlice, type TokenAuditPruneCursorV1 } from '../../src/services/tokenAudit'
+import type { TokenAuditPruneCursorV1 } from '../../src/auth/application/tokenCallAudit'
+import { createTokenCallAudit } from '../../src/auth/composition'
 
 declare const self: Worker
 
@@ -27,7 +28,7 @@ self.onmessage = async (
   if (db === null) throw new Error('contention-worker-not-initialised')
   const started = performance.now()
   try {
-    const result = await pruneTokenAuditSlice(db, 90, event.data.cursor, Date.now(), 10)
+    const result = await createTokenCallAudit(db).pruneSlice(90, event.data.cursor, Date.now(), 10)
     postMessage({ type: 'result', ok: true, elapsedMs: performance.now() - started, result })
   } catch (error) {
     postMessage({

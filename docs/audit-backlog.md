@@ -1885,6 +1885,12 @@ SIGKILL 的 daemon(或其子进程)仍持锁**;紧接着 `:307` SIGTERM 用例
 子进程(TerminateProcess 不递归),以及 harness 在起新 daemon 前是否该等锁真正可
 获取而不是固定等待。
 
+第七次复现(2026-11-04,run 41815287143 attempt 1,commit b82af321a,纯文档 diff):Windows
+e2e shard 1/4 `crash-recovery.spec.ts:370` 多次 SIGKILL 用例连同 retry 两次在
+`waitForStatus(A-running-cycle1)` 上 10s 未离开 `pending`,`:307` SIGTERM 同样超时后重试通过;
+同一 job 里 `:237` 两次通过,日志**没有**占锁提示,属时序形态(与 `9498cca64` 那次同形)。
+父提交 ce164ed44 同一分片全绿;只重跑失败 job(attempt 2)全绿,重跑只作佐证。
+
 ## 无 `ORDER BY` 的读在两个 provider 上会漂（RFC-349 实测登记，2026-09-03）
 
 **机制已实测,不是理论**。PostgreSQL provider 走 `drizzle-orm/sqlite-proxy`——**两个 provider 由

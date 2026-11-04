@@ -17,7 +17,7 @@ import type {
   OperationResult,
 } from '@/platform/operations/contracts'
 import { resolveOperationId } from '@/platform/operations/catalog'
-import { takeDeleteSnapshot } from '@/services/tokenAudit'
+import { takeDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { errorHandler } from '@/util/errors'
 
 interface BoundOperationHandler {

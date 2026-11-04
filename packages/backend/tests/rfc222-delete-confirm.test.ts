@@ -20,7 +20,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { assertDeleteConfirm, readDeleteBody } from '../src/services/deleteConfirm'
+import { assertDeleteConfirm, readDeleteBody } from '../src/platform/http/deleteConfirm'
 import { createUser } from './helpers/userFixture'
 import { ValidationError } from '../src/util/errors'
 

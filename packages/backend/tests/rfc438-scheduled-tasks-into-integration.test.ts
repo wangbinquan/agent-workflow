@@ -3,8 +3,8 @@
 // 锁四件事：
 // ① 位置：服务、节拍与路由迁入 integration，原文件不存在；运行期 heal 不在生产源码里（RFC-395 II-b 起由 epoch-2
 //    转换规则取代，按 RFC-424 先例迁入用例辅助）。
-// ② 方向：task-execution 的源码不再 import 任何定时任务文件；迁入的 application 文件不碰 legacy `services/`、WS 与 git；
-//    绑定只多用两个 HTTP 传输助手。
+// ② 方向：task-execution 的源码不再 import 任何定时任务文件；迁入的文件不碰 legacy `services/`、WS 与 git
+//    （RFC-440 起两个 HTTP 传输助手迁入 platform/http，绑定也不再例外）。
 // ③ 端口：`composeScheduledTaskRunner` 的 `runDue` 跑一轮，限额 `SCHEDULE_MAX_IN_FLIGHT`；节拍间隔在节奏登记表里；
 //    变更通知连到 WS 广播；校验运行时补上的三条 legacy 校验与原函数同一判定。
 // ④ 生产应用里定时任务管理面的路由元数据不变。
@@ -91,14 +91,12 @@ describe('RFC-438 —— 位置与方向', () => {
     expect(offenders).toEqual([])
   })
 
-  test('迁入的 application 文件不碰 legacy services/、WS、git 与文件系统；绑定只多用两个 HTTP 传输助手', () => {
+  test('迁入的文件（含绑定）不碰 legacy services/、WS、git 与文件系统', () => {
     const offenders: string[] = []
     for (const path of NEW_FILES) {
-      const binding = path.startsWith('inbound/')
       for (const specifier of specifiers(readFileSync(join(INTEGRATION, path), 'utf8'))) {
-        const transportHelper =
-          specifier === '@/services/deleteConfirm' || specifier === '@/services/tokenAudit'
-        if (specifier.startsWith('@/services/') && !(binding && transportHelper)) {
+        // RFC-440：删除确认与删除快照迁入 platform/http，绑定不再需要 services/ 例外。
+        if (specifier.startsWith('@/services/')) {
           offenders.push(`${path} -> ${specifier}`)
         }
         if (/^(?:@\/ws\/|@\/util\/git|node:fs|node:child_process)/.test(specifier)) {

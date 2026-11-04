@@ -5,7 +5,6 @@ import type { AuthRuntimeOptions, DatabaseSourceWriteWindow } from './applicatio
 import {
   createTokenCallAuditParticipant,
   type TokenCallAuditParticipant,
-  type TokenCallRecord,
 } from './application/tokenCallAudit'
 import { allowsLegacyDaemonTestAccess } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -42,26 +41,3 @@ export function createAuthRuntimeFor(input: CreateAuthRuntimeInput): AuthRuntime
 export function createTokenCallAudit(db: PersistenceDb): TokenCallAuditParticipant {
   return createTokenCallAuditParticipant(createTokenCallAuditPersistence(db))
 }
-
-/**
- * Compatibility bridge for callers not yet assembled by provider bootstrap.
- * The legacy service delegates here and therefore contains no SQL mechanism;
- * root composition can replace each call site with one long-lived participant.
- */
-export const legacyTokenCallAudit = Object.freeze({
-  record(db: PersistenceDb, record: TokenCallRecord, now?: number) {
-    return createTokenCallAudit(db).record(record, now)
-  },
-  prune(db: PersistenceDb, retentionDays: number, now?: number) {
-    return createTokenCallAudit(db).prune(retentionDays, now)
-  },
-  pruneSlice(
-    db: PersistenceDb,
-    retentionDays: number,
-    cursor: unknown,
-    now?: number,
-    batchSize?: number,
-  ) {
-    return createTokenCallAudit(db).pruneSlice(retentionDays, cursor, now, batchSize)
-  },
-})

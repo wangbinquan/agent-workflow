@@ -1,3 +1,16 @@
+## 2026-11-04 RFC-440 删除确认、删除快照与 token 读视图离开 services/（In Progress；`design/RFC-440-transport-helpers-out-of-services/`）
+
+- **来由**：RFC-294 W4 B / D 第六步（RFC-439 后入站适配器不再深引模块内部，余下「不 import `services/`」：`routes/` 23 个、`mcp/server.ts`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/deleteConfirm.ts` → `platform/http/deleteConfirm.ts`；`services/tokenAudit.ts` 的删除快照 → `platform/http/deleteSnapshot.ts`；
+    `services/tokenRedaction.ts` → identity-access 的 `auth/tokenRedaction.ts`（均按 RFC-294 的 legacy 归属表）；
+  - 删除生产零调用的 token 审计兼容转出与 `legacyTokenCallAudit` 桥，用例改用 `createTokenCallAudit(db)`；
+  - import `services/` 的路由 23 → 18（skills、memories、workgroups、workflows、plugins）；platform 与模块对这三个 legacy 助手的依赖清零；
+  - 顺带修正夜跑 workflow 的路径过滤（`services/tokenAudit.ts`，以及自 RFC-437 起已不存在的 `services/webhook/**`）。
+- **不做**：其余 18 个路由的 `services/` 依赖；`services/mcpSurface`、`services/apiDocs`；`src/auth/` 并入 `modules/identity-access`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-439 代码能力的两个 HTTP 绑定归入 code-capability 模块（Done；`design/RFC-439-code-capability-inbound-bindings/`）
 
 - **来由**：RFC-294 W4 B / D 第五步、E8 前置（RFC-438 之后 `routes/` 只剩两个深引模块内部的文件，都属于 code-capability 兼容岛）。
@@ -17,6 +30,8 @@
   - 导出仓库 209 个文件（全部架构测试、引用 code-capability 的双引擎用例等）3299 pass，7 条四路并行下 PG 启动超时单独复跑通过；
     P0 变异 lane 两引擎各 17 阶段通过。
 - **CI**：exact SHA 主 CI run 41811487655 attempt 1 70/70 全绿；windows-platform run 41811487613 通过（AC-4）。
+  Done 文档 `b82af321a` 的主 CI run 41815287143：attempt 1 Windows e2e 分片 1/4 的 `crash-recovery` 已知时序抖动（等 running 10 s
+  超时、无占锁，见 `docs/audit-backlog.md` 第七次复现），重跑失败作业 attempt 2 全绿。
 - **下一步**：B / D 余下「入站适配器不 import `services/`」：`routes/` 23 个、`mcp/server.ts` 1 个（R1 里来自入站适配器的边已为 0）。
   第一刀是 RFC-440（删除确认、删除快照与 token 读视图离开 `services/`，23 → 18）；E8 整体吸收另立 RFC。
 

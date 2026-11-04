@@ -42,7 +42,7 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { SKILL_MERGER_AGENT_ID } from '@/services/systemResources'
 // RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).

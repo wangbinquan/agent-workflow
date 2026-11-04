@@ -30,7 +30,7 @@ import { createBoundMcpOperationHandles } from '@/mcp/operationClient'
 import { McpCallError, toolsFor, type McpToolContext } from '@/mcp/tools'
 import type { OperationInvoker } from '@/platform/operations/contracts'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
-import { redactErrorText } from '@/services/tokenRedaction'
+import { redactErrorText } from '@/auth/tokenRedaction'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 /** Advertised to clients on initialize. */

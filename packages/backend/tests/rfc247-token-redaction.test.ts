@@ -31,7 +31,7 @@ import {
   serializeWorkflowReceiptFor,
   shouldRedactFor,
   type WorkflowReadLens,
-} from '@/services/tokenRedaction'
+} from '@/auth/tokenRedaction'
 
 /**
  * RFC-270 改判：三个定义 serializer 的第二参从 `ActorSource` 变成了双轴的
@@ -187,7 +187,7 @@ describe('RFC-247 — every redactor has an outlet', () => {
     // Five serialization points; each must go through the single outlet.
     const uses = mcps.split('serializeMcpFor(').length - 1
     expect(uses).toBeGreaterThanOrEqual(5)
-    expect(read('services/tokenRedaction.ts')).toContain('return shouldRedactFor(source)')
+    expect(read('auth/tokenRedaction.ts')).toContain('return shouldRedactFor(source)')
   })
 
   test('redactRepoUrl reaches every task row projection (AC-38)', () => {
@@ -227,7 +227,7 @@ describe('RFC-247 — every redactor has an outlet', () => {
   test('no redactor in tokenRedaction.ts is left with zero callers', () => {
     // The generalized form of the two misses. Every exported redactor must be
     // referenced somewhere OUTSIDE its own module.
-    const moduleSource = read('services/tokenRedaction.ts')
+    const moduleSource = read('auth/tokenRedaction.ts')
     // `<T>` sits between the name and `(` on the generic ones, so the pattern
     // has to allow it — without that this test silently checks a subset, which
     // is the same class of miss it exists to catch.
@@ -236,7 +236,7 @@ describe('RFC-247 — every redactor has an outlet', () => {
     ].map((m) => m[1])
     expect(exported.length).toBeGreaterThanOrEqual(5)
 
-    const callers = walkSrc(SRC).filter((f) => !f.endsWith(join('services', 'tokenRedaction.ts')))
+    const callers = walkSrc(SRC).filter((f) => !f.endsWith(join('auth', 'tokenRedaction.ts')))
     const haystack = callers.map((f) => readFileSync(f, 'utf8')).join('\n')
     const unwired = exported.filter((name) => !haystack.includes(`${name}(`))
     expect(unwired).toEqual([])

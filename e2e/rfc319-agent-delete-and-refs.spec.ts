@@ -76,7 +76,7 @@
 //   packages/frontend/src/i18n/en-US.ts:7959-7973              四条拒删文案 + hint
 //   packages/backend/src/routes/agents.ts:109-115              GET /api/agents：先剥 builtin，再按 ACL 过滤
 //   packages/backend/src/routes/agents.ts:305-330              DELETE 顺序：404 → builtin → 授权 → confirm → fence → 业务闸
-//   packages/backend/src/services/deleteConfirm.ts:44-66       delete-confirm-required / -mismatch（精确比较，不 trim）
+//   packages/backend/src/platform/http/deleteConfirm.ts:44-66       delete-confirm-required / -mismatch（精确比较，不 trim）
 //   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-launching
 //   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-in-use（工作流定义引用）
 //   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-dependency-still-referenced

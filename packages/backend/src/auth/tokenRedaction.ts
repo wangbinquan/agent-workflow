@@ -31,8 +31,8 @@ import {
   type PrivilegedNodeLens,
 } from '@agent-workflow/shared'
 import type { Task } from '@agent-workflow/shared'
-import type { Actor, ActorSource } from '@/auth/actor'
-import { REDACTED, redactMcpRecord, redactRepoUrl } from '@/auth/application/tokenSnapshotRedaction'
+import type { Actor, ActorSource } from './actor'
+import { REDACTED, redactMcpRecord, redactRepoUrl } from './application/tokenSnapshotRedaction'
 import { redactSensitiveString } from '@/util/redact'
 
 export { REDACTED, redactMcpRecord, redactRepoUrl }

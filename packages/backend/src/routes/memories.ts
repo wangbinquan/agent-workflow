@@ -34,8 +34,8 @@ import {
   type MemoryScopeRef,
 } from '@/modules/memory/public/types'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { actorOf } from '@/auth/actor'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'

@@ -170,7 +170,7 @@ export function projectPluginForDump(plugin: {
  *  is its one closed credential carrier (same status as MCP local env: ALL
  *  values are masked, keys survive so the reader can reason about shape).
  *  ONE walker for both outlets — the intent dump masks with the default
- *  `‹redacted›` marker, the token read projection (services/tokenRedaction.ts)
+ *  `‹redacted›` marker, the token read projection (packages/backend/src/auth/tokenRedaction.ts)
  *  passes its own `***` — so the two mechanisms can never disagree about which
  *  nodes carry secrets. Non-script nodes and every other field pass through
  *  untouched. Pure and non-mutating; returns the SAME reference when nothing

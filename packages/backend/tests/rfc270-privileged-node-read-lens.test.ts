@@ -29,7 +29,7 @@ import {
   serializeWorkflowFor,
   serializeWorkflowReceiptFor,
   workflowReadLensFor,
-} from '@/services/tokenRedaction'
+} from '@/auth/tokenRedaction'
 
 const SCRIPT_BODY = 'import os\nprint(os.environ["AW_PORT_DIFF"])\n'
 

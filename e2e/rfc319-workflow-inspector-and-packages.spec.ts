@@ -82,7 +82,7 @@
 //   packages/frontend/src/components/workflow-editor/ValidationPanel.tsx:330-368       只有 wrapper-children-outside-bounds 才挂「自动适配」
 //   packages/frontend/src/components/canvas/wrapperOps.ts:43-61                        clearWrapperSize：删 size 字段
 //   packages/backend/src/services/workflow.validator.ts:2127-2161                      wrapper-children-outside-bounds 的判定（warning 档）
-//   packages/backend/src/services/tokenRedaction.ts:39-91                               `***` 与 privileged lens 的落点
+//   packages/backend/src/auth/tokenRedaction.ts:39-91                               `***` 与 privileged lens 的落点
 //   packages/shared/src/privilegedNodeRedaction.ts:87-117                               script 节点被遮的三个字段
 //   packages/backend/src/services/resourcePackage/export.ts:246-282                     root fence 不符 ⇒ package-root-changed
 //   packages/backend/src/routes/resourcePackages.ts:121-163                              expectedVersion 只接受纯十进制整数

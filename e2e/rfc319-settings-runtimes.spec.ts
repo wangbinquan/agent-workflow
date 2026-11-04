@@ -840,7 +840,7 @@ test('RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代
   await expectDeleteRefused('claude-code', 'config.memoryDistillRuntime')
 
   // 收尾：解除引用，交给下一条用例做正向删除。
-  // 代理的 DELETE 是 type-to-confirm（services/deleteConfirm.ts:44-66）+ 版本围栏。
+  // 代理的 DELETE 是 type-to-confirm（platform/http/deleteConfirm.ts:44-66）+ 版本围栏。
   await api(`/api/agents/${agent.id}`, {
     method: 'DELETE',
     body: JSON.stringify({

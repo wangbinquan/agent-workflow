@@ -35,12 +35,12 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import {
   serializeWorkflowFor,
   serializeWorkflowReceiptFor,
   workflowReadLensFor,
-} from '@/services/tokenRedaction'
+} from '@/auth/tokenRedaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 

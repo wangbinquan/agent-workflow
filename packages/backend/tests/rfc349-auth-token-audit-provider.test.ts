@@ -3,7 +3,7 @@
 // (RFC-359 W4-D9), exercised on both engines by rfc359-w4-d9-adapters.test.ts.
 
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
@@ -37,15 +37,13 @@ describeEachProviderHttpApplication(
     opencodeVersion: null,
   },
   (scope) => {
-    test('legacy service is a facade and application contract has no provider handle', () => {
-      const facade = source('src/services/tokenAudit.ts')
+    test('the legacy facade and its bridge are gone; application contract has no provider handle', () => {
+      // RFC-440: every production caller already used the provider-assembled participant, so
+      // the `services/tokenAudit` facade and the `legacyTokenCallAudit` bridge behind it were
+      // deleted; the delete snapshot it also carried moved to platform/http/deleteSnapshot.ts.
+      expect(existsSync(resolve(import.meta.dir, '..', 'src/services/tokenAudit.ts'))).toBe(false)
+      expect(source('src/auth/composition.ts')).not.toContain('legacyTokenCallAudit')
       const application = source('src/auth/application/tokenCallAudit.ts')
-
-      for (const forbidden of ['DbClient', "from '@/db/", '.select(', '.insert(', '.update(']) {
-        expect(facade).not.toContain(forbidden)
-      }
-      expect(facade).toContain('legacyTokenCallAudit')
-      expect(facade).not.toContain('export function listTokenAudit')
       const server = source('src/bootstrap/daemonHttpComposition.ts')
       expect(server).toContain('core.tokenCallAudit.listForUser(userId)')
       expect(server).toContain('core.tokenCallAudit.list()')

@@ -26,7 +26,8 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { pruneTokenAudit, recordTokenCall, redactSnapshot } from '../src/services/tokenAudit'
+import { createTokenCallAudit } from '../src/auth/composition'
+import { redactSnapshot } from '../src/auth/application/tokenCallAudit'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from './helpers/userFixture'
 
@@ -231,7 +232,11 @@ describeEachProviderHttpApplication(
         patScopes: [],
         patId: h.patId,
       })
-      const id = await recordTokenCall(brokenDb, { actor, channel: 'rest', statusCode: 200 })
+      const id = await createTokenCallAudit(brokenDb).record({
+        actor,
+        channel: 'rest',
+        statusCode: 200,
+      })
       expect(id).toBeNull()
     })
 
@@ -248,7 +253,9 @@ describeEachProviderHttpApplication(
         source: 'pat',
         patScopes: [],
       })
-      expect(await recordTokenCall(h.db, { actor, channel: 'rest', statusCode: 200 })).toBeNull()
+      expect(
+        await createTokenCallAudit(h.db).record({ actor, channel: 'rest', statusCode: 200 }),
+      ).toBeNull()
     })
   },
 )
@@ -277,7 +284,7 @@ describeEachProviderHttpApplication(
         patScopes: [],
         patId: h.patId,
       })
-      const id = await recordTokenCall(h.db, {
+      const id = await createTokenCallAudit(h.db).record({
         actor,
         channel: 'mcp',
         toolName: 'resource_write',
@@ -337,9 +344,11 @@ describeEachProviderHttpApplication(
       })
       const now = 1_800_000_000_000
       const day = 86_400_000
-      await recordTokenCall(h.db, { actor, channel: 'rest', statusCode: 200 }, now - 100 * day)
-      await recordTokenCall(
-        h.db,
+      await createTokenCallAudit(h.db).record(
+        { actor, channel: 'rest', statusCode: 200 },
+        now - 100 * day,
+      )
+      await createTokenCallAudit(h.db).record(
         {
           actor,
           channel: 'mcp',
@@ -350,10 +359,13 @@ describeEachProviderHttpApplication(
         },
         now - 95 * day,
       )
-      await recordTokenCall(h.db, { actor, channel: 'rest', statusCode: 200 }, now - 10 * day)
+      await createTokenCallAudit(h.db).record(
+        { actor, channel: 'rest', statusCode: 200 },
+        now - 10 * day,
+      )
       expect((await h.audit.list()).length).toBe(3)
 
-      const pruned = await pruneTokenAudit(h.db, 90, now)
+      const pruned = await createTokenCallAudit(h.db).prune(90, now)
       expect(pruned.audits).toBe(2)
       expect(pruned.snapshots).toBe(1)
 
@@ -378,8 +390,8 @@ describeEachProviderHttpApplication(
         patScopes: [],
         patId: h.patId,
       })
-      await recordTokenCall(h.db, { actor, channel: 'rest', statusCode: 200 })
-      expect((await pruneTokenAudit(h.db, 1)).audits).toBe(0)
+      await createTokenCallAudit(h.db).record({ actor, channel: 'rest', statusCode: 200 })
+      expect((await createTokenCallAudit(h.db).prune(1)).audits).toBe(0)
     })
   },
 )
@@ -414,7 +426,7 @@ describeEachProviderHttpApplication(
         patId,
       })
       for (const when of at) {
-        await recordTokenCall(db, { actor, channel: 'rest', statusCode: 200 }, when)
+        await createTokenCallAudit(db).record({ actor, channel: 'rest', statusCode: 200 }, when)
       }
     }
 
@@ -605,7 +617,7 @@ describeEachProviderHttpApplication(
       const circular: Record<string, unknown> = { id: 'x' }
       circular.self = circular // JSON.stringify throws
 
-      const id = await recordTokenCall(h.db, {
+      const id = await createTokenCallAudit(h.db).record({
         actor,
         channel: 'mcp',
         toolName: 'resource_write',
@@ -641,7 +653,7 @@ describeEachProviderHttpApplication(
         patScopes: [],
         patId: h.patId,
       })
-      const id = await recordTokenCall(h.db, {
+      const id = await createTokenCallAudit(h.db).record({
         actor,
         channel: 'mcp',
         resourceKind: 'agents',

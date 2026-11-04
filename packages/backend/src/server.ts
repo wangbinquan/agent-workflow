@@ -17,7 +17,7 @@ import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/
 import type { ExecutionStatus } from '@agent-workflow/shared'
 import { Hono } from 'hono'
 import { actorOf, tryActorOf } from '@/auth/actor'
-import { takeDeleteSnapshot } from '@/services/tokenAudit'
+import { takeDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { IntegrationTriggerResourceQueries } from '@/modules/integration/composition/scheduledTasks'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'

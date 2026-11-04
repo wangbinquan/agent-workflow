@@ -15,7 +15,7 @@
 //      body is code the daemon host will execute, so who may READ it is the same
 //      question as who may WRITE it, and the platform now answers it in one
 //      place. The server no longer sends the body to a principal without the
-//      point (services/tokenRedaction.ts) — this panel would render `***`, which
+//      point (packages/backend/src/auth/tokenRedaction.ts) — this panel would render `***`, which
 //      is worse than saying so. The "may not change" half is unchanged and now
 //      holds by construction: there is no control to type into.
 //

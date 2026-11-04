@@ -20,15 +20,15 @@ import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute, registerRouteMiddleware } from '@/routes/registry'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
+import { assertDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import {
   redactEventPayload,
   redactStdout,
   serializeTaskFor,
   workflowReadLensFor,
   shouldRedactFor,
-} from '@/services/tokenRedaction'
+} from '@/auth/tokenRedaction'
 import { parseBoolQuery } from '@/util/http'
 import { SyncWorkflowBodySchema, UpdateTaskMembersBodySchema } from '@agent-workflow/shared'
 import {

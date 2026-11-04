@@ -83,7 +83,7 @@ export function assertDeleteConfirm(
  * actually differs.
  *
  * The asymmetry is the point, and it mirrors `shouldRedactFor` in
- * services/tokenRedaction.ts: this RFC treats "which channel is this" as a real
+ * auth/tokenRedaction.ts: this RFC treats "which channel is this" as a real
  * distinction rather than pretending every caller is the same.
  */
 export function assertTokenDeleteConfirm(

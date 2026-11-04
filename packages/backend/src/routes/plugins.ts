@@ -25,9 +25,9 @@ import type {
   UpgradePluginCatalogReceipt,
 } from '@/modules/resource-catalog/public/types'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { serializePluginFor } from '@/services/tokenRedaction'
-import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
+import { serializePluginFor } from '@/auth/tokenRedaction'
+import { assertDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 

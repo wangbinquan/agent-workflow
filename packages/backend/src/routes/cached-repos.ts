@@ -21,8 +21,8 @@ import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/o
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
-import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import {
   CachedRepoHasReferencesError,

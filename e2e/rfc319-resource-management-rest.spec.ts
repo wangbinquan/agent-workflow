@@ -68,7 +68,7 @@
 //   packages/shared/src/schemas/mcp.ts:200-216             CreateMcp / UpdateMcpLocal 都挂 Write 版
 //   packages/frontend/src/lib/mcp-form.ts:158-167          表单最终用同一份 schema 兜底 ⇒ 请求发不出去
 //   packages/frontend/src/components/McpFields.tsx:24-27   只渲染 name/command/url/timeoutMs 四个简单键
-//   packages/backend/src/services/deleteConfirm.ts:44-66   assertDeleteConfirm：422 delete-confirm-mismatch
+//   packages/backend/src/platform/http/deleteConfirm.ts:44-66   assertDeleteConfirm：422 delete-confirm-mismatch
 //   packages/backend/src/routes/mcps.ts:413-440            删除顺序：confirm → 独占区内 hash + fresh-name 复核
 //   packages/backend/src/services/mcp.ts:243-287           引用闸：预检 + 同一事务内复核，两处都抛 mcp-still-referenced
 //   packages/backend/src/routes/plugins.ts:200-217         插件删除的同款双闸

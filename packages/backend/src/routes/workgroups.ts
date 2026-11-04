@@ -40,7 +40,7 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { captureDeleteSnapshot } from '@/services/tokenAudit'
+import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 // RFC-243 T2: workgroup launches go through the unified executor facade — this
 // route must not call startWorkgroupTask directly (source-text lock).
 import { NotFoundError, ValidationError } from '@/util/errors'

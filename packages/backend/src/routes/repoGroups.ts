@@ -22,7 +22,7 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
-import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import {
   createRepoGroup,
   deleteRepoGroup,

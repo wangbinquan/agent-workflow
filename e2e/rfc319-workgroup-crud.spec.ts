@@ -62,7 +62,7 @@
 //   packages/frontend/src/routes/workgroups.detail.tsx:1023-1045 ConfirmDialog 的 confirmInput 接线
 //   packages/frontend/src/components/ConfirmDialog.tsx:83-95   confirmMatched 精确相等 + 键盘也走同一道门
 //   packages/backend/src/routes/workgroups.ts:213-235          DELETE：404 → govern → parse → confirm → 业务闸
-//   packages/backend/src/services/deleteConfirm.ts:44-66       delete-confirm-required / -mismatch
+//   packages/backend/src/platform/http/deleteConfirm.ts:44-66       delete-confirm-required / -mismatch
 //   packages/backend/src/services/workgroups.ts:445-446        改名资格 + owner 名字域唯一
 //   packages/backend/src/services/workgroups.ts:908-928        assertNameChangeAllowedInTx ⇒ workgroup-name-in-use
 //   packages/backend/src/services/workgroups.ts:264-291        copy：exact-revision fence + nextResourceCopyName

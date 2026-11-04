@@ -18,7 +18,7 @@ import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getWorkflow, workflowDraftSnapshotOf } from '@/services/workflow'
-import { REDACTED, serializeWorkflowFor, workflowReadLensFor } from '@/services/tokenRedaction'
+import { REDACTED, serializeWorkflowFor, workflowReadLensFor } from '@/auth/tokenRedaction'
 import { DomainError } from '@/util/errors'
 import {
   createWorkflow,

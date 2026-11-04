@@ -29,7 +29,6 @@ import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eve
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
 import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
-import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { gcDeliveriesSlice } from '@/modules/integration/application/webhookDeliveryStore'
 import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -300,7 +299,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       })),
     )
 
-    const first = await pruneTokenAuditSlice(db, 1, null, 100_000_000, 2)
+    const first = await createTokenCallAudit(db).pruneSlice(1, null, 100_000_000, 2)
     expect(first).toEqual({
       done: false,
       cursor: { version: 1, phase: 'snapshots', cutoff: 13_600_000 },
@@ -308,28 +307,28 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     })
     expect((await db.select().from(tokenDeleteSnapshot)).length).toBe(1)
 
-    const second = await pruneTokenAuditSlice(db, 1, first.cursor, 100_000_000, 2)
+    const second = await createTokenCallAudit(db).pruneSlice(1, first.cursor, 100_000_000, 2)
     expect(second).toEqual({
       done: false,
       cursor: { version: 1, phase: 'audits', cutoff: 13_600_000 },
       counters: { audits: 0, snapshots: 1 },
     })
-    const third = await pruneTokenAuditSlice(db, 1, second.cursor, 100_000_000, 2)
+    const third = await createTokenCallAudit(db).pruneSlice(1, second.cursor, 100_000_000, 2)
     expect(third).toMatchObject({
       done: false,
       cursor: { version: 1, phase: 'audits', cutoff: 13_600_000 },
       counters: { audits: 2, snapshots: 0 },
     })
-    const fourth = await pruneTokenAuditSlice(db, 1, third.cursor, 100_000_000, 2)
+    const fourth = await createTokenCallAudit(db).pruneSlice(1, third.cursor, 100_000_000, 2)
     expect(fourth).toMatchObject({ done: true, counters: { audits: 1, snapshots: 0 } })
     expect(await db.select().from(tokenAudit)).toHaveLength(0)
   })
 
   test('token audit rejects an unknown durable cursor version without deleting rows', async () => {
     const db = createInMemoryDb()
-    await expect(pruneTokenAuditSlice(db, 90, { version: 2, phase: 'audits' })).rejects.toThrow(
-      'maintenance-token-audit-cursor-invalid',
-    )
+    await expect(
+      createTokenCallAudit(db).pruneSlice(90, { version: 2, phase: 'audits' }),
+    ).rejects.toThrow('maintenance-token-audit-cursor-invalid')
   })
 
   describeEachProvider('provider', (harness) => {
