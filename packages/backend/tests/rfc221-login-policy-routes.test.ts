@@ -7,7 +7,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createOidcProvidersService } from '../src/services/oidcProviders'
+import { createOidcProvidersService } from '../src/auth/oidc/providers'
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'd'.repeat(64)

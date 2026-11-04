@@ -17,7 +17,7 @@
 //     yields the subject or the login fails loud.
 
 import type { JWTPayload } from 'jose'
-import type { IdTokenClaims } from '@/services/oidc/provisioning'
+import type { IdTokenClaims } from './provisioning'
 import type { EffectiveEndpoints } from './endpoints'
 import { getJwksInstance } from './endpoints'
 import {

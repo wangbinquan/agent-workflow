@@ -2939,7 +2939,7 @@ function AuthenticationTab() {
 // RFC-286 F3：本地手写行类型换 shared 单源（字段逐一同形，设计门已核）。
 type OidcProviderRow = OidcProvider
 
-// RFC-220 — ProbeResult mirror (backend services/oidcProviders.ts): the /test
+// RFC-220 — ProbeResult mirror (backend auth/oidc/providers.ts): the /test
 // endpoint always answers 200 with this shape; `ok` is the login-readiness
 // verdict, per-endpoint rows carry the effective value + its source.
 const OIDC_ENDPOINT_KEYS = [

@@ -57,8 +57,8 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/routes/settings.tsx:2404-2421                  删除按钮的 disabled + title
 //   packages/frontend/src/routes/settings.tsx:2447                       编辑弹窗的 preventDisable
 //   packages/frontend/src/routes/settings.tsx:3086-3098                  Enabled 开关被 preventDisable 关死
-//   packages/backend/src/services/oidcProviders.ts:213-230               PATCH enabled=false 的 last-enabled-oidc-required
-//   packages/backend/src/services/oidcProviders.ts:255-270               DELETE 的 last-enabled-oidc-required
+//   packages/backend/src/auth/oidc/providers.ts:213-230               PATCH enabled=false 的 last-enabled-oidc-required
+//   packages/backend/src/auth/oidc/providers.ts:255-270               DELETE 的 last-enabled-oidc-required
 //   packages/frontend/src/components/settings/CodeHostsSection.tsx:317-359 删除的两步确认（impact → digest 重来）
 //   packages/frontend/src/components/settings/CodeHostsSection.tsx:519-552 ConfirmDialog 的描述与 removeConfirmAgain
 //   packages/backend/src/services/codeHost/connections.ts:503-557        remove()：撤销确认摘要 + 连带删除个人凭据

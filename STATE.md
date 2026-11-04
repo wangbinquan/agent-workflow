@@ -1,3 +1,14 @@
+## 2026-11-04 RFC-443 OIDC 提供方服务与开通策略归 identity-access 的 auth/oidc（In Progress；`design/RFC-443-oidc-into-auth/`）
+
+- **来由**：RFC-294 W4 B / D 第九步（RFC-442 后 12 个路由仍 import `services/`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/oidcProviders.ts` → `auth/oidc/providers.ts`，`services/oidc/provisioning.ts` → `auth/oidc/provisioning.ts`（均原样，与 OIDC 其余
+    五个文件同处；依赖规则 `no-auth-to-services` 的说明即「认证领域的策略逻辑属于 auth/」）；
+  - import `services/` 的路由 12 → 10（`oidc`、`oidc-auth`）；`auth/` 不再 import `services/`（原 `auth/oidc/identity.ts` 一条类型边）。
+- **不做**：`src/auth/` 整体并入 `modules/identity-access`；其余 10 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-442 协作的三个 services/ 兼容层收口（In Progress；`design/RFC-442-collaboration-facades-out-of-services/`）
 
 - **来由**：RFC-294 W4 B / D 第八步（RFC-441 后 15 个路由仍 import `services/`）。

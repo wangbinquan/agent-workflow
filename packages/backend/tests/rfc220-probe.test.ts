@@ -15,10 +15,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
-import {
-  createOidcProvidersService,
-  type OidcProvidersService,
-} from '../src/services/oidcProviders'
+import { createOidcProvidersService, type OidcProvidersService } from '../src/auth/oidc/providers'
 
 const ISSUER = 'https://idp.example.com'
 

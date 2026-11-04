@@ -26,7 +26,7 @@ import {
   createOidcProvidersService,
   redactedProvider,
   type OidcProvidersService,
-} from '../src/services/oidcProviders'
+} from '../src/auth/oidc/providers'
 import { createIdentity } from '../src/services/userIdentities'
 import { DomainError } from '../src/util/errors'
 

@@ -11,7 +11,7 @@
 // 「纯函数判对了，但 callback 没把 reject 落成拒绝」。
 //
 // 判据取自源码单一事实源：
-//   services/oidc/provisioning.ts:56-82   decideProvisioning 的六分支表
+//   auth/oidc/provisioning.ts:56-82   decideProvisioning 的六分支表
 //   routes/oidc-auth.ts:216-218           reject ⇒ c.html(friendly(reason), 403)
 //   util/oidcResponse.ts:32-37            三条拒绝各自的文案
 //   auth/oidc/identity.ts:113             email_verified 只认布尔真

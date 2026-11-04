@@ -8,7 +8,7 @@ import {
   UpdateAuthLoginPolicyBodySchema,
 } from '@agent-workflow/shared'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
-import { redactedProvider, type OidcProvidersService } from '@/services/oidcProviders'
+import { redactedProvider, type OidcProvidersService } from '@/auth/oidc/providers'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'

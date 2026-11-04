@@ -20,10 +20,10 @@ import {
   syncPreferredSnapshot as syncPreferredSnapshotService,
 } from '../src/services/userIdentities'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { applyEmailTrust } from '../src/services/oidc/provisioning'
+import { applyEmailTrust } from '../src/auth/oidc/provisioning'
 import { DomainError } from '../src/util/errors'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createOidcProvidersService } from '../src/services/oidcProviders'
+import { createOidcProvidersService } from '../src/auth/oidc/providers'
 import { randomBytes } from 'node:crypto'
 
 function identityAccessFixture(db: DbClient) {

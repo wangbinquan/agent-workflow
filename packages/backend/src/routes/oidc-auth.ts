@@ -12,11 +12,7 @@ import { acquireIdentityClaims, resolveOidcProfileNames } from '@/auth/oidc/iden
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
 import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
-import {
-  applyEmailTrust,
-  decideProvisioning,
-  type IdTokenClaims,
-} from '@/services/oidc/provisioning'
+import { applyEmailTrust, decideProvisioning, type IdTokenClaims } from '@/auth/oidc/provisioning'
 import { registerRoute } from '@/routes/registry'
 import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'

@@ -314,6 +314,7 @@ describe('RFC-305 identity-access architecture', () => {
 
   test('module composition and public contracts have only the reviewed consumers', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
+      'packages/backend/src/auth/oidc/providers.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       // RFC-427: the CLI user / package command assembly moved here from main.ts.
@@ -449,7 +450,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/services/oidcProviders.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/resourcePackage/executionAdapter.ts -> @/modules/identity-access/public/participants',

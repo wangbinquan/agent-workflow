@@ -54,7 +54,7 @@ import {
 import { type DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
-import { createOidcProvidersService } from '@/services/oidcProviders'
+import { createOidcProvidersService } from '@/auth/oidc/providers'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
   composeRepositoryMirrors,

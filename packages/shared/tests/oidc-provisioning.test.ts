@@ -6,7 +6,7 @@ import type { OidcProvider } from '../src/schemas/oidcProvider'
 // Re-export the function from backend so the snapshot lives in `shared` tests
 // (CI three-piece guards both packages). The function itself remains a pure
 // JS function with no DB / HTTP coupling.
-import { decideProvisioning } from '../../backend/src/services/oidc/provisioning'
+import { decideProvisioning } from '../../backend/src/auth/oidc/provisioning'
 
 const baseProvider = (
   patch: Partial<Pick<OidcProvider, 'provisioning' | 'allowedEmailDomains'>>,

@@ -2,7 +2,7 @@
 // 4-field `getProviderMetadata`/`testDiscovery` (plus the metadata/JWKS
 // cache) were deleted in RFC-220 when the login routes moved to the
 // per-field merge resolver (auth/oidc/endpoints.ts, which owns all caching)
-// and /test moved to the resolver-backed probe (services/oidcProviders.ts).
+// and /test moved to the resolver-backed probe (auth/oidc/providers.ts).
 // Pure HTTP; no DB writes.
 
 import { timeoutSignal } from '@/util/timeoutSignal'

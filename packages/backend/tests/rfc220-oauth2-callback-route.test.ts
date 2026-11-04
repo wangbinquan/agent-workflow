@@ -25,7 +25,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createOidcProvidersService } from '../src/services/oidcProviders'
+import { createOidcProvidersService } from '../src/auth/oidc/providers'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { clearPendingFlows } from '../src/auth/oidc/flow'
 import { setOidcDefaultRole } from './helpers/auth/loginPolicy'
