@@ -432,7 +432,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/routes/workgroupTasks.ts',
       'packages/backend/src/routes/workgroups.ts',
       'packages/backend/tests/helpers/startTaskDeps.ts',
-      'packages/backend/src/services/webhook/webhookDispatch.ts',
+      'packages/backend/src/modules/integration/application/webhookDispatch.ts',
     ]
     for (const path of callers) {
       const source = read(path)

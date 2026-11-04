@@ -1,6 +1,6 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { WebhookEndpointServiceDeps } from '@/services/webhookEndpoints'
+import type { WebhookEndpointServiceDeps } from '../application/webhookEndpoints'
 import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
 import type { WebhookConfigurationQuery } from '../application/ports/webhookConfiguration'
 import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'

@@ -2,8 +2,10 @@
 // path. Provider parsing and transport authentication belong to inbound adapters.
 import { createLogger } from '@/util/log'
 import { codeHostEventObservations } from '../public/events'
-import type { VerifiedWebhookIngressCommands } from '../public/commands'
-import type { VerifiedWebhookIngressDependencies } from './ports/verifiedWebhookIngress'
+import type {
+  VerifiedWebhookIngressCommands,
+  VerifiedWebhookIngressDependencies,
+} from './ports/verifiedWebhookIngress'
 import { webhookDeliveryOutcome } from './webhookDeliveryOutcome'
 
 const log = createLogger('webhook-ingress')

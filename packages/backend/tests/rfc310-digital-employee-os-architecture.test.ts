@@ -298,14 +298,30 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
   })
 
   test('Webhook ingress is publisher-only and Event Center receives no endpoint-wide dispatcher', () => {
-    const ingress = readFileSync(join(BACKEND_SRC, 'routes', 'webhooks.ts'), 'utf8')
-    const replay = readFileSync(join(BACKEND_SRC, 'routes', 'webhookDeliveries.ts'), 'utf8')
+    // RFC-437: the ingress and replay rules moved into integration application use cases; the two
+    // bindings in integration/inbound/http only decode, call and map. Every file on the path is scanned.
+    const ingressBinding = readFileSync(
+      join(BACKEND_SRC, 'modules/integration/inbound/http/webhookIngressRoutes.ts'),
+      'utf8',
+    )
+    const ingress = readFileSync(
+      join(BACKEND_SRC, 'modules/integration/application/receiveCodeHostWebhook.ts'),
+      'utf8',
+    )
+    const replayBinding = readFileSync(
+      join(BACKEND_SRC, 'modules/integration/inbound/http/webhookDeliveryRoutes.ts'),
+      'utf8',
+    )
+    const replay = readFileSync(
+      join(BACKEND_SRC, 'modules/integration/application/replayWebhookDelivery.ts'),
+      'utf8',
+    )
     const integrationComposition = readFileSync(
       join(BACKEND_SRC, 'modules', 'integration', 'composition.ts'),
       'utf8',
     )
     const dispatcherTypes = readFileSync(
-      join(BACKEND_SRC, 'services', 'webhook', 'dispatcherTypes.ts'),
+      join(BACKEND_SRC, 'modules', 'integration', 'application', 'ports', 'webhookDispatcher.ts'),
       'utf8',
     )
     const requiredPorts = readFileSync(
@@ -345,11 +361,18 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       join(BACKEND_SRC, 'modules/integration/composition/webhookIngress.ts'),
       'utf8',
     )
-    expect(ingress).toContain('await ingress.receive(')
+    expect(ingress).toContain('await deps.verifiedIngress.receive(')
     expect(ingressApplication).toContain('deps.events.observe(observation)')
     expect(ingressComposition).toContain('eventCenter.commands.observe(observation)')
-    expect(replay).toContain('commands.observe(')
-    for (const source of [ingress, ingressApplication, ingressComposition, replay]) {
+    expect(replay).toContain('deps.events.observe(observation)')
+    for (const source of [
+      ingressBinding,
+      ingress,
+      ingressApplication,
+      ingressComposition,
+      replayBinding,
+      replay,
+    ]) {
       expect(source).not.toMatch(/webhookDispatcher\s*\.\s*dispatch\s*\(/)
     }
     expect(integrationComposition).toContain('dispatcher: EventCenterCodeHostDeliveryDispatcher')

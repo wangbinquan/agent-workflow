@@ -17,8 +17,8 @@
 //   capability every time somebody fixed a typo in it.
 
 import { describe, expect, test } from 'bun:test'
-import { gitlabNormalize } from '../src/services/webhook/gitlabAdapter'
-import { githubNormalize } from '../src/services/webhook/githubAdapter'
+import { gitlabNormalize } from '../src/modules/integration/domain/gitlabNormalization'
+import { githubNormalize } from '../src/modules/integration/domain/githubNormalization'
 
 const project = {
   id: 41823,

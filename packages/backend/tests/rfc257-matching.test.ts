@@ -13,7 +13,7 @@ import {
   matchTrigger,
   streamKeyOf,
   type TriggerRule,
-} from '@/services/webhook/matching'
+} from '@/modules/integration/domain/webhookTriggerMatching'
 
 function ev(overrides: Partial<CodeHostEvent> = {}): CodeHostEvent {
   return {

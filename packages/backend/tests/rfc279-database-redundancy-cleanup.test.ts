@@ -349,7 +349,7 @@ describe('RFC-279 source ratchet', () => {
       'services/repoGroup.ts',
       'modules/resource-catalog/infrastructure/legacy/skillOperations.ts',
       'modules/resource-catalog/infrastructure/migration/skillBootRules.ts',
-      'services/webhook/webhookDispatch.ts',
+      'modules/integration/application/webhookDispatch.ts',
       'bootstrap/daemonApplication.ts',
     ]
       .map((path) =>

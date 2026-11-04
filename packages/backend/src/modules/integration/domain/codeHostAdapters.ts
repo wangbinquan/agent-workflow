@@ -7,13 +7,15 @@
 //
 // 运行时依赖是单向的：本文件 import 各 adapter 实现组注册表；实现文件只做
 // type-only import 本文件（编译期擦除，无 ESM 循环）。
+//
+// RFC-437：自 services/webhook/codeHostAdapter.ts 迁入 integration domain——适配器只描述 provider 的头、
+// 判别符、验签与归一化，都是纯函数。
 import type { CodeHostProvider } from '@agent-workflow/shared'
 
-import { githubAdapter } from '@/services/webhook/githubAdapter'
-import { gitlabAdapter } from '@/services/webhook/gitlabAdapter'
+import { githubAdapter } from './githubWebhookAdapter'
+import { gitlabAdapter } from './gitlabWebhookAdapter'
 
-import type { HeaderBag, NormalizeResult } from '@/modules/integration/domain/codeHostNormalization'
-export type { HeaderBag, NormalizeResult } from '@/modules/integration/domain/codeHostNormalization'
+import type { HeaderBag, NormalizeResult } from './codeHostNormalization'
 
 export interface CodeHostAdapter {
   readonly provider: CodeHostProvider
@@ -36,7 +38,7 @@ export interface CodeHostAdapter {
   normalize(headers: HeaderBag, body: unknown): NormalizeResult
 }
 
-/** replay 的 HeaderBag 重建（webhookDeliveries.ts 消费）：审计列值 → 事件头。 */
+/** replay 的 HeaderBag 重建（投递重放与分发器消费）：审计列值 → 事件头。 */
 export function replayHeaders(
   adapter: CodeHostAdapter,
   eventHeaderValue: string | null,

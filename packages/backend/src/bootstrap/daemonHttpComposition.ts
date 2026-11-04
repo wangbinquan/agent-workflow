@@ -27,7 +27,10 @@ import type { DeploymentSelections } from './deploymentProfile'
 import { composeRunObservation } from '@/modules/run-observability/composition/runObservation'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
-import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
+import {
+  composeWebhookDeliveryReplay,
+  composeWebhookIngressTransport,
+} from '@/modules/integration/composition/webhookIngress'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
@@ -344,9 +347,12 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     }),
     webhookDeliveries: Object.freeze({
       webhookDeliveryRuntime,
-      digitalEmployeeEventCenter: eventCenter,
-      webhookDispatcher,
-      webhookTerminalControl,
+      replay: composeWebhookDeliveryReplay({
+        webhookDeliveryRuntime,
+        digitalEmployeeEventCenter: eventCenter,
+        webhookDispatcher,
+        webhookTerminalControl,
+      }),
     }),
   })
 

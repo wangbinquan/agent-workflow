@@ -2,7 +2,7 @@ import type {
   ExecutionInvoker,
   TaskExecutionResourceAuthority,
 } from '@/modules/task-execution/public/commands'
-import type { WebhookDispatchDeps } from '@/services/webhook/webhookDispatch'
+import type { WebhookDispatchDeps } from '../application/webhookDispatch'
 import type { WebhookTaskExecutionParticipant } from '../application/ports/webhookExecution'
 import type { DigitalEmployeeWorkStartPort } from '../public/participants'
 

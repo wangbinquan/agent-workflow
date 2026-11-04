@@ -85,6 +85,8 @@ const routeFiles = [
   ...trackedFiles(
     'packages/backend/src/modules/development-automation/infrastructure/http/graphDesignRoutes.ts',
   ),
+  // RFC-437：Webhook 投递重放的规则从路由搬进 integration 的应用用例；这些客户端可达的错误码跟着走。
+  ...trackedFiles('packages/backend/src/modules/integration/application/replayWebhookDelivery.ts'),
   // RFC-359 W4-D19b：两个 provider 的任务房合成一份中立实现，legacy 那三个动作文件随之退役。
   // 同样的道理——语料跟着搬，否则这些客户端可达的错误码会从棘轮里消失。
   ...trackedFiles(

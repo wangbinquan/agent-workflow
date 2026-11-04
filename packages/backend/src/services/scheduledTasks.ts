@@ -49,6 +49,7 @@ import type {
   TaskExecutionWorkflowSnapshot,
 } from '@/modules/resource-catalog/public/types'
 import type {
+  IntegrationTriggerResourceAuthority,
   IntegrationTriggerResourceQueries,
   ScheduledTaskCreateRecord,
   ScheduledTaskMutablePatch,
@@ -83,14 +84,6 @@ export type ScheduleAuthorityRuntime = Readonly<{
 }>
 
 export type IntegrationTriggerResourceBinding = IntegrationTriggerResourceQueries
-
-/** Exact opaque handle and the current actor projection admitted with it. */
-export interface IntegrationTriggerResourceAuthority {
-  readonly authority: ResourceRequestContext
-  readonly actor: Actor
-  readonly resources: IntegrationTriggerResourceBinding
-  readonly taskExecutionResources: TaskExecutionResourceBinding
-}
 
 export interface IntegrationTriggerValidationRuntime {
   assertWorkflowLaunchable(workflow: TaskExecutionWorkflowSnapshot): Promise<void>

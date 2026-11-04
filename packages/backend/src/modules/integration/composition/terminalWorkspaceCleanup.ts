@@ -1,6 +1,6 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { TerminalWorkspacePrunePolicy } from '@/services/lifecycle'
-import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
+import { createWebhookTerminalWorkspacePrunePolicy } from '../application/terminalWorkspaceCleanup'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '../infrastructure/terminalWorkspaceAttribution'
 
 /**

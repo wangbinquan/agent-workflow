@@ -15,7 +15,7 @@
 // （tests/fixtures/gitlab-webhooks/README.md 实测清单）。
 import { describe, expect, test } from 'bun:test'
 
-import { gitlabApiBaseUrl, gitlabNormalize } from '@/services/webhook/gitlabAdapter'
+import { gitlabApiBaseUrl, gitlabNormalize } from '@/modules/integration/domain/gitlabNormalization'
 
 const HEADERS = { 'x-gitlab-event-uuid': 'uuid-263' }
 

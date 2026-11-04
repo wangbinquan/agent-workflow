@@ -54,7 +54,7 @@ import {
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
 import { createUser } from './helpers/userFixture'
-import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
+import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
 
 const NOW = 1_755_500_000_000
 const ROUNDS_TOKEN = 'b'.repeat(64)

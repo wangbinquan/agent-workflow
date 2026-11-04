@@ -42,7 +42,7 @@ import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTa
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
 import { getTask, isTaskActive } from '../src/services/task'
-import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
+import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
 import { sha1Hex } from '../src/util/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { createUser } from './helpers/userFixture'

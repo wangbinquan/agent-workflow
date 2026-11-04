@@ -30,7 +30,7 @@ import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
 import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
-import { gcDeliveriesSlice } from '@/services/webhook/deliveryStore'
+import { gcDeliveriesSlice } from '@/modules/integration/application/webhookDeliveryStore'
 import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
 

@@ -40,13 +40,11 @@ import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import {
-  supportsEventCenterCodeHostDelivery,
-  type WebhookDispatcher,
-} from '@/services/webhook/dispatcherTypes'
-import {
   createWebhookDispatcher,
+  supportsEventCenterCodeHostDelivery,
   type WebhookDispatchDeps,
-} from '@/services/webhook/webhookDispatch'
+  type WebhookDispatcher,
+} from '@/modules/integration/composition/webhookDispatch'
 import { createLogger } from '@/util/log'
 import type { DaemonScheduledTaskModules } from './scheduledTasks'
 

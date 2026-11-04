@@ -1,3 +1,4 @@
+// RFC-437：自 services/webhook/terminalWorkspaceCleanup.ts 迁入 integration application；策略类型取 task-execution public。
 // RFC-300 — admission policy for immediate cleanup of direct Webhook task
 // workspaces. This module deliberately owns only the integration attribution
 // rule. Lifecycle owns the atomic status+claim write and GC/source-control owns
@@ -5,8 +6,8 @@
 
 import type { SpaceKind, TaskStatus } from '@agent-workflow/shared'
 
-import type { WebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/application/ports/terminalWorkspaceAttribution'
-import type { TerminalWorkspacePrunePolicy } from '@/services/lifecycle'
+import type { WebhookTerminalWorkspaceAttributionQueries } from './ports/terminalWorkspaceAttribution'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
 
 export interface WebhookTerminalWorkspacePolicyInput {
   to: TaskStatus

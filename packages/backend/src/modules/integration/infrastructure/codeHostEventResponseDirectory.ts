@@ -6,8 +6,8 @@ import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { matchTrigger } from '@/services/webhook/matching'
-import { parseTriggerRow } from '@/services/webhook/webhookDispatch'
+import { matchTrigger } from '../domain/webhookTriggerMatching'
+import { parseTriggerRow } from '../application/webhookDispatch'
 import type { CodeHostEventResponseDirectoryPort } from '../application/ports/codeHostEventResponse'
 import {
   codeHostSelectorEvent,

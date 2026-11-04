@@ -36,7 +36,6 @@ import { mountConfigRoutes } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
-import { mountWebhookIngressRoutes } from '@/routes/webhooks'
 import { type IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { executionStatusOf } from '@/modules/system-operations/composition'
@@ -97,9 +96,12 @@ import { mountEventCenterRoutes } from '@/modules/event-center/composition'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import { mountCodeRoutes } from '@/routes/code'
-import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
-import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
-import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
+import {
+  mountWebhookDeliveryRoutes,
+  mountWebhookEndpointRoutes,
+  mountWebhookIngressRoutes,
+  mountWebhookTriggerRoutes,
+} from '@/modules/integration/composition'
 import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'

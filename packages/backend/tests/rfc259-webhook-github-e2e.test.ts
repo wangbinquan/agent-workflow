@@ -20,7 +20,7 @@ import { composeWebhookIngressTransport } from '@/modules/integration/compositio
 import {
   createWebhookDispatcher,
   renderedLaunchPayload,
-} from '../src/services/webhook/webhookDispatch'
+} from '../src/modules/integration/application/webhookDispatch'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
@@ -34,7 +34,7 @@ import {
   createCodeHostWebhookRoutingDirectory,
 } from '../src/modules/integration/composition'
 import { codeHostEventCatalogJson } from '../src/modules/integration/public/events'
-import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
+import { mountWebhookIngressRoutes } from '../src/modules/integration/inbound/http/webhookIngressRoutes'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 4))
 const SECRET = 'gh-e2e-secret'

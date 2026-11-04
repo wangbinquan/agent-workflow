@@ -3,7 +3,7 @@
 本目录存放**真实 GitHub（github.com / GHES）**导出的 webhook payload（脱敏后）。
 在真实 fixture 落地前，`tests/rfc259-github-adapter.test.ts` 使用按 GitHub 官方
 文档形态手写的 builder payload——**字段路径以真实 fixture 为准，不符处回改
-`services/webhook/githubAdapter.ts` 与 `design/RFC-259-*/design.md §2.2`**。
+`modules/integration/domain/githubNormalization.ts` 与 `design/RFC-259-*/design.md §2.2`**。
 
 ## 实测清单（proposal §8；逐项在真实 GitHub 上核准）
 

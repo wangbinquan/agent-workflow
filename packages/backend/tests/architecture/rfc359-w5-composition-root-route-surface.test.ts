@@ -18,7 +18,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
-import type { WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
+import type { WebhookDispatcher } from '@/modules/integration/application/ports/webhookDispatcher'
 
 import type { TestProvider } from '../helpers/eachProvider'
 import { describeEachProviderHttpApplication } from '../helpers/providerHttpApplicationScope'

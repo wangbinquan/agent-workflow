@@ -24,9 +24,9 @@ import {
   listScheduledTaskItems as listScheduledTaskItemsService,
   listScheduledTasks as listScheduledTasksService,
   runScheduleNow as runScheduleNowService,
-  type IntegrationTriggerResourceAuthority,
   updateScheduledTask as updateScheduledTaskService,
 } from '../../src/services/scheduledTasks'
+import type { IntegrationTriggerResourceAuthority } from '../../src/modules/integration/application/ports/scheduledTaskPersistence'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
 import { composeScheduledTaskRuntimeFor } from '../../src/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '../../src/services/taskLaunchGate'

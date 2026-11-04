@@ -1,8 +1,9 @@
 // Signature verification remains exclusive to the direct webhook transport.
+// RFC-437：自 services/webhook/githubAdapter.ts 迁入 integration domain。
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { CodeHostAdapter, HeaderBag } from './codeHostAdapter'
-import { githubNormalize } from '@/modules/integration/domain/githubNormalization'
-export { githubNormalize, githubApiBaseUrl } from '@/modules/integration/domain/githubNormalization'
+import type { CodeHostAdapter } from './codeHostAdapters'
+import type { HeaderBag } from './codeHostNormalization'
+import { githubNormalize } from './githubNormalization'
 
 export function githubVerify(
   headers: HeaderBag,

@@ -27,7 +27,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
-import { gcDeliveries } from '../src/services/webhook/deliveryStore'
+import { gcDeliveries } from '../src/modules/integration/application/webhookDeliveryStore'
 import type { WebhookDeliveryStatus } from '@agent-workflow/shared'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -400,7 +400,10 @@ describe('RFC-261 · 源码层文本锁（行为等价面的兜底，CLAUDE.md �
       join(SRC, 'modules', 'integration', 'infrastructure', 'webhookDeliveryQueries.ts'),
       'utf8',
     )
-    const route = readFileSync(join(SRC, 'routes', 'webhookDeliveries.ts'), 'utf8')
+    const route = readFileSync(
+      join(SRC, 'modules', 'integration', 'inbound', 'http', 'webhookDeliveryRoutes.ts'),
+      'utf8',
+    )
     expect(persistence).toContain('WITH RECURSIVE repo_walk')
     // RFC-359 W4-B4：一份中立实现，表与列经 drizzle 引用渲染（PG 侧带 schema 前缀），不再写裸表名。
     expect(persistence).toContain(

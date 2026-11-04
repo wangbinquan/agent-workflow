@@ -1,6 +1,7 @@
 // RFC-349 — provider-neutral webhook delivery application facade. Database
-// mechanics live in modules/integration/infrastructure; ingress, recovery, and
+// mechanics live in this module's infrastructure; ingress, recovery, and
 // maintenance receive this explicit Promise port from bootstrap composition.
+// RFC-437：自 services/webhook/deliveryStore.ts 迁入 integration application。
 import type {
   WebhookDeliveryGcCursorV1,
   WebhookDeliveryGcSliceReceipt,
@@ -8,23 +9,13 @@ import type {
   WebhookDeliveryInsertReceipt,
   WebhookDeliveryPersistencePort,
   WebhookDeliveryRetention,
-} from '@/modules/integration/application/ports/webhookDeliveryPersistence'
+} from './ports/webhookDeliveryPersistence'
 import {
-  DELIVERY_BODY_MAX_CHARS,
   DELIVERY_BODY_RETENTION_MS,
   DELIVERY_GC_BATCH,
   DELIVERY_ROW_RETENTION_MS,
-  truncateDeliveryBody,
-} from '@/modules/integration/domain/webhookDelivery'
+} from '../domain/webhookDelivery'
 import type { WebhookDeliveryReason, WebhookDeliveryStatus } from '@agent-workflow/shared'
-
-export {
-  DELIVERY_BODY_MAX_CHARS,
-  DELIVERY_BODY_RETENTION_MS,
-  DELIVERY_GC_BATCH,
-  DELIVERY_ROW_RETENTION_MS,
-  truncateDeliveryBody,
-}
 
 export type InsertDeliveryInput = WebhookDeliveryInsertInput
 export type InsertDeliveryResult = WebhookDeliveryInsertReceipt
@@ -106,12 +97,4 @@ export async function gcDeliveries(
     if (slice.done) return total
     cursor = slice.cursor
   }
-}
-
-export function touchEndpointLastDelivery(
-  persistence: WebhookDeliveryPersistencePort,
-  endpointId: string,
-  now: number,
-): Promise<void> {
-  return persistence.touchEndpointLastDelivery(endpointId, now)
 }

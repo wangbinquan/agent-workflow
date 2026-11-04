@@ -1,5 +1,5 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { EventCenterCodeHostDeliveryDispatcher } from '@/services/webhook/dispatcherTypes'
+import type { EventCenterCodeHostDeliveryDispatcher } from './application/ports/webhookDispatcher'
 import {
   createCodeHostEventDeliveryAdapter,
   createCodeHostEventRoutingAdapter,
@@ -68,3 +68,9 @@ export { createWebhookFireRetentionPhase } from './infrastructure/retentionPhase
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createIntegrationMaintenanceJobHandlers } from './application/maintenanceJobs'
+
+// RFC-437: the code-host webhook HTTP bindings live in this module's inbound/http; server.ts mounts them here.
+export { mountWebhookIngressRoutes } from './inbound/http/webhookIngressRoutes'
+export { mountWebhookDeliveryRoutes } from './inbound/http/webhookDeliveryRoutes'
+export { mountWebhookEndpointRoutes } from './inbound/http/webhookEndpointRoutes'
+export { mountWebhookTriggerRoutes } from './inbound/http/webhookTriggerRoutes'

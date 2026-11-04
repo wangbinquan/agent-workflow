@@ -184,8 +184,30 @@ describeEachProvider(
     test('the Event Center continuation owns the predicate and the Webhook route stays decoupled', () => {
       // 纯函数好断言，但它得真的被调用。现在该职责属于 Event Center 的消费者
       // adapter；Webhook ingress 只发布事件，不能重新跨界写 Mission 表。
+      // RFC-437: the ingress binding and its use case both live in integration now.
       const route = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'routes', 'webhooks.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'integration',
+          'inbound',
+          'http',
+          'webhookIngressRoutes.ts',
+        ),
+        'utf8',
+      )
+      const ingress = readFileSync(
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'integration',
+          'application',
+          'receiveCodeHostWebhook.ts',
+        ),
         'utf8',
       )
       const continuation = readFileSync(
@@ -201,6 +223,7 @@ describeEachProvider(
         'utf8',
       )
       expect(route).not.toContain('development-automation')
+      expect(ingress).not.toContain('development-automation')
       expect(continuation).toContain('shouldWakeForWebhook({')
       expect(continuation).not.toContain("claim !== null && claim.state === 'active'")
       const at = continuation.indexOf('shouldWakeForWebhook({')

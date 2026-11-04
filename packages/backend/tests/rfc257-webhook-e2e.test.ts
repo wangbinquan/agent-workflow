@@ -38,11 +38,11 @@ import {
 } from '../src/modules/integration/public/events'
 import type { MrTerminalControl } from '../src/modules/integration/public/participants'
 import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
-import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
+import { mountWebhookIngressRoutes } from '../src/modules/integration/inbound/http/webhookIngressRoutes'
 import {
   createWebhookDispatcher,
   renderedLaunchPayload,
-} from '../src/services/webhook/webhookDispatch'
+} from '../src/modules/integration/application/webhookDispatch'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeEventCenter } from './helpers/eventCenter'
 import {

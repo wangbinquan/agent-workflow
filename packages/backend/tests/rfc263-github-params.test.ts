@@ -14,7 +14,7 @@
 // 回改（tests/fixtures/github-webhooks/README.md 实测清单）。
 import { describe, expect, test } from 'bun:test'
 
-import { githubApiBaseUrl, githubNormalize } from '@/services/webhook/githubAdapter'
+import { githubApiBaseUrl, githubNormalize } from '@/modules/integration/domain/githubNormalization'
 
 const REPOSITORY = {
   id: 8080,

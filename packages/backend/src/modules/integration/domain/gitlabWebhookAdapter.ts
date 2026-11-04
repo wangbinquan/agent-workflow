@@ -1,15 +1,9 @@
 // Signature verification remains exclusive to the direct webhook transport.
+// RFC-437：自 services/webhook/gitlabAdapter.ts 迁入 integration domain。
 import { timingSafeEqual } from 'node:crypto'
-import type { CodeHostAdapter, HeaderBag } from './codeHostAdapter'
-import {
-  gitlabNormalize,
-  gitlabSummaryKindOf,
-} from '@/modules/integration/domain/gitlabNormalization'
-export {
-  gitlabNormalize,
-  gitlabApiBaseUrl,
-  gitlabSummaryKindOf,
-} from '@/modules/integration/domain/gitlabNormalization'
+import type { CodeHostAdapter } from './codeHostAdapters'
+import type { HeaderBag } from './codeHostNormalization'
+import { gitlabNormalize, gitlabSummaryKindOf } from './gitlabNormalization'
 
 export function gitlabVerify(
   headers: HeaderBag,

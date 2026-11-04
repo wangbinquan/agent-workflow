@@ -1,8 +1,9 @@
+// RFC-437：自 services/webhook/matching.ts 迁入 integration domain（纯函数）。
 // RFC-257 T4 — 分流引擎的纯函数面：规则匹配 / 流键 / 熔断评估。
 // 全部零 I/O，五维矩阵与并发语义的测试都落在这里（design §10「首选可断言面」）。
 import type { CodeHostEvent, CodeHostEventType, WebhookRepoScope } from '@agent-workflow/shared'
 import { AUTHOR_FILTERED_EVENT_TYPES } from '@agent-workflow/shared'
-import { webhookStreamKeyOf } from '@/modules/integration/domain/mrTerminalControl'
+import { webhookStreamKeyOf } from './mrTerminalControl'
 
 /** 触发器规则的运行时形态（DB 行 JSON 列解析后；wire schema 见 shared/schemas/webhook.ts）。 */
 export type TriggerRule = {

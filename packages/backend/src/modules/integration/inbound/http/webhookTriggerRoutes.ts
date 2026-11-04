@@ -1,8 +1,9 @@
 // RFC-257 T8/T9 — 触发器管理面路由（薄壳）。RFC-284 T28：全部业务判定与
-// db/schema 访问下沉 services/webhookTriggers.ts（权限语义/owner 制/保存期校验
+// db/schema 访问下沉触发器服务（RFC-437 起为 application/webhookTriggers.ts；权限语义/owner 制/保存期校验
 // 的领域注释也在那里）；本文件只剩 registerRoute 元数据 + actor/param/query/body
 // 抽取。方法级权限门在 registerRoute，行级
 // owner∨`event-automation-rules:override-owner` 门在服务层。
+// RFC-437：自 routes/webhookTriggers.ts 归入 integration 的 inbound/http。
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
@@ -15,17 +16,17 @@ import {
   listWebhookTriggers,
   resetWebhookTriggerStream,
   updateWebhookTrigger,
-} from '@/services/webhookTriggers'
+  type WebhookTriggerServiceDeps,
+} from '../../application/webhookTriggers'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
-import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
-import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
+import type { IntegrationTriggerResourceQueries } from '../../application/ports/scheduledTaskPersistence'
 import { directRequestAuthority } from '@/routes/operationAuthority'
-import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
 
 interface WebhookTriggerRouteIdentityAccess {
   readonly directAuthority: DirectAuthorityBinding
-  readonly integrationTriggerResources: IntegrationTriggerResourceBinding
+  readonly integrationTriggerResources: IntegrationTriggerResourceQueries
   readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 

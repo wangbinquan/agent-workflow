@@ -5,20 +5,26 @@ import type { MrTerminalControl } from '../public/participants'
 import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
-} from '@/services/webhook/dispatcherTypes'
+} from '../application/ports/webhookDispatcher'
+import { createCodeHostWebhookReceiver } from '../application/receiveCodeHostWebhook'
+import {
+  createWebhookDeliveryReplay,
+  type WebhookDeliveryReplay,
+} from '../application/replayWebhookDelivery'
+import {
+  createWebhookRateLimiters,
+  type WebhookRateLimiters,
+} from '../application/webhookRateLimiter'
 import { createVerifiedWebhookIngress } from '../application/verifiedWebhookIngress'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { WebhookDeliveryQueries } from '../application/ports/webhookDeliveryQueries'
+import type { WebhookDeliveryRuntime } from '../application/ports/webhookDeliveryRuntime'
 import type { WebhookIngressPersistence } from '../application/ports/webhookIngressPersistence'
 import { createVerifiedWebhookDeliveryPersistence } from '../infrastructure/verifiedWebhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 import { createWebhookDeliveryQueries } from '../infrastructure/webhookDeliveryQueries'
 import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
 
-/** Provider-neutral audit/replay seam; transports never select or inspect a database provider. */
-export interface WebhookDeliveryRuntime extends WebhookIngressPersistence {
-  readonly queries: WebhookDeliveryQueries
-}
+export type { WebhookDeliveryRuntime }
 
 export function composeWebhookIngressPersistence(
   persistence: WebhookIngressPersistence,
@@ -57,6 +63,8 @@ export function composeWebhookIngressTransport(input: {
   readonly digitalEmployeeEventCenter?: EventCenterModule
   readonly webhookDispatcher?: WebhookDispatcher
   readonly webhookTerminalControl?: MrTerminalControl
+  /** RFC-437：入站接收的限流器；缺省按两档默认速率新建（用例注入假时钟时传入）。 */
+  readonly limiters?: WebhookRateLimiters
 }) {
   const eventCenter = input.digitalEmployeeEventCenter
   const enabled =
@@ -65,26 +73,68 @@ export function composeWebhookIngressTransport(input: {
     !!input.webhookDispatcher &&
     supportsEventCenterCodeHostDelivery(input.webhookDispatcher) &&
     eventCenter !== undefined
+  const verifiedIngress =
+    !enabled || eventCenter === undefined
+      ? undefined
+      : createVerifiedWebhookIngress({
+          persistence: {
+            accept: (command) => input.webhookIngressPersistence.acceptVerifiedDelivery(command),
+          },
+          audit: input.webhookIngressPersistence.deliveries,
+          events: {
+            observe: async (observation) => await eventCenter.commands.observe(observation),
+            notify: (deliveryId) => eventCenter.worker.runOneNotification(deliveryId),
+            nudge: () =>
+              eventCenter.observerControl.nudgeSource({ id: 'code-host.activity', revision: 1 }),
+          },
+          wakeTerminalControl: (effectId) => input.webhookTerminalControl?.wake(effectId),
+          now: () => Date.now(),
+        })
+  const secretBox = input.secretBox
   return Object.freeze({
     webhookIngressPersistence: input.webhookIngressPersistence,
     crewStationEvents: input.crewStationEvents,
-    secretBox: input.secretBox,
-    verifiedIngress:
-      !enabled || eventCenter === undefined
+    secretBox,
+    verifiedIngress,
+    // RFC-437：入站接收用例。装配缺件（无密钥箱或无已验证接收）时不构造，绑定随之不挂载入站面——
+    // 对齐 OIDC 的自我跳过惯例：管理面会以显式错误提示，而不是留一个必 500 的公开路由。
+    receiver:
+      secretBox === undefined || verifiedIngress === undefined
         ? undefined
-        : createVerifiedWebhookIngress({
-            persistence: {
-              accept: (command) => input.webhookIngressPersistence.acceptVerifiedDelivery(command),
-            },
-            audit: input.webhookIngressPersistence.deliveries,
-            events: {
-              observe: async (observation) => await eventCenter.commands.observe(observation),
-              notify: (deliveryId) => eventCenter.worker.runOneNotification(deliveryId),
-              nudge: () =>
-                eventCenter.observerControl.nudgeSource({ id: 'code-host.activity', revision: 1 }),
-            },
-            wakeTerminalControl: (effectId) => input.webhookTerminalControl?.wake(effectId),
-            now: () => Date.now(),
+        : createCodeHostWebhookReceiver({
+            persistence: input.webhookIngressPersistence,
+            unseal: (secretEnc) => secretBox.unseal(secretEnc),
+            verifiedIngress,
+            limiters: input.limiters ?? createWebhookRateLimiters(),
           }),
+  })
+}
+
+/**
+ * RFC-437：投递重放的可用性与原路由同一条件——事件中心与分发器都已接线，且分发器支持事件中心投递；
+ * 不看密钥箱与托管事件入口。不可用时返回 undefined，绑定报 409 `webhook-ingress-unavailable`。
+ */
+export function composeWebhookDeliveryReplay(input: {
+  readonly webhookDeliveryRuntime: WebhookDeliveryRuntime
+  readonly digitalEmployeeEventCenter?: EventCenterModule
+  readonly webhookDispatcher?: WebhookDispatcher
+  readonly webhookTerminalControl?: MrTerminalControl
+}): WebhookDeliveryReplay | undefined {
+  const eventCenter = input.digitalEmployeeEventCenter
+  if (
+    eventCenter === undefined ||
+    input.webhookDispatcher === undefined ||
+    !supportsEventCenterCodeHostDelivery(input.webhookDispatcher)
+  ) {
+    return undefined
+  }
+  return createWebhookDeliveryReplay({
+    runtime: input.webhookDeliveryRuntime,
+    events: {
+      observe: async (observation) => await eventCenter.commands.observe(observation),
+      notify: (deliveryId) => eventCenter.worker.runOneNotification(deliveryId),
+    },
+    wakeTerminalControl: (effectId) => input.webhookTerminalControl?.wake(effectId),
+    now: () => Date.now(),
   })
 }

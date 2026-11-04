@@ -750,7 +750,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const webhookDispatch = readFileSync(
-      resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'),
+      resolve(sourceRoot, 'modules/integration/application/webhookDispatch.ts'),
       'utf8',
     )
     const eventAutomationContext = readFileSync(
@@ -761,7 +761,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const scheduledRoute = readFileSync(resolve(sourceRoot, 'routes/scheduledTasks.ts'), 'utf8')
-    const webhookRoute = readFileSync(resolve(sourceRoot, 'routes/webhookTriggers.ts'), 'utf8')
+    const webhookRoute = readFileSync(
+      resolve(sourceRoot, 'modules/integration/inbound/http/webhookTriggerRoutes.ts'),
+      'utf8',
+    )
 
     expect(publicParticipant).toContain('DigitalEmployeeIntegrationTriggerParticipant')
     expect(publicParticipant).toContain("'digital-employee-integration-trigger-participant'")
@@ -869,7 +872,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
-    const webhook = readFileSync(resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'), 'utf8')
+    const webhook = readFileSync(
+      resolve(sourceRoot, 'modules/integration/application/webhookDispatch.ts'),
+      'utf8',
+    )
     const wrapper = readFileSync(
       resolve(sourceRoot, 'modules/task-execution/composition/wrapperMechanics.ts'),
       'utf8',

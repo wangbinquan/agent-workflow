@@ -1,5 +1,6 @@
 // RFC-257 — provider-neutral dispatcher contract.
-import type { WebhookEndpointRecord } from '@/modules/integration/application/ports/webhookDispatchPersistence'
+// RFC-437：自 services/webhook/dispatcherTypes.ts 迁入 integration 的 application/ports。
+import type { WebhookEndpointRecord } from './webhookDispatchPersistence'
 import type { CodeHostEvent, TriggerContext } from '@agent-workflow/shared'
 
 export type WebhookEndpointRow = WebhookEndpointRecord

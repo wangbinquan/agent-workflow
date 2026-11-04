@@ -5,8 +5,9 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, test } from 'bun:test'
 
-import { githubNormalize, githubVerify, githubAdapter } from '@/services/webhook/githubAdapter'
-import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
+import { githubNormalize } from '@/modules/integration/domain/githubNormalization'
+import { githubVerify, githubAdapter } from '@/modules/integration/domain/githubWebhookAdapter'
+import { CODE_HOST_ADAPTERS, replayHeaders } from '@/modules/integration/domain/codeHostAdapters'
 
 const REPOSITORY = {
   id: 42,

@@ -1,7 +1,8 @@
 // RFC-257 T7 — webhook 端点管理面路由（薄壳）。RFC-284 T28：全部业务判定、
-// secret 密封与 db/schema 访问下沉 services/webhookEndpoints.ts（读写分层 /
+// secret 密封与 db/schema 访问下沉端点服务（RFC-437 起为 application/webhookEndpoints.ts；读写分层 /
 // D19 / secret 三形态的领域注释也在那里）；本文件只剩 registerRoute 元数据 +
 // actor/param/body 抽取，以及「无密封器则不开管理面」的挂载期跳过。
+// RFC-437：自 routes/webhookEndpoints.ts 归入 integration 的 inbound/http。
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
@@ -14,9 +15,9 @@ import {
   rotateWebhookEndpointSecret,
   rotateWebhookEndpointUrlToken,
   updateWebhookEndpoint,
-} from '@/services/webhookEndpoints'
+  type WebhookEndpointServiceDeps,
+} from '../../application/webhookEndpoints'
 import { safeJsonOrThrowInvalid } from '@/util/http'
-import type { WebhookEndpointServiceDeps } from '@/services/webhookEndpoints'
 
 export function mountWebhookEndpointRoutes(
   app: Hono,

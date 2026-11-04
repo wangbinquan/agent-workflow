@@ -1,3 +1,4 @@
+// RFC-437：自 services/webhook/triggerValidation.ts 迁入 integration domain（纯函数）。
 // RFC-257 T8 — 触发器保存期静态校验（design §4.2 / AC-14 前半）。
 // 三层：①模板变量 ⊆ 所选事件类型交集可用集（shared templateVarIssues）；
 // ②workflow 面的输入映射 kind-aware 校验（git→event-branch、text→template、

@@ -26,7 +26,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
-import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
+import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import {
   integrationTriggerWebhookAuthorityDependencies,

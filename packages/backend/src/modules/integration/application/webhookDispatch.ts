@@ -1,3 +1,4 @@
+// RFC-437：自 services/webhook/webhookDispatch.ts 迁入 integration application；依赖改从 owner 取。
 // RFC-257 T6 — Webhook response execution service（design §0/§4/§5）。
 // 生产入口只使用 dispatchSubscription：一条 Event Center Delivery 精确执行一条
 // 已匹配规则，绝不重扫 endpoint，也不修改共享 Webhook audit 状态。旧 dispatch
@@ -16,26 +17,25 @@ import type {
   DelegatedRequestAuthorityFactory,
   RequestAuthority,
 } from '@/modules/identity-access/public/participants'
-import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
 import type {
+  ExecutionInvoker,
   TaskExecutionResourceAuthority,
   TaskExecutionResourceBinding,
-} from '@/services/execution/taskExecutionResources'
+} from '@/modules/task-execution/public/commands'
 import type {
   EventCenterCodeHostDeliveryDispatcher,
   WebhookDispatcher,
   WebhookEndpointRow,
-} from '@/services/webhook/dispatcherTypes'
-import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
-import type { ExecutionInvoker } from '@/services/execution/types'
-import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
-import { markDelivery } from '@/services/webhook/deliveryStore'
+} from './ports/webhookDispatcher'
+import { CODE_HOST_ADAPTERS, replayHeaders } from '../domain/codeHostAdapters'
+import type { IntegrationTriggerResourceQueries } from './ports/scheduledTaskPersistence'
+import { markDelivery } from './webhookDeliveryStore'
 import {
   evaluateCircuit,
   matchTrigger,
   streamKeyOf,
   type TriggerRule,
-} from '@/services/webhook/matching'
+} from '../domain/webhookTriggerMatching'
 import { ValidationError } from '@/util/errors'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import { createLogger } from '@/util/log'
@@ -64,22 +64,19 @@ import {
   webhookTriggerTerminalPolicyIssue,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
-import {
-  decideProtectedLaunch,
-  type MrStreamState,
-} from '@/modules/integration/domain/mrTerminalControl'
+import { decideProtectedLaunch, type MrStreamState } from '../domain/mrTerminalControl'
 import type {
   MrTerminalControl,
   ProtectedMrLaunchGuard,
   WorkStartReceipt,
   WorkStartTarget,
-} from '@/modules/integration/public/participants'
+} from '../public/participants'
 import { DomainError } from '@/util/errors'
 import type {
   WebhookDispatchPersistencePort,
   WebhookTriggerRecord,
-} from '@/modules/integration/application/ports/webhookDispatchPersistence'
-import type { WebhookDeliveryPersistencePort } from '@/modules/integration/application/ports/webhookDeliveryPersistence'
+} from './ports/webhookDispatchPersistence'
+import type { WebhookDeliveryPersistencePort } from './ports/webhookDeliveryPersistence'
 
 const log = createLogger('webhook-dispatch')
 
@@ -88,8 +85,7 @@ export type WebhookDispatchDeps = {
   deliveryPersistence: WebhookDeliveryPersistencePort
   identityAccess: Readonly<{
     delegatedRequests: DelegatedRequestAuthorityFactory
-    getUserGitCommitIdentity: GetUserGitCommitIdentity
-    integrationTriggerResources: IntegrationTriggerResourceBinding
+    integrationTriggerResources: IntegrationTriggerResourceQueries
     taskExecutionResources: TaskExecutionResourceBinding
   }>
   /** per-dispatch 读取（对齐 scheduledTaskScheduler 的 per-tick cfg.defaultRuntime）。 */
@@ -117,7 +113,7 @@ export type WebhookDispatchDeps = {
     readonly resourceAuthority: Readonly<{
       authority: RequestAuthority
       actor: Actor
-      resources: IntegrationTriggerResourceBinding
+      resources: IntegrationTriggerResourceQueries
       taskExecutionResources: TaskExecutionResourceBinding
     }>
     readonly defaultRuntime: string | null | undefined

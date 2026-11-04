@@ -6,20 +6,20 @@ import {
   assertIntegrationTriggerSnapshotUsable,
   assertScheduledTargetUsable,
   loadIntegrationTriggerResourceSnapshot,
-  type IntegrationTriggerResourceAuthority,
   type ScheduledTaskOperations,
 } from '@/services/scheduledTasks'
+import type { IntegrationTriggerResourceAuthority } from '../application/ports/scheduledTaskPersistence'
 import {
   renderWebhookLaunch,
   type RenderedLaunch,
   type WebhookDispatchDeps,
-} from '@/services/webhook/webhookDispatch'
+} from '../application/webhookDispatch'
 import {
   rehearsalEvent,
   staticTriggerIssues,
   type WebhookTriggerSaveCandidate,
-} from '@/services/webhook/triggerValidation'
-import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
+} from '../domain/webhookTriggerValidation'
+import type { WebhookTriggerServiceDeps } from '../application/webhookTriggers'
 import { ValidationError } from '@/util/errors'
 import { webhookPayloadTemplateSchemaFor, type WorkflowDefinition } from '@agent-workflow/shared'
 

@@ -1,3 +1,4 @@
+// RFC-437：自 services/webhookEndpoints.ts 迁入 integration application。
 // RFC-284 T28（审计 N10 主证）—— webhook 端点 CRUD 自 routes/webhookEndpoints.ts
 // 薄壳化下沉：路由层只剩 registerRoute 元数据 + actor/param 抽取，全部
 // db/schema/secret/config 访问与业务判定在本文件。行为承诺：RFC-283/292 落地后的
@@ -26,7 +27,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type {
   WebhookEndpointAdministrationPort,
   WebhookEndpointRecord,
-} from '@/modules/integration/application/ports/webhookEndpointAdministration'
+} from './ports/webhookEndpointAdministration'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 export interface WebhookEndpointServiceDeps {

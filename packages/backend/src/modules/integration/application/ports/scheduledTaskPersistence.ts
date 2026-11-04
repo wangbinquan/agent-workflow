@@ -3,6 +3,7 @@ import type { OwnerIdentity, ResourceGrantLevel, UserPublic } from '@agent-workf
 import type { Actor } from '@/auth/actor'
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
+import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
@@ -153,4 +154,15 @@ export interface IntegrationTriggerResourceQueries {
     pair: IntegrationTriggerAuthorityPair,
     requests: readonly IntegrationTriggerResourceRequest[],
   ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]>
+}
+
+/**
+ * Exact opaque handle and the current actor projection admitted with it.
+ * RFC-437：自 `services/scheduledTasks.ts` 迁入；定时任务与 Webhook 触发器共用这份授权。
+ */
+export interface IntegrationTriggerResourceAuthority {
+  readonly authority: ResourceRequestContext
+  readonly actor: Actor
+  readonly resources: IntegrationTriggerResourceQueries
+  readonly taskExecutionResources: TaskExecutionResourceBinding
 }

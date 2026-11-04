@@ -15,7 +15,7 @@ import {
   rotateWebhookEndpointSecret,
   rotateWebhookEndpointUrlToken,
   updateWebhookEndpoint,
-} from '@/services/webhookEndpoints'
+} from '@/modules/integration/application/webhookEndpoints'
 import { createUser } from './helpers/userFixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

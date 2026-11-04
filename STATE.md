@@ -1,3 +1,16 @@
+## 2026-11-03 RFC-437 代码平台 Webhook 家族归入 integration（In Progress；`design/RFC-437-integration-webhook-family/`）
+
+- **来由**：RFC-294 W4 B / D 第三步（RFC-436 之后余下 4 个深引路由中的 Webhook 投递），同时执行 RFC-294 design §2「`services/` 按 owner
+  迁入模块后删除」。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，
+  按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/webhook/*` 十个文件、`services/webhookEndpoints.ts`、`services/webhookTriggers.ts` 与四个 Webhook 路由迁入 integration：
+    纯规则进 domain，协调与用例进 application，分发器合同进 ports，绑定进 `inbound/http`；原文件与 `services/webhook/` 删除；
+  - 入站接收（`receiveCodeHostWebhook`）与投递重放（`replayWebhookDelivery`）抽成应用用例，绑定只做解码、调用与映射；重放可用性由 composition 判定；
+  - `VerifiedWebhookIngressCommands` 与 `WebhookIngressPersistence` 移出 `public/commands`；
+  - `R1` 198 → 178，深引路由 4 → 3，import `services/` 的路由 28 → 24；定时任务另立 RFC-438。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-03 RFC-436 事件中心与数字员工的 HTTP 绑定归入各自模块（Done；`design/RFC-436-module-inbound-http-bindings/`）
 
 - **来由**：RFC-294 W4 余项 E9 的路由部分，也是 W4 B / D 第二步（RFC-435 之后余下 6 个深引路由中的两个）。用户 2026-11-02「好，你继续推进RFC294，

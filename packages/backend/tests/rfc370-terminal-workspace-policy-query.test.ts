@@ -1,7 +1,7 @@
 // RFC-370: terminal workspace policy must await the selected current setting,
 // preserve attribution-before-config ordering, and retain lifecycle fallback.
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
+import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import {
   registerTerminalWorkspacePrunePolicy,
   resolveTerminalWorkspacePruneDecision,

@@ -13,7 +13,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type {
   EventCenterCodeHostDeliveryDispatcher,
   WebhookDispatcher,
-} from '../src/services/webhook/dispatcherTypes'
+} from '../src/modules/integration/application/ports/webhookDispatcher'
 import type { EventCenterModule } from '../src/modules/event-center/composition'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
@@ -23,9 +23,9 @@ import {
   createCodeHostWebhookRoutingDirectory,
 } from '../src/modules/integration/composition'
 import { codeHostEventCatalogJson } from '../src/modules/integration/public/events'
-import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
-import { createWebhookRateLimiters } from '../src/services/webhook/rateLimiter'
-import { recoverInterruptedDeliveries } from '../src/services/webhook/deliveryStore'
+import { mountWebhookIngressRoutes } from '../src/modules/integration/inbound/http/webhookIngressRoutes'
+import { createWebhookRateLimiters } from '../src/modules/integration/application/webhookRateLimiter'
+import { recoverInterruptedDeliveries } from '../src/modules/integration/application/webhookDeliveryStore'
 import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
 import { eventually, eventuallyAtLeast } from './helpers/eventually'
@@ -436,7 +436,7 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
           secretEnc: box.seal(SECRET),
           enabled: true,
         })
-        // 直接用路由模块 + 自建 app 注入 fake clock 限流器
+        // 直接用路由模块 + 自建 app 注入 fake clock 限流器（RFC-437：限流器随入站用例由装配注入）
         const fake = fakeDispatcher()
         const app = new Hono()
         mountWebhookIngressRoutes(
@@ -445,6 +445,7 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
             webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
             secretBox: box,
             webhookDispatcher: fake.dispatcher,
+            limiters,
             digitalEmployeeEventCenter: {
               commands: {
                 observe() {
@@ -468,7 +469,6 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
               },
             } as unknown as EventCenterModule,
           }),
-          { limiters },
         )
         for (let i = 0; i < 300; i++) {
           const res = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })

@@ -1,3 +1,4 @@
+// RFC-437：自 services/webhook/rateLimiter.ts 迁入 integration application（入站接收的准入规则）。
 // RFC-257 T5 — 内存滑窗限流（单进程 daemon，无需 Redis）。时钟可注入
 // （设计门 F-16：测试用 fake clock，不靠真实时间流逝）。
 //

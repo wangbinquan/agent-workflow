@@ -4,8 +4,9 @@
 // fixture 为准回改。
 import { describe, expect, test } from 'bun:test'
 
-import { gitlabNormalize, gitlabVerify } from '@/services/webhook/gitlabAdapter'
-import { CODE_HOST_ADAPTERS } from '@/services/webhook/codeHostAdapter'
+import { gitlabNormalize } from '@/modules/integration/domain/gitlabNormalization'
+import { gitlabVerify } from '@/modules/integration/domain/gitlabWebhookAdapter'
+import { CODE_HOST_ADAPTERS } from '@/modules/integration/domain/codeHostAdapters'
 
 /** 接口 v2（RFC-259 D2）为 GitHub HMAC 加的字节参——GitLab 明文比对不消费。 */
 const NO_BODY = new Uint8Array(0)

@@ -2,6 +2,9 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDeliveryPersistencePort } from '../application/ports/webhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 
+// RFC-437：启动恢复经此取用投递存储（原 `services/webhook/deliveryStore`）。
+export { recoverInterruptedDeliveries } from '../application/webhookDeliveryStore'
+
 /** Provider-neutral seam used by ingress, recovery, retention, and diagnostics. */
 export function composeWebhookDeliveryPersistence(
   persistence: WebhookDeliveryPersistencePort,

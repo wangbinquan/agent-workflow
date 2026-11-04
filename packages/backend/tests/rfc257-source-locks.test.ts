@@ -15,8 +15,12 @@ import { resolve } from 'node:path'
 const SRC = resolve(import.meta.dir, '..', 'src')
 
 describe('RFC-257 · source locks', () => {
-  test('routes/webhooks.ts never touches c.req.url', () => {
-    const text = readFileSync(resolve(SRC, 'routes/webhooks.ts'), 'utf8')
+  // RFC-437: the ingress binding moved to integration/inbound/http.
+  test('the webhook ingress binding never touches c.req.url', () => {
+    const text = readFileSync(
+      resolve(SRC, 'modules/integration/inbound/http/webhookIngressRoutes.ts'),
+      'utf8',
+    )
     expect(text.includes('c.req.url')).toBe(false)
   })
 

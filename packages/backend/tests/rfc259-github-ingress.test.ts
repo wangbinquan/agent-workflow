@@ -19,7 +19,7 @@ import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { ulid } from 'ulid'
 import { eventually } from './helpers/eventually'
-import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
+import type { WebhookDispatcher } from '../src/modules/integration/application/ports/webhookDispatcher'
 
 const SECRET = 'gh-webhook-secret'
 

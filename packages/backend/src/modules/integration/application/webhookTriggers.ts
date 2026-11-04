@@ -1,3 +1,4 @@
+// RFC-437：自 services/webhookTriggers.ts 迁入 integration application。
 // RFC-284 T28（审计 N10 主证）—— webhook 触发器 CRUD 自 routes/webhookTriggers.ts
 // 薄壳化下沉：路由层只剩 registerRoute 元数据 + actor/param/query 抽取，全部
 // db/schema/config 访问与业务判定在本文件。行为承诺：RFC-283/292 落地后的字节级
@@ -9,7 +10,7 @@
 // **读面全量开放**（列表/详情/fires 对任何过了 read 方法门的 viewer 可见，原
 // 「不可见 = 404」读语义退役）；RFC-283/RFC-305 写面行级门为 owner ∨
 // `event-automation-rules:override-owner`（404 同形）。保存期校验三层
-// （services/webhook/triggerValidation.ts 注释）；创建/更新时以**保存者身份**跑
+// （domain/webhookTriggerValidation.ts 注释）；创建/更新时以**保存者身份**跑
 // 「彩排渲染 + assertScheduledTargetUsable」——launch 目标对保存者不可见即拒绝
 // （对齐 services/resourceRefs.ts 的新增引用校验惯例）。
 import { ulid } from 'ulid'
@@ -25,18 +26,18 @@ import {
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { migrateTriggerRowTemplateToV2, parseTriggerRow } from '@/services/webhook/webhookDispatch'
+import { migrateTriggerRowTemplateToV2, parseTriggerRow } from './webhookDispatch'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import type { IntegrationTriggerResourceAuthority } from '@/services/scheduledTasks'
+import type { IntegrationTriggerResourceAuthority } from './ports/scheduledTaskPersistence'
 import type {
   WebhookDispatchPersistencePort,
   WebhookTriggerRecord,
-} from '@/modules/integration/application/ports/webhookDispatchPersistence'
+} from './ports/webhookDispatchPersistence'
 import type {
   WebhookTriggerAdministrationPort,
   WebhookTriggerFireRecord,
-} from '@/modules/integration/application/ports/webhookTriggerAdministration'
-import type { WebhookTriggerSaveCandidate } from '@/services/webhook/triggerValidation'
+} from './ports/webhookTriggerAdministration'
+import type { WebhookTriggerSaveCandidate } from '../domain/webhookTriggerValidation'
 
 export interface WebhookTriggerServiceDeps {
   administration: WebhookTriggerAdministrationPort

@@ -78,7 +78,7 @@ import { createTaskLifecycleDurableConsumerDefinitions } from '@/modules/task-ex
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import type { CommittedEventEnvelopeV1 } from '@/platform/events/committed/types'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
-import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
+import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const BINDING = 'gitlab:group/proj!42'

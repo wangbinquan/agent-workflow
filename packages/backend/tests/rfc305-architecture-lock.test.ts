@@ -351,6 +351,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/digital-employee/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/event-center/composition/required-ports.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/integration/application/ports/scheduledTaskPersistence.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/integration/application/webhookDispatch.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/integration/inbound/http/webhookTriggerRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/ports/intentApplyOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/ports/intentPersistence.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/resourceCatalog.ts -> @/modules/identity-access/public/participants',
@@ -443,7 +445,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
-      'packages/backend/src/routes/webhookTriggers.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
@@ -455,8 +456,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
-      'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/ws/connections.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/ws/registry.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/ws/server.ts -> @/modules/identity-access/public/participants',
@@ -817,8 +816,9 @@ describe('RFC-305 reusable-authority fences', () => {
       'utf8',
     )
     const scheduled = readFileSync(resolve(BACKEND_SRC, 'services', 'scheduledTasks.ts'), 'utf8')
+    // RFC-437: the dispatcher moved into integration application with the webhook family.
     const webhook = readFileSync(
-      resolve(BACKEND_SRC, 'services', 'webhook', 'webhookDispatch.ts'),
+      resolve(BACKEND_SRC, 'modules', 'integration', 'application', 'webhookDispatch.ts'),
       'utf8',
     )
     const eventAutomation = readFileSync(

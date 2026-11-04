@@ -79,7 +79,10 @@ export type {
   TaskDriveRuntimeOptions,
   TaskExecutionContextRef,
 } from '../application/ports/taskExecutionTopology'
-export type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
+export type {
+  TaskExecutionResourceAuthority,
+  TaskExecutionResourceBinding,
+} from '../application/ports/taskExecutionResourceSnapshots'
 /** RFC-395 II-a：状态转移的伴随写（按目标表分组），legacy 生命周期 writer 经此取用。 */
 export type { NodeRunLifecycleWrite } from '../application/ports/nodeRunWrites'
 export {

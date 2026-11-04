@@ -23,7 +23,7 @@ import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
-import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
+import type { WebhookDispatcher } from '../src/modules/integration/application/ports/webhookDispatcher'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -222,8 +222,17 @@ describeEachProviderHttpApplication('RFC-257 · 端点面错误码', SCOPE_OPTIO
     // randomBytes(32) 碰撞既有 token，实际不可复现。此断言点名该码并锁定其
     // 存在于源码（消失即此测试失去意义，应一并删除）。
     // RFC-284 T28 改锚：端点 CRUD 正体迁 services/webhookEndpoints.ts（路由为薄壳）。
+    // RFC-437 改锚：端点服务随 Webhook 家族归入 integration 的 application。
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'webhookEndpoints.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'integration',
+        'application',
+        'webhookEndpoints.ts',
+      ),
       'utf8',
     )
     expect(src.includes("'webhook-endpoint-token-mint-failed'")).toBe(true)
@@ -352,8 +361,18 @@ describeEachProviderHttpApplication(
       // dedupe, so the duplicate-result branch cannot be produced through the
       // public route today. Keep the invariant named and source-locked; if the
       // port later admits replay dedupe, replace this with a behavioral fake.
+      // RFC-437: the rule moved with the replay use case into integration application; the
+      // duplicate branch is also asserted behaviorally there (rfc437 replay use case test).
       const source = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'routes', 'webhookDeliveries.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'integration',
+          'application',
+          'replayWebhookDelivery.ts',
+        ),
         'utf8',
       )
       expect(source).toContain("'webhook-delivery-replay-conflict'")

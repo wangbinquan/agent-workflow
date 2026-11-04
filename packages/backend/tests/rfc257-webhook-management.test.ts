@@ -16,7 +16,7 @@ import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplica
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { eventuallyAtLeast } from './helpers/eventually'
-import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
+import type { WebhookDispatcher } from '../src/modules/integration/application/ports/webhookDispatcher'
 
 type User = { id: string; token: string }
 

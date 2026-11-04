@@ -96,13 +96,13 @@ import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
-import { mountWebhookIngressRoutes } from '@/routes/webhooks'
+import { mountWebhookIngressRoutes } from '@/modules/integration/inbound/http/webhookIngressRoutes'
 import { createUser } from './helpers/userFixture'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
 import { createLocalEvidenceStagingNamespace } from '../src/modules/development-automation/composition/evidenceStaging'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { exampleProgramFixture } from './helpers/executionContractFixture'
-import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
+import { createWebhookDispatcher } from '@/modules/integration/application/webhookDispatch'
 
 setDefaultTimeout(180_000)
 

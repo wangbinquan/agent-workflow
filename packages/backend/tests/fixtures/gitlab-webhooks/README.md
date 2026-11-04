@@ -3,7 +3,7 @@
 本目录存放**真实自建 GitLab 实例**导出的 webhook payload（脱敏后）。在真实
 fixture 落地前，`tests/rfc257-gitlab-adapter.test.ts` 使用按 GitLab 官方文档
 形态手写的 builder payload——**字段路径以真实 fixture 为准，不符处回改
-`services/webhook/gitlabAdapter.ts` 与 `design/RFC-257-*/design.md §2.3`**。
+`modules/integration/domain/gitlabNormalization.ts` 与 `design/RFC-257-*/design.md §2.3`**。
 
 ## 实测清单（proposal §8 / plan T3；逐项在部署侧 GitLab 上核准）
 

@@ -32,8 +32,8 @@ import {
   renderWebhookLaunch,
   renderedLaunchPayload,
   type WebhookDispatchDeps,
-} from '../src/services/webhook/webhookDispatch'
-import type { WebhookEndpointRow } from '../src/services/webhook/dispatcherTypes'
+} from '../src/modules/integration/application/webhookDispatch'
+import type { WebhookEndpointRow } from '../src/modules/integration/application/ports/webhookDispatcher'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
 

@@ -20,7 +20,7 @@ import {
   setTaskStatus,
 } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
-import { shouldRequestWebhookWorkspacePrune } from '../src/services/webhook/terminalWorkspaceCleanup'
+import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 
 const ulid = monotonicFactory()

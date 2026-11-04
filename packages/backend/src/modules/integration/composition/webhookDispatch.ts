@@ -1,7 +1,7 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { WebhookDispatchDeps } from '@/services/webhook/webhookDispatch'
-import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
+import type { WebhookDispatchDeps } from '../application/webhookDispatch'
+import type { WebhookTriggerServiceDeps } from '../application/webhookTriggers'
 import type { ScheduledTaskOperations } from '@/services/scheduledTasks'
 import type { WebhookDispatchPersistencePort } from '../application/ports/webhookDispatchPersistence'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
@@ -11,6 +11,12 @@ import { createWebhookLaunchAdmission } from '../infrastructure/webhookDispatchR
 import { createWebhookRepositoryResolver } from '../infrastructure/webhookRepositoryResolver'
 
 export type { WebhookTaskExecutionParticipant } from '../application/ports/webhookExecution'
+// RFC-437：分发器与其合同随 Webhook 家族归入本模块，bootstrap 经此取用。
+export { createWebhookDispatcher, type WebhookDispatchDeps } from '../application/webhookDispatch'
+export {
+  supportsEventCenterCodeHostDelivery,
+  type WebhookDispatcher,
+} from '../application/ports/webhookDispatcher'
 // RFC-359 W4-B4 / RFC-381：执行运行时只有一份，两个 provider 会话经 `cli/daemonModules/integration.ts` 装配。
 export {
   createWebhookDispatchExecutionRuntime,
