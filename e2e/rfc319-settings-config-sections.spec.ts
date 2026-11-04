@@ -27,7 +27,7 @@
 //     自己去杀子进程。存不住 = 运维以为开了自动恢复，实际重启后一切照旧；断路器阈值
 //     存不住 = 一次故障能被无限自动重试放大。
 //   * 【CFG-33】外部访问开关是事故杠杆：它必须**同时**关掉 `POST /api/mcp` 与新令牌
-//     铸造，并且**不**波及已签发令牌的 REST 通道（`services/mcpSurface.ts` 的注释把
+//     铸造，并且**不**波及已签发令牌的 REST 通道（`platform/configuration/mcpSurface.ts` 的注释把
 //     这三件事写成了同一个决定）。只关一半 = 事故当中以为止了血，其实还在发新凭据。
 //   * 【CFG-37】渲染分区的「测试连接」是管理员**唯一**能在保存前验证端点的手段。四种
 //     结果必须各自成立且互相分得开——把超时报成成功、把 500 报成「未填端点」，管理员
@@ -54,13 +54,13 @@
 //   packages/frontend/src/components/settings/useFusionAgentDraft.ts:437-455  融合行 PUT /api/agents/<merger>
 //   packages/frontend/src/lib/settings-drafts.ts:38-118           分区最小写入白名单
 //   packages/frontend/src/routes/settings.tsx:709-786             RecoveryTab 的三开关 + 四阈值
-//   packages/backend/src/services/mcpSurface.ts:1-21              一个开关关两件事的决定
+//   packages/backend/src/platform/configuration/mcpSurface.ts:1-20              一个开关关两件事的决定
 //   packages/backend/src/mcp/server.ts:175-181                    /api/mcp 的 mcp-surface-disabled
 //   packages/backend/src/routes/auth.ts:407-414                   POST /api/auth/pats 的 token-issuance-disabled
 //   packages/backend/src/routes/registry.ts:179-190               mcp_only 令牌的 REST 用途门（本文件用 general 令牌绕开它）
 //   packages/frontend/src/routes/settings.tsx:2050-2085           RenderingTab 的连通性测试四分支
 //   packages/backend/src/routes/plantuml.ts:36-80                 代理的五种响应 + 两道体积闸
-//   packages/backend/src/services/plantuml.ts:140-185             三步回退链与 error-svg 早停
+//   packages/backend/src/platform/http/plantuml.ts:140-185             三步回退链与 error-svg 早停
 //   packages/backend/src/services/launchRuntimeConfig.ts:150-172  per-node 超时 / 重试 / 会话重启预算的启动期解析
 //   packages/backend/src/services/startTaskDeps.ts:51             每次启动都重读一次 config
 //   packages/backend/src/services/runner.ts:1956-1958             `node-timeout: exceeded {N}ms`
@@ -1151,7 +1151,7 @@ const OK_SVG =
   '<title>rfc319 fake renderer</title><rect width="200" height="80" fill="#fff"/></svg>'
 
 /** PlantUML 服务器对**源码有语法错**时的回应形状：4xx + 一张诊断 SVG。
- *  两端都靠 `<svg` + /PlantUML version/i 认它（services/plantuml.ts:72-74）。 */
+ *  两端都靠 `<svg` + /PlantUML version/i 认它（platform/http/plantuml.ts:72-74）。 */
 const SYNTAX_ERROR_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">' +
   '<text x="10" y="20">PlantUML version 1.2026.0</text>' +

@@ -768,7 +768,7 @@ describe('RFC-344 single inbound root source locks', () => {
   })
 
   test('API docs read only the operation projections', () => {
-    const docs = readFileSync(join(ROOT, 'src/services/apiDocs.ts'), 'utf8')
+    const docs = readFileSync(join(ROOT, 'src/platform/operations/apiDocs.ts'), 'utf8')
     expect(docs).not.toContain("from '@/routes/registry'")
     expect(docs).not.toContain("from '@/mcp/tools'")
     expect(docs).toContain("from '@/platform/operations/catalog'")

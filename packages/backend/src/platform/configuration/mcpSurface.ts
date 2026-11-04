@@ -18,8 +18,3 @@ import type { Config } from '@agent-workflow/shared'
 export function isMcpSurfaceEnabled(config: Pick<Config, 'mcpSurfaceEnabled'>): boolean {
   return config.mcpSurfaceEnabled ?? true
 }
-
-/** RFC-247 D16 — audit retention in days. */
-export function tokenAuditRetentionDays(config: Pick<Config, 'tokenAuditRetentionDays'>): number {
-  return config.tokenAuditRetentionDays ?? 90
-}

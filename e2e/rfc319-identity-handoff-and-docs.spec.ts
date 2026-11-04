@@ -37,7 +37,7 @@
 //   packages/backend/src/routes/users.ts:107-133               /api/tokens 与 /api/tokens/audit：users:read + tokenAccess never
 //   packages/backend/src/server.ts:371-385                     PAT 调用审计中间件（fire-and-forget）
 //   packages/backend/src/services/memory.ts:793-813            canManageMemory：repo/repo_group/global 仅 bypass；资源 scope 随写权
-//   packages/backend/src/services/apiDocs.ts:85-107            按有效权限裁剪端点表 + 逐工具算 grantable
+//   packages/backend/src/platform/operations/apiDocs.ts:85-107            按有效权限裁剪端点表 + 逐工具算 grantable
 //   packages/frontend/src/lib/api-docs-markdown.ts:120-133     grantable=false ⇒ 名字后面缀一个 _(not available to your account)_
 //   packages/frontend/src/components/prose/prose.css:310-315   .prose pre 自带 overflow-x: auto（宽块在自己容器里滚）
 //   packages/frontend/src/components/split/UnsavedChangesGuard.tsx:100-105  enableBeforeUnload 随 dirty/busy 武装

@@ -20,7 +20,7 @@ import { extractBearerToken } from '@/auth/session'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
 import { hashAuthToken, type AuthRuntime } from '@/auth/application/authRuntime'
 import { assertMatrixGrantable, PatMatrixError } from '@/auth/application/patPolicy'
-import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
+import { isMcpSurfaceEnabled } from '@/platform/configuration/mcpSurface'
 import { registerRoute } from '@/routes/registry'
 import {
   ConflictError,

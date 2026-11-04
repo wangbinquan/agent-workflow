@@ -17,7 +17,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { registerRoute, resetRouteMetaRegistry } from '../src/routes/registry'
-import { buildApiDocs, clientSnippets, wellKnownMcp } from '../src/services/apiDocs'
+import { buildApiDocs, clientSnippets, wellKnownMcp } from '../src/platform/operations/apiDocs'
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

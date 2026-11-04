@@ -1,3 +1,15 @@
+## 2026-11-04 RFC-441 API 文档、PlantUML 渲染与外部入口开关归 platform（In Progress；`design/RFC-441-platform-helpers-out-of-services/`）
+
+- **来由**：RFC-294 W4 B / D 第七步（RFC-440 后余下「不 import `services/`」：`routes/` 18 个、`mcp/server.ts`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/apiDocs.ts` → `platform/operations/apiDocs.ts`，`services/plantuml.ts` → `platform/http/plantuml.ts`（均原样）；
+  - `services/mcpSurface.ts` → `platform/configuration/mcpSurface.ts`，删去生产零调用的 `tokenAuditRetentionDays`
+    （归属表登记为 resource-catalog，按配置缺省规则改归 platform，理由见 proposal §6）；
+  - import `services/` 的路由 18 → 15（`auth`、`docs`、`plantuml`）；`mcp/` 清零，入站适配器里只剩 `routes/` 有 legacy 依赖。
+- **不做**：其余 15 个路由的 `services/` 依赖；`routes/registry`、`routes/resourceAcl` 归位 platform。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-440 删除确认、删除快照与 token 读视图离开 services/（Done；`design/RFC-440-transport-helpers-out-of-services/`）
 
 - **来由**：RFC-294 W4 B / D 第六步（RFC-439 后入站适配器不再深引模块内部，余下「不 import `services/`」：`routes/` 23 个、`mcp/server.ts`）。
@@ -18,6 +30,7 @@
     7 条四路并行下 PostgreSQL 超时单独复跑通过；P0 变异 lane 两引擎各 17 阶段通过。
 - **CI**：exact SHA 主 CI run 41822844875 attempt 1 70/70 全绿；windows-platform、visual-regression 通过；夜跑 maintenance-soak
   按新路径过滤触发并通过（AC-4）。
+  Done 文档 `260f676aa` 的主 CI run 41828667523 70/70 全绿。
 - **下一步**：B / D 余下 `routes/` 18 个、`mcp/server.ts` 1 个。RFC-441 候选：`apiDocs`、`plantuml` 归 platform，
   外部入口开关 `isMcpSurfaceEnabled` 归 `platform/configuration`（零调用的 `tokenAuditRetentionDays` 删除），清 `auth`、`docs`、
   `plantuml` 三个路由与 `mcp/server.ts`（18 → 15，`mcp/` 清零）。

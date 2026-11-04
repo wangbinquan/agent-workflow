@@ -67,9 +67,9 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/services/runtime/opencode/util.ts:95          probe: compatible = ran（所以第三态今天出不来）
 //   packages/backend/src/services/runtime/claudeCode/probe.ts:79       同上
 //   packages/shared/src/schemas/runtime.ts:17                          第三态仍是契约上的合法取值
-//   packages/backend/src/services/apiDocs.ts:85-99                     端点按「账号能不能持有这些点」裁剪
-//   packages/backend/src/services/apiDocs.ts:101-107                   工具的 grantable 标记
-//   packages/backend/src/services/apiDocs.ts:240-250                   wellKnownMcp 文档体
+//   packages/backend/src/platform/operations/apiDocs.ts:85-99                     端点按「账号能不能持有这些点」裁剪
+//   packages/backend/src/platform/operations/apiDocs.ts:101-107                   工具的 grantable 标记
+//   packages/backend/src/platform/operations/apiDocs.ts:240-250                   wellKnownMcp 文档体
 //   packages/backend/src/routes/publicOrigin.ts:77-94                  derivePublicOrigin 优先级
 //   packages/backend/src/routes/docs.ts:52-77                          /.well-known/mcp 挂在鉴权域外
 //   packages/frontend/src/routes/settings.tsx:1622-1650                Network 分区 + 文档链接

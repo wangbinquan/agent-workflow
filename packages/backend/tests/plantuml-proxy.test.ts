@@ -26,7 +26,7 @@ import {
   hostOf,
   looksLikePlantumlError,
   renderPlantuml,
-} from '../src/services/plantuml'
+} from '../src/platform/http/plantuml'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

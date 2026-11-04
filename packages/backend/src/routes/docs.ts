@@ -2,7 +2,7 @@
 // discovery document.
 //
 // `GET /api/docs/api` is generated per request from the live route registry,
-// the live tool registry and the permission catalog (services/apiDocs.ts). It
+// the live tool registry and the permission catalog (platform/operations/apiDocs.ts). It
 // is trimmed to the caller's effective permissions, because a page listing
 // endpoints the reader can never call teaches them nothing they can act on.
 //
@@ -24,8 +24,8 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 import { actorOf } from '@/auth/actor'
 import { publicOriginOf } from '@/routes/publicOrigin'
 import { registerRoute } from '@/routes/registry'
-import { buildApiDocs, clientSnippets, wellKnownMcp } from '@/services/apiDocs'
-import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
+import { buildApiDocs, clientSnippets, wellKnownMcp } from '@/platform/operations/apiDocs'
+import { isMcpSurfaceEnabled } from '@/platform/configuration/mcpSurface'
 
 export interface DocumentationRouteDependencies {
   readonly configuration: ApplicationConfigurationQueries

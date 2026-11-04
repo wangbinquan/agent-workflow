@@ -29,7 +29,7 @@ import { bindingForTool } from '@/mcp/operationBindings'
 import { createBoundMcpOperationHandles } from '@/mcp/operationClient'
 import { McpCallError, toolsFor, type McpToolContext } from '@/mcp/tools'
 import type { OperationInvoker } from '@/platform/operations/contracts'
-import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
+import { isMcpSurfaceEnabled } from '@/platform/configuration/mcpSurface'
 import { redactErrorText } from '@/auth/tokenRedaction'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 

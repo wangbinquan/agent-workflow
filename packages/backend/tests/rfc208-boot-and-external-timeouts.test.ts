@@ -14,7 +14,7 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { renderPlantuml } from '../src/services/plantuml'
+import { renderPlantuml } from '../src/platform/http/plantuml'
 
 const startSource = readDaemonGraphSource()
 const gitVersionSource = readFileSync(
