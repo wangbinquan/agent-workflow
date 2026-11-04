@@ -1,4 +1,4 @@
-## 2026-11-04 RFC-441 API 文档、PlantUML 渲染与外部入口开关归 platform（In Progress；`design/RFC-441-platform-helpers-out-of-services/`）
+## 2026-11-04 RFC-441 API 文档、PlantUML 渲染与外部入口开关归 platform（Done；`design/RFC-441-platform-helpers-out-of-services/`）
 
 - **来由**：RFC-294 W4 B / D 第七步（RFC-440 后余下「不 import `services/`」：`routes/` 18 个、`mcp/server.ts`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -9,6 +9,15 @@
   - import `services/` 的路由 18 → 15（`auth`、`docs`、`plantuml`）；`mcp/` 清零，入站适配器里只剩 `routes/` 有 legacy 依赖。
 - **不做**：其余 15 个路由的 `services/` 依赖；`routes/registry`、`routes/resourceAcl` 归位 platform。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`19ba4671b`。
+- **集中验证**：全量 SQLite 19 条失败全是负载超时（8 个文件单独复跑全过）；导出仓库 183 个文件 2719 pass，16 条四路并行下
+  PostgreSQL 超时单独复跑通过；P0 变异 lane 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41840584975：attempt 1 后端分片 16/44 `rfc311-perf-guards` AC-11 塌方探测（PG P95 8241 ms 对
+  SQLite 82 ms，audit-backlog 已记的停顿形态），重跑失败作业 attempt 2 全绿（AC-4）。
+- **另记**：e2e-full 夜跑自 11-03 起红，根因是 `ubuntu-latest` 切到 Ubuntu 26.04 而 Playwright 1.60.0 装不上 chromium，与任何提交
+  无关；主 CI 的 ubuntu e2e 只因浏览器缓存命中暂未受影响。处置（钉 `ubuntu-24.04` 或升级 Playwright）待用户决定，证据见
+  `docs/audit-backlog.md`。
+- **下一步**：RFC-442（协作的三个 `services/` 兼容层收口，路由 15 → 12，R1 170 → 169）。
 
 ## 2026-11-04 RFC-440 删除确认、删除快照与 token 读视图离开 services/（Done；`design/RFC-440-transport-helpers-out-of-services/`）
 

@@ -1,6 +1,6 @@
 # RFC-441 API 文档、PlantUML 渲染与外部入口开关归 platform（RFC-294 W4 B / D 第七步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-04；`19ba4671b`，exact SHA 主 CI run 41840584975：attempt 1 后端分片 16/44 的 `rfc311-perf-guards` AC-11 塌方探测红（PostgreSQL P95 8241 ms 对 SQLite 82 ms，audit-backlog 已记的 PG 停顿形态，本 RFC 不触及任务目录读路径），重跑失败作业 attempt 2 全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-440](../RFC-440-transport-helpers-out-of-services/proposal.md)（删除确认、删除快照与 token 读视图离开 services/）

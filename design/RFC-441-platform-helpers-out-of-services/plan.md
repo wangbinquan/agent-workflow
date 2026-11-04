@@ -18,7 +18,7 @@
 - [x] AC-1 三个 `services/` 文件删除，源码不再 import 旧路径；新文件不 import 模块与 legacy 目标前缀
 - [x] AC-2 计数按实测更新（import `services/` 的路由 18 → 15，`mcp/` 清零，`services/` 229 → 226）
 - [x] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `260f676aa`）
 
@@ -47,6 +47,13 @@
 - `apiDocs`、`plantuml` 与 HEAD 逐字节相同；`mcpSurface` 只删去末尾零调用的 `tokenAuditRetentionDays`，开关读取不变；
 - 四个引用方只改 import 路径（`routes/docs.ts` 另改一处注释里的路径），调用与路由不变；
 - 维护服务的令牌审计保留期仍是它就地写的缺省 90 天，删除的读取函数在生产里从未被调用。
+
+## CI（AC-4）
+
+`19ba4671b`：exact SHA 主 CI run 41840584975。attempt 1 只有后端分片 16/44 红：`rfc311-perf-guards` 的 AC-11 塌方探测在
+「task-operations catalog — 过滤视图（G1 快路径）」上量到 PostgreSQL P95 8241 ms 对 SQLite 82 ms（100.6×），整条 PG 用例 61.7 s。
+这是 `docs/audit-backlog.md` 已登记的同一分片、同一用例的整机 / PG 停顿形态（11-02 `b00be9c37` 105.8×）；本 RFC 只迁移 API 文档、
+PlantUML 渲染与外部入口开关，不触及任务目录读路径。只重跑失败作业，attempt 2 全绿；重跑只作佐证。
 
 ## PR / 提交
 
