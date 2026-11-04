@@ -1,4 +1,4 @@
-## 2026-11-04 RFC-440 删除确认、删除快照与 token 读视图离开 services/（In Progress；`design/RFC-440-transport-helpers-out-of-services/`）
+## 2026-11-04 RFC-440 删除确认、删除快照与 token 读视图离开 services/（Done；`design/RFC-440-transport-helpers-out-of-services/`）
 
 - **来由**：RFC-294 W4 B / D 第六步（RFC-439 后入站适配器不再深引模块内部，余下「不 import `services/`」：`routes/` 23 个、`mcp/server.ts`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -10,6 +10,17 @@
   - 顺带修正夜跑 workflow 的路径过滤（`services/tokenAudit.ts`，以及自 RFC-437 起已不存在的 `services/webhook/**`）。
 - **不做**：其余 18 个路由的 `services/` 依赖；`services/mcpSurface`、`services/apiDocs`；`src/auth/` 并入 `modules/identity-access`。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`452673a11`。
+- **集中验证**：
+  - 全量 SQLite 四分片 19 条失败，无本 RFC 问题：17 条负载超时，另 2 条（RFC-398 SIGKILL 父进程读到截断 JSON、RFC-370 V3
+    边界检查多出 `git-meta/info/refs`）与改动面无交集；7 个文件单独复跑全过；
+  - 导出仓库 210 个文件（全部架构测试与涉及删除确认 / 删除快照 / token 审计 / token 读视图的用例）3241 pass，
+    7 条四路并行下 PostgreSQL 超时单独复跑通过；P0 变异 lane 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41822844875 attempt 1 70/70 全绿；windows-platform、visual-regression 通过；夜跑 maintenance-soak
+  按新路径过滤触发并通过（AC-4）。
+- **下一步**：B / D 余下 `routes/` 18 个、`mcp/server.ts` 1 个。RFC-441 候选：`apiDocs`、`plantuml` 归 platform，
+  外部入口开关 `isMcpSurfaceEnabled` 归 `platform/configuration`（零调用的 `tokenAuditRetentionDays` 删除），清 `auth`、`docs`、
+  `plantuml` 三个路由与 `mcp/server.ts`（18 → 15，`mcp/` 清零）。
 
 ## 2026-11-04 RFC-439 代码能力的两个 HTTP 绑定归入 code-capability 模块（Done；`design/RFC-439-code-capability-inbound-bindings/`）
 

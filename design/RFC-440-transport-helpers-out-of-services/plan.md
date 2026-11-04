@@ -20,7 +20,7 @@
 - [x] AC-1 三个 `services/` 文件与 `legacyTokenCallAudit` 删除，源码不再 import 旧路径；新文件的依赖符合 design §0
 - [x] AC-2 计数按实测更新（import `services/` 的路由 23 → 18 等，见 proposal §5）
 - [x] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `b82af321a`）
 
@@ -58,6 +58,11 @@
   （`server.ts` 的审计中间件、bound operation invoker）都指向这一份文件；
 - `legacyTokenCallAudit` 与 facade 的审计转出在生产里零调用；用例改用的 `createTokenCallAudit(db)` 正是兼容桥每次调用时做的事；
 - 夜跑 workflow 的路径过滤只指向存在的文件，token 审计与投递 GC 的实现改动会照常触发夜跑。
+
+## CI（AC-4）
+
+`452673a11`：exact SHA 主 CI run 41822844875 attempt 1 70/70 全绿；windows-platform、visual-regression 通过。
+本提交改了夜跑 maintenance-soak 的路径过滤，该 workflow 因此按新过滤触发并通过（run 41822844908）。
 
 ## PR / 提交
 

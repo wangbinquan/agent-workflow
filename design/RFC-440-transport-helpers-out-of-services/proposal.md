@@ -1,6 +1,6 @@
 # RFC-440 删除确认、删除快照与 token 读视图离开 services/（RFC-294 W4 B / D 第六步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-04；`452673a11`，exact SHA 主 CI run 41822844875 attempt 1 70/70 全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-439](../RFC-439-code-capability-inbound-bindings/proposal.md)（代码能力的两个 HTTP 绑定归入 code-capability 模块）
