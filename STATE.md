@@ -1,4 +1,4 @@
-## 2026-11-03 RFC-438 定时任务归入 integration，task-execution 不再依赖定时任务（In Progress；`design/RFC-438-scheduled-tasks-into-integration/`）
+## 2026-11-03 RFC-438 定时任务归入 integration，task-execution 不再依赖定时任务（Done；`design/RFC-438-scheduled-tasks-into-integration/`）
 
 - **来由**：RFC-294 W4 B / D 第四步（RFC-437 之后余下 3 个深引路由中的定时任务），同时执行 design §2「`services/` 按 owner 迁入模块后删除」。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -10,6 +10,17 @@
   - 运行期 heal 自 RFC-395 II-b 起由 epoch-2 转换规则取代、生产零调用，按 RFC-424 先例迁入 `tests/helpers`；
   - `R1` 178 → 176，深引路由 3 → 2，import `services/` 的路由 24 → 23。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`0606b2597`。
+- **集中验证**：
+  - 全量 SQLite 四分片的本 RFC 问题已修：定时启动合同最初经 task-execution public 导出（带 legacy Actor 与函数类型，public 面规则
+    与 RFC-400 报出），改为 integration 的 consumer-owned 端口；另有一条注释触发 RFC-418 文本规则、两条新用例正则与一条源码锁路径；
+    16 条负载超时单独复跑全过；
+  - 复验 166 个文件 1675 pass；导出仓库 219 个文件（含提及定时任务的双引擎用例）3122 pass，4 条并行下 PG 启动超时单独复跑通过；
+    P0 变异 lane 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41789286921：attempt 1 的 macOS e2e 分片 3/4 已跑完 140 条全部通过（19.0 min），加上准备时间超出作业 20 分钟时限被取消（基础设施）；重跑失败作业 attempt 2 70/70 全绿（该分片 140 条 3.3 min 全过）（AC-5）。
+- **下一步**：E8——code-capability 的 stage 合同与能力模板路由归入 development-automation（清掉最后 2 个深引路由）；
+  另有登记的债：`services/scheduledTaskRefs`（需 resource-catalog 端口）、删除确认与令牌审计两个 HTTP 传输助手、
+  `integration/composition/webhookAdmission` 的校验逻辑。
 
 ## 2026-11-03 RFC-437 代码平台 Webhook 家族归入 integration（Done；`design/RFC-437-integration-webhook-family/`）
 
