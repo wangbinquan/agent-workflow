@@ -41,7 +41,7 @@ import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
-} from '../src/services/taskClarifyDirective'
+} from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
 import { reenterScheduler } from './reenter-scheduler'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,

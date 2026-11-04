@@ -43,7 +43,7 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
+import { TASK_QUESTION_CONFLICT } from '../domain/taskQuestionConflicts'
 import {
   canReassign,
   deriveQuestionPhase,

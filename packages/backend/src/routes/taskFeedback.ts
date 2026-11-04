@@ -14,7 +14,8 @@ import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
-import { canViewTaskFeedback, createTaskFeedback, listTaskFeedback } from '@/services/taskFeedback'
+import { createTaskFeedback } from '@/modules/collaboration/public/commands'
+import { canViewTaskFeedback, listTaskFeedback } from '@/modules/collaboration/public/queries'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
 export function mountTaskFeedbackRoutes(

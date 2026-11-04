@@ -10,8 +10,8 @@
 //
 // 正典是 `taskClarifyDirective.ts`——它早已是中立实现（`PersistenceDb`
 // 上的 drizzle query builder + `databaseSessionFor(db).transaction`），还额外导出
-// `setNodeClarifyDirectiveTx`（RFC-341 的澄清决定 seal 拿它当事务参与者）与
-// `isAskingNodeInSnapshot`。本工厂只是把那三个中立函数适配到 `ClarifyDirectiveStore` 端口
+// `setNodeClarifyDirectiveTx`（RFC-341 的澄清决定 seal 拿它当事务参与者；提问节点判定
+// `isAskingNodeInSnapshot` 自 RFC-442 起在 domain）。本工厂只是把那三个中立函数适配到 `ClarifyDirectiveStore` 端口
 // 的形状上，装配点因此对两个引擎是同一个工厂。
 // RFC-359 W12：正典文件及其消费路径已统一使用中立名称。
 

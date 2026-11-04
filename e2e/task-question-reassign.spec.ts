@@ -18,7 +18,7 @@
 //   shared/task-questions.ts:184-186        canReassign：目标须在该任务的 agent 节点集合里
 //   services/taskQuestions.ts:937-942       非 agent 目标 ⇒ task-question-reassign-invalid
 //   services/taskQuestions.ts:955-961       manual 目标未跑过 ⇒ manual-question-target-never-run
-//   services/taskQuestionConflicts.ts:27-28 码名
+//   modules/collaboration/domain/taskQuestionConflicts.ts:27-28 码名
 
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

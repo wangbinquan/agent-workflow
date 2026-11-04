@@ -5,7 +5,7 @@
 // 没人看的列表里。差别在界面上只有一个小徽标，所以它必须是真的：
 //
 //   * **写下去要真的排进蒸馏**（HUMAN-47）。后端在插入行的同一条链路里 enqueue 一个
-//     distill job 并把 `distilled` 置位（`services/taskFeedback.ts:48-70`）。徽标要是
+//     distill job 并把 `distilled` 置位（`modules/collaboration/application/taskFeedback.ts:39-61`）。徽标要是
 //     写死的，人会以为每条都进了蒸馏，实际可能一条都没排上。
 //   * **连点要有节流**（HUMAN-47）。纯客户端的 3 秒闸（`TaskFeedbackList.tsx:40,128-135`），
 //     窗口起点是**上一次被放行的点击**那一刻，与那一行何时落库无关。没有它，一次手抖就往
@@ -23,7 +23,7 @@
 // 注释也这么写着。记在这里，免得后人看到「改了没红」误以为没覆盖。
 //
 // 判据取自源码单一事实源：
-//   services/taskFeedback.ts:48-72        插入 + enqueueDistillJob + distilled 置位
+//   modules/collaboration/application/taskFeedback.ts:39-61  插入 + 排进蒸馏 + distilled 置位
 //   routes/taskFeedback.ts:67-80          两个 404 分支逐字节同形（含带引号文案）
 //   shared/schemas/taskFeedback.ts:17-19  bodyMd trim + 1..4000
 //   components/tasks/TaskFeedbackList.tsx:40          RATE_LIMIT_MS（本文件在运行时读它，见下）
@@ -309,7 +309,7 @@ test('连点要被拦住：一次手抖不该往同一个任务里灌两条一�
   // 等这个，而不是等「一秒应该够了吧」——不成立就说明这一条压根没提交成功。
   await expect(page.getByTestId('task-feedback-textarea')).toHaveValue('')
   expect(submits.length, '第一条根本没发出去 —— 后面整条连点链路都无从谈起').toBe(1)
-  // 草稿被清空 ⇒ POST 已经成功返回；服务端是先落库再回包（`services/taskFeedback.ts:48-72`），
+  // 草稿被清空 ⇒ POST 已经成功返回；服务端是先落库再回包（`modules/collaboration/application/taskFeedback.ts:39-61`），
   // 所以这里既不用轮询也不用等待，行数必须已经加一。
   const baseline = rowsBefore + 1
   expect((await feedbackRows()).length, '提交回了成功，库里却没有这一行').toBe(baseline)

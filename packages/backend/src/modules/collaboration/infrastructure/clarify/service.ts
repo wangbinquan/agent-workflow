@@ -93,7 +93,7 @@ import {
   fenceTaskWrite,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/public/participants'
-import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
+import { getNodeClarifyDirectiveRow } from '../taskClarifyDirective'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'

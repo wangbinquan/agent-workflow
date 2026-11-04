@@ -66,7 +66,7 @@ import {
   loadUndispatchedParkTargets,
   loadUndispatchedSelfQuestionerTargets,
 } from '../src/services/taskQuestions'
-import { getNodeClarifyDirectiveRow } from '../src/services/taskClarifyDirective'
+import { getNodeClarifyDirectiveRow } from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

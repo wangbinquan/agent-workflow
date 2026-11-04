@@ -1,3 +1,16 @@
+## 2026-11-04 RFC-442 协作的三个 services/ 兼容层收口（In Progress；`design/RFC-442-collaboration-facades-out-of-services/`）
+
+- **来由**：RFC-294 W4 B / D 第八步（RFC-441 后 15 个路由仍 import `services/`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - 删除 `services/taskFeedback.ts`（collaboration public 的转出）与 `services/taskClarifyDirective.ts`（把 collaboration infrastructure
+    转给模块外的 legacy 转出，一条 R1 边）；
+  - 提问节点判定 `isAskingNodeInSnapshot` 迁入 collaboration domain、经 `public/queries` 给路由；冲突码 `services/taskQuestionConflicts.ts`
+    迁入 domain、经 `public/types` 给路由；collaboration 内部与用例直接取模块文件；
+  - import `services/` 的路由 15 → 12，`R1` 170 → 169。
+- **不做**：collaboration infrastructure 对其他 legacy `services/` 的依赖；其余 12 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-441 API 文档、PlantUML 渲染与外部入口开关归 platform（Done；`design/RFC-441-platform-helpers-out-of-services/`）
 
 - **来由**：RFC-294 W4 B / D 第七步（RFC-440 后余下「不 import `services/`」：`routes/` 18 个、`mcp/server.ts`）。

@@ -92,7 +92,7 @@ import {
 import { loadSealedQuestionIds } from '@/services/taskQuestions'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
+import { TASK_QUESTION_CONFLICT } from '../../domain/taskQuestionConflicts'
 
 const log = createLogger('clarify-auto-dispatch')
 

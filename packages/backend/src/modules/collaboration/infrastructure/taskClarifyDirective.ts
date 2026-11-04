@@ -12,11 +12,7 @@
 // `setBy` is the task-member user id, recorded for the UI/audit trail only; like
 // every other attribution column it MUST NOT enter an agent prompt.
 
-import {
-  isClarifyAskingNode,
-  type WorkflowDefinition,
-  type ClarifyDirective,
-} from '@agent-workflow/shared'
+import type { ClarifyDirective } from '@agent-workflow/shared'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
 
@@ -81,19 +77,4 @@ export function setNodeClarifyDirectiveTx(
     shardKey,
     now,
   )
-}
-/**
- * RFC-122: is `nodeId` an asking-agent node in the task's frozen workflow
- * snapshot (the JSON the route holds as a string)? Owns the JSON.parse so the
- * route never casts an `unknown` to `WorkflowDefinition` (RFC-054 W1-7). Returns
- * false on unparseable JSON — the route then surfaces the appropriate 422.
- */
-export function isAskingNodeInSnapshot(snapshotJson: string, nodeId: string): boolean {
-  let definition: WorkflowDefinition
-  try {
-    definition = JSON.parse(snapshotJson) as WorkflowDefinition
-  } catch {
-    return false
-  }
-  return isClarifyAskingNode(definition, nodeId)
 }

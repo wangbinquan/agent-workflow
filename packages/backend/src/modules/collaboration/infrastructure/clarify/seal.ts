@@ -48,7 +48,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sealAnswersServerSide } from '@/services/clarify/service'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
 import { wgClarifyAskerKeyForRound } from '@/services/workgroup/askerKey'
-import { setNodeClarifyDirectiveTx } from '@/services/taskClarifyDirective'
+import { setNodeClarifyDirectiveTx } from '../taskClarifyDirective'
 import {
   classifyClarifyReseal,
   sealedClarifyQuestionIds,

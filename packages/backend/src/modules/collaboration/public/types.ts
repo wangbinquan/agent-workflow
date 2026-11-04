@@ -98,3 +98,7 @@ export type {
   ClarifyAnswerSource,
 } from '../application/ports/clarifyAnswerQueries'
 export type { ClarifyAnswerContent } from '../domain/clarifyAnswerContent'
+export {
+  TASK_QUESTION_CONFLICT,
+  type TaskQuestionConflictCode,
+} from '../domain/taskQuestionConflicts'

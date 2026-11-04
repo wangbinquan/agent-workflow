@@ -18,7 +18,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
+import { TASK_QUESTION_CONFLICT } from '@/modules/collaboration/public/types'
 
 function requireQuestionOperations(
   operations: CollaborationRouteOperations | undefined,

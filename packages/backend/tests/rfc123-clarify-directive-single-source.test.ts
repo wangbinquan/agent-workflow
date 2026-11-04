@@ -49,7 +49,7 @@ import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
-} from '../src/services/taskClarifyDirective'
+} from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 function makeQ(id = 'q1'): ClarifyQuestion {
