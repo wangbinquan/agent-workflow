@@ -24,8 +24,11 @@ import { MrTerminalControlWorker } from '@/modules/integration/application/mrTer
 import { createMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
-import { pollAndClaim, runDueSchedulesOnce } from '@/services/scheduledTaskScheduler'
-import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import {
+  pollAndClaim,
+  runDueSchedulesOnce,
+} from '@/modules/integration/application/scheduledTaskScheduler'
+import type { BuildScheduleLaunch } from '@/modules/integration/application/ports/scheduledLaunch'
 import { createUser } from './helpers/userFixture'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {

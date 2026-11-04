@@ -7,7 +7,7 @@ import {
 
 import type { WebhookTaskExecutionParticipant } from '@/modules/integration/application/ports/webhookExecution'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
-import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
 import type { ExecutionInvoker, TaskCancellationCommand } from '../public/commands'
 import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 

@@ -74,3 +74,5 @@ export { mountWebhookIngressRoutes } from './inbound/http/webhookIngressRoutes'
 export { mountWebhookDeliveryRoutes } from './inbound/http/webhookDeliveryRoutes'
 export { mountWebhookEndpointRoutes } from './inbound/http/webhookEndpointRoutes'
 export { mountWebhookTriggerRoutes } from './inbound/http/webhookTriggerRoutes'
+// RFC-438: the scheduled-task binding moved here too.
+export { mountScheduledTaskRoutes } from './inbound/http/scheduledTaskRoutes'

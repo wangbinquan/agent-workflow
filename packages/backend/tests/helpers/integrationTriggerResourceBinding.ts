@@ -20,12 +20,12 @@ import {
   fireSchedule as fireScheduleService,
   getScheduledTask as getScheduledTaskService,
   getScheduledTaskRow as getScheduledTaskRowService,
-  healScheduledLaunchPayloads as healScheduledLaunchPayloadsService,
   listScheduledTaskItems as listScheduledTaskItemsService,
   listScheduledTasks as listScheduledTasksService,
   runScheduleNow as runScheduleNowService,
   updateScheduledTask as updateScheduledTaskService,
-} from '../../src/services/scheduledTasks'
+} from '../../src/modules/integration/application/scheduledTasks'
+import { healScheduledLaunchPayloads as healScheduledLaunchPayloadsService } from './scheduledPayloadHeal'
 import type { IntegrationTriggerResourceAuthority } from '../../src/modules/integration/application/ports/scheduledTaskPersistence'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
 import { composeScheduledTaskRuntimeFor } from '../../src/modules/integration/composition/scheduledTasks'

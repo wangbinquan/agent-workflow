@@ -13,7 +13,7 @@ import { composeNodeRunPromptOperations } from './nodeRunPrompts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import type { CollaborationRepairPorts } from '../application/ports/collaborationRepair'
-import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import type { TaskExecutionModule } from '../composition'
 import type { TaskExecutionBinding } from './taskExecutionBinding'
@@ -380,7 +380,6 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
     autoResume,
     recovery: persistence.recoveryAdministration,
     taskHasDriver: runtime.schedulerDriver.isTaskActive,
-    buildScheduleLaunch,
   })
   return Object.freeze({
     driverLifecycle,

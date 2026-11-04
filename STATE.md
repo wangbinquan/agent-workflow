@@ -1,3 +1,16 @@
+## 2026-11-03 RFC-438 定时任务归入 integration，task-execution 不再依赖定时任务（In Progress；`design/RFC-438-scheduled-tasks-into-integration/`）
+
+- **来由**：RFC-294 W4 B / D 第四步（RFC-437 之后余下 3 个深引路由中的定时任务），同时执行 design §2「`services/` 按 owner 迁入模块后删除」。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/scheduledTasks.ts`、`services/scheduledTaskScheduler.ts` 迁入 integration application，`routes/scheduledTasks.ts` 迁入 `inbound/http`，原文件删除；
+  - 方向倒转：定时启动合同 `ScheduleLaunch` / `BuildScheduleLaunch` 归 task-execution 并经 `public/commands` 导出；后台循环只收 `runDue` 端口，
+    由 bootstrap 用 integration 的 `composeScheduledTaskRunner` 装配；节拍间隔移入 `DAEMON_CADENCE.scheduledTasks`（值不变）；
+  - 他域机制改走端口：触发预检、启动入参与 agent 形状校验由 composition 补进 operations，WS 广播改为变更通知端口，访问档位投影取 resource-catalog `public/types`；
+  - 运行期 heal 自 RFC-395 II-b 起由 epoch-2 转换规则取代、生产零调用，按 RFC-424 先例迁入 `tests/helpers`；
+  - `R1` 178 → 176，深引路由 3 → 2，import `services/` 的路由 24 → 23。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-03 RFC-437 代码平台 Webhook 家族归入 integration（Done；`design/RFC-437-integration-webhook-family/`）
 
 - **来由**：RFC-294 W4 B / D 第三步（RFC-436 之后余下 4 个深引路由中的 Webhook 投递），同时执行 RFC-294 design §2「`services/` 按 owner

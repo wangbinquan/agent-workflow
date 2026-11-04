@@ -1,37 +1,27 @@
-import type { Config } from '@agent-workflow/shared'
-
 import { createFileTaskBackgroundConfigurationQuery } from '../infrastructure/local/fileTaskBackgroundConfiguration'
 import type { TaskBackgroundConfigurationQuery } from '../application/ports/taskBackgroundConfiguration'
 import { findStalledRunningChildren, runHeartbeatKillOnce } from '@/services/autoKill'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { reconcileDeadRunningRuns } from '@/services/orphanReconcile'
-import {
-  runDueSchedulesOnce,
-  SCHEDULE_MAX_IN_FLIGHT,
-  SCHEDULE_TICK_MS,
-} from '@/services/scheduledTaskScheduler'
-import type {
-  BuildScheduleLaunch,
-  ScheduleAuthorityRuntime,
-  ScheduledTaskOperations,
-} from '@/services/scheduledTasks'
 import { killStaleRunProcessTree } from '@/util/process'
 import type { TaskExecutionModule } from '../composition'
 import type { TaskAutoResumeCommand } from '../application/ports/taskAutoResumeCommand'
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
-import type { ProviderBackgroundControl } from '../application/ports/providerBackground'
+import type {
+  ProviderBackgroundControl,
+  ProviderBackgroundStart,
+} from '../application/ports/providerBackground'
 import { createTaskExecutionProviderBackground } from '../application/providerBackground'
 
 export interface TaskExecutionProviderBackgroundStartDependencies {
   readonly configPath?: string
   readonly configuration?: TaskBackgroundConfigurationQuery
-  readonly scheduled: Readonly<{
-    readonly operations: ScheduledTaskOperations
-    readonly identityAccess: ScheduleAuthorityRuntime
-    readonly loadConfig?: () => Config | Promise<Config>
-    readonly onAutoDisable?: (id: string) => void
-  }>
+  /**
+   * RFC-438: one scheduled-task pass belongs to integration; bootstrap hands it in as the application port's
+   * `runDue`. Task-execution keeps only the loop, its cadence and the enable gate.
+   */
+  readonly scheduled: ProviderBackgroundStart['scheduled']
 }
 
 export interface TaskExecutionProviderBackgroundControl extends Omit<
@@ -49,7 +39,6 @@ interface ProviderBackgroundRuntime {
   readonly autoResume: TaskAutoResumeCommand
   readonly recovery: TaskRecoveryOperations
   readonly taskHasDriver: (taskId: string) => boolean
-  readonly buildScheduleLaunch: BuildScheduleLaunch
 }
 
 /**
@@ -72,7 +61,7 @@ export function composeTaskExecutionProviderBackground(
       autoRepairMs: () => DAEMON_CADENCE.autoRepair,
       autoKillMs: () => DAEMON_CADENCE.autoKill,
       orphanReconcileSupervisoryMs: () => DAEMON_CADENCE.orphanReconcileSupervisory,
-      scheduleTickMs: () => SCHEDULE_TICK_MS,
+      scheduleTickMs: () => DAEMON_CADENCE.scheduledTasks,
     },
     fileConfiguration: (configPath) => createFileTaskBackgroundConfigurationQuery(configPath),
     sweeps: {
@@ -108,23 +97,7 @@ export function composeTaskExecutionProviderBackground(
         ...(dependencies.configuration === undefined
           ? {}
           : { configuration: dependencies.configuration }),
-        scheduled: {
-          ...(dependencies.scheduled.loadConfig === undefined
-            ? {}
-            : { loadConfig: dependencies.scheduled.loadConfig }),
-          async runDue(input) {
-            await runDueSchedulesOnce(dependencies.scheduled.operations, {
-              buildLaunch: runtime.buildScheduleLaunch,
-              identityAccess: dependencies.scheduled.identityAccess,
-              maxFailures: input.maxFailures,
-              limit: SCHEDULE_MAX_IN_FLIGHT,
-              defaultRuntime: input.defaultRuntime,
-              ...(dependencies.scheduled.onAutoDisable === undefined
-                ? {}
-                : { onAutoDisable: dependencies.scheduled.onAutoDisable }),
-            })
-          },
-        },
+        scheduled: dependencies.scheduled,
       })
     },
     pause: control.pause,

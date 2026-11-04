@@ -147,8 +147,9 @@ describe('RFC-165 — raw-key guard wiring (source lock)', () => {
     expect(countOf(sharedMultipart, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })
 
-  test('routes/scheduledTasks.ts gates create + update payloads', () => {
-    const src = read('packages/backend/src/routes/scheduledTasks.ts')
+  // RFC-438: the scheduled-task binding and service moved into integration.
+  test('the scheduled-task binding gates create + update payloads', () => {
+    const src = read('packages/backend/src/modules/integration/inbound/http/scheduledTaskRoutes.ts')
     expect(countOf(src, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(2)
   })
 
@@ -166,8 +167,8 @@ describe('RFC-165 — raw-key guard wiring (source lock)', () => {
     expect(countOf(src, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })
 
-  test('services/scheduledTasks.ts repair guard uses the shared reject helper', () => {
-    const src = read('packages/backend/src/services/scheduledTasks.ts')
+  test('the scheduled-task service repair guard uses the shared reject helper', () => {
+    const src = read('packages/backend/src/modules/integration/application/scheduledTasks.ts')
     expect(countOf(src, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })
 })

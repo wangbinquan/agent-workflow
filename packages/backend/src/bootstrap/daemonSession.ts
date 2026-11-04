@@ -82,6 +82,7 @@ import {
   createHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
 import { enforceLimits } from '@/services/limits'
+import { composeScheduledTaskRunner } from '@/modules/integration/composition/scheduledTasks'
 
 interface DaemonProviderHttpAdmission {
   readonly lifecycle: Pick<
@@ -352,10 +353,12 @@ export async function composeDaemonSession(
     runtime.taskExecution.background,
     {
       configuration: input.configuration,
-      scheduled: {
+      // RFC-438：一轮定时任务由 integration 提供，task-execution 的后台循环只持有节奏与开关。
+      scheduled: composeScheduledTaskRunner({
         operations: runtime.scheduledTasks.operations,
         identityAccess: runtime.scheduledTaskIdentityAccess,
-      },
+        buildLaunch: runtime.taskExecution.trigger.buildScheduleLaunch,
+      }),
     },
   )
 

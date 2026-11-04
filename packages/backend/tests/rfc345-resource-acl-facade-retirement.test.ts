@@ -373,13 +373,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
-    'routes/scheduledTasks.ts',
-    ['canEditAccess', 'canGovernAccess'],
-    'scheduled-task ACL projection',
-    REMOVE_OWNERS.scheduledTask,
-  ),
-  edge(
-    'services/resourceAcl.ts',
     'services/resourcePackage/closure.ts',
     ['isVisibleRow'],
     'resource-package closure visibility',
@@ -398,13 +391,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['isVisibleRow'],
     'resource-package preview visibility',
     REMOVE_OWNERS.resourcePackageRead,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'services/scheduledTasks.ts',
-    ['canEditAccess', 'canGovernAccess'],
-    'scheduled-task ACL service projection',
-    REMOVE_OWNERS.scheduledTask,
   ),
   edge(
     'services/resourceAcl.ts',
@@ -500,9 +486,9 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
-    'services/scheduledTasks.ts',
+    'modules/integration/composition/scheduledTasks.ts',
     ['assertWorkflowLaunchInputs'],
-    'scheduled task launch input validation',
+    'scheduled task launch input validation (RFC-438: wired by integration composition)',
     REMOVE_OWNERS.taskExecutionResources,
   ),
   edge(

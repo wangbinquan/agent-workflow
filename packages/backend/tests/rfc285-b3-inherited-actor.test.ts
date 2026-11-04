@@ -206,7 +206,7 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
   })
 
   test('scheduled 臂收编：手写 owner rebuild 归零、错误码 owner-inactive 不变', () => {
-    const scheduled = src('services/scheduledTasks.ts')
+    const scheduled = src('modules/integration/application/scheduledTasks.ts')
     expect(scheduled).toContain('identityAccess.delegatedRequests.forSchedule({')
     expect(scheduled).not.toContain('buildInheritedActor(')
     expect(scheduled.includes('buildActor(')).toBe(false) // 手写 rebuild 已收编

@@ -19,7 +19,7 @@ import type { StartTask } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
+import type { BuildScheduleLaunch } from '../src/modules/integration/application/ports/scheduledLaunch'
 import { runDueSchedulesOnce } from './helpers/scheduledTaskScheduler'
 import { createUser } from './helpers/userFixture'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -220,7 +220,16 @@ describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
 
   test('source lock: claim CAS-advances next_run_at but never writes last_run_at (R4-1)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduledTaskScheduler.ts'),
+      // RFC-438: the scheduler moved into integration application.
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'integration',
+        'application',
+        'scheduledTaskScheduler.ts',
+      ),
       'utf-8',
     )
     // The claim UPDATE sets next_run_at + updated_at only — last_run_at is owned by

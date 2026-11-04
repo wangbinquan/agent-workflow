@@ -1019,7 +1019,7 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
 describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
   test('定时触发的准备失败也留下任务行 + __repo_prep__ 失败行（而不是什么都不留）', async () => {
     const { createScheduledTask, fireSchedule, getScheduledTaskRow } =
-      await import('@/services/scheduledTasks')
+      await import('@/modules/integration/application/scheduledTasks')
     // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
     // ——它是 `startExecution` 三分支 switch 的第三份写法。定时启动改走与路由同一份编排，
     // 本条的判据面（「失败也留任务行 + `__repo_prep__` 失败行」）一字未动。

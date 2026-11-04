@@ -73,6 +73,11 @@ export const DAEMON_CADENCE = {
   /** RFC-310 Digital Employee OS durable Event → Reaction driver. */
   digitalEmployeeOs: 1_000,
   /**
+   * 定时任务节拍（task-execution 后台循环 `scheduled-task` 的间隔；每拍跑一轮 integration 的认领与触发）。
+   * 预设以分钟为粒度，30 s 足够细，又比 1Hz 轻。RFC-438 自原节拍文件的 `SCHEDULE_TICK_MS` 移入本表，值不变。
+   */
+  scheduledTasks: 30_000,
+  /**
    * RFC-370 v3 V6 —— 托管对象发布日志的恢复 / 回收（maintenanceJobRunner `hostedObjectRecovery`）。
    * 非 hourly：被放弃的上传与 owner 释放的固定引用要在分钟级收敛，不进 MAINTENANCE_PHASE。
    */

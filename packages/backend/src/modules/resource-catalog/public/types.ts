@@ -13,6 +13,9 @@ import type {
 // （跨 context 内部 import，RFC-317 R2 入账）。同一判据两个来源正是本 RFC 反复撞到的漂移形状，
 // 因此由 owner（resource-catalog）在 public 面给出唯一出口。
 export { hasResourceAclBypass } from '../domain/resourceAccess'
+// RFC-438：访问档位的两个纯投影同样由 owner 在 public 面给出——integration 的定时任务服务与管理面此前经 legacy
+// `@/services/resourceAcl` 取。
+export { canEditAccess, canGovernAccess } from '../domain/resourceAccess'
 
 import type {
   Agent,

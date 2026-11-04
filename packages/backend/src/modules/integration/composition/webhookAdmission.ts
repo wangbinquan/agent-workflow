@@ -7,7 +7,7 @@ import {
   assertScheduledTargetUsable,
   loadIntegrationTriggerResourceSnapshot,
   type ScheduledTaskOperations,
-} from '@/services/scheduledTasks'
+} from '../application/scheduledTasks'
 import type { IntegrationTriggerResourceAuthority } from '../application/ports/scheduledTaskPersistence'
 import {
   renderWebhookLaunch,

@@ -1,18 +1,17 @@
 // RFC-159/RFC-375 — claim due schedules and run a bounded batch.
-// The maintenance Worker owns the periodic cadence.
+// The task-execution background loop owns the periodic cadence (`DAEMON_CADENCE.scheduledTasks`).
+// RFC-438：自 services/scheduledTaskScheduler.ts 迁入 integration application；广播改走变更通知端口。
 
 import { computeNextRunAt, ScheduleSpecSchema } from '@agent-workflow/shared'
 
+import type { BuildScheduleLaunch } from './ports/scheduledLaunch'
 import {
   fireSchedule,
-  type BuildScheduleLaunch,
   type Row,
   type ScheduleAuthorityRuntime,
   type ScheduledTaskOperations,
-} from '@/services/scheduledTasks'
-import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
+} from './scheduledTasks'
 
-export const SCHEDULE_TICK_MS = 30_000 // preset minute granularity is plenty; lighter than 1Hz
 export const SCHEDULE_FIRE_CONCURRENCY = 4 // actual parallel launches
 export const SCHEDULE_MAX_IN_FLIGHT = 32 // R2-a: dispatched-but-not-done cap = backlog bound
 export const DEFAULT_MAX_CONSECUTIVE_FAILURES = 10
@@ -113,7 +112,7 @@ async function fireClaimed(
       defaultRuntime,
     )
     await recordSuccess(operations, row.id, taskId, firedAt)
-    scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
+    operations.notifications.notify({
       type: 'scheduled.fired',
       id: row.id,
       ownerUserId: row.ownerUserId,
@@ -121,7 +120,7 @@ async function fireClaimed(
   } catch (err) {
     await recordFailure(operations, row.id, msgOf(err), firedAt, maxFailures, onAutoDisable)
     // A failure changed last_status (and possibly auto-disabled) — refresh the UI.
-    scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
+    operations.notifications.notify({
       type: 'scheduled.updated',
       id: row.id,
       ownerUserId: row.ownerUserId,

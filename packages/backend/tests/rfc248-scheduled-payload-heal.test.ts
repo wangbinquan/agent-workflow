@@ -28,7 +28,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { integrationTriggerResourceBinding } from './helpers/integrationTriggerResourceBinding'
 import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/composition/scheduledTasks'
-import { healScheduledLaunchPayloads as healScheduledLaunchPayloadsWithPort } from '../src/services/scheduledTasks'
+import { healScheduledLaunchPayloads as healScheduledLaunchPayloadsWithPort } from './helpers/scheduledPayloadHeal'
 
 let db: PersistenceDb
 

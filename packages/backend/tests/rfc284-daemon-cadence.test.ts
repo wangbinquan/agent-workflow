@@ -33,6 +33,8 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       digitalEmployeeOs: 1_000,
       // RFC-370 v3 V6 新增（非调参）：托管对象发布日志的恢复 / 回收拍（10 分钟，非 hourly）。
       hostedObjectRecovery: 600_000,
+      // RFC-438 移入（非调参）：定时任务节拍，原 services/scheduledTaskScheduler.ts 的 SCHEDULE_TICK_MS。
+      scheduledTasks: 30_000,
     })
   })
 })

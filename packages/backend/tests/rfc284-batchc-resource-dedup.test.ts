@@ -236,9 +236,13 @@ describe('rfc284 批C T9 §2.2 — scheduled 引用扫描单点', () => {
     expect(SRC('modules/resource-catalog/infrastructure/workgroupRepository.ts')).toContain(
       'deps.scheduledReferences(scheduledRows, input.id)',
     )
-    // scheduledTasks.ts 保留 design 命名的导出面（薄再导出）
-    expect(SRC('services/scheduledTasks.ts')).toContain(
-      "export { scheduledRowsReferencing } from './scheduledTaskRefs'",
+    // RFC-438：定时任务服务迁入 integration application，不再转出这个 legacy 叶子（application 不 import services/）；
+    // 设计命名的导出面就是叶子本身。
+    expect(SRC('services/scheduledTaskRefs.ts')).toContain(
+      'export function scheduledRowsReferencing',
+    )
+    expect(SRC('modules/integration/application/scheduledTasks.ts')).not.toContain(
+      'scheduledRowsReferencing',
     )
   })
 })

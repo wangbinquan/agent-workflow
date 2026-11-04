@@ -188,7 +188,7 @@ test('the binding reads every cadence from the daemon constants on each arm', ()
     'autoRepairMs: () => DAEMON_CADENCE.autoRepair,',
     'autoKillMs: () => DAEMON_CADENCE.autoKill,',
     'orphanReconcileSupervisoryMs: () => DAEMON_CADENCE.orphanReconcileSupervisory,',
-    'scheduleTickMs: () => SCHEDULE_TICK_MS,',
+    'scheduleTickMs: () => DAEMON_CADENCE.scheduledTasks,',
     'fileConfiguration: (configPath) => createFileTaskBackgroundConfigurationQuery(configPath),',
   ])
     expect(binding).toContain(line)

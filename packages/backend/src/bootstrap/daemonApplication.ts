@@ -87,17 +87,15 @@ import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import type { Config } from '@agent-workflow/shared'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
-import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import type { BuildScheduleLaunch } from '@/modules/integration/composition/scheduledTasks'
+import type { ScheduleAuthorityRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { type RuntimeDiagnosticDependencies } from '@/modules/runtime-management/composition/runtimeManagement'
 import { type WebhookDispatcher } from '@/modules/integration/composition/webhookDispatch'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { reconcileRepositoryTransportConnectionProjections } from '@/modules/source-control/composition'
 import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
-import {
-  type SelectedTaskExecutionProviderRuntime,
-  type TaskExecutionBackgroundStartDependencies,
-} from '@/modules/task-execution/composition/providerRuntime'
+import { type SelectedTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeResourceLimitOperations } from './resourceLimits'
@@ -240,7 +238,7 @@ export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseP
    */
   readonly collaborationContext: CollaborationRouteContext
   readonly scheduledTasks: DaemonScheduledTaskModules['scheduledTaskRuntime']
-  readonly scheduledTaskIdentityAccess: TaskExecutionBackgroundStartDependencies['scheduled']['identityAccess']
+  readonly scheduledTaskIdentityAccess: ScheduleAuthorityRuntime
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
   readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
   readonly digitalEmployee: DigitalEmployeeModuleWithRuntime

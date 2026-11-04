@@ -18,7 +18,7 @@ import type { TaskLifecycleAutoRepairPolicy } from '@/modules/task-execution/app
 import { createFileTaskBackgroundConfigurationQuery } from '@/modules/task-execution/infrastructure/local/fileTaskBackgroundConfiguration'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import { SCHEDULE_TICK_MS } from '@/services/scheduledTaskScheduler'
+import { composeScheduledTaskRunner } from '@/modules/integration/composition/scheduledTasks'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   scheduledTaskRuntime,
@@ -61,9 +61,6 @@ function fixture(
     module,
     recovery,
     taskHasDriver: () => false,
-    buildScheduleLaunch: () => async () => {
-      throw new Error('unexpected schedule launch')
-    },
     autoResume: {
       async run({ breaker }) {
         calls.resumed.push(breaker)
@@ -78,14 +75,18 @@ function fixture(
       },
     },
   })
-  const scheduleDependencies = {
+  // RFC-438：一轮定时任务由 integration 提供，后台循环只收 `runDue`。
+  const scheduleDependencies = composeScheduledTaskRunner({
     operations: scheduled.operations,
     identityAccess: {
       delegatedRequests: identity.delegatedRequests,
       integrationTriggerResources: scheduled.integrationTriggerResources,
       taskExecutionResources: taskExecutionResourceBinding(db),
     },
-  }
+    buildLaunch: () => async () => {
+      throw new Error('unexpected schedule launch')
+    },
+  })
   return { control, module, calls, recovery, scheduled, scheduleDependencies }
 }
 
@@ -284,7 +285,7 @@ describeEachProvider('RFC-370 Task background selected settings', (harness) => {
       await heldTick(DAEMON_CADENCE.orphanReconcileSupervisory, 0, () =>
         expect(poll).not.toHaveBeenCalled(),
       )
-      await heldTick(SCHEDULE_TICK_MS, 0, () => expect(poll).not.toHaveBeenCalled())
+      await heldTick(DAEMON_CADENCE.scheduledTasks, 0, () => expect(poll).not.toHaveBeenCalled())
       expect(poll).toHaveBeenCalledTimes(1)
       expect(legacyReads).toBe(0)
     } finally {

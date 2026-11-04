@@ -740,7 +740,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       ),
       'utf8',
     )
-    const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
+    const schedules = readFileSync(
+      resolve(sourceRoot, 'modules/integration/application/scheduledTasks.ts'),
+      'utf8',
+    )
     const triggerValidation = readFileSync(
       resolve(sourceRoot, 'modules/integration/composition/webhookAdmission.ts'),
       'utf8',
@@ -760,7 +763,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       ),
       'utf8',
     )
-    const scheduledRoute = readFileSync(resolve(sourceRoot, 'routes/scheduledTasks.ts'), 'utf8')
+    const scheduledRoute = readFileSync(
+      resolve(sourceRoot, 'modules/integration/inbound/http/scheduledTaskRoutes.ts'),
+      'utf8',
+    )
     const webhookRoute = readFileSync(
       resolve(sourceRoot, 'modules/integration/inbound/http/webhookTriggerRoutes.ts'),
       'utf8',
@@ -871,7 +877,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/task-execution/infrastructure/taskRouteOperations.ts'),
       'utf8',
     )
-    const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
+    const schedules = readFileSync(
+      resolve(sourceRoot, 'modules/integration/application/scheduledTasks.ts'),
+      'utf8',
+    )
     const webhook = readFileSync(
       resolve(sourceRoot, 'modules/integration/application/webhookDispatch.ts'),
       'utf8',

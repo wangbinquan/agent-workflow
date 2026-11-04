@@ -1,4 +1,5 @@
 // RFC-159 — scheduled-task HTTP routes.
+// RFC-438：自 routes/scheduledTasks.ts 归入 integration 的 inbound/http。
 // GET    /api/scheduled-tasks       — list (owner + `tasks:read:all` sees all)
 // GET    /api/scheduled-tasks/:id   — one (invisible == 404)
 // POST   /api/scheduled-tasks       — create (owner = actor; create-time launch gate)
@@ -31,15 +32,15 @@ import {
   runScheduleNow,
   updateScheduleAcl,
   updateScheduledTask,
-  type BuildScheduleLaunch,
   type ScheduleAuthorityRuntime,
-} from '@/services/scheduledTasks'
-import { canEditAccess, canGovernAccess } from '@/services/resourceAcl'
+  type ScheduledTaskRuntime,
+} from '../../application/scheduledTasks'
+import { canEditAccess, canGovernAccess } from '@/modules/resource-catalog/public/types'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
-import type { ScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import type { BuildScheduleLaunch } from '../../application/ports/scheduledLaunch'
 
 /**
  * RFC-324 —— 排期写权：owner / `write` 授权 / ACL bypass。

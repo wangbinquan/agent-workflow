@@ -1,13 +1,11 @@
 // RFC-359 AC-6：跟着 `integrationTriggerResourceBinding` 一起放宽——它只是把 db 转交给那个夹具。
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runDueSchedulesOnce as runDueSchedulesOnceWithProvider } from '../../src/services/scheduledTaskScheduler'
-import type {
-  BuildScheduleLaunch,
-  ScheduleAuthorityRuntime,
-} from '../../src/services/scheduledTasks'
+import { runDueSchedulesOnce as runDueSchedulesOnceWithProvider } from '../../src/modules/integration/application/scheduledTaskScheduler'
+import type { BuildScheduleLaunch } from '../../src/modules/integration/application/ports/scheduledLaunch'
+import type { ScheduleAuthorityRuntime } from '../../src/modules/integration/application/scheduledTasks'
 import { scheduledTaskRuntime } from './integrationTriggerResourceBinding'
 
-export * from '../../src/services/scheduledTaskScheduler'
+export * from '../../src/modules/integration/application/scheduledTaskScheduler'
 
 export function runDueSchedulesOnce(
   db: PersistenceDb,

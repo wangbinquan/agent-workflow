@@ -173,7 +173,7 @@ describe('RFC-437 —— Webhook 家族的位置与依赖', () => {
     expect(binding).not.toContain('WebhookDispatcher')
     const server = readFileSync(join(SRC, 'server.ts'), 'utf8')
     expect(server).toMatch(
-      /import \{\n {2}mountWebhookDeliveryRoutes,\n {2}mountWebhookEndpointRoutes,\n {2}mountWebhookIngressRoutes,\n {2}mountWebhookTriggerRoutes,\n\} from '@\/modules\/integration\/composition'/,
+      /import \{\n(?: {2}mount\w+Routes,\n)* {2}mountWebhookDeliveryRoutes,\n {2}mountWebhookEndpointRoutes,\n {2}mountWebhookIngressRoutes,\n {2}mountWebhookTriggerRoutes,\n\} from '@\/modules\/integration\/composition'/,
     )
     expect(server).not.toMatch(/from '@\/routes\/webhook/)
   })

@@ -19,7 +19,7 @@ import { Hono } from 'hono'
 import { actorOf, tryActorOf } from '@/auth/actor'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
-import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
+import type { IntegrationTriggerResourceQueries } from '@/modules/integration/composition/scheduledTasks'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
 import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
@@ -81,7 +81,6 @@ import { mountMaintenanceRoutes } from '@/routes/maintenance'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
-import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
 import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
@@ -97,6 +96,7 @@ import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import { mountCodeRoutes } from '@/routes/code'
 import {
+  mountScheduledTaskRoutes,
   mountWebhookDeliveryRoutes,
   mountWebhookEndpointRoutes,
   mountWebhookIngressRoutes,
@@ -112,7 +112,7 @@ import { errorHandler } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
 export type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
-  readonly integrationTriggerResources: IntegrationTriggerResourceBinding
+  readonly integrationTriggerResources: IntegrationTriggerResourceQueries
   readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 
