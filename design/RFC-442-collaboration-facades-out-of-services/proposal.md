@@ -1,6 +1,6 @@
 # RFC-442 协作的三个 services/ 兼容层收口（RFC-294 W4 B / D 第八步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-04；`9c1a6f2a9`，exact SHA 主 CI run 41854437159：attempt 1～5 只有 macOS 作业未跑成（macOS arm64 runner 容量不足（作业未被分配 runner：「The job was not acquired by Runner of type hosted even after multiple attempts」，GitHub 注记「Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times」），没有 runner 就被取消），其余作业全绿；逐次只重跑失败作业，attempt 6 全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-441](../RFC-441-platform-helpers-out-of-services/proposal.md)（API 文档、PlantUML 渲染与外部入口开关归 platform）

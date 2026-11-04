@@ -18,7 +18,7 @@
 - [x] AC-1 两个 `services/` 文件删除，源码不再 import 旧路径；`auth/` 不 import `services/`
 - [x] AC-2 计数按实测更新（路由 12 → 10，`services/` 223 → 221）
 - [x] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `9c1a6f2a9`）
 
@@ -47,6 +47,10 @@
 - `providers.ts`、`provisioning.ts` 与 HEAD 逐字节相同；
 - 四个引用方只改 import 路径（`oidc-auth.ts` 的 import 被 prettier 合成一行），`auth/oidc/discovery.ts` 只改注释里的路径；
 - RFC-305 锁的消费者清单只把同一条边的来源路径换成新位置。
+
+## CI（AC-4）
+
+`21ae7afa3`：exact SHA 主 CI run 41867668794：attempt 1～4 只有 macOS e2e 分片因 GitHub macOS arm64 runner 容量不足未被分配 runner 而取消，其余作业全绿；逐次只重跑失败作业，attempt 5 全绿。重跑只作佐证，不作通过依据；失败作业逐条归因见上。
 
 ## PR / 提交
 

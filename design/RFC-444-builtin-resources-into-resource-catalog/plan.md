@@ -18,7 +18,7 @@
 - [x] AC-1 原文件删除，源码不再 import 旧路径；模块外经 `public/types`
 - [x] AC-2 计数按实测更新（路由 10 → 9，R2 41 → 39，`services/` 221 → 220）
 - [x] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `21ae7afa3`）
 
@@ -49,6 +49,10 @@
 - 清单文件与 HEAD 逐字节相同（审计锚点的行号因此有效）；`public/types` 转出的五个符号就是原文件的同一批导出；
 - 各引用方只改 import 路径；knowledge-evolution 的隔离 id 改从共享合同取，正是原文件原样转出的那个常量；
 - 删去的兼容再导出在生产里没有消费者，两个用例改从清单本身取同一组常量。
+
+## CI（AC-4）
+
+`98cd1706f`：exact SHA 主 CI run 41881968088：attempt 1 macOS e2e 分片 3/4 拿到 runner 后 1 failed / 2 flaky（RFC-396 订票旅程与 RFC-372 两条录制旅程在慢 runner 上点击超时，audit-backlog 已记的贴线长旅程，本 RFC 不触及其路径），分片 2/4、4/4 未被分配 runner；只重跑失败作业，attempt 2 全绿。重跑只作佐证，不作通过依据；失败作业逐条归因见上。
 
 ## PR / 提交
 

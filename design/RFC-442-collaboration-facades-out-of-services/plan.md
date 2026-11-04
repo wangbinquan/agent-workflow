@@ -18,7 +18,7 @@
 - [x] AC-1 三个 `services/` 文件删除，源码不再 import 旧路径；路由经 exact public 入口取用
 - [x] AC-2 计数按实测更新（路由 15 → 12，R1 170 → 169，模块 151 → 149，`services/` 226 → 223）
 - [x] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `3d3f21e4b`）
 
@@ -49,6 +49,10 @@
 - `isAskingNodeInSnapshot` 连同注释原样迁入 domain，路由经 `public/queries` 取到的是同一个函数；
 - `taskFeedback` 转出删除后，路由直接取它原本转出的同一组 collaboration public 函数；
 - collaboration 内部与用例改取同模块文件，取到的是原转出背后的同一批函数；seal.ts 的串行化语义不变（见上）。
+
+## CI（AC-4）
+
+`9c1a6f2a9`：exact SHA 主 CI run 41854437159：attempt 1～5 只有 macOS 作业未跑成（macOS arm64 runner 容量不足（作业未被分配 runner：「The job was not acquired by Runner of type hosted even after multiple attempts」，GitHub 注记「Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times」），没有 runner 就被取消），其余作业全绿；逐次只重跑失败作业，attempt 6 全绿。重跑只作佐证，不作通过依据；失败作业逐条归因见上。
 
 ## PR / 提交
 

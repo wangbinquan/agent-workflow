@@ -1,6 +1,6 @@
 # RFC-444 内建资源清单归 resource-catalog（RFC-294 W4 B / D 第十步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-04；`98cd1706f`，exact SHA 主 CI run 41881968088：attempt 1 macOS e2e 分片 3/4 拿到 runner 后 1 failed / 2 flaky（RFC-396 订票旅程与 RFC-372 两条录制旅程在慢 runner 上点击超时，audit-backlog 已记的贴线长旅程，本 RFC 不触及其路径），分片 2/4、4/4 未被分配 runner；只重跑失败作业，attempt 2 全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D（并清偿 W4-C 遗留的两条 R2 边）
 - **前序**：[RFC-443](../RFC-443-oidc-into-auth/proposal.md)（OIDC 提供方服务与开通策略归 auth/oidc）

@@ -1,4 +1,4 @@
-## 2026-11-04 RFC-444 内建资源清单归 resource-catalog（In Progress；`design/RFC-444-builtin-resources-into-resource-catalog/`）
+## 2026-11-04 RFC-444 内建资源清单归 resource-catalog（Done；`design/RFC-444-builtin-resources-into-resource-catalog/`）
 
 - **来由**：RFC-294 W4 B / D 第十步（RFC-443 后 10 个路由仍 import `services/`），并清偿 W4-C 遗留的 KE-03 两条 R2 边。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -8,8 +8,14 @@
   - 删去 knowledge-evolution 里生产已无消费者的兼容再导出；`R2` 41 → 39；import `services/` 的路由 10 → 9（`resourceAcl`）。
 - **不做**：内建资源播种改为 participant；其余 9 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`98cd1706f`。
+- **集中验证**：全量 SQLite 的本 RFC 问题已修（`commons-manifest.json` 的内建资源内核条目仍指旧路径，改指新路径、layer 改为 domain）；
+  18 条负载超时单独复跑全过；导出仓库 185 个文件 2628 pass，1 条 PG 启动超时单独复跑通过；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41881968088：attempt 1 macOS e2e 分片 3/4 拿到 runner 后 1 failed / 2 flaky（RFC-396 订票旅程与 RFC-372 两条录制旅程在慢 runner 上点击超时，audit-backlog 已记的贴线长旅程，本 RFC 不触及其路径），分片 2/4、4/4 未被分配 runner；只重跑失败作业，attempt 2 全绿（AC-4）。
+- **下一步**：B / D 余下 9 个路由：source-control（`repos`、`repoGroups`、`cached-repos`）、integration 的代码平台连接
+  （`codeHosts`、`accountRepositoryTransportCredentials`）、resource-catalog（`agents`、`mcps`）与 task-execution（`health`、`tasks`）。
 
-## 2026-11-04 RFC-443 OIDC 提供方服务与开通策略归 identity-access 的 auth/oidc（In Progress；`design/RFC-443-oidc-into-auth/`）
+## 2026-11-04 RFC-443 OIDC 提供方服务与开通策略归 identity-access 的 auth/oidc（Done；`design/RFC-443-oidc-into-auth/`）
 
 - **来由**：RFC-294 W4 B / D 第九步（RFC-442 后 12 个路由仍 import `services/`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -19,8 +25,12 @@
   - import `services/` 的路由 12 → 10（`oidc`、`oidc-auth`）；`auth/` 不再 import `services/`（原 `auth/oidc/identity.ts` 一条类型边）。
 - **不做**：`src/auth/` 整体并入 `modules/identity-access`；其余 10 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`21ae7afa3`。
+- **集中验证**：全量 SQLite 20 条失败全是负载超时（7 个文件单独复跑全过）；导出仓库 209 个文件 2778 pass，本 RFC 用例的「目录不存在」
+  断言在导出里撞上残留空目录，改为「目录下没有源文件」；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41867668794：attempt 1～4 只有 macOS e2e 分片因 GitHub macOS arm64 runner 容量不足未被分配 runner 而取消，其余作业全绿；逐次只重跑失败作业，attempt 5 全绿（AC-4）。
 
-## 2026-11-04 RFC-442 协作的三个 services/ 兼容层收口（In Progress；`design/RFC-442-collaboration-facades-out-of-services/`）
+## 2026-11-04 RFC-442 协作的三个 services/ 兼容层收口（Done；`design/RFC-442-collaboration-facades-out-of-services/`）
 
 - **来由**：RFC-294 W4 B / D 第八步（RFC-441 后 15 个路由仍 import `services/`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -32,6 +42,10 @@
   - import `services/` 的路由 15 → 12，`R1` 170 → 169。
 - **不做**：collaboration infrastructure 对其他 legacy `services/` 的依赖；其余 12 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`9c1a6f2a9`。
+- **集中验证**：全量 SQLite 的本 RFC 问题已修（串行化插入源码锁把 `clarify/seal.ts` 的哈希锁在 `clarifyAnswerWrite` 的复核证明里，
+  按 RFC-400 先例复核后刷新）；16 条负载超时单独复跑全过；导出仓库 262 个文件 3724 pass；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41854437159：attempt 1～5 只有 macOS 作业未跑成（macOS arm64 runner 容量不足（作业未被分配 runner：「The job was not acquired by Runner of type hosted even after multiple attempts」，GitHub 注记「Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times」），没有 runner 就被取消），其余作业全绿；逐次只重跑失败作业，attempt 6 全绿（AC-4）。
 
 ## 2026-11-04 RFC-441 API 文档、PlantUML 渲染与外部入口开关归 platform（Done；`design/RFC-441-platform-helpers-out-of-services/`）
 
@@ -49,6 +63,8 @@
   PostgreSQL 超时单独复跑通过；P0 变异 lane 两引擎各 17 阶段通过。
 - **CI**：exact SHA 主 CI run 41840584975：attempt 1 后端分片 16/44 `rfc311-perf-guards` AC-11 塌方探测（PG P95 8241 ms 对
   SQLite 82 ms，audit-backlog 已记的停顿形态），重跑失败作业 attempt 2 全绿（AC-4）。
+  Done 文档 `3d3f21e4b` 的主 CI run 41848657338：attempt 1 macOS e2e 四个分片超出作业时限被取消，attempt 2～5 macOS 作业未被分配
+  runner（GitHub macOS arm64 容量不足），逐次只重跑失败作业，attempt 6 全绿。
 - **另记**：e2e-full 夜跑自 11-03 起红，根因是 `ubuntu-latest` 切到 Ubuntu 26.04 而 Playwright 1.60.0 装不上 chromium，与任何提交
   无关；主 CI 的 ubuntu e2e 只因浏览器缓存命中暂未受影响。处置（钉 `ubuntu-24.04` 或升级 Playwright）待用户决定，证据见
   `docs/audit-backlog.md`。
