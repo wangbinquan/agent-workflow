@@ -1,4 +1,4 @@
-## 2026-11-04 RFC-439 代码能力的两个 HTTP 绑定归入 code-capability 模块（In Progress；`design/RFC-439-code-capability-inbound-bindings/`）
+## 2026-11-04 RFC-439 代码能力的两个 HTTP 绑定归入 code-capability 模块（Done；`design/RFC-439-code-capability-inbound-bindings/`）
 
 - **来由**：RFC-294 W4 B / D 第五步、E8 前置（RFC-438 之后 `routes/` 只剩两个深引模块内部的文件，都属于 code-capability 兼容岛）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -10,6 +10,15 @@
   - 顺带订正 RFC-438 文档里「定时启动合同经 task-execution public 导出」的过期描述（实现是 integration 的 consumer-owned 端口）。
 - **不做**：E8 整体吸收（DA 的 T7 锁禁止消费 code-capability；兼容岛拥有表与转换探针，另立 RFC）；`services/demoSeed` 的 R1 边。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`ce164ed44`。
+- **集中验证**：
+  - 全量 SQLite 四分片 34 条失败：本 RFC 的 1 条已修（新用例的说明符正则把注释当成 import，改用 census 的 AST 提取并加非空对照）；
+    路由错误码棘轮在提交前经 `git ls-files` 读到已删文件，属工作树假象，在导出仓库上通过；其余 33 条是负载超时，16 个文件单独复跑全过；
+  - 导出仓库 209 个文件（全部架构测试、引用 code-capability 的双引擎用例等）3299 pass，7 条四路并行下 PG 启动超时单独复跑通过；
+    P0 变异 lane 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41811487655 attempt 1 70/70 全绿；windows-platform run 41811487613 通过（AC-4）。
+- **下一步**：B / D 余下「入站适配器不 import `services/`」：`routes/` 23 个、`mcp/server.ts` 1 个（R1 里来自入站适配器的边已为 0）。
+  第一刀是 RFC-440（删除确认、删除快照与 token 读视图离开 `services/`，23 → 18）；E8 整体吸收另立 RFC。
 
 ## 2026-11-03 RFC-438 定时任务归入 integration，task-execution 不再依赖定时任务（Done；`design/RFC-438-scheduled-tasks-into-integration/`）
 

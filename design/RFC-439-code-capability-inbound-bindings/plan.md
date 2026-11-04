@@ -20,7 +20,7 @@
 - [x] AC-1 两个路由迁入模块、原文件删除，绑定只依赖本模块与 HTTP 传输工具，`composition.ts` 保持 schema-only
 - [x] AC-2 账本与计数按实测更新（R1 176 → 170，深引路由 2 → 0，import `services/` 的路由 23 不变）
 - [x] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `0bf8272c2`）
 
@@ -54,6 +54,10 @@
 - 历史查询合同改用 application 的真实类型，投递链从 `unknown[]` 收紧为 `DeliveryRow[]`，只影响编译期；bootstrap 的连接由类型检查核对；
 - ACL 端点仍经 `mountAclEndpoints` 原样委托同一个 owner，RFC-317 的精确委托锁改指新位置后仍然命中；
 - 守卫语料扩到模块 `inbound/` 后没有新的违例；集中验证发现的本人用例缺陷已修（见上）。
+
+## CI（AC-4）
+
+`ce164ed44`：exact SHA 主 CI run 41811487655 attempt 1 70/70 全绿；windows-platform run 41811487613 通过。
 
 ## PR / 提交
 
