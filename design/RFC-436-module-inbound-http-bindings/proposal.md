@@ -1,6 +1,6 @@
 # RFC-436 事件中心与数字员工的 HTTP 绑定归入各自模块（RFC-294 W4 E9）
 
-- **状态**：In Progress（2026-11-03）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、
+- **状态**：Done（2026-11-03；`3cb987341`，exact SHA 主 CI run 41754866058：attempt 1 的 macOS e2e 分片 3/4 已跑 106/140 全过，在慢 runner 上撞到作业 20 分钟时限被取消（基础设施），重跑 attempt 2 70/70 全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、
   实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 余项 E9（路由到模块合同），同时是 W4 B / D 第二步的一部分
 - **前序**：[RFC-434](../RFC-434-inbound-adapter-public-contracts/proposal.md)、[RFC-435](../RFC-435-task-catalog-typed-queries/proposal.md)

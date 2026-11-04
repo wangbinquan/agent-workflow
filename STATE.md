@@ -1,4 +1,4 @@
-## 2026-11-03 RFC-436 事件中心与数字员工的 HTTP 绑定归入各自模块（In Progress；`design/RFC-436-module-inbound-http-bindings/`）
+## 2026-11-03 RFC-436 事件中心与数字员工的 HTTP 绑定归入各自模块（Done；`design/RFC-436-module-inbound-http-bindings/`）
 
 - **来由**：RFC-294 W4 余项 E9 的路由部分，也是 W4 B / D 第二步（RFC-435 之后余下 6 个深引路由中的两个）。用户 2026-11-02「好，你继续推进RFC294，
   过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -9,6 +9,15 @@
   - `services/employeeCaseMembers.ts` 归入 digital-employee `application/caseAccess`（自有查看者类型），平台工具只读判据由数字员工自己给出；
   - `R1` 201 → 198，深引路由 6 → 4，import `services/` 的路由 29 → 28；`routes-no-cast` 守卫扩到模块 `inbound/`。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`3cb987341`。
+- **集中验证**：
+  - 全量 SQLite 四分片：本 RFC 漏改的两条接线断言与三份架构清单（RFC-310 OS 清单、development-automation 架构锁、RFC-349 边界扫描）已修；
+    15 条负载超时同一时限下单独复跑全过；路由错误码棘轮只在未提交工作树报出；
+  - 修后复验 152 个文件 1472 pass；导出仓库 169 个文件（含受影响用例的 PostgreSQL lane）2329 pass，唯一失败为并行下 PG 启动超时、单独复跑通过；
+  - P0 变异 lane 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41754866058：attempt 1 的 macOS e2e 分片 3/4 已跑 106/140 全过，在慢 runner 上撞到作业 20 分钟时限被取消（基础设施），重跑 attempt 2 70/70 全绿（AC-5）。
+- **下一步**：RFC-437 代码平台 Webhook 家族归入 integration（进行中）；之后定时任务（随 `services/scheduledTasks` 迁入 integration）、
+  E8 的 stage 合同与能力模板。
 
 ## 2026-11-03 RFC-435 任务目录的 public 查询类型化、不接遗留 Actor（Done；`design/RFC-435-task-catalog-typed-queries/`）
 
