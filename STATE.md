@@ -1,4 +1,4 @@
-## 2026-11-03 RFC-437 代码平台 Webhook 家族归入 integration（In Progress；`design/RFC-437-integration-webhook-family/`）
+## 2026-11-03 RFC-437 代码平台 Webhook 家族归入 integration（Done；`design/RFC-437-integration-webhook-family/`）
 
 - **来由**：RFC-294 W4 B / D 第三步（RFC-436 之后余下 4 个深引路由中的 Webhook 投递），同时执行 RFC-294 design §2「`services/` 按 owner
   迁入模块后删除」。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，
@@ -10,6 +10,15 @@
   - `VerifiedWebhookIngressCommands` 与 `WebhookIngressPersistence` 移出 `public/commands`；
   - `R1` 198 → 178，深引路由 4 → 3，import `services/` 的路由 28 → 24；定时任务另立 RFC-438。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`450abf2ca`；`386adedb8` 修两条设计文档链接。
+- **集中验证**：
+  - 全量 SQLite 四分片的本 RFC 问题已修：分发器依赖合同里从未使用的 identity-access `public/queries` 类型迁入后成了 DAG 外 offered 边
+    （删去死依赖，不登记新债），RFC-305 用例读旧路径，新用例的事件中心假实现重复返回投递；15 条负载超时单独复跑全过；
+  - 复验 151 个文件 1495 pass；导出仓库 255 个文件（含提及 Webhook 的双引擎用例）3683 pass，两条失败（并行下 PG 启动超时、
+    导出仓库残留的空目录）单独复跑通过；P0 变异 lane 两引擎各 17 阶段通过。
+- **CI**：`450abf2ca` 的主 CI run 41768590656 红在两处：设计文档链接检查（本 RFC 漏改的两条 RFC-370 证据链接，后继 `386adedb8` 修复）与后端 22/44 的一条与本 RFC 无关的偶发用例；后继 `386adedb8`（父提交即 `450abf2ca`，只改那两条链接）的主 CI run 41772634009 首轮 70/70 全绿（AC-5，后继证据）。偶发用例登记在 `docs/audit-backlog.md`。
+- **下一步**：RFC-438 定时任务归入 integration。`services/scheduledTasks` 对资源 ACL、git、WS 广播、启动入参与预检、文件系统有值级依赖，
+  且 task-execution 的启动闭包与后台节拍反向依赖它，需先倒转方向（integration 自己的节拍、经 task-execution public 命令启动）。
 
 ## 2026-11-03 RFC-436 事件中心与数字员工的 HTTP 绑定归入各自模块（Done；`design/RFC-436-module-inbound-http-bindings/`）
 

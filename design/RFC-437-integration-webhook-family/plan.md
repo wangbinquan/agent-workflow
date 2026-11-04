@@ -22,7 +22,7 @@
 - [x] AC-2 入站接收与投递重放各为应用用例，每个分支有直接用例
 - [x] AC-3 账本与计数按实测更新（R1 198 → 178，深引路由 4 → 3，import `services/` 的路由 28 → 24，public/commands 只剩维护命令）
 - [x] AC-4 受影响用例全部通过
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿（后继证据，见下）
 
 ## 集中验证（2026-11-03，候选基于 `a64e68f9a`）
 
@@ -59,6 +59,17 @@
 - 投递重放：错误码与文案不变，可用性先于读投递判定；三种标记与 `webhookDeliveryOutcome` 逐字等价；终态唤醒、逐个通知与通知失败被吞不变；
 - 分发器、触发器、端点、终态工作区清理只改依赖来源，删去的只是零消费者的转出、零调用的函数与从未使用的依赖字段；
 - 路由、方法、权限点、令牌访问与公开理由不变，`server.ts` 的挂载先后不变。
+
+## CI（AC-5）
+
+- `450abf2ca` 的主 CI run 41768590656（attempt 1）：67 个作业通过，两处红：
+  - 「Markdown link check (design/)」：`design/RFC-370-crewstation-hosted-deployment/evidence.md` 两条相对链接仍指向已迁走的
+    `services/webhook/githubAdapter.ts` 与 `gitlabAdapter.ts`。属本 RFC 漏改，`386adedb8` 改指 integration `domain` 的两个归一化文件；
+  - 后端 22/44：`rfc370-v3-development-tree-operations`「payloads beyond the command budget travel as released volume files」的
+    树快照多出 `git-meta/info/refs`。本 RFC 未触及 development-automation 与 platform，同一提交本地单独复跑 3/3 通过、本地全量 SQLite 通过，
+    后继 run 上同一用例也通过。按偶发登记进 `docs/audit-backlog.md`，不以重跑代替结论。
+- 后继 `386adedb8`（父提交即 `450abf2ca`，只改上述两条链接）的主 CI run 41772634009：attempt 1 70/70 全绿。windows-platform 与
+  maintenance-soak-nightly 在 `450abf2ca` 上均通过。
 
 ## PR / 提交
 

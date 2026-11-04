@@ -5656,6 +5656,18 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办（需另立 RFC，资源目录的事务语义）：check-then-insert 先按 `(owner, mcp)` 取 advisory 锁让两笔排队，或改为 READ COMMITTED + 锁 +
   唯一冲突重来（RFC-397 在 task-execution 用的同一套做法）；变异验证用 barrier 把两笔卡在同一时刻启动，证明不再耗尽重试。
 
+## 托管开发树操作：大载荷快照偶发多出 `git-meta/info/refs`，越界判定误红（2026-11-03，CI 偶发，未处置）
+
+- 现象：主 CI run 41768590656（`450abf2ca`）attempt 1 的后端 ubuntu 22/44 红在 `rfc370-v3-development-tree-operations.test.ts`
+  「payloads beyond the command budget travel as released volume files」：期望校验结论 `{ ok: true, kind: 'clean' }`，实际是
+  `boundary / protected-root-write`，`detail: 'added git-meta/info/refs'`、`paths: ['git-meta:info/refs']`。
+- 归因：与当时的 RFC-437 无关——`450abf2ca` 只改 integration 的 Webhook 家族、相关用例与文档，未触及 development-automation 与 platform；
+  同一提交本地单独复跑 3/3 通过，本地全量 SQLite 通过，后继 `386adedb8` 的主 CI run 41772634009 上同一用例也通过。用例一次写入 3000 个条目；
+  `info/refs` 只由 `git update-server-info` 写出（`git repack` 在 `repack.updateServerInfo` 默认开启时调用，自动 gc 的 repack 会走到），
+  推测是 runner 上自动 gc 在用例期间改动了受保护的 git 元数据目录。
+- 待办：先确认机制（在该用例的测试仓里强制一次 `git gc` 的变异应能稳定复现）；再决定是测试仓关闭 `gc.auto`，还是树快照把 `info/refs`
+  这类 git 自维护产物排除在越界判定之外（后者是产品语义，需对托管越界规则单独评估）。
+
 ## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
 
 实现门（基准 `0244e0e24`，见 RFC-395 plan「实现门与设计门」）三条 P2 证据缺口里，下面两条只做了部分处置：
