@@ -1,8 +1,11 @@
+// RFC-436: Event Center's own HTTP binding (formerly `routes/eventCenter.ts`).
+// It reaches the module through the route-facing handle in `application/ports`;
+// `server.ts` mounts it through `composition.ts`.
 import type { Hono } from 'hono'
 import { z } from 'zod'
 
 import { actorOf } from '@/auth/actor'
-import type { EventCenterModule } from '@/modules/event-center/composition'
+import type { EventCenterModule } from '../../application/ports/eventCenterModule'
 import { registerRoute } from '@/routes/registry'
 import { ConflictError, ForbiddenError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'

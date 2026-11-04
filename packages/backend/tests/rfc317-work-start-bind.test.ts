@@ -70,6 +70,9 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
     expect(http).toContain(
       'const developmentActivityOperations = digitalEmployeeModules.activityOperations',
     )
+    // RFC-436: development-automation mounts the activity operation itself
+    // (route group `developmentCases`), still fed by the same worker binding.
+    expect(http).toContain('operations: developmentActivityOperations,')
     expect(server).toMatch(
       /mountDigitalEmployeeRoutes\(\s*app,\s*input.digitalDevelopment.digitalEmployees.persistence,\s*input.digitalDevelopment.digitalEmployees.module,/,
     )

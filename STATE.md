@@ -1,3 +1,15 @@
+## 2026-11-03 RFC-436 事件中心与数字员工的 HTTP 绑定归入各自模块（In Progress；`design/RFC-436-module-inbound-http-bindings/`）
+
+- **来由**：RFC-294 W4 余项 E9 的路由部分，也是 W4 B / D 第二步（RFC-435 之后余下 6 个深引路由中的两个）。用户 2026-11-02「好，你继续推进RFC294，
+  过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `routes/eventCenter.ts`、`routes/digitalEmployees.ts` 移到各自模块的 `inbound/http`，管理句柄合同移到 `application/ports`（不扩 public）；
+  - 数字员工路由托管的图设计路由与活动操作改由 development-automation 自己挂载（`server.ts` 新路由组 `developmentCases`），
+    案例授权是数字员工的案例访问判据，由 bootstrap 连接——context DAG 只允许 development-automation → digital-employee；
+  - `services/employeeCaseMembers.ts` 归入 digital-employee `application/caseAccess`（自有查看者类型），平台工具只读判据由数字员工自己给出；
+  - `R1` 201 → 198，深引路由 6 → 4，import `services/` 的路由 29 → 28；`routes-no-cast` 守卫扩到模块 `inbound/`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-03 RFC-435 任务目录的 public 查询类型化、不接遗留 Actor（Done；`design/RFC-435-task-catalog-typed-queries/`）
 
 - **来由**：RFC-294 W4 余项 E10，也是 W4 B / D 第二步的一部分（RFC-434 留下的 7 个深引路由之一）。用户 2026-11-02「好，你继续推进RFC294，

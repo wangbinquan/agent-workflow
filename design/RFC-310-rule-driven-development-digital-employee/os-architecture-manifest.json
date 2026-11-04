@@ -8,6 +8,7 @@
         "composition",
         "composition.ts",
         "domain",
+        "inbound",
         "infrastructure",
         "public"
       ],
@@ -15,6 +16,7 @@
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
         "bootstrap/daemonApplication.ts -> composition",
+        "bootstrap/daemonHttpComposition.ts -> composition",
         "bootstrap/daemonModules/digitalEmployee.ts -> composition",
         "bootstrap/daemonModules/digitalEmployee.ts -> composition/builtinJobTemplates",
         "bootstrap/daemonModules/integration.ts -> composition",
@@ -47,7 +49,7 @@
         "modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts -> public/participants",
         "modules/task-execution/application/adapters/reaction-admission-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/adapters/reaction-execution-adapter.ts -> composition/required-ports",
-        "routes/digitalEmployees.ts -> composition",
+        "server.ts -> composition",
         "services/digitalEmployeeAgentTemplates.ts -> public/participants"
       ]
     },
@@ -58,6 +60,7 @@
         "composition",
         "composition.ts",
         "domain",
+        "inbound",
         "infrastructure",
         "public"
       ],
@@ -87,8 +90,8 @@
         "modules/task-execution/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",
         "modules/task-execution/public/events.ts -> public/types",
-        "routes/eventCenter.ts -> composition",
-        "routes/webhookDeliveries.ts -> composition"
+        "routes/webhookDeliveries.ts -> composition",
+        "server.ts -> composition"
       ]
     },
     "execution-contract": {

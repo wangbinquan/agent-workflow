@@ -1,21 +1,13 @@
 import type {
+  DigitalEmployeeMigrationStatus,
   DigitalEmployeeWriterCutoverPersistence,
   DigitalEmployeeWriterState,
 } from '../application/ports/writerCutoverPersistence'
 export type {
+  DigitalEmployeeMigrationStatus,
   DigitalEmployeeWriterState,
   DigitalEmployeeWriterInstallation,
 } from '../application/ports/writerCutoverPersistence'
-
-export interface DigitalEmployeeMigrationStatus {
-  readonly schemaVersion: 1
-  readonly writer: DigitalEmployeeWriterState
-  readonly mechanicallyAdoptable: readonly []
-  readonly drainingTotal: 0
-  readonly drainingTruncated: false
-  readonly draining: readonly []
-  readonly blockedReason: null
-}
 export interface DigitalEmployeeWriterCutoverOperations {
   read(): Promise<DigitalEmployeeWriterState>
   analyze(): Promise<DigitalEmployeeMigrationStatus>

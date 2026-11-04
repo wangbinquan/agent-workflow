@@ -88,8 +88,12 @@ import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accoun
 import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
 import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
-import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
-import { mountEventCenterRoutes } from '@/routes/eventCenter'
+import { mountDigitalEmployeeRoutes } from '@/modules/digital-employee/composition'
+import {
+  mountDevelopmentCaseRoutes,
+  type DevelopmentCaseRoutes,
+} from '@/modules/development-automation/composition'
+import { mountEventCenterRoutes } from '@/modules/event-center/composition'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import { mountCodeRoutes } from '@/routes/code'
@@ -164,6 +168,8 @@ export interface AppApiRouteMounts {
   readonly eventCenter: AppRouteMount
   readonly executionContracts: AppRouteMount
   readonly digitalEmployees: AppRouteMount
+  /** RFC-436: development-automation's case-scoped routes (graph design + activity worker). */
+  readonly developmentCases: AppRouteMount
   readonly developmentConfig: AppRouteMount
   readonly developmentMissions: AppRouteMount
   readonly missionInputUploads: AppRouteMount
@@ -316,10 +322,8 @@ export interface ProviderDigitalDevelopmentRouteComposition {
   readonly digitalEmployees: Readonly<{
     readonly persistence: Parameters<typeof mountDigitalEmployeeRoutes>[1]
     readonly module: Parameters<typeof mountDigitalEmployeeRoutes>[2]
-    readonly activityOperations: Parameters<typeof mountDigitalEmployeeRoutes>[3]
-    readonly contexts: Parameters<typeof mountDigitalEmployeeRoutes>[4]
-    readonly graph: Parameters<typeof mountDigitalEmployeeRoutes>[5]
   }>
+  readonly developmentCases: DevelopmentCaseRoutes
   readonly developmentConfig: Readonly<{
     readonly aclRoutes: Parameters<typeof mountDevelopmentConfigRoutes>[1]
     readonly operations: Parameters<typeof mountDevelopmentConfigRoutes>[2]
@@ -540,10 +544,9 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
         app,
         input.digitalDevelopment.digitalEmployees.persistence,
         input.digitalDevelopment.digitalEmployees.module,
-        input.digitalDevelopment.digitalEmployees.activityOperations,
-        input.digitalDevelopment.digitalEmployees.contexts,
-        input.digitalDevelopment.digitalEmployees.graph,
       ),
+    developmentCases: (app: Hono) =>
+      mountDevelopmentCaseRoutes(app, input.digitalDevelopment.developmentCases),
     developmentConfig: (app: Hono) =>
       mountDevelopmentConfigRoutes(
         app,
@@ -671,6 +674,7 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   routes.eventCenter(app)
   routes.executionContracts(app)
   routes.digitalEmployees(app)
+  routes.developmentCases(app)
   routes.developmentConfig(app)
   routes.developmentMissions(app)
   routes.missionInputUploads(app)

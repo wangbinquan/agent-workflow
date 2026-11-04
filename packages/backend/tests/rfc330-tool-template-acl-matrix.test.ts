@@ -6,7 +6,7 @@
 // 别人的工具与模版，`:archive` 能退休别人的工具，也不存在私有工具。
 //
 // 本文件锁修复后的语义（proposal AC-2 / AC-3 / AC-4 / AC-6）。**红→绿对**：把
-// `routes/digitalEmployees.ts` 里的 `requireEditableTool` / `requireGovernableTool` /
+// 数字员工 HTTP 绑定（RFC-436 起是 `modules/digital-employee/inbound/http/digitalEmployeeRoutes.ts`）里的 `requireEditableTool` / `requireGovernableTool` /
 // `requireEditableJobTemplate` / `loadVisibleTool` 拆掉，403/404 组必须立刻红。
 //
 // 用例形状与 rfc317-employee-definition-acl 同口径：行直接种进表（不注册类型包，
@@ -33,7 +33,17 @@ import {
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const ROUTE_FILE = resolve(import.meta.dir, '..', 'src', 'routes', 'digitalEmployees.ts')
+// RFC-436：数字员工的 HTTP 绑定归入模块 inbound/http。
+const ROUTE_FILE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'digital-employee',
+  'inbound',
+  'http',
+  'digitalEmployeeRoutes.ts',
+)
 const NOW = 1_700_000_000_000
 const TYPE_REF = 'development@10'
 const WORK_ITEM = 'analyze-implement'

@@ -8,6 +8,7 @@ import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { type DaemonIntentModules } from '@/bootstrap/daemonModules/intent'
 import { type DaemonDigitalEmployeeModules } from '@/bootstrap/daemonModules/digitalEmployee'
+import { employeeCaseRouteAccess } from '@/modules/digital-employee/composition'
 import { type DaemonDevelopmentAutomationModules } from '@/bootstrap/daemonModules/developmentAutomation'
 import { type DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { type DaemonScheduledTaskModules } from '@/bootstrap/daemonModules/scheduledTasks'
@@ -356,9 +357,16 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     digitalEmployees: Object.freeze({
       persistence: digitalEmployeePersistence,
       module: digitalEmployee,
-      activityOperations: developmentActivityOperations,
-      contexts: identityAccess.directAuthority,
+    }),
+    // RFC-436: development-automation mounts its own case-scoped routes; the
+    // case authorization is the digital-employee module's case access.
+    developmentCases: Object.freeze({
       graph: digitalEmployeeModules.graph,
+      caseAccess: employeeCaseRouteAccess(digitalEmployee.runtime),
+      activity: Object.freeze({
+        operations: developmentActivityOperations,
+        contexts: identityAccess.directAuthority,
+      }),
     }),
     developmentConfig: Object.freeze({
       aclRoutes: developmentAclRoutes,

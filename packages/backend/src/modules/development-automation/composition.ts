@@ -546,3 +546,12 @@ export { schemaContribution } from './composition/schema'
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createDevelopmentAutomationMaintenanceJobHandlers } from './application/maintenanceJobs'
+/**
+ * RFC-436: development-automation mounts its own case-scoped routes (graph
+ * design routes and the activity operation) right after the digital-employee
+ * routes; bootstrap supplies the case authorization.
+ */
+export {
+  mountDevelopmentCaseRoutes,
+  type DevelopmentCaseRoutes,
+} from './inbound/http/employeeCaseRoutes'

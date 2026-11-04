@@ -28,7 +28,8 @@ function files(root: string): string[] {
 
 function businessFiles(moduleName: string): string[] {
   const root = join(BACKEND, 'src', 'modules', moduleName)
-  return ['application', 'domain', 'public'].flatMap((layer) => files(join(root, layer)))
+  // RFC-436：两个模块的 HTTP 绑定在本模块 inbound/，同样不得触及 DB 机制。
+  return ['application', 'domain', 'inbound', 'public'].flatMap((layer) => files(join(root, layer)))
 }
 
 export function providerMechanismViolations(candidates: readonly CandidateSource[]): string[] {
@@ -44,17 +45,12 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     const candidates = [
       ...businessFiles('digital-employee'),
       ...businessFiles('development-automation'),
-      ...[
-        'developmentConfig.ts',
-        'developmentMissions.ts',
-        'digitalEmployees.ts',
-        'missionInputUploads.ts',
-      ].map((name) => join(BACKEND, 'src', 'routes', name)),
-      ...[
-        'developmentDeliveryDeps.ts',
-        'digitalEmployeeAgentTemplates.ts',
-        'employeeCaseMembers.ts',
-      ].map((name) => join(BACKEND, 'src', 'services', name)),
+      ...['developmentConfig.ts', 'developmentMissions.ts', 'missionInputUploads.ts'].map((name) =>
+        join(BACKEND, 'src', 'routes', name),
+      ),
+      ...['developmentDeliveryDeps.ts', 'digitalEmployeeAgentTemplates.ts'].map((name) =>
+        join(BACKEND, 'src', 'services', name),
+      ),
     ]
     expect(candidates.length).toBeGreaterThanOrEqual(10)
     const violations = providerMechanismViolations(

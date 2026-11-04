@@ -18,10 +18,12 @@
 // entry off the allowlist by refactoring to a Zod `safeParse`.
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
+const SRC_DIR = resolve(import.meta.dir, '..', 'src')
+const ROUTES_DIR = resolve(SRC_DIR, 'routes')
+const MODULES_DIR = resolve(SRC_DIR, 'modules')
 
 /**
  * Patterns that are NEVER cast bypasses — they're legitimate type narrowings
@@ -154,10 +156,39 @@ function isImportishLine(line: string, allLines: string[], lineIdx: number): boo
   return false
 }
 
+/**
+ * RFC-436: HTTP bindings move from `routes/` into their owner module's
+ * `inbound/` adapter (RFC-294 design §2). A guard that only listed `routes/`
+ * would silently stop guarding a binding the moment it moved, so the scan also
+ * covers every module's `inbound/**` sources. Route files keep their bare file
+ * name as the allowlist key; inbound files use their path under `src/`.
+ */
+function listInboundFiles(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...listInboundFiles(path))
+    else if (entry.name.endsWith('.ts')) out.push(path)
+  }
+  return out
+}
+
 function listRouteFiles(): string[] {
-  return readdirSync(ROUTES_DIR)
+  const routes = readdirSync(ROUTES_DIR)
     .filter((f) => f.endsWith('.ts'))
     .map((f) => join(ROUTES_DIR, f))
+  const inbound = readdirSync(MODULES_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(MODULES_DIR, entry.name, 'inbound'))
+    .filter((dir) => existsSync(dir))
+    .flatMap((dir) => listInboundFiles(dir))
+  return [...routes, ...inbound]
+}
+
+function routeFileKey(file: string): string {
+  return file.startsWith(ROUTES_DIR + '/')
+    ? file.slice(ROUTES_DIR.length + 1)
+    : file.slice(SRC_DIR.length + 1)
 }
 
 const CAST_RE = /\bas\s+([A-Za-z_][A-Za-z0-9_]*)/g
@@ -208,7 +239,7 @@ describe('RFC-054 W1-7 — routes/*.ts must not use `as T` to bypass Zod', () =>
 
     const violations: Violation[] = []
     for (const f of files) {
-      const basename = f.slice(ROUTES_DIR.length + 1)
+      const basename = routeFileKey(f)
       const lines = stripComments(readFileSync(f, 'utf-8')).split('\n')
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!
@@ -254,7 +285,7 @@ describe('RFC-054 W1-7 — routes/*.ts must not use `as T` to bypass Zod', () =>
     // every allowlist entry corresponds to a real (stripped-comment) line.
     const sources = new Map<string, string[]>()
     for (const f of listRouteFiles()) {
-      const basename = f.slice(ROUTES_DIR.length + 1)
+      const basename = routeFileKey(f)
       sources.set(basename, stripComments(readFileSync(f, 'utf-8')).split('\n'))
     }
     const zombies: string[] = []

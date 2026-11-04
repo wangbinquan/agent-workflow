@@ -11,7 +11,7 @@
 //
 // 比「忘了加过滤」更坏：列的存在会让下一个读代码的人以为可见性已经受控。
 //
-// 本文件锁修复后的语义。**红→绿对**：把 `routes/digitalEmployees.ts` 里的
+// 本文件锁修复后的语义。**红→绿对**：把数字员工 HTTP 绑定（RFC-436 起是 `modules/digital-employee/inbound/http/digitalEmployeeRoutes.ts`）里的
 // `loadVisibleEmployee` / `requireOwnedEmployee` 拆掉，403/404 组必须立刻红。
 //
 // 关于用例形状的两点说明
@@ -44,7 +44,17 @@ import {
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const ROUTE_FILE = resolve(import.meta.dir, '..', 'src', 'routes', 'digitalEmployees.ts')
+// RFC-436：数字员工的 HTTP 绑定归入模块 inbound/http。
+const ROUTE_FILE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'digital-employee',
+  'inbound',
+  'http',
+  'digitalEmployeeRoutes.ts',
+)
 const NOW = 1_700_000_000_000
 
 interface Actor {
@@ -239,7 +249,7 @@ describe('RFC-317 T8 —— 三个列表面都接了可见性过滤（AST 断言
   // 行为已由 rfc099 矩阵逐类覆盖。这里要证的是**接线**：三个列表 handler 都真的
   // 过了那道过滤，而不是漏掉一个。
   const source = ts.createSourceFile(
-    'digitalEmployees.ts',
+    'digitalEmployeeRoutes.ts',
     readFileSync(ROUTE_FILE, 'utf8'),
     ts.ScriptTarget.Latest,
     true,

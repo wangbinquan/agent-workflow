@@ -12,7 +12,8 @@
 //   成员   = GET 对可见者开放；PUT 仅 owner / bypass；重复成员 last-wins；转移后前任降为
 //            collaborator；WS 帧受众 = before ∪ after
 //
-// **红→绿对**：把 `routes/digitalEmployees.ts` 里的 `loadVisibleCase` / `requireCaseOperator`
+// **红→绿对**：把数字员工 HTTP 绑定（RFC-436 起是
+// `modules/digital-employee/inbound/http/digitalEmployeeRoutes.ts`）里的 `loadVisibleCase` / `requireCaseOperator`
 // 拆掉，404/403 组必须立刻红。行直接种进 `employee_cases`（无上下文 / 轮次），所以正向
 // 用例只断言「门放行」（响应码不是门的码），放行后的投影 / 状态机失败不归本文件管。
 
@@ -30,7 +31,8 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { buildActor } from '../src/auth/actor'
-import { canOperateCase, canViewCase } from '../src/services/employeeCaseMembers'
+// RFC-436：判据从 `services/employeeCaseMembers` 归入 digital-employee 的案例访问。
+import { canOperateCase, canViewCase } from '../src/modules/digital-employee/application/caseAccess'
 import { createUser } from './helpers/userFixture'
 import {
   TASKS_LIST_CHANNEL,

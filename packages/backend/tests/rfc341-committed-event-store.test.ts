@@ -69,7 +69,11 @@ async function setRoutingEpoch(harness: ProviderHarness, epoch: number): Promise
 
 describe('RFC-341 committed-event store', () => {
   test('Event Center maps retry CAS loss to the stable route error code', () => {
-    const route = readFileSync(resolve(import.meta.dir, '../src/routes/eventCenter.ts'), 'utf8')
+    // RFC-436: Event Center's HTTP binding lives in its module's inbound adapter.
+    const route = readFileSync(
+      resolve(import.meta.dir, '../src/modules/event-center/inbound/http/eventCenterRoutes.ts'),
+      'utf8',
+    )
     expect(route).toContain("'committed-event-retry-conflict'")
     expect(route).toContain('/api/event-center/committed-deliveries/:eventId/:consumerId/retry')
   })

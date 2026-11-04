@@ -1,7 +1,8 @@
 // RFC-317 T55 · findings TP-05 —— 通用面不得引用「以某个员工类型命名」的权限点。
 //
 // `composeDigitalEmployee` 收的是 `typePackages: [...]` —— 一个**列表**；
-// `routes/digitalEmployees.ts` 也泛型地列举员工**类型**。可是这个通用模块挂出来的路由，
+// 数字员工 HTTP 绑定（RFC-436 起是 `modules/digital-employee/inbound/http/digitalEmployeeRoutes.ts`）
+// 也泛型地列举员工**类型**。可是这个通用模块挂出来的路由，
 // 授权词表里硬编码着**今天唯一存在的那个类型**的名字：`development-missions:*`。
 //
 // 为什么这是个问题而不只是命名难看：加第二个员工类型时，它的路由要么被迫复用

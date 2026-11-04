@@ -7,25 +7,19 @@ import type { Hono } from 'hono'
 import { z } from 'zod'
 
 import { actorOf, type Actor } from '@/auth/actor'
-import type { DigitalEmployeeModule } from '@/modules/digital-employee/composition'
-import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
-import {
-  createDevelopmentActivityOperation,
-  type DevelopmentActivityOperations,
-} from '@/modules/development-automation/public/operations'
-import { registerOperationRoute } from '@/routes/operationRoute'
-import { directOperationAuthority } from '@/routes/operationAuthority'
 import { registerRoute } from '@/routes/registry'
+import type { DigitalEmployeeModule } from '../../application/ports/digitalEmployeeModule'
 import {
-  canManageCaseMembers,
   // RFC-359 W57：`loadVisibleCase` / `requireCaseOperator` 此前在本文件里各有一份**逐字相同**的
-  // 局部闭包——而本文件早就从这个服务取三个判据了。它们决定「这个案子对你可见吗 / 你能不能操作」，
-  // 两份实现意味着路由与服务可能对同一个 actor 给出不同答案。
+  // 局部闭包。它们决定「这个案子对你可见吗 / 你能不能操作」，两份实现意味着路由与判据可能对
+  // 同一个 actor 给出不同答案。RFC-436：`requireCaseOwner` 的局部副本同理删除，三者都取自本
+  // context 的案例访问判据。
   loadVisibleCase,
   requireCaseOperator,
+  requireCaseOwner,
   type CaseAclRow,
-} from '@/services/employeeCaseMembers'
-import { assertNotBuiltin } from '@/services/systemResources'
+} from '../../application/caseAccess'
+import { assertEmployeeToolWritable } from '../../application/toolAccess'
 import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -142,20 +136,17 @@ export interface DigitalEmployeeRoutePersistence {
   }): void
 }
 
+/**
+ * RFC-436: the digital-employee module's own HTTP binding (formerly
+ * `routes/digitalEmployees.ts`). It mounts only this context's routes;
+ * development-automation mounts its case-scoped graph design routes and the
+ * activity operation itself (`server.ts` route group `developmentCases`), with
+ * the case authorization from `application/caseAccess`.
+ */
 export function mountDigitalEmployeeRoutes(
   app: Hono,
   persistence: DigitalEmployeeRoutePersistence,
   module: DigitalEmployeeModule,
-  activityOperations: DevelopmentActivityOperations,
-  contexts: DirectAuthorityBinding,
-  graph?: {
-    mountRoutes(
-      app: Hono,
-      access: {
-        authorize(actor: Actor, caseId: string, edit: boolean): Promise<unknown>
-      },
-    ): void
-  },
 ): void {
   const maxUploadBytes = 32 * 1024 * 1024
   const adapterVisibilitySubject = (c: Parameters<typeof actorOf>[0]) =>
@@ -236,7 +227,7 @@ export function mountDigitalEmployeeRoutes(
     toolId: string,
   ): Promise<{ row: ToolAclRow; access: ResourceAccess }> => {
     const row = await loadVisibleTool(c, toolId)
-    assertNotBuiltin('employee_tool', row)
+    assertEmployeeToolWritable(row)
     const access = await persistence.requireResourceEdit(actorOf(c), 'employee_tool', row)
     return { row, access }
   }
@@ -245,7 +236,7 @@ export function mountDigitalEmployeeRoutes(
     toolId: string,
   ): Promise<ToolAclRow> => {
     const row = await loadVisibleTool(c, toolId)
-    assertNotBuiltin('employee_tool', row)
+    assertEmployeeToolWritable(row)
     await persistence.requireResourceGovern(actorOf(c), 'employee_tool', row)
     return row
   }
@@ -276,18 +267,6 @@ export function mountDigitalEmployeeRoutes(
     const row = await loadVisibleJobTemplate(c, id)
     const access = await persistence.requireResourceEdit(actorOf(c), 'employee_job_template', row)
     return { row, access }
-  }
-  const requireCaseOwner = async (
-    runtime: DigitalEmployeeCaseRuntime,
-    actor: Actor,
-    caseId: string,
-  ): Promise<CaseAclRow> => {
-    const row = await loadVisibleCase(runtime, actor, caseId)
-    if (canManageCaseMembers(actor, row)) return row
-    throw new ForbiddenError(
-      'forbidden',
-      'only the employee case owner or an actor with resource-acl:bypass can manage members',
-    )
   }
   // 只取改名围栏要比对的那一个字符串字段；用 zod 而不是 `as` 转型（routes-no-cast 守卫）。
   const submittedString = (body: unknown, key: string): string | undefined => {
@@ -384,13 +363,6 @@ export function mountDigitalEmployeeRoutes(
 
   if (module.runtime !== null) {
     const runtime = module.runtime
-    graph?.mountRoutes(app, {
-      authorize: (actor, caseId, edit) =>
-        edit
-          ? requireCaseOperator(runtime, actor, caseId)
-          : loadVisibleCase(runtime, actor, caseId),
-    })
-
     registerRoute(
       app,
       {
@@ -588,17 +560,6 @@ export function mountDigitalEmployeeRoutes(
         return jsonDocumentResponse(document.projectionJson)
       },
     )
-
-    registerOperationRoute(app, {
-      descriptor: createDevelopmentActivityOperation(activityOperations),
-      method: 'POST',
-      path: '/api/employee-cases/worker/run-one',
-      executionGroup: 'digital-employee',
-      tokenAccess: 'never',
-      decode: () => ({}),
-      context: (c) => directOperationAuthority(contexts, actorOf(c)),
-      encode: (c, output) => c.json(output),
-    })
   }
 
   registerRoute(

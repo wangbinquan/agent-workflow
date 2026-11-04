@@ -9,6 +9,9 @@ import {
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeTaskCatalogSource,
+  canManageCaseMembers,
+  type DigitalEmployeeAclResourceType,
+  type DigitalEmployeeRoutePersistence,
 } from '@/modules/digital-employee/composition'
 import {
   composeDevelopmentEmployeeWorkspace,
@@ -47,17 +50,12 @@ import {
 } from '@/services/digitalEmployeeAgentTemplates'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import { type DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
-import {
-  type DigitalEmployeeAclResourceType,
-  type DigitalEmployeeRoutePersistence,
-} from '@/routes/digitalEmployees'
 import { type ProviderResourceCatalogComposition } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import {
   resourceAclAudienceAuthority,
   type updateResourceAcl,
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import { planMembersReplacement } from '@/modules/collaboration/composition'
-import { canManageCaseMembers } from '@/services/employeeCaseMembers'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { ValidationError, ForbiddenError } from '@/util/errors'

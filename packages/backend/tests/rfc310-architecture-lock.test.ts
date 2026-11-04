@@ -3,7 +3,8 @@
 //
 // 锁四类合同（design.md §1.2/§1.3）：
 // 1. 模块顶层结构闭集：只允许 domain/application/engine/ports/infrastructure/
-//    public/composition 七层目录 + composition.ts；public/ 下只允许 RFC-294 的
+//    public/composition 七层目录、RFC-294 design §2 的可选 inbound/（RFC-436 起）
+//    + composition.ts；public/ 下只允许 RFC-294 的
 //    五个 exact 入口名（跨 context 深 import 由 rfc294-architecture-preflight 锁，
 //    此处锁的是结构本身）。
 // 2. composition.ts 的全仓消费者精确账本；已退役 required-ports 的消费者须保持为空。
@@ -30,6 +31,8 @@ const TOP_LEVEL_ALLOWED_DIRS = new Set([
   'engine',
   'ports',
   'infrastructure',
+  // RFC-436：RFC-294 design §2 的可选层，本域专属的 HTTP 绑定（只 decode → call → map）。
+  'inbound',
   'public',
   'composition',
 ])
@@ -57,6 +60,8 @@ const COMPOSITION_CONSUMERS: string[] = [
   'bootstrap/maintenanceWorkerGraph.ts',
   // RFC-431: the standalone profile states the local development-automation selections.
   'bootstrap/standalone.ts',
+  // RFC-436: server.ts mounts the case-scoped routes development-automation owns.
+  'server.ts',
 ]
 const REQUIRED_PORTS_CONSUMERS: string[] = []
 
@@ -182,6 +187,10 @@ describe('rfc310 development-automation architecture lock', () => {
         }
         if (inside.startsWith('public/') && (touchesInfra || transport || s.startsWith('@/db'))) {
           flag('public must not touch infrastructure/transport/db')
+        }
+        // RFC-294 §3 常驻规则 3：inbound 绑定只 decode → call → map，不碰 DB 与本模块 infrastructure。
+        if (inside.startsWith('inbound/') && (touchesInfra || s.startsWith('@/db'))) {
+          flag('inbound binding must not touch infrastructure/db')
         }
         if (inside !== 'composition.ts' && s === `${MODULE_SPEC}/composition/required-ports`) {
           flag('required-ports is composition/adapter-only')
