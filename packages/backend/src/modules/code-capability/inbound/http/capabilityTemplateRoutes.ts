@@ -1,5 +1,10 @@
 // RFC-309 T7/T8 — the HTTP face of the capability template. One resource.
 //
+// RFC-439: this binding moved from `routes/capabilityTemplates.ts` into the
+// module's own inbound/http layer; the application root mounts it through
+// `composition/routes`. The generic ACL endpoint template it delegates to is an
+// HTTP transport helper, like `registerRoute`.
+//
 // RFC-304 mounted two: `/api/capability-frameworks` (department: scripts and
 // hooks, system-domain writes) and `/api/capability-bindings` (group: agents,
 // prompts, params). Neither half was usable alone, so a person configuring a
@@ -27,10 +32,10 @@
 import type { Hono } from 'hono'
 import { type ResourceAcl, type UpdateResourceAclBody } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { CapabilityTemplateOperations } from '@/modules/code-capability/application/capabilityTemplateOperations'
+import type { CapabilityTemplateOperations } from '../../application/capabilityTemplateOperations'
 import { registerRoute } from '@/routes/registry'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
-import type { TemplateUpstreamOperations } from '@/modules/code-capability/application/templateUpstreamStatus'
+import type { TemplateUpstreamOperations } from '../../application/templateUpstreamStatus'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 

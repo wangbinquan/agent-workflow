@@ -83,7 +83,10 @@ import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
-import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
+import {
+  mountCapabilityTemplateRoutes,
+  mountCodeRoutes,
+} from '@/modules/code-capability/composition/routes'
 import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
 import { mountDigitalEmployeeRoutes } from '@/modules/digital-employee/composition'
@@ -94,7 +97,6 @@ import {
 import { mountEventCenterRoutes } from '@/modules/event-center/composition'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
-import { mountCodeRoutes } from '@/routes/code'
 import {
   mountScheduledTaskRoutes,
   mountWebhookDeliveryRoutes,

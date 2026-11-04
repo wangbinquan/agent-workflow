@@ -42,8 +42,8 @@ describe('RFC-349 code-capability provider boundary', () => {
       ...files(join(MODULE, 'application')),
       ...files(join(MODULE, 'domain')),
       ...files(join(MODULE, 'public')),
-      join(BACKEND, 'src', 'routes', 'code.ts'),
-      join(BACKEND, 'src', 'routes', 'capabilityTemplates.ts'),
+      // RFC-439: the two code HTTP bindings moved from `routes/` into the module's inbound layer.
+      ...files(join(MODULE, 'inbound')),
       join(BACKEND, 'src', 'services', 'codeIntel', 'codeIntel.ts'),
       join(BACKEND, 'src', 'services', 'codeIntel', 'fileSymbols.ts'),
       join(BACKEND, 'src', 'services', 'changeNarrative.ts'),
@@ -131,7 +131,10 @@ describe('RFC-349 code-capability provider boundary', () => {
   })
 
   test('capability-template transport consumes the injected upstream operation', () => {
-    const source = readFileSync(join(BACKEND, 'src', 'routes', 'capabilityTemplates.ts'), 'utf8')
+    const source = readFileSync(
+      join(MODULE, 'inbound', 'http', 'capabilityTemplateRoutes.ts'),
+      'utf8',
+    )
     expect(source).toContain('deps.codeHistoryQueries.templateUpstream')
     expect(source).toContain('templateUpstream.read(id)')
     expect(source).toContain('templateUpstream.merge(id, actor)')

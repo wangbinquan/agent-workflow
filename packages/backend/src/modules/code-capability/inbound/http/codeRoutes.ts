@@ -1,5 +1,9 @@
 // RFC-304 T31b — the HTTP face of `/code`.
 //
+// RFC-439: this binding moved from `routes/code.ts` into the module's own
+// inbound/http layer, so it reads the module's domain and application types
+// directly; the application root mounts it through `composition/routes`.
+//
 // Three endpoints, which is the whole minimal surface PR-5's page needs: read
 // the repository × capability matrix, flip one cell, and watch what the
 // platform has been doing.
@@ -25,37 +29,27 @@ import type {
   CodeMetricsQuery,
   CodeRoundAttemptsQuery,
   CodeWorkItemProjectionQuery,
-} from '@/modules/code-capability/public/queries'
-import type { TemplateUpstreamOperations } from '@/modules/code-capability/application/templateUpstreamStatus'
-import {
-  CODE_CAPABILITIES,
-  parseCodeCapabilityId,
-} from '@/modules/code-capability/domain/stageContract'
-import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
-import { projectStageGraph } from '@/modules/code-capability/domain/stageGraph'
+} from '../../public/queries'
+import type { CodeDeliveryChainQuery } from '../../application/codeMatrixQuery'
+import type { TemplateUpstreamOperations } from '../../application/templateUpstreamStatus'
+import { CODE_CAPABILITIES, parseCodeCapabilityId } from '../../domain/stageContract'
+import { lookupStageContract } from '../../domain/capabilityRegistry'
+import { projectStageGraph } from '../../domain/stageGraph'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
 
 /**
- * Route-facing structural contract for code history. The module composition
- * returns this shape without making the legacy route import module internals,
- * which would create a new RFC-317 R1 inbound edge.
+ * The code-history reads this binding serves, in the module's own application
+ * types. `composeCodeHistoryQueries` returns exactly this shape. Before RFC-439
+ * the binding lived outside the module and restated the delivery chain as a
+ * structural copy (`unknown[]` rows) so that it would not import module
+ * internals; inside the module it names the real query.
  */
 export interface CodeHistoryRouteQueries {
   readonly matrix: CodeMatrixQuery
   readonly workItems: CodeWorkItemProjectionQuery
   readonly attempts: CodeRoundAttemptsQuery
-  readonly deliveries: {
-    forProject(input: {
-      readonly stableProjectId: string
-      readonly limit?: number
-    }): Promise<readonly unknown[]>
-    forCorrelation(correlationId: string): Promise<readonly unknown[]>
-    failures(input: {
-      readonly stableProjectId?: string
-      readonly limit?: number
-    }): Promise<readonly unknown[]>
-  }
+  readonly deliveries: CodeDeliveryChainQuery
   readonly metrics: CodeMetricsQuery
   readonly templateUpstream: TemplateUpstreamOperations
 }

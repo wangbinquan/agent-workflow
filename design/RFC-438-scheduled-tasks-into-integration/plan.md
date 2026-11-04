@@ -5,15 +5,15 @@
 
 ## 任务
 
-| 编号       | 内容                                                                                                          | 依据              |
-| ---------- | ------------------------------------------------------------------------------------------------------------- | ----------------- |
-| RFC-438-T1 | task-execution：定时启动合同移入本域端口并经 public 导出；后台启动入参收窄为 `runDue` 端口                    | design §2         |
-| RFC-438-T2 | resource-catalog `public/types` 转出访问档位投影；触发器校验端口扩三个成员；integration 变更通知端口          | design §3         |
-| RFC-438-T3 | 服务与节拍迁入 integration application，依赖改走端口与 owner；运行期 heal 迁入用例辅助                        | design §1、§3     |
-| RFC-438-T4 | 路由迁入 `inbound/http`；composition 转出挂载与 `composeScheduledTaskRunner`；`server.ts` 与 bootstrap 改连接 | design §2、§4、§5 |
-| RFC-438-T5 | 用例：新增 RFC-438 用例，改指旧路径的用例与辅助；账本与计数按实测更新                                         | design §6、§8     |
-| RFC-438-T6 | 集中验证；实现门（本会话自审，只审功能）；提交、推送、跟 exact SHA CI                                         | design §8         |
-| RFC-438-T7 | 收尾：proposal 状态、RFC 索引、`STATE.md`、RFC-294 plan（B / D 第四步）                                       | —                 |
+| 编号       | 内容                                                                                                                                  | 依据              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| RFC-438-T1 | 定时启动合同由 integration 以 consumer-owned 端口声明，task-execution 留同形本域合同（不进 public）；后台启动入参收窄为 `runDue` 端口 | design §2         |
+| RFC-438-T2 | resource-catalog `public/types` 转出访问档位投影；触发器校验端口扩三个成员；integration 变更通知端口                                  | design §3         |
+| RFC-438-T3 | 服务与节拍迁入 integration application，依赖改走端口与 owner；运行期 heal 迁入用例辅助                                                | design §1、§3     |
+| RFC-438-T4 | 路由迁入 `inbound/http`；composition 转出挂载与 `composeScheduledTaskRunner`；`server.ts` 与 bootstrap 改连接                         | design §2、§4、§5 |
+| RFC-438-T5 | 用例：新增 RFC-438 用例，改指旧路径的用例与辅助；账本与计数按实测更新                                                                 | design §6、§8     |
+| RFC-438-T6 | 集中验证；实现门（本会话自审，只审功能）；提交、推送、跟 exact SHA CI                                                                 | design §8         |
+| RFC-438-T7 | 收尾：proposal 状态、RFC 索引、`STATE.md`、RFC-294 plan（B / D 第四步）                                                               | —                 |
 
 ## 验收清单
 

@@ -32,7 +32,7 @@ import {
 } from '../src/modules/code-capability/application/codeMetricsQuery'
 import { composeCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
 import { createCodeMetricsRead } from '../src/modules/code-capability/infrastructure/codeMetricsRead'
-import { mountCodeRoutes } from '../src/routes/code'
+import { mountCodeRoutes } from '../src/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
 import { errorHandler } from '../src/util/errors'
 

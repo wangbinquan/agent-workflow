@@ -32,8 +32,8 @@
   - 原文件删除，不留 facade。
 - **G2 task-execution 不再依赖定时任务**：
   - 后台循环的定时任务节拍只收一个 `runDue` 端口，由 bootstrap 用 integration 的节拍装配；
-  - 定时启动闭包仍由 task-execution 实现（它启动的是本域任务），类型改为 task-execution 自有的合同，经 public 导出；
-    integration 以结构同形的端口消费它，bootstrap 连接。
+  - 定时启动闭包仍由 task-execution 实现（它启动的是本域任务）；合同由 integration 以 consumer-owned 端口声明，task-execution 留结构同形的
+    本域合同、不进 public（RFC-439 订正：此处原写「经 public 导出」，实现因 public 面规则改为现形），bootstrap 连接。
 - **G3 他域机制改走端口或 owner 合同**：
   - 资源访问档位判定取 owner 的精确入口；
   - 工作流启动入参与触发预检并入已有的触发器校验端口，由 composition 连接 legacy 实现；

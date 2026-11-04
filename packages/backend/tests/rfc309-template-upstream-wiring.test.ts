@@ -36,7 +36,7 @@ import { createTemplateUpstreamPersistence } from '../src/modules/code-capabilit
 import {
   mountCapabilityTemplateRoutes,
   type CapabilityTemplateRouteDeps,
-} from '../src/routes/capabilityTemplates'
+} from '../src/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
 import {
   assertNameUnchangedForEditor,

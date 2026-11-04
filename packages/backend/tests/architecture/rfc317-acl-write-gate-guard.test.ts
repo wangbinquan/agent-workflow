@@ -28,17 +28,20 @@
 // 前的形状），本文件必须立刻红。
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import ts from 'typescript'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const ROUTES_ROOT = resolve(REPO_ROOT, 'packages', 'backend', 'src', 'routes')
+const MODULES_ROOT = resolve(REPO_ROOT, 'packages', 'backend', 'src', 'modules')
 
 /** `mountAclEndpoints` 的**定义**所在处；它自然不需要 owner 判据。 */
 const ACL_MOUNTER_DEFINITION = 'packages/backend/src/routes/resourceAcl.ts'
-const CAPABILITY_TEMPLATE_ROUTE = 'packages/backend/src/routes/capabilityTemplates.ts'
+/** RFC-439：能力模板的 HTTP 绑定从 `routes/capabilityTemplates.ts` 搬进 code-capability 的 inbound 层。 */
+const CAPABILITY_TEMPLATE_ROUTE =
+  'packages/backend/src/modules/code-capability/inbound/http/capabilityTemplateRoutes.ts'
 
 /**
  * 只读地使用 `canViewResource` 的路由文件。每条必须写清「读什么、为什么不是写门」。
@@ -46,6 +49,13 @@ const CAPABILITY_TEMPLATE_ROUTE = 'packages/backend/src/routes/capabilityTemplat
  */
 const READ_ONLY_VISIBILITY_ALLOWLIST: Readonly<Record<string, string>> = {}
 
+/**
+ * 语料 = `routes/` 下的全部路由文件 + 各模块 `inbound/` 下的 HTTP 绑定。
+ *
+ * RFC-436～439 按 RFC-294 目标架构把路由搬进 owner 模块的 `inbound/http`。只扫 `routes/`
+ * 会让搬走的绑定悄悄离开本守卫——「路由换了位置」看起来像「这个文件没了」，而它挂的 /acl
+ * 端点与写门从此不受约束（与 route-error-code-coverage 的「语料跟着走」同理）。
+ */
 function routeFiles(): string[] {
   const out: string[] = []
   const visit = (dir: string): void => {
@@ -56,6 +66,10 @@ function routeFiles(): string[] {
     }
   }
   visit(ROUTES_ROOT)
+  for (const entry of readdirSync(MODULES_ROOT, { withFileTypes: true })) {
+    const inbound = resolve(MODULES_ROOT, entry.name, 'inbound')
+    if (entry.isDirectory() && existsSync(inbound)) visit(inbound)
+  }
   return out.sort()
 }
 
@@ -299,6 +313,9 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
   test('语料非空：确实扫到了路由文件（扫到 0 个说明目录变了，本文件此刻零预言力）', () => {
     expect(SOURCES.length).toBeGreaterThan(30)
     expect(SOURCES.some((source) => source.rel === ACL_MOUNTER_DEFINITION)).toBe(true)
+    // RFC-439：语料必须包含模块 inbound 层的 HTTP 绑定，搬进模块的路由不能离开本守卫。
+    expect(SOURCES.some((source) => source.rel === CAPABILITY_TEMPLATE_ROUTE)).toBe(true)
+    expect(SOURCES.filter((source) => source.rel.includes('/inbound/')).length).toBeGreaterThan(5)
   })
 
   test('前提复核：确实存在挂载 /acl 的消费方，否则规则①无处可施', () => {

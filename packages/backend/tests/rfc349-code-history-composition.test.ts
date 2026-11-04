@@ -19,11 +19,20 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { mountCodeRoutes } from '@/routes/code'
+import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
 import { errorHandler } from '@/util/errors'
 
-const CODE_ROUTE_SOURCE = resolve(import.meta.dir, '..', 'src', 'routes', 'code.ts')
+const CODE_ROUTE_SOURCE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'code-capability',
+  'inbound',
+  'http',
+  'codeRoutes.ts',
+)
 const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'server.ts')
 const APPLICATION_SOURCE = resolve(
   import.meta.dir,

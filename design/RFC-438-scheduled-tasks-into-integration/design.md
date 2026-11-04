@@ -7,7 +7,7 @@
 
 - **bounded context / 层**：
   - integration：`application`（定时任务用例与节拍）、`application/ports`（变更通知）、`inbound/http`（管理面绑定）；
-  - task-execution：`application/ports`（定时启动合同）与 `public/commands` 导出；
+  - task-execution：`application/ports`（结构同形的本域定时启动合同，不进 public；合同本身由 integration 的 `application/ports/scheduledLaunch.ts` 以 consumer-owned 方式声明）；
   - resource-catalog：`public/types` 导出访问档位的两个纯投影；
   - composition、`server.ts` 与 bootstrap 只改连接。
 - **承担的演进**：W4 B / D 第四步，并执行 RFC-294 design §2「`services/` 按 owner 迁入模块后删除」：
@@ -76,7 +76,8 @@ onAutoDisable? })`，返回 `runDue({ maxFailures, defaultRuntime })`，内部�
 ## 5. 其他 import 方
 
 - `server.ts`：`IntegrationTriggerResourceBinding` 改用 integration 端口的 `IntegrationTriggerResourceQueries`（经 composition 转出）。
-- `bootstrap/daemonApplication.ts`、`daemonHttpComposition.ts`：`BuildScheduleLaunch` 改取 TE `public/commands`。
+- `bootstrap/daemonApplication.ts`、`daemonHttpComposition.ts`：`BuildScheduleLaunch` 改取 integration `composition/scheduledTasks` 转出的类型
+  （RFC-439 订正：此处原写「改取 TE `public/commands`」，与实现不符）。
 - integration：`composition/webhookAdmission.ts`、`composition/webhookDispatch.ts`、`composition/scheduledTasks.ts`、
   `infrastructure/webhookDispatchRuntime.ts` 改从本模块 application 取。
 - 用例与辅助文件：约 22 个引用旧路径的文件改指新位置；heal 用例改从 `T/helpers/scheduledPayloadHeal.ts` 取。

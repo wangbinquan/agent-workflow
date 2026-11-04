@@ -17,7 +17,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { mountCodeRoutes } from '@/routes/code'
+import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
 import { errorHandler } from '@/util/errors'
 
