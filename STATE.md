@@ -1,3 +1,17 @@
+## 2026-11-04 RFC-447 仓库组用例归 source-control（In Progress；`design/RFC-447-repository-groups-into-source-control/`）
+
+- **来由**：RFC-294 W4 B / D 第十三步（RFC-446 后 6 个路由仍 import `services/`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/repoGroup.ts` 迁入 source-control `application/repositoryGroups.ts`（函数体原样）；挂 URL 节点的现场登记改为注入的
+    `importRepositoryUrl`，由 `composeRepositoryGroups` 按部署形态选择（托管远端登记 / 单机镜像缓存，等待上限由装配根按请求现取）；
+  - 路由只经 public 合同 `RepositoryGroups`（`mountRepoGroupRoutes(app, groups)`）；展平函数在模块内改取同模块文件，`services/task.ts` 经 `public/queries`；
+  - 两个只转手存储的导出（`groupsReferencingRepo`、`detachRepoFromAllGroups`）删除，用例改调存储端口；
+  - import `services/` 的路由 6 → 5；`services/` 文件 217 → 216；模块里 import `services/` 的文件 143 → 142。
+- **不做**：`cached-repos` 与 `services/gitRepoCache`、`services/repoBatchImport`；其余 5 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-445、RFC-446 的 Done 文档提交 `5bb075d31`：exact SHA 主 CI run 41974281472 首轮全绿。
+
 ## 2026-11-04 RFC-446 仓库 refs / files 读取归 source-control（Done；`design/RFC-446-repository-reads-into-source-control/`）
 
 - **来由**：RFC-294 W4 B / D 第十二步（RFC-445 后 7 个路由仍 import `services/`）。

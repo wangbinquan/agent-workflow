@@ -100,7 +100,7 @@ import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecuti
 import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { mintNodeRun, nextRetryIndex } from '@/services/nodeRunMint'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import { resolveRepoGroupLayout } from '@/modules/source-control/public/queries'
 import {} from '@/services/taskAuthorization'
 import { ConflictError, DomainError, ValidationError, diagnosticTextOf } from '@/util/errors'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'

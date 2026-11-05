@@ -38,7 +38,10 @@ import { ulid } from 'ulid'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { rememberVolatileRepoUrl } from '../src/services/repoCredentials'
-import { createRepoGroup, updateRepoGroup } from '../src/services/repoGroup'
+import {
+  createRepoGroup,
+  updateRepoGroup,
+} from '../src/modules/source-control/application/repositoryGroups'
 import { getTask } from '@/services/task'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { materializeSpace } from './helpers/legacyTaskWorkspace'

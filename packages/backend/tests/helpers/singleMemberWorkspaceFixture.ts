@@ -15,7 +15,7 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
-import { createRepoGroup } from '@/services/repoGroup'
+import { createRepoGroup } from '@/modules/source-control/application/repositoryGroups'
 import { runGit } from '@/util/git'
 import type { ProviderHarness } from './eachProvider'
 import { createEachProviderTaskExecution } from './eachProviderTaskExecution'

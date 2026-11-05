@@ -10,7 +10,7 @@ import {
   resolveSubmoduleParams,
 } from '@/services/gitRepoCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import { resolveRepoGroupLayout } from '../application/repositoryGroups'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   cleanupCreatedWorktree,
@@ -928,7 +928,7 @@ export async function materializeSpaceWithProvider(
   }
 
   // RFC-248: 用仓库组启动时，成员规格由**展平后的布局**给出，而不是 wire 上的
-  // `repos[]`。展平在 services/repoGroup.ts 里做（校验错误已在那里转成 422）。
+  // `repos[]`。展平在 application/repositoryGroups.ts 里做（校验错误已在那里转成 422）。
   // RFC-248（实现门 P1）：展平出 0 个仓的组**不能启动**。它可能来自 force 删掉
   // 最后一个仓、或者一个空的子组。放行的后果不是报错而是更糟：服务端建出一个
   // 没有任何 `task_repos` 的组根目录、`repoCount` 记成 1，然后任务在一个**不是

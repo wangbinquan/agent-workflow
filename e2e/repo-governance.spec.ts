@@ -11,7 +11,7 @@
 //
 // 判据取自源码单一事实源：
 //   `deleteCachedRepo` / `CachedRepoHasReferencesError`（gitRepoCache.ts:1593）
-//   `deleteRepoGroup` / `RepoGroupHasReferencesError`（repoGroup.ts:44,618）
+//   `deleteRepoGroup` / `RepoGroupHasReferencesError`（source-control application/repositoryGroups.ts:57,597）
 //   `clipAndRedact` / `redactGitUrl`（repoBatchImport.ts:496-506）
 //
 // fixture 里的「令牌」刻意**不带任何真实供应商前缀**（`glpat-` / `ghp_` …）：

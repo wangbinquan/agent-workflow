@@ -430,7 +430,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/ref/runtimeRef.ts': 'runtime-management',
   'packages/backend/src/services/repoBatchImport.ts': 'source-control',
   'packages/backend/src/services/repoCredentials.ts': 'source-control',
-  'packages/backend/src/services/repoGroup.ts': 'source-control',
   'packages/backend/src/services/repoLabels.ts': 'source-control',
   'packages/backend/src/services/resourceAcl.ts': 'resource-catalog',
   'packages/backend/src/services/resourceCopyName.ts': 'resource-catalog',

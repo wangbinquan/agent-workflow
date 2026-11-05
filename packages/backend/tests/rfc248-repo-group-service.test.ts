@@ -18,13 +18,11 @@ import {
   RepoGroupHasReferencesError,
   createRepoGroup as createRepoGroupImpl,
   deleteRepoGroup,
-  detachRepoFromAllGroups,
   getRepoGroup,
   getRepoGroupLayoutResponse,
-  groupsReferencingRepo,
   listRepoGroups,
   updateRepoGroup as updateRepoGroupImpl,
-} from '../src/services/repoGroup'
+} from '../src/modules/source-control/application/repositoryGroups'
 import { DomainError } from '../src/util/errors'
 import {
   repoGroupNodesFromAttachments,
@@ -685,10 +683,11 @@ describeEachProvider('RFC-248 repo group service', (harness) => {
       },
       null,
     )
-    const refs = await groupsReferencingRepo(store, appRepo)
+    // RFC-447：服务层的两个转手已删，删仓守卫直接用存储端口的同名方法。
+    const refs = await store.groupsReferencingRepo(appRepo)
     expect(refs.map((r) => r.name).sort()).toEqual(['g1', 'g2'])
-    expect(await detachRepoFromAllGroups(store, appRepo)).toBe(3) // g1 两行 + g2 一行
-    expect(await groupsReferencingRepo(store, appRepo)).toEqual([])
+    expect(await store.detachRepoFromAllGroups(appRepo)).toBe(3) // g1 两行 + g2 一行
+    expect([...(await store.groupsReferencingRepo(appRepo))]).toEqual([])
     const detached = await getRepoGroup(store, g1.id)
     expect(detached.nodes.every((node) => node.attachment === null)).toBe(true)
     expect(detached.nodes).toEqual([

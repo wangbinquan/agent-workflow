@@ -231,7 +231,7 @@ describeEachProvider('RFC-359 W8-T29 —— 两个用户同时建同名仓库组
         )
       }
       const settled = await Promise.allSettled([create('a'), create('b')])
-      // `services/repoGroup.ts` 把 'name-conflict' 翻成 409 `repo-group-name-conflict`；
+      // `modules/source-control/application/repositoryGroups.ts` 把 'name-conflict' 翻成 409 `repo-group-name-conflict`；
       // 裸 23505 冒上去就是 500。
       expect(settledShapes(settled, (value) => value).sort()).toEqual(['created', 'name-conflict'])
       // 库面同样只多一个组。

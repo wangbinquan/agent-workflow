@@ -1,5 +1,8 @@
 // RFC-249 — 仓库组目录树 CRUD、展平、预览与引用守卫。
 // DB 与公开 wire 的唯一事实源都是 repo_group_nodes；旧 members 模型已完全退役。
+//
+// RFC-447：由 services/repoGroup.ts 原样迁入 source-control 的 application 层。挂 URL 的节点现场登记改为注入的
+// `importRepositoryUrl`（装配层按部署形态选择远端登记或镜像缓存），本文件不再 import legacy。
 
 import type {
   CreateRepoGroup,
@@ -25,9 +28,13 @@ import type {
   RepositoryGroupRecord,
   RepositoryGroupSnapshot,
   RepositoryWorkspaceStore,
-} from '@/modules/source-control/public/operations'
-import type { RepositoryRegistration } from '@/modules/source-control/public/types'
-import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
+} from '../ports/repositoryWorkspaceStore'
+import type {
+  RepositoryGroupDeletion,
+  RepositoryGroupDraft,
+  RepositoryGroupPreview,
+  RepositoryGroupSnapshotReader,
+} from './ports/repositoryGroups'
 import {
   ConflictError,
   DomainError,
@@ -38,9 +45,12 @@ import {
 
 export interface RepoGroupDeps {
   store: RepositoryWorkspaceStore
-  cache?: GitRepoCacheDeps
-  /** RFC-370 §10 V17: registers a verified remote instead of cloning (hosted). */
-  register?: (url: string) => Promise<RepositoryRegistration>
+  /** RFC-447: a node that names its repository by URL is registered on the
+   * spot and gets the registered id. Composition picks the deployment's way: a
+   * hosted deployment registers a verified remote instead of cloning (RFC-370
+   * §10 V17); a standalone daemon clones into its mirror cache. Absent, such a
+   * node is refused. */
+  importRepositoryUrl?: (url: string) => Promise<string>
   now?: () => number
 }
 
@@ -67,7 +77,7 @@ type RawGroupRow = RepositoryGroupRecord
 type RawNodeRow = RepositoryGroupNodeRecord
 
 type RepoGroupWrite = CreateRepoGroup
-type RepoGroupPreviewWrite = { name?: string; nodes: readonly RepoGroupNodeInput[] }
+type RepoGroupPreviewWrite = RepositoryGroupDraft
 
 function asValidation(error: unknown): never {
   if (error instanceof RepoGroupLayoutError) {
@@ -109,7 +119,7 @@ function loadAllGroups(snapshot: RepositoryGroupSnapshot): Map<string, Flattenab
 }
 
 export async function resolveRepoGroupLayout(
-  store: RepositoryWorkspaceStore,
+  store: RepositoryGroupSnapshotReader,
   groupId: string,
 ): Promise<{
   repos: PlannedRepo[]
@@ -133,7 +143,7 @@ export async function resolveRepoGroupLayout(
 export async function previewRepoGroupLayout(
   store: RepositoryWorkspaceStore,
   input: RepoGroupPreviewWrite,
-): Promise<RepoGroupLayoutResponse & { pendingImports: number; pendingRepoPaths: string[] }> {
+): Promise<RepositoryGroupPreview> {
   const snapshot = await store.readRepositoryGroupSnapshot()
   const all = loadAllGroups(snapshot)
   const urlById = snapshot.repoUrls
@@ -347,18 +357,15 @@ async function materializeNodes(
     }
 
     let cachedRepoId = attachment.cachedRepoId ?? null
-    if (cachedRepoId === null && deps.register !== undefined) {
-      cachedRepoId = (await deps.register(attachment.repoUrl!)).cachedRepoId
-    } else if (cachedRepoId === null) {
-      if (deps.cache === undefined) {
+    if (cachedRepoId === null) {
+      if (deps.importRepositoryUrl === undefined) {
         throw new ValidationError(
           'repo-group-url-import-unavailable',
           'cannot import a repo URL in this context; pass cachedRepoId instead',
           { nodePath: node.path, nodeIndex: index },
         )
       }
-      const resolved = await resolveCachedRepo(deps.cache, { url: attachment.repoUrl! })
-      cachedRepoId = resolved.cached.id
+      cachedRepoId = await deps.importRepositoryUrl(attachment.repoUrl!)
     } else {
       if (!snapshot.repoUrls.has(cachedRepoId)) {
         throw new ValidationError(
@@ -573,11 +580,7 @@ export async function updateRepoGroup(
   return await getRepoGroup(deps.store, id)
 }
 
-export interface DeleteRepoGroupResult {
-  archivedMemories: number
-  detachedReferences: number
-  disabledSchedules: number
-}
+export type DeleteRepoGroupResult = RepositoryGroupDeletion
 
 function scheduledPayloadRepoGroupId(payload: unknown): string | null {
   if (typeof payload !== 'object' || payload === null) return null
@@ -640,19 +643,4 @@ export async function deleteRepoGroup(
     detachedReferences: deleted.detachedReferences,
     disabledSchedules: deleted.disabledSchedules,
   }
-}
-
-export async function groupsReferencingRepo(
-  store: RepositoryWorkspaceStore,
-  cachedRepoId: string,
-): Promise<Array<{ id: string; name: string }>> {
-  return [...(await store.groupsReferencingRepo(cachedRepoId))]
-}
-
-/** Force-delete a cached repo by detaching it while preserving its directory node/subtree. */
-export async function detachRepoFromAllGroups(
-  store: RepositoryWorkspaceStore,
-  cachedRepoId: string,
-): Promise<number> {
-  return await store.detachRepoFromAllGroups(cachedRepoId)
 }

@@ -495,13 +495,7 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
         input.resourceCatalog.repositories.store,
         input.resourceCatalog.repositories.mirrors,
       ),
-    repoGroups: (app: Hono) =>
-      mountRepoGroupRoutes(
-        app,
-        input.resourceCatalog.repositories.groups,
-        input.resourceCatalog.repositories.store,
-        input.resourceCatalog.repositories.mirrors,
-      ),
+    repoGroups: (app: Hono) => mountRepoGroupRoutes(app, input.resourceCatalog.repositories.groups),
     workflows: (app: Hono) =>
       mountWorkflowRoutes(
         app,

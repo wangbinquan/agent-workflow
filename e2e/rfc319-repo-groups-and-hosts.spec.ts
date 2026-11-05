@@ -17,7 +17,8 @@
 //     或反过来）会让用户以为自己的组被删了；展开行看到的展平布局是他**启动前唯一**能
 //     核对「这个组到底会给我几个仓、落在哪」的地方。
 //   * REPO-28 批量加仓 / 粘贴 URL 是组装组的两条主路径。粘贴那条会**现场导入**尚未缓存
-//     的远端（repoGroup.ts:388-398 的 `resolveCachedRepo`）——它静默失效的形态是「保存
+//     的远端（application/repositoryGroups.ts:359-368 的 `importRepositoryUrl`，单机装配为
+//     composition/repositoryGroups.ts:23-27 的 `resolveCachedRepo`）——它静默失效的形态是「保存
 //     成功但那个仓根本没进平台」，直到启动任务才发现。
 //   * REPO-29 批量操作条是节点多起来之后唯一能用的编辑手段。它的五个动作里有三个是
 //     **破坏性**的（摘除 / 移动 / 删除子树），任何一个作用到错误的节点集合上，用户都
@@ -44,10 +45,10 @@
 //   packages/frontend/src/components/repos/RepoBulkAddDialog.tsx:77-89   非法行按行号点名、重复行去重
 //   packages/frontend/src/components/repos/RepoBulkAddDialog.tsx:143-144 有非法行时提交按钮必须禁用
 //   packages/frontend/src/components/repos/RepoLayoutTree.tsx:87-108     ref / subdir / 只读 / via 链的呈现
-//   packages/backend/src/services/repoGroup.ts:492-504                   重名大小写不敏感 → 409
-//   packages/backend/src/services/repoGroup.ts:553-560                   自引用 → repo-group-cycle
-//   packages/backend/src/services/repoGroup.ts:562-578                   OCC 栅栏在事务内重读 version
-//   packages/backend/src/services/repoGroup.ts:414-428                   subdir 走 normalizeMountPath，错误带 `subdir: ` 前缀
+//   packages/backend/src/modules/source-control/application/repositoryGroups.ts:456-466  重名大小写不敏感 → 409
+//   packages/backend/src/modules/source-control/application/repositoryGroups.ts:520-525  自引用 → repo-group-cycle
+//   packages/backend/src/modules/source-control/application/repositoryGroups.ts:567-579  OCC 栅栏在事务内重读 version
+//   packages/backend/src/modules/source-control/application/repositoryGroups.ts:378-392  subdir 走 normalizeMountPath，错误带 `subdir: ` 前缀
 //   packages/shared/src/repoGroupLayout.ts:277-291                       同一定义内节点路径大小写折叠查重
 //   packages/shared/src/repoGroupLayout.ts:513-534                       超深度 / 成环 / 遍历预算
 //   packages/shared/src/repoGroupLayout.ts:579-593                       同一挂载点被两个仓占用

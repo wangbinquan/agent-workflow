@@ -293,6 +293,13 @@ export type {
   RepositoryRefresh,
   RepositoryRegistration,
 } from '../application/ports/repositoryMirrors'
+// RFC-447 — repository-group management operations for the HTTP surface.
+export type {
+  RepositoryGroupDeletion,
+  RepositoryGroupDraft,
+  RepositoryGroupPreview,
+  RepositoryGroups,
+} from '../application/ports/repositoryGroups'
 /** RFC-396: effect-free requests shared by employee types. Composition supplies
  * Git/process factories; callers cannot smuggle execution functions in a DTO. */
 export interface EmployeeCaseWorkspaceParticipant {

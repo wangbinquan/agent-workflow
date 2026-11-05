@@ -397,6 +397,8 @@ export type {
 } from './application/ports/workspaceContentEffects'
 /** RFC-370 §10 V17: registered repositories' reads, registration and refresh. */
 export { composeRepositoryMirrors } from './composition/repositoryMirrors'
+/** RFC-447: repository-group management and the standalone URL import. */
+export { composeRepositoryGroups, localRepositoryUrlImport } from './composition/repositoryGroups'
 export type {
   RepositoryMirrors,
   RepositoryRemoteEffects,

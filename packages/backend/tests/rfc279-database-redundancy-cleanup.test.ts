@@ -346,7 +346,7 @@ describe('RFC-279 source ratchet', () => {
       'modules/collaboration/infrastructure/clarify/queue.ts',
       'services/gitRepoCache.ts',
       'services/repoCredentials.ts',
-      'services/repoGroup.ts',
+      'modules/source-control/application/repositoryGroups.ts',
       'modules/resource-catalog/infrastructure/legacy/skillOperations.ts',
       'modules/resource-catalog/infrastructure/migration/skillBootRules.ts',
       'modules/integration/application/webhookDispatch.ts',

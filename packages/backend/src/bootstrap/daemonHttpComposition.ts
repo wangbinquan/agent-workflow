@@ -57,6 +57,7 @@ import { composeIdentityUserOperations } from '@/modules/identity-access/composi
 import { createOidcProvidersService } from '@/auth/oidc/providers'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
+  composeRepositoryGroups,
   composeRepositoryMirrors,
   createWorkspaceContentScope,
 } from '@/modules/source-control/composition'
@@ -464,6 +465,15 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       }),
     })
 
+  const repositoryMirrors = composeRepositoryMirrors({
+    store: core.repositoryWorkspaceStore,
+    secretBox: input.secretBox,
+    appHome: input.appHome,
+    // RFC-433: a hosted remote reads in the system volume; standalone (null) keeps its own mirror clones.
+    ...(input.selections.repositoryRemote === null
+      ? {}
+      : { remote: input.selections.repositoryRemote }),
+  })
   const resourceCatalogRoutes: ProviderAppCompositionInput<
     SelectedDaemonProviderCore<P>
   >['resourceCatalog'] = Object.freeze({
@@ -498,16 +508,13 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         appHome: input.appHome,
         secretBox: input.secretBox,
       }),
-      groups: Object.freeze({ configuration }),
-      mirrors: composeRepositoryMirrors({
+      // RFC-447: URL nodes register through the same mirrors the pickers read; the clone wait budget is read per write.
+      groups: composeRepositoryGroups({
         store: core.repositoryWorkspaceStore,
-        secretBox: input.secretBox,
-        appHome: input.appHome,
-        // RFC-433: a hosted remote reads in the system volume; standalone (null) keeps its own mirror clones.
-        ...(input.selections.repositoryRemote === null
-          ? {}
-          : { remote: input.selections.repositoryRemote }),
+        mirrors: repositoryMirrors,
+        cloneTimeoutMs: async () => (await configuration.read()).gitCloneTimeoutMs,
       }),
+      mirrors: repositoryMirrors,
     }),
     workflows: Object.freeze({
       runtime: input.testSeams?.workflowRuntime ?? Object.freeze({}),

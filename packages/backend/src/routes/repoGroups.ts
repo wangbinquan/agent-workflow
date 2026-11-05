@@ -10,6 +10,9 @@
 // 权限（D5）：仓库组与 cached_repos 同类，**复用 `repos:*` 权限点**，不新增
 // 授权矩阵行、不进 RFC-099 的 per-resource ACL。注意 `repos:update` 是本 RFC
 // 由 RFC-248 引入的点——在此之前 repos 域没有任何 PUT/PATCH 路由。
+//
+// RFC-447：用例归 source-control（`application/repositoryGroups.ts`），本路由只经 public 合同 `RepositoryGroups`；
+// URL 节点的现场登记（托管远端登记 / 单机镜像缓存，等待上限取 git clone 配置）由装配层选择。
 
 import {
   CreateRepoGroupSchema,
@@ -18,26 +21,11 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
-import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
+import type { RepositoryGroups } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
-import {
-  createRepoGroup,
-  deleteRepoGroup,
-  getRepoGroup,
-  getRepoGroupLayoutResponse,
-  listRepoGroups,
-  previewRepoGroupLayout,
-  updateRepoGroup,
-} from '@/services/repoGroup'
 import { ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
-
-export interface RepoGroupRouteDependencies {
-  readonly configuration: ApplicationConfigurationQueries
-}
 
 function assertNoRetiredMembers(raw: unknown): void {
   if (
@@ -53,25 +41,7 @@ function assertNoRetiredMembers(raw: unknown): void {
   }
 }
 
-export function mountRepoGroupRoutes(
-  app: Hono,
-  deps: RepoGroupRouteDependencies,
-  store: RepositoryWorkspaceStore,
-  mirrors: RepositoryMirrors,
-): void {
-  /** 建组 / 改组共用：URL→id 的现场导入要走缓存服务，超时沿用 git clone 配置。 */
-  const cacheDeps = async () => {
-    const cfg = await deps.configuration.read()
-    return {
-      store,
-      ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
-    }
-  }
-  // RFC-370 §10 V17：托管下 URL 挂载改为「校验远端后登记」，不在服务容器克隆。
-  const remote = mirrors.remoteRegistration
-  const registration =
-    remote === undefined ? {} : { register: (url: string) => remote.register(url) }
-
+export function mountRepoGroupRoutes(app: Hono, groups: RepositoryGroups): void {
   registerRoute(
     app,
     {
@@ -81,7 +51,7 @@ export function mountRepoGroupRoutes(
       tokenAccess: 'allow',
       summary: 'List repo groups',
     },
-    async (c) => c.json({ items: await listRepoGroups(store) }),
+    async (c) => c.json({ items: await groups.list() }),
   )
 
   registerRoute(
@@ -103,11 +73,7 @@ export function mountRepoGroupRoutes(
         })
       }
       const actor = actorOf(c)
-      const group = await createRepoGroup(
-        { store, cache: await cacheDeps(), ...registration },
-        parsed.data,
-        actor.user.id,
-      )
+      const group = await groups.create(parsed.data, actor.user.id)
       return c.json(group, 201)
     },
   )
@@ -121,7 +87,7 @@ export function mountRepoGroupRoutes(
       tokenAccess: 'allow',
       summary: 'Get a repo group',
     },
-    async (c) => c.json(await getRepoGroup(store, c.req.param('id'))),
+    async (c) => c.json(await groups.get(c.req.param('id'))),
   )
 
   registerRoute(
@@ -147,7 +113,7 @@ export function mountRepoGroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      return c.json(await previewRepoGroupLayout(store, parsed.data))
+      return c.json(await groups.preview(parsed.data))
     },
   )
 
@@ -160,7 +126,7 @@ export function mountRepoGroupRoutes(
       tokenAccess: 'allow',
       summary: 'Preview the flattened layout of a repo group',
     },
-    async (c) => c.json(await getRepoGroupLayoutResponse(store, c.req.param('id'))),
+    async (c) => c.json(await groups.layout(c.req.param('id'))),
   )
 
   registerRoute(
@@ -187,12 +153,7 @@ export function mountRepoGroupRoutes(
       // RFC-248: OCC 栅栏必须真的传下去——只在 schema 里留个字段而不转发，
       // 服务层那道 409 永远不会触发（实现门 P1）。
       const { expectedVersion, ...body } = parsed.data
-      const group = await updateRepoGroup(
-        { store, cache: await cacheDeps(), ...registration },
-        c.req.param('id'),
-        body,
-        expectedVersion,
-      )
+      const group = await groups.update(c.req.param('id'), body, expectedVersion)
       return c.json(group)
     },
   )
@@ -213,10 +174,10 @@ export function mountRepoGroupRoutes(
       if (actor.source === 'pat') {
         // RFC-247 T20 同款：令牌删除必须具名回显要删的东西。先查再确认，
         // 这样过期 id 回 404 而不是确认失败（与其它八条删除路由同序）。
-        const existing = await getRepoGroup(store, id)
+        const existing = await groups.get(id)
         assertTokenDeleteConfirm(await readDeleteBody(c), existing.name, 'repo', actor.source)
       }
-      const r = await deleteRepoGroup(store, id, { force })
+      const r = await groups.remove(id, { force })
       return c.json({ ok: true as const, ...r })
     },
   )

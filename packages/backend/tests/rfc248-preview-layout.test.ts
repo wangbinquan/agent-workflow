@@ -20,7 +20,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { previewRepoGroupLayout as previewRepoGroupLayoutImpl } from '../src/services/repoGroup'
+import { previewRepoGroupLayout as previewRepoGroupLayoutImpl } from '../src/modules/source-control/application/repositoryGroups'
 import {
   repoGroupNodesFromAttachments,
   type RepoGroupAttachmentSpec,

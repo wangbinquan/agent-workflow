@@ -45,10 +45,13 @@ import {
 } from '@/modules/source-control/infrastructure/local/fileFusionWorkspaceEffects'
 import { getWorkflow, workflowDraftSnapshotOf } from '@/services/workflow'
 
-import { createRepoGroup } from '@/services/repoGroup'
+import { createRepoGroup } from '@/modules/source-control/application/repositoryGroups'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  localRepositoryUrlImport,
+} from '../src/modules/source-control/composition'
 import {
   createWorkflow,
   updateWorkflow,
@@ -243,7 +246,7 @@ describe('RFC-199 production materialization cleanup', () => {
       composeSourceControlTaskPorts(harness.db),
     )
     const group = await createRepoGroup(
-      { store, cache: { store, appHome: harness.appHome } },
+      { store, importRepositoryUrl: localRepositoryUrlImport({ store, appHome: harness.appHome }) },
       {
         name: 'rfc199-multi',
         description: '',
@@ -553,13 +556,13 @@ describe('RFC-199 production materialization cleanup', () => {
           harness.db,
           composeSourceControlTaskPorts(harness.db),
         ),
-        cache: {
+        importRepositoryUrl: localRepositoryUrlImport({
           store: composeSqliteRepositoryWorkspaceStore(
             harness.db,
             composeSourceControlTaskPorts(harness.db),
           ),
           appHome: harness.appHome,
-        },
+        }),
       },
       {
         name: 'rfc199-partial',

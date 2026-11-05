@@ -16,8 +16,11 @@ import {
   type RepoGroupNodeInput,
 } from '@agent-workflow/shared'
 import type { DbClient } from '../../src/db/client'
-import { createRepoGroup } from '../../src/services/repoGroup'
-import { composeSqliteRepositoryWorkspaceStore } from '../../src/modules/source-control/composition'
+import { createRepoGroup } from '../../src/modules/source-control/application/repositoryGroups'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  localRepositoryUrlImport,
+} from '../../src/modules/source-control/composition'
 import { remoteUrlFor, startGitHttpRemote } from './gitHttpRemote'
 
 export type RepoGroupAttachmentSpec =
@@ -140,7 +143,7 @@ export async function seedRepoGroup(
   const readonlySet = new Set(options.readonlyIndexes ?? [])
   const store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
   const group = await createRepoGroup(
-    { store, cache: { store, appHome } },
+    { store, importRepositoryUrl: localRepositoryUrlImport({ store, appHome }) },
     {
       name: options.name ?? `fixture-group-${sourcePaths.length}`,
       description: '',

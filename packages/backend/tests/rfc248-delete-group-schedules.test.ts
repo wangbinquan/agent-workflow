@@ -20,7 +20,10 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { RepoGroupHasReferencesError, deleteRepoGroup } from '../src/services/repoGroup'
+import {
+  RepoGroupHasReferencesError,
+  deleteRepoGroup,
+} from '../src/modules/source-control/application/repositoryGroups'
 import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,

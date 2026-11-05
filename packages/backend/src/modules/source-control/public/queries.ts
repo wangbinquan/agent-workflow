@@ -4,6 +4,8 @@ import type { OwnRepositoryCredentialSubject } from './types'
 export type { WorkspacePresenceQueries } from '../application/ports/workspacePresence'
 export type { RepositoryWorkspaceReadQueries } from '../application/ports/repositoryWorkspaceReadQueries'
 export { selectRepositoryWorkspaceReadQueries } from '../composition/repositoryWorkspaceReadQueries'
+/** RFC-447: a repository group's flattened layout (legacy launch path). */
+export { resolveRepoGroupLayout } from '../application/repositoryGroups'
 
 export interface OwnRepositoryTransportCredentialQueries {
   list(subject: OwnRepositoryCredentialSubject): Promise<OwnCodeHostPushCredentialList>

@@ -85,7 +85,7 @@ describe('RFC-349 repository workspace provider boundary', () => {
       'services/repoCredentials.ts',
       'services/repoBatchImport.ts',
       'services/gitRepoCache.ts',
-      'services/repoGroup.ts',
+      'modules/source-control/application/repositoryGroups.ts',
       'services/submoduleRefresh.ts',
       'services/worktreeFileContent.ts',
       'routes/cached-repos.ts',

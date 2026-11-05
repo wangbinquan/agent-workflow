@@ -943,7 +943,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc390-neutral-http-binding.test.ts",
       "id": "rfc390-neutral-http-binding",
-      "lines": 243,
+      "lines": 244,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

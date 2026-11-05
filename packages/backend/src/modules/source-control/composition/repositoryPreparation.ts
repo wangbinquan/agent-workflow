@@ -1,7 +1,7 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import { resolveRepoGroupLayout } from '../application/repositoryGroups'
 import { DomainError, NotFoundError } from '@/util/errors'
 import type { GitCommitIdentity, TaskStartOptions } from '@agent-workflow/shared'
 import { ulid } from 'ulid'

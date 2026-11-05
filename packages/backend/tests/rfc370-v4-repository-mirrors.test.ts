@@ -45,7 +45,7 @@ import {
   getBatchSnapshot,
   startBatchImport,
 } from '../src/services/repoBatchImport'
-import { createRepoGroup } from '../src/services/repoGroup'
+import { createRepoGroup } from '../src/modules/source-control/application/repositoryGroups'
 import { DomainError, errorHandler } from '../src/util/errors'
 import { runGit } from '../src/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -247,7 +247,8 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
     const group = await createRepoGroup(
       {
         store,
-        register: (value) => mirrors.remoteRegistration!.register(value),
+        importRepositoryUrl: async (value) =>
+          (await mirrors.remoteRegistration!.register(value)).cachedRepoId,
       },
       {
         name: 'v17-group',
