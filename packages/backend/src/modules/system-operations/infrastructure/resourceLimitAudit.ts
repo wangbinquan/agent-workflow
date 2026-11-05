@@ -3,7 +3,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { bumpRecoveryCounter } from '@/services/recovery'
+import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
 import { createLogger } from '@/util/log'
 import type {
   ResourceLimitAudit,

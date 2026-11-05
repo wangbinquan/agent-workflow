@@ -15,8 +15,8 @@ import type {
   StartWorkgroupTask,
   TaskStatus,
 } from '@agent-workflow/shared'
-import type { MultipartFilePart } from '@/services/launchMultipart'
-import type { UploadLimits } from '@/services/upload'
+import type { MultipartFilePart } from '@/platform/http/multipartLaunch'
+import type { UploadLimits } from '@/modules/task-execution/public/types'
 import type { ExecutionInvoker } from '@/modules/task-execution/public/commands'
 
 export type { ExecutionInvoker } from '@/modules/task-execution/public/commands'

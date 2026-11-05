@@ -14,12 +14,11 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { reapOrphanRuns } from '../src/services/orphans'
+import { listRecoveryEventsForTask, recordRecoveryEvent } from '../src/services/recovery'
 import {
   __resetRecoveryCountersForTest,
-  listRecoveryEventsForTask,
-  recordRecoveryEvent,
   recoveryCountersSnapshot,
-} from '../src/services/recovery'
+} from '../src/platform/health/recoveryCounters'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 async function seedRunningTask(db: PersistenceDb): Promise<string> {

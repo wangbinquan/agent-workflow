@@ -16,7 +16,8 @@ import { ulid } from 'ulid'
 
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
-import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
+import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import {
   clearAutoRecoverySuspension,
   recordAutoRecoveryAttempt,

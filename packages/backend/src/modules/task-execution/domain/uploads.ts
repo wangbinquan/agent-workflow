@@ -1,5 +1,10 @@
 // RFC-370: original upload declarations, limits and validation; no content effects.
-import { findDuplicateUploadTarget, type UploadOnConflict } from '@agent-workflow/shared'
+import {
+  findDuplicateUploadTarget,
+  UploadInputSchema,
+  type UploadOnConflict,
+  type WorkflowInput,
+} from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 
 /** Hard defaults; routes override via config when caller wires settings. */
@@ -224,4 +229,41 @@ export function validateUploadPlan(args: {
       )
     }
   }
+}
+
+/**
+ * Extract upload-kind input declarations. Each one must pass UploadInputSchema
+ * (strict-on-write) — anything that snuck past a save path with a bad
+ * targetDir is rejected here too. Works for authored workflow inputs and for
+ * RFC-218 derived agent-port inputs alike. (RFC-445: moved here from
+ * services/launchMultipart.ts, beside the limits and plan validation.)
+ */
+export function collectUploadInputDefs(
+  inputs: readonly WorkflowInput[],
+): Map<string, UploadInputDef> {
+  const out = new Map<string, UploadInputDef>()
+  for (const inp of inputs) {
+    if (inp.kind !== 'upload') continue
+    const parsed = UploadInputSchema.safeParse(inp)
+    if (!parsed.success) {
+      throw new ValidationError(
+        'upload-input-invalid',
+        `workflow input '${inp.key}' (kind=upload) is malformed`,
+        { issues: parsed.error.issues },
+      )
+    }
+    const def: UploadInputDef = {
+      key: parsed.data.key,
+      targetDir: parsed.data.targetDir,
+    }
+    if (parsed.data.accept !== undefined) def.accept = parsed.data.accept
+    if (parsed.data.maxFileSize !== undefined) def.maxFileSize = parsed.data.maxFileSize
+    if (parsed.data.minCount !== undefined) def.minCount = parsed.data.minCount
+    if (parsed.data.maxCount !== undefined) def.maxCount = parsed.data.maxCount
+    // RFC-262 — absent stays absent so the writer's `?? 'rename'` default is
+    // the single place the fallback lives.
+    if (parsed.data.onConflict !== undefined) def.onConflict = parsed.data.onConflict
+    out.set(def.key, def)
+  }
+  return out
 }

@@ -148,7 +148,7 @@ import { withSerializableTaskExecution } from './taskLifecycleTransaction'
 import { withTaskExecutionAggregateWrite } from './ownedTaskExecution'
 
 import { parsePortValidationFailuresJson } from '@/services/envelope'
-import { parseMultipartLaunch } from '@/services/launchMultipart'
+import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
 
 import type { TaskReviewersPort } from '../application/ports/taskReviewers'
 import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'

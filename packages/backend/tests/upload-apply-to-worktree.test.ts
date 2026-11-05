@@ -9,15 +9,17 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
   acceptMatches,
-  applyUploadsToWorktree,
-  assertInsideWorktree,
   DEFAULT_UPLOAD_LIMITS,
-  resolveUniqueName,
   sniffMime,
   type UploadFile,
   type UploadInputDef,
+} from '../src/modules/task-execution/domain/uploads'
+import {
+  applyUploadsToWorktree,
+  resolveUniqueName,
   type UploadPlan,
-} from '../src/services/upload'
+} from '../src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
+import { assertInsideWorktree } from '../src/platform/content/local/uploadPaths'
 import { ValidationError } from '../src/util/errors'
 
 let root = ''

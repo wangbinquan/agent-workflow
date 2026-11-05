@@ -58,8 +58,9 @@ const FILE_LINE_ALLOWLIST = new Set<string>([
   // (RFC-099: the tasks.ts assignments PATCH handler that carried the same
   // cast was removed along with the node-assignment mechanism.)
   // (RFC-218: the multipart FormData-entries cast moved out of routes/tasks.ts
-  // into services/launchMultipart.ts when the parser was extracted for the
-  // agent launch route to share — no cast remains in routes/*.ts for it.)
+  // into the shared launch parser (RFC-445: platform/http/multipartLaunch.ts)
+  // when it was extracted for the agent launch route to share — no cast
+  // remains in routes/*.ts for it.)
   // (RFC-066 PR-A: the legacy `tasks.ts:repoPath: startInput.repoPath as
   // string,` entry was retired when the multipart handler was refactored
   // to narrow via an explicit `if (!multipartRepoPath) throw …` guard;

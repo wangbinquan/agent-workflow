@@ -21,7 +21,7 @@ import {
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
-import type { UploadPlan } from '@/services/upload'
+import type { UploadPlan } from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { held } from './helpers/portArtifactContent'

@@ -8,7 +8,10 @@ import { resolveUniqueUploadNameSync } from '@/modules/task-execution/public/que
 import type { WorkspaceUploadPlan } from '@/modules/task-execution/public/types'
 import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
-import { applyUploadsToWorktree, resolveUniqueName } from '@/services/upload'
+import {
+  applyUploadsToWorktree,
+  resolveUniqueName,
+} from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 import { applyUploadsToWorktree as nativeUpload } from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 import { held, callablePromise } from './helpers/portArtifactContent'
 import {

@@ -34,7 +34,7 @@ import {
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { abortAllActiveTasks } from '../src/services/task'
-import { __resetRecoveryCountersForTest } from '../src/services/recovery'
+import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import { buildActor } from '../src/auth/actor'
 import { runGit } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'

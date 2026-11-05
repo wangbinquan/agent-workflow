@@ -133,10 +133,11 @@ export function buildWorkflowStartBody(
 /**
  * RFC-262: two selected files that would land on the same worktree path.
  *
- * The daemon refuses this with `upload-duplicate-filename` (services/upload.ts
- * `validateUploadPlan`) BEFORE it clones anything — running the same shared
- * walker here means the wizard can say so while the files are still local,
- * instead of making the user ship up to 200 MiB to learn it. Ordering mirrors
+ * The daemon refuses this with `upload-duplicate-filename` (task-execution
+ * `domain/uploads.ts` `validateUploadPlan`) BEFORE it clones anything —
+ * running the same shared walker here means the wizard can say so while the
+ * files are still local, instead of making the user ship up to 200 MiB to
+ * learn it. Ordering mirrors
  * `buildWorkflowStartFormData`'s `Object.entries(uploads)` walk so the
  * `upload-<n>.bin` fallback index for a nameless part matches the server's.
  *

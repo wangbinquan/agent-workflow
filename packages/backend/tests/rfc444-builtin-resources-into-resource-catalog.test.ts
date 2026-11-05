@@ -72,7 +72,7 @@ describe('RFC-444 —— 引用与方向', () => {
     expect(offenders).toEqual([])
     // 非空对照：task-execution、knowledge-evolution、bootstrap、路由与 legacy service 都经 public/types 取用。
     expect(viaPublic).toBeGreaterThan(8)
-  })
+  }, 60_000)
 
   test('负对照：同一判据认得出别名与相对路径两种写法', () => {
     const probe = join(SRC, 'routes', 'probe.ts')

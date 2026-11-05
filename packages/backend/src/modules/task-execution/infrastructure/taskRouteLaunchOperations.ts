@@ -3,7 +3,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
 import {
   StartTaskSchema,
   TaskSchema,
@@ -60,9 +59,7 @@ import {
 import {
   attachWorkspaceCleanupToMultipartError,
   bufferUploadParts,
-  collectUploadInputDefs,
-  resolveUploadLimits,
-} from '@/services/launchMultipart'
+} from '../application/launchUploads'
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
@@ -79,7 +76,11 @@ import {
   taskLaunchAdmissionIssue,
   type TaskLaunchProvenance,
 } from '../domain/taskLaunchOrigin'
-import { validateUploadPlan } from '../domain/uploads'
+import {
+  collectUploadInputDefs,
+  DEFAULT_UPLOAD_LIMITS,
+  validateUploadPlan,
+} from '../domain/uploads'
 import { directTaskInitiatorFromActorSource } from '../inbound/directTaskInitiator'
 import type {
   AgentRouteTaskLaunchOperations,
@@ -88,6 +89,7 @@ import type {
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
 import type { SourceTerminationSnapshot } from '../public/types'
+import { resolveUploadLimits } from './local/fileTaskLaunchConfiguration'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import {

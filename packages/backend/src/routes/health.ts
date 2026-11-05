@@ -5,7 +5,7 @@ import type { Hono } from 'hono'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { registerRoute } from '@/routes/registry'
 import type { TaskStatusCountQueries } from '@/modules/task-execution/public/types'
-import { recoveryCountersSnapshot } from '@/services/recovery'
+import { recoveryCountersSnapshot } from '@/platform/health/recoveryCounters'
 
 export interface HealthRouteDependencies {
   readonly opencodeVersion: string | null

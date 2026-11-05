@@ -31,14 +31,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PLATFORM_INPUTS_DIR } from '@agent-workflow/shared'
 import {
-  applyUploadsToWorktree,
+  collectUploadInputDefs,
   DEFAULT_UPLOAD_LIMITS,
   validateUploadPlan,
   type UploadFile,
   type UploadInputDef,
+} from '../src/modules/task-execution/domain/uploads'
+import {
+  applyUploadsToWorktree,
   type UploadPlan,
-} from '../src/services/upload'
-import { collectUploadInputDefs } from '../src/services/launchMultipart'
+} from '../src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 import { ValidationError } from '../src/util/errors'
 
 let root = ''

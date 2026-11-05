@@ -1151,8 +1151,3 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     },
   )
 }
-
-// RFC-218: the multipart parsing / defs / limits / cleanup-decoration skeleton
-// moved to services/launchMultipart.ts so the agent launch route shares it.
-// Re-exported for existing importers (rfc107 test suite).
-export { attachWorkspaceCleanupToMultipartError } from '@/services/launchMultipart'

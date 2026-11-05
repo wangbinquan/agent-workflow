@@ -26,7 +26,7 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { __resetRecoveryCountersForTest } from '../src/services/recovery'
+import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'

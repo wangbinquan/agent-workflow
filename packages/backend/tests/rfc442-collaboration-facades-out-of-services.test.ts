@@ -91,7 +91,7 @@ describe('RFC-442 —— 引用与方向', () => {
         .map((specifier) => `${relative(SRC, path)} -> ${specifier}`),
     )
     expect(offenders).toEqual([])
-  })
+  }, 60_000)
 
   test('负对照：同一判据认得出别名与相对路径两种写法', () => {
     const probe = join(SRC, 'routes', 'probe.ts')

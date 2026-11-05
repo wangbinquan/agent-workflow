@@ -20,7 +20,8 @@ import {
   type StalledRun,
 } from '../src/services/autoKill'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
-import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
+import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 

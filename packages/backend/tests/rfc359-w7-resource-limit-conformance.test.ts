@@ -23,7 +23,10 @@ import { nodeRunFixture, taskFixture } from './helpers/model'
 import { createResourceLimitAudit } from '@/modules/system-operations/composition'
 import { createTaskResourceLimitFacts } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { __resetRecoveryCountersForTest, recoveryCountersSnapshot } from '@/services/recovery'
+import {
+  __resetRecoveryCountersForTest,
+  recoveryCountersSnapshot,
+} from '@/platform/health/recoveryCounters'
 import { describeEachProvider } from './helpers/eachProvider'
 import { readStoredNodeRunRows } from './helpers/model/storedRows'
 

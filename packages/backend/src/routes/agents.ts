@@ -46,12 +46,15 @@ import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { SKILL_MERGER_AGENT_ID } from '@/modules/resource-catalog/public/types'
 // RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).
-import { parseMultipartLaunch, type MultipartFilePart } from '@/services/launchMultipart'
-import type { UploadLimits } from '@/services/upload'
+import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
 import { safeJsonOrEmpty } from '@/util/http'
-import type { AgentRouteTaskLaunchOperations } from '@/modules/task-execution/public/commands'
+import type {
+  AgentRouteTaskLaunchOperations,
+  TaskRouteMultipartFilePart,
+  TaskRouteUploadLimits,
+} from '@/modules/task-execution/public/commands'
 
 export interface AgentRouteDependencies {
   readonly queries: AgentQueries
@@ -329,11 +332,13 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
       const actor = actorOf(c)
       const existing = await loadVisibleAgent(actor, c.req.param('id'))
       // RFC-218: path<ext> input ports bind files via multipart — same parser
-      // family as POST /api/tasks (services/launchMultipart). JSON stays the
+      // family as POST /api/tasks (platform/http/multipartLaunch). JSON stays the
       // only shape for text-port / zero-port launches.
       const ct = c.req.header('content-type') ?? ''
       let body: unknown
-      let uploads: { parts: MultipartFilePart[]; limits: UploadLimits } | undefined
+      let uploads:
+        | { parts: TaskRouteMultipartFilePart[]; limits: TaskRouteUploadLimits }
+        | undefined
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
         const parsedForm = await parseMultipartLaunch(c.req.raw)
         body = parsedForm.payloadJson

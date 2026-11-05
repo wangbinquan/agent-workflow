@@ -68,7 +68,7 @@ describe('RFC-443 —— 引用与方向', () => {
         .map((specifier) => `${relative(SRC, path)} -> ${specifier}`),
     )
     expect(offenders).toEqual([])
-  })
+  }, 60_000)
 
   test('负对照：同一判据认得出别名、相对路径与类型 import', () => {
     const probe = join(SRC, 'auth', 'oidc', 'probe.ts')

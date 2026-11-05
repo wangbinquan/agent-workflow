@@ -27,8 +27,8 @@ import {
 } from '@/modules/task-execution/domain/ownership'
 import { resolveCommitPushConfig, resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
 import { resolveSubagentLiveCapture, buildStartTaskDeps } from './helpers/startTaskDeps'
-import { resolveUploadLimits } from '@/services/launchMultipart'
-import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
+import { resolveUploadLimits } from '@/modules/task-execution/infrastructure/local/fileTaskLaunchConfiguration'
+import { DEFAULT_UPLOAD_LIMITS } from '@/modules/task-execution/public/queries'
 import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
 
 import { describeEachProvider } from './helpers/eachProvider'

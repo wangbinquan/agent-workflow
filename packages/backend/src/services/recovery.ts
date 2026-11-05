@@ -5,6 +5,9 @@
 // live-child-survived escalation (and the deferred auto-resume / auto-repair /
 // heartbeat-kill / quarantine) leave a durable, queryable trail instead of just
 // a `log.warn`. lifecycle_repair_audit is the MANUAL (human-click) counterpart.
+//
+// RFC-445: the in-process "since boot" counters `/health` reports moved to
+// platform/health/recoveryCounters.ts; recording an event still bumps them.
 
 import { ulid } from 'ulid'
 
@@ -13,6 +16,7 @@ import type {
   TaskRecoveryEventRecord,
   TaskRecoveryOperations,
 } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('recovery')
@@ -30,24 +34,6 @@ export interface RecordRecoveryEventArgs {
   after?: Record<string, unknown>
   /** Override clock (tests). */
   now?: number
-}
-
-// In-process "since boot" counters (single-daemon seam — the persistent
-// recovery_events table is the durable history; these are a cheap health gauge
-// that resets on restart by design).
-const counters = new Map<string, number>()
-
-export function bumpRecoveryCounter(key: string, by = 1): void {
-  counters.set(key, (counters.get(key) ?? 0) + by)
-}
-
-export function recoveryCountersSnapshot(): Record<string, number> {
-  return Object.fromEntries(counters)
-}
-
-/** Test helper — clear the in-process counters between cases. */
-export function __resetRecoveryCountersForTest(): void {
-  counters.clear()
 }
 
 /**

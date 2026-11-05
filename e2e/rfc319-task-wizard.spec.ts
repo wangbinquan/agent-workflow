@@ -48,7 +48,7 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/lib/task-wizard.ts:167-200        buildWorkflowStartFormData：multipart 装配
 //   packages/frontend/src/lib/task-wizard.ts:495-556        taskToLaunchPayload：多仓 ⇒ sourceTaskId 重放
 //   packages/frontend/src/lib/write-outcome.ts:45-52        4xx = definitive，其余一律 unknown
-//   packages/backend/src/services/upload.ts:1-8             上传落点 = 工作树内 targetDir，回填成 {{port}} 值
+//   packages/backend/src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads.ts:47-60   上传落点 = 工作树内 targetDir，回填成 {{port}} 值
 //   packages/backend/src/services/workflowLaunchInputs.ts:74-110  服务端复核 enum 成员与 git 形状
 //   packages/backend/src/services/task.ts:2192-2205         ref 解析不出来 ⇒ 422 repo-ref-not-found + availableRefs
 //   packages/backend/src/services/task.ts:2533-2542         expectedWorkflowVersion 栅栏（物化之前，不铸任务行）

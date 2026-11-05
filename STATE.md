@@ -1,3 +1,16 @@
+## 2026-11-04 RFC-445 启动 multipart 信封与恢复计数归 platform，上传兼容层退役（In Progress；`design/RFC-445-launch-multipart-and-recovery-counters/`）
+
+- **来由**：RFC-294 W4 B / D 第十一步（RFC-444 后 9 个路由仍 import `services/`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - 启动 multipart 信封 `parseMultipartLaunch` 迁入 `platform/http/multipartLaunch.ts`；其余上传助手按层迁入 task-execution（声明提取进
+    `domain/uploads`，缓冲与清理错误合成进 `application/launchUploads`，按配置文件取上限进 `infrastructure/local/fileTaskLaunchConfiguration`）；
+    删除 `services/launchMultipart.ts` 与 RFC-370 留下的兼容转出 `services/upload.ts`；
+  - 自启动以来的恢复计数迁入 `platform/health/recoveryCounters.ts`，四处累加点与 `/health` 改取新位置；`services/recovery.ts` 只留审计写入与查询；
+  - import `services/` 的路由 9 → 7（`agents`、`health`），`R1` 169 → 166。
+- **不做**：task-execution 恢复家族；`routes/tasks.ts` 的其余 legacy 依赖；其余 7 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-444 内建资源清单归 resource-catalog（Done；`design/RFC-444-builtin-resources-into-resource-catalog/`）
 
 - **来由**：RFC-294 W4 B / D 第十步（RFC-443 后 10 个路由仍 import `services/`），并清偿 W4-C 遗留的 KE-03 两条 R2 边。
@@ -12,6 +25,7 @@
 - **集中验证**：全量 SQLite 的本 RFC 问题已修（`commons-manifest.json` 的内建资源内核条目仍指旧路径，改指新路径、layer 改为 domain）；
   18 条负载超时单独复跑全过；导出仓库 185 个文件 2628 pass，1 条 PG 启动超时单独复跑通过；P0 两引擎各 17 阶段通过。
 - **CI**：exact SHA 主 CI run 41881968088：attempt 1 macOS e2e 分片 3/4 拿到 runner 后 1 failed / 2 flaky（RFC-396 订票旅程与 RFC-372 两条录制旅程在慢 runner 上点击超时，audit-backlog 已记的贴线长旅程，本 RFC 不触及其路径），分片 2/4、4/4 未被分配 runner；只重跑失败作业，attempt 2 全绿（AC-4）。
+  RFC-442～444 的 Done 文档提交 `60a8b2c7c`：exact SHA 主 CI run 41897046254，attempt 1 macOS e2e 分片 3/4、4/4 未被分配 runner（容量不足），只重跑失败作业，attempt 2 全绿。
 - **下一步**：B / D 余下 9 个路由：source-control（`repos`、`repoGroups`、`cached-repos`）、integration 的代码平台连接
   （`codeHosts`、`accountRepositoryTransportCredentials`）、resource-catalog（`agents`、`mcps`）与 task-execution（`health`、`tasks`）。
 

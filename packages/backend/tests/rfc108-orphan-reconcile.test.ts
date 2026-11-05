@@ -29,7 +29,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
-import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
+import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import {
   claimNewRuntimeSession,
   markRuntimeSessionResetPending,

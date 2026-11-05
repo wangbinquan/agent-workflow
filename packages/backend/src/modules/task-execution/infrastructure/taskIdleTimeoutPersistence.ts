@@ -35,7 +35,7 @@ import {
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { bumpRecoveryCounter } from '@/services/recovery'
+import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
 import { createLogger } from '@/util/log'
 import { chunkedAll } from '@/util/sqlChunk'
 

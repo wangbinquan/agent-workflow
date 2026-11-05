@@ -44,7 +44,7 @@ import {
 import { basename, dirname, join, resolve } from 'node:path'
 import { openDb, type DbClient } from '@/db/client'
 import { quickCheckDbFile } from '@/db/integrity'
-import { bumpRecoveryCounter } from '@/services/recovery'
+import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
 import { extractTarGz, tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
