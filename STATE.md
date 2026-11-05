@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-451 仓库镜像缓存家族归 source-control（In Progress；`design/RFC-451-repository-mirror-cache-into-source-control/`）
+## 2026-11-05 RFC-451 仓库镜像缓存家族归 source-control（Done；`design/RFC-451-repository-mirror-cache-into-source-control/`）
 
 - **来由**：RFC-294 W4 B / D 第十六步（RFC-450 后 2 个路由仍 import `services/`，其中 `cached-repos` 取 `services/gitRepoCache` 与
   `services/repoBatchImport`）。
@@ -13,6 +13,15 @@
 - **不做**：`tasks` 路由；`services/gitVersion`、`services/gitSubmodule`（W5）；`services/developmentDeliveryDeps` 其余部分（W4-E）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-450 的 Done 文档提交 `52d08e929`：exact SHA 主 CI run 42073868900 首轮全绿（含 crash-recovery 进展屏障对齐后的 Windows e2e）。
+- **落地**：`79867699c`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修：`git-protocols-e2e.yml` 的 push / pull_request 触发清单仍列着两个旧文件（不报红，
+  git 协议套件只是从此不再随镜像缓存的改动触发），改指新文件并登记平台的 `submoduleParams.ts`，新增 `ci-workflow-path-filters` 用例锁住所有
+  workflow 触发清单的条目存在，踩坑记入 `docs/dev-gotchas.md`。全量 SQLite 23383 pass，其余为负载超时与导出仓库所致的 `rfc321` 一条；接
+  PostgreSQL 218 个文件 2092 pass，超时的文件补预算复跑后全过；P0 两引擎各 17 阶段通过。RFC-167 dw-confirm 的 `approve` 一例与 RFC-359 W6-T26
+  PostgreSQL 计划审计的 600 秒准备钩子在本机负载 100～124 下仍到点，同一时刻在 RFC-450 导出仓库里同样到点（与本 RFC 无关）。
+- **CI**：exact SHA 主 CI run 42102014181 首轮全绿（70 个 job）；windows-platform run 42102014104 全绿；git-protocols-e2e run 42102014185 随本提交
+  触发并全绿（真实 Gitea 上的 HTTPS / SSH 克隆走迁入的镜像缓存）；同 SHA 的 maintenance-soak 夜间 run 42102014333 全绿。
+- **下一步**：B / D 余下 1 个路由：task-execution（`tasks`，14 个 `services/` import，分两族：任务诊断与恢复 7 个，workspace-insight 7 个）。
 
 ## 2026-11-05 RFC-450 代码平台连接与调用归 integration（Done；`design/RFC-450-code-host-family-into-integration/`）
 

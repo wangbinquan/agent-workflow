@@ -21,7 +21,7 @@
 - [x] AC-1 三个旧文件删除、零引用；路由不 import `services/`；平台 → 模块仍为 0
 - [x] AC-2 计数按实测更新（路由 2 → 1，`services/` 208 → 205）
 - [x] AC-3 受影响用例与新增用例全部通过（本机负载下的超时逐个复跑或同刻对照，见下）
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-05，候选基于 `52d08e929`）
 
@@ -67,6 +67,12 @@
 - HTTP 装配给合同的 store、镜像、配置、`appHome`、`secretBox` 与原来路由拿到的是同一批对象；装配根经 source-control composition barrel 取的
   批量导入归属 / 清理、后台保鲜与开发工作区准备是同一组函数；
 - 集中验证查出 git 协议 workflow 的触发清单没有跟着迁移（见上），已修并加守卫。
+
+## CI（AC-4）
+
+`79867699c`：exact SHA 主 CI run 42102014181 首轮全绿（70 个 job）；windows-platform run 42102014104 全绿；git-protocols-e2e run 42102014185
+随本提交触发（workflow 文件与改指后的新路径都命中触发清单）并全绿——真实 Gitea 上的 HTTPS / SSH 克隆走的就是迁入的镜像缓存；同 SHA 的
+maintenance-soak 夜间 run 42102014333 全绿。
 
 ## PR / 提交
 
