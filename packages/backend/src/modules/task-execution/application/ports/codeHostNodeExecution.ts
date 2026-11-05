@@ -28,6 +28,12 @@ export interface CodeHostNodeConnection {
   rejectUnauthorized: boolean
 }
 export type CodeHostNodeFetch = (url: string, init?: RequestInit) => Promise<Response>
+/** RFC-449: resolves the configured connection of one provider; null when not
+ * configured. Assembly injects the credential service (any service whose
+ * resolved connection carries these facts fits). */
+export interface CodeHostConnectionResolver {
+  resolve(provider: CodeHostProvider): Promise<CodeHostNodeConnection | null>
+}
 export type CodeHostProjectFallback =
   | { ok: true; value: string }
   | { ok: false; code: CodeHostFailureCode; message: string }

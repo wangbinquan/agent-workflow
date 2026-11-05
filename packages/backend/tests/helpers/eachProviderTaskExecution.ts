@@ -350,6 +350,7 @@ export async function createEachProviderTaskExecution(
           nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
           codeHostConnections: unusedCapability('code-host connection'),
+          codeHostRequests: unusedCapability('code-host requests'),
         },
         routeLaunch: {
           configPath,
@@ -522,6 +523,7 @@ export async function createEachProviderTaskExecution(
         identityAccess: runtimeIdentity,
         repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
         codeHostConnections: unusedCapability('code-host connection'),
+        codeHostRequests: unusedCapability('code-host requests'),
         executionPermits: testExecutionPermits,
         processConcurrencyScope: {},
       },

@@ -18,6 +18,9 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createLogger } from '@/util/log'
 import { runtimeConfigOpts } from '@/services/task'
+import { executeCodeHostCall } from '@/services/codeHost/call'
+import { resolveProjectFallback } from '@/services/codeHost/project'
+import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
@@ -353,6 +356,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
         validation: composeDynamicWorkflowLayerOneValidation(db),
       },
       codeHostConnections: input.repository.codeHostConnections,
+      // RFC-449: the code-host request implementation is injected with the connections.
+      codeHostRequests: { executeCodeHostCall, resolveProjectFallback, probeCodeHostMutation },
       repositoryPublicationTransport: input.repository.repositoryPublicationTransport,
     },
     rootResumeRuntime: async () => ({ runConfig: await runConfiguration() }),

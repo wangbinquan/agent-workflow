@@ -1,3 +1,20 @@
+## 2026-11-05 RFC-449 代码平台调用对 task-execution 与 development-automation 改为注入（In Progress；`design/RFC-449-code-host-requests-injected/`）
+
+- **来由**：RFC-294 W4 B / D 准备步。余下的 `codeHosts`、`accountRepositoryTransportCredentials` 两个路由取 `services/codeHost/connections`，
+  该家族的目标 owner 是 integration；但 task-execution 的代码平台节点装配直接 import 其中三个函数、task-execution 与 development-automation
+  以它的服务类型收连接，而上下文 DAG 只给 integration → task-execution / development-automation。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - task-execution：新增 `CodeHostConnectionResolver` 端口；运行时选项与参与者的 `codeHostConnections` 改用它，新增 `codeHostRequests`
+    （已有的结构化 `CodeHostRequestPort`）随连接一起注入；代码平台节点端口取注入的实现（未注入时按 `code-host-not-configured` 失败）；
+  - development-automation：交付 provider 的连接改为本地端口（类型取自交付绑定合同本身）；
+  - 装配根与测试拓扑注入 legacy 的三个函数；两个模块不再 import `services/codeHost/*`；模块里 import `services/` 的文件 141 → 140。
+- **不做**：迁移 `services/codeHost/*`、integration 的 MR 用例与两个路由（RFC-450）；其余路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-448 的 Done 文档提交 `0cd746750`：exact SHA 主 CI run 42014215669：attempt 1 macOS e2e 分片 3/4 一条 `system-mocks`
+  MCP 探测得到 `status: error`（607ms；同一代码在 `df2cb6e26` 的同一分片上 758ms 通过，未留 errorCode），只重跑失败作业，attempt 2 全绿；
+  重跑只作佐证。
+
 ## 2026-11-05 RFC-448 MCP 探测用例与资源操作协调器归 resource-catalog（Done；`design/RFC-448-mcp-probe-into-resource-catalog/`）
 
 - **来由**：RFC-294 W4 B / D 第十四步（RFC-447 后 5 个路由仍 import `services/`）。

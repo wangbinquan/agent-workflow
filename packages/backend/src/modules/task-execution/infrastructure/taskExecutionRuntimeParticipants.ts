@@ -21,7 +21,10 @@ import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
+import type {
+  CodeHostConnectionResolver,
+  CodeHostRequestPort,
+} from '../application/ports/codeHostNodeExecution'
 import type { DynamicWorkflowLayerOneValidation } from '../application/ports/dynamicWorkflowGenerate'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
@@ -107,7 +110,9 @@ export interface TaskExecutionRuntimeParticipantsInput {
   }>
   readonly repositoryPublicationTransport: RepositoryPublicationTransport
   /** 装配方选定的凭据读取面；参与者自己绝不回头重建一份。 */
-  readonly codeHostConnections?: CodeHostConnectionsService
+  readonly codeHostConnections?: CodeHostConnectionResolver
+  /** RFC-449: injected with the connections. */
+  readonly codeHostRequests?: CodeHostRequestPort
   /** 进程信号量共享用的守护进程级身份。 */
   readonly executionPermits: TaskExecutionPermitRegistry
   readonly processConcurrencyScope: object
@@ -164,6 +169,9 @@ export function createTaskExecutionRuntimeParticipants(
         ...(input.codeHostConnections === undefined
           ? {}
           : { codeHostConnections: input.codeHostConnections }),
+        ...(input.codeHostRequests === undefined
+          ? {}
+          : { codeHostRequests: input.codeHostRequests }),
         repositoryPublicationTransport: input.repositoryPublicationTransport,
         dynamicWorkflow: input.dynamicWorkflow,
       }

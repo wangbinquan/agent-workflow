@@ -94,6 +94,8 @@ const DISPOSITION = {
   scriptDepsInstallTimeoutMs: 'inherit',
   fanoutMaxShardTotal: 'dropped-registered',
   codeHostConnections: 'dropped-registered',
+  // RFC-449: injected with the connections by the same registered participants.
+  codeHostRequests: 'dropped-registered',
   codeHostFetch: 'dropped-registered',
   repositoryPublicationTransport: 'dropped-registered',
   // RFC-304: the daemon generation fencing MR leases. INHERITED, unlike the
@@ -154,6 +156,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'executionPermits',
         'processConcurrencyScope',
         'codeHostConnections',
+        'codeHostRequests',
         'codeHostFetch',
         'repositoryPublicationTransport',
       ].sort(),

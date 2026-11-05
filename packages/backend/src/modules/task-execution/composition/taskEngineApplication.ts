@@ -240,6 +240,7 @@ function prepareTaskDrive(
         executionContext: _executionContext,
         signal: _signal,
         codeHostConnections: _codeHostConnections,
+        codeHostRequests: _codeHostRequests,
         codeHostFetch: _codeHostFetch,
         repositoryPublicationTransport: _repositoryPublicationTransport,
         ...runtimeOptions

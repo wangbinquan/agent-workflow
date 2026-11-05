@@ -206,7 +206,9 @@ export interface TaskExecutionProviderRuntimeDependencies<
     | 'workspaceExcludeProfilesFor'
     | 'log'
   > &
-    Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>> &
+    Required<
+      Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections' | 'codeHostRequests'>
+    > &
     ProviderTaskRunBindingSelection &
     Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'workspaceExcludeProfilesFor'>>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>

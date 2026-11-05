@@ -75,6 +75,8 @@ function fixture() {
       },
     },
     codeHostConnections: { label: 'connections' },
+    // RFC-449: injected with the connections; never part of the driver configuration.
+    codeHostRequests: { label: 'requests' },
     codeHostFetch: { label: 'fetch' },
     repositoryPublicationTransport: { label: 'transport' },
   }
@@ -225,6 +227,7 @@ test('prepare takes the pools and locks at preparation; recovery, bodies and con
     'executionContext',
     'signal',
     'codeHostConnections',
+    'codeHostRequests',
     'codeHostFetch',
     'repositoryPublicationTransport',
   ])

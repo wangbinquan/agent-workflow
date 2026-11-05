@@ -8,9 +8,19 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { matchRepoProvider } from '@/modules/development-automation/domain/repositoryProviderMatch'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
-import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { DevelopmentDeliveryProvider } from '@/services/developmentDeliveryDeps'
+
+/** RFC-449: the connection the delivery binding carries, typed by the binding
+ * contract itself so this module does not import the credential service. */
+type DeliveryCodeHostConnection = NonNullable<
+  Awaited<ReturnType<DevelopmentDeliveryProvider['resolveBinding']>>
+>['call']['connection']
+
+/** The only thing the delivery provider needs from code-host connections. */
+export interface DevelopmentCodeHostConnections {
+  resolve(provider: 'gitlab' | 'github'): Promise<DeliveryCodeHostConnection | null>
+}
 
 interface RepositoryRecord {
   readonly id: string
@@ -29,7 +39,7 @@ interface DevelopmentDeliveryDirectory {
 function providerFrom(input: {
   readonly directory: DevelopmentDeliveryDirectory
   readonly secretBox?: SecretBox
-  readonly connections: CodeHostConnectionsService
+  readonly connections: DevelopmentCodeHostConnections
   readonly pipeline: SelectedPipelineEvidenceExecution
   readonly volatileRepositoryUrl?: (row: RepositoryRecord) => string | null
 }): DevelopmentDeliveryProvider {
@@ -116,7 +126,7 @@ function directoryOf(db: PersistenceDb): DevelopmentDeliveryDirectory {
 export function createDevelopmentDeliveryProvider(input: {
   readonly db: PersistenceDb
   readonly secretBox?: SecretBox
-  readonly connections: CodeHostConnectionsService
+  readonly connections: DevelopmentCodeHostConnections
   readonly pipeline: SelectedPipelineEvidenceExecution
 }): DevelopmentDeliveryProvider {
   return providerFrom({

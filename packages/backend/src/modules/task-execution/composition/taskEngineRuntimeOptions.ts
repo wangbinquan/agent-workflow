@@ -14,7 +14,10 @@ import type { Language, ScriptLanguage } from '@agent-workflow/shared'
 import type { TaskDagCollaborationOperations } from '@/modules/collaboration/public/participants'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
+import type {
+  CodeHostConnectionResolver,
+  CodeHostRequestPort,
+} from '../application/ports/codeHostNodeExecution'
 import type { Logger } from '@/util/log'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
@@ -159,7 +162,13 @@ export interface RunTaskOptions {
    * `code-host-not-configured` (the same self-skip discipline the OIDC and
    * webhook surfaces use when `secretBox` is missing).
    */
-  codeHostConnections?: CodeHostConnectionsService
+  codeHostConnections?: CodeHostConnectionResolver
+  /**
+   * RFC-449: the code-host requests (send / project fallback / recovery probe),
+   * injected with the connections. Absent ⇒ code-host nodes fail with
+   * `code-host-not-configured`.
+   */
+  codeHostRequests?: CodeHostRequestPort
   /** RFC-269: outbound fetch seam; production omits it, tests inject a stub. */
   codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
   /** RFC-321 exact publication transport; tests may inject, production resolves the daemon key. */

@@ -1,8 +1,8 @@
 import type { TaskMechanicsState } from './taskMechanicsState'
-import { executeCodeHostCall } from '@/services/codeHost/call'
-import { resolveProjectFallback } from '@/services/codeHost/project'
-import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
-import type { CodeHostNodeExecutionPorts } from '../application/ports/codeHostNodeExecution'
+import type {
+  CodeHostNodeExecutionPorts,
+  CodeHostRequestPort,
+} from '../application/ports/codeHostNodeExecution'
 import type { TaskExecutionContext } from '../application/taskExecutionContext'
 import { createCodeHostEffectAttemptObserver } from '../application/codeHostEffectObserver'
 import { resolveSchedulerRunRow } from '../application/resolveSchedulerRunRow'
@@ -23,6 +23,7 @@ type CodeHostNodeExecutionBinding = Pick<
     TaskMechanicsState['opts'],
     | 'executionContext'
     | 'codeHostConnections'
+    | 'codeHostRequests'
     | 'codeHostRequestTimeoutMs'
     | 'codeHostResponseMaxBytes'
     | 'codeHostFetch'
@@ -32,6 +33,28 @@ type CodeHostNodeExecutionBinding = Pick<
       'nodeRuns' | 'nodeExecution' | 'selection' | 'effects'
     >
   }
+}
+
+/** RFC-449: no request implementation injected ⇒ behave as if no connection
+ * were configured (the same failure code the node uses for a missing connection). */
+const UNCONFIGURED_CODE_HOST_REQUESTS: CodeHostRequestPort = {
+  executeCodeHostCall: async (spec) => ({
+    ok: false,
+    code: 'code-host-not-configured',
+    summary: `${spec.provider} is not configured`,
+    message: 'code-host-not-configured',
+  }),
+  resolveProjectFallback: (input) => ({
+    ok: false,
+    code: 'code-host-not-configured',
+    message: `no ${input.provider} code-host requests are configured`,
+  }),
+  probeCodeHostMutation: async () => ({
+    kind: 'unknown',
+    proofCode: 'code-host-not-configured',
+    responseStatus: null,
+    responseBody: '',
+  }),
 }
 
 /** Only adapters and context binding. The send/probe decision loop lives in the executor. */
@@ -121,7 +144,10 @@ export function createCodeHostNodeExecutionPorts(
           context: state.opts.executionContext as TaskExecutionContext,
         }),
     },
-    requests: { executeCodeHostCall, resolveProjectFallback, probeCodeHostMutation },
+    // RFC-449: the request implementation is injected with the connections (assembly).
+    get requests() {
+      return state.opts.codeHostRequests ?? UNCONFIGURED_CODE_HOST_REQUESTS
+    },
     status: { broadcastNodeStatus },
   }
 }

@@ -126,13 +126,19 @@ test('daemon probes the unified MCP mock over Streamable HTTP and compiled stdio
     })
     const probe = await requestJson<{
       status: string
+      errorCode?: string | null
+      errorMessage?: string | null
       tools: Array<{ name: string }> | null
       resources: Array<{ uri: string }> | null
     }>(`/api/mcps/${mcp.id}/probe`, {
       method: 'POST',
       body: { expectedConfigHash: mcp.operationConfigHash },
     })
-    expect(probe.status).toBe('ok')
+    // A failed probe must say why (2026-11-05 macOS CI: status 'error' in 607ms with no recorded cause).
+    expect(
+      probe.status,
+      `${fixture.name}: ${probe.errorCode ?? '-'} ${probe.errorMessage ?? ''}`,
+    ).toBe('ok')
     expect(probe.tools?.map((toolInfo) => toolInfo.name).sort()).toEqual([
       'echo',
       'fail',

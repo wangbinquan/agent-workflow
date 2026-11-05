@@ -28,6 +28,7 @@ export type ProviderTaskExecutionTestRunOptions = Omit<
   | 'processConcurrencyScope'
   | 'identityAccess'
   | 'codeHostConnections'
+  | 'codeHostRequests'
   | 'repositoryPublicationTransport'
   | 'executionContext'
   | 'signal'
