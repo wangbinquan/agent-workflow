@@ -1,4 +1,4 @@
-## 2026-11-04 RFC-447 仓库组用例归 source-control（In Progress；`design/RFC-447-repository-groups-into-source-control/`）
+## 2026-11-05 RFC-447 仓库组用例归 source-control（Done；`design/RFC-447-repository-groups-into-source-control/`）
 
 - **来由**：RFC-294 W4 B / D 第十三步（RFC-446 后 6 个路由仍 import `services/`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -11,6 +11,15 @@
 - **不做**：`cached-repos` 与 `services/gitRepoCache`、`services/repoBatchImport`；其余 5 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-445、RFC-446 的 Done 文档提交 `5bb075d31`：exact SHA 主 CI run 41974281472 首轮全绿。
+- **落地**：`531566b35`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 两处问题已修：RFC-447 用例的仓库组夹具缺根节点；`public/queries` 转出的展平函数以整个
+  存储为参数、把存储接口的 `Partial` / `object` 带上了 public 面（预检白名单报出），参数收窄为只读快照后架构测试与预检 1370 / 1370。
+  全量 SQLite 23339 pass，其余为负载超时（单独复跑 17 / 19 个文件全过，余下两组给 30 秒时限后全过）与导出仓库所致的 `rfc321` 一条；
+  接 PostgreSQL 232 个文件 3091 pass，PostgreSQL 一侧超时的 14 个文件给 30 秒时限后 616 / 616；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41988443836：attempt 1 backend 分片 16/44 一条 `rfc311-perf-guards` 过滤视图的 PostgreSQL P95 停顿（audit-backlog 已记，本 RFC 不触及任务目录读路径），只重跑失败作业，attempt 2 全绿；windows-platform 首轮全绿（AC-4）。`git-protocols-e2e` 红在 Ubuntu 26.04 上装不上 Playwright chromium（环境，自 11-03 起定时运行同样红，与本 RFC 无关，待用户决定钉 `ubuntu-24.04` 或升级 Playwright）。
+- **下一步**：B / D 余下 5 个路由：source-control（`cached-repos`）、integration 的代码平台连接（`codeHosts`、
+  `accountRepositoryTransportCredentials`）、resource-catalog（`mcps`）与 task-execution（`tasks`）。下一步 RFC-448：`mcps` 路由的 MCP
+  探测、探测记录与资源操作协调器归位。
 
 ## 2026-11-04 RFC-446 仓库 refs / files 读取归 source-control（Done；`design/RFC-446-repository-reads-into-source-control/`）
 

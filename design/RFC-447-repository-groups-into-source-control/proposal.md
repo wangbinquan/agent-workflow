@@ -1,6 +1,6 @@
 # RFC-447 仓库组用例归 source-control（RFC-294 W4 B / D 第十三步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-05；`531566b35`，exact SHA 主 CI run 41988443836：attempt 1 backend 分片 16/44 一条 `rfc311-perf-guards` 过滤视图的 PostgreSQL P95 偶发停顿（audit-backlog 已记的同一条，本 RFC 不触及任务目录读路径），只重跑失败作业，attempt 2 全绿；windows-platform 首轮全绿；`git-protocols-e2e` 红在装 Playwright chromium（Ubuntu 26.04，环境问题，自 11-03 起定时运行同样失败，与本 RFC 无关，待用户决定）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-446](../RFC-446-repository-reads-into-source-control/proposal.md)（仓库 refs / files 读取归 source-control）

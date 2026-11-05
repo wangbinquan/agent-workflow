@@ -16,10 +16,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 `services/repoGroup.ts` 删除，源码不再 import 旧路径；路由不 import `services/`、对 source-control 只经 `public/types`
-- [ ] AC-2 计数按实测更新（路由 6 → 5，`services/` 217 → 216，模块里 import `services/` 的文件 143 → 142，R1 / R2 不变）
-- [ ] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 `services/repoGroup.ts` 删除，源码不再 import 旧路径；路由不 import `services/`、对 source-control 只经 `public/types`
+- [x] AC-2 计数按实测更新（路由 6 → 5，`services/` 217 → 216，模块里 import `services/` 的文件 143 → 142，R1 / R2 不变）
+- [x] AC-3 受影响用例全部通过
+- [x] AC-4 exact SHA CI：主 CI（attempt 2）与 windows-platform 全绿；`git-protocols-e2e` 红在环境（Ubuntu 26.04 装不上 Playwright chromium，与提交无关，见 audit-backlog）
 
 ## 集中验证（2026-11-04，候选基于 `5bb075d31`）
 
@@ -59,6 +59,19 @@
 - 路由七个端点的参数、权限、响应码与 PAT 删除具名确认不变；
 - 装配根里 groups 与 mirrors 共用同一份 mirrors、同一个存储实例；
 - `services/task.ts` 与模块内三个消费者调用的是同一个展平函数。
+
+## CI（AC-4）
+
+`531566b35`：
+
+- 主 CI run 41988443836：attempt 1 只有 backend 分片 16/44 红一条：`rfc311-perf-guards`「task-operations catalog — 过滤视图（G1 快路径）」
+  PostgreSQL P95 8159.91ms 对 SQLite 121.75ms（67.0×，阈值 50×）。归因：audit-backlog 已记的同一分片同一用例的测量窗口停顿
+  （RFC-401 A1、RFC-441 都撞过），本 RFC 只迁移仓库组用例，不触及任务目录读路径。只重跑失败作业，attempt 2 全绿；重跑只作佐证。
+- windows-platform（run 41988443654）首轮全绿。
+- `git-protocols-e2e`（run 41988443750，因 source-control 路径触发）红在「Install Playwright (chromium only)」：
+  `Playwright does not support chromium on ubuntu26.04-x64`。与提交无关：该 workflow 的定时运行 11-03、11-04 同样红在这一步，
+  11-02 及以前全绿；与 `e2e-full-nightly` 是同一个环境问题，等用户在「钉 `ubuntu-24.04`」与「升级 Playwright」之间决定
+  （audit-backlog 已补记）。
 
 ## PR / 提交
 
