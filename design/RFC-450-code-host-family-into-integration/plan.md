@@ -20,7 +20,7 @@
 - [x] AC-2 分层门与 public surface 不新增债；4 条 `R2` 清偿
 - [x] AC-3 计数按实测更新（路由 4 → 2，`services/` 213 → 208，`R2` 39 → 35）
 - [x] AC-4 受影响用例与新增用例全部通过（另有三个与本 RFC 无关的负载受限用例本机未复跑绿，前一版对照同样失败，见下文）
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿（attempt 1 的红格归因见下文）
 
 ## 集中验证（2026-11-05，候选基于 `2f8d491cd`）
 
@@ -66,6 +66,10 @@
 - MR 用例里每一处调用都只把调用者换成绑定里的 `requests`，参数不变；生产绑定由交付 provider 给出，`requests` 由装配根注入，就是原来的那两个函数；
 - task-execution 节点请求与启动恢复探测取 integration composition 的同一组函数；
 - 集中验证查出两份源码文本锁没有跟着迁移（见上），已修并复跑。
+
+## CI（AC-5）
+
+`d29f951e0`：exact SHA 主 CI run 42065447650：attempt 1 只有 Windows e2e 分片 1/4 红——`crash-recovery` 两例等新启动的任务进入 running 的 10 秒屏障到点（last=pending；同文件三例这次比 run 42037618561 慢 1.4～1.7 倍；任务启动链路本 RFC 未改，与 `docs/dev-gotchas.md`「e2e 里等「运行时已经起来」的屏障」同类），只重跑失败作业，attempt 2 全绿；重跑只作佐证，屏障预算随 RFC-450 的 Done 文档提交对齐到同文件等终态用的 30 秒。windows-platform run 42065447653 与同 SHA 的 visual-regression、evidence-soak、maintenance-soak 夜间全绿。
 
 ## PR / 提交
 

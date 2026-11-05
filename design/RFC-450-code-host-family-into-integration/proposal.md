@@ -1,6 +1,6 @@
 # RFC-450 代码平台连接与调用归 integration（RFC-294 W4 B / D 第十五步）
 
-- **状态**：In Progress（2026-11-05）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-05；`d29f951e0`，exact SHA 主 CI run 42065447650 与 windows-platform run 42065447653 全绿；attempt 1 一处 Windows e2e 环境性超时，见 plan）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-449](../RFC-449-code-host-requests-injected/proposal.md)（task-execution 与 development-automation 已只认自己的端口）。

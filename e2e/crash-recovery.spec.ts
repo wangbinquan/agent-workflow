@@ -40,6 +40,13 @@ import { initGitRepo, repoRemoteUrl } from './command'
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
 
+// Progress barriers (a status the task must reach) share one budget with this file's terminal waits. On Windows,
+// launch → running prepares the repository, creates a worktree and starts the compiled launcher and stub: on
+// 2026-11-05 (run 42065447650, Windows shard 1/4) two cases stayed `pending` past the old 10s while the same file ran
+// 1.4–1.7× slower than in run 42037618561 (docs/dev-gotchas.md, "e2e 里等「运行时已经起来」的屏障"). The kill point is
+// unchanged: each wait returns within one 200ms poll of the status, so the 15s stub is still mid-run when killed.
+const PROGRESS_TIMEOUT_MS = 30_000
+
 interface RepoFixture {
   repoDir: string
   cleanup: () => void
@@ -214,7 +221,7 @@ async function resumeTaskThroughUi(
     daemon,
     taskId,
     (status) => status !== 'interrupted',
-    10_000,
+    PROGRESS_TIMEOUT_MS,
     'resume-left-interrupted',
   )
 }
@@ -252,7 +259,7 @@ test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume 
 
     // Wait until the task is actually in 'running' (scheduler dispatched +
     // runner spawned its child + the stub started sleeping).
-    await waitForStatus(daemonA, taskId, (s) => s === 'running', 10_000, 'A-running')
+    await waitForStatus(daemonA, taskId, (s) => s === 'running', PROGRESS_TIMEOUT_MS, 'A-running')
 
     // Hard kill — exercises orphans.reapOrphanRuns on next boot.
     await daemonA.killChild('SIGKILL')
@@ -316,7 +323,13 @@ test('SIGTERM (graceful) → task ends interrupted and remains resumable', async
   try {
     const fixtures = await seedAgentAndWorkflow(daemonA)
     const taskId = await launchTask(daemonA, fixtures.workflowId, repo.repoDir)
-    await waitForStatus(daemonA, taskId, (s) => s === 'running', 10_000, 'A-running-sigterm')
+    await waitForStatus(
+      daemonA,
+      taskId,
+      (s) => s === 'running',
+      PROGRESS_TIMEOUT_MS,
+      'A-running-sigterm',
+    )
 
     // SIGTERM walks the graceful-shutdown path: cli/start.ts aborts
     // in-flight runners (their AbortControllers SIGTERM the opencode child).
@@ -382,7 +395,13 @@ test('multiple SIGKILL → restart cycles, final resume reaches done (idempotent
   try {
     const fixtures = await seedAgentAndWorkflow(daemonA)
     const taskId = await launchTask(daemonA, fixtures.workflowId, repo.repoDir)
-    await waitForStatus(daemonA, taskId, (s) => s === 'running', 10_000, 'A-running-cycle1')
+    await waitForStatus(
+      daemonA,
+      taskId,
+      (s) => s === 'running',
+      PROGRESS_TIMEOUT_MS,
+      'A-running-cycle1',
+    )
     await daemonA.killChild('SIGKILL')
 
     // Cycle 2: same slow stub so the resumed task ALSO ends up running, then
@@ -400,7 +419,13 @@ test('multiple SIGKILL → restart cycles, final resume reaches done (idempotent
       headers: { Authorization: `Bearer ${daemonB.token}` },
     })
     expect(r1.ok).toBe(true)
-    await waitForStatus(daemonB, taskId, (s) => s === 'running', 10_000, 'B-running-cycle2')
+    await waitForStatus(
+      daemonB,
+      taskId,
+      (s) => s === 'running',
+      PROGRESS_TIMEOUT_MS,
+      'B-running-cycle2',
+    )
     await daemonB.killChild('SIGKILL')
 
     // Cycle 3: fast stub so the final resume actually completes.

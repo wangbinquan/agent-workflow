@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-450 代码平台连接与调用归 integration（In Progress；`design/RFC-450-code-host-family-into-integration/`）
+## 2026-11-05 RFC-450 代码平台连接与调用归 integration（Done；`design/RFC-450-code-host-family-into-integration/`）
 
 - **来由**：RFC-294 W4 B / D 第十五步（RFC-449 后 4 个路由仍 import `services/`，其中 `codeHosts`、`accountRepositoryTransportCredentials` 取
   `services/codeHost/connections`）。
@@ -25,6 +25,14 @@
     见 `docs/dev-gotchas.md`。其后：`eef504664` 主 CI 的 Linux e2e 三片在 ubuntu-24.04 上全绿（install-deps 不再报不支持；macOS 构建 job 一直没
     分到 runner、排队 24 分钟后被取消，只重跑失败作业 attempt 2 全绿），定时的 e2e-webkit-nightly run 42053544054 与 git-protocols-e2e run 42060411229
     转绿；e2e-full-nightly 待当晚。升级 Playwright（1.61+ 支持 26.04）会换浏览器构建、需刷新视觉基线，未做。
+- **落地**：`d29f951e0`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修：两份源码文本锁没有跟着迁移（RFC-269 执行用例的源码层锁按逐段拼接的旧路径读文件、
+  RFC-310 PR-7 负扫描把迁入的通用执行器扫了进来），改为读新位置并精确排除通用执行器目录。全量 SQLite 23370 pass，其余为负载超时与
+  导出仓库所致的 `rfc321` 一条；接 PostgreSQL 329 个文件 4145 pass；P0 两引擎各 17 阶段通过。RFC-167 dw-confirm、RFC-363 整段分页与
+  RFC-310 Case 运行时 WorkStart 三例在本机负载 40～125 下复跑仍到点，同一时刻在 RFC-449 导出仓库里同样到点（与本 RFC 无关）。
+- **CI**：exact SHA 主 CI run 42065447650：attempt 1 只有 Windows e2e 分片 1/4 红——`crash-recovery` 两例等新启动的任务进入 running 的 10 秒屏障到点（last=pending；同文件三例这次比 run 42037618561 慢 1.4～1.7 倍；任务启动链路本 RFC 未改，与 `docs/dev-gotchas.md`「e2e 里等「运行时已经起来」的屏障」同类），只重跑失败作业，attempt 2 全绿；重跑只作佐证，屏障预算随 RFC-450 的 Done 文档提交对齐到同文件等终态用的 30 秒。windows-platform run 42065447653 与同 SHA 的 visual-regression、evidence-soak、maintenance-soak 夜间全绿。
+- **下一步**：B / D 余下 2 个路由：source-control（`cached-repos`，`services/gitRepoCache`、`services/repoBatchImport`）与
+  task-execution（`tasks`，14 个 `services/` import）。
 
 ## 2026-11-05 RFC-449 代码平台调用对 task-execution 与 development-automation 改为注入（Done；`design/RFC-449-code-host-requests-injected/`）
 
