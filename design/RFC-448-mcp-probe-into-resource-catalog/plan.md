@@ -16,10 +16,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 三个 `services/` 文件删除；路由不 import `services/`、对 resource-catalog 只经 public；装配根不再从路由取时钟
-- [ ] AC-2 计数按实测更新（路由 5 → 4，`services/` 216 → 213，模块里 import `services/` 的文件 142 → 141）
-- [ ] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 三个 `services/` 文件删除；路由不 import `services/`、对 resource-catalog 只经 public；装配根不再从路由取时钟
+- [x] AC-2 计数按实测更新（路由 5 → 4，`services/` 216 → 213，模块里 import `services/` 的文件 142 → 141）
+- [x] AC-3 受影响用例全部通过
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-05，候选基于 `9636d1073`）
 
@@ -54,6 +54,10 @@
   （装配根的 `authorityFor` 对同一 actor 每次得到同一份）；路由仍先校验请求体再进入用例，422 / 404 的先后不变；
 - 两个协调器实例只在 composition 创建，装配根、观测模块与探测用例经同一个 barrel 取到同一份；MCP 写入时钟与探测时钟仍是同一个；
 - 路由去掉的三项依赖只被探测端点使用；其余端点不变。
+
+## CI（AC-4）
+
+`df2cb6e26`：exact SHA 主 CI run 42008858737 与 windows-platform run 42008858797 首轮全绿。
 
 ## PR / 提交
 

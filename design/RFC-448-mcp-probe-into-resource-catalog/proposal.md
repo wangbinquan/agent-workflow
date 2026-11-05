@@ -1,6 +1,6 @@
 # RFC-448 MCP 探测用例与资源操作协调器归 resource-catalog（RFC-294 W4 B / D 第十四步）
 
-- **状态**：In Progress（2026-11-05）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-05；`df2cb6e26`，exact SHA 主 CI run 42008858737 与 windows-platform run 42008858797 首轮全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-447](../RFC-447-repository-groups-into-source-control/proposal.md)（仓库组用例归 source-control）

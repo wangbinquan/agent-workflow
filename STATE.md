@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-448 MCP 探测用例与资源操作协调器归 resource-catalog（In Progress；`design/RFC-448-mcp-probe-into-resource-catalog/`）
+## 2026-11-05 RFC-448 MCP 探测用例与资源操作协调器归 resource-catalog（Done；`design/RFC-448-mcp-probe-into-resource-catalog/`）
 
 - **来由**：RFC-294 W4 B / D 第十四步（RFC-447 后 5 个路由仍 import `services/`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -12,6 +12,14 @@
 - **不做**：MCP 运行时诊断与写入的其余用例、插件操作；审计登记 EK-05 的处置（锚点随迁）；其余 4 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-447 的 Done 文档提交 `9636d1073`：exact SHA 主 CI run 41994842554 首轮全绿。
+- **落地**：`df2cb6e26`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修：两份源码文本锁（RFC-345 合同、RFC-370 托管探测）仍按迁移前的位置读路由，
+  改为读迁入后的用例与装配文件并锁路由不再持有它们（RFC-201 调用点棘轮在实施时已同步改读）。全量 SQLite 23363 pass，其余为负载超时（单独复跑 16 / 18 个文件全过，余下两组
+  给 30 秒时限后全过）与导出仓库所致的 `rfc321` 一条；接 PostgreSQL 203 个文件 2646 pass，PostgreSQL 一侧超时与 RFC-238 真实进程的退出后读流超时
+  所在的 24 个文件给 30 秒时限后通过；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 42008858737 与 windows-platform run 42008858797 首轮全绿（AC-4）。
+- **下一步**：B / D 余下 4 个路由：integration 的代码平台连接（`codeHosts`、`accountRepositoryTransportCredentials`，共用
+  `services/codeHost/connections`）、source-control（`cached-repos`）与 task-execution（`tasks`）。
 
 ## 2026-11-05 RFC-447 仓库组用例归 source-control（Done；`design/RFC-447-repository-groups-into-source-control/`）
 
