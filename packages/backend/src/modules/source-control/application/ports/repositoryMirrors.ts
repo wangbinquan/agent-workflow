@@ -44,7 +44,9 @@ export interface RepositoryMirrors {
   /** Repo-relative files of its default branch. */
   files(cachedRepoId: string): Promise<RepoFilesResponse>
   /** The same reads by a mirror directory on the daemon's own disk (the
-   * legacy `?path=` form); absent where that disk holds no mirror (hosted). */
+   * legacy `?path=` form); absent where that disk holds no mirror (hosted).
+   * Only a directory inside a registered mirror is read; any other path is
+   * refused with `repo-path-unknown` before git runs. */
   readonly local?: {
     refs(path: string): Promise<RepoRefsResponse>
     files(path: string): Promise<RepoFilesResponse>

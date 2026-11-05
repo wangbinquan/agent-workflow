@@ -53,8 +53,8 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/services/gitRepoCache.ts:1319        attention 视图 = has_submodules=1 且 last_submodule_sync_ok=0
 //   packages/backend/src/services/gitRepoCache.ts:1634-1690   删除：任务引用 ∪ 仓库组引用 → CachedRepoHasReferencesError(409)
 //   packages/backend/src/services/gitRepoCache.ts:879-887     冷克隆 argv：`clone --recurse-submodules [--jobs N]`
-//   packages/backend/src/routes/repos.ts:19-30                requireKnownPath：path 必须落在某个镜像 local_path 之内
-//   packages/backend/src/services/repo.ts:27-33               isKnownRepoPath：resolve 后同一或以 root+sep 开头
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryIntrospection.ts:76-94  ?path= 读取：path 必须落在某个镜像 local_path 之内
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryIntrospection.ts:34-40  isKnownRepoPath：resolve 后同一或以 root+sep 开头
 //   packages/backend/src/routes/tasks.ts:325-334              JSON 启动 deferRepoPreparation=true（先落任务行、后台准备）
 //   packages/backend/src/services/task.ts:2793-2800           延后准备前先 ensureCachedRepoIdentity（落 lastFetchedAt=0 的身份行）
 //   packages/backend/src/services/task.ts:5104-5140           准备失败 → 合成 `__repo_prep__` 行 failed + git 原话上行

@@ -13,7 +13,7 @@ import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { isKnownRepoPath } from '../src/services/repo'
+import { isKnownRepoPath } from '../src/modules/source-control/infrastructure/local/repositoryIntrospection'
 import { createUser } from './helpers/userFixture'
 
 describe('isKnownRepoPath', () => {

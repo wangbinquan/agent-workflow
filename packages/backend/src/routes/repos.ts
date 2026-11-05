@@ -10,29 +10,17 @@
 // deployment the remote itself. `?path=` (a standalone mirror directory)
 // remains for existing API clients; where the daemon's disk holds no mirror it
 // is refused.
+//
+// RFC-446: `mirrors.local` itself reads only inside a registered mirror
+// (source-control `infrastructure/local/repositoryIntrospection.ts`), so this
+// route no longer takes the repository store.
 
 import type { Hono } from 'hono'
-import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
-import { isKnownRepoPath } from '@/services/repo'
 import { ValidationError } from '@/util/errors'
 
-export function mountRepoRoutes(
-  app: Hono,
-  store: RepositoryWorkspaceStore,
-  mirrors: RepositoryMirrors,
-): void {
-  // RFC-099 audit (2026-07-15): `path` is attacker-controllable and repos:read
-  // is in the user baseline. Constrain introspection to paths inside a known
-  // cached-repos mirror so a user can't enumerate arbitrary host git repos.
-  async function requireKnownPath(path: string): Promise<void> {
-    const paths = await store.listKnownRepositoryPaths()
-    if (!isKnownRepoPath(paths, path)) {
-      throw new ValidationError('repo-path-unknown', 'path is not a known cached repository')
-    }
-  }
-
+export function mountRepoRoutes(app: Hono, mirrors: RepositoryMirrors): void {
   async function read<T>(
     query: (name: string) => string | undefined,
     byId: (cachedRepoId: string) => Promise<T>,
@@ -53,7 +41,6 @@ export function mountRepoRoutes(
         'this deployment keeps no repository mirror on its own disk; name the repository by cachedRepoId',
       )
     }
-    await requireKnownPath(path)
     return await byPath(mirrors.local, path)
   }
 

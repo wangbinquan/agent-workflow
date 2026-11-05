@@ -428,7 +428,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/recovery.ts': 'task-execution',
   'packages/backend/src/services/recoveryBreaker.ts': 'task-execution',
   'packages/backend/src/services/ref/runtimeRef.ts': 'runtime-management',
-  'packages/backend/src/services/repo.ts': 'source-control',
   'packages/backend/src/services/repoBatchImport.ts': 'source-control',
   'packages/backend/src/services/repoCredentials.ts': 'source-control',
   'packages/backend/src/services/repoGroup.ts': 'source-control',

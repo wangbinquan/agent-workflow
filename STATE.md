@@ -1,3 +1,16 @@
+## 2026-11-04 RFC-446 仓库 refs / files 读取归 source-control（In Progress；`design/RFC-446-repository-reads-into-source-control/`）
+
+- **来由**：RFC-294 W4 B / D 第十二步（RFC-445 后 7 个路由仍 import `services/`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/repo.ts` 的 `getRepoRefs`、`getRepoFiles`、`isKnownRepoPath` 原样迁入 source-control `infrastructure/local/repositoryIntrospection.ts`，
+    删除 `services/repo.ts`；
+  - `routes/repos.ts` 里 `?path=` 形式「先判定已登记镜像目录、再读」移成同文件的 `createKnownPathRepositoryReads`，由 mirrors 装配为
+    `RepositoryMirrors.local`；路由不再 import `services/`、不再收仓库存储（`mountRepoRoutes(app, mirrors)`）；
+  - import `services/` 的路由 7 → 6；`services/` 文件 218 → 217；错误码、判定顺序与响应不变。
+- **不做**：source-control 的 `repoGroups`、`cached-repos` 与 `services/gitRepoCache`、`services/repoGroup`；其余 5 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-04 RFC-445 启动 multipart 信封与恢复计数归 platform，上传兼容层退役（In Progress；`design/RFC-445-launch-multipart-and-recovery-counters/`）
 
 - **来由**：RFC-294 W4 B / D 第十一步（RFC-444 后 9 个路由仍 import `services/`）。

@@ -752,6 +752,9 @@ function registerCases(provider: ProviderHarness) {
   // and the next prompt carried zero Q&A history. scheduleAgentNode must now
   // inherit clarifyIteration (and shard / parent / review iteration) from the
   // latest existing row when minting the fresh attempt.
+  // 墙钟预算（2026-11-04 CI 实测补，16465e382 backend shard 43/44）：本例两次进入 runTask（首轮反问挂起、中断后
+  // 重入复活），各带一次真实 spawn。前一提交（60a8b2c7c）同一分片上 PostgreSQL 一侧 1498ms，同一运行里同文件其余各例
+  // 0.9～1.7s；这一次以 5491ms 越过 bun 默认 5s（SQLite 一侧 396ms）。显式预算=墙钟允许量，不是对调度变慢的容忍。
   test('interrupted clarify rerun: re-entering scheduler keeps clarifyIteration on the fresh attempt + Q&A in prompt', async () => {
     await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
@@ -903,7 +906,7 @@ function registerCases(provider: ProviderHarness) {
     expect(fresh.status).toBe('done')
     expect(readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? '').toContain('Clarify Q&A')
     expect(readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? '').toContain('Postgres')
-  })
+  }, 20_000)
 
   // RFC-100 (Codex review #2 / documented limitation-1 fix): a 'stop' (finalize)
   // round that is interrupted then REVIVED must stay RELEASED — the revived run

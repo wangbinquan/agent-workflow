@@ -292,7 +292,7 @@ describe('RFC-370 V17 hosted picker route', () => {
     const unused = async (): Promise<never> => {
       throw new Error('unexpected registration')
     }
-    mountRepoRoutes(app, { listKnownRepositoryPaths: async () => ['/mirrors/x'] } as never, {
+    mountRepoRoutes(app, {
       refs: async (id) => {
         calls.push(`refs:${id}`)
         return {

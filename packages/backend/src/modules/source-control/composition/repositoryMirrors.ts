@@ -6,10 +6,14 @@ import {
   invalidateRepoFacetsCache,
   rowToCached,
 } from '@/services/gitRepoCache'
-import { getRepoFiles, getRepoRefs } from '@/services/repo'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha1Hex } from '@/util/hash'
+import {
+  createKnownPathRepositoryReads,
+  getRepoFiles,
+  getRepoRefs,
+} from '../infrastructure/local/repositoryIntrospection'
 import type {
   CachedRepositoryRecord,
   RepositoryWorkspaceStore,
@@ -51,7 +55,9 @@ export function composeRepositoryMirrors(input: {
     return {
       refs: (id) => local(id, (path) => getRepoRefs(path)),
       files: (id) => local(id, getRepoFiles),
-      local: { refs: (path) => getRepoRefs(path), files: getRepoFiles },
+      // RFC-446: the `?path=` form reads only inside a registered mirror (the
+      // check routes/repos.ts used to make before calling these).
+      local: createKnownPathRepositoryReads(() => input.store.listKnownRepositoryPaths()),
     }
   }
   const now = input.now ?? Date.now
