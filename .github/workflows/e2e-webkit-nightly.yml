@@ -42,7 +42,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Pinned, not ubuntu-latest: Playwright 1.60.0 cannot install WebKit on ubuntu-26.04
+        # (ubuntu-latest since 2026-11-03).
+        os: [ubuntu-24.04, macos-latest]
         shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
     steps:
@@ -63,7 +65,7 @@ jobs:
 
       - name: Install Playwright browsers (webkit)
         # `--with-deps` installs the system libs webkit needs on
-        # ubuntu-latest (`libwebkit2gtk-4.0`, fonts, etc.). On macOS the
+        # Ubuntu (`libwebkit2gtk-4.0`, fonts, etc.). On macOS the
         # WebKit engine ships with the OS so only the playwright binary
         # is downloaded.
         shell: bash
@@ -73,7 +75,7 @@ jobs:
         env:
           CI: 'true'
           PLAYWRIGHT_WEBKIT: '1'
-          E2E_WORKERS: ${{ matrix.os == 'ubuntu-latest' && '1' || '2' }}
+          E2E_WORKERS: ${{ matrix.os == 'ubuntu-24.04' && '1' || '2' }}
         shell: bash
         # Hosted Ubuntu lost independent compiled daemons at two workers in multiple
         # shards; run that runner serially while keeping macOS at two. Coverage,

@@ -33,7 +33,9 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: Playwright 1.60.0 cannot install Chromium on ubuntu-26.04
+    # (ubuntu-latest since 2026-11-03; every full-tier night failed at the install step).
+    runs-on: ubuntu-24.04
     # 全量档比 PR 档多跑 P2/P3，且开了 debug 日志。留出比 PR 腿(20) 更宽的余量，
     # 但仍远小于 Actions 的六小时默认值——挂死必须以超时收场，不能占着 runner。
     timeout-minutes: 60

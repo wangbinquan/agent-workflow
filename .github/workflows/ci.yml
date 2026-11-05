@@ -697,7 +697,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        # Same pinned image as the Linux browser leg below, which downloads this job's
+        # `agent-workflow-e2e-${{ matrix.os }}` artifact: the binary is built and browser-tested
+        # on one image. See the e2e matrix for why it is not ubuntu-latest.
+        os: [ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps: &build-binary-steps
@@ -862,7 +865,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        # Pinned, not ubuntu-latest: Playwright 1.60.0 cannot install Chromium or its system
+        # deps on ubuntu-26.04 (ubuntu-latest since 2026-11-03), where this leg only passed while
+        # the browser cache hit. Move the pin together with a Playwright that supports the newer image.
+        os: [ubuntu-24.04]
         shard: [1, 2, 3]
         shards: [3]
     runs-on: ${{ matrix.os }}

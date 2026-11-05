@@ -301,7 +301,9 @@ describe('repository test entrypoint', () => {
     const buildBinaryJob = workflowJob(ciWorkflow, 'build-binary')
     const e2eJob = workflowJob(ciWorkflow, 'e2e')
     const buildPlatforms = [
-      { job: 'build-binary', os: 'ubuntu-latest', steps: '&build-binary-steps' },
+      // 2026-11-05: the Linux build + browser legs pin ubuntu-24.04 (Playwright 1.60.0 cannot
+      // install Chromium on ubuntu-latest = ubuntu-26.04); see ci-playwright-runner-image.test.ts.
+      { job: 'build-binary', os: 'ubuntu-24.04', steps: '&build-binary-steps' },
       { job: 'build-binary-macos', os: 'macos-latest', steps: '*build-binary-steps' },
       { job: 'build-binary-windows', os: 'windows-latest', steps: '*build-binary-steps' },
     ] as const
@@ -309,7 +311,7 @@ describe('repository test entrypoint', () => {
       {
         job: 'e2e',
         build: 'build-binary',
-        os: 'ubuntu-latest',
+        os: 'ubuntu-24.04',
         shards: '[1, 2, 3]',
         total: 3,
       },
