@@ -15,7 +15,9 @@ import { join } from 'node:path'
 
 const ROOT = join(import.meta.dir, '..')
 const gitTs = await Bun.file(join(ROOT, 'src/util/git.ts')).text()
-const cacheTs = await Bun.file(join(ROOT, 'src/services/gitRepoCache.ts')).text()
+const cacheTs = await Bun.file(
+  join(ROOT, 'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts'),
+).text()
 
 /** 注释剥离 + 空白折叠 + 两侧合法命名差异归一（outPromise↔outP / errPromise↔errP）。 */
 function normalize(seg: string): string {

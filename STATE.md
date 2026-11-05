@@ -1,3 +1,19 @@
+## 2026-11-05 RFC-451 仓库镜像缓存家族归 source-control（In Progress；`design/RFC-451-repository-mirror-cache-into-source-control/`）
+
+- **来由**：RFC-294 W4 B / D 第十六步（RFC-450 后 2 个路由仍 import `services/`，其中 `cached-repos` 取 `services/gitRepoCache` 与
+  `services/repoBatchImport`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - 子模块参数解析 `resolveSubmoduleParams` 原样迁入 `platform/workspace/local/submoduleParams.ts`（平台隔离直接用它，平台不能依赖模块）；
+  - 镜像缓存、批量导入、后台子模块保鲜与开发工作区仓库准备原样迁入 source-control `infrastructure/local`；`services/gitRepoCache`、
+    `services/repoBatchImport`、`services/submoduleRefresh` 删除；
+  - `cached-repos` 路由只经 source-control 的 `CachedRepositoryOperations`（`public/types`），装配读配置与选托管 / 本地刷新；
+  - import `services/` 的路由 2 → 1；`services/` 文件 208 → 205；模块里 import `services/` 的文件 138 → 139（迁入的家族仍取 legacy 的
+    `gitSubmodule`、`daemonCadence`、`maintenanceTicker`、`repoCredentials`，W5 / W4-E 余项）。
+- **不做**：`tasks` 路由；`services/gitVersion`、`services/gitSubmodule`（W5）；`services/developmentDeliveryDeps` 其余部分（W4-E）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-450 的 Done 文档提交 `52d08e929`：exact SHA 主 CI run 42073868900 首轮全绿（含 crash-recovery 进展屏障对齐后的 Windows e2e）。
+
 ## 2026-11-05 RFC-450 代码平台连接与调用归 integration（Done；`design/RFC-450-code-host-family-into-integration/`）
 
 - **来由**：RFC-294 W4 B / D 第十五步（RFC-449 后 4 个路由仍 import `services/`，其中 `codeHosts`、`accountRepositoryTransportCredentials` 取

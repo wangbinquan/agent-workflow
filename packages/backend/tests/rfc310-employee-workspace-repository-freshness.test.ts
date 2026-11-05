@@ -23,8 +23,8 @@ import {
   assertDevelopmentWorkspaceRepositoryFreshness,
   buildDevelopmentWorkspaceRepositoryPreparation,
   createDevelopmentWorkspaceRepositoryPreparation,
-} from '@/services/developmentDeliveryDeps'
-import { resolveCachedRepo } from '@/services/gitRepoCache'
+} from '@/modules/source-control/infrastructure/local/developmentWorkspaceRepositoryPreparation'
+import { resolveCachedRepo } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { DomainError } from '@/util/errors'
 
 const root = mkdtempSync(join(tmpdir(), 'rfc310-workspace-freshness-'))

@@ -60,7 +60,10 @@ describe('nonInteractiveGitEnv()', () => {
 })
 
 describe('git spawn sites wire nonInteractiveGitEnv()', () => {
-  const SPAWN_SITES = ['src/util/git.ts', 'src/services/gitRepoCache.ts']
+  const SPAWN_SITES = [
+    'src/util/git.ts',
+    'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
+  ]
   for (const rel of SPAWN_SITES) {
     test(`${rel} passes nonInteractiveGitEnv() to every Bun.spawn`, () => {
       const path = resolve(import.meta.dir, '..', rel)

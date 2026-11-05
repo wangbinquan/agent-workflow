@@ -583,6 +583,15 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   `packages/backend/tests/ci-playwright-runner-image.test.ts` 锁住「不用 `ubuntu-latest`、且镜像在已安装 Playwright 的支持表里」。
   要换镜像就和 Playwright 一起换；升级 Playwright 会换浏览器构建，视觉回归的 Linux 基线要按 `e2e/visual-regression.README.md` 刷新并复核。
 
+## 挪 / 删文件要同步 workflow 的 `paths:` 触发清单：漏改不报红，那套 workflow 只是从此不再随提交触发（RFC-451 实查，2026-11-05）
+
+- `on.push.paths` / `on.pull_request.paths` 只在改动命中某一条时才触发；条目指向的文件被挪走或删除后，那一条永远不会命中——不报错、
+  不变红，套件只剩 cron 在跑。RFC-451 把 `services/gitRepoCache.ts`、`services/repoBatchImport.ts` 迁进 source-control 时，
+  `git-protocols-e2e.yml` 的两份清单仍写着旧路径；按路径段扫源码引用、改 import 与源码文本锁都扫不到 workflow。
+- **定式**：挪 / 删文件时把 `.github/workflows/*.yml` 一起 grep 旧路径；`packages/backend/tests/ci-workflow-path-filters.test.ts`
+  锁住「每条 `paths` / `paths-ignore` 的字面条目存在、每条 glob 的目录前缀存在」。原文件里有逻辑被拆到别处（如 RFC-451 的子模块
+  参数解析归平台）时，拆出去的新文件也要登记，否则那段逻辑的改动同样不再触发。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

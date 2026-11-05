@@ -83,10 +83,10 @@ describe('RFC-349 repository workspace provider boundary', () => {
   test('production consumers contain no database mechanism and PostgreSQL has a native adapter', () => {
     const production = [
       'services/repoCredentials.ts',
-      'services/repoBatchImport.ts',
-      'services/gitRepoCache.ts',
+      'modules/source-control/infrastructure/local/repositoryBatchImport.ts',
+      'modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
       'modules/source-control/application/repositoryGroups.ts',
-      'services/submoduleRefresh.ts',
+      'modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh.ts',
       'services/worktreeFileContent.ts',
       'routes/cached-repos.ts',
       'routes/repoGroups.ts',

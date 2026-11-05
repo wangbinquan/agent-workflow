@@ -10,7 +10,7 @@
 //     delta UNSTAGED (§5.3, Codex gate 五/六轮 deletion + blocking-dir handling)
 //   - residualConflictMarkers pure oracle; isoRefName distinct base/node refs (D26)
 
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

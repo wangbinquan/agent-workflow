@@ -3,7 +3,7 @@
 // These tests deterministically materialize both ambiguous outcomes at the
 // lifecycle seam: launch-owned residue must be reclaimed, while a directory
 // that existed before spawn must never be removed.
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import {

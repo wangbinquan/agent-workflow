@@ -19,7 +19,7 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
-import { resolveCachedRepo } from '../src/services/gitRepoCache'
+import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { type RepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 

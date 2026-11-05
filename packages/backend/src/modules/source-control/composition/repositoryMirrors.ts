@@ -5,7 +5,7 @@ import {
   ensureCachedRepoIdentity,
   invalidateRepoFacetsCache,
   rowToCached,
-} from '@/services/gitRepoCache'
+} from '../infrastructure/local/repositoryMirrorCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha1Hex } from '@/util/hash'

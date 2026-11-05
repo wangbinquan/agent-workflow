@@ -11,7 +11,10 @@ import {
   type ProviderWebSocketScope,
 } from './helpers/providerWebSocketScope'
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '../src/ws/broadcaster'
-import { __resetBatchImportForTests, startBatchImport } from '../src/services/repoBatchImport'
+import {
+  __resetBatchImportForTests,
+  startBatchImport,
+} from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'

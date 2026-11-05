@@ -27,7 +27,7 @@ import {
   invalidateRepoFacetsCache,
   listCachedRepos,
   listCachedReposPage,
-} from '../src/services/gitRepoCache'
+} from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,

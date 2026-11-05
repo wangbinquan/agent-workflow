@@ -19,7 +19,7 @@ import type {
   RealtimeRuntime,
 } from '../../src/modules/runtime-management/public/participants'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { batchOwnerUserId } from '../../src/services/repoBatchImport'
+import { batchOwnerUserId } from '../../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { redactEventPayload } from '../../src/auth/tokenRedaction'
 import { memoryCatalogOf } from './memoryCatalog'
 

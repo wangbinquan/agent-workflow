@@ -11,8 +11,8 @@ import {
   getBatchSnapshot,
   startBatchImport,
   type RepoBatchImportDeps,
-} from '../src/services/repoBatchImport'
-import type { resolveCachedRepo } from '../src/services/gitRepoCache'
+} from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
+import type { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 type Resolver = typeof resolveCachedRepo

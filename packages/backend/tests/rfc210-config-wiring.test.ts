@@ -19,7 +19,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { syncSubmodules } from '@/services/gitSubmodule'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 import { runGit } from '@/util/git'
@@ -160,7 +160,8 @@ describe('RFC-377 production submodule policy wiring', () => {
       resolve(import.meta.dir, '../src/platform/workspace/local/isolation.ts'),
       'utf8',
     )
-    expect(source).toContain("import { resolveSubmoduleParams } from '@/services/gitRepoCache'")
+    // RFC-451: the resolver moved next to isolation (platform/workspace/local/submoduleParams.ts).
+    expect(source).toContain("import { resolveSubmoduleParams } from './submoduleParams'")
     const calls = source.match(
       /(?:createIsolatedWorktree\(\{|(?:alignWorktreeGitlinks|materializeTree)\([^\n{]*\{)\s*resolveSubmoduleParams,/g,
     )

@@ -30,7 +30,7 @@ import {
   listCachedRepos,
   refreshCachedRepo,
   resolveCachedRepo,
-} from '../src/services/gitRepoCache'
+} from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { resolveRepoSourceSingle } from './helpers/legacyTaskWorkspace'
 
 import { runGit } from '../src/util/git'

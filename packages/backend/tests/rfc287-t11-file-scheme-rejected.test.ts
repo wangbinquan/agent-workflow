@@ -18,7 +18,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { StartTaskSchema } from '@agent-workflow/shared'
-import { selectDueRepos } from '@/services/submoduleRefresh'
+import { selectDueRepos } from '@/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { ulid } from 'ulid'
@@ -141,7 +141,16 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
 
     // 刷新是启动之外的第二条运行面，同拒。
     const cacheSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf8',
     )
     // 窗口给足余量：这段是全仓注释最密的区域之一，收紧到刚好够用等于给别人的
@@ -169,7 +178,16 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
 
   test('后台保鲜的过滤按 url_redacted 判（明文只以密文列存在）', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'submoduleRefresh.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorAutoRefresh.ts',
+      ),
       'utf8',
     )
     // T14 改锚：判据已收敛成共享谓词 `isFileSchemeUrl`（G5 第一版手抄了两份，实现门
@@ -188,7 +206,8 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
 // 三轮门（Codex 契约面）P3：刷新的 fail-closed 分支曾把两件完全不同的事共用一个码。
 describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (harness) => {
   test('url_redacted 为 NULL 报 repo-url-unavailable，而不是 file 错误', async () => {
-    const { refreshCachedRepo } = await import('@/services/gitRepoCache')
+    const { refreshCachedRepo } =
+      await import('@/modules/source-control/infrastructure/local/repositoryMirrorCache')
     const db = harness.db
     const id = ulid()
     const { cachedRepos } = tablesOf(db)
@@ -219,7 +238,8 @@ describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (
   })
 
   test('真的 file:// 行仍报 repo-url-file-scheme-unsupported（拆码没拆错方向）', async () => {
-    const { refreshCachedRepo } = await import('@/services/gitRepoCache')
+    const { refreshCachedRepo } =
+      await import('@/modules/source-control/infrastructure/local/repositoryMirrorCache')
     const db = harness.db
     const id = ulid()
     const { cachedRepos } = tablesOf(db)

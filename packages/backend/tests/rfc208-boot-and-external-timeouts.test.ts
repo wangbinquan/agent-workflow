@@ -110,7 +110,16 @@ describe('RFC-208 · a failed filesystem rollback cannot strand a skill operatio
 
 describe('RFC-208 · git cache work is killable, not just race-able', () => {
   const cacheSource = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'source-control',
+      'infrastructure',
+      'local',
+      'repositoryMirrorCache.ts',
+    ),
     'utf8',
   )
 

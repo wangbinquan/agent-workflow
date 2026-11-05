@@ -44,7 +44,7 @@ import {
   __resetBatchImportForTests,
   getBatchSnapshot,
   startBatchImport,
-} from '../src/services/repoBatchImport'
+} from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { createRepoGroup } from '../src/modules/source-control/application/repositoryGroups'
 import { DomainError, errorHandler } from '../src/util/errors'
 import { runGit } from '../src/util/git'

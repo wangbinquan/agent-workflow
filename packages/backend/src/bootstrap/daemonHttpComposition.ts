@@ -61,6 +61,7 @@ import { composeIdentityUserOperations } from '@/modules/identity-access/composi
 import { createOidcProvidersService } from '@/auth/oidc/providers'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
+  composeCachedRepositoryOperations,
   composeRepositoryGroups,
   composeRepositoryMirrors,
   createWorkspaceContentScope,
@@ -517,8 +518,10 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     }),
     skills: Object.freeze({ ...skillCatalog, authorityFor }),
     repositories: Object.freeze({
-      store: core.repositoryWorkspaceStore,
-      cached: Object.freeze({
+      // RFC-451: the cached-repository operations over the same store and mirrors the pickers read.
+      cached: composeCachedRepositoryOperations({
+        store: core.repositoryWorkspaceStore,
+        mirrors: repositoryMirrors,
         configuration,
         appHome: input.appHome,
         secretBox: input.secretBox,

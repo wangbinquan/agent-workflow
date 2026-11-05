@@ -98,7 +98,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 1,
     why: 'git spawn 双点之一（RFC-208 组杀/超时特化语义，豁免有据；与 gitRepoCache 镜像互锁）。',
   },
-  'services/gitRepoCache.ts': {
+  'modules/source-control/infrastructure/local/repositoryMirrorCache.ts': {
     governance: 'process-group',
     count: 1,
     why: 'git spawn 双点之二（镜像 util/git.ts，注释互指防漂移；RFC-284 T18 加文本锁）。',

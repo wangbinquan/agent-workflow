@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 import { CachedRepoSchema } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { listCachedRepos } from '../src/services/gitRepoCache'
+import { listCachedRepos } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { normalizeStartTaskRepos } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 const TOKEN = 'ghp_SUPERSECRET_TOKEN_VALUE'

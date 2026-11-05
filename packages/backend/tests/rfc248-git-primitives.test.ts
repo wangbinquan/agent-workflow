@@ -2,7 +2,7 @@
 // was deleted: platform exclusions now live in the RFC-308 profile test and
 // never edit business .gitignore.
 
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'

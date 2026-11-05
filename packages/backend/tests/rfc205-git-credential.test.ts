@@ -297,7 +297,16 @@ describe('__git-credential exact target binding (P0-2)', () => {
 describe('source locks — the mirror never re-disks the credential', () => {
   test('clone/fetch use the redacted URL + lease leadingArgs; warm fetch normalises origin first', () => {
     const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('cloneArgs.push(redacted, tmpDir)')

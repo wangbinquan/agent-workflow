@@ -7,7 +7,7 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'

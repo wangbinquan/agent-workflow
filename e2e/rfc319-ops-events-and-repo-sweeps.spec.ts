@@ -59,7 +59,7 @@ import { liveSqlitePath } from './storage'
 //   * 孤儿工作树回收：packages/backend/src/services/gc.ts:622-660（无任务行锚定 + 24h 年龄地板）、
 //     半成品镜像目录 :583-620，装配与相位 :803-841 与
 //     packages/backend/src/services/daemonCadence.ts:95-96。
-//   * 子模块递归模式落到克隆：packages/backend/src/services/gitRepoCache.ts:461-472
+//   * 子模块递归模式落到克隆：packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:461-472
 //     与 :473-495（显式参数 > 设置 > 内置默认）。
 //
 // 与既有 spec 的分工（刻意不重叠）：

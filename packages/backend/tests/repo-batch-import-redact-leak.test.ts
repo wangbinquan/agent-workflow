@@ -15,7 +15,16 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const FILE = resolve(import.meta.dir, '..', 'src', 'services', 'repoBatchImport.ts')
+const FILE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'source-control',
+  'infrastructure',
+  'local',
+  'repositoryBatchImport.ts',
+)
 
 describe('repoBatchImport redact guard (RFC-033)', () => {
   test('every wire-bound row uses redactGitUrl', () => {

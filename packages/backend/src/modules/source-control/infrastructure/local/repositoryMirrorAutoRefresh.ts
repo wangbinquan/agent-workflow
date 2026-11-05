@@ -13,7 +13,7 @@
 import { isFileSchemeUrl, type Config } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
-import { refreshCachedRepo } from '@/services/gitRepoCache'
+import { refreshCachedRepo } from './repositoryMirrorCache'
 import { createLogger } from '@/util/log'
 import { createManagedPeriodicJob } from '@/services/managedPeriodicJob'
 

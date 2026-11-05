@@ -12,9 +12,9 @@ import {
   retryBatchRow,
   getBatchSnapshot,
   type RepoBatchImportDeps,
-} from '../src/services/repoBatchImport'
+} from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { DomainError, NotFoundError } from '../src/util/errors'
-import type { resolveCachedRepo } from '../src/services/gitRepoCache'
+import type { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 type Resolver = typeof resolveCachedRepo

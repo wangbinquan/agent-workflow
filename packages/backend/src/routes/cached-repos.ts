@@ -16,40 +16,16 @@ import {
   StartBatchImportRequestSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import type { SecretBox } from '@/auth/secretBox'
-import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
+import type { CachedRepositoryOperations } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
-import {
-  CachedRepoHasReferencesError,
-  deleteCachedRepo,
-  listCachedRepos,
-  listCachedReposPage,
-  refreshCachedRepo,
-} from '@/services/gitRepoCache'
-import { getBatchSnapshot, retryBatchRow, startBatchImport } from '@/services/repoBatchImport'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 
-export interface CachedRepoRouteDependencies {
-  readonly configuration: ApplicationConfigurationQueries
-  readonly appHome?: string
-  readonly secretBox?: SecretBox
-}
-
-export function mountCachedRepoRoutes(
-  app: Hono,
-  deps: CachedRepoRouteDependencies,
-  store: RepositoryWorkspaceStore,
-  mirrors: RepositoryMirrors,
-): void {
-  const remote = mirrors.remoteRegistration
-  const registration =
-    remote === undefined ? {} : { register: (url: string) => remote.register(url) }
+/** RFC-451: the operations, the selected mirrors and their settings come composed from source-control. */
+export function mountCachedRepoRoutes(app: Hono, operations: CachedRepositoryOperations): void {
   registerRoute(
     app,
     {
@@ -79,7 +55,7 @@ export function mountCachedRepoRoutes(
         limit: param('limit'),
       }
       if (Object.values(raw).every((v) => v === undefined)) {
-        const items = await listCachedRepos(store)
+        const items = await operations.list()
         return c.json({ items })
       }
       const parsed = CachedRepoPageQuerySchema.safeParse(raw)
@@ -89,7 +65,7 @@ export function mountCachedRepoRoutes(
           parsed.error.issues[0]?.message ?? 'invalid query',
         )
       }
-      return c.json(await listCachedReposPage(store, parsed.data))
+      return c.json(await operations.page(parsed.data))
     },
   )
 
@@ -103,23 +79,8 @@ export function mountCachedRepoRoutes(
       summary: 'Refresh a cached mirror',
     },
     async (c) => {
-      const id = c.req.param('id')
-      if (remote !== undefined) return c.json(await remote.refresh(id))
-      // RFC-208: `gitCloneTimeoutMs` was dead config — the schema accepted it but
-      // nothing ever passed it to `cloneTimeoutMs`, so an operator tightening the
-      // window had no effect. Manual refresh shells out to `git fetch` against a
-      // remote host, which is exactly the call that needs a bound.
-      const cfg = await deps.configuration.read()
-      const r = await refreshCachedRepo(
-        {
-          store,
-          ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
-          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-          ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
-        },
-        id,
-      )
-      return c.json(r)
+      // RFC-451: hosted mirrors verify the remote again; a standalone daemon fetches with the configured clone bound.
+      return c.json(await operations.refresh(c.req.param('id')))
     },
   )
 
@@ -142,7 +103,7 @@ export function mountCachedRepoRoutes(
       // the same ordering the other seven delete routes use.
       const actor = actorOf(c)
       if (actor.source === 'pat') {
-        const existing = (await listCachedRepos(store)).find((r) => r.id === id)
+        const existing = (await operations.list()).find((r) => r.id === id)
         if (!existing) throw new NotFoundError('cached-repo-not-found', 'cached repo not found')
         assertTokenDeleteConfirm(
           await readDeleteBody(c),
@@ -155,17 +116,10 @@ export function mountCachedRepoRoutes(
         // (RFC-204 removed the plaintext url), so nothing sensitive is stored.
         captureDeleteSnapshot(c, actor, existing)
       }
-      try {
-        const r = await deleteCachedRepo({ store }, id, { force: isForce })
-        return c.json({ ok: true, deletedLocalPath: r.deletedLocalPath })
-      } catch (err) {
-        if (err instanceof CachedRepoHasReferencesError) {
-          // Re-throw so the central errorHandler renders the 409 with details
-          // (count + urlRedacted). Default Hono handler picks up status/code/details.
-          throw err
-        }
-        throw err
-      }
+      // `cached-repo-has-references` propagates to the central errorHandler, which renders the 409 with
+      // its details (count + urlRedacted + referencing groups).
+      const r = await operations.remove(id, { force: isForce })
+      return c.json({ ok: true, deletedLocalPath: r.deletedLocalPath })
     },
   )
 
@@ -189,21 +143,11 @@ export function mountCachedRepoRoutes(
           issues: parsed.error.issues,
         })
       }
-      const cfg = await deps.configuration.read()
-      const result = startBatchImport(
-        {
-          store,
-          ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
-          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-          concurrency: cfg.repoBatchImportConcurrency,
-          retentionMs: cfg.repoBatchImportRetentionMs,
-          ...registration,
-        },
-        parsed.data,
-        // RFC-285 B6②：发起者归属（WS 升级门判定依据）。
-        { userId: actorOf(c).user.id },
-      )
-      return c.json(result.snapshot, 201)
+      // RFC-285 B6②：发起者归属（WS 升级门判定依据）。
+      const snapshot = await operations.startBatchImport(parsed.data, {
+        userId: actorOf(c).user.id,
+      })
+      return c.json(snapshot, 201)
     },
   )
 
@@ -218,7 +162,7 @@ export function mountCachedRepoRoutes(
     },
     (c) => {
       const batchId = c.req.param('batchId')
-      const snap = getBatchSnapshot(batchId)
+      const snap = operations.batchSnapshot(batchId)
       if (snap === null) {
         throw new NotFoundError('batch-not-found', `batch ${batchId} not found or expired`)
       }
@@ -250,18 +194,7 @@ export function mountCachedRepoRoutes(
         }
         body = parsed.data
       }
-      const snap = retryBatchRow(
-        {
-          store,
-          ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
-          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-          ...registration,
-        },
-        batchId,
-        rowId,
-        body,
-      )
-      return c.json(snap)
+      return c.json(operations.retryBatchRow(batchId, rowId, body))
     },
   )
 }

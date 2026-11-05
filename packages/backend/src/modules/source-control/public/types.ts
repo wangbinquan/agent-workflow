@@ -293,6 +293,11 @@ export type {
   RepositoryRefresh,
   RepositoryRegistration,
 } from '../application/ports/repositoryMirrors'
+// RFC-451 — the cached-repository management surface (`/api/cached-repos`).
+export type {
+  CachedRepositoryOperations,
+  CachedRepositoryRefresh,
+} from '../application/ports/cachedRepositoryOperations'
 // RFC-447 — repository-group management operations for the HTTP surface.
 export type {
   RepositoryGroupDeletion,

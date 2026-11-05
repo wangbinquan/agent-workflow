@@ -65,7 +65,7 @@ import {
   createPostgresqlAdminBackupCoordinator,
 } from '@/modules/system-operations/composition'
 import { createSecretBox } from '@/auth/secretBox'
-import { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
+import { createDevelopmentWorkspaceRepositoryPreparation } from '@/modules/source-control/composition'
 import {
   composeLocalRepositoryPreparationEffects,
   composeLocalScratchWorkspaceEffects,

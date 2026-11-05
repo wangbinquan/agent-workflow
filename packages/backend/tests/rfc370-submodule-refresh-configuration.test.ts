@@ -4,7 +4,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 import { expect, spyOn, test } from 'bun:test'
 import type { Config } from '@agent-workflow/shared'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { startConfiguredSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
+import { startConfiguredSubmoduleRefreshLoop } from '@/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
 import { describeEachProvider } from './helpers/eachProvider'
 
 type RefreshConfig = Pick<Config, 'submoduleAutoRefresh'>

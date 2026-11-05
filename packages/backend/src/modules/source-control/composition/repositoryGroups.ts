@@ -3,7 +3,10 @@
 // deployment registers a verified remote instead of cloning (RFC-370 §10 V17);
 // a standalone daemon clones into its mirror cache, waiting at most the
 // configured git clone budget, read once per create / replace.
-import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
+import {
+  resolveCachedRepo,
+  type GitRepoCacheDeps,
+} from '../infrastructure/local/repositoryMirrorCache'
 import {
   createRepoGroup,
   deleteRepoGroup,

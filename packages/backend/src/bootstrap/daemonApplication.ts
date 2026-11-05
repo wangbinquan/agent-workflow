@@ -122,7 +122,7 @@ import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
-import { batchOwnerUserId } from '@/services/repoBatchImport'
+import { batchOwnerUserId } from '@/modules/source-control/composition'
 import { redactEventPayload } from '@/auth/tokenRedaction'
 import {
   composeProviderAppDeps,

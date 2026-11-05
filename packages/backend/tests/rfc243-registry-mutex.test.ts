@@ -7,7 +7,7 @@
 //      成功注册（2026-07-27 半初始化 commondir 事故的反例形态）。
 //   3. 源码锁：三个注册表写操作（createWorktree/removeWorktree/
 //      createIsolatedWorktree）都经过 withWorktreeRegistryLock。
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

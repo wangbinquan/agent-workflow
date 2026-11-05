@@ -26,10 +26,12 @@ import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/op
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { runTaskIdleTimeoutSweep } from '@/modules/task-execution/composition/taskIdleTimeout'
-import { startConfiguredSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
+import {
+  startBatchImportGc,
+  startConfiguredSubmoduleRefreshLoop,
+} from '@/modules/source-control/composition'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { startBackupScheduler } from '@/services/backupScheduler'
-import { startBatchImportGc } from '@/services/repoBatchImport'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import type { buildWebSocketAdapter } from '@/ws/server'

@@ -11,7 +11,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { __resetBatchImportForTests } from '../src/services/repoBatchImport'
+import { __resetBatchImportForTests } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,

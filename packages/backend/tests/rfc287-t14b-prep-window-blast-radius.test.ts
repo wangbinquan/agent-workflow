@@ -124,7 +124,7 @@ describeEachProvider('G7 —— 身份登记不得堵在克隆锁后面', (harne
     const url = 'http://10.255.255.1:9/identity-lock-probe.git'
     try {
       const { resolveCachedRepo, ensureCachedRepoIdentity } =
-        await import('@/services/gitRepoCache')
+        await import('@/modules/source-control/infrastructure/local/repositoryMirrorCache')
       // 占锁：故意不 await，让它在后台把克隆锁握满 3 秒。
       let cloneSettled = false
       const blocking = resolveCachedRepo(

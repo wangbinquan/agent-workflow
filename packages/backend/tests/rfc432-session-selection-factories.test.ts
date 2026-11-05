@@ -21,7 +21,7 @@ import {
 import type { ContentPutRequest } from '@/platform/content/contentStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
+import { createDevelopmentWorkspaceRepositoryPreparation } from '@/modules/source-control/infrastructure/local/developmentWorkspaceRepositoryPreparation'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { SESSION_FACTORY_SELECTIONS } from './helpers/deploymentSelectionPartition'

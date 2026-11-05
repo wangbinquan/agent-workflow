@@ -30,7 +30,7 @@ import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { resolveCachedRepo } from '../src/services/gitRepoCache'
+import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 // 真 git clone + 真进程，和 git-repo-cache.test.ts 同一档预算。

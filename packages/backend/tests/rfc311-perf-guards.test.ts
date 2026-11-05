@@ -85,7 +85,7 @@ import {
 } from '../src/modules/development-automation/infrastructure/missionReadModels'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { archiveEvents } from './helpers/taskEventArchive'
-import { listCachedReposPage } from '../src/services/gitRepoCache'
+import { listCachedReposPage } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import {
   describeEachProvider,

@@ -53,7 +53,7 @@ import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 
 // RFC-210 / RFC-377: orchestration owns policy; git primitives stay in util/git.
 // Pass the cache service's settings/capability resolver at every entry point.
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from './submoduleParams'
 import {
   bottomUp,
   detectSubmodules,

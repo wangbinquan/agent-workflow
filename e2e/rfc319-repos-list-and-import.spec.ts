@@ -43,11 +43,11 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/components/repos/BatchImportDialog.tsx:293-321  改 URL 重试：空串 = 原 URL 重试
 //   packages/frontend/src/components/VirtualList.tsx:150-163              aria-setsize = 已加载总数
 //   packages/backend/src/routes/cached-repos.ts:41-70                     无参 = 旧全量形状；带任一参数 = 分页封套
-//   packages/backend/src/services/gitRepoCache.ts:1321-1367               q 三列 LIKE / 三个视图 / 游标行值比较
-//   packages/backend/src/services/gitRepoCache.ts:1441-1452               facets 恒为全量视角
-//   packages/backend/src/services/gitRepoCache.ts:1262                    facets 5s TTL（下面 waitForRepoFacets 的由来）
-//   packages/backend/src/services/repoBatchImport.ts:188-224              非法 URL 的行「出生即失败」，不进队列
-//   packages/backend/src/services/repoBatchImport.ts:519-534              rowToWire 两次 redactGitUrl
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1321-1367               q 三列 LIKE / 三个视图 / 游标行值比较
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1441-1452               facets 恒为全量视角
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1262                    facets 5s TTL（下面 waitForRepoFacets 的由来）
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryBatchImport.ts:188-224              非法 URL 的行「出生即失败」，不进队列
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryBatchImport.ts:519-534              rowToWire 两次 redactGitUrl
 //   packages/shared/src/schemas/ws.ts:542                                 WS_PATHS.repoImport
 //   packages/shared/src/schemas/permission.ts:1083-1087                   repos:create/update/delete/execute 是 manager 档
 //   packages/shared/src/schemas/permission.ts:945                         repos:read 在 user 基线里

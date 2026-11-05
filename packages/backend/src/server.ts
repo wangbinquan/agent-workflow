@@ -269,7 +269,6 @@ export interface ProviderResourceCatalogRouteComposition {
   readonly plugins: Parameters<typeof mountPluginRoutes>[1]
   readonly skills: Parameters<typeof mountSkillRoutes>[1]
   readonly repositories: Readonly<{
-    readonly store: Parameters<typeof mountCachedRepoRoutes>[2]
     readonly cached: Parameters<typeof mountCachedRepoRoutes>[1]
     readonly groups: Parameters<typeof mountRepoGroupRoutes>[1]
     /** RFC-370 §10 V17: the selected repository mirrors. */
@@ -485,12 +484,7 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
     skillProvenance: (app: Hono) => mountSkillProvenanceRoutes(app, input.memory.skillProvenance),
     repos: (app: Hono) => mountRepoRoutes(app, input.resourceCatalog.repositories.mirrors),
     cachedRepos: (app: Hono) =>
-      mountCachedRepoRoutes(
-        app,
-        input.resourceCatalog.repositories.cached,
-        input.resourceCatalog.repositories.store,
-        input.resourceCatalog.repositories.mirrors,
-      ),
+      mountCachedRepoRoutes(app, input.resourceCatalog.repositories.cached),
     repoGroups: (app: Hono) => mountRepoGroupRoutes(app, input.resourceCatalog.repositories.groups),
     workflows: (app: Hono) =>
       mountWorkflowRoutes(

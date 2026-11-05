@@ -150,6 +150,8 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'modules/integration/application/verifiedWebhookIngress.ts: 1',
   'modules/intent/application/dispatcher.ts: 3',
   'modules/intent/inbound/intentSessionRoutes.ts: 10',
+  // RFC-451: moved unchanged from services/repoBatchImport.ts.
+  'modules/source-control/infrastructure/local/repositoryBatchImport.ts: 2',
   'platform/background/maintenanceService.ts: 1',
   'platform/background/maintenanceWorkerRuntime.ts: 3',
   'platform/events/committed/workerDefinitions.ts: 1',
@@ -157,7 +159,6 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   // RFC-392 removes the unused SQLite test initialization fallback.
   'server.ts: 1',
   'services/controlListener.ts: 1',
-  'services/repoBatchImport.ts: 2',
   'services/reviewMutationCoordinator.ts: 1',
   'services/structuralDiff/service.ts: 2',
 ]

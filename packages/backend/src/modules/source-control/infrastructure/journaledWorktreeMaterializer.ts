@@ -11,7 +11,7 @@ import {
   type WorktreeLifecycleHookEvent,
 } from '@/util/git'
 import { syncSubmodules } from '@/services/gitSubmodule'
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { ConflictError } from '@/util/errors'
 import { materializeWorktree } from './workspaceMaterializer'
 

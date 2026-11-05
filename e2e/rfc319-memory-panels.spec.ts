@@ -69,7 +69,7 @@
 //   `MemoryDialogShell.tsx:34-38` 把 `/api/cached-repos` 的行声明成 `{ id, url, localPath }`，
 //   `:194-196` 的 `reposToOptions` 于是取 `r.url` 当标签；但 RFC-204 早已把明文 `url`
 //   从 wire 上摘掉，服务端实际只回 `urlRedacted`（`packages/shared/src/schemas/cachedRepo.ts:15`、
-//   `packages/backend/src/services/gitRepoCache.ts:353-359`）。结果是 **repo 档的下拉每一行都是空白**。
+//   `packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:353-359`）。结果是 **repo 档的下拉每一行都是空白**。
 //   本文件在 MEM-02 里按**位置**选中它并用服务端回读校验 scopeId，不去断言它的文案——
 //   断言空白等于把这个 bug 锁进测试。
 //

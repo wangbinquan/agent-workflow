@@ -78,7 +78,7 @@ import {
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
 import { archiveEvents } from './helpers/taskEventArchive'
-import { listCachedReposPage } from '@/services/gitRepoCache'
+import { listCachedReposPage } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'

@@ -19,7 +19,10 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
+import {
+  refreshCachedRepo,
+  resolveCachedRepo,
+} from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
@@ -147,7 +150,16 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
     // at source level. This guards the cold-path argv against accidental
     // regressions to plain `git clone`.
     const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
     ).text()
     expect(src).toContain("'--recurse-submodules'")
     expect(src).toContain('submoduleMode')

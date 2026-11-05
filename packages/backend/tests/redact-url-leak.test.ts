@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const FILES_THAT_TOUCH_URLS = [
-  'src/services/gitRepoCache.ts',
+  'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
   'src/services/task.ts',
   'src/routes/cached-repos.ts',
 ]
@@ -48,7 +48,11 @@ describe('RFC-024 URL redaction source-level coverage', () => {
   }
 
   test('CachedRepoHasReferencesError ctor only takes a redacted url', () => {
-    const path = resolve(import.meta.dir, '..', 'src/services/gitRepoCache.ts')
+    const path = resolve(
+      import.meta.dir,
+      '..',
+      'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
+    )
     const src = readFileSync(path, 'utf-8')
     // The class field is named `urlRedacted` — anyone storing a raw url here
     // would have to rename the field, which trips this assertion.

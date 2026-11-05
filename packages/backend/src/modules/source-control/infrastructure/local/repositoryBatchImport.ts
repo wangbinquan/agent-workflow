@@ -44,9 +44,9 @@ import type { RepositoryRegistration } from '@/modules/source-control/public/typ
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { resolveCachedRepo as defaultResolveCachedRepo } from '@/services/gitRepoCache'
+import { resolveCachedRepo as defaultResolveCachedRepo } from './repositoryMirrorCache'
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from './maintenanceTicker'
+import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 
 const log = createLogger('repo-batch-import')
 

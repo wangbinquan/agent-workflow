@@ -18,7 +18,7 @@ import {
   repositoryPreparationRevision,
 } from '@/modules/source-control/domain/repositoryPreparationFacts'
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
-import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
+import { ensureCachedRepoIdentity } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { sha256Hex } from '@/util/hash'
 
 interface Input {

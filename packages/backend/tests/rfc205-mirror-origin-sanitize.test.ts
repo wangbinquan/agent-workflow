@@ -17,7 +17,7 @@ import { pathToFileURL } from 'node:url'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { resolveCachedRepo } from '../src/services/gitRepoCache'
+import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { runGit } from '../src/util/git'
 
 let db: PersistenceDb

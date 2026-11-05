@@ -344,7 +344,7 @@ describe('RFC-279 source ratchet', () => {
       'services/taskQuestions.ts',
       // RFC-284 T27 改锚：正体迁 clarify/queue.ts（旧路径只剩 facade，留旧条目会让本扫描空转）。
       'modules/collaboration/infrastructure/clarify/queue.ts',
-      'services/gitRepoCache.ts',
+      'modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
       'services/repoCredentials.ts',
       'modules/source-control/application/repositoryGroups.ts',
       'modules/resource-catalog/infrastructure/legacy/skillOperations.ts',

@@ -53,6 +53,15 @@ export {
   createRepositoryPublicationTransport,
   resolveRepositoryPublicationTransportFromKeyFile,
 } from './composition/repositoryPublicationTransport'
+// RFC-451：本地镜像缓存家族（批量导入的清理与归属、后台子模块保鲜、开发工作区仓库准备），供装配根取用。
+export { batchOwnerUserId, startBatchImportGc } from './infrastructure/local/repositoryBatchImport'
+export { startConfiguredSubmoduleRefreshLoop } from './infrastructure/local/repositoryMirrorAutoRefresh'
+export {
+  assertDevelopmentWorkspaceRepositoryFreshness,
+  buildDevelopmentWorkspaceRepositoryPreparation,
+  createDevelopmentWorkspaceRepositoryPreparation,
+  type DevelopmentWorkspaceRepositoryPreparation,
+} from './infrastructure/local/developmentWorkspaceRepositoryPreparation'
 export { composeWorkspaceMaintenanceCommand } from './composition/workspaceMaintenance'
 export { createFileWorkspacePresenceQueries } from './infrastructure/local/fileWorkspacePresence'
 // RFC-431: the standalone profile's local selections (the hosted profile selects its own).
@@ -399,6 +408,10 @@ export type {
 export { composeRepositoryMirrors } from './composition/repositoryMirrors'
 /** RFC-447: repository-group management and the standalone URL import. */
 export { composeRepositoryGroups, localRepositoryUrlImport } from './composition/repositoryGroups'
+export {
+  composeCachedRepositoryOperations,
+  type CachedRepositorySettings,
+} from './composition/cachedRepositoryOperations'
 export type {
   RepositoryMirrors,
   RepositoryRemoteEffects,

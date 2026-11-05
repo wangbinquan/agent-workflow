@@ -9,7 +9,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import { DomainError, ConflictError, ValidationError } from '@/util/errors'
 import { runGit, type WorktreeLifecycleHookEvent } from '@/util/git'
 import { redactGitUrl } from '@agent-workflow/shared'
-import { listAvailableRefs } from '@/services/gitRepoCache'
+import { listAvailableRefs } from './repositoryMirrorCache'
 import type { RepositoryWorkspaceStore } from '../../ports/repositoryWorkspaceStore'
 import type { RepositoryPreparationEffects } from '../../application/ports/repositoryPreparationEffects'
 import {

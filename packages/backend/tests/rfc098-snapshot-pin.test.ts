@@ -27,7 +27,7 @@
 
 import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
 import { taskFixture, workflowFixture } from './helpers/model'
-import { resolveSubmoduleParams } from '@/services/gitRepoCache'
+import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

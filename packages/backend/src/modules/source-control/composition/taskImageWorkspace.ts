@@ -3,7 +3,7 @@ import {
   finishConflictResolution,
   type PreparedConflictResolution,
 } from '@/platform/workspace/local/isolation'
-import { listAvailableRefs } from '@/services/gitRepoCache'
+import { listAvailableRefs } from '../infrastructure/local/repositoryMirrorCache'
 import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
 import { DomainError } from '@/util/errors'
 import { gitDiffSnapshot, initScratchRepo, isGitWorkTree, runGit, worktreeDiff } from '@/util/git'

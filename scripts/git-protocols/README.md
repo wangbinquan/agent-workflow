@@ -71,7 +71,7 @@ Triggers:
 - **schedule**: `0 8 * * *` UTC — daily nightly run.
 - **workflow_dispatch**: manual button for ad-hoc verification.
 - **pull_request**: only when the PR diff touches
-  `packages/backend/src/services/gitRepoCache.ts`,
+  `packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts`,
   `packages/shared/src/git-url.ts`, this directory (compose file
   included), or the workflow file itself. Every other PR skips it.
 
@@ -117,7 +117,7 @@ their own PR with a re-baseline of the seed script's exit codes
 
 - **SSH clone via daemon**: gated behind a daemon-side feature that
   threads `GIT_SSH_COMMAND` / a per-task private-key path through
-  `gitRepoCache.ts`. The spec has a `describe.skip` block documenting
+  the repository mirror cache (`repositoryMirrorCache.ts`). The spec has a `describe.skip` block documenting
   the follow-up surface; until that lands, only HTTPS is exercised.
 - **Non-fast-forward push**: this fixture's seeded repo is empty
   (`auto_init: true` just creates a README commit). Push-side flows

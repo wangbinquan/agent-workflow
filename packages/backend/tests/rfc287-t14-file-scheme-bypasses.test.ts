@@ -17,7 +17,7 @@ import {
   StartTaskSchema,
   isFileSchemeUrl,
 } from '@agent-workflow/shared'
-import { selectDueRepos } from '@/services/submoduleRefresh'
+import { selectDueRepos } from '@/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
 import { ulid } from 'ulid'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

@@ -43,16 +43,16 @@ import { liveSqlitePath } from './storage'
 //
 // 判据源码位置（纯文本引用，禁 GitHub 外链——外链会被 CI 的 markdown link check
 // 逐条请求，见 CLAUDE.md §opencode 源码自取规则）：
-//   packages/backend/src/services/gitRepoCache.ts:1491-1520   刷新：先失效 facets、行不存在 404、urlRedacted 为 NULL → repo-url-unavailable
-//   packages/backend/src/services/gitRepoCache.ts:1528-1534   file:// → repo-url-file-scheme-unsupported（400）
-//   packages/backend/src/services/gitRepoCache.ts:1537-1546   lastFetchedAt=0 且目录不在 → repo-cache-not-fetched-yet（409）
-//   packages/backend/src/services/gitRepoCache.ts:1547-1555   目录不是合法 git dir → repo-cache-corrupt（409）
-//   packages/backend/src/services/gitRepoCache.ts:1563-1583   fetch 非零 → repo-refresh-failed（502，details.stderr 带 git 原话）
-//   packages/backend/src/services/gitRepoCache.ts:261-271     fetch 的真实 argv：`fetch --all --prune --tags`
-//   packages/backend/src/services/gitRepoCache.ts:1584-1600   子模块同步失败只落行、不失败请求
-//   packages/backend/src/services/gitRepoCache.ts:1319        attention 视图 = has_submodules=1 且 last_submodule_sync_ok=0
-//   packages/backend/src/services/gitRepoCache.ts:1634-1690   删除：任务引用 ∪ 仓库组引用 → CachedRepoHasReferencesError(409)
-//   packages/backend/src/services/gitRepoCache.ts:879-887     冷克隆 argv：`clone --recurse-submodules [--jobs N]`
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1491-1520   刷新：先失效 facets、行不存在 404、urlRedacted 为 NULL → repo-url-unavailable
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1528-1534   file:// → repo-url-file-scheme-unsupported（400）
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1537-1546   lastFetchedAt=0 且目录不在 → repo-cache-not-fetched-yet（409）
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1547-1555   目录不是合法 git dir → repo-cache-corrupt（409）
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1563-1583   fetch 非零 → repo-refresh-failed（502，details.stderr 带 git 原话）
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:261-271     fetch 的真实 argv：`fetch --all --prune --tags`
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1584-1600   子模块同步失败只落行、不失败请求
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1319        attention 视图 = has_submodules=1 且 last_submodule_sync_ok=0
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:1634-1690   删除：任务引用 ∪ 仓库组引用 → CachedRepoHasReferencesError(409)
+//   packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:879-887     冷克隆 argv：`clone --recurse-submodules [--jobs N]`
 //   packages/backend/src/modules/source-control/infrastructure/local/repositoryIntrospection.ts:76-94  ?path= 读取：path 必须落在某个镜像 local_path 之内
 //   packages/backend/src/modules/source-control/infrastructure/local/repositoryIntrospection.ts:34-40  isKnownRepoPath：resolve 后同一或以 root+sep 开头
 //   packages/backend/src/routes/tasks.ts:325-334              JSON 启动 deferRepoPreparation=true（先落任务行、后台准备）

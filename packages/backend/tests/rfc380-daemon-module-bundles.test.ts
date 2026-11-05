@@ -318,9 +318,22 @@ describeEachProvider('RFC-380 injected HTTP instances', (harness) => {
       expect(http.composition.authentication).toBe(session.core.httpAuthentication)
       expect(http.composition.core).toBe(session.core)
       expect(http.composition.core.tokenCallAudit).toBe(session.core.tokenCallAudit)
-      expect(http.composition.resourceCatalog.repositories.store).toBe(
-        session.core.repositoryWorkspaceStore,
-      )
+      // RFC-451: the cached-repository operations are composed over the session's own store (not a rebuilt one):
+      // a read through them reaches exactly that instance.
+      const sessionStore = session.core.repositoryWorkspaceStore as {
+        listCachedRepos: () => Promise<readonly unknown[]>
+      }
+      let sessionStoreReads = 0
+      sessionStore.listCachedRepos = async () => {
+        sessionStoreReads += 1
+        return []
+      }
+      try {
+        expect(await http.composition.resourceCatalog.repositories.cached.list()).toEqual([])
+      } finally {
+        Reflect.deleteProperty(sessionStore, 'listCachedRepos')
+      }
+      expect(sessionStoreReads).toBe(1)
       try {
         const response = await http.app.request('/api/agents', {
           headers: { Authorization: 'Bearer bundle-token' },

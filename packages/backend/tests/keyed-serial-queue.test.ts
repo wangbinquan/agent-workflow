@@ -54,7 +54,16 @@ describe('KeyedSerialQueue', () => {
     // 挪进**提交事务**（`applyResourceCatalogOperation` 的 dedupKey 撞车检查），跨进程也成立，
     // 于是那个队列连同 legacy 引擎岛一起删除。这里只剩 git cache 这一处用例。
     const gitCache = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf8',
     )
     expect(gitCache).toContain('urlQueue.run(urlHash')

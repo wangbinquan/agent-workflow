@@ -3,8 +3,8 @@
 # Why a separate workflow vs. extending ci.yml:
 #   * Gitea container boot + seed adds ~35s of fixed overhead per run.
 #     Adding that to every PR's 4-shard e2e matrix would burn ~5min/PR
-#     of compute for a surface that only changes when gitRepoCache.ts /
-#     git-url.ts touch the diff.
+#     of compute for a surface that only changes when the repository
+#     mirror cache / git-url.ts touch the diff.
 #   * The git-protocol surface is highly stable — a daily nightly + a
 #     path-filtered PR trigger gives us drift detection at the right
 #     cadence.
@@ -30,8 +30,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/backend/src/services/gitRepoCache.ts'
-      - 'packages/backend/src/services/repoBatchImport.ts'
+      # RFC-451：仓库镜像缓存与批量导入从 services/ 迁入 source-control；子模块参数解析原在
+      # services/gitRepoCache.ts 里、随迁移归平台，镜像克隆仍经它取参数，所以一并登记。
+      - 'packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts'
+      - 'packages/backend/src/modules/source-control/infrastructure/local/repositoryBatchImport.ts'
+      - 'packages/backend/src/platform/workspace/local/submoduleParams.ts'
       # 本套断言的**不止**仓库缓存：`task.repoUrl` 的脱敏持久化归 task.ts
       # （spec 自己的注释就写着「services/task.ts now runs redactGitUrl」）。
       # 漏了它的直接后果 RFC-287 T14 实测过一次：a20eb6e8 上本套因
@@ -49,8 +52,11 @@ on:
       - '.github/workflows/git-protocols-e2e.yml'
   pull_request:
     paths:
-      - 'packages/backend/src/services/gitRepoCache.ts'
-      - 'packages/backend/src/services/repoBatchImport.ts'
+      # RFC-451：仓库镜像缓存与批量导入从 services/ 迁入 source-control；子模块参数解析原在
+      # services/gitRepoCache.ts 里、随迁移归平台，镜像克隆仍经它取参数，所以一并登记。
+      - 'packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts'
+      - 'packages/backend/src/modules/source-control/infrastructure/local/repositoryBatchImport.ts'
+      - 'packages/backend/src/platform/workspace/local/submoduleParams.ts'
       # 本套断言的**不止**仓库缓存：`task.repoUrl` 的脱敏持久化归 task.ts
       # （spec 自己的注释就写着「services/task.ts now runs redactGitUrl」）。
       # 漏了它的直接后果 RFC-287 T14 实测过一次：a20eb6e8 上本套因

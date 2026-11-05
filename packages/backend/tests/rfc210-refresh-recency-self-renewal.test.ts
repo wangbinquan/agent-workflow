@@ -40,8 +40,14 @@ import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { refreshCachedRepo, resolveCachedRepo } from '@/services/gitRepoCache'
-import { refreshDueRepos, selectDueRepos } from '@/services/submoduleRefresh'
+import {
+  refreshCachedRepo,
+  resolveCachedRepo,
+} from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
+import {
+  refreshDueRepos,
+  selectDueRepos,
+} from '@/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const DAY = 24 * 60 * 60 * 1000

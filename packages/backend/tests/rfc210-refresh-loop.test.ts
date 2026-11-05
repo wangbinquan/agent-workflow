@@ -30,7 +30,7 @@ import {
   refreshDueRepos,
   selectDueRepos,
   startConfiguredSubmoduleRefreshLoop,
-} from '@/services/submoduleRefresh'
+} from '@/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 
 const NOW = 1_800_000_000_000

@@ -56,8 +56,8 @@
       "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
       "packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts",
+      "packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts",
       "packages/backend/src/services/commitPushRunner.ts",
-      "packages/backend/src/services/gitRepoCache.ts",
       "packages/backend/src/services/gitSubmodule.ts",
       "packages/backend/src/util/git.ts"
     ],
@@ -71,7 +71,7 @@
   "excludedReadPaths": [
     {
       "id": "cached-repository-clone-refresh",
-      "file": "packages/backend/src/services/gitRepoCache.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts",
       "reason": "repository preparation and background refresh are outside RFC-321 publication transactions"
     },
     {

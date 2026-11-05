@@ -27,8 +27,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
-import { refreshDueRepos } from '../src/services/submoduleRefresh'
+import {
+  refreshCachedRepo,
+  resolveCachedRepo,
+} from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
+import { refreshDueRepos } from '../src/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
 import { runGit } from '../src/util/git'
 import {
   credentialedRemoteUrlFor,

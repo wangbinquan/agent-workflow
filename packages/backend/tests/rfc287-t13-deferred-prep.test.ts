@@ -922,7 +922,8 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     // 前提复核：该任务确实**没有** task_repos 行（守卫的旧判据在此为 0）。
     expect((await readTaskRepoFixtures(db, { taskId: id })).length).toBe(0)
 
-    const { deleteCachedRepo } = await import('@/services/gitRepoCache')
+    const { deleteCachedRepo } =
+      await import('@/modules/source-control/infrastructure/local/repositoryMirrorCache')
     let code = ''
     try {
       await deleteCachedRepo(
@@ -1728,7 +1729,16 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     // 超时）。代价是克隆期间身份行可能被插进来，冷路径若照旧 INSERT 就撞
     // cached_repos.url_hash 唯一索引，抛一句无错误码的裸 SQLite 串。
     const src = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf8',
     )
     expect(src).toMatch(/const adoptId =[\s\S]{0,400}findCachedRepoByHash\(hash\)/)
@@ -1807,7 +1817,16 @@ describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
 
   test('URL 锁临界区里的子模块同步必须有界（否则永久占住该 URL 的队列）', () => {
     const src = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf8',
     )
     // 两处都在 withUrlLock 里：warm 复用路径与手动刷新路径。
@@ -2022,7 +2041,16 @@ describe('RFC-287 五轮门 —— 对抗输入', () => {
 
     // 反向：真半成品仍必须被认出来。分隔符取自生产者本身，避免两边各写各的。
     const cache = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf8',
     )
     const sep = cache.match(/\$\{slug\}(.+?)\$\{ulid\(\)\}/)
@@ -2142,7 +2170,16 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
 
   test('F1：引用计数必须用领养后的真实行 id（不是可能为幽灵的那个）', () => {
     const src = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryMirrorCache.ts',
+      ),
       'utf8',
     )
     // 冷路径返回处的计数与 `cached.id` 同源。
