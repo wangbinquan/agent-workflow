@@ -65,10 +65,8 @@ import { createLogger } from '../../src/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { composeDynamicWorkflowLayerOneValidation } from '../../src/modules/resource-catalog/composition/workflowOperations'
-import type { CodeHostConnectionsService } from '../../src/services/codeHost/connections'
-import { executeCodeHostCall } from '../../src/services/codeHost/call'
-import { resolveProjectFallback } from '../../src/services/codeHost/project'
-import { probeCodeHostMutation } from '../../src/services/codeHost/recoveryProbe'
+import type { CodeHostConnectionsService } from '../../src/modules/integration/application/ports/codeHostConnections'
+import { codeHostNodeRequests } from '../../src/modules/integration/composition'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
@@ -212,8 +210,8 @@ export function composeTaskExecutionTestRuntime(
       ...(options.codeHostConnections === undefined
         ? {}
         : { codeHostConnections: options.codeHostConnections }),
-      // RFC-449: the production request implementation, injected the way the daemon does.
-      codeHostRequests: { executeCodeHostCall, resolveProjectFallback, probeCodeHostMutation },
+      // RFC-449 / RFC-450: the production request implementation, injected the way the daemon does.
+      codeHostRequests: codeHostNodeRequests,
       repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
     }),
   })

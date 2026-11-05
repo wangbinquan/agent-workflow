@@ -17,7 +17,8 @@ import { createDevelopmentDeliveryProvider } from '@/modules/development-automat
 import { createEmployeePlatformWorkItemPersistence } from '@/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence'
 import { createMissionPersistence } from '@/modules/development-automation/infrastructure/missionStore'
 import { createPlaybookSagaPersistence } from '@/modules/development-automation/infrastructure/playbookSagaStore'
-import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
+import type { CodeHostConnectionsService } from '@/modules/integration/application/ports/codeHostConnections'
+import { codeHostRequests } from '@/modules/integration/composition'
 import { rememberVolatileRepoUrl, sealRepoUrl } from '@/services/repoCredentials'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -323,6 +324,7 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
       db: harness.db,
       secretBox: box,
       connections: { resolve: async () => null } as unknown as CodeHostConnectionsService,
+      requests: codeHostRequests,
       pipeline: {} as SelectedPipelineEvidenceExecution,
     })
     expect(await provider.resolveRepository('missing')).toBeNull()

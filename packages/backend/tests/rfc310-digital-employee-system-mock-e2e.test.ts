@@ -103,6 +103,7 @@ import { createLocalEvidenceStagingNamespace } from '../src/modules/development-
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { createWebhookDispatcher } from '@/modules/integration/application/webhookDispatch'
+import { codeHostRequests } from '@/modules/integration/composition'
 
 setDefaultTimeout(180_000)
 
@@ -785,6 +786,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
         const reviewHostBinding = {
           provider: 'gitlab' as const,
           project: encodeURIComponent(reviewProjectPath),
+          requests: codeHostRequests,
           call: {
             connection: {
               provider: 'gitlab' as const,

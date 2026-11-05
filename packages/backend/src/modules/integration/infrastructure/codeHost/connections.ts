@@ -21,40 +21,9 @@ import {
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-
-/** 解封后的凭据；只在进程内流转。 */
-export interface ResolvedCodeHostConnection {
-  provider: CodeHostProvider
-  baseUrl: string
-  repositoryUrlPrefixes: string[]
-  /** Present on persisted connections; optional keeps legacy test/adaptor stubs source-compatible. */
-  transportMappings?: RepositoryTransportMappingV1[]
-  /** Present on persisted connections; optional keeps legacy test/adaptor stubs source-compatible. */
-  connectionGeneration?: string
-  token: string
-  /** false is an explicit, GitLab-only TLS trust downgrade. */
-  rejectUnauthorized: boolean
-}
-
-export interface UpsertInput {
-  baseUrl: string
-  /** GitLab-only; omission preserves the stored collection. */
-  repositoryUrlPrefixes?: readonly string[]
-  /** Both providers; omission preserves the stored collection. */
-  transportMappings?: readonly RepositoryTransportMappingV1[]
-  /** 省略 = 保留原 token（要求该 provider 已有行）。 */
-  token?: string
-  /** 省略 = 首次为 true、已有行保留；false 只允许 GitLab。 */
-  rejectUnauthorized?: boolean
-  expectedConnectionGeneration?: string
-  confirmCredentialRevocationDigest?: string
-  actorUserId?: string | null
-}
-
-export interface CodeHostConnectionMutationConfirmation {
-  readonly expectedConnectionGeneration?: string
-  readonly confirmCredentialRevocationDigest?: string
-}
+import type { CodeHostConnectionProbeInput } from '../../application/ports/codeHostCalls'
+import type { CodeHostConnectionsService } from '../../application/ports/codeHostConnections'
+import { normalizeCodeHostRejectUnauthorized } from '../../domain/codeHostTlsPolicy'
 
 interface RepositoryTransportAdminConnection {
   readonly provider: CodeHostProvider
@@ -102,39 +71,7 @@ interface RepositoryTransportConnectionAdministrationParticipant {
   recordAdminConnectionTest(provider: CodeHostProvider, result: CodeHostTestResult): Promise<void>
 }
 
-export interface CodeHostConnectionsService {
-  /** 供执行器使用：解封后的完整凭据；未配置返回 null。 */
-  resolve(provider: CodeHostProvider): Promise<ResolvedCodeHostConnection | null>
-  /** 供 API 使用：两家各一行，未配置的也出现（configured:false）。 */
-  list(): Promise<CodeHostConnectionWire[]>
-  get(provider: CodeHostProvider): Promise<CodeHostConnectionWire>
-  upsert(provider: CodeHostProvider, input: UpsertInput): Promise<CodeHostConnectionWire>
-  remove(
-    provider: CodeHostProvider,
-    confirmation?: CodeHostConnectionMutationConfirmation,
-  ): Promise<boolean>
-  recordTest(provider: CodeHostProvider, result: CodeHostTestResult): Promise<void>
-}
-
 const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
-
-/**
- * TLS 信任策略的唯一 provider 判据。GitHub 当前没有该能力；静默接受 false
- * 会制造“保存成功但实际仍校验”的假配置，因此在服务边界明确拒绝。
- */
-export function normalizeCodeHostRejectUnauthorized(
-  provider: CodeHostProvider,
-  value: boolean | undefined,
-): boolean {
-  if (provider !== 'gitlab' && value === false) {
-    throw new ValidationError(
-      'code-host-tls-option-unsupported',
-      'disabling TLS certificate verification is supported only for GitLab connections',
-      { provider },
-    )
-  }
-  return provider === 'gitlab' ? (value ?? true) : true
-}
 
 /** Bun fetch 的逐请求 TLS 片段；默认完全省略 override。 */
 export function codeHostTlsRequestInit(input: {
@@ -594,20 +531,13 @@ const IDENTITY_PROBE: Readonly<
   },
 }
 
-export type FetchLike = (url: string, init?: BunFetchRequestInit) => Promise<Response>
-
 /**
  * 「测试连接」。四类结果必须**可区分** —— 否则这个按钮只是个安慰剂：管理员
  * 看到红叉却不知道该改 token 还是改 base URL 还是找网络。
  */
-export async function probeCodeHostConnection(input: {
-  provider: CodeHostProvider
-  baseUrl: string
-  token: string
-  rejectUnauthorized?: boolean
-  fetchImpl?: FetchLike
-  timeoutMs?: number
-}): Promise<CodeHostTestResult> {
+export async function probeCodeHostConnection(
+  input: CodeHostConnectionProbeInput,
+): Promise<CodeHostTestResult> {
   const probe = IDENTITY_PROBE[input.provider]
   const at = Date.now()
   const normalized = normalizeCodeHostBaseUrl(input.baseUrl, input.provider)

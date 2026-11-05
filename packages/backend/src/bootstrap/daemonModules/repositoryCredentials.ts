@@ -1,7 +1,11 @@
 import { type SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
-import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
+import {
+  codeHostRequests,
+  composeCodeHostConnections,
+  createRepositoryEndpointDiscovery,
+} from '@/modules/integration/composition'
 import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import {
   composeRepositoryTransportCredentials,
@@ -9,7 +13,6 @@ import {
   type RepositoryWorkspaceOperations,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
-import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { DeploymentSelections } from '../deploymentProfile'
 
 export function composeDaemonRepositoryCredentials(input: {
@@ -31,7 +34,7 @@ export function composeDaemonRepositoryCredentials(input: {
   const repositoryWorkspaceOperations = input.repositoryWorkspaceOperations
   const repository = input.repositoryTransportCredentialRepository
   const repositoryTransport = composeRepositoryTransportCredentials(repository, input.secretBox)
-  const codeHostConnections = createCodeHostConnectionsService({
+  const codeHostConnections = composeCodeHostConnections({
     secretBox: input.secretBox,
     repositoryTransport: repositoryTransport.adminConnections,
   })
@@ -59,6 +62,8 @@ export function composeDaemonRepositoryCredentials(input: {
     db: input.db,
     secretBox: input.secretBox,
     connections: codeHostConnections,
+    // RFC-450: every resolved MR binding sends through integration's code-host requests.
+    requests: codeHostRequests,
     pipeline: composeSelectedPipelineEvidenceRunnerFor(
       input.db,
       input.developmentPurposeRoot.pipeline,

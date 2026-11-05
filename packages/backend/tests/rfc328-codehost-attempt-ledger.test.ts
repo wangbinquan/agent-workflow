@@ -19,8 +19,8 @@ import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/ap
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import { canonicalJson, type LineageSlot } from '@/modules/task-execution/domain/executionIntent'
-import { executeCodeHostCall } from '@/services/codeHost/call'
-import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
+import { executeCodeHostCall } from '@/modules/integration/infrastructure/codeHost/call'
+import { probeCodeHostMutation } from '@/modules/integration/infrastructure/codeHost/recoveryProbe'
 import {
   CODE_HOST_ACTIONS,
   type CodeHostAction,

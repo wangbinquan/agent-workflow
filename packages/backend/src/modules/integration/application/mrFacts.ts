@@ -15,8 +15,6 @@
 // 'self'，防 feedback 自循环。幂等由上层 effects 台账管（idempotencyKey），
 // 本函数是纯执行体。
 
-import { executeCodeHostCall } from '@/services/codeHost/call'
-import { probeCodeHostConnection } from '@/services/codeHost/connections'
 import { callDeps, normalizedState, parseJson, type MrEnsureConnectionDeps } from './mrEnsure'
 
 export interface MrThreadMessageFact {
@@ -213,7 +211,7 @@ async function fetchMrDetail(
   | { readonly ok: true; readonly gitlab?: GitlabMrDetail; readonly github?: GithubPrDetail }
   | { readonly ok: false; readonly detail: string }
 > {
-  const got = await executeCodeHostCall(
+  const got = await deps.requests.executeCodeHostCall(
     { provider: deps.provider, action: 'mr.get', params: { project: deps.project, mr: mrRef } },
     callDeps(deps),
   )
@@ -253,7 +251,7 @@ async function targetOf(
   }
   const branch = detail.gitlab?.target_branch ?? null
   if (branch === null) return { ok: true, branch: null, sha: null }
-  const got = await executeCodeHostCall(
+  const got = await deps.requests.executeCodeHostCall(
     {
       provider: 'gitlab',
       action: 'custom',
@@ -288,7 +286,7 @@ async function collectThreads(
       readonly detail: string
     }
 > {
-  const listed = await executeCodeHostCall(
+  const listed = await deps.requests.executeCodeHostCall(
     {
       provider: deps.provider,
       action: 'comment.list',
@@ -436,7 +434,7 @@ async function collectApprovalHold(
     if (requested === undefined) return null
     return requested.length > 0
   }
-  const got = await executeCodeHostCall(
+  const got = await deps.requests.executeCodeHostCall(
     {
       provider: 'gitlab',
       action: 'custom',
@@ -477,13 +475,15 @@ export async function collectMergeRequestFacts(
 
   const verifiedPlatformLogin =
     options.selfMarker !== undefined || options.trustPlatformSelfMarkers === true
-      ? await probeCodeHostConnection({
-          provider: deps.provider,
-          baseUrl: deps.call.connection.baseUrl,
-          token: deps.call.connection.token,
-          rejectUnauthorized: deps.call.connection.rejectUnauthorized,
-          ...(deps.call.fetchImpl === undefined ? {} : { fetchImpl: deps.call.fetchImpl }),
-        }).then((result) => (result.ok && typeof result.login === 'string' ? result.login : null))
+      ? await deps.requests
+          .probeCodeHostConnection({
+            provider: deps.provider,
+            baseUrl: deps.call.connection.baseUrl,
+            token: deps.call.connection.token,
+            rejectUnauthorized: deps.call.connection.rejectUnauthorized,
+            ...(deps.call.fetchImpl === undefined ? {} : { fetchImpl: deps.call.fetchImpl }),
+          })
+          .then((result) => (result.ok && typeof result.login === 'string' ? result.login : null))
       : null
 
   const threads = await collectThreads(
@@ -562,7 +562,7 @@ export async function replyMergeRequestThread(
   },
 ): Promise<MrReplyResult> {
   const body = `${input.body}\n\n${selfMarkerToken(input.selfMarker)}`
-  const replied = await executeCodeHostCall(
+  const replied = await deps.requests.executeCodeHostCall(
     {
       provider: deps.provider,
       action: 'comment.reply-thread',

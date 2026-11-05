@@ -15,18 +15,10 @@ import {
   type CodeHostProvider,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
-import {
-  normalizeCodeHostRejectUnauthorized,
-  probeCodeHostConnection,
-  type CodeHostConnectionsService,
-} from '@/services/codeHost/connections'
+import type { CodeHostConnectionAdministration } from '@/modules/integration/public/types'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
-
-export interface CodeHostRouteDependencies {
-  readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
-}
 
 function providerOf(raw: string): CodeHostProvider {
   // safeParse 而不是 `as`：RFC-054 W1-7 要求路由层的窄化走 Zod，而不是断言。
@@ -39,8 +31,7 @@ function providerOf(raw: string): CodeHostProvider {
 
 export function mountCodeHostRoutes(
   app: Hono,
-  deps: CodeHostRouteDependencies,
-  service: CodeHostConnectionsService | null,
+  service: CodeHostConnectionAdministration | null,
 ): void {
   // 对齐 OIDC / webhook 端点的自我跳过：没有密封器就不开凭据面，而不是退化成
   // 明文存储。
@@ -140,38 +131,8 @@ export function mountCodeHostRoutes(
         await safeJsonOrThrowInvalid(c.req.raw).catch(() => ({})),
       )
       const body = parsed.success ? parsed.data : {}
-      // 未传的字段回落到已保存的值，所以「先保存再测」与「边填边测」都成立。
-      const stored = await service.resolve(provider)
-      const baseUrl = body.baseUrl ?? stored?.baseUrl
-      const token = body.token ?? stored?.token
-      const rejectUnauthorized = normalizeCodeHostRejectUnauthorized(
-        provider,
-        body.rejectUnauthorized ?? stored?.rejectUnauthorized,
-      )
-      if (baseUrl === undefined || token === undefined) {
-        throw new ValidationError(
-          'code-host-not-configured',
-          `${provider} has no stored credential; provide baseUrl and token to test`,
-        )
-      }
-      const result = await probeCodeHostConnection({
-        provider,
-        baseUrl,
-        token,
-        rejectUnauthorized,
-        ...(deps.codeHostFetch !== undefined ? { fetchImpl: deps.codeHostFetch } : {}),
-      })
-      // 只有在「测的就是已保存的那套」时才回写结果 —— 否则一次对着草稿值的
-      // 成功探活会给已保存的坏配置盖上绿勾。
-      if (
-        stored !== null &&
-        baseUrl === stored.baseUrl &&
-        token === stored.token &&
-        rejectUnauthorized === stored.rejectUnauthorized
-      ) {
-        await service.recordTest(provider, result)
-      }
-      return c.json(result)
+      // RFC-450：回落已存值、规范化 TLS 选项、探测与回写的编排在 integration 的「测试连接」用例里。
+      return c.json(await service.test(provider, body))
     },
   )
 }

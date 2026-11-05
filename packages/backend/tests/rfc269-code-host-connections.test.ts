@@ -26,7 +26,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import {
   createCodeHostConnectionsService,
   probeCodeHostConnection,
-} from '../src/services/codeHost/connections'
+} from '../src/modules/integration/infrastructure/codeHost/connections'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 

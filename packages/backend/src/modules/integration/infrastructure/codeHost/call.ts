@@ -12,11 +12,9 @@
 
 import type {
   CodeHostAction,
-  CodeHostCustomRequest,
   CodeHostParamMap,
   CodeHostProvider,
   CodeHostRequestBinding,
-  CodeHostTemplateContext,
   CodeHostTransform,
   TriggerContext,
 } from '@agent-workflow/shared'
@@ -42,47 +40,17 @@ import {
 } from '@agent-workflow/shared'
 import type { CodeHostFailureCode } from '@agent-workflow/shared'
 import {
-  codeHostTlsRequestInit,
-  type FetchLike,
-  type ResolvedCodeHostConnection,
-} from '@/services/codeHost/connections'
-import { buildCodeHostUrl, redirectTargetIssue } from '@/services/codeHost/url'
-import {
   buildCodeHostRecoveryDescriptor,
   type CodeHostSendAttemptInfo,
-  type CodeHostSendAttemptObserver,
 } from '@/modules/task-execution/public/participants'
-
-/** 节点定义里与执行相关的那一份（scheduler 从 WorkflowNode 读出后传进来）。 */
-export interface CodeHostCallSpec {
-  provider: CodeHostProvider
-  action: string
-  params: Readonly<Record<string, string>>
-  request?: CodeHostCustomRequest
-  allowDestructive?: boolean
-  timeoutMs?: number
-}
-
-/** project 定位段的推导结果（`params.project` 留空时用）。 */
-export type ProjectFallback =
-  | { ok: true; value: string }
-  | { ok: false; code: CodeHostFailureCode; message: string }
-
-export interface CodeHostCallDeps {
-  connection: ResolvedCodeHostConnection
-  ctx: CodeHostTemplateContext
-  projectFallback: ProjectFallback
-  fetchImpl?: FetchLike
-  maxResponseBytes?: number
-  /** 测试用：让退避不真的睡。 */
-  sleep?: (ms: number) => Promise<void>
-  /** RFC-328: record every real mutation send before the transport sees it. */
-  attemptObserver?: CodeHostSendAttemptObserver
-}
-
-export type CodeHostCallOutcome =
-  | { ok: true; status: number; body: string; truncated: boolean; method: string; pathname: string }
-  | { ok: false; code: CodeHostFailureCode; summary: string; message: string }
+import type {
+  CodeHostCallDeps,
+  CodeHostCallOutcome,
+  CodeHostCallSpec,
+  FetchLike,
+} from '../../application/ports/codeHostCalls'
+import { buildCodeHostUrl, redirectTargetIssue } from '../../domain/codeHostUrl'
+import { codeHostTlsRequestInit } from './connections'
 
 export const DEFAULT_CODE_HOST_TIMEOUT_MS = 30_000
 export const DEFAULT_CODE_HOST_MAX_RESPONSE_BYTES = 256 * 1024

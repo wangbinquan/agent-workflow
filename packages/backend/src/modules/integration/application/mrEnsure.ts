@@ -9,14 +9,16 @@
 // host path/raw policy/日志。完整 MR care（评论/标签/轮询）归 PR-7；这里只有
 // ensure + 单次 observe（mergeRequestFacts collector 的素材面）。
 
-import { executeCodeHostCall, type CodeHostCallDeps } from '@/services/codeHost/call'
 import type { CodeHostProvider } from '@agent-workflow/shared'
+import type { CodeHostCallDeps, CodeHostRequests } from './ports/codeHostCalls'
 
 export interface MrEnsureConnectionDeps {
   readonly provider: CodeHostProvider
   /** URL-encoded project 定位段（gitlab: `grp%2Frepo`；github: `owner/repo`）。 */
   readonly project: string
   readonly call: Omit<CodeHostCallDeps, 'projectFallback'>
+  /** RFC-450: the code-host requests this binding sends through (injected by assembly). */
+  readonly requests: CodeHostRequests
 }
 
 export interface MrEnsureInput {
@@ -103,7 +105,7 @@ async function findBySourceBranch(
     }
   | { readonly ok: false; readonly detail: string }
 > {
-  const listed = await executeCodeHostCall(
+  const listed = await deps.requests.executeCodeHostCall(
     {
       provider: deps.provider,
       action: 'mr.list',
@@ -169,7 +171,7 @@ export async function ensureMergeRequest(
   }
 
   const description = `${input.description ?? ''}\n\n[aw-mission:${input.missionId}]`.trim()
-  const created = await executeCodeHostCall(
+  const created = await deps.requests.executeCodeHostCall(
     {
       provider: deps.provider,
       action: 'mr.create',
@@ -234,7 +236,7 @@ export async function observeMergeRequest(
   deps: MrEnsureConnectionDeps,
   mrRef: string,
 ): Promise<MrObserveResult> {
-  const got = await executeCodeHostCall(
+  const got = await deps.requests.executeCodeHostCall(
     {
       provider: deps.provider,
       action: 'mr.get',

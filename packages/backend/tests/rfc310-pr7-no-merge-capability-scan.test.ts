@@ -28,9 +28,16 @@ const ROOTS = [
   join(import.meta.dir, '../src/modules/source-control'),
 ]
 
+// RFC-450: RFC-269's generic code-host executor (the action catalog that user-authored workflow nodes
+// orchestrate explicitly — out of scope per the header) moved from services/codeHost into integration;
+// it was outside these roots before, so exactly its directory stays outside. The MR use cases that
+// call it (application/mrEnsure, application/mrFacts) remain scanned.
+const GENERIC_EXECUTOR = join(import.meta.dir, '../src/modules/integration/infrastructure/codeHost')
+
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name)
+    if (p === GENERIC_EXECUTOR) continue
     if (statSync(p).isDirectory()) walk(p, acc)
     else if (p.endsWith('.ts')) acc.push(p)
   }

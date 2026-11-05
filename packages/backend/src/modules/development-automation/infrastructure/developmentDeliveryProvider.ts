@@ -11,11 +11,12 @@ import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/pu
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { DevelopmentDeliveryProvider } from '@/services/developmentDeliveryDeps'
 
-/** RFC-449: the connection the delivery binding carries, typed by the binding
- * contract itself so this module does not import the credential service. */
-type DeliveryCodeHostConnection = NonNullable<
+/** RFC-449 / RFC-450: the binding this provider resolves, typed by the delivery contract itself so this
+ * module imports neither the credential service nor the code-host request implementation. */
+type DeliveryBinding = NonNullable<
   Awaited<ReturnType<DevelopmentDeliveryProvider['resolveBinding']>>
->['call']['connection']
+>
+type DeliveryCodeHostConnection = DeliveryBinding['call']['connection']
 
 /** The only thing the delivery provider needs from code-host connections. */
 export interface DevelopmentCodeHostConnections {
@@ -40,6 +41,8 @@ function providerFrom(input: {
   readonly directory: DevelopmentDeliveryDirectory
   readonly secretBox?: SecretBox
   readonly connections: DevelopmentCodeHostConnections
+  /** RFC-450: the code-host requests every resolved binding sends through (injected by assembly). */
+  readonly requests: DeliveryBinding['requests']
   readonly pipeline: SelectedPipelineEvidenceExecution
   readonly volatileRepositoryUrl?: (row: RepositoryRecord) => string | null
 }): DevelopmentDeliveryProvider {
@@ -71,6 +74,7 @@ function providerFrom(input: {
         provider: matched.provider,
         project: matched.project,
         call: { connection, ctx: { ports: {} } },
+        requests: input.requests,
       }
     },
     readMrFactTarget: (target: { readonly missionId: string; readonly mrClaimId: string }) =>
@@ -127,12 +131,14 @@ export function createDevelopmentDeliveryProvider(input: {
   readonly db: PersistenceDb
   readonly secretBox?: SecretBox
   readonly connections: DevelopmentCodeHostConnections
+  readonly requests: DeliveryBinding['requests']
   readonly pipeline: SelectedPipelineEvidenceExecution
 }): DevelopmentDeliveryProvider {
   return providerFrom({
     directory: directoryOf(input.db),
     secretBox: input.secretBox,
     connections: input.connections,
+    requests: input.requests,
     pipeline: input.pipeline,
     volatileRepositoryUrl: (row) => unsealRepoUrl(row, undefined, input.db),
   })

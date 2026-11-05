@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { collectMergeRequestFacts } from '../src/modules/integration/application/mrFacts'
 import type { MrEnsureConnectionDeps } from '../src/modules/integration/application/mrEnsure'
+import { codeHostRequests } from '../src/modules/integration/composition'
 
 const HEAD = 'a'.repeat(40)
 const TARGET = 'b'.repeat(40)
@@ -74,6 +75,7 @@ test('a copied self marker remains human unless the authenticated platform accou
   const deps: MrEnsureConnectionDeps = {
     provider: 'gitlab',
     project: encodeURIComponent('group/repo'),
+    requests: codeHostRequests,
     call: {
       connection: {
         provider: 'gitlab',

@@ -17,6 +17,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
+import { composeCodeHostConnectionProbe } from '../src/modules/integration/composition'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createUser } from './helpers/userFixture'
@@ -254,21 +255,19 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountAccountRepositoryTransportCredentialRoutes(
-      app,
-      {},
-      {
-        credentials: composeRepositoryTransportCredentials(
-          new DrizzleRepositoryTransportCredentialRepository(h.db),
-          box,
-        ).ownCredentials,
-        currentSubjects: {
-          async resolveCurrentSubject() {
-            return null
-          },
+    mountAccountRepositoryTransportCredentialRoutes(app, {
+      credentials: composeRepositoryTransportCredentials(
+        new DrizzleRepositoryTransportCredentialRepository(h.db),
+        box,
+      ).ownCredentials,
+      currentSubjects: {
+        async resolveCurrentSubject() {
+          return null
         },
       },
-    )
+      // RFC-450: integration's probe; this case is refused before any probe.
+      connectionProbe: composeCodeHostConnectionProbe(),
+    })
 
     const response = await app.request('/api/account/code-host-push-credentials')
     expect(response.status).toBe(403)

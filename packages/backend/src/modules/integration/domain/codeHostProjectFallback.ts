@@ -6,7 +6,11 @@
 
 import { parseGitUrl } from '@agent-workflow/shared'
 import type { CodeHostFailureCode, CodeHostProvider } from '@agent-workflow/shared'
-import type { ProjectFallback } from '@/services/codeHost/call'
+
+/** project 定位段的推导结果（`params.project` 留空时用）。 */
+export type ProjectFallback =
+  | { ok: true; value: string }
+  | { ok: false; code: CodeHostFailureCode; message: string }
 
 function hostOf(url: string): string | null {
   const parsed = parseGitUrl(url)

@@ -54,6 +54,7 @@ import {
   createRepositoryPublicationTransport,
   SQLiteRepositoryTransportCredentialRepository,
 } from '@/modules/source-control/composition'
+import { codeHostRequests } from '@/modules/integration/composition'
 
 setDefaultTimeout(180_000)
 
@@ -163,6 +164,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
         const hostBinding = {
           provider: 'gitlab' as const,
           project: encodeURIComponent(projectPath),
+          requests: codeHostRequests,
           call: {
             connection: {
               provider: 'gitlab' as const,

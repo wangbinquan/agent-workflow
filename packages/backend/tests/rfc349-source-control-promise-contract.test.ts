@@ -21,7 +21,8 @@ describe('RFC-349 source-control Promise contract', () => {
       'packages/backend/src/modules/source-control/public/participants.ts',
       'packages/backend/src/modules/source-control/composition.ts',
       'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
-      'packages/backend/src/services/codeHost/connections.ts',
+      // RFC-450: the connection service moved into integration's infrastructure.
+      'packages/backend/src/modules/integration/infrastructure/codeHost/connections.ts',
     ]
     for (const path of neutralFiles) {
       const source = read(path)
@@ -56,8 +57,14 @@ describe('RFC-349 source-control Promise contract', () => {
 
   test('repository transport HTTP consumers await the provider-neutral contracts', () => {
     const account = read('packages/backend/src/routes/accountRepositoryTransportCredentials.ts')
-    const connections = read('packages/backend/src/services/codeHost/connections.ts')
+    const connections = read(
+      'packages/backend/src/modules/integration/infrastructure/codeHost/connections.ts',
+    )
     const routes = read('packages/backend/src/routes/codeHosts.ts')
+    // RFC-450: the test-connection orchestration (and its stored-value read) moved into the use case.
+    const connectionTest = read(
+      'packages/backend/src/modules/integration/application/codeHostConnectionTest.ts',
+    )
 
     expect(account).toContain('return await operation()')
     expect(account).toContain('await credentials.resolvePersonalForTest(')
@@ -70,7 +77,7 @@ describe('RFC-349 source-control Promise contract', () => {
     expect(connections).not.toContain('dbTxSync')
     expect(routes).toContain('await service.upsert(')
     expect(routes).toContain('await service.remove(')
-    expect(routes).toContain('await service.resolve(')
+    expect(connectionTest).toContain('await service.resolve(')
   })
 
   test('publication composition consumes an injected closed repository', () => {

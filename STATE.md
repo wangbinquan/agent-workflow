@@ -1,3 +1,31 @@
+## 2026-11-05 RFC-450 代码平台连接与调用归 integration（In Progress；`design/RFC-450-code-host-family-into-integration/`）
+
+- **来由**：RFC-294 W4 B / D 第十五步（RFC-449 后 4 个路由仍 import `services/`，其中 `codeHosts`、`accountRepositoryTransportCredentials` 取
+  `services/codeHost/connections`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `services/codeHost/*` 五个文件按层迁入 integration：URL、TLS 选项判据、project 定位段进 `domain`，调用与连接的数据形状和端口进
+    `application/ports`，执行器、连接服务与恢复探测进 `infrastructure/codeHost`；`services/codeHost/` 删除；
+  - 「测试连接」的编排从 `routes/codeHosts.ts` 原样迁入 `application/codeHostConnectionTest.ts`；两个路由只经 `public/types` 的
+    `CodeHostConnectionAdministration` / `CodeHostConnectionProbe`，出站 fetch 测试注入点改由 composition 绑定；
+  - MR 用例 `mrEnsure` / `mrFacts` 经绑定里的 `requests` 发请求（交付 provider 由装配根注入），清偿 4 条 `R2`；
+  - 装配根、HTTP 装配与 task-execution 节点请求、启动恢复探测改取 integration composition；
+  - import `services/` 的路由 4 → 2；`services/` 文件 213 → 208；`R2` 39 → 35；模块里 import `services/` 的文件 140 → 138。
+- **不做**：`cached-repos`、`tasks` 两个路由；`services/developmentDeliveryDeps.ts`（W4-E）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：
+  - RFC-449 的 Done 文档提交 `70cb9afeb`（只改文档）：exact SHA 主 CI run 42043578397 attempt 1 四处红格逐一归因——actionlint 的下载拿到
+    92 字节非 gzip 的发布资产（上游下载瞬时失败，资产其后可正常下载）；backend shard 43/44 上 PostgreSQL 一侧 `scheduler-clarify-dispatch`
+    「multi-round (ci=2) interrupted rerun」一例 5550ms 越过 bun 默认 5s（前一提交同一分片 2144ms；与 RFC-446 补过预算的同文件姐妹例同形，
+    本 RFC 给它同样的 20s 显式预算，断言不变）；Linux e2e 2/3 在慢 runner 上撞 20 分钟 job 时限（已跑用例全过）；windows-platform
+    run 42047527786 被其后 `eef504664` 的推送按 per-ref concurrency 取消（后继 run 42048579002 全绿、含本提交）。只重跑失败作业，attempt 2 全绿；
+    重跑只作佐证。
+  - CI 微调 `eef504664`：安装 Playwright 浏览器的 Linux job 固定到 `ubuntu-24.04`（`ubuntu-latest` 自 11-03 起是 ubuntu-26.04，Playwright 1.60.0
+    装不了浏览器；三个夜间自那天起每晚红在安装一步，主 CI 的 Linux e2e 只靠浏览器缓存命中才绿），新增 `ci-playwright-runner-image` 用例锁定，
+    见 `docs/dev-gotchas.md`。其后：`eef504664` 主 CI 的 Linux e2e 三片在 ubuntu-24.04 上全绿（install-deps 不再报不支持；macOS 构建 job 一直没
+    分到 runner、排队 24 分钟后被取消，只重跑失败作业 attempt 2 全绿），定时的 e2e-webkit-nightly run 42053544054 与 git-protocols-e2e run 42060411229
+    转绿；e2e-full-nightly 待当晚。升级 Playwright（1.61+ 支持 26.04）会换浏览器构建、需刷新视觉基线，未做。
+
 ## 2026-11-05 RFC-449 代码平台调用对 task-execution 与 development-automation 改为注入（Done；`design/RFC-449-code-host-requests-injected/`）
 
 - **来由**：RFC-294 W4 B / D 准备步。余下的 `codeHosts`、`accountRepositoryTransportCredentials` 两个路由取 `services/codeHost/connections`，

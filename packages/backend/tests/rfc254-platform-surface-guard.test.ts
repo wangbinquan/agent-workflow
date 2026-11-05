@@ -187,14 +187,16 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
-    file: 'services/codeHost/url.ts',
+    // RFC-450: services/codeHost/url.ts moved verbatim into the integration domain.
+    file: 'modules/integration/domain/codeHostUrl.ts',
     match: '`${basePath}/`',
     count: 1,
     why: 'operand is a URL pathname (`new URL(...).pathname`), not a filesystem path — URL pathnames are `/`-separated and case-sensitive on every platform, so neither the win32 separator nor NTFS case folding applies (RFC-269)',
   },
   {
     rule: 'posix-path-prefix',
-    file: 'services/codeHost/project.ts',
+    // RFC-450: services/codeHost/project.ts moved verbatim into the integration domain.
+    file: 'modules/integration/domain/codeHostProjectFallback.ts',
     match: '`${prefixPath}/`',
     count: 1,
     why: 'operands are normalized Git repository URL paths, not filesystem paths — URL and Git wire paths use `/` as a case-sensitive segment separator on every platform',

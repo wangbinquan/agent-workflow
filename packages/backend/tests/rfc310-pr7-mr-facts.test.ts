@@ -35,6 +35,7 @@ import {
   replyMergeRequestThread,
   selfMarkerToken,
 } from '../src/modules/integration/application/mrFacts'
+import { codeHostRequests } from '../src/modules/integration/composition'
 
 setDefaultTimeout(120_000)
 
@@ -61,6 +62,7 @@ function connectionFor(
     provider,
     // gitlab 的 project 定位段是 URL-encoded path；github 是原样 owner/repo。
     project: provider === 'gitlab' ? encodeURIComponent(project) : project,
+    requests: codeHostRequests,
     call: {
       connection: {
         provider,

@@ -17,12 +17,12 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import type { CurrentSubjectAccessResolver } from '@/modules/identity-access/public/participants'
+import type { CodeHostConnectionProbe } from '@/modules/integration/public/types'
 import {
   RepositoryTransportCredentialError,
   type OwnRepositoryCredentialSubject,
 } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
-import { probeCodeHostConnection } from '@/services/codeHost/connections'
 import {
   ConflictError,
   DomainError,
@@ -76,10 +76,8 @@ export interface AccountRepositoryTransportCredentialRouteDeps {
   /** identity-access owns this port; re-declaring its shape here only hid the
    *  fact that the route already depends on it. */
   readonly currentSubjects: CurrentSubjectAccessResolver
-}
-
-export interface AccountRepositoryTransportCredentialRuntimeDeps {
-  readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
+  /** RFC-450: integration's identity probe; the outbound fetch is bound by assembly. */
+  readonly connectionProbe: CodeHostConnectionProbe
 }
 
 class AccountCredentialOperationLimiter {
@@ -146,7 +144,6 @@ function requireOperationBudget(limiter: AccountCredentialOperationLimiter, user
 
 export function mountAccountRepositoryTransportCredentialRoutes(
   app: Hono,
-  deps: AccountRepositoryTransportCredentialRuntimeDeps,
   routeDeps: AccountRepositoryTransportCredentialRouteDeps,
 ): void {
   const credentials = routeDeps.credentials
@@ -228,12 +225,11 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       }
       const credential = resolved.credential
       return c.json(
-        await probeCodeHostConnection({
+        await routeDeps.connectionProbe.probe({
           provider: credential.provider,
           baseUrl: credential.baseUrl,
           token: credential.token,
           rejectUnauthorized: credential.rejectUnauthorized,
-          ...(deps.codeHostFetch !== undefined ? { fetchImpl: deps.codeHostFetch } : {}),
         }),
       )
     },

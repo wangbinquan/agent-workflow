@@ -1068,6 +1068,9 @@ function registerCases(provider: ProviderHarness) {
   // the next prompt (chronological order). This locks the multi-round-history
   // slice of clarify.ts and the inheritance path in scheduler.ts together —
   // neither in isolation suffices.
+  // 墙钟预算（2026-11-05 CI 实测补，70cb9afeb backend shard 43/44，run 42043578397）：与上面「interrupted clarify
+  // rerun」同形——本例同样两次进入 runTask（ci=2 中断、复活重入），各带一次真实 spawn。前一提交（2f8d491cd）同一分片上
+  // PostgreSQL 一侧 2144ms；这一次以 5550ms 越过 bun 默认 5s（SQLite 一侧 509ms）。显式预算=墙钟允许量，断言一个字未改。
   test('multi-round (ci=2) interrupted rerun: every prior round renders in next prompt', async () => {
     await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
@@ -1290,7 +1293,7 @@ function registerCases(provider: ProviderHarness) {
     expect(prompt).toContain('Which environment first?')
     expect(prompt).toContain('Postgres')
     expect(prompt).toContain('Staging')
-  })
+  }, 20_000)
 }
 
 describeEachProvider('scheduler RFC-023 clarify dispatch', (provider) => {

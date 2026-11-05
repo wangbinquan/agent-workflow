@@ -87,6 +87,8 @@ const routeFiles = [
   ),
   // RFC-437：Webhook 投递重放的规则从路由搬进 integration 的应用用例；这些客户端可达的错误码跟着走。
   ...trackedFiles('packages/backend/src/modules/integration/application/replayWebhookDelivery.ts'),
+  // RFC-450：代码平台「测试连接」的编排从 routes/codeHosts.ts 搬进 integration 的应用用例；它的错误码跟着走。
+  ...trackedFiles('packages/backend/src/modules/integration/application/codeHostConnectionTest.ts'),
   // RFC-446：`?path=` 形式的已登记镜像目录判定从 routes/repos.ts 搬进 source-control 的本地读取；它的错误码跟着走。
   ...trackedFiles(
     'packages/backend/src/modules/source-control/infrastructure/local/repositoryIntrospection.ts',

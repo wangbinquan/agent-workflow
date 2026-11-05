@@ -27,7 +27,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import {
   createCodeHostConnectionsService,
   resolveCodeHostConnectionsFromKeyFile,
-} from '../src/services/codeHost/connections'
+} from '../src/modules/integration/infrastructure/codeHost/connections'
 import {
   composeRepositoryTransportCredentials,
   DrizzleRepositoryTransportCredentialRepository,

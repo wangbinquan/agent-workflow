@@ -31,6 +31,10 @@ import {
   composeWebhookDeliveryReplay,
   composeWebhookIngressTransport,
 } from '@/modules/integration/composition/webhookIngress'
+import {
+  composeCodeHostConnectionAdministration,
+  composeCodeHostConnectionProbe,
+} from '@/modules/integration/composition'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
@@ -94,7 +98,6 @@ import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import type {
   IntegrationTriggerIdentityAccess,
   ProviderResourceCatalogRouteComposition,
-  ProviderSourceControlRouteComposition,
   ProviderMemoryRouteComposition,
   ProviderAppCompositionInput,
 } from '@/server'
@@ -153,7 +156,10 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
   >
   readonly testSeams?: Readonly<{
     workflowRuntime?: ProviderResourceCatalogRouteComposition['workflows']['runtime']
-    codeHostRuntime?: ProviderSourceControlRouteComposition['codeHosts']['deps']
+    /** RFC-450: the outbound fetch both code-host route contracts bind (tests only). */
+    codeHostRuntime?: Readonly<{
+      codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
+    }>
     buildScheduleLaunch?: BuildScheduleLaunch
   }>
 }
@@ -571,19 +577,20 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     }),
   })
 
+  const codeHostFetch = input.testSeams?.codeHostRuntime?.codeHostFetch
   const sourceControlRoutes: ProviderAppCompositionInput<
     SelectedDaemonProviderCore<P>
   >['sourceControl'] = Object.freeze({
-    codeHosts: Object.freeze({
-      deps: input.testSeams?.codeHostRuntime ?? Object.freeze({}),
+    codeHosts: composeCodeHostConnectionAdministration({
       service: codeHostConnections,
+      ...(codeHostFetch === undefined ? {} : { fetchImpl: codeHostFetch }),
     }),
     repositoryTransportCredentials: Object.freeze({
-      runtime: input.testSeams?.codeHostRuntime ?? Object.freeze({}),
-      route: Object.freeze({
-        credentials: repositoryTransport.ownCredentials,
-        currentSubjects: identityAccess.resolveAuthority,
-      }),
+      credentials: repositoryTransport.ownCredentials,
+      currentSubjects: identityAccess.resolveAuthority,
+      connectionProbe: composeCodeHostConnectionProbe(
+        codeHostFetch === undefined ? {} : { fetchImpl: codeHostFetch },
+      ),
     }),
     worktreeFiles,
   })

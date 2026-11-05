@@ -13,9 +13,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { CODE_HOST_PARAM_MAX, type TriggerContext } from '@agent-workflow/shared'
 
-import { executeCodeHostCall, type CodeHostCallSpec } from '../src/services/codeHost/call'
-import { resolveProjectFallback } from '../src/services/codeHost/project'
-import { buildCodeHostUrl } from '../src/services/codeHost/url'
+import { executeCodeHostCall } from '../src/modules/integration/infrastructure/codeHost/call'
+import type { CodeHostCallSpec } from '../src/modules/integration/application/ports/codeHostCalls'
+import { resolveProjectFallback } from '../src/modules/integration/domain/codeHostProjectFallback'
+import { buildCodeHostUrl } from '../src/modules/integration/domain/codeHostUrl'
 
 // 同 connections 测试：夹具刻意不带 glpat- / ghp_ 前缀（gitleaks 规则）。
 const TOKEN = 'aw-fixture-not-a-real-token-1234' // gitleaks:allow
@@ -905,9 +906,18 @@ describe('RFC-269 源码层锁', () => {
   test('执行路径不 spawn 任何子进程 —— 它因此不进 containment 准入面', () => {
     // 这条锁存在的意义：未来任何人把实现改成 `curl` 子进程，都会静默绕过
     // RFC-205/227/233 的全部边界论证，而所有行为测试仍会绿。
-    const dir = resolve(import.meta.dir, '..', 'src', 'services', 'codeHost')
-    for (const file of ['call.ts', 'connections.ts', 'project.ts', 'url.ts']) {
-      const src = readFileSync(resolve(dir, file), 'utf8')
+    // RFC-450: the family moved from services/codeHost into integration by layer; every file that holds
+    // the former call / connections / project / url code stays in this lock.
+    const integration = resolve(import.meta.dir, '..', 'src', 'modules', 'integration')
+    for (const file of [
+      'infrastructure/codeHost/call.ts',
+      'infrastructure/codeHost/connections.ts',
+      'infrastructure/codeHost/recoveryProbe.ts',
+      'domain/codeHostProjectFallback.ts',
+      'domain/codeHostUrl.ts',
+      'domain/codeHostTlsPolicy.ts',
+    ]) {
+      const src = readFileSync(resolve(integration, file), 'utf8')
       expect(src).not.toContain('Bun.spawn')
       expect(src).not.toContain('containedSpawn')
       expect(src).not.toContain('child_process')
@@ -923,7 +933,16 @@ describe('RFC-269 源码层锁', () => {
     expect(promptSrc).toContain('triggerContextValue(input.triggerContext, ref.source, ref.field)')
 
     const callSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'codeHost', 'call.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'integration',
+        'infrastructure',
+        'codeHost',
+        'call.ts',
+      ),
       'utf8',
     )
     expect(callSrc).toContain('renderCodeHostTemplate')

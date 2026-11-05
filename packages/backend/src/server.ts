@@ -305,14 +305,10 @@ export interface ProviderIntegrationRouteComposition {
 }
 
 export interface ProviderSourceControlRouteComposition {
-  readonly codeHosts: Readonly<{
-    readonly deps: Parameters<typeof mountCodeHostRoutes>[1]
-    readonly service: Parameters<typeof mountCodeHostRoutes>[2]
-  }>
-  readonly repositoryTransportCredentials: Readonly<{
-    readonly runtime: Parameters<typeof mountAccountRepositoryTransportCredentialRoutes>[1]
-    readonly route: Parameters<typeof mountAccountRepositoryTransportCredentialRoutes>[2]
-  }>
+  readonly codeHosts: Parameters<typeof mountCodeHostRoutes>[1]
+  readonly repositoryTransportCredentials: Parameters<
+    typeof mountAccountRepositoryTransportCredentialRoutes
+  >[1]
   readonly worktreeFiles: Parameters<typeof mountWorktreeFilesRoutes>[1]
 }
 
@@ -516,15 +512,12 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
     webhookEndpoints: (app: Hono) => {
       mountWebhookEndpointRoutes(app, input.integration.webhookEndpoints)
     },
-    codeHosts: (app: Hono) =>
-      mountCodeHostRoutes(
-        app,
-        input.sourceControl.codeHosts.deps,
-        input.sourceControl.codeHosts.service,
-      ),
+    codeHosts: (app: Hono) => mountCodeHostRoutes(app, input.sourceControl.codeHosts),
     repositoryTransportCredentials: (app: Hono) => {
-      const credentials = input.sourceControl.repositoryTransportCredentials
-      mountAccountRepositoryTransportCredentialRoutes(app, credentials.runtime, credentials.route)
+      mountAccountRepositoryTransportCredentialRoutes(
+        app,
+        input.sourceControl.repositoryTransportCredentials,
+      )
     },
     code: (app: Hono) => mountCodeRoutes(app, input.code.history),
     capabilityTemplates: (app: Hono) =>

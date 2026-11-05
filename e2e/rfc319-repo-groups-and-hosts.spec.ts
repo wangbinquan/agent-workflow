@@ -55,9 +55,9 @@
 //   packages/backend/src/services/task.ts:1810-1848                      subdir → sparse checkout，且检出为空要报错
 //   packages/backend/src/services/task.ts:2455-2462                      ref/subdir/readonly 落进 task_repos
 //   packages/backend/src/services/scheduler.ts:2124-2143                 只读成员脏检查（每条终态路径都跑，干净写 0）
-//   packages/backend/src/routes/codeHosts.ts:125-172                     测试连接回落已存值；草稿值的结果不回写
-//   packages/backend/src/services/codeHost/connections.ts:118-130        rejectUnauthorized=false 仅 GitLab
-//   packages/backend/src/services/codeHost/connections.ts:189-199        repositoryUrlPrefixes 仅 GitLab
+//   packages/backend/src/modules/integration/application/codeHostConnectionTest.ts:14-49 测试连接回落已存值；草稿值的结果不回写
+//   packages/backend/src/modules/integration/domain/codeHostTlsPolicy.ts:11-23 rejectUnauthorized=false 仅 GitLab
+//   packages/backend/src/modules/integration/infrastructure/codeHost/connections.ts:133-144 repositoryUrlPrefixes 仅 GitLab
 //   packages/shared/src/codeHost/path.ts:104-125                         前缀归一化：小写 scheme/host、去尾斜杠、拒凭据/query
 //   packages/frontend/src/components/settings/CodeHostsSection.tsx:399-408 前端把每一项归一化后再去重
 //

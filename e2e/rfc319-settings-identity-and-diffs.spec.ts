@@ -61,7 +61,7 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/auth/oidc/providers.ts:255-270               DELETE 的 last-enabled-oidc-required
 //   packages/frontend/src/components/settings/CodeHostsSection.tsx:317-359 删除的两步确认（impact → digest 重来）
 //   packages/frontend/src/components/settings/CodeHostsSection.tsx:519-552 ConfirmDialog 的描述与 removeConfirmAgain
-//   packages/backend/src/services/codeHost/connections.ts:503-557        remove()：撤销确认摘要 + 连带删除个人凭据
+//   packages/backend/src/modules/integration/infrastructure/codeHost/connections.ts:446-499 remove()：撤销确认摘要 + 连带删除个人凭据
 //   packages/backend/src/services/webhookEndpoints.ts:87-97              ingressUrl 只由 publicBaseUrl 拼，缺就是 null
 //   packages/frontend/src/components/WebhookEndpointCard.tsx:416-440     有 URL 给复制按钮，没有就给告警条 + 路径
 //   packages/backend/src/routes/publicOrigin.ts:17-24,77-94              /.well-known/mcp 与 webhook 入站 URL 的**不同**规则

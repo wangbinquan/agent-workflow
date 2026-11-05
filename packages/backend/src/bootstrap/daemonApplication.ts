@@ -83,7 +83,7 @@ import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
-import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
+import { codeHostNodeRequests } from '@/modules/integration/composition'
 import type { Config } from '@agent-workflow/shared'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
@@ -826,7 +826,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
           ),
         ),
         codeHostProbe: (descriptor) =>
-          probeCodeHostMutation({
+          codeHostNodeRequests.probeCodeHostMutation({
             descriptor,
             resolveConnection: (provider) => codeHostConnections.resolve(provider),
           }),

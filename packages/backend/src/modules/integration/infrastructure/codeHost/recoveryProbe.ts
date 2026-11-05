@@ -3,9 +3,9 @@
 // requested projection, proves the exact GitLab draft still exists, or leaves
 // the operation for actor-authorized replay.
 
-import type { FetchLike, ResolvedCodeHostConnection } from '@/services/codeHost/connections'
-import { codeHostTlsRequestInit } from '@/services/codeHost/connections'
-import { buildCodeHostUrl } from '@/services/codeHost/url'
+import type { FetchLike, ResolvedCodeHostConnection } from '../../application/ports/codeHostCalls'
+import { buildCodeHostUrl } from '../../domain/codeHostUrl'
+import { codeHostTlsRequestInit } from './connections'
 import {
   classifyCodeHostProbeResponse,
   codeHostRecoveryBaseUrlDigest,

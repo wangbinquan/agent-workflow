@@ -13,6 +13,14 @@ export {
   type RepositoryEndpointConnection,
   type RepositoryEndpointFetch,
 } from './application/repositoryEndpointDiscovery'
+// RFC-450：代码平台连接服务、两个路由合同与两组请求实现。
+export {
+  codeHostNodeRequests,
+  codeHostRequests,
+  composeCodeHostConnectionAdministration,
+  composeCodeHostConnectionProbe,
+  composeCodeHostConnections,
+} from './composition/codeHostConnections'
 
 /** RFC-359 AC-1（plan §5gc）—— 同上，两个 provider 唯一的一份，走 `…WithPersistence` 那层。 */
 export function createCodeHostWebhookRoutingDirectory(

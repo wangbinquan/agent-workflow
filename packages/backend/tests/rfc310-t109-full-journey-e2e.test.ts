@@ -70,6 +70,7 @@ import { eq } from 'drizzle-orm'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { codeHostRequests } from '@/modules/integration/composition'
 
 setDefaultTimeout(300_000)
 
@@ -133,6 +134,7 @@ function hostBinding() {
   return {
     provider: 'gitlab' as const,
     project: encodeURIComponent(PROJECT_PATH),
+    requests: codeHostRequests,
     call: {
       connection: {
         provider: 'gitlab' as const,

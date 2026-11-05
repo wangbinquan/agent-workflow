@@ -6,7 +6,7 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import { executeCodeHostCall } from '../src/services/codeHost/call'
+import { executeCodeHostCall } from '../src/modules/integration/infrastructure/codeHost/call'
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
 import { validateWorkflowDefinition } from '../src/services/workflow.validator'
 

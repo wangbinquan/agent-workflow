@@ -4,7 +4,7 @@
 // ① 两个模块下没有文件 import `services/codeHost/*`（census AST，别名与相对路径都认，带负对照）——后继 RFC-450 把该家族迁入
 //    integration 时不会产生 DAG 外的边（DAG 只给 integration → task-execution / development-automation）。
 // ② 代码平台节点的请求端口取运行时选项注入的实现；未注入时三个请求都按「未配置」失败而不抛错。
-// ③ 装配根注入的就是 legacy 的三个函数（RFC-450 迁移前的唯一接线点）。
+// ③ 装配根注入的就是代码平台请求的生产实现（RFC-450 起取自 integration composition 的 `codeHostNodeRequests`）。
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -65,13 +65,12 @@ describe('RFC-449 —— 引用', () => {
     expect(targetOf(probe, '@agent-workflow/shared')).toBeNull()
   })
 
-  test('装配根注入的是 legacy 的三个函数', () => {
+  test('装配根注入的是 integration 的代码平台请求实现', () => {
     const bootstrap = readFileSync(join(SRC, 'bootstrap/daemonModules/taskExecution.ts'), 'utf8')
+    expect(bootstrap).toContain('codeHostRequests: codeHostNodeRequests,')
     expect(bootstrap).toContain(
-      'codeHostRequests: { executeCodeHostCall, resolveProjectFallback, probeCodeHostMutation },',
+      "import { codeHostNodeRequests } from '@/modules/integration/composition'",
     )
-    for (const legacy of ['call', 'project', 'recoveryProbe'])
-      expect(bootstrap).toContain(`from '@/services/codeHost/${legacy}'`)
   })
 })
 

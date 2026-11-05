@@ -22,7 +22,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
+import { createCodeHostConnectionsService } from '@/modules/integration/infrastructure/codeHost/connections'
 
 const DIGEST = 'a'.repeat(64)
 

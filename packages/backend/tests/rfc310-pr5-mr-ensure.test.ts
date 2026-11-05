@@ -23,6 +23,7 @@ import {
   observeMergeRequest,
   type MrEnsureConnectionDeps,
 } from '../src/modules/integration/application/mrEnsure'
+import { codeHostRequests } from '../src/modules/integration/composition'
 
 setDefaultTimeout(120_000)
 
@@ -71,6 +72,7 @@ function depsOf(provider: 'gitlab' | 'github', projectId: string): MrEnsureConne
   return {
     provider,
     project: projectId,
+    requests: codeHostRequests,
     call: {
       connection: {
         provider,
