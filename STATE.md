@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-449 代码平台调用对 task-execution 与 development-automation 改为注入（In Progress；`design/RFC-449-code-host-requests-injected/`）
+## 2026-11-05 RFC-449 代码平台调用对 task-execution 与 development-automation 改为注入（Done；`design/RFC-449-code-host-requests-injected/`）
 
 - **来由**：RFC-294 W4 B / D 准备步。余下的 `codeHosts`、`accountRepositoryTransportCredentials` 两个路由取 `services/codeHost/connections`，
   该家族的目标 owner 是 integration；但 task-execution 的代码平台节点装配直接 import 其中三个函数、task-execution 与 development-automation
@@ -14,6 +14,14 @@
 - **附带**：RFC-448 的 Done 文档提交 `0cd746750`：exact SHA 主 CI run 42014215669：attempt 1 macOS e2e 分片 3/4 一条 `system-mocks`
   MCP 探测得到 `status: error`（607ms；同一代码在 `df2cb6e26` 的同一分片上 758ms 通过，未留 errorCode），只重跑失败作业，attempt 2 全绿；
   重跑只作佐证。
+- **落地**：`2f8d491cd`。
+- **集中验证**：都在候选导出仓库里跑。实现门自审补了两处用例锁（RFC-408 驱动配置排除表加 `codeHostRequests`、provider 测试拓扑的运行选项
+  不收它），删掉排除后 RFC-408 用例即红。全量 SQLite 23375 pass，其余为负载超时（单独复跑 12 / 14 个文件全过，RFC-167 dw-confirm 与
+  RFC-396 MR 候选桥给 30 秒时限后全过）与导出仓库所致的 `rfc321` 一条；接 PostgreSQL 276 个文件 3417 pass，PostgreSQL 一侧超时所在的 21 个
+  文件给 30 秒时限或单独复跑后全过；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 42037618561 与 windows-platform run 42037618568 首轮全绿（AC-4）；同 SHA 的定时 `e2e-full-nightly` run 42040875015 四个分片都在「Install Playwright browsers」一步失败（`Playwright does not support chromium on ubuntu26.04-x64`：ubuntu-26.04 runner 与 Playwright 1.60.0 不兼容，环境问题、待用户决定），与本 RFC 无关。
+- **下一步**：RFC-450 把 `services/codeHost/*` 按层迁入 integration，`codeHosts`、`accountRepositoryTransportCredentials` 两个路由改经
+  integration 的 public 合同；之后余下 `cached-repos`、`tasks`。
 
 ## 2026-11-05 RFC-448 MCP 探测用例与资源操作协调器归 resource-catalog（Done；`design/RFC-448-mcp-probe-into-resource-catalog/`）
 

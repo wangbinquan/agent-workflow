@@ -18,7 +18,7 @@
 - [x] AC-1 task-execution 与 development-automation 不再 import `services/codeHost/*`；代码平台节点只经注入的请求端口调用
 - [x] AC-2 计数按实测更新（模块里 import `services/` 的文件 141 → 140，路由仍 4）
 - [x] AC-3 受影响用例全部通过（见下文集中验证）
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-05，候选基于 `0cd746750`）
 
@@ -56,6 +56,10 @@
 - 交付 provider：只把连接的类型换成本地端口，绑定解析与匹配逻辑不变；
 - 自审补了两处用例锁：RFC-408 的驱动配置排除表加 `codeHostRequests`；provider 测试拓扑给调用方的运行选项与连接一样不收它；
   另把 design §2 里「`daemonTaskExecutionBundle` 给占位」的错误说法改正（它走装配根）。
+
+## CI（AC-4）
+
+`2f8d491cd`：exact SHA 主 CI run 42037618561 与 windows-platform run 42037618568 首轮全绿。同 SHA 的定时 `e2e-full-nightly` run 42040875015 四个分片都在「Install Playwright browsers」一步失败（`Playwright does not support chromium on ubuntu26.04-x64`：ubuntu-26.04 runner 与 Playwright 1.60.0 不兼容，环境问题、待用户决定），与本 RFC 无关。
 
 ## PR / 提交
 

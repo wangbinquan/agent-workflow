@@ -1,6 +1,6 @@
 # RFC-449 代码平台调用对 task-execution 与 development-automation 改为注入（RFC-294 W4 B / D 准备）
 
-- **状态**：In Progress（2026-11-05）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-05；`2f8d491cd`，exact SHA 主 CI run 42037618561 与 windows-platform run 42037618568 首轮全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-448](../RFC-448-mcp-probe-into-resource-catalog/proposal.md)；**后继**：RFC-450（代码平台连接与调用归 integration）。
