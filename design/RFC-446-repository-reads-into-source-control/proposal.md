@@ -1,6 +1,6 @@
 # RFC-446 仓库 refs / files 读取归 source-control（RFC-294 W4 B / D 第十二步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-04；`a85eeebb6`，exact SHA 主 CI run 41968848710：attempt 1 macOS e2e 分片 3/4 拿到 runner 后已完成的用例全部通过，RFC-396 三条长旅程（3.8～6.6 min）在慢 runner 上把分片拖过 20 分钟作业上限被取消，本 RFC 不触及其路径；只重跑失败作业，attempt 2 全绿；windows-platform 首轮全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-445](../RFC-445-launch-multipart-and-recovery-counters/proposal.md)（启动 multipart 信封与恢复计数归 platform）

@@ -15,10 +15,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 `services/repo.ts` 删除，源码不再 import 旧路径；`routes/repos.ts` 不 import `services/`、不收仓库存储；判定只在一处
-- [ ] AC-2 计数按实测更新（路由 7 → 6，`services/` 218 → 217，R1 166 / R2 39 不变）
-- [ ] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 `services/repo.ts` 删除，源码不再 import 旧路径；`routes/repos.ts` 不 import `services/`、不收仓库存储；判定只在一处
+- [x] AC-2 计数按实测更新（路由 7 → 6，`services/` 218 → 217，R1 166 / R2 39 不变）
+- [x] AC-3 受影响用例全部通过
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `16465e382`）
 
@@ -55,6 +55,17 @@
 - 生产里 `RepositoryMirrors` 只由 `composeRepositoryMirrors` 一处构造：单机分支的 `local` 由工厂装配，托管分支没有 `local`；装配层
   给 mirrors 与路由的是同一个 `core.repositoryWorkspaceStore`，判定读到的已登记目录与原先相同；
 - 各引用方只改 import 与挂载参数。
+
+## CI（AC-4）
+
+`a85eeebb6`：exact SHA 主 CI run 41968848710：
+
+- attempt 1 只有 `Playwright e2e (macos-latest shard 3/4)` 没有完成：拿到 runner 后 140 条里已完成的全部通过（无失败、无 flaky），
+  RFC-396 三条长旅程分别 5.8m / 6.6m / 3.8m，把分片拖过作业 20 分钟上限（`The job has exceeded the maximum execution time of 20m0s`）
+  被取消；同一分片在 RFC-445 的运行里约 5 分钟、在 `60a8b2c7c` 的 attempt 2 约 14 分钟；
+- 归因 runner 吞吐，不归本 RFC：本 RFC 只把仓库 refs / files 读取与已登记目录判定迁入 source-control，长旅程不经过 `?path=` 读取，
+  按 id 读的路径也未变；
+- 只重跑失败作业，attempt 2 全绿（该分片 13.5 分钟）；重跑只作佐证，不作通过依据。windows-platform（run 41968848781）首轮全绿。
 
 ## PR / 提交
 

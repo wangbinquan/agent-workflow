@@ -1,4 +1,4 @@
-## 2026-11-04 RFC-446 仓库 refs / files 读取归 source-control（In Progress；`design/RFC-446-repository-reads-into-source-control/`）
+## 2026-11-04 RFC-446 仓库 refs / files 读取归 source-control（Done；`design/RFC-446-repository-reads-into-source-control/`）
 
 - **来由**：RFC-294 W4 B / D 第十二步（RFC-445 后 7 个路由仍 import `services/`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -10,8 +10,16 @@
   - import `services/` 的路由 7 → 6；`services/` 文件 218 → 217；错误码、判定顺序与响应不变。
 - **不做**：source-control 的 `repoGroups`、`cached-repos` 与 `services/gitRepoCache`、`services/repoGroup`；其余 5 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`a85eeebb6`。附带 `scheduler-clarify-dispatch`「interrupted clarify rerun」一例的 20s 显式预算（RFC-445 CI 红格的归因）。
+- **集中验证**：都在候选导出仓库里跑（工作树同时可用）。全量 SQLite 23333 pass，无本 RFC 问题：`rfc321-repository-publication-ratchet`
+  一条是导出仓库只有候选提交所致（工作树 10 / 10），其余 51 条负载超时单独复跑 17 / 19 个文件全过，余下 RFC-167、RFC-396 两组与 RFC-445
+  基线对照同样超时。接 PostgreSQL 183 个文件 2378 pass，180 条 PostgreSQL 5 秒时限，给 30 秒时限后 408 / 408 通过；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41968848710：attempt 1 macOS e2e 分片 3/4 拿到 runner 后已完成的用例全部通过，RFC-396 三条长旅程（3.8～6.6 min）把分片拖过 20 分钟作业上限被取消（本 RFC 不触及其路径）；只重跑失败作业，attempt 2 全绿；windows-platform 首轮全绿（AC-4）。
+- **下一步**：B / D 余下 6 个路由：source-control（`repoGroups`、`cached-repos`）、integration 的代码平台连接（`codeHosts`、
+  `accountRepositoryTransportCredentials`）、resource-catalog（`mcps`）与 task-execution（`tasks`）。下一步 RFC-447：仓库组用例
+  （`services/repoGroup.ts`）归 source-control application，URL 现场导入改为注入，路由只经 public 合同。
 
-## 2026-11-04 RFC-445 启动 multipart 信封与恢复计数归 platform，上传兼容层退役（In Progress；`design/RFC-445-launch-multipart-and-recovery-counters/`）
+## 2026-11-04 RFC-445 启动 multipart 信封与恢复计数归 platform，上传兼容层退役（Done；`design/RFC-445-launch-multipart-and-recovery-counters/`）
 
 - **来由**：RFC-294 W4 B / D 第十一步（RFC-444 后 9 个路由仍 import `services/`）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -23,6 +31,13 @@
   - import `services/` 的路由 9 → 7（`agents`、`health`），`R1` 169 → 166。
 - **不做**：task-execution 恢复家族；`routes/tasks.ts` 的其余 legacy 依赖；其余 7 个路由。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`16465e382`。
+- **集中验证**：本机负载 30～110（Docker 虚拟机里常驻的 Kubernetes 控制面占 4～7 核）。全量 SQLite 23324 pass，本 RFC 用例两条断言写错已修
+  （未命名部件的 MIME 由 bun 传输决定；`/health` 只有 3 个本地 import 目标），RFC-440～445 的全树 import 扫描给 60 秒时限；其余 48 条负载超时，
+  单独复跑 16 / 18 个文件全过，余下 RFC-167 dw-confirm、RFC-396 MR 候选桥两组与基线 `60a8b2c7c` 对照同样超时。导出仓库接 PostgreSQL
+  242 个文件 2680 pass，25 条 PostgreSQL 5 秒时限（同时段基线同样超时），给 30 秒时限后 128 / 128 通过；P0 两引擎各 17 阶段通过。
+- **CI**：exact SHA 主 CI run 41958285754：attempt 1 backend 分片 43/44 一条 `scheduler-clarify-dispatch` PostgreSQL 用例 5491ms 越过 bun 默认 5s（前一提交同一分片 1498ms，本 RFC 不经过该路径；RFC-446 给它 20s 显式预算），只重跑失败作业，attempt 2 全绿；windows-platform、integration-opencode、visual-regression-nightly 首轮全绿（AC-4）。
+- **下一步**：见 RFC-446。
 
 ## 2026-11-04 RFC-444 内建资源清单归 resource-catalog（Done；`design/RFC-444-builtin-resources-into-resource-catalog/`）
 

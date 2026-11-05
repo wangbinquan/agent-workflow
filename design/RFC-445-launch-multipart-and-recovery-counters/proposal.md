@@ -1,6 +1,6 @@
 # RFC-445 启动 multipart 信封与恢复计数归 platform，上传兼容层退役（RFC-294 W4 B / D 第十一步）
 
-- **状态**：In Progress（2026-11-04）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-04；`16465e382`，exact SHA 主 CI run 41958285754：attempt 1 backend 分片 43/44 一条 `scheduler-clarify-dispatch` PostgreSQL 用例 5491ms 越过 bun 默认 5s（前一提交同一分片 1498ms，本 RFC 不经过该路径，RFC-446 给它 20s 显式预算），只重跑失败作业，attempt 2 全绿；windows-platform、integration-opencode、visual-regression-nightly 首轮全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D
 - **前序**：[RFC-444](../RFC-444-builtin-resources-into-resource-catalog/proposal.md)（内建资源清单归 resource-catalog）

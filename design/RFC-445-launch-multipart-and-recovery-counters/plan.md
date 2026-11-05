@@ -16,10 +16,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 两个原文件删除，源码不再 import 旧路径；`agents`、`health` 路由不 import `services/`；计数只经 platform
-- [ ] AC-2 计数按实测更新（路由 9 → 7，R1 169 → 166，`services/` 220 → 218）
-- [ ] AC-3 受影响用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 两个原文件删除，源码不再 import 旧路径；`agents`、`health` 路由不 import `services/`；计数只经 platform
+- [x] AC-2 计数按实测更新（路由 9 → 7，R1 169 → 166，`services/` 220 → 218）
+- [x] AC-3 受影响用例全部通过
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-04，候选基于 `60a8b2c7c`）
 
@@ -65,6 +65,18 @@
   由 `tsc` 核对可赋值；
 - 计数状态只在 platform 一处；`recordRecoveryEvent` 仍先累加计数再写审计；
 - 各引用方只改 import 路径；`routes/tasks.ts` 删去的转出只有一个用例消费者，已改从 application 取。
+
+## CI（AC-4）
+
+`16465e382`：exact SHA 主 CI run 41958285754：
+
+- attempt 1 只有 backend 分片 43/44 红一条：`scheduler-clarify-dispatch`「interrupted clarify rerun」的 PostgreSQL 一侧 5491ms
+  越过 bun 默认 5s，测试间未处理错误是超时后被拆除的同一用例的尾巴；
+- 归因 runner 时序，不归本 RFC：前一提交（`60a8b2c7c`，run 41897046254）同一分片上该例 1498ms 通过；同一运行里同文件其余各例
+  0.9～1.7s、该例 SQLite 一侧 396ms；该例经过的 `runTask` / 反问 / 调度路径不含本 RFC 改动的代码；同一文件此前已有三例按同一理由
+  给过 20s 显式预算（`679e70a9a`、RFC-423、RFC-430），本例由 RFC-446 补上；
+- 只重跑失败作业，attempt 2 全绿；重跑只作佐证，不作通过依据。windows-platform（run 41958286074）、integration-opencode、
+  visual-regression-nightly 首轮全绿。
 
 ## PR / 提交
 
