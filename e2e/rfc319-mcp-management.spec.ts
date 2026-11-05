@@ -73,10 +73,10 @@
 //   packages/frontend/src/lib/mcp-probe-query.ts:100-118         409 stale/superseded → resultStale
 //   packages/backend/src/routes/mcps.ts:544-561                  探测前的 hash 闸与 mcp-disabled 闸
 //   packages/backend/src/routes/mcps.ts:392-394                  PUT 的 hash 闸（assertExpectedHash）
-//   packages/backend/src/services/mcpProbe.ts:126-133            enabled=false 在任何 I/O 之前就拒
-//   packages/backend/src/services/mcpProbe.ts:193-211            partial：status 仍是 ok，只标 errorCode
-//   packages/backend/src/services/mcpProbe.ts:367-411            classifyProbeError 的分档顺序
-//   packages/backend/src/services/mcpProbe.ts:52                 HARD_TOTAL_TIMEOUT_MS = 60_000（timeout 档的唯一来源）
+//   packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:129-136            enabled=false 在任何 I/O 之前就拒
+//   packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:196-214            partial：status 仍是 ok，只标 errorCode
+//   packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:370-414            classifyProbeError 的分档顺序
+//   packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:55                 HARD_TOTAL_TIMEOUT_MS = 60_000（timeout 档的唯一来源）
 //   packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#validatePluginReferences             plugin-disabled（422）
 //   packages/shared/src/mcp-operation.ts:42-57                   操作 hash 覆盖 updatedAt ⇒ 任何写入都会让旧 hash 作废
 //   packages/system-mocks/src/mcp/stdio.ts:6-18                  stdio 桩的 ok / crash / hang 三档（本文件只用既有档，未新增）
@@ -701,7 +701,7 @@ test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partia
       expectedChip: 'mcp-probe-status-error',
       // 「把那条路径回显出来」这一半**只在 POSIX 上成立**，原因不在本平台：
       // 产品并不自己拼这句话，它转述的是运行时 spawn 失败的原文
-      // （services/mcpProbe.ts:319-334 那张 errno 表在 Bun 上一条都命中不了，
+      // （modules/resource-catalog/infrastructure/mcpProbe.ts:322-337 那张 errno 表在 Bun 上一条都命中不了，
       // 兜住分类的是 CONNECT_FAILED_MESSAGE_RE 的文本匹配）。POSIX 上 Bun 给的是
       // `ENOENT: no such file or directory, posix_spawn '<path>'`，路径在里面；
       // 2026-08-25 的 Windows CI 实测给的是
@@ -722,7 +722,7 @@ test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partia
       // ② 子进程起来了又立刻死掉：走的是另一条判定分支（连接被关闭，而不是 ENOENT），
       //    这一档同样必须落在 connect-failed 上，否则用户会被指去查网络。
       //    ⚠️ 现状：这一档没有可展开的详情——子进程的 stderr 采集不到失败路径上
-      //    （services/mcpProbe.ts:243 读的是 `client?.capturedStderr()`，而 openClient
+      //    （modules/resource-catalog/infrastructure/mcpProbe.ts:246 读的是 `client?.capturedStderr()`，而 openClient
       //    在握手失败时抛错、那个 client 对象根本没被构造出来）。已单独报为产品缺陷；
       //    这里**不**断言「详情不存在」，以免把这个缺陷锁成契约。
       label: 'connect-failed / 子进程起来就崩',
@@ -836,7 +836,7 @@ test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partia
 // ---------------------------------------------------------------------------
 
 // **为什么这一条打 `@nightly`（风险是 P2，档位却在夜跑）**：它的判据本身要求真等满
-// `HARD_TOTAL_TIMEOUT_MS = 60_000`（services/mcpProbe.ts:52）——per-MCP 的 `timeoutMs` 永远
+// `HARD_TOTAL_TIMEOUT_MS = 60_000`（modules/resource-catalog/infrastructure/mcpProbe.ts:55）——per-MCP 的 `timeoutMs` 永远
 // 到不了这个天花板（握手超时的文案会先被 :394 判成 handshake-failed），所以「撞上总时限」
 // 这件事没有任何测试技巧能缩短，除非改生产代码给天花板加旋钮，而本 RFC 是零生产改动。
 // 把它放进 PR 腿等于给每一次提交加一分多钟，换不来更早的反馈：这一档的分类逻辑是纯常量比较，
@@ -844,7 +844,7 @@ test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partia
 test('RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败 @nightly', async ({
   page,
 }) => {
-  // 单次调用超时故意配得比 60s 天花板还长（services/mcpProbe.ts:52），
+  // 单次调用超时故意配得比 60s 天花板还长（modules/resource-catalog/infrastructure/mcpProbe.ts:55），
   // 于是先触发的必然是**总时限**——这是 timeout 这一档唯一的真实来源。
   const mcp = await seedLocalMcp({
     slug: nextSlug('rfc319-timeout'),

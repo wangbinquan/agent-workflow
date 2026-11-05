@@ -25,7 +25,7 @@ import {
   type McpCatalogTestBinding as McpServiceBinding,
   updateMcpForTest as updateMcp,
 } from './helpers/mcpServiceBinding'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps

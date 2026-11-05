@@ -7,8 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
 
-import { __setProbeOptionsForTesting } from '../src/routes/mcps'
-import type { OpenClientFn, ProbedMcpClient } from '../src/services/mcpProbe'
+import { __setMcpProbeOptionsForTesting as __setProbeOptionsForTesting } from '../src/modules/resource-catalog/composition'
+import type {
+  OpenClientFn,
+  ProbedMcpClient,
+} from '../src/modules/resource-catalog/infrastructure/mcpProbe'
 
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {

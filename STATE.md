@@ -1,3 +1,18 @@
+## 2026-11-05 RFC-448 MCP 探测用例与资源操作协调器归 resource-catalog（In Progress；`design/RFC-448-mcp-probe-into-resource-catalog/`）
+
+- **来由**：RFC-294 W4 B / D 第十四步（RFC-447 后 5 个路由仍 import `services/`）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `routes/mcps.ts` 三个探测端点（列表、读、探测）的编排原样迁入 resource-catalog `application/mcps/probeOperations.ts`，合同
+    `McpProbeOperations` 经 `public/types`；路由只做 HTTP；
+  - `services/mcpProbe.ts` 进 `infrastructure/mcpProbe.ts`，`services/mcpProbeStore.ts` 进 `application/mcps/probeRecords.ts`，协调器类进
+    `infrastructure/resourceOperationCoordinator.ts`、两个进程级实例进 `composition/resourceOperationCoordinators.ts`；
+  - 测试注入点与探测时钟随 `composeMcpProbeOperations` 走，装配根的 MCP 写入时钟改取它（装配根不再 import 路由）；
+  - import `services/` 的路由 5 → 4；`services/` 文件 216 → 213；模块里 import `services/` 的文件 142 → 141。
+- **不做**：MCP 运行时诊断与写入的其余用例、插件操作；审计登记 EK-05 的处置（锚点随迁）；其余 4 个路由。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-447 的 Done 文档提交 `9636d1073`：exact SHA 主 CI run 41994842554 首轮全绿。
+
 ## 2026-11-05 RFC-447 仓库组用例归 source-control（Done；`design/RFC-447-repository-groups-into-source-control/`）
 
 - **来由**：RFC-294 W4 B / D 第十三步（RFC-446 后 6 个路由仍 import `services/`）。

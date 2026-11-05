@@ -8,7 +8,7 @@ import { type ApplicationConfigurationQueries } from '@/modules/system-operation
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { directOperationAuthority } from '@/routes/operationAuthority'
-import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import { mcpOperationCoordinator } from '@/modules/resource-catalog/composition'
 import type { DeploymentSelections } from '../deploymentProfile'
 import { type DaemonProviderCore } from './providerCore'
 

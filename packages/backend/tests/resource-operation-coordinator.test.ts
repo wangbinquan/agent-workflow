@@ -1,7 +1,7 @@
 // RFC-201 — deterministic lock/dedup/generation tests for the daemon fence.
 
 import { describe, expect, test } from 'bun:test'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 
 function deferred<T>() {
   let resolve!: (value: T) => void

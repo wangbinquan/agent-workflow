@@ -26,7 +26,7 @@ import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/m
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import type { McpCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { McpOperationContext } from '../src/modules/resource-catalog/public/participants'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import {
   createMcpForTest as createMcp,
   type McpCatalogTestBinding as McpServiceBinding,

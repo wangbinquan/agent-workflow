@@ -19,7 +19,7 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
   test('remaining business facades consume only injected Resource Catalog contracts', () => {
     for (const relative of [
       'services/mcpClosure.ts',
-      'services/mcpProbeStore.ts',
+      'modules/resource-catalog/application/mcps/probeRecords.ts',
       'services/pluginClosure.ts',
       'services/pluginGenerationGc.ts',
     ]) {

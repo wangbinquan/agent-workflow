@@ -19,7 +19,7 @@ import {
 import type { McpCatalogModule } from '../../src/modules/resource-catalog/public/operations'
 import type { McpOperationContext } from '../../src/modules/resource-catalog/public/participants'
 import type { McpCatalogResource } from '../../src/modules/resource-catalog/public/types'
-import { ResourceOperationCoordinator } from '../../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import type { McpClosureQuery } from '../../src/services/mcpClosure'
 import { monotonicNow } from '../../src/util/time'
 

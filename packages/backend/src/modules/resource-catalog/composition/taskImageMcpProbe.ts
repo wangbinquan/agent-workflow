@@ -6,7 +6,7 @@
 // Like every other hosted execution, the probe now runs in the task image.
 import { z } from 'zod'
 import { McpSchema } from '@agent-workflow/shared'
-import { probeMcp, type ProbeResult } from '@/services/mcpProbe'
+import { probeMcp, type ProbeResult } from '../infrastructure/mcpProbe'
 
 const Request = z.object({ mcp: McpSchema, startedAt: z.number().int() }).strict()
 

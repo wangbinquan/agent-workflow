@@ -1,5 +1,5 @@
 import type { McpPatch } from '../ports/mcpMutation'
-import type { CreateMcp, Mcp } from '@agent-workflow/shared'
+import type { CreateMcp, Mcp, McpProbe } from '@agent-workflow/shared'
 import type { McpOperationContext } from '../../public/participants'
 import type { McpCatalogResource } from '../../public/types'
 
@@ -64,6 +64,40 @@ export interface McpAccessPort {
 
 export interface McpOperationCoordinatorPort {
   runExclusive<T>(resourceId: string, task: () => Promise<T>): Promise<T>
+}
+
+/** RFC-448: the coordinator surface the probe use cases need; the shared
+ * process-wide MCP instance provides it. */
+export interface McpProbeCoordinatorPort extends McpOperationCoordinatorPort {
+  runDeduplicatedOperation<T>(
+    resourceId: string,
+    operationConfigHash: string,
+    operation: () => Promise<T>,
+  ): Promise<T>
+  beginOperation(
+    resourceId: string,
+    now: number,
+    timestampFloors: readonly number[],
+  ): { readonly generation: number; readonly startedAt: number }
+  latestGeneration(resourceId: string): number
+}
+
+/** A stored probe plus the configuration hash it measured. */
+export type McpProbeReceipt = McpProbe & { readonly configHashUsed: string }
+
+/** RFC-448: the MCP probe use cases behind `/api/mcps/probes` and
+ * `/api/mcps/:id/probe` (RFC-030 / RFC-201). */
+export interface McpProbeOperations {
+  /** Stored probes of the MCPs visible to `authority`. */
+  list(authority: McpOperationContext): Promise<McpProbe[]>
+  /** One visible MCP's stored probe; `probe-not-found` if it was never probed. */
+  read(authority: McpOperationContext, id: string): Promise<McpProbe>
+  /** Probe the MCP's exact configuration and store the result. */
+  probe(
+    authority: McpOperationContext,
+    id: string,
+    expectedConfigHash: string,
+  ): Promise<McpProbeReceipt>
 }
 
 export interface McpMutationClock {

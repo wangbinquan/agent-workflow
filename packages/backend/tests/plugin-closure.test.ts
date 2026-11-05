@@ -14,7 +14,7 @@ import { buildActor } from '../src/auth/actor'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composePluginCatalog } from '../src/modules/resource-catalog/composition/pluginOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { createPluginRepository } from '../src/modules/resource-catalog/infrastructure/pluginRepository'
 import {
   collectPluginIdsFromClosure,

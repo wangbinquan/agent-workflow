@@ -2605,10 +2605,10 @@
     },
     {
       "anchors": [
-        "packages/backend/src/services/mcpProbe.ts:461",
-        "packages/backend/src/services/mcpProbe.ts:516-527",
-        "packages/backend/src/services/mcpProbe.ts:147-148",
-        "packages/backend/src/services/mcpProbe.ts:619-632",
+        "packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:464",
+        "packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:519-530",
+        "packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:150-151",
+        "packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:622-635",
         "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts:127-135",
         "docs/audit-backlog.md:672-679"
       ],

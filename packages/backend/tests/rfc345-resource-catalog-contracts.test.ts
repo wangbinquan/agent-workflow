@@ -1053,7 +1053,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).toContain(
       "import type { McpQueries } from '@/modules/resource-catalog/public/queries'",
     )
-    expect(route).toContain('McpAclIdentityParticipant')
+    // RFC-448: the closed ACL identity port is consumed by the probe use cases that
+    // moved out of the route; the route no longer takes it.
+    const probeOperations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/mcps/probeOperations.ts'),
+      'utf8',
+    )
+    expect(probeOperations).toContain('McpAclIdentityParticipant')
+    expect(route).not.toContain('McpAclIdentityParticipant')
     expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
@@ -1064,11 +1071,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.get',
       'descriptor: operations.getAcl',
       'descriptor: operations.updateAcl',
-      'queries.list(',
       'queries.get(',
-      'aclIdentity.load(',
     ]) {
       expect(route).toContain(consumer)
+    }
+    // RFC-448: the probe list / read / probe handlers moved into the probe use cases,
+    // which now consume the visible-list query and the ACL identity port.
+    for (const consumer of ['queries.list(', 'queries.get(', 'aclIdentity.load(']) {
+      expect(probeOperations).toContain(consumer)
     }
     expect(application).toContain('coordinator.runExclusive')
     expect(application).toContain('requireResourceEdit')

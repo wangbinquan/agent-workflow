@@ -415,6 +415,9 @@ export interface AgentResourceClosureStatus {
 }
 
 /** Closed provider persistence projection for one MCP probe. */
+// RFC-448 — the MCP probe use cases behind the HTTP probe endpoints.
+export type { McpProbeOperations, McpProbeReceipt } from '../application/mcps/ports'
+
 export interface McpProbeRecord {
   readonly id: string
   readonly mcpId: string

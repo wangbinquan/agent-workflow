@@ -46,7 +46,7 @@ import {
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { __setProbeOptionsForTesting } from '../src/routes/mcps'
+import { __setMcpProbeOptionsForTesting as __setProbeOptionsForTesting } from '../src/modules/resource-catalog/composition'
 import {
   approveFusion,
   createFusion as createFusionWithAuthority,
@@ -54,7 +54,7 @@ import {
   reconcileFusion,
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import type { ProbedMcpClient } from '../src/services/mcpProbe'
+import type { ProbedMcpClient } from '../src/modules/resource-catalog/infrastructure/mcpProbe'
 import { buildSiblingOutputsBlock } from '@/modules/collaboration/infrastructure/review'
 import {
   createManagedSkill,

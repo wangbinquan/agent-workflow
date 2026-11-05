@@ -7,8 +7,12 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
 import type { McpProbeStore } from '../../src/modules/resource-catalog/public/participants'
-import type { ProbeResult } from '../../src/services/mcpProbe'
-import { getProbeByMcpId, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
+import type { ProbeResult } from '../../src/modules/resource-catalog/infrastructure/mcpProbe'
+import {
+  getProbeByMcpId,
+  listProbes,
+  upsertProbe,
+} from '../../src/modules/resource-catalog/application/mcps/probeRecords'
 import { describeEachProvider } from '../helpers/eachProvider'
 
 async function seedMcp(db: PersistenceDb, name: string): Promise<string> {

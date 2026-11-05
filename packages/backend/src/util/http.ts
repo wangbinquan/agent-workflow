@@ -32,7 +32,7 @@ export function parseBoolQuery(c: Context, name: string, opts: { default: boolea
 // 各族按现语义对号入座；调用方一律 import 这里，routes 内不得再有本地定义
 // （rfc284-safejson-convergence.test.ts 计数锁；webhook 两路由 T28 前豁免）。
 //
-// string 入参的两个变体（oidcProviders.ts / mcpProbeStore.ts 的 parse-string）
+// string 入参的两个变体（oidcProviders.ts / resource-catalog application/mcps/probeRecords.ts 的 parse-string）
 // 语义不同（入参不是 Request），刻意保留本地并在原地注释区分。
 
 /** parse 失败返回 `{}`——下游 zod 以字段级 `validation-error` 报错（{} 族现语义）。 */

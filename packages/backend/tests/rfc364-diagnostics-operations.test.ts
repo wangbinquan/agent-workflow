@@ -8,7 +8,7 @@ import {
 } from '@/modules/identity-access/application/operationContext'
 import { createMcpDiagnosticsContexts } from '@/modules/resource-catalog/infrastructure/mcpDiagnosticsContexts'
 import { createMcpDiagnosticsOperations } from '@/modules/resource-catalog/application/mcps/diagnosticsOperations'
-import { ResourceOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '@/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 
 function gate() {
   let resolve!: () => void

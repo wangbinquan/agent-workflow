@@ -13,7 +13,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import type { Mcp } from '@agent-workflow/shared'
-import { probeMcp } from '../src/services/mcpProbe'
+import { probeMcp } from '../src/modules/resource-catalog/infrastructure/mcpProbe'
 
 // `import.meta.dir` is typed as string | undefined under @types/bun but is
 // always populated at runtime in Bun; guard so tsc is happy.

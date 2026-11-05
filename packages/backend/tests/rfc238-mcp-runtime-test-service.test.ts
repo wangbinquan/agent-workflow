@@ -28,7 +28,7 @@ import {
   createLocalMcpDiagnosticsApplication as createMcpDiagnosticsApplication,
   type LocalMcpDiagnosticsApplicationInput as McpDiagnosticsApplicationInput,
 } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { getRuntimeDriver } from '../src/services/runtime'
 import {
   emptySystemAgentOutputEvidence,

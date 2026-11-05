@@ -26,59 +26,33 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { McpOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  McpAclIdentityParticipant,
-  McpOperationContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { McpOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { McpQueries } from '@/modules/resource-catalog/public/queries'
 import type {
   CreateMcpCatalogInput,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
   McpCatalogResource,
+  McpProbeOperations,
   RenameMcpCatalogInput,
   UpdateMcpCatalogInput,
 } from '@/modules/resource-catalog/public/types'
-import type { McpProbeRunner, McpProbeStore } from '@/modules/resource-catalog/public/participants'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { assertDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { serializeMcpFor } from '@/auth/tokenRedaction'
-import { probeMcp, type ProbeOptions } from '@/services/mcpProbe'
-import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeStore'
-import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
-import {
-  ConflictError,
-  DomainError,
-  NotFoundError,
-  ValidationError,
-  staleConflictError,
-} from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type { McpDiagnosticsCommands } from '@/modules/resource-catalog/public/commands'
 import type { McpDiagnosticsQueries } from '@/modules/resource-catalog/public/queries'
 import { safeJsonOrEmpty } from '@/util/http'
 
-const log = createLogger('mcps-routes')
-
-// Allow tests to override the probe options (e.g. inject a fake openClient).
-// In production this stays undefined and probeMcp uses defaults.
-let probeOptionsOverride: ProbeOptions | undefined
-export function __setProbeOptionsForTesting(opts: ProbeOptions | undefined): void {
-  probeOptionsOverride = opts
-}
-
-export function mcpRouteNow(): number {
-  return (probeOptionsOverride?.now ?? Date.now)()
-}
-
 export interface McpRouteDependencies {
   readonly queries: McpQueries
   readonly operations: McpOperationDescriptors
-  readonly aclIdentity: McpAclIdentityParticipant
-  readonly probeStore: McpProbeStore
+  /** RFC-448: the probe use cases (list / read / probe). */
+  readonly probes: McpProbeOperations
   readonly authorityFor: (actor: Actor) => McpOperationContext
   readonly runtimeTests: {
     readonly commands: McpDiagnosticsCommands
@@ -86,12 +60,10 @@ export interface McpRouteDependencies {
   }
   readonly runtimeTestCommandContextFor: (actor: Actor) => CommandContext
   readonly runtimeTestQueryContextFor: (actor: Actor) => QueryContext
-  /** Where the deployment runs its Agents' MCP servers; absent, in-process. */
-  readonly probeRunner?: McpProbeRunner
 }
 
 export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
-  const { queries, operations, aclIdentity, probeStore, runtimeTests } = module
+  const { queries, operations, runtimeTests } = module
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleMcp(actor: Actor, id: string): Promise<McpCatalogResource> {
     const mcp = await queries.get(module.authorityFor(actor), { id })
@@ -123,13 +95,7 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       tokenAccess: 'allow',
       summary: 'Stored probe results for all MCP servers',
     },
-    async (c) => {
-      const list = await listProbes(probeStore)
-      const actor = actorOf(c)
-      const visibleMcps = await queries.list(module.authorityFor(actor))
-      const allowed = new Set(visibleMcps.map((m) => m.id))
-      return c.json(list.filter((p) => allowed.has(p.mcpId)))
-    },
+    async (c) => c.json(await module.probes.list(module.authorityFor(actorOf(c)))),
   )
 
   registerOperationRoute(app, {
@@ -436,34 +402,8 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       tokenAccess: 'allow',
       summary: 'Read the stored probe result',
     },
-    async (c) => {
-      const id = c.req.param('id')
-      // Existence check on the parent mcp keeps the 404 distinction:
-      //   - mcp doesn't exist            → 404 mcp-not-found
-      //   - mcp exists but never probed  → 404 probe-not-found
-      const actor = actorOf(c)
-      const resolved = await loadVisibleMcp(actor, id)
-      const { currentName, probe } = await mcpOperationCoordinator.runExclusive(
-        resolved.id,
-        async () => {
-          // Bind the read to the already-resolved stable id. Reload visibility
-          // under the same fence used by rename/ACL so name reuse cannot expose a
-          // different MCP's inventory or make the original probe disappear.
-          const fresh = await loadVisibleMcp(actor, resolved.id)
-          return {
-            currentName: fresh.name,
-            probe: await getProbeByMcpId(probeStore, fresh.id),
-          }
-        },
-      )
-      if (probe === null) {
-        throw new NotFoundError(
-          'probe-not-found',
-          `mcp '${currentName}' has not been probed yet — POST /api/mcps/${resolved.id}/probe first`,
-        )
-      }
-      return c.json(probe)
-    },
+    async (c) =>
+      c.json(await module.probes.read(module.authorityFor(actorOf(c)), c.req.param('id'))),
   )
 
   registerRoute(
@@ -485,94 +425,13 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      const resolved = await loadVisibleMcp(actor, id)
-      const expectedHash = parsed.data.expectedConfigHash
-
-      const receipt = await mcpOperationCoordinator.runDeduplicatedOperation(
-        resolved.id,
-        expectedHash,
-        async () => {
-          const start = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-            const captured = await loadVisibleMcp(actor, resolved.id)
-            const actualHash = captured.operationConfigHash
-            if (actualHash !== expectedHash) {
-              throw staleConflictError('mcp', 'the MCP changed; reload before probing', {
-                expectedConfigHash: expectedHash,
-                currentConfigHash: actualHash,
-              })
-            }
-            // Preserve the existing 422 disabled contract before assigning a
-            // generation to an operation that cannot truly start.
-            if (!captured.enabled) {
-              throw new ValidationError(
-                'mcp-disabled',
-                `mcp '${captured.name}' is disabled; enable it before probing`,
-              )
-            }
-            const persisted = await getProbeByMcpId(probeStore, captured.id)
-            const operation = mcpOperationCoordinator.beginOperation(captured.id, mcpRouteNow(), [
-              captured.updatedAt + 1,
-              (persisted?.startedAt ?? 0) + 1,
-            ])
-            return { captured, ...operation }
-          })
-
-          let result
-          try {
-            result =
-              module.probeRunner === undefined
-                ? await probeMcp(start.captured, {
-                    ...probeOptionsOverride,
-                    startedAt: start.startedAt,
-                  })
-                : await module.probeRunner.probe(start.captured, { startedAt: start.startedAt })
-          } catch (err) {
-            if (err instanceof DomainError) throw err
-            log.error('probeMcp unexpectedly threw', {
-              mcp: start.captured.name,
-              message: err instanceof Error ? err.message : String(err),
-            })
-            throw err
-          }
-
-          return mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-            const authority = module.authorityFor(actor)
-            const current = await queries.get(authority, { id: resolved.id })
-            if (current === null) {
-              const identity = await aclIdentity.load(resolved.id)
-              if (identity !== null) {
-                throw staleConflictError(
-                  'mcp',
-                  'MCP access changed while the probe was running; result was discarded',
-                )
-              }
-              throw staleConflictError(
-                'mcp',
-                'the MCP changed while the probe was running; result was discarded',
-                { expectedConfigHash: expectedHash },
-              )
-            }
-            if (current.operationConfigHash !== expectedHash) {
-              throw staleConflictError(
-                'mcp',
-                'the MCP changed while the probe was running; result was discarded',
-                { expectedConfigHash: expectedHash },
-              )
-            }
-            if (mcpOperationCoordinator.latestGeneration(current.id) !== start.generation) {
-              throw new ConflictError(
-                'resource-operation-superseded',
-                'a newer probe completed for this MCP; result was discarded',
-                { generation: start.generation },
-              )
-            }
-            const persisted = await upsertProbe(probeStore, current.id, current.name, result)
-            return { ...persisted, configHashUsed: expectedHash }
-          })
-        },
+      return c.json(
+        await module.probes.probe(
+          module.authorityFor(actorOf(c)),
+          id,
+          parsed.data.expectedConfigHash,
+        ),
       )
-      return c.json(receipt)
     },
   )
 

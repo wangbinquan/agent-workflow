@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { Mcp } from '@agent-workflow/shared'
-import { probeMcp } from '../src/services/mcpProbe'
+import { probeMcp } from '../src/modules/resource-catalog/infrastructure/mcpProbe'
 
 // RUN_GIT_NETWORK gate (P0 test-tier fortification): hosts a real Bun.serve MCP
 // endpoint and drives a full client handshake with a sub-5s latency budget.

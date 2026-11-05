@@ -81,6 +81,10 @@ import {
   type SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
+import {
+  composeMcpProbeOperations,
+  mcpOperationCoordinator,
+} from '@/modules/resource-catalog/composition'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -487,13 +491,18 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     mcps: Object.freeze({
       queries: mcpCatalog.queries,
       operations: mcpCatalog.operations,
-      aclIdentity: mcpCatalog.participants.aclIdentity,
-      probeStore: mcpProbeStore,
+      // RFC-448: the probe use cases, bound to the shared MCP coordinator and the deployment's probe.
+      probes: composeMcpProbeOperations({
+        queries: mcpCatalog.queries,
+        aclIdentity: mcpCatalog.participants.aclIdentity,
+        store: mcpProbeStore,
+        coordinator: mcpOperationCoordinator,
+        probeRunner: mcpRuntimeTests.probeRunner,
+      }),
       authorityFor,
       runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },
       runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,
       runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,
-      probeRunner: mcpRuntimeTests.probeRunner,
     }),
     plugins: Object.freeze({
       queries: pluginCatalog.queries,

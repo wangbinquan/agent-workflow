@@ -1,5 +1,5 @@
 // RFC-030 T3 — guards that @modelcontextprotocol/sdk resolves and exposes the
-// classes services/mcpProbe.ts depends on. If a future bun.lock prune drops
+// classes modules/resource-catalog/infrastructure/mcpProbe.ts depends on. If a future bun.lock prune drops
 // the dep, this fails at the test layer before runtime probe attempts crash.
 
 import { describe, expect, test } from 'bun:test'

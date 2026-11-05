@@ -36,7 +36,7 @@ import {
   type PluginServiceBinding,
 } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import {
   createMcpForTest as createMcp,
   type McpCatalogTestBinding as McpServiceBinding,

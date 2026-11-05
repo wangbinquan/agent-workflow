@@ -46,6 +46,7 @@ const HTTP_OWNERS = [
   'composeRunObservation',
   'composeRepositoryMirrors',
   'composeRepositoryGroups',
+  'composeMcpProbeOperations',
   'resizeAllNodePools',
   'resizeAllTaskFanoutSems',
   'setChildTaskBudgetCapacity',

@@ -12,8 +12,11 @@
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { __setProbeOptionsForTesting } from '../../src/routes/mcps'
-import type { OpenClientFn, ProbedMcpClient } from '../../src/services/mcpProbe'
+import { __setMcpProbeOptionsForTesting as __setProbeOptionsForTesting } from '../../src/modules/resource-catalog/composition'
+import type {
+  OpenClientFn,
+  ProbedMcpClient,
+} from '../../src/modules/resource-catalog/infrastructure/mcpProbe'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from '../helpers/providerHttpApplicationScope'
 

@@ -39,7 +39,7 @@ import {
 } from './helpers/pluginServiceBinding'
 import { createPluginGenerationFilesystemGcPort } from '../src/services/pluginGenerationGc'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
-import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')

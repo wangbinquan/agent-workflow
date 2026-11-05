@@ -27,7 +27,7 @@
 //     `system-mock-mcp-http`、stdio 那台自报 `system-mock-mcp-stdio`，见
 //     `packages/system-mocks/src/mcp/server.ts:20/45` 与 `mcp/stdio.ts:17`）——
 //     只断言 `status==='ok'` 分不出「真握手了」与「拿了另一台的旧结果」。
-//   * RES-20 —— 远端 MCP 的两条传输是**有序回退**的（`mcpProbe.ts:531-536` 先 Streamable HTTP
+//   * RES-20 —— 远端 MCP 的两条传输是**有序回退**的（`mcpProbe.ts:534-539` 先 Streamable HTTP
 //     再 SSE）。回退若被删掉，只支持 SSE 的服务器一律探成 connect-failed，而用户在界面上得到的
 //     结论是「这台 MCP 不可用」——一条完全可用的服务器被判了死刑。这条把 URL 指到只应答 GET 的
 //     `/mcp/sse`（POST 一律 404，即 Streamable HTTP 必失败），于是「探通了」这件事**本身**
@@ -84,8 +84,8 @@
 //   packages/frontend/src/components/skills/ImportZipPanel.tsx:145-165  校验失败：清空 file + 两句不同文案
 //   packages/frontend/src/components/skills/ImportZipPanel.tsx:216-245  commit 失败：留在 review + commitError
 //   packages/frontend/src/components/skills/ImportZipPanel.tsx:387-396  parse 按钮在 file===null 时禁用
-//   packages/backend/src/services/mcpProbe.ts:531-556                 remote 传输顺序 + 回退
-//   packages/backend/src/services/mcpProbe.ts:565-575                 serverInfo / protocolVersion 出处
+//   packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:534-559                 remote 传输顺序 + 回退
+//   packages/backend/src/modules/resource-catalog/infrastructure/mcpProbe.ts:568-578                 serverInfo / protocolVersion 出处
 //   packages/system-mocks/src/mcp/server.ts:20/45/82-108              三台 mock 各自的自报名与工具清单
 //   packages/system-mocks/src/suite.ts:424-425/467                    /mcp 与 /mcp/sse 的 URL 与路由归属
 //   packages/frontend/src/components/IntentEntryButton.tsx:38-51      入口把 mount 编进 /intent 的 search
@@ -691,13 +691,13 @@ test('RFC-319 RES-19: Streamable HTTP 与 stdio 各自真握手——回执里�
       { status: receipt.status, code: receipt.errorCode },
       `${transport} 探测没成功（${receipt.errorMessage ?? '无错误信息'}）⇒ 这条传输的握手在产品里根本走不通`,
     ).toEqual({ status: 'ok', code: null })
-    // serverInfo 只可能来自 initialize 的应答（mcpProbe.ts:565-575），所以它是「真握手过」
+    // serverInfo 只可能来自 initialize 的应答（mcpProbe.ts:568-578），所以它是「真握手过」
     // 的唯一凭据，也是「用的是哪一条传输」的唯一凭据——两台 mock 自报的名字不同。
     expect(
       receipt.serverInfo?.name,
       `${transport} 的回执没有指认到那台服务器 ⇒ 结果可能来自别的传输或上一次的缓存`,
     ).toBe(serverName)
-    // 协议版本按**当前实现**只对 HTTP 传输存在：`mcpProbe.ts:568-571` 从
+    // 协议版本按**当前实现**只对 HTTP 传输存在：`mcpProbe.ts:571-574` 从
     // `activeTransport.protocolVersion` 取，而 SDK 的 `StdioClientTransport` 上没有这个字段。
     // 这是形状差异不是缺陷，所以只在 HTTP 那条上断言，且断言的是「有」而不是某个具体版本号
     // ——写死版本号会在 SDK 升级那天把这条与被测行为无关地变红。

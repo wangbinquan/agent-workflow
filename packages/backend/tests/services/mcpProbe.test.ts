@@ -30,7 +30,7 @@ import {
   probeMcp,
   type OpenClientFn,
   type ProbedMcpClient,
-} from '../../src/services/mcpProbe'
+} from '../../src/modules/resource-catalog/infrastructure/mcpProbe'
 
 // ----------------------------- helpers ---------------------------------------
 

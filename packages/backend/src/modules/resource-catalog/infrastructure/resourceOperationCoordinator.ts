@@ -2,6 +2,9 @@
 // long-running exact-revision operations. The coordinator is intentionally
 // storage-agnostic: routes/services reload and authorize while holding the
 // stable-id lock, then may release it for external I/O and reacquire to settle.
+//
+// RFC-448: moved from services/resourceOperationCoordinator.ts unchanged; the
+// two process-wide instances live in composition/resourceOperationCoordinators.ts.
 
 interface LockState {
   tail: Promise<void>
@@ -131,7 +134,3 @@ export class ResourceOperationCoordinator {
     this.lastOperationStartedAt.delete(resourceId)
   }
 }
-
-/** Shared single-daemon instances, keyed by resource family then stable id. */
-export const mcpOperationCoordinator = new ResourceOperationCoordinator()
-export const pluginOperationCoordinator = new ResourceOperationCoordinator()

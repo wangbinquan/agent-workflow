@@ -39,13 +39,13 @@ import { selectSkillContentDependencies } from '@/modules/resource-catalog/compo
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { type McpCatalogModule } from '@/modules/resource-catalog/public/operations'
 import { type SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
-import { mcpRouteNow } from '@/routes/mcps'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
-import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import {
+  getProbeByMcpId,
   mcpOperationCoordinator,
+  mcpProbeNow,
   pluginOperationCoordinator,
-} from '@/services/resourceOperationCoordinator'
+} from '@/modules/resource-catalog/composition'
 
 type ResourceAclRow = Parameters<
   ReturnType<typeof composeResourceCatalogFor>['authorization']['canViewResource']
@@ -98,7 +98,7 @@ export function composeDaemonResourceCatalogModules(input: {
     coordinator: mcpOperationCoordinator,
     nextMutationTimestamp: async (mcp) => {
       const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
-      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
+      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpProbeNow(), [
         mcp.updatedAt + 1,
         (persisted?.startedAt ?? 0) + 1,
         mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,

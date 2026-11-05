@@ -1,5 +1,9 @@
 // RFC-030 — persistence layer for mcp_probes rows.
 //
+// RFC-448: moved from services/mcpProbeStore.ts unchanged, except that a probe
+// result is typed by the participant port's McpProbeMeasurement (same shape as
+// the in-process probe's ProbeResult; the hosted runner already returns it).
+//
 // Three operations:
 //   - listProbes(store)                 → all probes (provider-owned ordering)
 //   - getProbeByMcpId(store, mcpId)     → one probe by immutable parent id
@@ -9,9 +13,8 @@
 // rowToProbe is the only place where stored JSON strings get re-parsed.
 
 import { McpProbeSchema, type McpProbe } from '@agent-workflow/shared'
-import type { McpProbeRecord, McpProbeWrite } from '@/modules/resource-catalog/public/types'
-import type { McpProbeStore } from '@/modules/resource-catalog/public/participants'
-import type { ProbeResult } from '@/services/mcpProbe'
+import type { McpProbeRecord, McpProbeWrite } from '../../public/types'
+import type { McpProbeMeasurement, McpProbeStore } from '../../public/participants'
 
 function parseJson(value: string | null): unknown {
   if (value === null) return null
@@ -52,7 +55,7 @@ function toProbe(record: McpProbeRecord): McpProbe {
   return parsed.data
 }
 
-function toWrite(result: ProbeResult): McpProbeWrite {
+function toWrite(result: McpProbeMeasurement): McpProbeWrite {
   return Object.freeze({
     status: result.status,
     latencyMs: result.latencyMs,
@@ -90,7 +93,7 @@ export async function upsertProbe(
   store: McpProbeStore,
   mcpId: string,
   _mcpName: string,
-  result: ProbeResult,
+  result: McpProbeMeasurement,
 ): Promise<McpProbe> {
   return toProbe(await store.upsert(mcpId, toWrite(result)))
 }

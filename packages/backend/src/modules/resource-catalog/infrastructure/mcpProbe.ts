@@ -1,5 +1,8 @@
 // RFC-030 — MCP interface probe service.
 //
+// RFC-448: moved from services/mcpProbe.ts unchanged — it spawns / connects to
+// the MCP server in-process, so it is resource-catalog infrastructure.
+//
 // Public API:
 //   probeMcp(mcp, opts?) → ProbeResult
 //

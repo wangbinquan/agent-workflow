@@ -152,12 +152,16 @@ describe('task-image mcp-probe operation', () => {
 describe('hosted probe selection wiring', () => {
   const read = (path: string) => Bun.file(new URL(`../src/${path}`, import.meta.url)).text()
 
-  test('the route probes through the selected runner and in-process only without one', async () => {
+  test('the probe goes through the selected runner and in-process only without one', async () => {
+    // RFC-448: the selection moved with the probe use cases from routes/mcps.ts into
+    // resource-catalog's composition; the route only delegates.
+    const composition = await read('modules/resource-catalog/composition/mcpProbeOperations.ts')
+    expect(composition).toContain('runner === undefined')
+    expect(composition).toContain('? probeMcp(mcp, { ...probeOptionsOverride, startedAt })')
+    expect(composition).toContain(': runner.probe(mcp, { startedAt })')
     const route = await read('routes/mcps.ts')
-    expect(route).toContain('module.probeRunner === undefined')
-    expect(route).toContain(
-      'await module.probeRunner.probe(start.captured, { startedAt: start.startedAt })',
-    )
+    expect(route).toContain('module.probes.probe(')
+    expect(route).not.toContain('probeRunner')
   })
 
   test('the neutral HTTP binding hands both providers the selected runner; only hosted selects one', async () => {
