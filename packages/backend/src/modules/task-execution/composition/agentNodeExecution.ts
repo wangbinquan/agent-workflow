@@ -12,7 +12,7 @@ import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRun
 import { agentRefOfNode, fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 import { getRuntimeDriver } from '@/services/runtime'
 import { sha256Hex } from '@/util/hash'
-import { decideResumeSessionId } from '@/services/sessionModeFallback'
+import { decideResumeSessionId } from '../domain/sessionModeFallback'
 import * as agentRunHistory from '../application/agentRunHistory'
 import { resolveUpstreamInputs } from '../application/nodeInputs'
 import { toContainerRelative } from '../application/portArtifacts'

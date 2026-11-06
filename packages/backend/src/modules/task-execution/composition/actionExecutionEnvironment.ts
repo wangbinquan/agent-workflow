@@ -24,7 +24,7 @@ import { localActionWorkspaceEntries } from '../infrastructure/local/localAction
 /** RFC-431: the standalone selection checks entries below a host action workspace. */
 export { localActionWorkspaceEntries }
 import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
-import { watchTaskTerminal } from '@/services/execution/executionWatch'
+import { watchTaskTerminal } from '../infrastructure/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 
 export interface ActionExecutionEnvironmentDependencies {

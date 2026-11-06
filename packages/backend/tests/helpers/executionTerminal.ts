@@ -9,7 +9,10 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ExecutionOutcome } from '@/services/execution/types'
 import { getExecutionOutcome } from '@/services/execution/outcome'
-import { watchTaskTerminal, type TerminalWatchResult } from '@/services/execution/executionWatch'
+import {
+  watchTaskTerminal,
+  type TerminalWatchResult,
+} from '@/modules/task-execution/infrastructure/executionWatch'
 
 export type WatchExecutionResult =
   | { kind: 'outcome'; outcome: ExecutionOutcome }

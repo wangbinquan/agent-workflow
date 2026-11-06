@@ -4,8 +4,8 @@ import {
   currentMaxInvocationDepth,
   ensureChildTaskBudget,
   registerKnownChildTask,
-} from '@/services/execution/childBudget'
-import { watchTaskTerminal } from '@/services/execution/executionWatch'
+} from '../infrastructure/childBudget'
+import { watchTaskTerminal } from '../infrastructure/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import type { ChildCallNodeExecutionPorts } from '../application/ports/childCallNodeExecution'

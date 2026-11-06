@@ -14,7 +14,7 @@ import type {
 
 import { ulid } from 'ulid'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { TaskClaimGate } from './application/taskClaimGate'
 import { DrizzleTaskOwnershipPersistence } from './infrastructure/taskOwnershipPersistence'
 import { InMemoryTaskRuntimeRegistry } from './infrastructure/inMemoryTaskRuntimeRegistry'
@@ -328,3 +328,11 @@ export {
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
 } from './infrastructure/taskAuthorization'
+
+// RFC-456: the process-level child-budget and terminal-watch hooks the daemon root calls at startup and from
+// committed-event callbacks (the root reaches them here, not in infrastructure/).
+export {
+  notifyChildBudgetTaskStatus,
+  setChildTaskBudgetCapacity,
+} from './infrastructure/childBudget'
+export { notifyTaskTerminal } from './infrastructure/executionWatch'

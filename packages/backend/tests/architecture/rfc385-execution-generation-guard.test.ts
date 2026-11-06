@@ -24,7 +24,7 @@ test('execution module, provider runtime, fusion, run configuration and standalo
     ['bootstrap/daemonModules/taskExecution.ts', 1],
   ] as const) {
     const source = read(path)
-    expect(source).toContain("from '@/services/daemonGeneration'")
+    expect(source).toContain("from '@/platform/execution/daemonGeneration'")
     expect(executionGenerationViolations(source, sites)).toEqual([])
   }
   const adapters = compact(read('bootstrap/daemonModules/adapters.ts'))

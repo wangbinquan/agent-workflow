@@ -93,13 +93,13 @@ import type { TaskRouteOperations } from '@/modules/task-execution/public/comman
 import { storedEventFromRow } from '@/platform/events/committed/appendShared'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
-import { ChildTaskBudget } from '@/services/execution/childBudget'
+import { ChildTaskBudget } from '@/modules/task-execution/infrastructure/childBudget'
 import {
   resetTaskTerminalWatchersForTests,
   watchTaskTerminal,
   notifyTaskTerminal,
   type TerminalWatchResult,
-} from '@/services/execution/executionWatch'
+} from '@/modules/task-execution/infrastructure/executionWatch'
 import {
   TASK_CHANNEL,
   TASKS_LIST_CHANNEL,

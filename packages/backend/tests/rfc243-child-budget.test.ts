@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
 
-import { ChildTaskBudget } from '../src/services/execution/childBudget'
+import { ChildTaskBudget } from '../src/modules/task-execution/infrastructure/childBudget'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 

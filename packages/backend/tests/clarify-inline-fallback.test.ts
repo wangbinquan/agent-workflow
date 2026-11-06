@@ -10,7 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { ClarifyInlineFallbackReason } from '../src/services/sessionModeFallback'
+import type { ClarifyInlineFallbackReason } from '../src/modules/task-execution/domain/sessionModeFallback'
 import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const ENUM_REASONS = [
@@ -37,7 +37,15 @@ describe('RFC-026 fallback reason enum coverage', () => {
 
   test('sessionModeFallback.ts decideResumeSessionId covers every reason', () => {
     const fallbackSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'sessionModeFallback.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'domain',
+        'sessionModeFallback.ts',
+      ),
       'utf8',
     )
     for (const reason of ENUM_REASONS) {

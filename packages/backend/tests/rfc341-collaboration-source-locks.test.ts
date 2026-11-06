@@ -111,7 +111,9 @@ describe('RFC-341 collaboration owner source locks', () => {
 
   test('fresh, replay and claimed pre-drive share durable clarify convergence', () => {
     const autoDispatch = source('modules/collaboration/infrastructure/clarify/autoDispatch.ts')
-    const preDrive = source('services/humanGateContinuationEffects.ts')
+    const preDrive = source(
+      'modules/task-execution/application/drive/humanGateContinuationEffects.ts',
+    )
     const convergence = source(
       'modules/collaboration/infrastructure/clarifyContinuationConvergence.ts',
     )

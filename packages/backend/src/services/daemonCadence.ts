@@ -131,7 +131,7 @@ export const MAINTENANCE_PHASE = {
   backupPrune: 24 * MINUTE_MS,
   /** services/repoBatchImport.ts */
   batchImportGc: 28 * MINUTE_MS,
-  /** services/pluginGenerationGc.ts */
+  /** modules/resource-catalog/composition/pluginGenerationGc.ts（RFC-456 前在 `services/`） */
   pluginGenerationGc: 32 * MINUTE_MS,
   /** cli/start.ts —— RFC-310 未 claim 上传的 TTL 回收。 */
   developmentUploadGc: 36 * MINUTE_MS,

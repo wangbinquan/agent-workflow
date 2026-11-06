@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { createManagedPeriodicJob, type PeriodicTimerApi } from '../src/services/managedPeriodicJob'
+import {
+  createManagedPeriodicJob,
+  type PeriodicTimerApi,
+} from '../src/platform/background/managedPeriodicJob'
 
 class FakeTimers implements PeriodicTimerApi<number> {
   private nextId = 1

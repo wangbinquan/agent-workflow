@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { serializeCodeHostSensitiveProjectionV1 } from '@agent-workflow/shared'
 import { validateWorkflowDefinition } from '@/services/workflow.validator'
-import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
+import { assertCodeHostAuthorAllowed } from '@/modules/resource-catalog/domain/codeHostAuthorGate'
 import type { Actor } from '@/auth/actor'
 
 function codesFor(nodes: WorkflowNode[], edges: WorkflowDefinition['edges'] = []): string[] {

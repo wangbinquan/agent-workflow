@@ -14,8 +14,8 @@
 // lifecycle services (lifecycle.ts imports US for the emission) — db schema and
 // shared only.
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import type { TaskStatusProjectionReadModel } from '@/modules/task-execution/public/types'
-import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
+import type { TaskStatusProjectionReadModel } from '../public/types'
+import { createTaskExecutionReadModels } from './taskExecutionReadModels'
 
 export type TerminalWatchResult =
   | { kind: 'terminal'; status: TaskStatus }

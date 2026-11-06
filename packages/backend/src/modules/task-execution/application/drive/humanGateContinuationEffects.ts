@@ -2,13 +2,10 @@
 // phase.  The bounded contexts meet through their purpose-specific ports; this
 // file is the temporary composition bridge tracked by RFC-294 W4.
 
-import { GateContinuationEffectStep } from '@/modules/task-execution/application/drive/gateContinuationEffectStep'
-import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
-import {
-  TaskExecutionError,
-  type GateWorkspaceRollbackExecutor,
-} from '@/modules/task-execution/public/participants'
-import type { TaskClarifyContinuationPort } from '@/modules/task-execution/application/ports/gateContinuationSupport'
+import { GateContinuationEffectStep } from './gateContinuationEffectStep'
+import type { TaskExecutionPersistence } from '../ports/taskExecutionPersistence'
+import { TaskExecutionError, type GateWorkspaceRollbackExecutor } from '../../public/participants'
+import type { TaskClarifyContinuationPort } from '../ports/gateContinuationSupport'
 
 type GatePreDriveContext = Parameters<InstanceType<typeof GateContinuationEffectStep>['run']>[0]
 

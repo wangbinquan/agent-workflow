@@ -39,7 +39,7 @@ import { resolveCrossClarifySessionMode } from '@agent-workflow/shared'
 import {
   decideResumeSessionId,
   type ClarifyInlineFallbackReason,
-} from '../src/services/sessionModeFallback'
+} from '../src/modules/task-execution/domain/sessionModeFallback'
 import { getRuntimeDriver } from '../src/services/runtime'
 
 function ccNode(overrides: Partial<ClarifyCrossAgentNode> = {}): ClarifyCrossAgentNode {

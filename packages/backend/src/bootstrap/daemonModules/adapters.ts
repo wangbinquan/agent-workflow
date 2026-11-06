@@ -10,7 +10,7 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DaemonProviderCoreAdapters } from './providerCore'
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import {
   composeProcessTaskExecutionBinding,
   composeSessionTaskExecutionBinding,

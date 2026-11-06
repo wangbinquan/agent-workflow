@@ -24,7 +24,7 @@ import type { TaskMechanicsState } from '@/modules/task-execution/composition/ta
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { getRuntimeDriver } from '@/services/runtime'
-import { decideResumeSessionId } from '@/services/sessionModeFallback'
+import { decideResumeSessionId } from '@/modules/task-execution/domain/sessionModeFallback'
 import { sha256Hex } from '@/util/hash'
 
 type Calls = Record<string, unknown[]>

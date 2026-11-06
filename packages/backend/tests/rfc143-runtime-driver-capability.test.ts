@@ -444,11 +444,11 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
       'export function resolveOpencodeCmd',
     )
     expect(SRC('services/runtime/index.ts')).not.toContain('resolveOpencodeCmd,')
-    expect(SRC('services/execution/runtimeConfigFreeze.ts')).toContain(
+    expect(SRC('modules/task-execution/composition/runtimeConfigFreeze.ts')).toContain(
       'export function freezeBinaryConfig',
     )
     expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
-      "from '@/services/execution/runtimeConfigFreeze'",
+      "from './runtimeConfigFreeze'",
     )
     expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
       'freezeBinaryConfig(input.configPath, input.operationConfiguration)',

@@ -23,7 +23,7 @@ import {
 import {
   createPluginGenerationFilesystemGcPort,
   runPluginGenerationGc,
-} from '../src/services/pluginGenerationGc'
+} from '../src/modules/resource-catalog/composition/pluginGenerationGc'
 import {
   checkForUpdate,
   garbageCollectPluginGenerations,

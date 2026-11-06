@@ -18,7 +18,7 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import { assertScriptAuthorAllowed } from '@/services/scriptAuthorGate'
+import { assertScriptAuthorAllowed } from '@/modules/resource-catalog/domain/scriptAuthorGate'
 import { ForbiddenError } from '@/util/errors'
 
 /** Minimal Actor shape the gate reads: nothing but the permission set. */

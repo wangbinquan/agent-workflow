@@ -68,7 +68,7 @@
 //   packages/backend/src/services/workgroups.ts:264-291        copy：exact-revision fence + nextResourceCopyName
 //   packages/backend/src/services/workgroups.ts:557-568        delete 版本 fence
 //   packages/backend/src/services/workgroups.ts:570-585        非终态任务引用 ⇒ workgroup-in-use
-//   packages/backend/src/services/resourceCopyName.ts:60-76    -copy / -copy-N 阶梯
+//   packages/backend/src/modules/resource-catalog/domain/resourceCopyName.ts:60-76    -copy / -copy-N 阶梯
 //   packages/shared/src/schemas/workgroup.ts:483-503           workgroupLaunchReadiness
 //   packages/shared/src/schemas/workgroup.ts:532-536           workgroupHasHumanMember
 //   packages/shared/src/schemas/permission.ts:915-923          GUEST_BASELINE 有 workgroups:read、没有 :create

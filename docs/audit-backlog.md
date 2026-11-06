@@ -3452,7 +3452,7 @@ packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置�
      仍只认 owner（`:621-633`）。用例写成 public → read → write 三档矩阵。
    - DE-X4 的「体积上限校验」实现回的是 **422 `employee-upload-too-large`**，不是直觉上的 400/413。
    - DE-08 的 program 工具授权门与**工作流里 script 节点的 `scripts:author` 字段门**
-     （`services/scriptAuthorGate.ts:46`）是两道门；夹具必须由 admin 建合同工作流，否则这条用例
+     （`modules/resource-catalog/domain/scriptAuthorGate.ts:46`，RFC-456 前在 `services/`）是两道门；夹具必须由 admin 建合同工作流，否则这条用例
      证的是另一道门。
 
 ## RFC-319 B101 起草期撞到的产品缺陷（2026-08-26，工作流检查器 / 画布右键）
@@ -3651,7 +3651,7 @@ packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置�
    B105 的断言写在**活着**的那三列上。
 4. **【审计文案与实现不符，照抄会得到假红】OPS-X4 的建议参数 `periodicOrphanReconcileMs: 2000` 不可用。**
    `packages/shared/src/settingsNumericBounds.ts:72-78` 声明 `positiveMin: 60_000`（`PUT /api/config` 会 422），
-   `services/managedPeriodicJob.ts:75-92` 的 `minPositiveMs: 60_000` 会把 2000 判非法并**把这条 loop 整个
+   `platform/background/managedPeriodicJob.ts:75-92`（RFC-456 前在 `services/`）的 `minPositiveMs: 60_000` 会把 2000 判非法并**把这条 loop 整个
    禁用**（`onInvalid` → `enabled=false`）。照抄那个数字会得到一条「怎么等都不发生」的假红。B105 用的是
    合法下限 60_000，代价是那条腿真等 60 多秒。
 5. **【账本噪声，建议清理】`e2e/git-protocols.spec.ts:192-198` 是一个用例体为空的 `test.describe.skip`。**
@@ -3846,7 +3846,7 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
 1. **【真实缺陷，中高（开发体验），本机 3/3 稳定复现，未写成断言】dev-watch 锁交接有竞态：
    上一代排空了、新一代却退出码 1，结果一个 daemon 都不剩。**
    `packages/backend/src/cli/start.ts:205-215` 的 `requestShutdown(endpoint, …)` 返回非 `'accepted'`
-   就 `throw`；而 `packages/backend/src/services/controlListener.ts:100-106` 在**构造完 Response 之后**
+   就 `throw`；而 `packages/backend/src/platform/execution/local/controlListener.ts:100-106`（RFC-456 前在 `services/`）在**构造完 Response 之后**
    就 `queueMicrotask(options.onShutdown)`——空闲 daemon 的 `shutdown()` 会在响应真正写进 socket 之前
    跑掉 `server.stop(true)` ⇒ 客户端 fetch 抛异常 ⇒ `requestShutdown` 返回 `'unreachable'`。
    复现：同一个 home 上先起一个带 `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS=20000` 的 daemon，再起第二个同样的。
@@ -5052,7 +5052,7 @@ Error: e2e/harness: daemon closed with code 1 signal null before printing ready 
 - **现象**：CI 运行 40950592110（`0244e0e24`）的 Windows e2e 2/4，`clarify and review continuations recover when SIGKILL
   lands after commit but before wake` 两次尝试都报同一句 `review gate did not reappear … last=undefined`，但这次 daemon B
   **已就绪**（`exitCode: null`），就绪后 30 秒的 stdout 只有一行不变量扫描，没有任何调度。与上面 09-12 的「起不来」不是一回事。
-- **根因在 e2e 崩溃屏障**（`packages/backend/src/services/humanGateDecisionE2eBarrier.ts`）：它写完标记后只是让这一个请求等一个永不
+- **根因在 e2e 崩溃屏障**（`packages/backend/src/modules/collaboration/infrastructure/humanGateDecisionE2eBarrier.ts`，RFC-456 前在 `services/`）：它写完标记后只是让这一个请求等一个永不
   兑现的 promise，进程的事件循环照常转。daemon 自己的人工门续跑 worker 每 1 秒对账一次，会认领刚提交的续跑并起下一个节点（设计代理）；
   SIGKILL 若晚于这一步才落下（Windows 上杀进程慢），场景就成了「节点运行中崩溃」。产品对此的处理是对的：daemon B 把任务标为
   `interrupted`（「daemon restarted while this task was running; please resume」），不会自动续跑，于是评审门不会出现。
@@ -5270,7 +5270,7 @@ ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已�
 `bootstrap/daemonApplication.ts`（原 PostgreSQL 应用的 3 处，RFC-391 已合一）、`modules/digital-employee/application/osWorker.ts`(1)、
 `modules/intent/inbound/intentSessionRoutes.ts`(10)、`modules/intent/application/dispatcher.ts`(3)、
 `modules/event-center/application/eventCenterWorker.ts`(1)、`server.ts`(4)、`routes/webhooks.ts`(1)、
-`services/scheduledTaskScheduler.ts`(1)、`services/controlListener.ts`(1)、
+`services/scheduledTaskScheduler.ts`(1)、`platform/execution/local/controlListener.ts`（1，RFC-456 前在 `services/`）、
 `services/pluginGenerationGc.ts`(1)、`services/repoBatchImport.ts`(2)、
 `services/execution/managedProcess.ts`(4)、`services/reviewMutationCoordinator.ts`(1)、
 `services/structuralDiff/service.ts`(2)。

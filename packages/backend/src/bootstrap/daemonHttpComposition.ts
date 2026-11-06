@@ -95,7 +95,7 @@ import {
   mcpOperationCoordinator,
 } from '@/modules/resource-catalog/composition'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
+import { setChildTaskBudgetCapacity } from '@/modules/task-execution/composition'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'

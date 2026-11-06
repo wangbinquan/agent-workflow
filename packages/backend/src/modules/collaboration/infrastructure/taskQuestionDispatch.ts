@@ -108,7 +108,7 @@ import {
   type HumanGateOperationJournal,
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
+import { waitAtHumanGateDecisionCommitBarrier } from './humanGateDecisionE2eBarrier'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import {
   isClarifyChannelEdge,

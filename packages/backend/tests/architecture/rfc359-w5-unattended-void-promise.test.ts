@@ -157,10 +157,11 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'platform/background/maintenanceService.ts: 1',
   'platform/background/maintenanceWorkerRuntime.ts: 3',
   'platform/events/committed/workerDefinitions.ts: 1',
+  // RFC-456: moved unchanged from services/controlListener.ts.
+  'platform/execution/local/controlListener.ts: 1',
   'platform/execution/local/managedProcess.ts: 4',
   // RFC-392 removes the unused SQLite test initialization fallback.
   'server.ts: 1',
-  'services/controlListener.ts: 1',
   'services/reviewMutationCoordinator.ts: 1',
 ]
 

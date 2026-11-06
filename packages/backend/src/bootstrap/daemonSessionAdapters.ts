@@ -19,7 +19,7 @@ import type {
 } from '@/bootstrap/daemonModules/providerCore'
 import type { DaemonTaskExecutionAdapters } from '@/bootstrap/daemonModules/taskExecution'
 import type { DaemonApplicationInput } from './daemonApplication'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'

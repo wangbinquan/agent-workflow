@@ -14,7 +14,7 @@ import type { NodeRunPromptOperations } from '../application/ports/nodeRunPrompt
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
 import { createLocalTaskAgentRunFamily } from '../infrastructure/local/taskAgentRunFamily'
 import { composePortOutputContentValidation } from './portOutputValidation'
-import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
+import { freezeBinaryConfig } from './runtimeConfigFreeze'
 
 /** Binding input used only at bootstrap's native composition boundary. */
 export interface LocalTaskAgentRunFamilyBinding {

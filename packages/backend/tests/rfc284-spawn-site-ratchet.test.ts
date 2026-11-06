@@ -132,7 +132,8 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 2,
     why: 'doctor 诊断探针（daemon 外一次性 CLI，独立于执行层）。',
   },
-  'services/controlListener.ts': {
+  // RFC-456: moved from services/controlListener.ts.
+  'platform/execution/local/controlListener.ts': {
     governance: 'short-lived',
     count: 1,
     why: 'hardKill 的同步 kill/taskkill 兜底（杀进程原语，同 util/process 豁免理由）。',

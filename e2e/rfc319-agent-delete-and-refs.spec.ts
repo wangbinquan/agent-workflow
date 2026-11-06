@@ -83,7 +83,7 @@
 //   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-tasks-active（只拦非终态）
 //   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-scheduled-referenced
 //   packages/backend/src/modules/resource-catalog/infrastructure/referenceLookup.ts#createWorkflowAgentReferenceLookup（按 node.agentId 判定）
-//   packages/backend/src/services/scheduledTaskRefs.ts:12-27   引用判定**不看** enabled
+//   packages/backend/src/modules/resource-catalog/domain/scheduledTaskRefs.ts:12-27   引用判定**不看** enabled
 //   packages/backend/src/services/resourceAcl.ts:359-370       discloseRefsSync：{visible[], hiddenCount}
 //   packages/backend/src/services/resourceAcl.ts:388-398       discloseScheduleRefs
 //   packages/backend/src/modules/resource-catalog/domain/systemResources.ts:53-60     isBuiltinRow / excludeBuiltinAgents

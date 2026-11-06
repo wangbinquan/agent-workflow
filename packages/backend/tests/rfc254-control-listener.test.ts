@@ -25,7 +25,7 @@ import {
   startControlListener,
   writeControlFile,
   type ControlEndpoint,
-} from '@/services/controlListener'
+} from '@/platform/execution/local/controlListener'
 import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 
 const roots: string[] = []

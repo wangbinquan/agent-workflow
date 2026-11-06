@@ -1,3 +1,26 @@
+## 2026-11-06 RFC-456 `services/` 单一 owner 的零散实现归位（In Progress；`design/RFC-456-services-single-owner-placement/`）
+
+- **来由**：RFC-294 W9-D 第三步。RFC-455 后 `services/` 107 个文件；按「生产 importer 只在一个模块或装配根、对外依赖都在目标 DAG 上、
+  迁走后 `R1` / `R2` 不升」筛出 14 个只有一个 owner 的文件（约 1.4K 行）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：task-execution 5 个按层落位（domain / application / infrastructure / composition；三个进程级钩子经 `composition.ts` 给装配根）；
+  `daemonGeneration` 进 `platform/execution`、`managedPeriodicJob` 进 `platform/background`；resource-catalog 4 个纯件进 `domain`，插件代际
+  GC 的兼容包装并入它的 composition；collaboration 的 e2e 屏障进它的 `infrastructure`，停机控制通道进 `platform/execution/local`（system-operations 与 `stop` CLI 共用）。
+  函数体原样。
+- **不做**：运行时驱动一族（要重画 task-execution ↔ runtime-management 的驱动接缝，单独立 RFC）；`limits` / `demoSeed` / `ownerScopedName` /
+  `taskLaunchGate` 等带越界依赖的文件；`agentDeps`（RFC-345 登记的兼容债，随 W4-E1 改由 resource-catalog
+  `AgentDependencyQueries` 承担）；`services/task.ts`（E1）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-455 的 Done 文档提交 `36a4b0be4`：exact SHA 主 CI run 42207675648 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修（tsc / eslint 看不见，全量 SQLite 与 PostgreSQL lane 都查出）：
+  `clarify-inline-fallback` 按分段路径（`'services', 'sessionModeFallback.ts'`）读旧文件，迁移前按 `services/<名>` 与 import 说明符的
+  全仓搜漏了它（同一处也让 `test-suite-policy` 的模块作用域读路径检查红）；改指新位置后按带引号的文件名全仓复搜，再无遗漏。全量
+  SQLite 23444 pass，其余为负载超时（19 个文件）、上述问题与导出仓库所致的 `rfc321`；修复后 21 个文件复跑只剩 RFC-167 `approve` 与
+  RFC-363 目录分页各一例（同一时刻在 RFC-455 导出仓库里同样到点）；PostgreSQL 439 个文件的 lane（负载 85～94，64 个文件只有超时）修复后
+  复跑 65 个文件只剩两个文件撞自带时限的 4 例（对照两边同样到点）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/`
+  107 → 93、`legacy-horizontal-files` 228 → 214、`legacy-service-implementations` 102 → 88、`R1` 119 → 108、`R2` 27 不变，其余架构 counts
+  不变（没有跨 context 生产消费方的 public 符号 320 → 322，见 design §4）。
+
 ## 2026-11-06 RFC-455 资源包一族归 resource-catalog（Done；`design/RFC-455-resource-package-family-to-resource-catalog/`）
 
 - **来由**：RFC-294 W9-D（`services/` 实现文件按 owner 归位）、RFC-345 T6 未收口的「parse / preview / apply / export 组织到

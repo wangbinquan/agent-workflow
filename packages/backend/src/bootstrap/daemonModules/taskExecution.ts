@@ -19,7 +19,7 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createLogger } from '@/util/log'
 import { runtimeConfigOpts } from '@/services/task'
 import { codeHostNodeRequests } from '@/modules/integration/composition'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import {

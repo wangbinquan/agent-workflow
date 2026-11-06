@@ -81,7 +81,7 @@ import {
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
+import { waitAtHumanGateDecisionCommitBarrier } from '../humanGateDecisionE2eBarrier'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
   dispatchDeferredTaskQuestions,

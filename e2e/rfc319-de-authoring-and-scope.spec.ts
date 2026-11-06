@@ -804,7 +804,7 @@ test('RFC-319 DE-08: program 工具要 scripts:author 才能写，workflow 工�
 
   // ② 同一个人写 workflow 工具**不该**被那道门挡住——工具本身不携带脚本正文，判据是合同闭包。
   //    合同工作流本体由 admin 建并公开：工作流里的 script 节点是**另一道**
-  //    `scripts:author` 字段门（`services/scriptAuthorGate.ts:46`），与本条要证的
+  //    `scripts:author` 字段门（`modules/resource-catalog/domain/scriptAuthorGate.ts:46`），与本条要证的
   //    「工具类型门」无关；混在一起会让下面那句「不需要 scripts:author」失去指向。
   //    闭合判据是 text 输入 `prompt` + 输出端口 `agent-result`
   //    （`taskExecutionAdapter.ts:39-86` 的三条）。

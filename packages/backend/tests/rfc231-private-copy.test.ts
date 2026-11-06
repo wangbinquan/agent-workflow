@@ -41,7 +41,7 @@ import {
   createMcpForTest as createMcp,
   type McpCatalogTestBinding as McpServiceBinding,
 } from './helpers/mcpServiceBinding'
-import { nextResourceCopyName } from '../src/services/resourceCopyName'
+import { nextResourceCopyName } from '../src/modules/resource-catalog/domain/resourceCopyName'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getWorkflow, workflowRevisionOf } from '../src/services/workflow'
 import { workgroupRevisionOf } from '../src/services/workgroups'

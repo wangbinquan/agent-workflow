@@ -1,5 +1,5 @@
 import { unlinkSync, writeFileSync } from 'node:fs'
-import { startControlListener } from '@/services/controlListener'
+import { startControlListener } from '@/platform/execution/local/controlListener'
 import type { DaemonHostLifecyclePort } from '../../application/ports/daemonHostLifecycle'
 import { createFileDaemonRuntimeQueries } from './fileDaemonRuntimeQueries'
 

@@ -30,7 +30,7 @@ import {
 import * as resourceCatalog from '@/bootstrap/daemonModules/resourceCatalog'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { composeUnstartedApplication } from './helpers/providerHttpApplication'
 import { standaloneSelections } from '@/bootstrap/standalone'

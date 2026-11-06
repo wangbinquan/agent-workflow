@@ -10,7 +10,7 @@ import { inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError } from '@/util/errors'
 import { isAgentLaunching } from '@/services/agentLaunchReservation'
-import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
+import { scheduledRowsReferencing } from '../domain/scheduledTaskRefs'
 
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import { discloseRefsSync, discloseScheduleRefs } from '../domain/resourceAccess'

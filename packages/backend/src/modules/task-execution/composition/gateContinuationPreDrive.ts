@@ -1,7 +1,7 @@
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskClarifyContinuationPort } from '../application/ports/gateContinuationSupport'
 import type { GateWorkspaceRollbackExecutor } from '../public/participants'
-import { createGateContinuationPreDriveStep } from '@/services/humanGateContinuationEffects'
+import { createGateContinuationPreDriveStep } from '../application/drive/humanGateContinuationEffects'
 
 /** The provider constructs its continuation objects at the original composition point. */
 export function composeGateContinuationPreDrive(input: {

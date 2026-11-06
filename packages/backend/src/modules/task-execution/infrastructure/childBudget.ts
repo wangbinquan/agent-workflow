@@ -20,8 +20,8 @@
 // Bookkeeping is driven by the committed task-lifecycle consumer plus explicit
 // pre-insert holds around the launch window. Boot/lazy init rebuilds the counted
 // set from the DB so restarts cannot leak or double-count units.
-import type { ChildTaskBudgetQueries } from '@/modules/task-execution/application/ports/childTaskBudgetQueries'
-import { DrizzleChildTaskBudgetQueries } from '@/modules/task-execution/infrastructure/childTaskBudgetQueries'
+import type { ChildTaskBudgetQueries } from '../application/ports/childTaskBudgetQueries'
+import { DrizzleChildTaskBudgetQueries } from './childTaskBudgetQueries'
 import { createLogger } from '@/util/log'
 import type { TaskStatus } from '@agent-workflow/shared'
 

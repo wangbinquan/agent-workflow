@@ -21,7 +21,6 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
       'services/mcpClosure.ts',
       'modules/resource-catalog/application/mcps/probeRecords.ts',
       'services/pluginClosure.ts',
-      'services/pluginGenerationGc.ts',
     ]) {
       expect(source(relative), relative).not.toMatch(DATABASE_MECHANISM)
     }
@@ -61,12 +60,15 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
   })
 
   test('generation GC delegates provider reads to the module-owned command', () => {
-    const facade = source('services/pluginGenerationGc.ts')
+    // RFC-456: the `services/pluginGenerationGc.ts` compatibility wrapper is retired; its maintenance binding moved
+    // into the owner's composition (its other exports were identity forwards of the ones already there).
+    expect(existsSync(resolve(sourceRoot, 'services/pluginGenerationGc.ts'))).toBe(false)
+    const binding = source('modules/resource-catalog/composition/pluginGenerationGc.ts')
 
-    expect(facade).toContain('command: PluginGenerationGcCommand')
-    expect(facade).toContain('await opts.command.run({')
-    expect(facade).toContain('createPluginGenerationFilesystemGcPort(')
-    expect(facade).not.toMatch(DATABASE_MECHANISM)
+    expect(binding).toContain('command: PluginGenerationGcCommand')
+    expect(binding).toContain('await opts.command.run({')
+    expect(binding).toContain('createPluginGenerationFilesystemGcPort,')
+    expect(binding).not.toMatch(DATABASE_MECHANISM)
   })
 
   test('runtime-test leases are injected and awaited through the provider-neutral participant', () => {

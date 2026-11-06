@@ -48,7 +48,7 @@ import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persisten
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
+import { createPluginGenerationFilesystemGcPort } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import { createLogger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

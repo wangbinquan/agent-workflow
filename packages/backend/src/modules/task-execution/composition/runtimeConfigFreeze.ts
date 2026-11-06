@@ -1,8 +1,8 @@
 import {
   freezeRuntimeBinaryConfiguration,
   type TaskOperationConfigurationQueries,
-} from '@/modules/task-execution/public/queries'
-import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
+} from '../public/queries'
+import { createFileTaskOperationConfiguration } from '../composition'
 
 /**
  * Read the current binary fallbacks at node-mint time. The resulting values

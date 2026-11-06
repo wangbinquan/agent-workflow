@@ -24,7 +24,7 @@ import {
 import { createSystemOperationsMaintenanceJobHandlers } from '@/modules/system-operations/composition'
 import { createTokenAuditMaintenanceJobHandlers } from '@/auth/application/maintenanceJobs'
 
-import { runPluginGenerationGc } from '@/services/pluginGenerationGc'
+import { runPluginGenerationGc } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 
 type TaskExecutionMaintenanceCommands = Parameters<
   typeof createTaskExecutionMaintenanceJobHandlers

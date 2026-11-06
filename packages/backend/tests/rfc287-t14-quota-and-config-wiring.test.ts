@@ -14,7 +14,7 @@ import {
   ensureChildTaskBudget,
   setChildTaskBudgetCapacity,
   resetChildTaskBudgetForTests,
-} from '@/services/execution/childBudget'
+} from '@/modules/task-execution/infrastructure/childBudget'
 
 describeEachProvider(
   'RFC-287 T14 — 调大子任务配额必须立刻唤醒已排队者',

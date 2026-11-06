@@ -1,5 +1,5 @@
 import { readPidFromLock, acquireLock, isProcessAlive, type Lock } from '@/util/lock'
-import { readControlFile, requestShutdown } from '@/services/controlListener'
+import { readControlFile, requestShutdown } from '@/platform/execution/local/controlListener'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import type { QuiescePort, SessionLockPort } from '../../application/ports/epochSwitch'
 import { EpochSwitchError, type EpochSwitchFaults } from '../../domain/epochSwitch/model'

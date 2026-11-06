@@ -19,7 +19,7 @@ import { migrateWorkflowDefinitionToLatest } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 
-import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
+import { scheduledRowsReferencing } from '../../domain/scheduledTaskRefs'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import {
   WORKFLOW_NAME_INVALID_MESSAGE,

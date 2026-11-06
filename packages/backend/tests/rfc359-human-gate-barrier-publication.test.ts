@@ -15,7 +15,10 @@ import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 
 const source = readFileSync(
-  resolve(import.meta.dir, '../src/services/humanGateDecisionE2eBarrier.ts'),
+  resolve(
+    import.meta.dir,
+    '../src/modules/collaboration/infrastructure/humanGateDecisionE2eBarrier.ts',
+  ),
   'utf8',
 )
 const body = new Bun.Transpiler({ loader: 'ts' }).transformSync(
@@ -129,7 +132,10 @@ test('the real barrier stops every timer of the process until it is killed', asy
     [
       "import { writeFileSync } from 'node:fs'",
       `import { waitAtHumanGateDecisionCommitBarrier } from ${JSON.stringify(
-        resolve(import.meta.dir, '../src/services/humanGateDecisionE2eBarrier.ts'),
+        resolve(
+          import.meta.dir,
+          '../src/modules/collaboration/infrastructure/humanGateDecisionE2eBarrier.ts',
+        ),
       )}`,
       'let count = 0',
       `setInterval(() => writeFileSync(${JSON.stringify(ticks)}, String(++count)), 5)`,

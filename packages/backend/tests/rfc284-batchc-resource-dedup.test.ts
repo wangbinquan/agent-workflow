@@ -38,7 +38,7 @@ import {
   isVisibleToAudienceSnapshot,
   listResourceGrantUserIdsInTx,
 } from '../src/services/resourceAcl'
-import { scheduledRowsReferencing } from '../src/services/scheduledTaskRefs'
+import { scheduledRowsReferencing } from '../src/modules/resource-catalog/domain/scheduledTaskRefs'
 import { isSkillNameOccupiedForOwner } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
@@ -223,7 +223,7 @@ describe('rfc284 批C T9 §2.2 — scheduled 引用扫描单点', () => {
   })
 
   test('结构锁：叶子模块零依赖（workflow⇄scheduledTasks 成环规避）+ 三域已委托', () => {
-    const leaf = SRC('services/scheduledTaskRefs.ts')
+    const leaf = SRC('modules/resource-catalog/domain/scheduledTaskRefs.ts')
     expect(leaf).not.toContain("from '@/services")
     expect(leaf).not.toContain("from './")
     for (const f of [
@@ -232,14 +232,14 @@ describe('rfc284 批C T9 §2.2 — scheduled 引用扫描单点', () => {
       'modules/resource-catalog/composition/workgroupOperations.ts',
     ]) {
       expect(SRC(f)).toContain('scheduledRowsReferencing(')
-      expect(SRC(f)).toContain("from '@/services/scheduledTaskRefs'")
+      expect(SRC(f)).toContain("from '../domain/scheduledTaskRefs'")
     }
     expect(SRC('modules/resource-catalog/infrastructure/workgroupRepository.ts')).toContain(
       'deps.scheduledReferences(scheduledRows, input.id)',
     )
     // RFC-438：定时任务服务迁入 integration application，不再转出这个 legacy 叶子（application 不 import services/）；
     // 设计命名的导出面就是叶子本身。
-    expect(SRC('services/scheduledTaskRefs.ts')).toContain(
+    expect(SRC('modules/resource-catalog/domain/scheduledTaskRefs.ts')).toContain(
       'export function scheduledRowsReferencing',
     )
     expect(SRC('modules/integration/application/scheduledTasks.ts')).not.toContain(

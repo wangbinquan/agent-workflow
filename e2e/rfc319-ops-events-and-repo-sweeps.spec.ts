@@ -31,7 +31,7 @@ import { liveSqlitePath } from './storage'
 //     :78-87（进程探针：pid 活着**且**命令行仍含当初 spawn 的二进制）、
 //     :239-262（CAS 翻 interrupted + periodic-reap 审计）、:270-289（任务行翻 interrupted）。
 //   * 「0 = 关」「正值下限 60s」：packages/shared/src/settingsNumericBounds.ts:72-78
-//     与 packages/backend/src/services/managedPeriodicJob.ts:75-92。
+//     与 packages/backend/src/platform/background/managedPeriodicJob.ts:75-92。
 //   * PUT /api/config 的热应用点：packages/backend/src/routes/config.ts:108-110
 //     （持久化成功之后才 notifyConfigApplied）与
 //     packages/backend/src/services/configAppliedListeners.ts:21-32。

@@ -20,7 +20,7 @@
 // they are already covered by the two existing fallback test files.)
 
 import { describe, expect, test } from 'bun:test'
-import { decideResumeSessionId } from '../src/services/sessionModeFallback'
+import { decideResumeSessionId } from '../src/modules/task-execution/domain/sessionModeFallback'
 
 describe('RFC-026 decideResumeSessionId guard precedence (simultaneous failures)', () => {
   test('inline + missing id + unsupported resume capability → capability reason wins', () => {

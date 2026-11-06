@@ -233,7 +233,7 @@ import {
   type HumanGateOperationJournal,
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
+import { waitAtHumanGateDecisionCommitBarrier } from './humanGateDecisionE2eBarrier'
 
 /** RFC-145: human-readable supersede breadcrumb prefix (message builder only —
  *  the machine contract is the superseded_by_review / rolled_back columns). */

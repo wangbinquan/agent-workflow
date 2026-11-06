@@ -11,7 +11,7 @@ import type {
 /**
  * RFC-026: why an inline clarify rerun fell back to an isolated session — `decideResumeSessionId`'s
  * two pre-spawn exits plus the post-spawn `session-not-found`. Task-execution's own copy of the union
- * in `services/sessionModeFallback.ts`: the agent binding passes that decision through the rules port,
+ * in `domain/sessionModeFallback.ts`: the agent binding passes that decision through the rules port,
  * so the compiler rejects any reason this record does not accept.
  */
 export type ClarifyInlineFallbackReason =

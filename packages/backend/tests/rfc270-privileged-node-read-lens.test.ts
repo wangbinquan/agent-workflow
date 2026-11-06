@@ -260,8 +260,10 @@ describe('RFC-270 · 接线：每个定义出口都过镜头', () => {
     )
     expect(lens).toContain("'scripts:author'")
     expect(lens).toContain("'code-host-calls:author'")
-    expect(src('services/scriptAuthorGate.ts')).toContain("'scripts:author'")
-    expect(src('services/codeHostAuthorGate.ts')).toContain("'code-host-calls:author'")
+    expect(src('modules/resource-catalog/domain/scriptAuthorGate.ts')).toContain("'scripts:author'")
+    expect(src('modules/resource-catalog/domain/codeHostAuthorGate.ts')).toContain(
+      "'code-host-calls:author'",
+    )
   })
 })
 

@@ -640,6 +640,14 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   （`rfc345-provider-neutral-classic-facades`）。拆段前除了按文件名搜，还要按被拆走的声明文本搜（`export function X`、`export const X`）。
   同一轮的另一个坑：违规样本被**生产侧**先拒了——`util/zip` 的 `encodeZip` 自己就拒绝 `../` 路径，用它造穿越样本，抛错的是编码器，
   被测的 `decodeZip` 根本没跑到。负样本要绕开同侧校验（这里用 fflate `zipSync` 直接打包），并断言被测方的错误码，不断言消息片段。
+- **给 `services/` 文件挑落点前先量两本账（RFC-456 实撞，2026-11-06）**：`R1`（census `inboundBoundaryEdges`）数的是**一切非模块文件**
+  取模块内部的边，`cli/` 也算——`stop` CLI 用的停机控制通道若进 system-operations 的 `infrastructure/`，`R1` 就多一条；装配根取模块的
+  composition 只对 `BOOTSTRAP_FILES` 豁免，取 `infrastructure/` 一律记账（装配根至今零条，进程级钩子经模块的 `composition.ts` 给）。
+  `R2` 只数 application / domain / engine / public 取 `@/services/` 的边，消费方在 infrastructure / composition 时迁不迁都不变。另一类：
+  RFC-345 的 facade 登记表把某些实现文件的消费方记成「兼容债」并写明继任合同（如 `services/agentDeps.ts` → resource-catalog 的
+  `AgentDependencyQueries`），把这种文件挪进消费方模块只是把债挪走，不是还掉，登记表的本意要求按继任合同改。动手前 `dump-edges`
+  量一遍、`grep` 一遍登记表。同一次还漏跑了下文「移动/重命名源文件后至少扫这三种形态」的第 ② 种（`'services', '<名>'`
+  分段拼接）：`clarify-inline-fallback` 一处读旧路径漏网，全量里由 `test-suite-policy` 的「模块作用域读的源码路径都在」兜住。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

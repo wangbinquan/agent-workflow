@@ -53,7 +53,7 @@ import { runGit } from '../src/util/git'
 import {
   notifyTaskTerminal,
   resetTaskTerminalWatchersForTests,
-} from '../src/services/execution/executionWatch'
+} from '../src/modules/task-execution/infrastructure/executionWatch'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

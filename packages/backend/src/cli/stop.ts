@@ -20,7 +20,7 @@ import {
   readControlFile,
   removeControlFile,
   requestShutdown,
-} from '@/services/controlListener'
+} from '@/platform/execution/local/controlListener'
 import { isProcessAlive, readPidFromLock } from '@/util/lock'
 import { Paths } from '@/util/paths'
 

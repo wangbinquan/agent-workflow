@@ -13,7 +13,7 @@ import {
 import { eq } from 'drizzle-orm'
 
 import { ConflictError } from '@/util/errors'
-import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
+import { scheduledRowsReferencing } from '../domain/scheduledTaskRefs'
 
 import { assertNameUnchangedForEditor } from '../application/resourceAccess'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'

@@ -26,7 +26,7 @@ import {
 } from '@/modules/task-execution/composition/providerRuntime'
 import type { createComposedApp } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { runTaskIdleTimeoutSweep } from '@/modules/task-execution/composition/taskIdleTimeout'
 import {
@@ -65,8 +65,10 @@ import {
   startManagedWorkerDefinition,
 } from '@/platform/events/committed/workerDefinitions'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
-import { notifyTaskTerminal } from '@/services/execution/executionWatch'
+import {
+  notifyChildBudgetTaskStatus,
+  notifyTaskTerminal,
+} from '@/modules/task-execution/composition'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import {
   createDaemonProviderRuntimeSession,
