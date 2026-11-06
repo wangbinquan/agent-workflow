@@ -19,7 +19,7 @@
 - [x] AC-1 两个旧文件不在、零引用；解析器只在 shared 定义一份
 - [x] AC-2 架构计数按实测（`services/` 84 → 82、`R1` 108 → 101、`R2` 27 → 23），越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿（exact SHA 有一格本 RFC 的问题〔perf 门〕，由 `8c715b39c` 修复后通过；修复提交另有一格外链 502，非本 RFC 改动；见 §CI）
 
 ## 集中验证（2026-11-06，候选基于 `390ab1228`，文档基于 `f3540d4ea`）
 
@@ -70,6 +70,16 @@
 - 解析器只在 shared 定义一份，shared 入口导出的就是它（新用例断言）；`resolvePortContent{,Detailed}` 仍是 composition 原生解析的薄包装
   （新用例对同一输入比对）；
 - 集中验证没有查出本 RFC 的问题。
+
+## CI（AC-4）
+
+- `67229b932`：exact SHA 主 CI run 42275186285：70 个 job 里 68 个通过（含 macOS e2e 四个分片——RFC-457 两次都没跑上的
+  macOS 分片 1/4 在这里跑过）；**Perf microbenchmark gate 红，是本 RFC 的问题**：仓库根 `tests/perf/run.ts` 仍按相对路径取已删除的
+  `services/envelope`（迁移前的全仓搜索漏了仓库根 `tests/`），`CI required` 随之红。同 SHA 的 windows-platform run 42275186287、
+  integration-opencode run 42275186335 通过。修复提交 `8c715b39c`（perf 基准改取 shared 解析器、RFC-458 用例的零引用断言补扫仓库根
+  `tests/`、`docs/dev-gotchas.md` 的搜索范围补 `tests` 与 `.github`）：主 CI run 42281520777 的 Perf microbenchmark gate 通过，70 个 job 里
+  68 个通过；另一格 Markdown link check (design/) 因外链 `https://github.com/wangbinquan/CrewStation/actions/runs/37589389380`（RFC-371 的
+  验证记录，不是本 RFC 的改动）返回 502 Bad Gateway 记红（前一次 run 同一检查通过），未重跑，以下一次提交的 CI 作后继证据。
 
 ## PR / 提交
 

@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-458 workflow-output 信封解析器归 shared（In Progress；`design/RFC-458-envelope-parser-to-shared/`）
+## 2026-11-06 RFC-458 workflow-output 信封解析器归 shared（Done；`design/RFC-458-envelope-parser-to-shared/`）
 
 - **来由**：RFC-294 W9-D 第五步。`services/envelope.ts` 装着信封解析器（纯字符串处理）与 task-execution 的端口内容包装、校验失败形状两件事；
   解析器留在 `services/` 让 intent / memory / task-execution 的 application 层取 `@/services/envelope`（`R2` 4 条），文件自己又取
@@ -19,6 +19,19 @@
   `review-detail-render-rfc158` 自带 20 秒的一例（对照两边相同）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/`
   84 → 82、`legacy-horizontal-files` 205 → 203、`legacy-service-implementations` 79 → 77、`R1` 108 → 101、`R2` 27 → 23，其余架构 counts
   不变（public surface 不变：shared 的新导出不是模块 public 面）。
+- **落地**：`67229b932`。
+- **CI**：exact SHA 主 CI run 42275186285：70 个 job 里 68 个通过（含 macOS e2e 四个分片——RFC-457 两次都没跑上的
+  macOS 分片 1/4 在这里跑过）；**Perf microbenchmark gate 红，是本 RFC 的问题**：仓库根 `tests/perf/run.ts` 仍按相对路径取已删除的
+  `services/envelope`（迁移前的全仓搜索漏了仓库根 `tests/`），`CI required` 随之红。同 SHA 的 windows-platform run 42275186287、
+  integration-opencode run 42275186335 通过。修复提交 `8c715b39c`（perf 基准改取 shared 解析器、RFC-458 用例的零引用断言补扫仓库根
+  `tests/`、`docs/dev-gotchas.md` 的搜索范围补 `tests` 与 `.github`）：主 CI run 42281520777 的 Perf microbenchmark gate 通过，70 个 job 里
+  68 个通过；另一格 Markdown link check (design/) 因外链 `https://github.com/wangbinquan/CrewStation/actions/runs/37589389380`（RFC-371 的
+  验证记录，不是本 RFC 的改动）返回 502 Bad Gateway 记红（前一次 run 同一检查通过），未重跑，以下一次提交的 CI 作后继证据。
+- **下一步**：RFC-294 W9-D 余项（`services/` 82 个文件）。`R1` 大头：`resourceAcl`（9，RFC-345 登记的 ACL 读兼容层，按继任合同还）、
+  `services/task.ts`（9，E1）、`nodeRunMint`（8，另贡献 `R2` 3；intent / runtime-management → task-execution 不是目标 DAG 给的边，要先
+  设计系统 agent 运行的端口）、`developmentDeliveryDeps`（7）、`taskExecutionResourceDependencies` / `systemAgentRun`（各 5）、
+  `commitPushRunner`（4，取 source-control composition）；`nodeRollback`（3）给 collaboration 用要先有 task-execution 的回滚 participant
+  （现形签名带数据库句柄，进 public 会抬 public surface 偏差）。运行时驱动一族另立 RFC。
 
 ## 2026-11-06 RFC-457 `services/` 的平台机制归 `platform`（Done；`design/RFC-457-services-platform-mechanisms/`）
 
