@@ -81,21 +81,21 @@ import {
 import { isPathishKindString } from '@/modules/task-execution/public/queries'
 
 import type { PortArtifactWorkspaceFile } from '@/modules/task-execution/public/types'
-import { renderUserPrompt } from '@/services/protocol'
+import { renderUserPrompt } from '@agent-workflow/shared'
 // RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
 // stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes
 // through `driver.buildBusinessSpawn` — runNode is fully kind-blind (zero
 // `runtime === 'xxx'` branches; the runtime-specific assembly lives in
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
-// (tests, memoryDistiller) keep resolving from '@/services/runner'.
+// (tests, memoryDistiller) used to resolve from '@/services/runner'; RFC-454 deleted that re-export, so they import the declaration sites.
 // RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
 // stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes
 // through `driver.buildBusinessSpawn` — runNode is fully kind-blind (zero
 // `runtime === 'xxx'` branches; the runtime-specific assembly lives in
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
-// (tests, memoryDistiller) keep resolving from '@/services/runner'.
+// (tests, memoryDistiller) used to resolve from '@/services/runner'; RFC-454 deleted that re-export, so they import the declaration sites.
 import { type RuntimeKind } from '@/services/runtime'
 import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 
@@ -119,7 +119,7 @@ import { buildRuntimeInventoryObservation } from '@/services/execution/inventory
 import {
   FINAL_REAP_MARGIN_MS,
   MANAGED_PROCESS_MAX_LINE_CHARS,
-} from '@/services/execution/managedProcess'
+} from '@/platform/execution/local/managedProcess'
 
 /** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000

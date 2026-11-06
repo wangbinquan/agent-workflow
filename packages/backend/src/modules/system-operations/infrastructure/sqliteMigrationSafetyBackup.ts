@@ -17,7 +17,10 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { DatabaseMigrationSafetyBackupPort } from '../application/databaseMigrationRunner'
-import { quickCheckOffThread, vacuumIntoOffThread } from '@/services/backup'
+import {
+  quickCheckOffThread,
+  vacuumIntoOffThread,
+} from '@/platform/persistence/sqlite/systemProviderBackup'
 import { createSha256DigestBuilder } from '@/util/hash'
 
 async function digestFile(path: string): Promise<string> {

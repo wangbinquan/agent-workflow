@@ -18,14 +18,14 @@ import {
   MAX_STDERR_TAIL_CHARS,
   MAX_STDERR_TAIL_LINE_CHARS,
   MAX_STREAM_LINE_CHARS,
-} from '../src/services/runner'
+} from '../src/modules/task-execution/application/taskAgentRun'
 // RFC-282 E1a — the runner's `pumpLines` twin was src-dead (every stream goes
 // through the unified executor since RFC-280) and had drifted on the
 // truncation marker; the bound lock now pins the ONE pump in managedProcess.
 // Behavior deltas taken over from the live implementation (registered §7):
 // the marker text is '…[line truncated]' and a truncated line ALSO fires
 // onLineTruncated. Everything else asserts unchanged.
-import { pump } from '../src/services/execution/managedProcess'
+import { pump } from '../src/platform/execution/local/managedProcess'
 
 const pumpLines = (
   stream: ReadableStream<Uint8Array>,

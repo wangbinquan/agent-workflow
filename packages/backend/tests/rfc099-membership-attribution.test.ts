@@ -32,7 +32,7 @@ import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { createUser } from './helpers/userFixture'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

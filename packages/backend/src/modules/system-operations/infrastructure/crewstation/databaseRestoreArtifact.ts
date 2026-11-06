@@ -22,7 +22,10 @@ import {
   canonicalSchemaJson,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
-import { readManifest, type BackupManifestV2 } from '@/services/backupManifest'
+import {
+  readManifest,
+  type BackupManifestV2,
+} from '@/platform/persistence/sqlite/systemBackupManifest'
 import { extractTarGz } from '@/util/archive'
 import {
   HOSTED_BACKUP_SIDECAR,

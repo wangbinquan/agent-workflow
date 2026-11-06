@@ -16,7 +16,7 @@ import {
   tokenCount,
   type RuntimeUsageMeter,
   type RuntimeUsageMeterInput,
-} from '../usage'
+} from '@/modules/runtime-management/public/participants'
 import { opencodeUsageDatabasePath, readOpencodeTreeUsage } from './nativeUsage'
 
 export function createOpencodeUsageMeter(

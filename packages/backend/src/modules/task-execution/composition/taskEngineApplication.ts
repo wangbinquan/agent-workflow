@@ -1,7 +1,7 @@
 import { projectStoredTaskRepositoryMounts } from '../infrastructure/taskRepositorySurface'
 import { bindWorkspaceExcludeProfile } from '@/modules/source-control/public/participants'
 import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
-import type { BoundRunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
+import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
 import type {
   PreparedTaskDrive,
   TaskDrivePreparation,

@@ -45,7 +45,7 @@ import {
   setTaskStatus,
   TERMINAL_TASK_STATUSES,
   trySetTaskStatus,
-} from '../src/services/lifecycle'
+} from '../src/modules/task-execution/public/operations'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

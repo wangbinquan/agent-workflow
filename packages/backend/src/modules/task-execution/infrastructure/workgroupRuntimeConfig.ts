@@ -7,8 +7,8 @@
 // 这份配置是引擎**唯一**读的那份（design §8.4，引擎从不读 workgroups 资源行），
 // 少填一个字段就是一整类运行时行为在某一条启动路径上悄悄消失。
 //
-// 落在这个目录而不是 shared：`FrozenWorkgroupGroup` 是 backend 侧的类型
-// （`./legacyCallClosure.ts`）；两个调用点也都在本目录，共享它不新增任何一条 import 边。
+// 落在这个目录而不是 shared：`FrozenWorkgroupGroup` 是 backend 侧的类型（RFC-454 起在 resource-catalog 的
+// `domain/callClosure.ts`，经其 `public/types` 取）；两个调用点也都在本目录。
 
 import {
   WorkgroupRuntimeConfigSchema,
@@ -19,9 +19,12 @@ import {
   resolveWorkgroupOutputContract,
   type Workgroup,
   type WorkgroupRuntimeConfig,
+  WORKGROUP_TURN_CLARIFY_NODE_ID as WG_CLARIFY_NODE_ID,
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
 } from '@agent-workflow/shared'
 
-import type { FrozenWorkgroupGroup } from './legacyCallClosure'
+import type { FrozenWorkgroupGroup } from '@/modules/resource-catalog/public/types'
 
 /** 资源行与冻结副本两种来源；构建只读两者共有的那些字段。 */
 export type WorkgroupRuntimeConfigSource = Workgroup | FrozenWorkgroupGroup
@@ -56,12 +59,9 @@ export function buildWorkgroupRuntimeConfig(
 }
 
 // RFC-395 II-a: production and fixtures share the parsed host snapshot and group projection.
-// These values are wire-frozen in task snapshots and node-run identities. They
-// are repeated here deliberately: TaskExecution must not import Resource
-// Catalog provider-private workgroup infrastructure merely to launch a task.
-const WG_LEADER_NODE_ID = '__wg_leader__'
-const WG_MEMBER_NODE_ID = '__wg_member__'
-const WG_CLARIFY_NODE_ID = '__wg_clarify__'
+// The workgroup host node ids are wire-frozen in task snapshots and node-run identities; RFC-454 takes them from
+// shared's single source (they used to be repeated here so this file would not import resource-catalog's
+// provider-private workgroup infrastructure).
 
 export function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDefinition {
   const leaderMember = config.members.find((member) => member.id === config.leaderMemberId)

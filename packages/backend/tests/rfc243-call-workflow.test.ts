@@ -42,7 +42,7 @@ import {
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
 import type { TaskContinuationDependencies } from '../src/services/task'
-import { freezeCallClosure } from '../src/services/execution/closure'
+import { freezeCallClosure } from '../src/modules/task-execution/infrastructure/legacyCallClosure'
 import { buildActor } from '../src/auth/actor'
 
 const closureActor = buildActor({

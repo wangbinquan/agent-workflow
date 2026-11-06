@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildProtocolBlock, renderUserPrompt } from '../src/services/protocol'
+import { buildProtocolBlock, renderUserPrompt } from '@agent-workflow/shared'
 
 const META = {
   repoPath: '/Users/me/repo',

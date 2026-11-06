@@ -15,7 +15,7 @@ let fixtureRunSequence = 0
 
 import { describe, expect, test } from 'bun:test'
 
-import { isTargetNodeConsumed } from '../src/services/clarifyRerunLedger'
+import { isTargetNodeConsumed } from '../src/modules/collaboration/infrastructure/clarify/rerunLedger'
 
 type NodeRunRow = ReturnType<typeof projectNodeRunReadFacts>
 const T = 'agent_T'

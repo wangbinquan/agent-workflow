@@ -33,7 +33,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { abortAllActiveTasks } from '@/services/task'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { listTaskQuestions } from '../src/services/taskQuestions'
+import { listTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { reenterScheduler } from './reenter-scheduler'
 import { runTestGit } from './helpers/testCommand'
 import type {

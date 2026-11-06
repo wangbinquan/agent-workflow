@@ -55,7 +55,7 @@ import { ulid } from 'ulid'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'
 import { expectDatabaseFailure } from './helpers/databaseFailure'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import {
   bindTriggerRun,
@@ -67,11 +67,11 @@ import {
   loadUndispatchedDesignerTargets,
   reassignTaskQuestion,
   stageTaskQuestion,
-} from '../src/services/taskQuestions'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
 import {
   dispatchTaskQuestions,
   dispatchTaskQuestionsWithDecision,
-} from '../src/services/taskQuestionDispatch'
+} from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { runLifecycleInvariants } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'

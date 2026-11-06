@@ -15,7 +15,7 @@ import type { AdminBackupReceipt } from '@/modules/system-operations/domain/back
 import { createLegacyPlatformRecoveryAdapter } from '@/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter'
 import type { RestoreArtifactPathResolver } from '@/modules/system-operations/infrastructure/restoreArtifactIngress'
 import type { BackupOptions } from '@/platform/persistence/sqlite/systemProviderBackup'
-import { readManifest } from '@/services/backupManifest'
+import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import { extractTarGz } from '@/util/archive'
 
 const roots: string[] = []

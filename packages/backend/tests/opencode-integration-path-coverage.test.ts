@@ -36,9 +36,11 @@ const YML = resolve(REPO_ROOT, '.github', 'workflows', 'integration-opencode.yml
 /** The exact path list every `on:` trigger must carry, sorted for comparison. */
 const CANONICAL = [
   'packages/backend/src/main.ts',
-  'packages/backend/src/services/runner.ts',
+  // RFC-454: the runner and protocol re-exports in services/ are deleted; their bodies live here.
+  'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgent*.ts',
   'packages/backend/src/services/envelope.ts',
-  'packages/backend/src/services/protocol.ts',
+  'packages/shared/src/prompt.ts',
   'packages/backend/src/services/runtime/opencode/**',
   // Process lifecycle changes can alter the live runtime path.
   'packages/backend/src/services/execution/**',

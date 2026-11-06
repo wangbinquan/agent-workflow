@@ -22,7 +22,10 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pruneBackups, startBackupScheduler } from '../src/services/backupScheduler'
+import {
+  pruneBackups,
+  startBackupScheduler,
+} from '../src/platform/background/providerBackupScheduler'
 
 const tmps: string[] = []
 function tmp(): string {

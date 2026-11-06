@@ -12,7 +12,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { eq, inArray } from 'drizzle-orm'
 
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
-import { dispatchTaskQuestions } from '@/services/taskQuestionDispatch'
+import { dispatchTaskQuestions } from '@/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

@@ -14,7 +14,7 @@
 
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getRuntimeDriver, tryGetRuntimeDriver } from '../src/services/runtime'
 import type { RuntimeKind } from '../src/services/runtime'
@@ -23,9 +23,9 @@ const SRC = resolve(import.meta.dir, '..', 'src')
 const read = (rel: string): string => readFileSync(resolve(SRC, rel), 'utf8')
 
 describe('RFC-282 C0 — laundering channel closed', () => {
+  // RFC-454: the `services/runner.ts` re-export is deleted outright — the channel is closed for good.
   test('runner.ts no longer re-exports driver internals', () => {
-    const text = read('services/runner.ts')
-    expect(text).not.toMatch(/export\s+\{[^}]*\}\s+from\s+'\.\/runtime\/(?:opencode|claudeCode)\//)
+    expect(existsSync(resolve(SRC, 'services/runner.ts'))).toBe(false)
   })
 
   test('ProbeOpts has ONE definition (runtime/types); the opencode util re-exports it', () => {

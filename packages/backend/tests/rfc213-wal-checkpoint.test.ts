@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { checkpointWal } from '../src/services/backupScheduler'
+import { checkpointWal } from '../src/platform/background/providerBackupScheduler'
 
 const tmps: string[] = []
 function tmp(): string {

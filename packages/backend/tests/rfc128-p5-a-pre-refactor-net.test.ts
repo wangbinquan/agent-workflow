@@ -35,7 +35,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
+import { loadUndispatchedDesignerTargets } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

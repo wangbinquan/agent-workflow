@@ -6,7 +6,10 @@
 // 只剩一个装配口，绑定自然也只该有一份——放在这里，因为「插件怎么装到盘上」是
 // resource-catalog **外**的能力，模块只声明端口、由消费方填。
 
-import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
+import {
+  installPlugin,
+  plannedGenerationDir,
+} from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 
 /**
  * 端口形状按**结构**声明，不从 resource-catalog 的 composition 里 import 类型：

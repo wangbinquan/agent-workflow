@@ -22,7 +22,7 @@ import {
   getClarifyRoundDetail,
   listClarifyRoundSummaries,
   listClarifyRounds,
-} from '../src/services/clarifyRounds'
+} from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import { NotFoundError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

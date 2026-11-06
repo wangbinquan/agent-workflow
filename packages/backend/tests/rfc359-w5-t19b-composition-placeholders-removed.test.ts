@@ -59,7 +59,7 @@ import {
 import type { driveTaskEngineApplication } from '@/modules/task-execution/composition/taskEngineApplication'
 import type { TaskExecutionProviderRuntimeDependencies } from '@/modules/task-execution/composition/providerRuntime'
 import type { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
-import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
+import type { RunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 

@@ -162,8 +162,9 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
       expect(source).not.toContain('like(agents.')
       expect(source).toContain(`${collector}(`)
     }
-    expect(SRC('services/resourceRefs.ts')).toContain(
-      "export * from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'",
+    // RFC-454: the `services/resourceRefs.ts` re-export is deleted; consumers take the implementation (or shared).
+    expect(existsSync(resolve(import.meta.dir, '..', 'src', 'services', 'resourceRefs.ts'))).toBe(
+      false,
     )
     expect(SRC('modules/resource-catalog/infrastructure/legacy/resourceRefs.ts')).not.toContain(
       'findAgentsReferencingIdInJsonColumn',

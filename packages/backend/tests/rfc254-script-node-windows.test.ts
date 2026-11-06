@@ -18,7 +18,7 @@ import {
   gitBashCandidatesFromGitPath,
   gitBashFromGitPath,
   interpreterCandidatePaths,
-} from '@/services/scriptRun'
+} from '@/platform/execution/local/scriptInterpreter'
 import { buildScriptPath } from '@/util/platformExec'
 import { SCRIPT_RESERVED_ENV_KEYS, scriptReservedEnvKeyIssue } from '@agent-workflow/shared'
 

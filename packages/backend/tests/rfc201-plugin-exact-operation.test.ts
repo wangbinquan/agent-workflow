@@ -30,7 +30,7 @@ import {
   PLUGIN_GENERATION_MANIFEST,
   readGenerationManifestForCachedPath,
   resetNpmProbeCacheForTests,
-} from '../src/services/pluginInstaller'
+} from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { pluginOperationConfigHashOf } from '../src/services/pluginOperationRevision'
 import { ConflictError } from '../src/util/errors'
 

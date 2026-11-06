@@ -22,13 +22,13 @@ import {
   readClarifyRoundFixtures,
 } from './helpers/model'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { listTaskQuestions } from '../src/services/taskQuestions'
+import { listTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

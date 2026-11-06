@@ -34,7 +34,7 @@ import {
   writeTaskRuntimeLifecycleInTx,
 } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
+import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
 import { __hasTaskReviewMutationQueueForTesting } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

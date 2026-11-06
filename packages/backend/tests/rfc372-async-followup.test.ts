@@ -18,7 +18,7 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { mountClarifyRoutes } from '@/routes/clarify'
-import { createClarifyRound } from '@/services/clarify/service'
+import { createClarifyRound } from '@/modules/collaboration/infrastructure/clarify/service'
 import { errorHandler } from '@/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import {

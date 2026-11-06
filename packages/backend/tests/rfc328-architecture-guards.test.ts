@@ -22,7 +22,8 @@ type GuardUnit = Pick<SourceUnit, 'path' | 'text' | 'source'>
 const WORKER_MUTATION_FILES = new Set([
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
   'packages/backend/src/services/nodeRunMint.ts',
-  'packages/backend/src/services/runner.ts',
+  // RFC-454: the runner body (the `services/runner.ts` re-export it was listed under is deleted).
+  'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
   'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts',
 ])
 const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
@@ -876,7 +877,7 @@ describe('RFC-328 architecture guards', () => {
     expect(
       rfc328GuardViolations(
         fixture(
-          'packages/backend/src/services/runner.ts',
+          'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
           'function staleWriter(db: any) { db.update(nodeRuns).set({ status: "done" }).run() }',
         ),
       ).some((violation) => violation.startsWith('raw worker mutation nodeRuns:')),

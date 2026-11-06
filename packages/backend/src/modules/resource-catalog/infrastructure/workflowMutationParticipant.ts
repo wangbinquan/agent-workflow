@@ -21,6 +21,7 @@ import {
   WorkflowDraftSnapshotSchema,
   type Workflow,
   type WorkflowDefinition,
+  extractWorkflowAgentRefs,
 } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -36,11 +37,7 @@ import type {
   WorkflowMutationParticipant,
 } from '../application/ports/workflowMutation'
 import { isVisibleRow, type AclRow } from '../domain/resourceAccess'
-import {
-  extractWorkflowAgentRefs,
-  extractWorkflowWorkflowRefs,
-  extractWorkflowWorkgroupRefs,
-} from './legacy/resourceRefs'
+import { extractWorkflowWorkflowRefs, extractWorkflowWorkgroupRefs } from './legacy/resourceRefs'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 import { grantedResourceIdsFor } from './resourceVisibility'
 import {

@@ -65,15 +65,18 @@ import {
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacyCrossClarify } from './clarify-fixtures'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import {
+  listTaskQuestions,
+  reassignTaskQuestion,
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const actor = { userId: 'u1', role: 'owner' as const }

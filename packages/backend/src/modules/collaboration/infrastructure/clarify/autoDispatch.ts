@@ -69,7 +69,7 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify/service'
+import { resolveClarifyNodeFromTaskSnapshot } from './service'
 import { hasOpenDispatchedEntryOnHome } from './rerunLedger'
 import { sealRoundQuestions } from './seal'
 import type { ClarifySealDecisionParticipantInTx } from '../../application/ports/clarifySealDecisionParticipant'
@@ -77,7 +77,7 @@ import {
   prepareClarifyDecision,
   replayCommittedClarifyDecision,
   type ClarifyDecisionArgs,
-} from '@/services/clarifyDecision'
+} from '../clarifyDecision'
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
@@ -88,8 +88,8 @@ import {
   dispatchTaskQuestions,
   type DispatchTaskQuestionsCommittedEventIdentity,
   type DispatchTaskQuestionsResult,
-} from '@/services/taskQuestionDispatch'
-import { loadSealedQuestionIds } from '@/services/taskQuestions'
+} from '../taskQuestionDispatch'
+import { loadSealedQuestionIds } from '../taskQuestions'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '../../domain/taskQuestionConflicts'

@@ -54,7 +54,7 @@ import type { ReviewDecisionKind, WorkflowDefinition, WorkflowNode } from '@agen
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { trySetTaskStatus } from '../src/services/lifecycle'
+import { trySetTaskStatus } from '../src/modules/task-execution/public/operations'
 import {
   addReviewComment,
   deleteReviewComment,

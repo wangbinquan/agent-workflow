@@ -37,7 +37,7 @@ import {
   resetTaskTerminalWatchersForTests,
   watchTaskTerminal,
 } from '../src/services/execution/executionWatch'
-import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
+import { setTaskStatus, trySetTaskStatus } from '../src/modules/task-execution/public/operations'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'

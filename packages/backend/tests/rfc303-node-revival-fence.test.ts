@@ -11,7 +11,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { fenceTaskWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { lockNodeRunTaskRootInTx } from '@/modules/task-execution/infrastructure/nodeRunWriteProtocol'
-import { setNodeRunStatus, setNodeRunStatusTx, transitionNodeRunStatus } from '@/services/lifecycle'
+import {
+  setNodeRunStatus,
+  setNodeRunStatusTx,
+  transitionNodeRunStatus,
+} from '@/modules/task-execution/public/operations'
 
 async function fixture(db: PersistenceDb, status: 'pending' | 'done') {
   await workflowFixture(db, { id: 'workflow-1', name: 'workflow', definition: '{}' })

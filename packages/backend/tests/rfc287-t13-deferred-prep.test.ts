@@ -1482,7 +1482,7 @@ describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', (
     expect(before?.workspacePrunedAt ?? null, '准备失败不得打墓碑').toBeNull()
 
     // 复活闸门：能从 failed CAS 回 pending，就说明墓碑没挡路（AC-11 的前提）。
-    const { setTaskStatus } = await import('@/services/lifecycle')
+    const { setTaskStatus } = await import('@/modules/task-execution/public/operations')
     await setTaskStatus({
       db,
       taskId: id,

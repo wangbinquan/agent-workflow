@@ -8,7 +8,7 @@ import {
   type ReadonlySqliteDatabase,
 } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 import { platformHomeEnv } from '@/util/platformExec'
-import type { RuntimeUsageModel } from '../usage'
+import type { RuntimeUsageModel } from '@/modules/runtime-management/public/participants'
 
 /** Delegation depth below a root session that the summary follows. */
 export const OPENCODE_TREE_MAX_DEPTH = 8

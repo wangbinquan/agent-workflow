@@ -14,10 +14,9 @@ import type { ManagedProcessResult } from '@/platform/execution/local/managedPro
 import {
   describeInterpreterResolution,
   resolveScriptInterpreter,
-  runScriptProcess,
   type ResolvedInterpreter,
-  type ScriptRunRequest,
-} from './scriptRun'
+} from '@/platform/execution/local/scriptInterpreter'
+import { runScriptProcess, type ScriptRunRequest } from './scriptRun'
 import { ensureScriptDepsEnv, type ScriptDepsEnv } from './scriptDepsEnv'
 import {
   createLocalProcessEffectProjection,

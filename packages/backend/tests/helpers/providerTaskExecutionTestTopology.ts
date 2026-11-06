@@ -1,6 +1,6 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
+import type { RunTaskOptions } from '../../src/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'

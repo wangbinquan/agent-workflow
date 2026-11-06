@@ -17,9 +17,9 @@ import { eq } from 'drizzle-orm'
 
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 // RFC-359 W8 —— 判据 / 错误类型 / 字段白名单取自叶子 `platform/persistence/nodeRunLifecycleCore.ts`，
-// **不要**改回 `@/services/lifecycle`（它 re-export 自 `sqlite/taskLifecycle.ts`）：那条边本身无环，
+// **不要**改成经 `taskLifecycle.ts` 的转出取（RFC-454 前经 `@/services/lifecycle`）：那条边本身无环，
 // 但它挡住反方向——`taskLifecycle.ts` 一旦 import 本文件就闭出
-// taskLifecycle → 本文件 → services/lifecycle → taskLifecycle，同步事务面就再也转不动。
+// taskLifecycle → 本文件 → taskLifecycle，同步事务面就再也转不动。
 import {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,

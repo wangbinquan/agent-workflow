@@ -36,7 +36,10 @@ import {
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
+import {
+  installPlugin,
+  plannedGenerationDir,
+} from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'

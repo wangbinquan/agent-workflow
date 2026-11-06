@@ -33,7 +33,7 @@ import { redactSensitiveString } from '@/util/redact'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
-import { runManagedProcess } from '@/services/execution/managedProcess'
+import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 
 const log = createLogger('plugin-installer')
 

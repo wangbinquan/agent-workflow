@@ -25,7 +25,7 @@ import {
   PluginInstallFailedError,
   PluginInstallTimeoutError,
   resetNpmProbeCacheForTests,
-} from '../../src/services/pluginInstaller'
+} from '../../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 
 const FAKE_NPM = resolve(import.meta.dir, '..', 'fixtures', 'fake-npm.ts')
 

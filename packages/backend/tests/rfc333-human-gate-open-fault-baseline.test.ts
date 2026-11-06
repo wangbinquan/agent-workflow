@@ -33,7 +33,7 @@ import {
 } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'

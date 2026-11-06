@@ -20,8 +20,8 @@ import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { extractScriptPorts } from '@/services/scriptPorts'
-import { runManagedProcess } from '@/services/execution/managedProcess'
-import { assembleScriptEnv } from '@/services/scriptRun'
+import { runManagedProcess } from '@/platform/execution/local/managedProcess'
+import { assembleScriptEnv } from '@/modules/task-execution/infrastructure/local/scriptRun'
 import { readScriptEnv, readScriptLanguage, scriptOutputMode } from '@agent-workflow/shared'
 
 /**

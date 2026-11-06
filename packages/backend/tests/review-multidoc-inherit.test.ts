@@ -41,7 +41,7 @@ import {
   setDocumentSelection,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
+import { transitionTaskStatusByEvent } from '../src/modules/task-execution/public/operations'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']

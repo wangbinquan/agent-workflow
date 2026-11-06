@@ -48,9 +48,12 @@ import {
 } from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { createClarifyRound } from '../src/services/clarify/service'
-import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
+import {
+  listTaskQuestions,
+  reassignTaskQuestion,
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 
 // RFC-132 (PR-C/PR-B): the unified flat injector (buildClarifyQueueContext) reads DISPATCHED
 // task_questions. Answers below go through the REAL unified driver (autoDispatchClarifyRound =
@@ -561,7 +564,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     // node_run row directly and dispatching it through the scheduler again.
     // The dispatchCrossClarifyNode helper (called inside scheduler) should
     // short-circuit it to done.
-    const { dispatchCrossClarifyNode } = await import('../src/services/clarify/service')
+    const { dispatchCrossClarifyNode } =
+      await import('../src/modules/collaboration/infrastructure/clarify/service')
     const nrId = ulid()
     await nodeRunFixture(h.db, {
       id: nrId,

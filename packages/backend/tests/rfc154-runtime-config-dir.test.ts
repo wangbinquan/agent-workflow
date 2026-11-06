@@ -511,7 +511,8 @@ describe('RFC-154 source guards — config-dir literals confined to the single s
     //   claudeCode/sessionCapture.ts (transcript fallback)
     //   claudeCode/config.ts (credentials bridge source)
     const files = [
-      'services/runner.ts',
+      // RFC-454: the `services/runner` re-export is gone; the runner body is task-execution's native agent run.
+      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
       'services/runtime/opencode/driver.ts',
       'services/runtime/opencode/spawn.ts',
       'services/runtime/claudeCode/driver.ts',

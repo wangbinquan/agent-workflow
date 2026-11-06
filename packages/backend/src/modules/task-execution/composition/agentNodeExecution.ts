@@ -1,10 +1,10 @@
 import { portFallbackMount } from '@/platform/content/locations/portArchive'
-import { findClarifyNode } from '@/services/clarify/service'
 import {
   computeRemaining,
+  findClarifyNode,
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
-} from '@/services/clarifyRounds'
+} from '../domain/clarifyRules'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type { TaskMechanicsState } from './taskMechanicsState'

@@ -28,7 +28,7 @@ import {
   type ClarifyFollowup,
   type ClarifyQuestion,
 } from '@agent-workflow/shared'
-import { createClarifyRound } from '@/services/clarify/service'
+import { createClarifyRound } from '@/modules/collaboration/infrastructure/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { saveClarifyDraft } from '@/modules/collaboration/infrastructure/clarifyRounds'
 import { freezeAnswerAttributions } from '@/modules/collaboration/domain/clarifyAnswers'

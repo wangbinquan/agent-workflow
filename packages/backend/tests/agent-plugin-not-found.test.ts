@@ -23,7 +23,7 @@ import {
   createPlugin,
   type PluginServiceBinding,
 } from './helpers/pluginServiceBinding'
-import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { resetNpmProbeCacheForTests } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { ValidationError } from '../src/util/errors'
 import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 

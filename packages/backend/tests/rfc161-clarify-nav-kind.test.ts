@@ -24,7 +24,7 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { getClarifyRoundDetail } from '../src/services/clarifyRounds'
+import { getClarifyRoundDetail } from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 type TaskStatus = 'running' | 'awaiting_human' | 'canceled' | 'failed' | 'interrupted' | 'done'

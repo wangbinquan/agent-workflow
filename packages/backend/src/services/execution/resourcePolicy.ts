@@ -60,7 +60,7 @@ export const PLUGIN_DISABLED_SITES: readonly string[] = [
   'services/workflow.validator.ts',
   'modules/resource-catalog/infrastructure/legacy/agent.ts',
   'modules/resource-catalog/application/agents/agentResourceIntegrity.ts',
-  'services/execution/resolveInjection.ts',
+  'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
 ]
 
 export const DISABLED_RESOURCE_POLICY: Readonly<

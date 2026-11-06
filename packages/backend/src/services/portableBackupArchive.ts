@@ -13,7 +13,7 @@ import {
   type MigrationIdentity,
   currentAppVersion,
   writeManifest,
-} from '@/services/backupManifest'
+} from '@/platform/persistence/sqlite/systemBackupManifest'
 
 const log = createLogger('portableBackupArchive')
 

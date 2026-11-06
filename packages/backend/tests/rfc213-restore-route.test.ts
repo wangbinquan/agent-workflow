@@ -19,8 +19,11 @@ import {
   DirectOperationContextFactory,
 } from '../src/modules/identity-access/application/operationContext'
 import { composeSystemOperations } from '../src/modules/system-operations/composition'
-import { createBackup } from '../src/services/backup'
-import { hasPendingRestore, stagePendingRestore } from '../src/services/pendingRestore'
+import { createBackup } from '../src/platform/persistence/sqlite/systemProviderBackup'
+import {
+  hasPendingRestore,
+  stagePendingRestore,
+} from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
 import { mountRestoreRoutes } from '../src/routes/restore'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 

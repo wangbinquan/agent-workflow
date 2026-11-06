@@ -19,7 +19,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
-} from '../src/services/clarifyRounds'
+} from '../src/modules/task-execution/domain/clarifyRules'
 import {
   isClarifyAskingNode,
   renderUserPrompt,

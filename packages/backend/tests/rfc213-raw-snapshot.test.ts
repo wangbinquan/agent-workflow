@@ -23,7 +23,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
 import { extractTarGz } from '../src/util/archive'
-import { readDbMigrationIdentity, readManifest } from '../src/services/backupManifest'
+import {
+  readDbMigrationIdentity,
+  readManifest,
+} from '../src/platform/persistence/sqlite/systemBackupManifest'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
 import { quickCheckDbFile } from '../src/db/integrity'
 import { sqliteRawDbSnapshotMechanisms } from '../src/platform/persistence/sqlite/rawDbSnapshotMechanisms'
@@ -307,7 +310,7 @@ describe('RFC-213 createBackup manifest (PR-0 T2)', () => {
     const db: DbClient = openDb({ path: dbPath })
     const identity = readDbMigrationIdentity(dbPath)
 
-    const { createBackup } = await import('../src/services/backup')
+    const { createBackup } = await import('../src/platform/persistence/sqlite/systemProviderBackup')
     const res = await createBackup({
       contract: logicalSchemaContract,
       db,

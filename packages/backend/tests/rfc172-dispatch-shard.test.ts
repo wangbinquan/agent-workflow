@@ -36,12 +36,15 @@ import {
   buildFrontierMintPlan,
   dispatchTaskQuestions,
   resolveEntryShardKeys,
-} from '../src/services/taskQuestionDispatch'
+} from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
-import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
-import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
-import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
+import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
+import {
+  createManualTaskQuestion,
+  reassignTaskQuestion,
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { hasOpenDispatchedEntryOnHome } from '../src/modules/collaboration/infrastructure/clarify/rerunLedger'
 import { createNodeRunMintParticipantInTx } from '../src/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { withTaskExecutionWrite } from '../src/modules/task-execution/infrastructure/ownedTaskExecution'
 // Monotonic so seed ORDER == id ORDER — several shard tests depend on "the run seeded last is the

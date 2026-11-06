@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionCaptureRequest } from '../src/modules/runtime-management/application/ports/agentMaterialEvidence'
-import type { RuntimeUsageMeter } from '../src/services/runtime/usage'
+import type { RuntimeUsageMeter } from '../src/modules/runtime-management/public/participants'
 import type {
   NativeAgentMaterialEvidenceHooks,
   NativeAgentMaterialEvidenceScope,

@@ -227,9 +227,9 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     })
     const taskId = await seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
 
-    const { createBackup } = await import('../src/services/backup')
+    const { createBackup } = await import('../src/platform/persistence/sqlite/systemProviderBackup')
     const { extractTarGz } = await import('../src/util/archive')
-    const { readManifest } = await import('../src/services/backupManifest')
+    const { readManifest } = await import('../src/platform/persistence/sqlite/systemBackupManifest')
     const res = await createBackup({
       contract: logicalSchemaContract,
       db,

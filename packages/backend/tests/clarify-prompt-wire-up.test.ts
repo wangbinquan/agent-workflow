@@ -151,16 +151,9 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     expect(src).not.toContain('clarifyContext?.directive')
     // RFC-284 T27 改锚：正体已迁 services/clarify/rounds.ts（旧路径是 facade，
     // 读它只会看到 4 行转口）。锁的意图不变：oracle 的 stop 门必须在场。
+    // RFC-454 再改锚：这组判定已从 collaboration 的 clarifyRounds.ts 迁入 task-execution 的 domain/clarifyRules.ts。
     const oracleSrc = readFileSync(
-      join(
-        __dirname,
-        '..',
-        'src',
-        'modules',
-        'collaboration',
-        'infrastructure',
-        'clarifyRounds.ts',
-      ),
+      join(__dirname, '..', 'src', 'modules', 'task-execution', 'domain', 'clarifyRules.ts'),
       'utf8',
     )
     expect(oracleSrc).toContain("args.contextDirective !== 'stop'")

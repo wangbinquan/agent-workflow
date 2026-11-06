@@ -40,7 +40,7 @@ import {
   evaluateDesignerRerunReadiness,
   resolveCrossNodeStopped,
   sealAnswersServerSide,
-} from '../src/services/clarify/service'
+} from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

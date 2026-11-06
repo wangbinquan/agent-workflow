@@ -341,7 +341,8 @@ describe('RFC-279 source ratchet', () => {
       'modules/resource-catalog/infrastructure/legacy/skill.ts',
       'modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
       'modules/resource-catalog/infrastructure/legacy/skillVersion.ts',
-      'services/taskQuestions.ts',
+      // RFC-454: the implementation (the `services/taskQuestions` re-export is deleted).
+      'modules/collaboration/infrastructure/taskQuestions.ts',
       // RFC-284 T27 改锚：正体迁 clarify/queue.ts（旧路径只剩 facade，留旧条目会让本扫描空转）。
       'modules/collaboration/infrastructure/clarify/queue.ts',
       'modules/source-control/infrastructure/local/repositoryMirrorCache.ts',

@@ -5,7 +5,7 @@ import { createChildCallNodeExecutionPorts } from '@/modules/task-execution/comp
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import type { NodeStepRequest } from '@/modules/task-execution/domain/nodeExecution'
 import { CallWorkflowNodeExecutor } from '@/modules/task-execution/engine/node/call-workflow/callWorkflowNodeExecutor'
-import { callEdgeKey } from '@/services/execution/closure'
+import { callEdgeKey } from '@/modules/resource-catalog/domain/callClosure'
 import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
 import { createLogger } from '@/util/log'
 

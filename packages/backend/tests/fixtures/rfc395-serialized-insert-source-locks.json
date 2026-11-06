@@ -8,7 +8,7 @@
       "dependencies": [
         {
           "path": "modules/collaboration/infrastructure/clarify/seal.ts",
-          "sha256": "391e5d47322217790121c1fc7b257d6e47403c645ec874cb38fe6e2df7b39282"
+          "sha256": "f7df9fd55afa982ddd56c0e2f67170024063aa111ca3c17ce3bc249cfa0982ad"
         }
       ],
       "sites": [
@@ -25,7 +25,7 @@
           "line": 192
         }
       ],
-      "why": "READ COMMITTED saveDraft takes a question-key advisory lock before checking draft/attribution, plus a round ordinal lock before MAX+1. seal takes the exclusive round lock before reading answers; clarify/seal.ts opens the caller transaction. Regressions: rfc395-clarify-target-concurrency.test.ts. RFC-400: reviewed the seal.ts change (the task node-status event is appended through the injected task-execution participant on the same tx); the round lock, the caller transaction and the answer insert order remain unchanged. RFC-442: reviewed the seal.ts change (setNodeClarifyDirectiveTx is imported from the sibling infrastructure module instead of the deleted services/taskClarifyDirective re-export; same function); the round lock, the caller transaction and the answer insert order remain unchanged."
+      "why": "READ COMMITTED saveDraft takes a question-key advisory lock before checking draft/attribution, plus a round ordinal lock before MAX+1. seal takes the exclusive round lock before reading answers; clarify/seal.ts opens the caller transaction. Regressions: rfc395-clarify-target-concurrency.test.ts. RFC-400: reviewed the seal.ts change (the task node-status event is appended through the injected task-execution participant on the same tx); the round lock, the caller transaction and the answer insert order remain unchanged. RFC-442: reviewed the seal.ts change (setNodeClarifyDirectiveTx is imported from the sibling infrastructure module instead of the deleted services/taskClarifyDirective re-export; same function); the round lock, the caller transaction and the answer insert order remain unchanged. RFC-454: reviewed the seal.ts change (sealAnswersServerSide, reconcileRoundEntriesTx and wgClarifyAskerKeyForRound are imported from their collaboration declarations instead of the deleted services/ re-exports; the asker key moved verbatim into collaboration domain); the round lock, the caller transaction and the answer insert order remain unchanged."
     },
     {
       "path": "modules/task-execution/infrastructure/nodeExecutionPersistence.ts",

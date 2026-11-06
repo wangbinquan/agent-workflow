@@ -84,6 +84,25 @@ export function collectWorkflowDependencyRefs(
   return refs
 }
 
+/**
+ * Agent references of a workflow definition (agent-single nodes). RFC-223
+ * (PR-8): returns only canonical `agentId` values. A name-only persisted node
+ * is corrupt/legacy data and fails closed; portable YAML names are resolved by
+ * the dedicated importRefs service before this function is reached.
+ *
+ * RFC-454: moved here from the backend's resource-catalog legacy directory — a filter over
+ * `collectWorkflowDependencyRefs`, used by resource-catalog and by intent's dump.
+ */
+export function extractWorkflowAgentRefs(def: {
+  nodes?: ReadonlyArray<Record<string, unknown>>
+}): Set<string> {
+  return new Set(
+    collectWorkflowDependencyRefs(def)
+      .filter((ref) => ref.resourceType === 'agent')
+      .map((ref) => ref.value),
+  )
+}
+
 export interface AgentReferences {
   readonly skills: readonly AgentSkillRef[]
   readonly dependsOn: readonly string[]

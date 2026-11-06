@@ -25,7 +25,7 @@ import {
 } from '../src/services/runtime/injectionIdentity'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { skillFilesRel } from '../src/services/skillIdentityPaths'
 import { createAgent } from './helpers/model/resourceWrites'

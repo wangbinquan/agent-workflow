@@ -31,7 +31,10 @@ import { withO2Closure } from './helpers/o2Closure'
 
 import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 
-import { createClarifyRound, resolveCrossNodeStopped } from '../src/services/clarify/service'
+import {
+  createClarifyRound,
+  resolveCrossNodeStopped,
+} from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -43,7 +46,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from './helpers/userFixture'
-import { loadUndispatchedSelfQuestionerTargets } from '../src/services/taskQuestions'
+import { loadUndispatchedSelfQuestionerTargets } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
 

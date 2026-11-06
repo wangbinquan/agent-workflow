@@ -19,7 +19,7 @@ import {
   assertWorkVolumeWritersSettled,
   retainWorkVolumeWriter,
 } from '@/platform/crewstation/workVolumeWriters'
-import { runManagedProcess } from '@/services/execution/managedProcess'
+import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 import { validatePluginMaterialTree } from '../infrastructure/crewstation/pluginMaterialTree'
 import {
   installPlugin,

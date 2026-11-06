@@ -17,7 +17,7 @@ import {
   ConcurrentNodeRunTransition,
   setNodeRunStatus,
   transitionNodeRunStatus,
-} from '../src/services/lifecycle'
+} from '../src/modules/task-execution/public/operations'
 import { IllegalNodeRunTransition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

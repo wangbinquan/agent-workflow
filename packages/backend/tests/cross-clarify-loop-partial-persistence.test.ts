@@ -47,7 +47,7 @@ import {
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
   resolveCrossNodeStopped,
-} from '../src/services/clarify/service'
+} from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const actor = { userId: 'u1', role: 'owner' as const }

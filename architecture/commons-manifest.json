@@ -215,7 +215,7 @@
       "claimAudit": "Header claims it owns process reliability with no policy. TRUE for the 5 callers that go through it (agentProcess, scriptRun, scriptDepsEnv, pluginInstaller, customEventObserverProgram). FALSE as a repo-wide claim: mcpProbe (SDK StdioClientTransport), structuralDiff/deep/runner, verificationRunner, developmentAdapterRunner, util/git, gitRepoCache and spawnVersionProbe all start children outside it, each with a weaker or absent kill/reap chain.",
       "core": true,
       "files": [
-        "packages/backend/src/services/execution/managedProcess.ts"
+        "packages/backend/src/platform/execution/local/managedProcess.ts"
       ],
       "guards": [],
       "id": "runmanagedprocess",
@@ -272,7 +272,7 @@
       "claimAudit": "The 'only writer' claim DOES hold for the drizzle builder form — packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts:38-40 pins exactly 1 write in this file and rejects any other file. It does NOT hold for raw SQL: the scanner matches only `.update(tasks)`, and packages/backend/src/services/restore.ts:317-326 already writes `UPDATE tasks SET ...` through an `as unknown as` cast to the raw bun:sqlite handle.",
       "core": true,
       "files": [
-        "packages/backend/src/services/lifecycle.ts"
+        "packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts"
       ],
       "guards": [],
       "id": "settaskstatus-trysettaskstatus",
@@ -371,7 +371,7 @@
       "claimAudit": "Save-time reference checks remain table-driven off ACL_TABLES with the required id/name token-domain tag. RFC-395 II-a moves reverse lookups to resource-catalog infrastructure/referenceLookup.ts: MCP, plugin and skill ports share agentJsonLookup (LIKE prefilter plus exact JSON matching); agent-dependency and workflow reverse ports retain their distinct historical matching policies.",
       "core": false,
       "files": [
-        "packages/backend/src/services/resourceRefs.ts",
+        "packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts",
         "packages/backend/src/modules/resource-catalog/infrastructure/referenceLookup.ts"
       ],
       "guards": [],

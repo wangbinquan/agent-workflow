@@ -1,5 +1,5 @@
 import type { Actor } from '@/auth/actor'
-import type { FrozenWorkgroupRef } from '@/services/execution/closure'
+import type { FrozenWorkgroupRef } from '@/modules/resource-catalog/public/types'
 import type { MaterializedSpace } from './preparedWorkspace'
 import type { StartTask } from '@agent-workflow/shared'
 import type { ChildResumeRuntime, SchedulerDriverPort } from './taskExecutionTopology'

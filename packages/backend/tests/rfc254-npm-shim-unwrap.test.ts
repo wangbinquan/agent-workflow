@@ -25,7 +25,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { resolveNpmCommand } from '@/services/pluginInstaller'
+import { resolveNpmCommand } from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 
 const RUNTIME = '/opt/bun/bin/bun'
 

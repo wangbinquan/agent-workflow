@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DAEMON_RESTART_ERROR_SUMMARY, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { QUESTION_DISPATCH_CLOSED_TASK_STATUSES } from '../src/services/taskQuestions'
+import { QUESTION_DISPATCH_CLOSED_TASK_STATUSES } from '../src/modules/collaboration/infrastructure/taskQuestions'
 
 const SRC = (rel: string) => readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
@@ -40,7 +40,8 @@ describe('终态集合单源化（flag-audit W0）', () => {
   })
 
   test('同名异义陷阱已拆除：taskQuestions 不再导出 TERMINAL_TASK_STATUSES', () => {
-    const src = SRC('services/taskQuestions.ts')
+    // RFC-454: read the implementation (the `services/taskQuestions` re-export is deleted).
+    const src = SRC('modules/collaboration/infrastructure/taskQuestions.ts')
     expect(src).not.toMatch(/export const TERMINAL_TASK_STATUSES/)
     // 更名后的问题派发关闭集语义不变（刻意窄于生命周期终态——failed/interrupted 可恢复）。
     expect([...QUESTION_DISPATCH_CLOSED_TASK_STATUSES].sort()).toEqual(['canceled', 'done'])

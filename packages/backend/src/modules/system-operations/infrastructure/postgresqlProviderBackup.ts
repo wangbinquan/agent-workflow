@@ -3,7 +3,7 @@
 // tables are carried forward from the cutover operation's verified artifact.
 
 import { join } from 'node:path'
-import type { BackupKind } from '@/services/backupManifest'
+import type { BackupKind } from '@/platform/persistence/sqlite/systemBackupManifest'
 import {
   createPortableBackupArchive,
   type PortableBackupApplicationAssets,

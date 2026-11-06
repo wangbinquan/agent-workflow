@@ -466,7 +466,7 @@ describe('RFC-348 — read sites name nothing the registries do not teach (AST r
 
   test('workflowLaunchInputs.ts numberField / stringField / as-cast reads', () => {
     const sf = parseFile(
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflowLaunchInputs.ts',
+      'packages/backend/src/modules/resource-catalog/domain/workflowLaunchInputs.ts',
     )
     const found = new Set([
       ...helperArgNames(sf, ['numberField', 'stringField']),

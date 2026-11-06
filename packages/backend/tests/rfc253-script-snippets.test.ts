@@ -28,8 +28,8 @@ import {
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
-import { runManagedProcess } from '@/services/execution/managedProcess'
-import { INTERPRETER_SPEC } from '@/services/scriptRun'
+import { runManagedProcess } from '@/platform/execution/local/managedProcess'
+import { INTERPRETER_SPEC } from '@/platform/execution/local/scriptInterpreter'
 
 const LANGUAGES: ScriptLanguage[] = ['python', 'bash', 'node']
 

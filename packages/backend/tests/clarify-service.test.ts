@@ -35,7 +35,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createClarifyRound, sealAnswersServerSide } from '../src/services/clarify/service'
+import {
+  createClarifyRound,
+  sealAnswersServerSide,
+} from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

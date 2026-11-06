@@ -6,7 +6,8 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { resolveScriptInterpreter, runScriptProcess } from './scriptRun'
+import { resolveScriptInterpreter } from '@/platform/execution/local/scriptInterpreter'
+import { runScriptProcess } from './scriptRun'
 import type { ScriptFixtureProcess } from '../../application/ports/scriptFixture'
 
 export function createLocalScriptFixtureProcess(

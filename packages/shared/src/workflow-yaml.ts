@@ -8,6 +8,7 @@ import { stringify as stringifyYaml } from 'yaml'
 import {
   WorkflowDefinitionSelectorSchema,
   WorkflowDraftSnapshotSchema,
+  type Workflow,
   type WorkflowDefinition,
   type WorkflowDefinitionSelector,
   type WorkflowDraftSnapshot,
@@ -79,4 +80,31 @@ export function stringifyWorkflowYamlDocument(
     definition: normalized.definition,
   }
   return stringifyYaml(payload, { indent: 2, lineWidth: 120 })
+}
+
+/**
+ * Serialize an already-captured workflow row. Callers that also perform an
+ * ACL/revision guard must pass that exact immutable snapshot here instead of
+ * re-reading by id after the guard (RFC-199 B1/B3).
+ *
+ * RFC-454: moved here from the backend's resource-catalog legacy directory — it is a thin adapter over
+ * `stringifyWorkflowYamlDocument`, and the platform's portable backup assets need it without reaching a module.
+ */
+export function stringifyWorkflowYaml(
+  wf: Pick<Workflow, 'id' | 'name' | 'description'> & {
+    definition: WorkflowDefinition | WorkflowDefinitionSelector
+  },
+): string {
+  return stringifyWorkflowYamlDocument(
+    {
+      name: wf.name,
+      description: wf.description,
+      // The shared serializer deliberately accepts the canonical definition
+      // schema for full-fidelity backups. Portable selectors are a strict
+      // no-agentId subset with passthrough selector metadata, so they normalize
+      // through that same serializer without widening the import schema.
+      definition: wf.definition as WorkflowDefinition,
+    },
+    { id: wf.id },
+  )
 }

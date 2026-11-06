@@ -63,7 +63,7 @@ import {
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
-import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
+import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/public/queries'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'

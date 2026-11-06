@@ -29,7 +29,7 @@ import {
   listTaskQuestions,
   reassignTaskQuestion,
   stageTaskQuestion,
-} from '../src/services/taskQuestions'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
 
 const AGENT_SNAPSHOT = JSON.stringify({
   $schema_version: 3,

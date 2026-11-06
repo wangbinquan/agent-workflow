@@ -38,7 +38,8 @@ import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
 } from './helpers/participantLaunch'
-import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/services/resourceRefs'
+import { extractWorkflowAgentRefs } from '@agent-workflow/shared'
+import { stripWorkflowNodeAgentIds } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { createUser } from './helpers/userFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createAgent, renameAgent, createWorkgroup } from './helpers/model/resourceWrites'

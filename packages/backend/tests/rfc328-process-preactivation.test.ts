@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runManagedProcess } from '../src/services/execution/managedProcess'
+import { runManagedProcess } from '../src/platform/execution/local/managedProcess'
 import {
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,

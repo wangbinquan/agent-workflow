@@ -38,7 +38,7 @@ import {
   updatePlugin,
 } from './helpers/pluginServiceBinding'
 import { createPluginGenerationFilesystemGcPort } from '../src/services/pluginGenerationGc'
-import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { resetNpmProbeCacheForTests } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 

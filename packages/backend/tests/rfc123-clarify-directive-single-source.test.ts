@@ -30,7 +30,7 @@ import {
   createClarifyRound,
   dispatchCrossClarifyNode,
   resolveCrossNodeStopped,
-} from '../src/services/clarify/service'
+} from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

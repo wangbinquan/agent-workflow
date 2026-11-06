@@ -8,7 +8,7 @@
 // ⚠️ **不是全仓唯一**（RFC-317 T66 按源码订正；原文写的是「唯一注册表」）。
 // 本表被 10 个文件消费，而 `packages/backend/src` 下有 35 处 `setInterval(`；
 // 至少这几处仍各自带默认周期，没有进表：
-//   · services/backupScheduler.ts:194 —— `setInterval(…, 3_600_000)` 裸字面量，
+//   · platform/background/providerBackupScheduler.ts —— `setInterval(…, 3_600_000)` 裸字面量，
 //     正是本表被创造出来消灭的那种形状；
 //   · services/taskArchive.ts / maintenanceRetention.ts / eventsArchive.ts ——
 //     `intervalMs: number = 3_600_000` 形式的参数默认值；
@@ -127,7 +127,7 @@ export const MAINTENANCE_PHASE = {
   retentionSweep: 16 * MINUTE_MS,
   /** services/taskArchive.ts */
   taskArchive: 20 * MINUTE_MS,
-  /** services/backupScheduler.ts —— 备份保留期 prune（与备份拍本身无关）。 */
+  /** platform/background/providerBackupScheduler.ts —— 备份保留期 prune（与备份拍本身无关）。 */
   backupPrune: 24 * MINUTE_MS,
   /** services/repoBatchImport.ts */
   batchImportGc: 28 * MINUTE_MS,

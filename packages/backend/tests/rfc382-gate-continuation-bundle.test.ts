@@ -26,8 +26,8 @@ import {
   skipRepositoryPreparation,
 } from '@/modules/task-execution/composition/taskDriveLegacy'
 import { createGateContinuationDriver } from '@/modules/task-execution/public/participants'
-import { createClarifyRound } from '@/services/clarify/service'
-import { prepareClarifyDecision } from '@/services/clarifyDecision'
+import { createClarifyRound } from '@/modules/collaboration/infrastructure/clarify/service'
+import { prepareClarifyDecision } from '@/modules/collaboration/infrastructure/clarifyDecision'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { finishCommittedClarifyAutoDispatch } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'

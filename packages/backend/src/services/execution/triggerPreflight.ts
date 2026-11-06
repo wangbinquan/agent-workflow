@@ -10,7 +10,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
-import { parseCallClosure } from './closure'
+import { parseCallClosure } from '@/modules/resource-catalog/public/queries'
 
 export function triggerSourceFromContext(
   context: TriggerContext | null | undefined,

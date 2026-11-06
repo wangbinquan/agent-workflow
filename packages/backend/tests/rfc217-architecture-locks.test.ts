@@ -61,10 +61,10 @@ describe('rfc217 G1 — no-circular guard is real', () => {
     expect(read('.dependency-cruiser.cjs')).toContain('DEPCRUISE_TSCONFIG')
   })
 
-  test('workgroup/constants.ts is a zero-import leaf module', () => {
-    const src = read(
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/constants.ts',
-    )
+  // RFC-454: the workgroup host sentinels have one home — shared's `workgroupHostIdentity.ts` (resource-catalog's
+  // legacy `workgroup/constants.ts` duplicated two of them and is deleted).
+  test('the workgroup host sentinels live in a zero-import leaf module', () => {
+    const src = read('packages/shared/src/workgroupHostIdentity.ts')
     expect(src).not.toMatch(/^\s*import\b/m)
     expect(src).not.toMatch(/\brequire\s*\(/)
     // the sentinels themselves must stay here (wire-frozen values)

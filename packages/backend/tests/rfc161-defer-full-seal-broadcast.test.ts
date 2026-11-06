@@ -22,7 +22,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from './helpers/userFixture'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 

@@ -45,7 +45,7 @@ export function shouldRequestWebhookWorkspacePrune(
  * RFC-317 LC-04 —— 把「谁该被回收」连同「这次回收叫什么名字」一起收进本模块。
  *
  * 归属列（`webhook_trigger_id` / `event_subscription_id`）由这里**自己读**，不再让
- * `services/lifecycle.ts` 那个通用写点替我们选列——那个写点是所有任务状态转移的公共
+ * task-execution 的任务状态写点（`public/operations`）替我们选列——那个写点是所有任务状态转移的公共
  * 内核，它一旦在类型签名里点名某个集成，就再也无法脱离该集成被抽取。
  *
  * 为什么另起一次查询而不是让 kernel 把整行转发过来：`tasks` 有 68 列、含最大 32 KiB

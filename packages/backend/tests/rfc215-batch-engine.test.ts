@@ -22,7 +22,7 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
+import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,

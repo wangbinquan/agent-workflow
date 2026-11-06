@@ -51,14 +51,14 @@ import {
   listTaskQuestions,
   loadUndispatchedSelfQuestionerTargets,
   reassignTaskQuestion,
-} from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
-} from '../src/services/clarify/service'
+} from '../src/modules/collaboration/infrastructure/clarify/service'
 import { runLifecycleInvariants } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {

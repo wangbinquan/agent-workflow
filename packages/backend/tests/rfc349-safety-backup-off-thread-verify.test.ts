@@ -17,7 +17,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { quickCheckOffThread } from '../src/services/backup'
+import { quickCheckOffThread } from '../src/platform/persistence/sqlite/systemProviderBackup'
 
 function seedDatabase(path: string): void {
   const db = new Database(path)

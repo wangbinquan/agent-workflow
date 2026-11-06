@@ -1152,3 +1152,10 @@ export {
   SKILL_MERGER_AGENT_NAME,
   assertNotBuiltin,
 } from '../domain/systemResources'
+// RFC-454 — the stored call-closure shapes (`domain/callClosure.ts`).
+export type {
+  FrozenCallClosure,
+  FrozenWorkflowRef,
+  FrozenWorkgroupGroup,
+  FrozenWorkgroupRef,
+} from '../domain/callClosure'

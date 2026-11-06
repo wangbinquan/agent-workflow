@@ -17,7 +17,7 @@ import {
   type RuntimeUsageMeter,
   type RuntimeUsageMeterInput,
   type RuntimeUsageModel,
-} from '../usage'
+} from '@/modules/runtime-management/public/participants'
 
 interface MessageUsage {
   readonly model: string

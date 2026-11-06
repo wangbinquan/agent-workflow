@@ -64,9 +64,9 @@ import {
   buildWorkgroupRuntimeConfig,
 } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import {
-  WG_LEADER_NODE_ID,
-  WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
+} from '@agent-workflow/shared'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,

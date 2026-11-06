@@ -42,9 +42,12 @@ import { afterAll, beforeEach, expect, test } from 'bun:test'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { createClarifyRound } from '../src/services/clarify/service'
-import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
+import {
+  listTaskQuestions,
+  reassignTaskQuestion,
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const actor = { userId: 'u1', role: 'owner' as const }

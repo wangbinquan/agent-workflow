@@ -10,8 +10,8 @@ import type {
   MaterializedSpace,
   ResolvedRepoSource,
 } from '@/modules/source-control/application/workspaceMaterialization'
+import type { ResolvedInterpreter } from '@/platform/execution/local/scriptInterpreter'
 import type {
-  ResolvedInterpreter,
   ScriptRunOutcome,
   ScriptRunRequest,
 } from '@/modules/task-execution/infrastructure/local/scriptRun'

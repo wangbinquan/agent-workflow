@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { rmSync } from 'node:fs'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { assertTargetDirInsideWorktree } from '@/platform/content/local/uploadPaths'
-import { resolveScriptInterpreter } from '@/services/scriptRun'
+import { resolveScriptInterpreter } from '@/platform/execution/local/scriptInterpreter'
 import type { CustomObserverProgramInput } from '../application/ports/customObserverProgram'
 import { createLocalCustomObserverProgram } from '../infrastructure/local/customObserverProgram'
 

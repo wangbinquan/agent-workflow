@@ -21,7 +21,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { installPlugin, plannedGenerationDir } from '../src/services/pluginInstaller'
+import {
+  installPlugin,
+  plannedGenerationDir,
+} from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 

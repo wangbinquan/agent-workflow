@@ -14,8 +14,11 @@ import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { isDbSnapshotInProgress, vacuumIntoOffThread } from '../src/services/backup'
-import { runWalCheckpointTick } from '../src/services/backupScheduler'
+import {
+  isDbSnapshotInProgress,
+  vacuumIntoOffThread,
+} from '../src/platform/persistence/sqlite/systemProviderBackup'
+import { runWalCheckpointTick } from '../src/platform/background/providerBackupScheduler'
 
 describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
   test('the compile step lists the worker as its own entrypoint', () => {

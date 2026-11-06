@@ -50,7 +50,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { DrizzleTerminalMaintenancePersistence } from '../src/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
-import { setTaskStatus } from '../src/services/lifecycle'
+import { setTaskStatus } from '../src/modules/task-execution/public/operations'
 import { runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()

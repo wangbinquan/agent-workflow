@@ -57,7 +57,7 @@ import {
 import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 

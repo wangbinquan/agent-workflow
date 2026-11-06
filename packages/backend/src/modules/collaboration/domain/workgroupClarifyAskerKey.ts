@@ -7,9 +7,15 @@
 // the '' node-level row (byte-for-byte the pre-RFC-207 behaviour), while an
 // ordinary fan-out shard now gets its own row — stopping shard 3's questions no
 // longer silences shard 7. That narrowing is intentional and disclosed.
+//
+// RFC-454: moved here from resource-catalog's legacy workgroup directory (collaboration's clarify seal is its only
+// user, and collaboration → resource-catalog is not a target DAG edge); the node ids are shared's single source.
 
-import { wgClarifyAskerKey } from '@agent-workflow/shared'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
+import {
+  wgClarifyAskerKey,
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
+} from '@agent-workflow/shared'
 
 export function wgClarifyAskerKeyForRound(nodeId: string, shardKey: string | null): string {
   if (nodeId === WG_LEADER_NODE_ID || nodeId === WG_MEMBER_NODE_ID) {

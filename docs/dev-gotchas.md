@@ -614,6 +614,25 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   `node:path` 取法逐例比对的用例（目录名带点、点文件、尾随斜杠、`..`）——这也让 domain 的结果不随 Windows / POSIX 的 `path` 语义变化；
   真要碰宿主的逻辑留在 `engine` / `infrastructure`。
 
+## 删除一跳转出（facade）：守卫看见的是转出背后的真相（RFC-454 实撞，2026-11-05）
+
+RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证里 8 个文件红，没有一个是行为问题，全是转出遮住的东西露了出来：
+
+- **读转出内容的文本锁**：`cross-clarify-designer-rerun-no-rollback` 用 `resolve(…, 'services', 'clarify', 'service.ts')` 读源码再断言
+  「不含回滚助手」——转出里只有再导出行，这条断言一直落空，转出一删就 ENOENT。整串搜 `services/clarify/service` 搜不到路径片段
+  写法（同上文 RFC-393 那条）。
+- **被再导出链挂住的文件**：只剩用例在用的 oracle / 旧入口，因为转出的再导出链被 RFC-376 G14 算作可达；转出一删，不可达精确清单
+  多出 3 个（`rfc376-structural-guards`）。
+- **进入新模块的目录守卫**：函数挪进 task-execution 后落进只扫该模块的守卫（`rfc339-wrapper-runtime-cutover` 禁 task-execution 里
+  裸读 `.nodeIds`），在 collaboration 时不受约束。
+- **开放类型进 public**：带 `unknown` 字段的类型从 infrastructure 改经 owner 的 `public/*` 导出，W0-R public surface 偏差随之 +2
+  （`rfc294-architecture-preflight`；偏差记在第一条走到该声明的导出链上，看上去像是别的符号的问题）。
+- **sha256 源码锁连依赖一起钉**：`tests/fixtures/rfc395-serialized-insert-source-locks.json` 的条目把调用方文件的摘要也钉住，只改
+  三行 import 也失配（`rfc359-w8-t29`）。
+- **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
+  RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
+  `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

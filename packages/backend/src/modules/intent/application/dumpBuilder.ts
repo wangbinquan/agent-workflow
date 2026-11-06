@@ -42,11 +42,11 @@ import {
   fenceUntrusted,
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
+  extractWorkflowAgentRefs,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { NotFoundError } from '@/util/errors'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
-import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
 import { renderPlatformInventoryFile, type IntentPlatformInventory } from './platformInventory'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'

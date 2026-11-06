@@ -13,6 +13,7 @@ import {
   resolveClarifyBudget,
   wgClarifyAskerKey,
   workgroupHasHumanMember,
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
 } from '@agent-workflow/shared'
 
 import { and, eq, inArray } from 'drizzle-orm'
@@ -26,8 +27,6 @@ import type {
   CollaborationClarifySuppressionInput,
 } from '../application/ports/collaborationRuntimeMechanics'
 import { createClarifyDirectiveStore } from './clarifyDirectiveStore'
-
-const WG_LEADER_NODE_ID = '__wg_leader__'
 
 function canRequeueAssignment(
   from: WorkgroupAssignmentStatus,

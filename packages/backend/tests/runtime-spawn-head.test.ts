@@ -5,7 +5,7 @@
 // byte-for-byte identical. This locks both directions.
 
 import { describe, expect, test } from 'bun:test'
-import { pickRuntimeHead } from '../src/services/runner'
+import { pickRuntimeHead } from '../src/services/runtime/head'
 
 describe('pickRuntimeHead (RFC-112 PR-C)', () => {
   test('built-in (null/empty binary) falls back to the RFC-111 head (golden)', () => {

@@ -31,7 +31,7 @@ import {
   type ClarifyAnswer,
   type ClarifyQuestion,
 } from '@agent-workflow/shared'
-import { createClarifyRound } from '@/services/clarify/service'
+import { createClarifyRound } from '@/modules/collaboration/infrastructure/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
 import { createClarifyFollowupOperations } from '@/modules/collaboration/application/clarifyFollowup'

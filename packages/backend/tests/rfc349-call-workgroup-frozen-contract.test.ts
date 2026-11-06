@@ -24,7 +24,7 @@ import type { Hono } from 'hono'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { FrozenWorkgroupGroupSchema } from '../src/modules/task-execution/infrastructure/legacyCallClosure'
+import { FrozenWorkgroupGroupSchema } from '../src/modules/resource-catalog/domain/callClosure'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
 // RFC-359 AC-6：两个引擎各跑一遍。

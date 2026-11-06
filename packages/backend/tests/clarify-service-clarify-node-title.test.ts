@@ -15,7 +15,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
-import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
+import {
+  getClarifyRoundDetail,
+  listClarifyRoundSummaries,
+} from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

@@ -77,7 +77,7 @@ import { createTaskLifecycleDurableConsumerDefinitions } from '@/modules/task-ex
 // 再导出会让这份对拍在账本里看不见。
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import type { CommittedEventEnvelopeV1 } from '@/platform/events/committed/types'
-import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
+import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 

@@ -21,7 +21,7 @@ import {
   readClarifyRoundFixtures,
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -31,7 +31,7 @@ import {
   listTaskQuestions,
   reassignTaskQuestion,
   stageTaskQuestion,
-} from '../src/services/taskQuestions'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { buildClarifyQueueContext } from '@/modules/collaboration/infrastructure/clarify/queue'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {

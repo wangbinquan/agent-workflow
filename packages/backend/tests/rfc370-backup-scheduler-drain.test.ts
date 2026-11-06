@@ -1,7 +1,7 @@
 // RFC-370: provider close awaits the scheduled backup acknowledgement and the
 // existing post-backup retention wake. Timer stop alone cannot close its DB.
 import { describe, expect, spyOn, test } from 'bun:test'
-import { startBackupScheduler } from '@/services/backupScheduler'
+import { startBackupScheduler } from '@/platform/background/providerBackupScheduler'
 
 function deferred() {
   let resolve!: () => void

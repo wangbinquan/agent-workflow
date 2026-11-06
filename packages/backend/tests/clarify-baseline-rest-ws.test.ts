@@ -21,11 +21,17 @@ import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { autoDispatchClarifyRoundWithDecision } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
-import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import {
+  getClarifyRoundDetail,
+  listClarifyRoundSummaries,
+} from '../src/modules/collaboration/infrastructure/clarifyRounds'
+import {
+  listTaskQuestions,
+  reassignTaskQuestion,
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

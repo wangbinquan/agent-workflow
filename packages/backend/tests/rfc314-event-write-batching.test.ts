@@ -29,7 +29,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { pump } from '../src/services/execution/managedProcess'
+import { pump } from '../src/platform/execution/local/managedProcess'
 import { runNode } from './helpers/runner'
 import { recordStatements } from './helpers/statementRecorder'
 

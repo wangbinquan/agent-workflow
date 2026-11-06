@@ -32,7 +32,7 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

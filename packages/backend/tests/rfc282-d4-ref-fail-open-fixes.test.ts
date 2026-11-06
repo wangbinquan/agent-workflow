@@ -20,7 +20,7 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { resolveRefsUsableByName } from '../src/services/resourceRefs'
+import { resolveRefsUsableByName } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 

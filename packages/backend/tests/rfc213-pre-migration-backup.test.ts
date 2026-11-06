@@ -24,7 +24,7 @@ import { deriveSchemaEdge } from '@/platform/persistence/schema/history/edgeDiff
 import { compileContract } from '@/platform/persistence/schema/contract'
 import { persistenceSchema, logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { column } from '@/platform/persistence/schema/dsl'
-import { maybePreMigrationBackup } from '../src/services/backupScheduler'
+import { maybePreMigrationBackup } from '../src/platform/background/providerBackupScheduler'
 
 import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
 import { acquireLock } from '@/util/lock'

@@ -15,7 +15,7 @@ import { graphExecutionContractRegistrations } from '@/modules/development-autom
 import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
-import { INTERPRETER_SPEC } from '@/modules/task-execution/infrastructure/local/scriptRun'
+import { INTERPRETER_SPEC } from '@/platform/execution/local/scriptInterpreter'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
 test('graph type has six responsibilities while view combinations are selected within design', () => {

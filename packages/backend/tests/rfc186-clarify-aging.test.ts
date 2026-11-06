@@ -6,12 +6,12 @@
 // at id ≥ trigger is itself the produced/consumed signal for host nodes.
 
 import { describe, expect, test } from 'bun:test'
-import { isTargetNodeConsumed } from '../src/services/clarifyRerunLedger'
+import { isTargetNodeConsumed } from '../src/modules/collaboration/infrastructure/clarify/rerunLedger'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
-  WG_LEADER_NODE_ID,
-  WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
+} from '@agent-workflow/shared'
 
 type Row = Parameters<typeof isTargetNodeConsumed>[3][number]
 function run(over: Partial<Row>): Row {

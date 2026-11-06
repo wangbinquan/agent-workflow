@@ -22,9 +22,9 @@ import {
 } from './helpers/workgroupSelection'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
-  WG_LEADER_NODE_ID,
-  WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
+} from '@agent-workflow/shared'
 
 const LEADER = 'M_leader'
 const A1 = 'M_agent1'

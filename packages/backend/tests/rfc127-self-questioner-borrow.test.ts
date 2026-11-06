@@ -33,7 +33,7 @@ import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
+import { resolveBorrowForNode } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { borrowDuplicateExecutionRejection } from '../src/modules/task-execution/application/agentNodeErrors'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

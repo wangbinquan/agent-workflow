@@ -2,17 +2,13 @@ import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
-import {
-  runNode as runNodeWithProvider,
-  type RunNodeOptions as ProviderRunNodeOptions,
-} from '../../src/services/runner'
+import { runNativeTaskAgent as runNodeWithProvider } from '../../src/modules/task-execution/infrastructure/local/nativeTaskAgentRun'
+import { type RunNodeOptions as ProviderRunNodeOptions } from '../../src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
-
-export * from '../../src/services/runner'
 
 /**
  * Provider-selected test composition for the production-required memory read participant.

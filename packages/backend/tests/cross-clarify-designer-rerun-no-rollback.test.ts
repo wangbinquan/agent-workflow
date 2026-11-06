@@ -36,9 +36,12 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { createClarifyRound } from '../src/services/clarify/service'
-import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
+import {
+  listTaskQuestions,
+  reassignTaskQuestion,
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { runGit } from '../src/util/git'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 
@@ -255,8 +258,19 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
   test('source guard: the cross-clarify service + the unified dispatch mint do not reference the rollback helpers', () => {
     // the unified clarify service (readiness / stop / round logic; RFC-217 T9
     // merged crossClarify.ts into it) must stay rollback-free …
+    // RFC-454: read the implementations in collaboration — the services/ paths this guard used to read were one-hop
+    // re-exports (deleted), so the absence checks below only saw the re-export lines.
     const crossSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'service.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'clarify',
+        'service.ts',
+      ),
       'utf8',
     )
     expect(crossSrc).not.toContain('rollbackNodeRunWorktrees')
@@ -265,7 +279,15 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
     // rollback in the answer flow is autoDispatchClarifyRound's SELF-clarify branch
     // (gated kind==='self'), never the cross/designer dispatch.
     const dispatchSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'taskQuestionDispatch.ts',
+      ),
       'utf8',
     )
     expect(dispatchSrc).not.toContain('rollbackNodeRunWorktrees')

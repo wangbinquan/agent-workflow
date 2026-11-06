@@ -7,7 +7,7 @@ import {
 import {
   applyPendingRestoreIfAny as applyPendingSqliteRestore,
   type ApplyPendingRestoreOptions,
-} from '@/services/pendingRestore'
+} from '@/modules/system-operations/infrastructure/local/filePendingRestore'
 
 export function restoreSqliteBackupForTest(
   tarballPath: string,

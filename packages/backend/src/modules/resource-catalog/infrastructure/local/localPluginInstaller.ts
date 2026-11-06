@@ -1,4 +1,4 @@
-import { checkForUpdate, cleanupInstallGeneration, installPlugin } from '@/services/pluginInstaller'
+import { checkForUpdate, cleanupInstallGeneration, installPlugin } from './filePluginInstallation'
 import type { PluginInstallerPort } from '../../application/plugins/ports'
 
 /** Local npm/git/file mechanics; AW's catalog owns publication and compensation. */

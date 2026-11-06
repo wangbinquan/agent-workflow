@@ -61,14 +61,14 @@ import { type Logger } from '@/util/log'
 // `runtime === 'xxx'` branches; the runtime-specific assembly lives in
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
-// (tests, memoryDistiller) keep resolving from '@/services/runner'.
+// (tests, memoryDistiller) used to resolve from '@/services/runner'; RFC-454 deleted that re-export, so they import the declaration sites.
 // RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
 // stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes
 // through `driver.buildBusinessSpawn` — runNode is fully kind-blind (zero
 // `runtime === 'xxx'` branches; the runtime-specific assembly lives in
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
-// (tests, memoryDistiller) keep resolving from '@/services/runner'.
+// (tests, memoryDistiller) used to resolve from '@/services/runner'; RFC-454 deleted that re-export, so they import the declaration sites.
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type {
   RuntimeProfile,

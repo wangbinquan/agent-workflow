@@ -47,7 +47,7 @@ CS RFC-042 数据库恢复 Job 另注入 `CS_DATABASE_RESTORE_REFERENCE`（托�
 
 | 变量                                                               | 写入点                                                                                    | 语义                                                                                                                                                                                    |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AW_ENVELOPE_NONCE`                                                | `backend/src/services/scriptRun.ts`                                                       | script 节点输出信封 nonce（防内容伪造信封；转义坑见 `envelope.ts` 注释）                                                                                                                |
+| `AW_ENVELOPE_NONCE`                                                | `backend/src/modules/task-execution/infrastructure/local/scriptRun.ts`                                                       | script 节点输出信封 nonce（防内容伪造信封；转义坑见 `envelope.ts` 注释）                                                                                                                |
 | `OPENCODE_AW_INVENTORY_OUT`                                        | `packages/shared/src/inventory.ts`（协议常量）                                            | opencode dump 插件把启动 inventory JSON 写到该路径，框架运行后读回                                                                                                                      |
 | `AW_GIT_CRED_HOST` / `AW_GIT_CRED_FILE`                            | `backend/src/main.ts`（credential-helper 子命令模式读取）                                 | 内部 git credential helper 通道（路径/host 而非明文密钥，RFC-205）                                                                                                                      |
 | `AW_MANAGED_PROCESS_LAUNCH_NONCE`                                  | `backend/src/services/execution/managedProcess.ts` 写入，`backend/src/main.ts` 读取       | Windows 编译单二进制递归启动 launcher 的内部入口标记；完整请求仍走回执后的 activation frame，启动真实 target 前删除                                                                     |
@@ -57,7 +57,7 @@ CS RFC-042 数据库恢复 Job 另注入 `CS_DATABASE_RESTORE_REFERENCE`（托�
 | `AW_EVENT_INPUT_FILE`                                              | `backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts`           | 自定义事件观察程序的只读 input envelope 文件；大结果不经 env 传递                                                                                                                       |
 | `AW_EVENT_OBSERVER_PROTOCOL`                                       | 同上                                                                                      | 自定义事件观察程序必须遵守的版本化 stdout envelope 协议标识                                                                                                                             |
 
-### script 节点上下文族（`backend/src/services/scriptRun.ts` 组装）
+### script 节点上下文族（`backend/src/modules/task-execution/infrastructure/local/scriptRun.ts` 组装）
 
 `AW_WORKTREE`、`AW_TASK_ID`、`AW_NODE_ID`、`AW_NODE_RUN_ID`、`AW_RETRY_INDEX`、
 `AW_ITERATION`、`AW_SHARD_KEY`、`AW_RUN_DIR`、`AW_INPUT_DIR`、`AW_DEPS_DIR`、

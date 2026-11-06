@@ -42,9 +42,11 @@ on:
     branches: [main]
     paths:
       - 'packages/backend/src/main.ts'
-      - 'packages/backend/src/services/runner.ts'
+      # RFC-454: the runner and protocol re-exports in services/ are deleted; their bodies live here.
+      - 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts'
+      - 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgent*.ts'
       - 'packages/backend/src/services/envelope.ts'
-      - 'packages/backend/src/services/protocol.ts'
+      - 'packages/shared/src/prompt.ts'
       # 6adf3ea1: the whole opencode compat surface — driver/spawn/events + the
       # version-registry/flag utils + the shell stubs — a CLI-flag rename here
       # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
@@ -57,9 +59,11 @@ on:
   pull_request:
     paths:
       - 'packages/backend/src/main.ts'
-      - 'packages/backend/src/services/runner.ts'
+      # RFC-454: the runner and protocol re-exports in services/ are deleted; their bodies live here.
+      - 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts'
+      - 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgent*.ts'
       - 'packages/backend/src/services/envelope.ts'
-      - 'packages/backend/src/services/protocol.ts'
+      - 'packages/shared/src/prompt.ts'
       # 6adf3ea1: the whole opencode compat surface — driver/spawn/events + the
       # version-registry/flag utils + the shell stubs — a CLI-flag rename here
       # (e.g. 1964a0d0) must trigger the live sweep, not slip through.

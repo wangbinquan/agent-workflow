@@ -9,7 +9,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { ulid } from 'ulid'
-import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
+import { listClarifyRoundSummaries } from '../src/modules/collaboration/infrastructure/clarifyRounds'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 

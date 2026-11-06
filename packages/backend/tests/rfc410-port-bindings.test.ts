@@ -12,7 +12,7 @@ import { createTaskRunPorts } from '@/modules/task-execution/composition/taskEng
 import type { TaskExecutionRuntimeComponents } from '@/modules/task-execution/composition/taskExecutionComponents'
 import { createExecutionScopeIndex } from '@/modules/task-execution/domain/executionScope'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
-import type { BoundRunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
+import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { composeDynamicWorkflowLayerOneValidation } from '@/modules/resource-catalog/composition/workflowOperations'
 import {
   loadWorkflowValidationContext,

@@ -11,7 +11,7 @@ import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
@@ -77,10 +77,8 @@ describe('RFC-282 D2 — grant-set query single source', () => {
   })
 
   // RFC-401 T6 (proposal G5): `legacy/importRefs.ts` went with the test-only YAML import writer.
+  // RFC-454: the `services/resourceRefs.ts` re-export (the file this lock read) is deleted outright.
   test('resourceRefs no longer carries the grant-set SQL', () => {
-    for (const file of ['services/resourceRefs.ts']) {
-      const text = readFileSync(resolve(SRC, file), 'utf8')
-      expect(text).not.toContain('.from(resourceGrants)')
-    }
+    expect(existsSync(resolve(SRC, 'services/resourceRefs.ts'))).toBe(false)
   })
 })

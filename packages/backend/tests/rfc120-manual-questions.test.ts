@@ -39,7 +39,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { buildClarifyQueueContext } from '@/modules/collaboration/infrastructure/clarify/queue'
 import {
@@ -48,8 +48,8 @@ import {
   listTaskQuestions,
   loadUndispatchedDesignerTargets,
   reassignTaskQuestion,
-} from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

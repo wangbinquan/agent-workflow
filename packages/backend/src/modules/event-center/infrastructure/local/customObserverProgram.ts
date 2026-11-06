@@ -5,7 +5,7 @@ import {
   INTERPRETER_SPEC,
   resolveScriptInterpreter,
   type ResolvedInterpreter,
-} from '@/services/scriptRun'
+} from '@/platform/execution/local/scriptInterpreter'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 import { CUSTOM_EVENT_OBSERVER_PROTOCOL } from '../../domain/customEventSource'
 import type {

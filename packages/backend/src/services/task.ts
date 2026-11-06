@@ -72,7 +72,7 @@ import { join } from 'node:path'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
+import { setNodeRunStatus, setTaskStatus } from '@/modules/task-execution/public/operations'
 import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
@@ -82,7 +82,7 @@ import {
 } from '@/modules/task-execution/public/participants'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import type { killStaleRunProcessTree } from '@/util/process'
-// RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 `@/services/lifecycle`
+// RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 task-execution `public/operations`
 // 上同名的 bun:sqlite 专属**同步**版按名字区分开。
 import {
   composeSqliteRepositoryWorkspaceStore,

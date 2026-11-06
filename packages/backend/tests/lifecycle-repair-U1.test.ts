@@ -102,7 +102,8 @@ describeEachProvider('RFC-057 — U1.cancel-older-keep-newest', (provider) => {
     const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
     // Drift: cancel one of them manually before the operator clicks apply.
-    const { transitionNodeRunStatus } = await import('../src/services/lifecycle')
+    const { transitionNodeRunStatus } =
+      await import('../src/modules/task-execution/public/operations')
     await transitionNodeRunStatus({
       db: h.db,
       nodeRunId: setup.runIds[0]!,

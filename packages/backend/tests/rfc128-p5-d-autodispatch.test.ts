@@ -37,7 +37,7 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -54,18 +54,18 @@ import {
   autoDispatchClarifyRoundWithDecision,
   finishCommittedClarifyAutoDispatch,
 } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { prepareClarifyDecision } from '../src/services/clarifyDecision'
+import { prepareClarifyDecision } from '../src/modules/collaboration/infrastructure/clarifyDecision'
 import { composeGateContinuationPreDrive as createGateContinuationPreDriveStep } from '../src/modules/task-execution/composition/gateContinuationPreDrive'
 import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
 import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import {
   loadUndispatchedDesignerTargets,
   loadUndispatchedParkTargets,
   loadUndispatchedSelfQuestionerTargets,
-} from '../src/services/taskQuestions'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { getNodeClarifyDirectiveRow } from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'

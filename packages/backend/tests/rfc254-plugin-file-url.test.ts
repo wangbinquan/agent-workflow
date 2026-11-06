@@ -20,7 +20,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { installPlugin } from '@/services/pluginInstaller'
+import { installPlugin } from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 
 describe('RFC-254 T31 — file:// plugin install path conversion', () => {
   test('source anchor: installFilePlugin uses fileURLToPath, never URL.pathname', () => {

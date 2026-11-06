@@ -2,7 +2,7 @@
 // from `main.ts`. A source `bun test` parent cannot reproduce the production hop (compiled daemon -> compiled launcher
 // -> compiled runtime), so the e2e artifact owns this narrow executable check; `main.ts` still refuses it outside
 // e2e builds before anything spawns.
-import { runManagedProcess } from '@/services/execution/managedProcess'
+import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 
 export async function runManagedProcessOutputProbe(
   target: string,

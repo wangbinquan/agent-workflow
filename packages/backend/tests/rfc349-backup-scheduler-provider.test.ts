@@ -11,7 +11,7 @@
 // `rfc426-scheduled-backup-source.test.ts`），定时器只管节拍：每拍无参调用一次注入的函数。
 
 import { describe, expect, test } from 'bun:test'
-import { startBackupScheduler } from '@/services/backupScheduler'
+import { startBackupScheduler } from '@/platform/background/providerBackupScheduler'
 
 describe('RFC-349 provider-aware backup scheduler', () => {
   test('runs an injected provider backup without requiring a SQLite client', async () => {

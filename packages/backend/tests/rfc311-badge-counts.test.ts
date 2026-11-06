@@ -23,7 +23,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   countAwaitingClarifyRounds,
   listClarifyRoundSummaries,
-} from '../src/services/clarify/rounds'
+} from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import {
   countPendingReviews,
   listReviewSummaries,

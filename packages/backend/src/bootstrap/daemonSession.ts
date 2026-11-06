@@ -34,7 +34,7 @@ import {
   startConfiguredSubmoduleRefreshLoop,
 } from '@/modules/source-control/composition'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { startBackupScheduler } from '@/services/backupScheduler'
+import { startBackupScheduler } from '@/platform/background/providerBackupScheduler'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import type { buildWebSocketAdapter } from '@/ws/server'

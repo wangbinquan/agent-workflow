@@ -26,7 +26,7 @@ import {
   PluginFileNotFoundError,
   PluginInstallFailedError,
   PluginInstallTimeoutError,
-} from '@/services/pluginInstaller'
+} from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { DomainError } from '@/util/errors'
 
 describe('file 源 spec 的三种形态都要归一成宿主路径', () => {

@@ -85,14 +85,13 @@ import {
   type CauseClass,
   causeClassForEntry,
   isDispatchedEntryConsumed,
-} from '@/services/clarifyRerunLedger'
-import { evaluateDesignerRerunReadiness } from '@/services/clarify/service'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
+} from './clarify/rerunLedger'
+import { evaluateDesignerRerunReadiness } from './clarify/service'
 import {
   assertTaskAcceptsQuestions,
   taskNodeHasRun,
   QUESTION_DISPATCH_CLOSED_TASK_STATUSES,
-} from '@/services/taskQuestions'
+} from './taskQuestions'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
@@ -116,6 +115,8 @@ import {
   type RunLineageView,
   type TaskActorRole,
   type WorkflowDefinition,
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
 } from '@agent-workflow/shared'
 import { runIdsWithOutput } from './nodeRunOutputPresence'
 
@@ -377,7 +378,7 @@ function homeTarget(e: TaskQuestionRow): string | null {
 
 // RFC-128 P5-BC (§5.2.12 F3) — the rerun-cause class an entry's dispatch mints, derived from its
 // 承接 role. CauseClass + causeClassForEntry + the immediate-ledger oracle live in
-// @/services/clarifyRerunLedger (RFC-133 moved causeClassForEntry there so the queued-entry
+// ./clarify/rerunLedger (RFC-133 moved causeClassForEntry there so the queued-entry
 // cause guard shares the ONE definition).
 // Auto-split dispatch priority (§5.2.13): self/questioner (blocking-output, §0) BEFORE designer.
 const CAUSE_PRIORITY: Record<CauseClass, number> = {

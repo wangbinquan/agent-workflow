@@ -41,7 +41,7 @@ import {
   composeLegacyTaskRunDriveBinding,
   composeTaskWorkspaceExcludeProfilesFor,
 } from '../../src/modules/task-execution/composition/localTaskRunSelection'
-import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
+import type { RunTaskOptions } from '../../src/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { pickInheritableRunConfig } from '../../src/modules/task-execution/application/ports/taskExecutionTopology'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'

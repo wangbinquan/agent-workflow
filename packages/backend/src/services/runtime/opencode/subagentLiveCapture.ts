@@ -18,7 +18,7 @@
 //
 // The poller is intentionally decoupled from WebSocket plumbing: it calls
 // `opts.onInsert` whenever a tick lands at least one row, and the caller
-// (services/runner.ts) is responsible for translating that into a broadcast.
+// (task-execution's native agent run) is responsible for translating that into a broadcast.
 // This keeps the live capture testable without booting the ws server.
 
 import { existsSync } from 'node:fs'

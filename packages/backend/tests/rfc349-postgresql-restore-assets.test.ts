@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { BackupManifestV2 } from '@/services/backupManifest'
+import type { BackupManifestV2 } from '@/platform/persistence/sqlite/systemBackupManifest'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlProviderRestoreApplicationAssets } from '@/modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets'
 

@@ -45,9 +45,9 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { sealAnswersServerSide } from '@/services/clarify/service'
-import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
-import { wgClarifyAskerKeyForRound } from '@/services/workgroup/askerKey'
+import { sealAnswersServerSide } from './service'
+import { reconcileRoundEntriesTx } from '../taskQuestions'
+import { wgClarifyAskerKeyForRound } from '../../domain/workgroupClarifyAskerKey'
 import { setNodeClarifyDirectiveTx } from '../taskClarifyDirective'
 import {
   classifyClarifyReseal,

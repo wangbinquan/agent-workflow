@@ -291,6 +291,14 @@ const RETIRED_FACADES = [
   'services/workgroup/dwActions.ts',
   'services/workgroup/room.ts',
   'services/workgroup/taskActions.ts',
+  // RFC-454: the last one-hop re-exports here were deleted; consumers take the declaration sites
+  // (`assertWorkflowLaunchInputs` through resource-catalog `public/queries`, the YAML serializer and the workflow
+  // agent refs from shared, the workgroup host ids from shared and the clarify asker key from collaboration's domain).
+  'services/resourceRefs.ts',
+  'services/workflow.yaml.ts',
+  'services/workflowLaunchInputs.ts',
+  'services/workgroup/askerKey.ts',
+  'services/workgroup/constants.ts',
 ] as const
 
 const edge = (
@@ -400,13 +408,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     REMOVE_OWNERS.taskExecution,
   ),
   edge(
-    'services/resourceRefs.ts',
-    'modules/intent/application/dumpBuilder.ts',
-    ['extractWorkflowAgentRefs'],
-    'Intent workflow reference extraction',
-    REMOVE_OWNERS.portableImportReferences,
-  ),
-  edge(
     'services/skillBootVerify.ts',
     'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
     ['isSkillInjectableThisBoot'],
@@ -451,59 +452,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['loadWorkflowValidationContext', 'validateWorkflowDef'],
     'task launch Workflow validation',
     REMOVE_OWNERS.workflowValidation,
-  ),
-  edge(
-    'services/workflow.yaml.ts',
-    'platform/persistence/portableApplicationAssets.ts',
-    ['stringifyWorkflowYaml'],
-    // RFC-359 W9：备份的 workflow 序列化此前是两条边（SQLite 的 systemProviderBackup.ts
-    // 与 PostgreSQL 的 postgresqlProviderBackupApplicationAssets.ts 各一份实现），
-    // 合一后只剩这一条；同时销掉了 `services/workflow.ts#listWorkflows` 那条边。
-    'portable backup Workflow serialization',
-    REMOVE_OWNERS.systemOperations,
-  ),
-  edge(
-    'services/workflowLaunchInputs.ts',
-    'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
-    ['assertWorkflowLaunchInputs'],
-    // RFC-359 W8-A：子任务启动的输入门原本只长在 legacy 引擎里（同一个 facade 的
-    // `services/task.ts` 消费者），PG 的子任务铸造机根本不看 inputs。补齐用的是**同一个**
-    // 符号，因此这条边与其它四条同生同灭、同一个清偿 owner。
-    'PostgreSQL child launch input validation',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflowLaunchInputs.ts',
-    'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-    ['assertWorkflowLaunchInputs'],
-    // RFC-359 AC-1（plan §5hn 批次二 ④）：启动输入契约原本只长在 `services/task.ts` 的
-    // `startTask` 那一侧，共用的启动参与者上没有——**PostgreSQL 从来没执行过这条契约**
-    //（同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。补到参与者的
-    // 工作流臂上之后两个引擎同一道门。与 W8-A 那条同形：**同一个符号**、**同一个清偿
-    // owner**，随 RFC-294 W4-E1 cutover 一起退役。
-    'PostgreSQL workflow route launch input validation',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflowLaunchInputs.ts',
-    'modules/integration/composition/scheduledTasks.ts',
-    ['assertWorkflowLaunchInputs'],
-    'scheduled task launch input validation (RFC-438: wired by integration composition)',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workgroup/askerKey.ts',
-    'modules/collaboration/infrastructure/clarify/seal.ts',
-    ['wgClarifyAskerKeyForRound'],
-    'workgroup clarify asker identity',
-    REMOVE_OWNERS.collaborationQuestions,
-  ),
-  edge(
-    'services/workgroup/constants.ts',
-    'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
-    ['WG_LEADER_NODE_ID', 'WG_MEMBER_NODE_ID'],
-    'workgroup question dispatch node identities',
-    REMOVE_OWNERS.collaborationQuestions,
   ),
   // RFC-424：`services/workgroup/state.ts` → `services/task.ts` 的最后一个符号 `setDwStateTx`
   // 随测试专用的动态工作流续跑准入删除，整条边销账。

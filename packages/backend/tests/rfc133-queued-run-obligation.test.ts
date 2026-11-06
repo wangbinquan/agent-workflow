@@ -24,7 +24,10 @@ import type { PersistenceTables } from '@/platform/persistence/sessionTables'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
 
-import { causeClassForEntry, isDispatchedEntryConsumed } from '../src/services/clarifyRerunLedger'
+import {
+  causeClassForEntry,
+  isDispatchedEntryConsumed,
+} from '../src/modules/collaboration/infrastructure/clarify/rerunLedger'
 import type { RunLineageView } from '@agent-workflow/shared'
 
 type NodeRunRow = ReturnType<typeof projectNodeRunReadFacts>

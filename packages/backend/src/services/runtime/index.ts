@@ -1,4 +1,7 @@
-export type { RuntimeUsageMeter, RuntimeUsageSnapshot } from './usage'
+export type {
+  RuntimeUsageMeter,
+  RuntimeUsageSnapshot,
+} from '@/modules/runtime-management/public/participants'
 // RFC-111 PR-A — runtime driver registry + resolution.
 //
 // `getRuntimeDriver` is the factory (multica's Backend-factory pattern) that

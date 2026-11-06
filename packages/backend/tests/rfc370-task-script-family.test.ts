@@ -35,7 +35,7 @@ import {
 import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
 import { createWorkerIdentity } from '../src/modules/task-execution/domain/ownership'
 import { requestHash } from '../src/modules/task-execution/domain/executionEffect'
-import { ScriptDepsInstallError as CompatibilityScriptDepsInstallError } from '../src/services/scriptDepsEnv'
+import { ScriptDepsInstallError as CompatibilityScriptDepsInstallError } from '../src/modules/task-execution/infrastructure/local/scriptDepsEnv'
 import { ScriptDepsInstallError as NativeScriptDepsInstallError } from '../src/modules/task-execution/infrastructure/local/scriptDepsEnv'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'

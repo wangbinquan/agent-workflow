@@ -12,7 +12,7 @@
 // `event-automation-rules:override-owner`（404 同形）。保存期校验三层
 // （domain/webhookTriggerValidation.ts 注释）；创建/更新时以**保存者身份**跑
 // 「彩排渲染 + assertScheduledTargetUsable」——launch 目标对保存者不可见即拒绝
-// （对齐 services/resourceRefs.ts 的新增引用校验惯例）。
+// （对齐 resource-catalog `infrastructure/legacy/resourceRefs.ts` 的新增引用校验惯例）。
 import { ulid } from 'ulid'
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'

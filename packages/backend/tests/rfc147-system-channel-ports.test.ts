@@ -197,12 +197,12 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
   })
 
   test('taskQuestionDispatch 第四变体删除，改共享谓词', () => {
-    const facade = read('packages/backend/src/services/taskQuestionDispatch.ts')
+    // RFC-454: the `services/taskQuestionDispatch` re-export is deleted; consumers take the implementation.
+    expect(
+      existsSync(resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts')),
+    ).toBe(false)
     const implementation = read(
       'packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts',
-    )
-    expect(facade).toContain(
-      "export * from '@/modules/collaboration/infrastructure/taskQuestionDispatch'",
     )
     expect(implementation).not.toMatch(/function isChannelEdge\(/)
     expect(implementation).toContain('isClarifyChannelEdge')

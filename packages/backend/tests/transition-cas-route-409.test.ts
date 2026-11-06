@@ -16,7 +16,10 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { ConcurrentNodeRunTransition, transitionNodeRunStatus } from '../src/services/lifecycle'
+import {
+  ConcurrentNodeRunTransition,
+  transitionNodeRunStatus,
+} from '../src/modules/task-execution/public/operations'
 import { errorHandler } from '../src/util/errors'
 
 async function seedNodeRun(

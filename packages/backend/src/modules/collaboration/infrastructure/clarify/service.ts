@@ -29,7 +29,7 @@ import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 //     produced by private wire adapters from the unified DTO.
 //
 // Dead surface deleted with the merge (zero production callers; reads live in
-// services/clarify/rounds.ts since T7, cleanup rides the tasks FK cascade, the
+// ../clarifyRounds.ts since T7, cleanup rides the tasks FK cascade, the
 // scheduler has its own inline cross-clarify dispatch branch):
 //   listClarifySummaries / getClarifyDetail / countPendingClarifications /
 //   cleanupSessionsForTask / listCrossClarifySummaries / getCrossClarifyDetail /
@@ -81,7 +81,6 @@ import {
   type ClarifyTerminatedAs,
   type ClarifyTruncationWarning,
   type WorkflowDefinition,
-  type WorkflowNode,
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 
@@ -801,14 +800,6 @@ export function findClarifyNodeIdForAgent(
   agentNodeId: string,
 ): string | undefined {
   return findClarifyNodeForAgent(definition, agentNodeId)
-}
-
-/** Returns the workflow node object for a clarify id, when present. */
-export function findClarifyNode(
-  definition: WorkflowDefinition,
-  clarifyNodeId: string,
-): WorkflowNode | undefined {
-  return definition.nodes.find((n) => n.id === clarifyNodeId && n.kind === 'clarify')
 }
 
 /**

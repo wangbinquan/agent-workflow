@@ -18,7 +18,7 @@ import {
   type Agent,
 } from '@agent-workflow/shared'
 import { prepareAgentReferenceUpdate } from '@/modules/resource-catalog/infrastructure/agentReferenceWrite'
-import { extractWorkflowAgentRefs } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
+import { extractWorkflowAgentRefs } from '@agent-workflow/shared'
 import type { RunHistoryFacts } from '@/modules/task-execution/infrastructure/migration/oracle/historySnapshot'
 
 const answer = {

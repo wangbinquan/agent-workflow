@@ -1,3 +1,17 @@
+## 2026-11-05 RFC-454 `services/` 一跳转出清仓（In Progress；`design/RFC-454-services-one-hop-facade-sweep/`）
+
+- **来由**：RFC-294 W9-D 第一步。RFC-453 后入站适配器不再取 `services/`，余下 153 个文件里 36 个只做 `export … from`（早先迁移留下的
+  兼容地址），其中 6 个藏着目标 DAG 不给的依赖、1 个藏着 application → infrastructure 的取用。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：删除 30 个转出，消费方（生产与用例）改取声明处 / 平台 / shared / owner public；被藏住的越界依赖按真实使用者下沉——澄清判定
+  与澄清节点查找进 task-execution `domain`，调用闭包编解码与启动输入校验进 resource-catalog `domain`（经 public 给 task-execution），
+  脚本解释器解析进 `platform/execution/local`，workgroup 词表与澄清提问者键、工作流 YAML 序列化与代理引用提取进 shared；函数体原样
+  （两处例外对一切输入同解：`computeRemaining` 改经 RFC-339 的包装成员读者，`FrozenWorkgroupRef.group` 进 public 后收为闭合类型）。
+- **不做**：余下 6 个转出（`sessionEventSink` 随运行时驱动归位；`workflow` / `workgroups` 等 resource-catalog 执行期查询端口；
+  `workflow.validator` 随 E1；`skillBootVerify` / `skillIdentityPaths` 等技能注入端口）；`services/` 的实现文件。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-453 的 Done 文档提交 `fd5467bec`：exact SHA 主 CI run 42159938224 首轮全绿（70 个 job）。
+
 ## 2026-11-05 RFC-453 workspace-insight 一族归新模块 workspace-insight（Done；`design/RFC-453-workspace-insight-module/`）
 
 - **来由**：RFC-294 W4 B / D 第十八步、E5（RFC-452 后 `tasks` 是唯一 import `services/` 的路由，余 workspace-insight 一族 7 处）。

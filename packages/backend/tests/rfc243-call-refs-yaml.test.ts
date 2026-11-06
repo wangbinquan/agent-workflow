@@ -26,9 +26,9 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
-import { extractWorkflowWorkflowRefs } from '../src/services/resourceRefs'
+import { extractWorkflowWorkflowRefs } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { getWorkflow } from '../src/services/workflow'
-import { workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
+import { workflowDefinitionToSelectors } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.yaml'
 import { copyWorkflow, createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {

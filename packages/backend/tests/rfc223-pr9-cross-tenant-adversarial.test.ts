@@ -64,7 +64,7 @@ import {
   getSkillVersionContent,
   restoreSkillVersion,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { buildFrontierMintPlan } from '../src/services/taskQuestionDispatch'
+import { buildFrontierMintPlan } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { abortAllActiveTasks, getTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

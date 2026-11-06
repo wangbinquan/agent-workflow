@@ -34,18 +34,21 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { createBackup } from '../src/services/backup'
+import { createBackup } from '../src/platform/persistence/sqlite/systemProviderBackup'
 import {
   computeRestoreDirection,
   swapInDbFile,
   RestoreDowngradeError,
   RestoreIntegrityError,
   RestoreSafetyBackupError,
-} from '../src/services/restore'
-import { writeManifest, type BackupManifest } from '../src/services/backupManifest'
+} from '../src/platform/persistence/sqlite/systemProviderRestore'
+import {
+  writeManifest,
+  type BackupManifest,
+} from '../src/platform/persistence/sqlite/systemBackupManifest'
 import { restoreCommand } from '../src/cli/restore'
 import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
-import { hasPendingRestore } from '../src/services/pendingRestore'
+import { hasPendingRestore } from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
 import { writePidFileForTest } from '../src/util/lock'
 import { appVersion } from '../src/util/version'
 import { extractTarGz, tarGz } from '../src/util/archive'

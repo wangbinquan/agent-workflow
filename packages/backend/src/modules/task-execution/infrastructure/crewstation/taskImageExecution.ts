@@ -5,11 +5,8 @@ import { join, resolve } from 'node:path'
 import { rmSync } from 'node:fs'
 import type { ScriptLanguage } from '@agent-workflow/shared'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
-import {
-  resolveScriptInterpreter,
-  runScriptProcess,
-  type ScriptRunRequest,
-} from '../local/scriptRun'
+import { resolveScriptInterpreter } from '@/platform/execution/local/scriptInterpreter'
+import { runScriptProcess, type ScriptRunRequest } from '../local/scriptRun'
 import { ensureScriptDepsEnv } from '../local/scriptDepsEnv'
 import { createFilePortArtifactContent } from '../local/filePortArtifactContent'
 import { resolveNativePortContentDetailed } from '../local/filePortOutputValidation'

@@ -34,6 +34,7 @@ import {
   LIVE_WORKTREE_TASK_STATUSES,
   migrateWorkflowDefinitionToLatest,
   WorkflowDefinitionSchema,
+  stringifyWorkflowYaml,
 } from '@agent-workflow/shared'
 import { eq, inArray, sql } from 'drizzle-orm'
 import { writeFileSync } from 'node:fs'
@@ -41,7 +42,6 @@ import { join } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
-import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import {
   captureWorktreeRows,
   reconstructWorktreeRows,

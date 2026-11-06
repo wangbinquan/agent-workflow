@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

@@ -23,7 +23,7 @@ import { withO2Closure } from './helpers/o2Closure'
 
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 
-import { createClarifyRound } from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'

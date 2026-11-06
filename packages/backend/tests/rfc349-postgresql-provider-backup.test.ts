@@ -21,7 +21,7 @@ import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
-import { readManifest } from '@/services/backupManifest'
+import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
 import { captureWorktreeRows } from '@/services/worktreeBackup'
 import { extractTarGz } from '@/util/archive'

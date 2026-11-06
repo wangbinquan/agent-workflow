@@ -1,7 +1,7 @@
 import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import { finishCommittedClarifyAutoDispatch } from '@/services/clarify/autoDispatch'
+import { finishCommittedClarifyAutoDispatch } from './clarify/autoDispatch'
 import type {
   ClarifyContinuationConvergence,
   ClarifyContinuationConvergenceRequest,

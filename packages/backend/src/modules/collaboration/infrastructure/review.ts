@@ -197,7 +197,7 @@ import type { ReviewGateOpenDocumentDraft } from '@/modules/collaboration/applic
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { chunkedAll } from '@/util/sqlChunk'
 
-import { assertNodeRunSourceTerminationAdmission } from '@/services/lifecycle'
+import { assertNodeRunSourceTerminationAdmission } from '@/modules/task-execution/public/operations'
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
 // （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'

@@ -38,7 +38,10 @@ import {
 } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { transitionNodeRunStatus, transitionNodeRunStatusTx } from '../src/services/lifecycle'
+import {
+  transitionNodeRunStatus,
+  transitionNodeRunStatusTx,
+} from '../src/modules/task-execution/public/operations'
 import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'

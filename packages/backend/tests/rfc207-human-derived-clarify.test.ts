@@ -25,9 +25,9 @@ import {
 import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
-  WG_LEADER_NODE_ID,
-  WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
+} from '@agent-workflow/shared'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {

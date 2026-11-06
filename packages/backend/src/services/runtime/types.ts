@@ -10,7 +10,10 @@ export type {
   StartupInventory,
 } from '@/modules/runtime-management/public/participants'
 
-import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from './usage'
+import type {
+  RuntimeUsageMeter,
+  RuntimeUsageMeterInput,
+} from '@/modules/runtime-management/public/participants'
 // RFC-111 PR-A — runtime abstraction types.
 //
 // The platform drives one agent CLI per node_run. Today that CLI is opencode,

@@ -1,7 +1,7 @@
 // Legacy lifecycle compatibility operations.
 //
 // RFC-395 II-b O1: the writer now belongs to task-execution. This entrypoint
-// keeps services/lifecycle callers on the same mutation atoms without loading
+// keeps the legacy callers (RFC-454 removed their `services/lifecycle` re-export) on the same mutation atoms without loading
 // the human-gate and recovery composition graph. New business consumers receive
 // provider-selected TaskExecution ports.
 

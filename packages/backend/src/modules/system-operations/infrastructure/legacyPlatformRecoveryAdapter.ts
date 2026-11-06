@@ -10,7 +10,7 @@ import {
   listFailedRestores,
   readPendingRestore,
   stagePendingRestore,
-} from '@/services/pendingRestore'
+} from './local/filePendingRestore'
 import {
   planRestore,
   restoreBackup,

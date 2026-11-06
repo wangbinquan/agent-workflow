@@ -13,12 +13,12 @@ import type {
   AgentRunRequest,
 } from '@/modules/task-execution/application/ports/agentNodeExecution'
 import { NOOP_AGENT_RUN_SETTLED_OBSERVER } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
-import { findClarifyNode } from '@/services/clarify/service'
+import { findClarifyNode } from '@/modules/task-execution/domain/clarifyRules'
 import {
   computeRemaining,
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
-} from '@/services/clarifyRounds'
+} from '@/modules/task-execution/domain/clarifyRules'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'

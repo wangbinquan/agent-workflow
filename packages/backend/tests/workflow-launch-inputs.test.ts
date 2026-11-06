@@ -3,7 +3,7 @@ import type { WorkflowInput } from '@agent-workflow/shared'
 import {
   assertWorkflowLaunchInputs,
   workflowLaunchInputIssues,
-} from '../src/services/workflowLaunchInputs'
+} from '../src/modules/resource-catalog/domain/workflowLaunchInputs'
 
 const defs: WorkflowInput[] = [
   { kind: 'text', key: 'topic', label: 'Topic', required: true, maxLength: 20 },

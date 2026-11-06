@@ -24,8 +24,11 @@ import { join } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { openDb } from '../src/db/client'
-import { isDbSnapshotInProgress, vacuumIntoOffThread } from '../src/services/backup'
-import { runWalCheckpointTick } from '../src/services/backupScheduler'
+import {
+  isDbSnapshotInProgress,
+  vacuumIntoOffThread,
+} from '../src/platform/persistence/sqlite/systemProviderBackup'
+import { runWalCheckpointTick } from '../src/platform/background/providerBackupScheduler'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 
 function admin(): Actor {

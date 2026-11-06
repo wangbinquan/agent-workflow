@@ -99,7 +99,7 @@ import {
   describeWrapperKind,
   reviewInputSource,
 } from '@agent-workflow/shared'
-import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
+import { callEdgeKey, parseCallClosure } from '../../domain/callClosure'
 import { workflowReferenceFromPersistenceRow } from '../workflowPersistence'
 // RFC-358: 覆盖层合同住在本模块 public 面——application port 与 intent 都要引用它，
 // 而它们都不该 import 这个 legacy 文件。
@@ -180,7 +180,7 @@ export interface WorkflowValidationCandidate {
  *
  * RFC-243 §5.4: pass the candidate being validated to ALSO load its
  * call-workflow reference closure (lazy, name-keyed, transitively — the
- * advisory twin of the launch freeze in `services/execution/closure.ts`).
+ * advisory twin of the launch freeze in task-execution's `infrastructure/legacyCallClosure.ts`).
  * Callers that omit it keep the pre-RFC-243 context: call rules that need the
  * child definition then degrade instead of false-failing (see §4f / rule 2).
  */
@@ -296,7 +296,7 @@ function closureFromFrozen(
  * candidate definition: BFS level-by-level over the `workflows` table by
  * authoritative NAME selector, following references of referenced definitions
  * transitively. Never loads unreferenced rows. Lenient advisory twin of the
- * launch freeze (`freezeCallClosure`, services/execution/closure.ts — keep the
+ * launch freeze (`freezeCallClosure`, task-execution `infrastructure/legacyCallClosure.ts` — keep the
  * two walks shape-identical so the gates cannot drift): an unresolvable name
  * or an unreadable stored definition simply stays absent from the map (the
  * validator reports `call-workflow-ref-missing`), it never throws. The map is
@@ -2907,7 +2907,7 @@ export function validateWorkflowDef(
 
   // 4f. RFC-243 — call-workflow nodes (design §5.4) --------------------------
   // Advisory twin of the launch-time closure freeze (`freezeCallClosure`,
-  // services/execution/closure.ts): shown at /validate + /validate-draft,
+  // task-execution infrastructure/legacyCallClosure.ts): shown at /validate + /validate-draft,
   // enforced at the launch gate — which additionally fails closed on its own
   // fresh walk, so a stale resolver here can never ADMIT a broken launch.
   // Checks that need the referenced definition run only when the closure was

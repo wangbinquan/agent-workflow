@@ -16,7 +16,8 @@ import type {
   TaskScriptDependencyEnvironment,
   TaskScriptResult,
 } from '../../application/ports/taskScriptRunFamily'
-import type { ResolvedInterpreter, ScriptRunOutcome } from '../local/scriptRun'
+import type { ResolvedInterpreter } from '@/platform/execution/local/scriptInterpreter'
+import type { ScriptRunOutcome } from '../local/scriptRun'
 import type { ScriptDepsEnv } from '../local/scriptDepsEnv'
 import {
   createHostedProcessEffectProjection,

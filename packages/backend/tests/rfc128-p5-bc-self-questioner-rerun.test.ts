@@ -37,12 +37,15 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
-import { dispatchTaskQuestions, resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
+import {
+  dispatchTaskQuestions,
+  resolveBorrowForNode,
+} from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import {
   loadUndispatchedSelfQuestionerTargets,
   reconcileTaskQuestionsForRound,
-} from '../src/services/taskQuestions'
-import { createClarifyRound } from '../src/services/clarify/service'
+} from '../src/modules/collaboration/infrastructure/taskQuestions'
+import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { ConflictError } from '../src/util/errors'

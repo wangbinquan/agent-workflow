@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
+import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'

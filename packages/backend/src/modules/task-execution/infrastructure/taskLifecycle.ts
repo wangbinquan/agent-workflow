@@ -90,7 +90,7 @@ export type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../appli
 
 // RFC-359 W8 —— 转移判据 / 错误类型 / 字段白名单下沉到叶子
 // `platform/persistence/nodeRunLifecycleCore.ts`，同步版与中立异步孪生都向下取用同一份。
-// 这里继续 re-export，`@/services/lifecycle` 与既有调用方的 import 路径一格不动。
+// 这里继续 re-export，既有调用方的 import 路径一格不动（RFC-454 删了 `services/lifecycle` 这层转出）。
 export {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
@@ -317,7 +317,7 @@ export async function cancelOpenNodeRuns(args: {
 }
 
 // RFC-359：联合的唯一定义在 `modules/task-execution/infrastructure/humanGateTaskTransition.ts`
-// （human-gate 跃迁本身归那一层）；这里只把它转出去，`services/lifecycle.ts` 的 import 路径不动。
+// （human-gate 跃迁本身归那一层）；这里只把它转出去，既有 import 路径不动。
 export type { HumanGateTaskTransition } from './humanGateTaskTransition'
 
 /**

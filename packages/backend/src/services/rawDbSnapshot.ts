@@ -12,7 +12,7 @@
 // to SQLITE_CORRUPT and preserves even a broken file for forensics.
 //
 // Design gate (design/RFC-213-disaster-recovery/design.md §3.1) mandated this
-// split from createBackup (services/backup.ts, VACUUM INTO — healthy DB only).
+// split from createBackup (platform/persistence/sqlite/systemProviderBackup.ts, VACUUM INTO — healthy DB only).
 
 import {
   closeSync,
@@ -34,7 +34,7 @@ import {
   type BackupManifest,
   currentAppVersion,
   writeManifest,
-} from './backupManifest'
+} from '@/platform/persistence/sqlite/systemBackupManifest'
 
 const log = createLogger('rawDbSnapshot')
 

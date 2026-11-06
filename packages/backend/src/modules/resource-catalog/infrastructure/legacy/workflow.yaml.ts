@@ -1,16 +1,14 @@
 // P-4-08: YAML export for workflows.
 //
 // Export: dump the canonical Workflow object (id + name + description +
-// definition) as YAML using the `yaml` package's pretty printer; preview parses an
+// definition) as YAML — RFC-454: the serializer itself is shared's `stringifyWorkflowYaml`; preview parses an
 // import request without writing. RFC-401 T6 (proposal G5): the test-only YAML import
 // writer is deleted — no production route imported a workflow through it.
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
-  type Workflow,
   type WorkflowDefinition,
   type WorkflowDefinitionSelector,
-  stringifyWorkflowYamlDocument,
   stripCallWorkflowNodeIds,
   WorkflowDefinitionSelectorSchema,
   WorkflowNameSchema,
@@ -23,30 +21,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { filterVisibleRows } from '@/modules/resource-catalog/composition/resourceAcl'
 import { WORKFLOW_NAME_INVALID_MESSAGE } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { ValidationError } from '@/util/errors'
-
-/**
- * Serialize an already-captured workflow row. Callers that also perform an
- * ACL/revision guard must pass that exact immutable snapshot here instead of
- * re-reading by id after the guard (RFC-199 B1/B3).
- */
-export function stringifyWorkflowYaml(
-  wf: Pick<Workflow, 'id' | 'name' | 'description'> & {
-    definition: WorkflowDefinition | WorkflowDefinitionSelector
-  },
-): string {
-  return stringifyWorkflowYamlDocument(
-    {
-      name: wf.name,
-      description: wf.description,
-      // The shared serializer deliberately accepts the canonical definition
-      // schema for full-fidelity backups. Portable selectors are a strict
-      // no-agentId subset with passthrough selector metadata, so they normalize
-      // through that same serializer without widening the import schema.
-      definition: wf.definition as WorkflowDefinition,
-    },
-    { id: wf.id },
-  )
-}
 
 export interface YamlImportPreview {
   /** Workflow id parsed from YAML, if any. */

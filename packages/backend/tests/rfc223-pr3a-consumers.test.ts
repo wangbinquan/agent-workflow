@@ -26,7 +26,7 @@ import {
 } from './helpers/workgroupSelection'
 import { extractAgentIdsFromSnapshot } from '../src/modules/memory/application/distill/schedule'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
-import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'
+import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { createAgent, renameAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const ACTOR = buildActor({

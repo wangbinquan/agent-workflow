@@ -18,7 +18,7 @@ import {
   ConcurrentTaskTransition,
   registerTerminalWorkspacePrunePolicy,
   setTaskStatus,
-} from '../src/services/lifecycle'
+} from '../src/modules/task-execution/public/operations'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'

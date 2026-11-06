@@ -1,4 +1,8 @@
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import {
+  assertWorkflowLaunchInputs,
+  createWorkflowExecutionQueries,
+  parseFrozenWorkgroupGroup,
+} from '@/modules/resource-catalog/public/queries'
 import { lockTaskAggregateRoots } from './taskDefinitionWriteParticipant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -14,6 +18,9 @@ import {
   type TaskStartOptions,
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
+  WORKGROUP_TURN_CLARIFY_NODE_ID as WG_CLARIFY_NODE_ID,
+  WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -24,7 +31,6 @@ import { taskReadColumns } from './taskRepositorySql'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
-import { FrozenWorkgroupGroupSchema } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -33,7 +39,6 @@ import {
   triggerSourceFromContext,
 } from '@/services/execution/triggerPreflight'
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
-import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   CHILD_LAUNCH_FAILURE,
@@ -53,12 +58,6 @@ import {
   type TaskExecutionTransaction,
 } from './taskLifecycleTransaction'
 import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
-
-// Wire-frozen task/workflow identities. TaskExecution repeats them here rather
-// than importing Resource Catalog provider-private infrastructure.
-const WG_LEADER_NODE_ID = '__wg_leader__'
-const WG_MEMBER_NODE_ID = '__wg_member__'
-const WG_CLARIFY_NODE_ID = '__wg_clarify__'
 
 export interface ChildWorkgroupLaunchResources {
   loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]>
@@ -206,7 +205,7 @@ async function prepareWorkgroupSubject(
     collaborators: readonly string[]
   }>
 > {
-  const group = FrozenWorkgroupGroupSchema.parse(request.frozenGroup.group)
+  const group = parseFrozenWorkgroupGroup(request.frozenGroup.group)
   if (group.id !== request.frozenGroup.id || group.version !== request.frozenGroup.version) {
     throw new ValidationError(
       'workgroup-frozen-identity-mismatch',

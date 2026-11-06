@@ -35,7 +35,7 @@ import type {
   LogicalSchemaContract,
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import { writeManifest } from '@/services/backupManifest'
+import { writeManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { extractTarGz, tarGz } from '@/util/archive'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'

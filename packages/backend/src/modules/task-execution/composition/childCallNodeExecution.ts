@@ -24,7 +24,7 @@ import {
   childClosureSubset,
   frozenWorkflowFromClosure,
   frozenWorkgroupFromClosure,
-} from '../infrastructure/legacyCallClosure'
+} from '@/modules/resource-catalog/public/queries'
 import { broadcastNodeStatus } from '../infrastructure/nodeStatusEvents'
 import { isolatedRunBinding, nodeRunLedger } from './executionMechanismBindings'
 import { createIsolationMechanicsPorts } from './isolationMechanicsBinding'

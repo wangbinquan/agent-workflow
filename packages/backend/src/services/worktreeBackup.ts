@@ -10,7 +10,7 @@
 // Deliberately does NOT touch the resume/rollback path: on resume a reconstructed
 // worktree is rolled back to its pre_snapshot exactly like any other (that IS the
 // correct resume semantics — a re-run must start from a clean pre-run state).
-// The auto-resume-suspension applied by restore (services/restore.ts) keeps the
+// The auto-resume-suspension applied by restore (platform/persistence/sqlite/systemProviderRestore.ts) keeps the
 // user in control until they consciously resume. Same-machine only: the base
 // commits / branch live in the cached mirror under ~/.agent-workflow/repos which
 // the backup excludes.

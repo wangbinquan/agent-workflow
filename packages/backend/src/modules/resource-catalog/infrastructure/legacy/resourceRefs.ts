@@ -16,11 +16,7 @@
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, GrantResourceType, WorkflowDefinition } from '@agent-workflow/shared'
-import {
-  collectWorkflowDependencyRefs,
-  collectWorkflowCallRefs,
-  collectWorkgroupCallRefs,
-} from '@agent-workflow/shared'
+import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -50,22 +46,6 @@ import {
   forEachResourceCommit,
 } from '../resourceCommitSequence'
 export type { RefCheckGroup, ResolvedRefsById } from '../../application/agents/referenceTypes'
-
-/**
- * Agent references of a workflow definition (agent-single nodes). RFC-223
- * (PR-8): returns only canonical `agentId` values. A name-only persisted node
- * is corrupt/legacy data and fails closed; portable YAML names are resolved by
- * the dedicated importRefs service before this function is reached.
- */
-export function extractWorkflowAgentRefs(def: {
-  nodes?: ReadonlyArray<Record<string, unknown>>
-}): Set<string> {
-  return new Set(
-    collectWorkflowDependencyRefs(def)
-      .filter((ref) => ref.resourceType === 'agent')
-      .map((ref) => ref.value),
-  )
-}
 
 /** Names in `next` that are not in `prev` — the D15 "new references". */
 export function diffNewNames(prev: ReadonlySet<string>, next: ReadonlySet<string>): string[] {

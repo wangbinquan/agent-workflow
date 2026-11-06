@@ -17,7 +17,7 @@ import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { callEdgeKey } from '../src/services/execution/closure'
+import { callEdgeKey } from '../src/modules/resource-catalog/domain/callClosure'
 import {
   loadWorkflowValidationContext,
   validateWorkflowDef,

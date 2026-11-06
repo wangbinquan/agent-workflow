@@ -9,7 +9,7 @@ import { eventResponseTargetSchema } from '@/modules/event-center/domain/respons
 import { materializeEventAutomationTarget } from '@/modules/event-center/application/eventAutomationTarget'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { validateAgentLaunchShape } from '@/services/agentLaunch'
-import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
+import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/domain/workflowLaunchInputs'
 const context = (value = 'event text') =>
   TriggerContextSchema.parse({
     trigger: { test: { text: value } },

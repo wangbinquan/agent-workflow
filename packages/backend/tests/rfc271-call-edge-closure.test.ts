@@ -24,7 +24,7 @@ import {
   frozenWorkflowFromClosure,
   frozenWorkgroupFromClosure,
   parseCallClosure,
-} from '@/services/execution/closure'
+} from '@/modules/resource-catalog/domain/callClosure'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
 const emptyDef = (nodes: unknown[] = []): WorkflowDefinition =>

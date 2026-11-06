@@ -25,22 +25,22 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { createBackup } from '../src/services/backup'
+import { createBackup } from '../src/platform/persistence/sqlite/systemProviderBackup'
 import {
   clearPendingRestore,
   hasPendingRestore,
   listFailedRestores,
   readPendingRestore,
   stagePendingRestore,
-} from '../src/services/pendingRestore'
+} from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
 import { applyPendingSqliteRestoreForTest as applyPendingRestoreIfAny } from './helpers/sqlitePostRestoreRecovery'
 import {
   RestoreDowngradeError,
   RestoreIntegrityError,
   RestorePostSwapError,
   validateBackupForStage,
-} from '../src/services/restore'
-import { writeManifest } from '../src/services/backupManifest'
+} from '../src/platform/persistence/sqlite/systemProviderRestore'
+import { writeManifest } from '../src/platform/persistence/sqlite/systemBackupManifest'
 import { tarGz } from '../src/util/archive'
 import { quickCheckDbFile } from '../src/db/integrity'
 import { readFileSync } from 'node:fs'

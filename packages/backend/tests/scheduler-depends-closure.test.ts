@@ -19,7 +19,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getAgent } from './helpers/resourceLookup'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { createAgent } from './helpers/model/resourceWrites'
 

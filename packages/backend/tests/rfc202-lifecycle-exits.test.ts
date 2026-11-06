@@ -33,7 +33,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
-import { trySetTaskStatus } from '../src/services/lifecycle'
+import { trySetTaskStatus } from '../src/modules/task-execution/public/operations'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
@@ -42,7 +42,7 @@ import {
   listReviewSummaries,
   countPendingReviews,
 } from '@/modules/collaboration/infrastructure/review'
-import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
+import { listClarifyRoundSummaries } from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import { scheduledRowsReferencingWorkflow } from '../src/services/workflow'
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'

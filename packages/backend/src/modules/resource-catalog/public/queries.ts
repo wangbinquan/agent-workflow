@@ -280,3 +280,13 @@ export type {
   WorkflowReferenceSummary,
   WorkflowExecutionDocument,
 } from '../application/ports/executionResourceQueries'
+// RFC-454 — the stored call-closure codec and the launch-input check (pure; task-execution and integration read them).
+export {
+  callEdgeKey,
+  childClosureSubset,
+  frozenWorkflowFromClosure,
+  frozenWorkgroupFromClosure,
+  parseCallClosure,
+  parseFrozenWorkgroupGroup,
+} from '../domain/callClosure'
+export { assertWorkflowLaunchInputs } from '../domain/workflowLaunchInputs'

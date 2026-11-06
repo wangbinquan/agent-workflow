@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
-import { runManagedProcess } from '../src/services/execution/managedProcess'
+import { runManagedProcess } from '../src/platform/execution/local/managedProcess'
 
 describe('Settings timeout consumer boundary', () => {
   test('an overflowing timeout is rejected before spawning a child', async () => {

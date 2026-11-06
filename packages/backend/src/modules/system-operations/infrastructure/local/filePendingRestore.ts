@@ -25,7 +25,10 @@ import { z } from 'zod'
 import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import { restoreBackup, RestorePostSwapError } from '@/services/restore'
+import {
+  restoreBackup,
+  RestorePostSwapError,
+} from '@/platform/persistence/sqlite/systemProviderRestore'
 import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
 import { settleEpochSwitchBeforePointerReplacement } from '../epochSwitch/pointerReplacement'
 
