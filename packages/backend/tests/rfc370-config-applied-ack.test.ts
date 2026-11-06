@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import {
   notifyConfigApplied,
   registerConfigAppliedListener,
-} from '@/services/configAppliedListeners'
+} from '@/platform/configuration/configAppliedListeners'
 
 function barrier() {
   let resolve!: () => void

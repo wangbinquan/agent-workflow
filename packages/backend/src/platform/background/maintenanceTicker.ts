@@ -10,7 +10,7 @@
 // 相位值登记在 `daemonCadence.ts` 的 `MAINTENANCE_PHASE`，漏登记由
 // `tests/rfc322-maintenance-cadence.test.ts` 拦下。
 
-import { MAINTENANCE_SLOW_TICK_MS } from '@/services/daemonCadence'
+import { MAINTENANCE_SLOW_TICK_MS } from '@/platform/background/daemonCadence'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('maintenance-ticker')

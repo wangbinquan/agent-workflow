@@ -648,6 +648,13 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `AgentDependencyQueries`），把这种文件挪进消费方模块只是把债挪走，不是还掉，登记表的本意要求按继任合同改。动手前 `dump-edges`
   量一遍、`grep` 一遍登记表。同一次还漏跑了下文「移动/重命名源文件后至少扫这三种形态」的第 ② 种（`'services', '<名>'`
   分段拼接）：`clarify-inline-fallback` 一处读旧路径漏网，全量里由 `test-suite-policy` 的「模块作用域读的源码路径都在」兜住。
+- **迁移二进制额外入口（Worker）要四处同改（RFC-457，2026-11-06）**：`new Worker(...)` 不被 bundler 追踪，所以 Worker 文件挪位置时
+  ① `scripts/build-binary.ts` 的 `WORKER_ENTRIES`、② 起 Worker 处的编译态路径（`$bunfs` 里相对入口共同根 `src/` 的路径，如
+  `'./platform/persistence/sqlite/backupVacuumWorker.ts'`）、③ 源码态 `new URL('./x.ts', import.meta.url)`（相对起它的文件）、④ 架构门
+  `tests/architecture/rfc294Gates.ts` 的 `BINARY_ENTRIES`（可达性与顶层 await 守卫的根）必须一起改；漏 ① 或 ② 时 tsc 与源码态用例都绿，
+  只有发布二进制 ModuleNotFound、备份悄悄退回主线程（RFC-311 实现门 P0-1）。RFC-457 用例把四处锁成同一个存在的文件。另：legacy 文件迁入
+  `platform/` 后，`rfc349-provider-cutover` 等只扫业务 / 传输面（模块 application/domain/engine/public 与 `services/` `routes/` 等）的
+  exact 债清单会少一条——那是还债，同步删掉条目，别当成守卫坏了。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
@@ -1360,7 +1367,7 @@ bunx tsc --noEmit -p tsconfig.json
 1. 拿那条 SQL 直接打真库量一次 + `explain query plan`；再 `select count(*)` 看表规模。
    十行以内就能证伪「查询慢」这个前提。
 2. 起一个外部进程按同频打同一条 SQL。外部快、daemon 慢 ⇒ 是进程级停顿，不是 DB/磁盘。
-3. 再去找谁占住了事件循环：同刻引爆的维护任务（见 `services/daemonCadence.ts` 的
+3. 再去找谁占住了事件循环：同刻引爆的维护任务（见 `platform/background/daemonCadence.ts` 的
    `MAINTENANCE_PHASE`）、同步 `Bun.spawnSync` fork 风暴（`util/process.ts`）、
    主线程上的 `VACUUM` / `wal_checkpoint(TRUNCATE)`。
 
@@ -4903,7 +4910,7 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
 - **视觉基线的 darwin 侧对「palette 滚动容器底部的新条目」不稳定**：RFC-243 给 node picker 新增 CALLS 分区后，本地 `bun run test:visual` 对 `workflow-editor-1536-three-rail-light` / `1179-palette-light` 时绿时红，diff 图显示**只有 CALLS 两条目**有文字位移重影（约 3.3k~3.8k 像素、ratio 0.01），页面其余部分逐像素一致——底部条目受滚动位置/字体加载时序影响。**ubuntu（CI 权威门）稳定绿**，故未改 spec；再有人在 palette 末尾加分区且撞到同一抖动，正解是截图前显式把 palette 容器 `scrollTop=0` 或对该区域加 mask，而不是抬阈值。
 
 - **只挂 `setInterval` 的后台清理循环 = 在「重启比周期还频繁」的部署上一次都不会执行**（2026-08-21 生产实测，RFC-311 余项）：某生产跑 v0.18.11（**已含**事件归档的字节水位 `765910a3`），`node_run_events` 仍长到 78.6 万行 / 1.72GB。水位算法本身没问题——把开发库按同形放大到 78.6 万行 / 2.6GB 实测，归档器一拍削 20 万行、4 拍收敛到 20 万行 / 389MiB，单拍 1151 条语句里只有 2 条 >50ms。**问题全在装配**：`startEventsArchiver` / `startTaskArchiveSweeper` 都只挂了 `setInterval(1h)`、没有 boot 首拍，而那台 daemon 发版/重启比一小时更勤，于是两个「给库体积封顶」的执行者形同虚设，表只涨不缩。三条定式：
-  ① 凡是**给某个无界资源封顶**的周期任务，boot 也要跑一拍（延迟 30s 让迁移/备份/恢复/巡检的开机风暴先过去，见 `services/daemonCadence.ts` 的 `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`；纯扫描类如 lifecycle 巡检 5s 即可），并且 `stop()` 要连未触发的首拍一起撤——否则 DB 关掉之后定时器还会去碰它。
+  ① 凡是**给某个无界资源封顶**的周期任务，boot 也要跑一拍（延迟 30s 让迁移/备份/恢复/巡检的开机风暴先过去，见 `platform/background/daemonCadence.ts` 的 `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`；纯扫描类如 lifecycle 巡检 5s 即可），并且 `stop()` 要连未触发的首拍一起撤——否则 DB 关掉之后定时器还会去碰它。
   ② 周期循环的配置一律**每拍热读**（`() => loadConfig(Paths.config)`），别读 boot 快照。`startWalCheckpointLoop` 曾经是快照，且 `intervalMs<=0` 时直接返回空 handle、**进程里连 timer 都不存在**：把 `walCheckpointIntervalMs` 从 0 改成 600000 之后不重启 daemon 永远不生效，而现象只是「-wal 照涨」，没有任何日志指向真凶。
   ③ 这类洞**单元测试天然抓不到**——既有用例都直接调 `archiveEvents()` / `runTaskArchiveSweep()`，跳过了装配层。判据必须写在 ticker 上（「boot 后 N ms 内跑了第一拍」「stop() 撤得掉未触发的首拍」「0→N 不重启即生效」），见 `tests/rfc311-maintenance-boot-tick.test.ts`。
   排查同类现象（「某个清理器为什么没生效」）的第一顺位不是算法，是**这个循环有没有机会跑过**：查 daemon 连续在线时长（`grep 'lock acquired' logs/daemon.log`）与该循环自己的 INFO 行是否出现过。

@@ -27,7 +27,7 @@ import {
   readDbMigrationIdentity,
   readManifest,
 } from '../src/platform/persistence/sqlite/systemBackupManifest'
-import { rawCopyDb } from '../src/services/rawDbSnapshot'
+import { rawCopyDb } from '../src/platform/persistence/sqlite/rawDbSnapshot'
 import { quickCheckDbFile } from '../src/db/integrity'
 import { sqliteRawDbSnapshotMechanisms } from '../src/platform/persistence/sqlite/rawDbSnapshotMechanisms'
 import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
@@ -340,7 +340,15 @@ describe('RFC-213 createBackup manifest (PR-0 T2)', () => {
 describe('impl-gate P0-4 — safety tarball durability (source guard)', () => {
   test('rawDbSnapshot fsyncs the tarball + backups dir after writing it', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'rawDbSnapshot.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'rawDbSnapshot.ts',
+      ),
       'utf-8',
     )
     const tarIdx = src.indexOf('await tarGz(stagingDir, outPath)')

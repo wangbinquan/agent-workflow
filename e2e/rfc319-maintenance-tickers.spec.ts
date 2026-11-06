@@ -15,7 +15,7 @@ import { liveSqlitePath } from './storage'
 //
 //   * 重维护调度：packages/backend/src/platform/background/maintenanceSchedule.ts
 //     （hourly 错峰、30s catch-up、slot 合并）与 maintenanceJobRunner.ts（Worker body）。
-//   * 自愈节奏：packages/backend/src/services/daemonCadence.ts:31/:37
+//   * 自愈节奏：packages/backend/src/platform/background/daemonCadence.ts:31/:37
 //     （autoKill / autoRepair 各 5min 周期）。
 //   * 投递保留 GC 的三段判据：packages/backend/src/services/webhook/deliveryStore.ts:176-218
 //     （body 段 `received_at < bodyCutoff AND body_json IS NOT NULL AND status NOT IN

@@ -1,6 +1,6 @@
 import { createPostgresqlProvisioning } from '@/platform/persistence/migration/postgresqlProvisioning'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
+import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
 // CLI-only automatic migration composition. daemonStart invokes this through the child CLI.
 import { join } from 'node:path'
 import { writeSync } from 'node:fs'

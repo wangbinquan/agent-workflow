@@ -4,7 +4,7 @@ import {
   findStalledRunningChildren,
   runHeartbeatKillOnce,
 } from '../application/recovery/heartbeatKill'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import { reconcileDeadRunningRuns } from '../infrastructure/local/deadRunReconcile'
 import { killStaleRunProcessTree } from '@/util/process'
 import type { TaskExecutionModule } from '../composition'

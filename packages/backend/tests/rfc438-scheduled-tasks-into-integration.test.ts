@@ -23,7 +23,7 @@ import type {
   ScheduledTaskOperations,
 } from '@/modules/integration/application/scheduledTasks'
 import { lookupRouteMeta } from '@/routes/registry'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/domain/workflowLaunchInputs'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
 import {

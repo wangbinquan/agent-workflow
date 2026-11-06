@@ -11,7 +11,7 @@ import {
   mergeValidatedConfigurationPatch,
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
-import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
+import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 
 function barrier() {
   let resolve!: () => void

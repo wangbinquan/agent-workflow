@@ -24,7 +24,7 @@ import {
   MIN_GIT_VERSION,
   mergeTreeGateError,
   parseGitVersion,
-} from '../src/services/gitVersion'
+} from '../src/platform/workspace/local/gitVersion'
 
 describe('mergeTreeGateError — RFC-130 D7 boot gate (pure)', () => {
   test('git 2.34.1 (Ubuntu 22.04, the incident shape) → refusal names found version + floor', () => {

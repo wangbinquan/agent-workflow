@@ -12,7 +12,7 @@ import { liveSqlitePath, liveSqliteGeneration } from './storage'
 //     排版 `  ✓/✗ <name>: <message>` 与收尾结论 → 同文件 `516-523`；
 //     退出码由 `packages/backend/src/main.ts:96-101` 决定（任一项 ok=false → 1）。
 //   * 各诊断项：git 地板 `doctor.ts:269-286`（`MIN_GIT_VERSION` 见
-//     `services/gitVersion.ts:60-68`）、ssh 忠告 `doctor.ts:314-326`、
+//     `platform/workspace/local/gitVersion.ts:60-68`）、ssh 忠告 `doctor.ts:314-326`、
 //     secret 权限 `doctor.ts:393-441`、migrations `doctor.ts:473-514`、
 //     provider-aware DB 完整性 `doctor.ts:111-183` 与
 //     `platform/persistence/databaseOperationalAdapter.ts`、备份健康 `doctor.ts:170-198`、

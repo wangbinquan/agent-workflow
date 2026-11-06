@@ -24,9 +24,9 @@ import {
 } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
-import { rawCopyDb } from '@/services/rawDbSnapshot'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
+import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
+import { rawCopyDb } from '@/platform/persistence/sqlite/rawDbSnapshot'
 
 const log = createLogger('backupScheduler')
 

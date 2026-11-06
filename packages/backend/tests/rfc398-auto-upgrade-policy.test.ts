@@ -1,4 +1,4 @@
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
+import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
 // RFC-398 §2.1/2.3/2.4B,F/2.5: policy tables include negative controls.
 import { expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

@@ -1,7 +1,7 @@
 import type { MaintenanceJobKey, MaintenanceSchedule } from '@agent-workflow/shared'
 import { computeNextRunAt, wallClockAt, zonedWallClockToEpoch } from '@agent-workflow/shared'
 
-import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
 import { HEAVY_MAINTENANCE_JOB_KEYS } from './maintenanceCatalog'
 
 export interface CleanupSlot {

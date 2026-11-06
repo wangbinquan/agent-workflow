@@ -18,7 +18,7 @@ import type { AtomicApplyRecoveryScene, AtomicApplyRow } from '@/platform/contra
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
 import { type MaintenanceOwnerCommands } from '@/bootstrap/maintenanceJobBindings'
 import { maintenanceJobSpec } from '@/platform/background/maintenanceCatalog'
-import { HOUR_MS } from '@/services/daemonCadence'
+import { HOUR_MS } from '@/platform/background/daemonCadence'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

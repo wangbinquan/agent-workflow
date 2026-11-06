@@ -282,7 +282,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc317-stale-assertion-invariants.test.ts",
       "id": "rfc317-stale-assertion-invariants",
-      "lines": 385,
+      "lines": 387,
       "mechanism": "ast",
       "minCorpusFiles": 701,
       "negativeFixture": true,
@@ -451,7 +451,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "id": "rfc349-provider-cutover",
-      "lines": 412,
+      "lines": 410,
       "mechanism": "source-text",
       "minCorpusFiles": 1500,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1126
+      "lines": 1127
     },
     {
       "assertsAbsence": true,
@@ -1339,7 +1339,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc400-top-level-await-guard.test.ts",
       "id": "rfc400-top-level-await-guard",
-      "lines": 138,
+      "lines": 139,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

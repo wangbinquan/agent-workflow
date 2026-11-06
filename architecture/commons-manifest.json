@@ -159,7 +159,7 @@
       "claimAudit": "Does NOT hold. 14 entries are registered and consumed, but at least 6 background loops keep their own literals outside it (backupScheduler.ts:194, taskArchive.ts:573, maintenanceRetention.ts:185, pluginGenerationGc.ts:16, memoryDistillScheduler.ts:431, scheduledTaskScheduler.ts:261). The guard rfc284-daemon-cadence.test.ts:6-28 pins the VALUES of table members only; membership is unguarded.",
       "core": false,
       "files": [
-        "packages/backend/src/services/daemonCadence.ts"
+        "packages/backend/src/platform/background/daemonCadence.ts"
       ],
       "guards": [],
       "id": "daemon-cadence-background-timer-registry",

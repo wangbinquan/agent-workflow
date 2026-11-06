@@ -231,10 +231,11 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat.timer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.checkpointTimer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.eventLoopTimer#setInterval#1',
+    // RFC-457: moved unchanged from services/maintenanceTicker.ts.
+    'packages/backend/src/platform/background/maintenanceTicker.ts#REAL_TIMERS.setInterval#setInterval#1',
     'packages/backend/src/platform/background/maintenanceWorkerRuntime.ts#runMaintenanceWorker.initialise#setInterval#1',
     'packages/backend/src/platform/background/maintenanceWorkerRuntime.ts#runMaintenanceWorker.initialise#setInterval#2',
     'packages/backend/src/platform/background/providerBackupScheduler.ts#startBackupScheduler.handle#setInterval#1',
-    'packages/backend/src/services/maintenanceTicker.ts#REAL_TIMERS.setInterval#setInterval#1',
     'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#startLiveSubagentCapture.intervalHandle#setInterval#1',
   ],
   'unreachable-production-files': [

@@ -13,8 +13,8 @@ const MAIN = PREFIX + 'main.ts'
 const DEPLOYMENT = PREFIX + 'bootstrap/deployment.ts'
 /** What `main.ts` may import besides `cli/` and `bootstrap/`, and why. */
 const ENTRY_IMPORTS: Readonly<Record<string, string>> = {
-  './services/execution/managedProcessLauncher':
-    'the process launcher runs before any assembly (RFC-328; RFC-400 keeps main.ts its only importer)',
+  './platform/execution/local/managedProcessLauncher':
+    'the process launcher runs before any assembly (RFC-328; RFC-457 dropped the services/ facade in between)',
   './util/version': 'the `version` command',
   './util/log': 'the startup failure log',
   './util/paths': 'the application home handed to the legacy epoch command',

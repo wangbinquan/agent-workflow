@@ -1,7 +1,11 @@
 // RFC-394: the standalone profile owns local dependency probes and their existing diagnostics.
 // RFC-431: it is also the standalone assembly root — it states every selection a standalone daemon uses.
 import { join } from 'node:path'
-import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
+import {
+  detectGitCapabilities,
+  mergeTreeGateError,
+  MIN_GIT_VERSION,
+} from '@/platform/workspace/local/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
 import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'

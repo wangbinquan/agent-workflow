@@ -17,7 +17,7 @@ import type { TaskBackgroundConfigurationQuery } from '@/modules/task-execution/
 import type { TaskLifecycleAutoRepairPolicy } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
 import { createFileTaskBackgroundConfigurationQuery } from '@/modules/task-execution/infrastructure/local/fileTaskBackgroundConfiguration'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import { composeScheduledTaskRunner } from '@/modules/integration/composition/scheduledTasks'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

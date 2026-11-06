@@ -53,7 +53,7 @@ import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persisten
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { Paths } from '@/util/paths'
 import { type BackupManifest, currentAppVersion, readManifest } from './systemBackupManifest'
-import { rawCopyDb } from '@/services/rawDbSnapshot'
+import { rawCopyDb } from '@/platform/persistence/sqlite/rawDbSnapshot'
 import { reconstructWorktrees } from '@/platform/persistence/portableApplicationAssets'
 import { ulid } from 'ulid'
 

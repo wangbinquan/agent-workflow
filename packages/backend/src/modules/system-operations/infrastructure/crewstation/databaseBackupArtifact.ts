@@ -16,7 +16,7 @@ import {
 import {
   createPortableBackupArchive,
   type PortableBackupApplicationAssets,
-} from '@/services/portableBackupArchive'
+} from '@/platform/persistence/portableBackupArchive'
 import type { HostedObjectContent } from './objectPublicationContract'
 import {
   HOSTED_BACKUP_SIDECAR,

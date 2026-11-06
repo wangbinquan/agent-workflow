@@ -27,7 +27,7 @@ import {
 import type { createComposedApp } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
-import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
+import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 import { runTaskIdleTimeoutSweep } from '@/modules/task-execution/composition/taskIdleTimeout'
 import {
   startBatchImportGc,
@@ -38,7 +38,7 @@ import { startBackupScheduler } from '@/platform/background/providerBackupSchedu
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import type { buildWebSocketAdapter } from '@/ws/server'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import { createMaintenanceService } from '@/platform/background/maintenanceService'
 import { runEventCenterCycle } from '@/modules/event-center/composition'
 import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/composition'

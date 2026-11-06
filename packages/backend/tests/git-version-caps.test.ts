@@ -2,12 +2,12 @@
 
 import { describe, expect, test } from 'bun:test'
 import * as pure from '../src/platform/contracts/gitVersion'
-import * as compatibility from '../src/services/gitVersion'
+import * as compatibility from '../src/platform/workspace/local/gitVersion'
 import {
   capabilitiesFromVersion,
   gitVersionAtLeast,
   parseGitVersion,
-} from '../src/services/gitVersion'
+} from '../src/platform/workspace/local/gitVersion'
 
 describe('parseGitVersion', () => {
   test('parses macOS Apple git', () => {

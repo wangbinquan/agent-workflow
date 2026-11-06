@@ -49,7 +49,7 @@ import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   runManagedProcessLauncher,
-} from './services/execution/managedProcessLauncher'
+} from './platform/execution/local/managedProcessLauncher'
 import { Paths } from './util/paths'
 import { createLogger } from './util/log'
 

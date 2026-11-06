@@ -364,8 +364,10 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
   test('⑥ 自称「唯一注册表」的表，必须真的没有表外同类实现', () => {
     // 派生端：backend src 里 `setInterval(` 的站点数 vs 消费 DAEMON_CADENCE 的文件数。
     // findings TP-12：表头自称唯一，实际至少六个循环各带自己的周期字面量。
-    const cadence = CORPUS.find((u) => u.path === 'packages/backend/src/services/daemonCadence.ts')
-    expect(cadence, '派生端文件不存在：services/daemonCadence.ts').toBeDefined()
+    const cadence = CORPUS.find(
+      (u) => u.path === 'packages/backend/src/platform/background/daemonCadence.ts',
+    )
+    expect(cadence, '派生端文件不存在：platform/background/daemonCadence.ts').toBeDefined()
 
     const intervalSites = CORPUS.filter(
       (u) => u.path.startsWith('packages/backend/src/') && u.text.includes('setInterval('),

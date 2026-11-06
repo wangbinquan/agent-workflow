@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
 import { HEAVY_MAINTENANCE_JOB_KEYS } from '@/platform/background/maintenanceCatalog'
 import {
   dailyCleanupSlot,

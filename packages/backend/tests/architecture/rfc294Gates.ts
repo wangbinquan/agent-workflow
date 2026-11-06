@@ -25,7 +25,7 @@ export const ARCHITECTURE_FILES = [
 ] as const
 export const BINARY_ENTRIES = [
   'main.ts',
-  'services/backupVacuumWorker.ts',
+  'platform/persistence/sqlite/backupVacuumWorker.ts',
   'bootstrap/maintenanceWorker.ts',
   'bootstrap/maintenanceWorkerEntry.ts',
   'platform/persistence/sqliteLogicalSourceWorker.ts',

@@ -2988,7 +2988,7 @@ diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionCo
    但会被 `backupProtectedKeepCount`（RFC-311 C4，默认 10）**按家族各自轮换**裁掉。
    覆盖写成「不受份数与天数约束，只按各自家族的份数轮换」。
 6. **【账本文案偏差】OPS-040 的「小时级」容易误导**：周期确实是 1 小时，但因为 RFC-322 的相位表，
-   **首拍在 4 分钟**（`services/daemonCadence.ts:94` 的 `MAINTENANCE_PHASE.worktreeGc = 4 * MINUTE_MS`，
+   **首拍在 4 分钟**（`platform/background/daemonCadence.ts:94`〔RFC-457 前在 `services/`〕的 `MAINTENANCE_PHASE.worktreeGc = 4 * MINUTE_MS`，
    硬常量、无 config 旋钮、也无 HTTP 手动入口）。按「小时级」去写等待预算会白等 56 分钟，
    或直接把这条判成不可测。这也是该 spec 单文件墙钟 ~6.9 分钟的唯一来源。
 
@@ -3855,8 +3855,8 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    影响：`bun --watch` 每次热重启都可能变成「旧的死了、新的没起来」。
    OPS-X7 的第二条腿只断言「上一代确实被请去排空」（缺陷修好之后依然成立），未把缺陷现状写成期望。
 2. **【真实缺陷，挡住三条能力】`webhookDeliveryGc` 与 `retentionSweep` 没有 boot 首拍。**
-   `cli/start.ts:929` 与 `:933-940` 两处装配**都没传 `bootDelayMs`**，而 `services/maintenanceTicker.ts:133-134`
-   的 boot 拍是 opt-in；相位表 `services/daemonCadence.ts:96/:100` 让首拍分别落在 T0+8min / T0+16min。
+   `cli/start.ts:929` 与 `:933-940` 两处装配**都没传 `bootDelayMs`**，而 `platform/background/maintenanceTicker.ts:133-134`〔RFC-457 前在 `services/`〕
+   的 boot 拍是 opt-in；相位表 `platform/background/daemonCadence.ts:96/:100` 让首拍分别落在 T0+8min / T0+16min。
    全仓 `bootDelayMs` 只有 `eventsArchive` / `taskArchive` / `lifecycleInvariants` 三个使用者，而
    `packages/backend/tests/rfc311-maintenance-boot-tick.test.ts` **已经为前两个修过、漏了这两个**。
    后果：一台平均重启间隔短于 8 分钟的机器，投递 GC 一次都不会跑。

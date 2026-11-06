@@ -41,13 +41,13 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
+import type { PortableBackupApplicationAssets } from '@/platform/persistence/portableBackupArchive'
 import {
   captureWorktreeRows,
   reconstructWorktreeRows,
   type WorktreeCaptureResult,
   type WorktreeReconstructResult,
-} from '@/services/worktreeBackup'
+} from '@/platform/persistence/worktreeBackup'
 import { ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
@@ -80,7 +80,7 @@ function decodeWorkflowDefinition(workflowId: string, stored: string) {
 
 /**
  * 备份要抓的 worktree 行：非终态（`LIVE_WORKTREE_TASK_STATUSES`）任务各一行。
- * 归档机制本身（打包、排除 `.git`、超上限跳过）由 `services/worktreeBackup.ts` 拥有，
+ * 归档机制本身（打包、排除 `.git`、超上限跳过）由 `./worktreeBackup.ts` 拥有，
  * 这里只负责选行。
  */
 export async function captureWorktrees(
@@ -104,7 +104,7 @@ export async function captureWorktrees(
 
 /**
  * 还原时按归档里的 task id 取当前的 worktree 行。路径 / 分支一律取**库里**的值，
- * 归档里的 JSON 只提供 task id（`services/worktreeBackup.ts` 的既有契约）。
+ * 归档里的 JSON 只提供 task id（`./worktreeBackup.ts` 的既有契约）。
  */
 export async function reconstructWorktrees(
   db: PersistenceDb,

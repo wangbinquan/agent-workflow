@@ -24,7 +24,7 @@ import type { DbClient } from '@/db/client'
 import {
   createPortableBackupArchive,
   type PortableBackupResult,
-} from '@/services/portableBackupArchive'
+} from '@/platform/persistence/portableBackupArchive'
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
@@ -42,8 +42,8 @@ declare const AW_COMPILED_BUILD: boolean | undefined
 
 const BACKUP_VACUUM_WORKER_ENTRY =
   typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
-    ? './services/backupVacuumWorker.ts'
-    : new URL('../../../services/backupVacuumWorker.ts', import.meta.url).href
+    ? './platform/persistence/sqlite/backupVacuumWorker.ts'
+    : new URL('./backupVacuumWorker.ts', import.meta.url).href
 
 /** RFC-311 — see backupVacuumWorker.ts: the copy runs off-thread so the
  *  daemon's synchronous connection keeps serving during a backup.

@@ -26,7 +26,9 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
       resolve(import.meta.dir, '..', '..', '..', 'scripts', 'build-binary.ts'),
       'utf8',
     )
-    expect(src).toContain("join(backendSrc, 'services', 'backupVacuumWorker.ts')")
+    expect(src).toContain(
+      "join(backendSrc, 'platform', 'persistence', 'sqlite', 'backupVacuumWorker.ts')",
+    )
     // 主二进制与 e2e 二进制共用同一个 compile helper；worker 必须作为
     // 额外入口进入该 helper，且两个产物都通过它构建。
     expect(src).toContain('entrypoints: [mainEntry, ...WORKER_ENTRIES]')
@@ -45,10 +47,8 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
       ),
       'utf8',
     )
-    expect(backup).toContain("? './services/backupVacuumWorker.ts'")
-    expect(backup).toContain(
-      ": new URL('../../../services/backupVacuumWorker.ts', import.meta.url).href",
-    )
+    expect(backup).toContain("? './platform/persistence/sqlite/backupVacuumWorker.ts'")
+    expect(backup).toContain(": new URL('./backupVacuumWorker.ts', import.meta.url).href")
     expect(backup).toContain('new Worker(BACKUP_VACUUM_WORKER_ENTRY)')
   })
 

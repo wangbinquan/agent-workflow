@@ -11,7 +11,7 @@ import type {
   DeploymentSessionSelections,
   HostProbeInput,
 } from '@/bootstrap/deploymentProfile'
-import * as git from '@/services/gitVersion'
+import * as git from '@/platform/workspace/local/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
 import * as hosted from '@/modules/system-operations/composition/crewstationDeployment'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'

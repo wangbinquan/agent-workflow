@@ -18,7 +18,7 @@ import { liveSqlitePath } from './storage'
 //   ② **后台清理**（OPS-039/040/041/042/043）——周期是 1 小时，**绝不能靠等**。
 //      本文件不等任何一个小时级周期拍，只用产品自己提供的三种可触发入口：
 //        * **boot 首拍**：事件归档器与终态任务 sweeper 都在 `T0 + 30s` 额外跑一次
-//          （`services/daemonCadence.ts` 的 `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`，
+//          （`platform/background/daemonCadence.ts` 的 `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`，
 //          它存在的理由正是「重启比周期还频繁的部署一次都不会归档」）；
 //        * **boot 同步拍**：备份保留期修剪在 `startBackupScheduler` 里是**开机同步**
 //          执行的（`services/backupScheduler.ts:195` `safePrune('boot prune')`），
@@ -35,10 +35,10 @@ import { liveSqlitePath } from './storage'
 //   * schema 漂移拒绝文案 → `packages/backend/src/cli/start.ts:254-279`；
 //     两个 stage 的判据 → `packages/backend/src/db/schemaAdmission.ts:169-227`
 //     （迁移收据链）与 `:314-360`（物理 schema 重放比对）。
-//   * git 地板 → `packages/backend/src/services/gitVersion.ts:68-85`，
+//   * git 地板 → `packages/backend/src/platform/workspace/local/gitVersion.ts:68-85`，
 //     闸门 → `packages/backend/src/cli/start.ts:397-410`。
 //   * pre-migration 原始备份 → `packages/backend/src/services/backupScheduler.ts:313-330`
-//     与 `services/rawDbSnapshot.ts:95-190`（字节拷贝，不是逻辑导出）。
+//     与 `platform/persistence/sqlite/rawDbSnapshot.ts:95-190`（字节拷贝，不是逻辑导出）。
 //   * boot auto-resume → `packages/backend/src/cli/start.ts:1488-1526`
 //     与 `modules/task-execution/application/recovery/autoResume.ts`。
 //   * 1Hz 限额 → `packages/backend/src/services/limits.ts:31-143`。

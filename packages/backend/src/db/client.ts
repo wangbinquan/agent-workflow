@@ -190,7 +190,7 @@ export function guardForeignStatements(sqlite: Database, client: object): void {
  * 仅 346 行。判据：
  *   · `cpuMs ≈ ms` ⇒ 这条语句真的在算，是查询问题（查计划 / 索引 / 数据量）；
  *   · `cpuMs ≪ ms` ⇒ 进程在等，**与这条 SQL 无关**（去查谁占住了事件循环，
- *     典型是同刻引爆的维护任务——见 `services/daemonCadence.ts` 的 MAINTENANCE_PHASE）。
+ *     典型是同刻引爆的维护任务——见 `platform/background/daemonCadence.ts` 的 MAINTENANCE_PHASE）。
  */
 export function instrumentSlowStatements(
   sqlite: Database,

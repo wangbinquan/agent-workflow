@@ -1,3 +1,26 @@
+## 2026-11-06 RFC-457 `services/` 的平台机制归 `platform`（In Progress；`design/RFC-457-services-platform-mechanisms/`）
+
+- **来由**：RFC-294 W9-D 第四步。RFC-456 后 `services/` 93 个文件，其中 9 个是与业务无关的平台机制（后台节奏与相位表、维护 ticker、原始库
+  快照、备份 VACUUM worker、可移植备份包、工作树备份、git 版本探测、配置生效监听、进程启动器兼容入口），只取 util / shared / platform，生产
+  消费方在 `platform/`、装配根与模块的 infrastructure / composition——`platform/` 反过来取 `services/` 13 条。用户 2026-11-02「好，你继续推进
+  RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：8 个文件迁入 `platform/background`、`platform/persistence`（含 `sqlite/`）、`platform/workspace/local`、`platform/configuration`，
+  函数体原样；进程启动器兼容入口删除（`main.ts` 直取平台模块，直跑用例改起生产的源码态入口）；备份 Worker 的四处入口路径同步（构建脚本、
+  编译态 / 源码态路径、架构门 `BINARY_ENTRIES`）；Windows workflow 路径过滤、`commons-manifest` 与架构报告归属表改指。
+- **不做**：`gitSubmodule` / `mergeAgent`（取 source-control 的 public 类型；平台的 workspace 隔离对它们的 3 条依赖随 source-control 一族
+  归位）；运行时驱动一族、task-execution 独占的执行一族。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-456 的 Done 文档提交 `bed86db80`：exact SHA 主 CI run 42235404351 首轮全绿（70 个 job）。它是 `fe9618337` 的直接后继、
+  只改 5 个文档文件，作 RFC-456 的后继证据（`fe9618337` 自己的 run 42227761085 有一格 e2e 因 runner 的 apt 一步慢撞时限被取消，见 RFC-456 plan）。
+  另：定时触发的 Release upgrade nightly（run 42240851239，schedule，检出 `bed86db80`）的 Verify windows-latest 撞 30 分钟上限被取消；
+  11-03、11-05 两晚同一 job 也是这样（11-02 通过的两次也用了 27～29 分钟），早于 RFC-456，不是这批改动引入的。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题（迁移前按三种形态全仓搜过文件名）。全量 SQLite 23452 pass，其余为负载
+  超时（22 个文件）与导出仓库所致的 `rfc321`；复跑 22 个文件只剩 RFC-167 `approve` 与 RFC-363 目录分页各一例（同一时刻在 RFC-456 导出
+  仓库里同样到点）；PostgreSQL 274 个文件的 lane 只有超时与 `rfc321`，复跑 23 个文件余 4 个文件撞自带时限（对照两边结果相同，含走到迁移的备份 Worker
+  的 `epoch1-permission-text-backup`）；P0 两引擎各 17 阶段通过（PostgreSQL 第一次基线阶段两例负载超时，低负载重跑通过）；`rfc321` 工作树
+  10 / 10。计数：`services/` 93 → 84、`legacy-horizontal-files` 214 → 205、`legacy-service-implementations` 88 → 79、`R1` 108 / `R2` 27
+  不变，其余架构 counts 不变。
+
 ## 2026-11-06 RFC-456 `services/` 单一 owner 的零散实现归位（Done；`design/RFC-456-services-single-owner-placement/`）
 
 - **来由**：RFC-294 W9-D 第三步。RFC-455 后 `services/` 107 个文件；按「生产 importer 只在一个模块或装配根、对外依赖都在目标 DAG 上、

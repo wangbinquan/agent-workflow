@@ -230,7 +230,7 @@ async function getEmployee(employeeId: string): Promise<EmployeeRow> {
  * 把一个真实案例静置成稳定的 `blocked` 现场。
  *
  * 为什么要落库：用户面没有任何入口能制造阻塞（见文件头注释），而 OS worker 每秒
- * 一跳（`packages/backend/src/services/daemonCadence.ts:57`），单发一条 UPDATE 会被
+ * 一跳（`packages/backend/src/platform/background/daemonCadence.ts:57`），单发一条 UPDATE 会被
  * 下一跳改写。这里把 inbox / round / outbox 一起收干净、把续作指针清空，
  * `planOneReaction` 因此不会再碰它（`runtimeService.ts:2258-2260` 只看 active|waiting，
  * `:2299` 无 inbox 无续作即跳过），恢复之后案例也不会立刻二次阻塞。

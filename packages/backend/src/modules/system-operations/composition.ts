@@ -76,7 +76,7 @@ import type {
   ApplicationConfigurationPersistencePort,
 } from './application/ports/applicationConfiguration'
 import { createFileApplicationConfiguration } from './infrastructure/local/fileApplicationConfiguration'
-import { notifyConfigApplied } from '@/services/configAppliedListeners'
+import { notifyConfigApplied } from '@/platform/configuration/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
 // RFC-346 — bootstrap-only System Operations composition.

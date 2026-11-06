@@ -50,7 +50,6 @@ on:
       # resolution is under platform/execution/local/** below.
       - 'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts'
       - 'packages/backend/src/embed.generated.ts'
-      - 'packages/backend/src/services/execution/managedProcessLauncher.ts'
       - 'packages/backend/src/platform/execution/local/**'
       - 'packages/backend/src/util/gitCredentialHelper.ts'
       - 'packages/backend/src/util/gitCredentialLease.ts'
@@ -334,7 +333,7 @@ on:
       - 'packages/backend/tests/rfc370-verification-command-family.test.ts'
       - 'packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts'
       - 'packages/backend/src/platform/contracts/gitVersion.ts'
-      - 'packages/backend/src/services/gitVersion.ts'
+      - 'packages/backend/src/platform/workspace/local/gitVersion.ts'
       - 'packages/backend/tests/git-version-caps.test.ts'
       - 'packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts'
       - 'packages/backend/src/modules/system-operations/application/doctorDiagnostics.ts'
@@ -510,7 +509,6 @@ on:
       # resolution is under platform/execution/local/** below.
       - 'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts'
       - 'packages/backend/src/embed.generated.ts'
-      - 'packages/backend/src/services/execution/managedProcessLauncher.ts'
       - 'packages/backend/src/platform/execution/local/**'
       - 'packages/backend/src/util/gitCredentialHelper.ts'
       - 'packages/backend/src/util/gitCredentialLease.ts'
@@ -794,7 +792,7 @@ on:
       - 'packages/backend/tests/rfc370-verification-command-family.test.ts'
       - 'packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts'
       - 'packages/backend/src/platform/contracts/gitVersion.ts'
-      - 'packages/backend/src/services/gitVersion.ts'
+      - 'packages/backend/src/platform/workspace/local/gitVersion.ts'
       - 'packages/backend/tests/git-version-caps.test.ts'
       - 'packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts'
       - 'packages/backend/src/modules/system-operations/application/doctorDiagnostics.ts'

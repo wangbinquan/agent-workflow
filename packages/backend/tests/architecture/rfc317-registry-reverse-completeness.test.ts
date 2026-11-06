@@ -51,7 +51,7 @@ import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
 import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { OPTION_DEFINITIONS } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import {
   INVARIANT_RULES,
   STUCK_RULES,
@@ -139,7 +139,7 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
   },
   {
     symbol: 'DAEMON_CADENCE',
-    declaringFile: 'packages/backend/src/services/daemonCadence.ts',
+    declaringFile: 'packages/backend/src/platform/background/daemonCadence.ts',
     keys: Object.keys(DAEMON_CADENCE),
     consumption: 'direct',
     why: 'daemon 各后台任务的节拍；每个键对应一个真实调度点。',

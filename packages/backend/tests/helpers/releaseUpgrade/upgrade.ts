@@ -1,5 +1,5 @@
 import { composeAutomaticUpgradeProvisioning } from '@/bootstrap/epochMigrationAuto'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
+import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
 // RFC-398 §7.3: the same automatic application as the CLI, and the real daemon preparation entry.
 import { readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

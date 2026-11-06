@@ -19,7 +19,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { DEFAULT_CONFIG, SETTINGS_NUMERIC_BOUNDS } from '@agent-workflow/shared'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import { isPeriodicReconcileDue } from '@/modules/task-execution/application/providerBackground'
 
 const LOOP_SOURCE = resolve(

@@ -48,7 +48,7 @@ import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLo
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalTableContract } from '@/platform/persistence/schemaContract'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
-import { createPortableBackupArchive } from '@/services/portableBackupArchive'
+import { createPortableBackupArchive } from '@/platform/persistence/portableBackupArchive'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 // 与 rfc359-t19h-postgresql-migration-sequence.test.ts 同形（0b7f0057e 的先例）：协议用例

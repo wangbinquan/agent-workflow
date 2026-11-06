@@ -18,7 +18,7 @@
 // 「唯一注册表」这句话的危害不在于数错，而在于它让读者停止去别处找——
 // 想知道「这个状态最坏多久被扫到」的人读完这句会以为翻完本表就够了。
 // RFC-322 收编了上面这些外挂周期，并补上了那条缺失的棘轮：hourly 维护循环一律走
-// `services/maintenanceTicker.ts` 的 `startMaintenanceTicker` 并在下面的
+// `platform/background/maintenanceTicker.ts` 的 `startMaintenanceTicker` 并在下面的
 // `MAINTENANCE_PHASE` 登记相位，漏登记会被 `tests/rfc322-maintenance-cadence.test.ts`
 // 拦下。本段保留是因为它记录的危害（读者读完会以为翻完本表就够了）依然成立：
 // 本表仍只收**周期**，非 hourly 的循环（1Hz / 30s / 5min 等）不进 MAINTENANCE_PHASE。

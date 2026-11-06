@@ -34,7 +34,7 @@ import { liveSqlitePath } from './storage'
 //     与 packages/backend/src/platform/background/managedPeriodicJob.ts:75-92。
 //   * PUT /api/config 的热应用点：packages/backend/src/routes/config.ts:108-110
 //     （持久化成功之后才 notifyConfigApplied）与
-//     packages/backend/src/services/configAppliedListeners.ts:21-32。
+//     packages/backend/src/platform/configuration/configAppliedListeners.ts:21-32。
 //   * GitHub 验签：packages/backend/src/services/webhook/githubAdapter.ts:109-128
 //     （`sha256=` + HMAC-SHA256(secret, 原始字节)，常量时间比较）、
 //     :143-166（repository.full_name / clone_url / ssh_url 三者缺一即 parse-failed）、
@@ -58,7 +58,7 @@ import { liveSqlitePath } from './storage'
 //     :1690-1702（保存 = 整份 launchPayload 替换）。
 //   * 孤儿工作树回收：packages/backend/src/services/gc.ts:622-660（无任务行锚定 + 24h 年龄地板）、
 //     半成品镜像目录 :583-620，装配与相位 :803-841 与
-//     packages/backend/src/services/daemonCadence.ts:95-96。
+//     packages/backend/src/platform/background/daemonCadence.ts:95-96。
 //   * 子模块递归模式落到克隆：packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts:461-472
 //     与 :473-495（显式参数 > 设置 > 内置默认）。
 //

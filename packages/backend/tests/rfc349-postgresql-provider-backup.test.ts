@@ -22,8 +22,8 @@ import type {
   PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
 import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
-import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
-import { captureWorktreeRows } from '@/services/worktreeBackup'
+import type { PortableBackupApplicationAssets } from '@/platform/persistence/portableBackupArchive'
+import { captureWorktreeRows } from '@/platform/persistence/worktreeBackup'
 import { extractTarGz } from '@/util/archive'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { workflowFixture } from './helpers/model'

@@ -9,8 +9,11 @@ import { ulid } from 'ulid'
 
 import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 import type { MaintenanceRunStore } from './maintenanceRunStorePort'
-import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { startMaintenanceTicker, type MaintenanceTickerHandle } from '@/services/maintenanceTicker'
+import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
+import {
+  startMaintenanceTicker,
+  type MaintenanceTickerHandle,
+} from '@/platform/background/maintenanceTicker'
 import { createLogger } from '@/util/log'
 import { FIXED_MAINTENANCE_JOB_SPECS, maintenanceJobSpec } from './maintenanceCatalog'
 import { parseMaintenanceJobPayload } from './maintenanceJobPayload'

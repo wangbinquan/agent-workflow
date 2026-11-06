@@ -77,7 +77,10 @@ describe('RFC-349 safety-backup integrity check runs off the daemon thread', () 
   })
 
   test('the worker still accepts both jobs on one entrypoint', () => {
-    const worker = readFileSync(resolve(backendRoot, 'src/services/backupVacuumWorker.ts'), 'utf8')
+    const worker = readFileSync(
+      resolve(backendRoot, 'src/platform/persistence/sqlite/backupVacuumWorker.ts'),
+      'utf8',
+    )
     expect(worker).toContain('quickCheckPath')
     expect(worker).toContain('vacuumSqliteInto')
     // Same entry the build script already ships (RFC-311 P0-1 lock).
@@ -85,6 +88,8 @@ describe('RFC-349 safety-backup integrity check runs off the daemon thread', () 
       resolve(backendRoot, '..', '..', 'scripts', 'build-binary.ts'),
       'utf8',
     )
-    expect(build).toContain("join(backendSrc, 'services', 'backupVacuumWorker.ts')")
+    expect(build).toContain(
+      "join(backendSrc, 'platform', 'persistence', 'sqlite', 'backupVacuumWorker.ts')",
+    )
   })
 })

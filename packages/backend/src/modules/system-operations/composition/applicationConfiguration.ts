@@ -10,7 +10,7 @@ import { createFileApplicationConfiguration } from '../infrastructure/local/file
 import type { ApplicationConfigurationCommands } from '../public/commands'
 import type { ApplicationConfigurationQueries } from '../public/queries'
 import type { Config } from '@agent-workflow/shared'
-import { notifyConfigApplied } from '@/services/configAppliedListeners'
+import { notifyConfigApplied } from '@/platform/configuration/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
 export interface ApplicationConfigurationBinding {

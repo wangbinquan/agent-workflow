@@ -8,7 +8,7 @@ import {
   createPortableBackupArchive,
   type PortableBackupApplicationAssets,
   type PortableBackupResult,
-} from '@/services/portableBackupArchive'
+} from '@/platform/persistence/portableBackupArchive'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'

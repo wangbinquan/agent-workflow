@@ -45,8 +45,8 @@ import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { resolveCachedRepo as defaultResolveCachedRepo } from './repositoryMirrorCache'
-import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
+import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
 
 const log = createLogger('repo-batch-import')
 

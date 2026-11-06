@@ -24,7 +24,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
+import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import { createLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
 

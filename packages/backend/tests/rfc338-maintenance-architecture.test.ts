@@ -12,7 +12,7 @@ import {
   HEAVY_MAINTENANCE_JOB_KEYS,
   MAINTENANCE_JOB_CATALOG,
 } from '@/platform/background/maintenanceCatalog'
-import { MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const ROOT = resolve(BACKEND, '..', '..')

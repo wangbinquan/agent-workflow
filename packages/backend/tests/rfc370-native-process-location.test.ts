@@ -6,14 +6,12 @@ import {
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
-} from '../src/services/execution/managedProcessLauncher'
+} from '../src/platform/execution/local/managedProcessLauncher'
 
 const roots: string[] = []
+// RFC-457: the legacy `services/execution/managedProcessLauncher.ts` CLI facade is deleted; the platform entry
+// below is the only source-run launcher entry.
 const entries = [
-  {
-    name: 'legacy',
-    path: join(import.meta.dir, '..', 'src', 'services', 'execution', 'managedProcessLauncher.ts'),
-  },
   {
     name: 'local',
     path: join(

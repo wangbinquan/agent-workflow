@@ -16,9 +16,9 @@ import {
   MAINTENANCE_PHASE,
   MAINTENANCE_SLOW_TICK_MS,
   MIN_PHASE_GAP_MS,
-} from '../src/services/daemonCadence'
+} from '../src/platform/background/daemonCadence'
 import { MAINTENANCE_JOB_CATALOG } from '../src/platform/background/maintenanceCatalog'
-import { startMaintenanceTicker, type TimerApi } from '../src/services/maintenanceTicker'
+import { startMaintenanceTicker, type TimerApi } from '../src/platform/background/maintenanceTicker'
 import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 
 // ---------------------------------------------------------------------------
@@ -480,7 +480,7 @@ describe('RFC-322 登记棘轮（AC-2）', () => {
 
   test('src 下不得再出现以 hourly 周期直接调用的裸 setInterval', () => {
     // 唯一豁免：原语自己（它调的是注入的 timers.setInterval，那正是收口后的唯一出口）。
-    const exempt = ['services/maintenanceTicker.ts']
+    const exempt = ['platform/background/maintenanceTicker.ts']
     const offenders: string[] = []
     for (const file of tsFiles(SRC)) {
       const rel = file.slice(SRC.length + 1)

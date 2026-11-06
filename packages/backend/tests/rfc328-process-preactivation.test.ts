@@ -11,7 +11,7 @@ import {
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
-} from '../src/services/execution/managedProcessLauncher'
+} from '../src/platform/execution/local/managedProcessLauncher'
 
 const roots: string[] = []
 const compiledTarget = process.env.AW_RFC328_COMPILED_TARGET ?? ''
@@ -186,7 +186,16 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
         cmd: [
           process.execPath,
           'run',
-          join(import.meta.dir, '..', 'src', 'services', 'execution', 'managedProcessLauncher.ts'),
+          join(
+            import.meta.dir,
+            '..',
+            'src',
+            'platform',
+            'execution',
+            'local',
+            // RFC-457: the platform launcher's source-run entry (the services/ CLI facade is deleted).
+            'managedProcessLauncherEntry.ts',
+          ),
         ],
         cwd: root,
         env: { ...process.env, [MANAGED_PROCESS_LAUNCH_NONCE_ENV]: launchNonce },

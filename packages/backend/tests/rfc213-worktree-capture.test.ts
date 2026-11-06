@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { DEFAULT_MAX_WORKTREE_BYTES } from '../src/services/worktreeBackup'
+import { DEFAULT_MAX_WORKTREE_BYTES } from '../src/platform/persistence/worktreeBackup'
 import {
   captureWorktrees,
   reconstructWorktrees,

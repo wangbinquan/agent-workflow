@@ -14,8 +14,8 @@
 // activation frame; replacing it with an un-awaited promise chain broke every Windows launch), so
 // the fix keeps it in `platform/execution/local/managedProcessLauncherEntry.ts`, a script entry no
 // module imports. Binary entries (`BINARY_ENTRIES`, nothing imports them) may still import a
-// top-level-await module: the async-ness stops at the entry. The legacy CLI facade
-// `services/execution/managedProcessLauncher.ts` is imported only by `main.ts`.
+// top-level-await module: the async-ness stops at the entry. RFC-457 deleted the legacy CLI facade
+// `services/execution/managedProcessLauncher.ts`; `main.ts` imports the platform launcher module itself.
 import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import ts from 'typescript'

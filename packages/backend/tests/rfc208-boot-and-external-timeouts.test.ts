@@ -18,7 +18,7 @@ import { renderPlantuml } from '../src/platform/http/plantuml'
 
 const startSource = readDaemonGraphSource()
 const gitVersionSource = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'gitVersion.ts'),
+  resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'gitVersion.ts'),
   'utf8',
 )
 

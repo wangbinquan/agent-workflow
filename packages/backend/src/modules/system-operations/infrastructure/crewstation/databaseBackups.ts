@@ -12,7 +12,7 @@ import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFe
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
+import type { PortableBackupApplicationAssets } from '@/platform/persistence/portableBackupArchive'
 import { DomainError } from '@/util/errors'
 import type { AdminBackupCoordinatorPort } from '../../application/ports/adminBackupCoordinator'
 import type { HostedObjectPublications } from './objectPublicationContract'
