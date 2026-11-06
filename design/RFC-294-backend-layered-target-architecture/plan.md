@@ -53,7 +53,7 @@
 | W6      | Done（2026-11-02，S7）                                         | RFC-395 T10 合成唯一状态机 `platform/atomic-apply`；RFC-401 合一资源写入栈（六类资源各一个写入参与者）、三入口错误收敛、持久 claim / lease，技能 / fusion / restore 接入，旧技能 operation 生命周期删除 |
 | W7      | Done（2026-10-31 核销）                                         | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴由 RFC-395 交付，逐条核对见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)                                                                                                                                                                             |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                                                                                                             |
-| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E/D 开放                | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6                                                                                                                                                                                                                                                        |
+| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123                                                                                                                        |
 
 ### 1.2 已关闭后继索引
 
@@ -539,6 +539,12 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   onboarding。前置：S2、W9-C、W9-E。
 - **2026-10-30**：W9-A / W9-B 已由 S2a / S2b 关闭；W9-C（domain / application 仍带 HTTP 状态、无 `OperationContext`）、
   W9-E（`services/backup.ts` / `restore.ts` / `pendingRestore.ts` 仍在）、W9-D（facade 45、`services/` 业务实现 219）开放。
+- **2026-11-05 W9-D 第一步**（[RFC-454](../RFC-454-services-one-hop-facade-sweep/proposal.md)）：删除 30 个 `services/` 一跳转出
+  （`legacy-thin-facades` 36 → 6、`services/` 153 → 123、`R1` 148 → 121、`R2` 33 → 29；W9-E 点名的 `backup` / `restore` /
+  `pendingRestore` 三个转出随之删除，实现早已在 `platform/persistence/sqlite` 与 system-operations）；被转出藏住的 6 处越界依赖按
+  真实使用者下沉，不加 DAG 边。余下 6 个转出：`sessionEventSink`（随运行时驱动归位）、`workflow` / `workgroups`（resource-catalog
+  执行期查询端口）、`workflow.validator`（随 E1）、`skillBootVerify` / `skillIdentityPaths`（技能注入端口；与注入 oracle 一起退役）。
+  架构计数 `legacy-service-implementations` 118 不变（下一步是这些实现文件按 owner 归位）。
 
 ## 5. 依赖顺序
 

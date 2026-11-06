@@ -18,10 +18,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 30 个转出删除、零引用；余下 6 个转出的消费方不增
-- [ ] AC-2 架构计数按实测（`legacy-thin-facades` 36 → 6、`services/` 153 → 123、`R1` / `R2` 下降），越界类计数不升
-- [ ] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 30 个转出删除、零引用；余下 6 个转出的消费方不增
+- [x] AC-2 架构计数按实测（`legacy-thin-facades` 36 → 6、`services/` 153 → 123、`R1` / `R2` 下降），越界类计数不升
+- [x] AC-3 受影响用例与新增用例全部通过
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-05，候选基于 `fd5467bec`）
 
@@ -82,6 +82,16 @@
   解释器登记与探测、YAML 序列化、代理引用提取、workgroup 宿主节点 id 与提问者键的取值不变（新用例锁线上取值）；
 - `services/execution/resourcePolicy.ts` 里 `PLUGIN_DISABLED_SITES` 那一项改指实现文件，该表只用于守卫，运行时不读；
 - 集中验证查出的问题（见上）已修并复验。
+
+## CI（AC-4）
+
+- `ad9c97550`：exact SHA 主 CI run 42177565071 69 / 70 个 job 通过；后端分片 12/44 的 `rfc217` G5 / G7 两条用例红——两个守卫仍用
+  `readdirSync` 扫本 RFC 删光的 resource-catalog `infrastructure/legacy/workgroup/`（ENOENT）。集中验证没查出，是因为导出仓库按路径删文件后
+  留下了空目录。同 SHA 的 windows-platform run 42177565047（workflow 自身与触发清单里的脚本执行器、装配根等文件）、maintenance-soak 夜间
+  run 42177564972、integration-opencode run 42177564971（代理运行与协议渲染的实现文件）、git-protocols-e2e run 42177565142 全绿。
+- 修复 `95aff68c5`：G5 只数显式列出的 owner 文件（该目录的两个文件都没有模式分支，账本不变），G7 的扫描面由该目录扩到整个后端源码
+  （共享 codec 在 shared 包里，后端没有任何文件手拆 shardKey）；导出仓库删去变空的目录后旧版复现两条 ENOENT、新版 18 / 18 通过。
+  exact SHA 主 CI run 42182033961 全绿（70 个 job）。
 
 ## PR / 提交
 

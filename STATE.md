@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-454 `services/` 一跳转出清仓（In Progress；`design/RFC-454-services-one-hop-facade-sweep/`）
+## 2026-11-05 RFC-454 `services/` 一跳转出清仓（Done；`design/RFC-454-services-one-hop-facade-sweep/`）
 
 - **来由**：RFC-294 W9-D 第一步。RFC-453 后入站适配器不再取 `services/`，余下 153 个文件里 36 个只做 `export … from`（早先迁移留下的
   兼容地址），其中 6 个藏着目标 DAG 不给的依赖、1 个藏着 application → infrastructure 的取用。
@@ -11,6 +11,23 @@
   `workflow.validator` 随 E1；`skillBootVerify` / `skillIdentityPaths` 等技能注入端口）；`services/` 的实现文件。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-453 的 Done 文档提交 `fd5467bec`：exact SHA 主 CI run 42159938224 首轮全绿（70 个 job）。
+- **落地**：`ad9c97550`；CI 修复 `95aff68c5`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修（tsc / eslint 看不见，全量 SQLite 与 PostgreSQL lane 都查出）：三个文件因转出的
+  再导出链断开变为生产不可达（登记为保留，RFC-376 不可达清单 27 → 27）、`FrozenWorkgroupRef.group: unknown` 随编解码进了 resource-catalog
+  public（改为闭合类型，public surface 偏差保持 102）、`computeRemaining` 迁进 task-execution 后落入 RFC-339 的成员读者扫描面（改经
+  `directNodeIdsOf`）、串行化插入源码锁里 `clarify/seal.ts` 的摘要（复核后重钉）、四个用例与 `windows-platform` 触发清单写着已删转出的
+  路径（cross-clarify 的源码守卫原读转出、断言落空，改读实现文件）。全量 SQLite 23409 pass，其余为负载超时、上述问题与导出仓库所致的
+  `rfc321`；修复后受影响面 23 个文件 476 pass / 0 fail，21 个超时文件单独复跑只剩 RFC-167 `approve` 一例（同一时刻在 RFC-453 导出仓库里
+  同样到点）；PostgreSQL 354 个文件的 lane 修复后复跑 72 个文件 1529 pass / 0 fail；P0 两引擎各 17 阶段通过；shared 2344 pass。计数：
+  `services/` 153 → 123、`legacy-thin-facades` 36 → 6、`R1` 148 → 121、`R2` 33 → 29，其余架构 counts 不变。
+- **CI**：`ad9c97550` 的 exact SHA 主 CI run 42177565071 69 / 70 个 job 通过，后端分片 12/44 红：`rfc217` 的 G5 / G7 仍扫本 RFC 删光的
+  resource-catalog `legacy/workgroup/` 目录（ENOENT；本地导出仓库删文件后留下空目录，扫到空目录照样绿，没能查出——已记入
+  `docs/dev-gotchas.md`）。同 SHA 的 windows-platform run 42177565047、maintenance-soak 夜间 run 42177564972、integration-opencode
+  run 42177564971、git-protocols-e2e run 42177565142 全绿。修复 `95aff68c5`（G5 只数显式的 owner 文件，G7 扫描面扩到整个后端源码）：
+  exact SHA 主 CI run 42182033961 全绿（70 个 job）。
+- **下一步**：RFC-294 W9-D 余项——`services/` 的实现文件按 owner 归位，先做 resource-catalog 独占的资源包一族（`services/resourcePackage/**`、
+  `services/bundle/provider.ts` 与两个修订摘要，16 个文件约 4.1K 行；即 RFC-345 T6 未收口的「parse / preview / apply / export 组织到
+  `resource-catalog/application/package`」）；余下 6 个转出随各自端口退役；W4 的 E1 / E5 / E8 / E9 / E10。
 
 ## 2026-11-05 RFC-453 workspace-insight 一族归新模块 workspace-insight（Done；`design/RFC-453-workspace-insight-module/`）
 
