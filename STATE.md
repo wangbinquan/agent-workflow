@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-455 资源包一族归 resource-catalog（In Progress；`design/RFC-455-resource-package-family-to-resource-catalog/`）
+## 2026-11-06 RFC-455 资源包一族归 resource-catalog（Done；`design/RFC-455-resource-package-family-to-resource-catalog/`）
 
 - **来由**：RFC-294 W9-D（`services/` 实现文件按 owner 归位）、RFC-345 T6 未收口的「parse / preview / apply / export 组织到
   `resource-catalog/application/package`」。RFC-454 后 `services/` 123 个文件，资源包一族 16 个文件的生产消费方全在 resource-catalog、
@@ -17,6 +17,13 @@
   （同一时刻在 RFC-454 导出仓库里同样到点）；PostgreSQL 340 个文件的 lane 修复后复跑 19 个文件只剩 `rfc238` 自带 2 秒等待的几例（对照
   两边都是 49 pass / 3 fail）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/` 123 → 107、`legacy-horizontal-files`
   244 → 228、`legacy-service-implementations` 118 → 102、`R1` 121 → 119、`R2` 29 → 27，其余架构 counts 不变。
+- **落地**：`519d9372a`。
+- **CI**：exact SHA 主 CI run 42203181694 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42203181923 通过。
+- **下一步**：RFC-294 W9-D 余项——运行时驱动一族（`services/runtime/**`，35 个文件约 6.4K 行；RFC-360 明确留下的驱动协议实现）归
+  runtime-management。目标 DAG 不给 memory / intent / resource-catalog / system-operations → runtime-management，所以先解开它们经
+  `services/` 取驱动的地方（memory / intent 的会话事件与运行时种类、resource-catalog 的 MCP 诊断与技能 / 插件类型、system-operations
+  的 doctor、source-control 的边界挂载）。随后是 task-execution 独占的 28 个文件（含 `services/task.ts`，E1）、resource-catalog 独占的
+  5 个与只被装配根用的 7 个；余下 6 个转出随各自端口退役；W4 的 E1 / E5 / E8 / E9 / E10。
 
 ## 2026-11-05 RFC-454 `services/` 一跳转出清仓（Done；`design/RFC-454-services-one-hop-facade-sweep/`）
 

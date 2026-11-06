@@ -53,7 +53,7 @@
 | W6      | Done（2026-11-02，S7）                                         | RFC-395 T10 合成唯一状态机 `platform/atomic-apply`；RFC-401 合一资源写入栈（六类资源各一个写入参与者）、三入口错误收敛、持久 claim / lease，技能 / fusion / restore 接入，旧技能 operation 生命周期删除 |
 | W7      | Done（2026-10-31 核销）                                         | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴由 RFC-395 交付，逐条核对见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)                                                                                                                                                                             |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                                                                                                             |
-| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123                                                                                                                        |
+| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107                     |
 
 ### 1.2 已关闭后继索引
 
@@ -545,6 +545,10 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   真实使用者下沉，不加 DAG 边。余下 6 个转出：`sessionEventSink`（随运行时驱动归位）、`workflow` / `workgroups`（resource-catalog
   执行期查询端口）、`workflow.validator`（随 E1）、`skillBootVerify` / `skillIdentityPaths`（技能注入端口；与注入 oracle 一起退役）。
   架构计数 `legacy-service-implementations` 118 不变（下一步是这些实现文件按 owner 归位）。
+- **2026-11-06 W9-D 第二步**（[RFC-455](../RFC-455-resource-package-family-to-resource-catalog/proposal.md)）：资源包一族 16 个文件
+  （`services/resourcePackage/**`、`services/bundle/provider.ts`、两个操作修订摘要）归 resource-catalog——算法层进 `application/package`，
+  依赖规划与回执、修订摘要与 zip 解码进 `domain`，两个装配绑定进 `composition`；`services/` 123 → 107、`legacy-service-implementations`
+  118 → 102、`R1` 121 → 119、`R2` 29 → 27，越界类计数不变。下一步：运行时驱动一族（`services/runtime/**`）归 runtime-management。
 
 ## 5. 依赖顺序
 

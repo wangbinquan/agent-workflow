@@ -20,7 +20,7 @@
 - [x] AC-1 16 个文件迁出 `services/`、零引用；`decodeZip` 一份定义
 - [x] AC-2 架构计数按实测（`services/` 123 → 107、`R1` / `R2` 下降），越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-06，候选基于 `b9057dacc`）
 
@@ -75,6 +75,10 @@
   路径；intent 取的两个修订摘要经 RC `public/queries` 导出，就是 domain 那一份（新用例恒等断言），且与 shared 的 Web Crypto 版本逐例相等；
 - 两个装配绑定只被 bootstrap 用，迁入 RC `composition` 后 bootstrap 的装配顺序与参数不变；
 - 集中验证查出的问题（见上）已修并复验。
+
+## CI（AC-4）
+
+- `519d9372a`：exact SHA 主 CI run 42203181694 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42203181923 通过。
 
 ## PR / 提交
 

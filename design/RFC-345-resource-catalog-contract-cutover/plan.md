@@ -197,8 +197,9 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 ### T6 — ResourcePackage public operations 与七 participant adapter
 
-- [ ] 把 parse/inspect/preview/apply/receipt/export 组织到 `resource-catalog/application/package`；（只落了
-      `application/package/{packageApplication,ports}.ts`；`services/resourcePackage/**` 仍有 12 个文件）
+- [x] 把 parse/inspect/preview/apply/receipt/export 组织到 `resource-catalog/application/package`；（RFC-455 `519d9372a`：
+      `services/resourcePackage/**` 的算法层迁入 `application/package`，依赖规划与回执、修订摘要与 zip 解码进 `domain`，两个装配绑定
+      进 `composition`）
 - [x] 建 `ResourcePackageOperations` descriptor factory 与 REST/CLI 共用的 application handler；（`c609fd655`、`c19845794`）
 - [x] 建 `ResourcePackageApplyTx` 七个 exact fields；（`public/participants.ts:350`）
 - [x] 经典六类 participant 来自 T5，capability-template participant 来自 current writer owner；
