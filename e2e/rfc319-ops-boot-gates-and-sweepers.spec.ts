@@ -40,9 +40,9 @@ import { liveSqlitePath } from './storage'
 //   * pre-migration 原始备份 → `packages/backend/src/services/backupScheduler.ts:313-330`
 //     与 `services/rawDbSnapshot.ts:95-190`（字节拷贝，不是逻辑导出）。
 //   * boot auto-resume → `packages/backend/src/cli/start.ts:1488-1526`
-//     与 `services/autoResume.ts`。
+//     与 `modules/task-execution/application/recovery/autoResume.ts`。
 //   * 1Hz 限额 → `packages/backend/src/services/limits.ts:31-143`。
-//   * 事件归档 + 读回 → `services/eventsArchive.ts:97-224/320-344`
+//   * 事件归档 + 读回 → `platform/persistence/sqlite/systemEventsArchive.ts`
 //     与 `services/task.ts:6380-6420`（归档段在前、库内段在后拼成一条流）。
 //   * worktree GC → `services/gc.ts:329-441`。
 //   * 终态任务归档 → `services/taskArchive.ts:354-488/525-564`。

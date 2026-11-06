@@ -40,7 +40,7 @@ import {
   loadSourceEvents,
   rowToDistillJob,
 } from '@/modules/memory/application/distill/memoryDistiller'
-import { getSessionTree } from '@/services/sessionView'
+import { getSessionTree } from '@/modules/task-execution/infrastructure/sessionTreeRead'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, CL, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { runNode } from './helpers/runner'

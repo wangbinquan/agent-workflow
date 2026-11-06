@@ -17,10 +17,10 @@
 // flip-only path.
 
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
-import type { ReapResult } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
-export type { ReapResult } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
-import type { TaskBootOrphanOperations } from '@/modules/task-execution/public/participants'
-import { recordRecoveryEvent } from '@/services/recovery'
+import type { ReapResult } from '../../application/ports/bootExecutionRecovery'
+export type { ReapResult } from '../../application/ports/bootExecutionRecovery'
+import type { TaskBootOrphanOperations } from '../../application/ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from '../../application/recovery/recoveryEvents'
 import {
   killStaleRunProcessTree,
   type StaleRunKillOutcome,

@@ -33,7 +33,7 @@ const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
   ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
   ['packages/backend/src/services/review.ts', new Set(['dispatchReviewNodeUnlocked'])],
   [
-    'packages/backend/src/services/runtimeSessionLease.ts',
+    'packages/backend/src/modules/task-execution/application/runtimeSessionLease.ts',
     new Set([
       'claimNewRuntimeSession',
       'confirmRuntimeSessionResume',

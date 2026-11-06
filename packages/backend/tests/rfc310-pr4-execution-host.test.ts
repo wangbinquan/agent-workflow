@@ -439,7 +439,8 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     // 然后跑**真实**的 boot 修复入口 reapOrphanRuns——DE host 行走的就是
     // 普通任务的 interrupted 收敛，没有专用逻辑。
     await patchTaskFixture(h.db, { id: launched.executionRef }, { status: 'running' })
-    const { reapOrphanRuns } = await import('../src/services/orphans')
+    const { reapOrphanRuns } =
+      await import('../src/modules/task-execution/infrastructure/local/orphanRunReap')
     await reapOrphanRuns(taskRecoveryOperations(h.db))
     const snap = await r.fetchOutcome(launched.executionRef)
     expect(snap.kind).toBe('exited')

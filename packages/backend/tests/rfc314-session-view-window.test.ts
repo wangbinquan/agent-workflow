@@ -25,7 +25,7 @@ import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { getSessionTree } from '../src/services/sessionView'
+import { getSessionTree } from '../src/modules/task-execution/infrastructure/sessionTreeRead'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 
 const SESSION = 'ses_parent'

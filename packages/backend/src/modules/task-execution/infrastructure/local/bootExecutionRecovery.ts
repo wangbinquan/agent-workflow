@@ -1,5 +1,5 @@
-import { reapOrphanRuns } from '@/services/orphans'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import { reapOrphanRuns } from './orphanRunReap'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '../../application/runtimeSessionLease'
 import {
   finalizeTaskExecutionRecovery,
   prepareTaskExecutionRecovery,

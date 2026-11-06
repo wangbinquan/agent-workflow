@@ -66,13 +66,14 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     const route = read('routes/tasks.ts')
     for (const code of [
       'task-route-operations-not-composed',
-      'task-recovery-operations-not-composed',
       'task-code-workspace-not-composed',
       'task-workspace-queries-not-composed',
       'task-repository-workspace-not-composed',
       'task-change-narrative-not-composed',
-      // RFC-370 M2: startup-inventory content is read through the selected owner.
-      'task-runtime-inventory-content-not-composed',
+      // RFC-452: the recovery operations and the startup-inventory content (RFC-370 M2: read through the selected
+      // owner) are required parameters of `composeTaskDiagnostics` now — RFC-359 W1-T1: "not composed" is not
+      // representable there — so the route fails closed on the composed surface instead.
+      'task-diagnostics-not-composed',
     ]) {
       expect(route).toContain(`throw new Error('${code}')`)
     }

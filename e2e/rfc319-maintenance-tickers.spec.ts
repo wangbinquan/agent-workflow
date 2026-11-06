@@ -26,7 +26,7 @@ import { liveSqlitePath } from './storage'
 //     `j.status in ('done','failed','canceled')`）、:129-165（webhook_trigger_fires
 //     按 fired_at 过期，且 `NOT EXISTS` 那条任务未终态的行——实现门 P1-3：
 //     supersede 的唯一事实源，吃掉未终态那行会让同一 MR 上两个活任务互相踩）。
-//   * 心跳停滞自动杀：packages/backend/src/services/autoKill.ts:96-110
+//   * 心跳停滞自动杀：packages/backend/src/modules/task-execution/application/recovery/heartbeatKill.ts:96-110
 //     （`running` + pid 非空 + 最后事件早于 `now - heartbeatStallMs`）、:126-158
 //     （quarantine → breaker → driver lease → killChild → recovery 审计）、
 //     packages/backend/src/util/process.ts:258-301（`killStaleRunProcessTree`：
@@ -34,13 +34,13 @@ import { liveSqlitePath } from './storage'
 //     **注意 autoKill.ts:149-156 无论 outcome 是什么都会落一条 `heartbeat-kill`
 //     recovery 事件**，所以本文件的判据是「子进程真的没了 + node_run 真的终态」，
 //     那条事件只作为补充断言（且断言它的 `outcome=killed`）。
-//   * 自动修复 + 限流 + 隔离：packages/backend/src/services/autoRepair.ts:56-120
+//   * 自动修复 + 限流 + 隔离：packages/backend/src/modules/task-execution/application/recovery/autoRepair.ts:56-120
 //     （规则开关 → quarantine → 唯一可自动应用选项 → breaker → 应用 + 审计）、
 //     packages/shared/src/diagnose-repair.ts:76-79（`selectAutoApplyOption`：
 //     恰好一个 eligible+available 才动手）、
 //     packages/backend/src/services/lifecycleRepair/options-S4.ts:17-77
 //     （v1 唯一 `autoApplyEligible` 的选项 `S4.kick-task`：pending → interrupted → resume）、
-//     packages/backend/src/services/recoveryBreaker.ts:23-84（滚动窗口计数，
+//     packages/backend/src/modules/task-execution/application/recovery/autoRecoveryBreaker.ts:23-84（滚动窗口计数，
 //     `attempts > maxPerWindow` ⇒ 落 `auto_recovery_suspended` 并记 `quarantine` 事件）。
 //
 // 与既有 spec 的分工（刻意不重叠）：

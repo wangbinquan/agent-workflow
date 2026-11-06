@@ -21,7 +21,7 @@ import {
   releaseRuntimeSessionLease,
   repairRuntimeSessionLeasesAfterOrphanReap,
   rotateRuntimeSessionLease,
-} from '@/services/runtimeSessionLease'
+} from '@/modules/task-execution/application/runtimeSessionLease'
 
 async function seedTaskRuns(db: PersistenceDb) {
   await workflowFixture(db, { id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })

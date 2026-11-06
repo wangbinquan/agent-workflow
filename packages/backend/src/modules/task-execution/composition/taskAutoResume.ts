@@ -1,4 +1,4 @@
-import { autoResumeInterruptedTasks } from '@/services/autoResume'
+import { autoResumeInterruptedTasks } from '../application/recovery/autoResume'
 import type {
   RepositoryPreparationRetryCommand,
   TaskAutoResumeCommand,

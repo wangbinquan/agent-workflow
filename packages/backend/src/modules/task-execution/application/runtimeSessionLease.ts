@@ -1,5 +1,5 @@
-import type { TaskRuntimeSessionLeaseExecutionOperations } from '@/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations'
-import type { TaskRuntimeSessionLeaseRepairOperations } from '@/modules/task-execution/public/participants'
+import type { TaskRuntimeSessionLeaseExecutionOperations } from './ports/taskRuntimeSessionLeaseExecutionOperations'
+import type { TaskRuntimeSessionLeaseRepairOperations } from './ports/runtimeSessionLeaseOperations'
 
 // Runtime-native conversation ownership and single-writer leases.
 //
@@ -15,7 +15,7 @@ import {
   type RuntimeSessionLeaseOperations,
   type RuntimeSessionLeaseProtocol,
   type RuntimeSessionLeaseToken,
-} from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
+} from './ports/runtimeSessionLeaseOperations'
 
 export {
   RuntimeSessionLeaseError,

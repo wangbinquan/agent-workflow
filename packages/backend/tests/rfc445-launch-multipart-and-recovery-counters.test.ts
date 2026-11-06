@@ -6,7 +6,7 @@
 // ② 引用：源码里没有任何文件 import 两个旧路径（census 的 AST 提取；别名与相对路径都认，带负对照）；`routes/agents.ts`、
 //    `routes/health.ts` 不 import `services/`。
 // ③ 计数只有一份：恢复计数只在 `platform/health/recoveryCounters.ts` 声明；四处累加点与 `/health` 只经它取；
-//    `services/recovery.ts` 只剩审计写入与查询，写入仍累加同一份计数。
+//    `services/recovery.ts`（RFC-452 起为 task-execution `application/recovery/recoveryEvents.ts`）只剩审计写入与查询，写入仍累加同一份计数。
 // ④ 行为：信封解析与四个错误码；先核对声明再复制字节；回收失败时的错误合成。
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -23,7 +23,7 @@ import {
   recoveryCountersSnapshot,
 } from '@/platform/health/recoveryCounters'
 import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
-import * as recovery from '@/services/recovery'
+import * as recovery from '@/modules/task-execution/application/recovery/recoveryEvents'
 import { DomainError, ValidationError } from '@/util/errors'
 import { importEdges, sourceUnit } from './architecture/census'
 
@@ -144,7 +144,7 @@ describe('RFC-445 —— 恢复计数只有一份', () => {
       'platform/persistence/sqlite/systemProviderRestore.ts',
       'modules/system-operations/infrastructure/resourceLimitAudit.ts',
       'modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts',
-      'services/recovery.ts',
+      'modules/task-execution/application/recovery/recoveryEvents.ts',
     ]) {
       expect(targetsOf(site), site).toContain(COUNTERS)
     }
@@ -159,7 +159,7 @@ describe('RFC-445 —— 恢复计数只有一份', () => {
     expect(declaring).toEqual([`${COUNTERS}.ts`])
   })
 
-  test('services/recovery 只剩审计写入与查询；写入仍累加同一份计数', async () => {
+  test('恢复审计（RFC-452 起在 task-execution application/recovery）只剩审计写入与查询；写入仍累加同一份计数', async () => {
     expect(Object.keys(recovery).sort()).toEqual([
       'listRecoveryEventsForTask',
       'recordRecoveryEvent',

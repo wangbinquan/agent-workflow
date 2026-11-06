@@ -4,7 +4,7 @@
 // recovery_event kind (no raw enum like `boot-reap` ever reaches the user) and
 // the zh/en bundles must stay symmetric + complete against the backend kind
 // set (RFC-203 T5c promoted the local describeRecoveryKind/describeRule pair
-// to this one primitive). If the backend (services/recovery.ts
+// to this one primitive). If the backend (modules/task-execution/application/recovery/recoveryEvents.ts
 // RecoveryEventKind) gains a kind, RECOVERY_EVENT_KINDS + these assertions
 // flag the missing translation; until one lands, labelForCode falls back to
 // the raw code.

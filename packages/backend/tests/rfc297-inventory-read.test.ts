@@ -13,7 +13,7 @@ import {
   facesFromOpencodeSnapshot,
   facesFromStartupObservation,
   assembleFaces,
-} from '@/services/execution/inventoryRead'
+} from '@/modules/task-execution/infrastructure/runtimeInventoryRead'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import type { InventorySnapshotCaptured, StartupObservation } from '@agent-workflow/shared'
 

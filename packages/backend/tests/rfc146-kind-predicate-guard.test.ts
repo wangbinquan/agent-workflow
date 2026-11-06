@@ -128,7 +128,16 @@ describe('RFC-146: task engine 三处表接线形态锁', () => {
     expect(frontierSrc).not.toContain('SETTLES_WITHOUT_ROW')
     expect(frontierSrc).not.toContain('settlesWithoutRow')
     const detectorSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'stuckTaskDetector.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'lifecycleAlerts',
+        'stuckTaskDetector.ts',
+      ),
       'utf8',
     )
     expect(detectorSrc).toContain('nodeKindIsClarifyGate(n.kind)')

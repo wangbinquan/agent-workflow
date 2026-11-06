@@ -45,9 +45,12 @@ import {
   type RepositoryWorkspaceReadQueries,
 } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
+import {
+  runLifecycleInvariants,
+  type LifecycleAlertRow,
+} from '../application/lifecycleAlerts/lifecycleInvariants'
 import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
-import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
+import { runStuckTaskDetector } from '../application/lifecycleAlerts/stuckTaskDetector'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'

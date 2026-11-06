@@ -54,7 +54,7 @@ import {
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { reapOrphanRuns } from '../src/services/orphans'
+import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

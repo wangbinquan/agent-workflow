@@ -74,8 +74,8 @@ import {
 } from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { deriveFrontier } from './helpers/frontierSelection'
-import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
-import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
+import { runLifecycleInvariants } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
+import { runStuckTaskDetector } from '../src/modules/task-execution/application/lifecycleAlerts/stuckTaskDetector'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   ClarifyQuestion,

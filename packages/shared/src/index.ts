@@ -83,6 +83,7 @@ export * from './gitFailureClass'
 export * from './lifecycle'
 export * from './lifecycle-alerts'
 export * from './diagnose-repair'
+export * from './schemas/taskDiagnostics' // RFC-452
 export * from './node-kind-behavior'
 export * from './workflow-sync-diff' // RFC-109
 export * from './workflow-canonical' // RFC-199

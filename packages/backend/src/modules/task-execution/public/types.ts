@@ -25,6 +25,11 @@ export type {
 } from '../application/ports/portArtifactContent'
 export type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 export type { TaskRuntimeInventoryContent } from '../application/ports/taskRuntimeInventoryContent'
+// RFC-452: the diagnostics surface the tasks route reaches (alerts, recovery audit, diagnose, node-run reads).
+export type {
+  TaskDiagnostics,
+  TaskLifecycleAlertNotices,
+} from '../application/ports/taskDiagnostics'
 export type { TaskArchiveContentBinding } from '../composition/taskArchiveMaintenance'
 
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these

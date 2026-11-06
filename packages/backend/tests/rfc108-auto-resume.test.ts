@@ -14,14 +14,14 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { autoResumeInterruptedTasks } from '../src/services/autoResume'
+import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
-import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import {
   clearAutoRecoverySuspension,
   recordAutoRecoveryAttempt,
-} from '../src/services/recoveryBreaker'
+} from '../src/modules/task-execution/application/recovery/autoRecoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }

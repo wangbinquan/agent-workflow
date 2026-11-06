@@ -14,13 +14,13 @@
 // findStalledRuns / killChild are injected; the maintenance Worker supplies
 // the production query and process operation.
 
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { recordRecoveryEvent } from '@/services/recovery'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from './recoveryEvents'
 import {
   type BreakerConfig,
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
-} from '@/services/recoveryBreaker'
+} from './autoRecoveryBreaker'
 
 export interface StalledRun {
   id: string

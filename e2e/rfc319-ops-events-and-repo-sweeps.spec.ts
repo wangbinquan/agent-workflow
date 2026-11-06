@@ -26,7 +26,7 @@ import { liveSqlitePath } from './storage'
 // 判据全部取自源码单一事实源（纯文本引用，禁 GitHub 外链，见 CLAUDE.md）：
 //
 //   * 周期孤儿对账与它的热重配：
-//     packages/backend/src/services/orphanReconcile.ts:341-383（loop + config 监听）、
+//     packages/backend/src/modules/task-execution/infrastructure/local/deadRunReconcile.ts:341-383（loop + config 监听）、
 //     :128-141（候选 = status='running' 且 startedAt < now-graceMs）、
 //     :78-87（进程探针：pid 活着**且**命令行仍含当初 spawn 的二进制）、
 //     :239-262（CAS 翻 interrupted + periodic-reap 审计）、:270-289（任务行翻 interrupted）。

@@ -59,7 +59,10 @@ import { type DatabaseMigrationModule } from '@/modules/system-operations/compos
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { createOidcProvidersService } from '@/auth/oidc/providers'
-import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
+import {
+  composeTaskDiagnostics,
+  composeTaskWorkspaceQueries,
+} from '@/modules/task-execution/composition'
 import {
   composeCachedRepositoryOperations,
   composeRepositoryGroups,
@@ -261,8 +264,15 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         createWorkspaceContentScope(workspaceRef, input.selections.workspaceContent),
     }),
     taskExecutionReadModels: taskExecutionProvider.readModels,
-    runtimeInventoryContent: input.selections.runtimeInventoryContent,
-    taskRecoveryOperations: taskExecutionProvider.recovery,
+    // RFC-452: the same recovery operations, read models, prompt / archived-event reads and inventory content the
+    // route used to take one by one.
+    diagnostics: composeTaskDiagnostics({
+      recovery: taskExecutionProvider.recovery,
+      readModels: taskExecutionProvider.readModels,
+      nodeRunPrompts: taskExecutionProvider.routes.tasks.nodeRunPrompts,
+      archivedEvents: taskExecutionProvider.routes.tasks.archivedEvents,
+      runtimeInventoryContent: input.selections.runtimeInventoryContent,
+    }),
     codeWorkspace,
     // RFC-370 §10 V16: hosted reads answer from the task volume and persist as
     // object publications; standalone PostgreSQL keeps native worktrees and files.

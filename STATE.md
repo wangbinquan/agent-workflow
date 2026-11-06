@@ -1,3 +1,21 @@
+## 2026-11-05 RFC-452 任务恢复与诊断家族归 task-execution（In Progress；`design/RFC-452-task-recovery-and-diagnostics-into-task-execution/`）
+
+- **来由**：RFC-294 W4 B / D 第十七步（RFC-451 后只剩 `tasks` 路由 import `services/`，14 处分两族：任务诊断与恢复 7 处、workspace-insight 7 处）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - 诊断 / 恢复一族连同它在 legacy 里的闭包共 17 个文件（自动恢复 / 修复 / 心跳收割、孤儿收割与死运行对账、优雅关停、生命周期不变量、
+    卡死检测、告警、恢复审计与熔断、运行时会话租约、会话树 / 运行时清单 / 启动验证读端）原样迁入 task-execution：只经端口决策的进
+    `application/recovery`、`application/lifecycleAlerts` 与 `application`，碰本机进程或文件的进 `infrastructure`；17 个 `services/` 文件删除；
+  - `tasks` 路由的 7 个诊断 / 恢复端点只经 task-execution 的 `TaskDiagnostics`（`public/types`）；路由里的两段编排（恢复审计与熔断态并发读、
+    诊断的「实时扫描 + 合并卡死行」）迁入 `application/taskDiagnostics`，装配只做绑定、依赖全为必填参数；告警、恢复审计、诊断三种响应在
+    shared 里有 zod schema，合同返回推导类型，不新增 public surface 债；
+  - 会话树读端改从平台取归档读端后，`services/eventsArchive`（`export *` 兼容转出）在生产里再无消费者，一并删除；
+  - 计数：`services/` 205 → 187；`R1` 166 → 148；`R2` 35 → 33；模块里 import `services/` 的文件 139 → 134；import `services/` 的路由仍 1
+    （`tasks` 余 workspace-insight 一族）。
+- **不做**：workspace-insight 一族（下一个 RFC）；`services/runtime`（W5）；`services/daemonCadence`；恢复循环的重新设计。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-451 的 Done 文档提交 `46f7160bb`：exact SHA 主 CI run 42108906335 首轮全绿（70 个 job）。
+
 ## 2026-11-05 RFC-451 仓库镜像缓存家族归 source-control（Done；`design/RFC-451-repository-mirror-cache-into-source-control/`）
 
 - **来由**：RFC-294 W4 B / D 第十六步（RFC-450 后 2 个路由仍 import `services/`，其中 `cached-repos` 取 `services/gitRepoCache` 与
@@ -49,7 +67,10 @@
     装不了浏览器；三个夜间自那天起每晚红在安装一步，主 CI 的 Linux e2e 只靠浏览器缓存命中才绿），新增 `ci-playwright-runner-image` 用例锁定，
     见 `docs/dev-gotchas.md`。其后：`eef504664` 主 CI 的 Linux e2e 三片在 ubuntu-24.04 上全绿（install-deps 不再报不支持；macOS 构建 job 一直没
     分到 runner、排队 24 分钟后被取消，只重跑失败作业 attempt 2 全绿），定时的 e2e-webkit-nightly run 42053544054 与 git-protocols-e2e run 42060411229
-    转绿；e2e-full-nightly 待当晚。升级 Playwright（1.61+ 支持 26.04）会换浏览器构建、需刷新视觉基线，未做。
+    转绿；e2e-full-nightly：11-05 的定时 run 42040875015 跑在钉之前的 `2f8d491cd` 上，仍红在安装一步；手动 dispatch 的 run 42131531410
+    （`46f7160bb`，含本微调）四个分片与 RFC-319 覆盖账本对账全绿，且浏览器是全新下载（该 workflow 不缓存浏览器，
+    `playwright install --with-deps chromium` 在 ubuntu-24.04 上装上 Chrome for Testing 148）——主 CI 缓存失效时走的就是这条路径。升级 Playwright（1.61+ 支持 26.04）会换浏览器构建、需刷新
+    视觉基线，未做。
 - **落地**：`d29f951e0`。
 - **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修：两份源码文本锁没有跟着迁移（RFC-269 执行用例的源码层锁按逐段拼接的旧路径读文件、
   RFC-310 PR-7 负扫描把迁入的通用执行器扫了进来），改为读新位置并精确排除通用执行器目录。全量 SQLite 23370 pass，其余为负载超时与

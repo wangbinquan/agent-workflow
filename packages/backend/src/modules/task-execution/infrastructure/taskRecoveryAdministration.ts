@@ -1,7 +1,7 @@
 // RFC-419: the recovery administration face, moved verbatim from composition/taskExecutionPersistence.ts (renamed
 // from createRecoveryAdministration); every method is a persistence operation on the shared recovery primitives.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '../application/runtimeSessionLease'
 import type { TaskRecoveryHumanGateFactsPort } from '../composition/required-ports'
 import { DrizzleNodeRunLifecyclePersistence } from './nodeRunLifecyclePersistence'
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from './runtimeSessionLeaseOperations'

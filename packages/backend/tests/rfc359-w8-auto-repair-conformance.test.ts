@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '@/auth/actor'
-import type { LifecycleAlertRow } from '@/services/lifecycleInvariants'
+import type { LifecycleAlertRow } from '@/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/types'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import type {
@@ -34,7 +34,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createTaskLifecycleAutoRepairCommand } from '@/modules/task-execution/composition/taskLifecycleRepair'
 import { createTaskRouteRepairOperations } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
-import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
+import { listOpenLifecycleAlertsForTask } from '@/modules/task-execution/application/lifecycleAlerts/openLifecycleAlerts'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_788_600_000_000

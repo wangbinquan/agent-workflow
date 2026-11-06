@@ -32,7 +32,7 @@ import {
   summarizeOpenAlerts,
   type LifecycleAlertRow,
   type OpenAlertSummary,
-} from '../src/services/lifecycleInvariants'
+} from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { configureLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 import { createLogger } from '../src/util/log'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'

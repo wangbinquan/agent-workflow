@@ -36,8 +36,22 @@ import { detachedProcessGroup } from '../src/util/process'
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 const MANAGED_PROCESS = resolve(BACKEND_SRC, 'platform', 'execution', 'local', 'managedProcess.ts')
-const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
-const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
+const ORPHANS = resolve(
+  BACKEND_SRC,
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'local',
+  'orphanRunReap.ts',
+)
+const STUCK = resolve(
+  BACKEND_SRC,
+  'modules',
+  'task-execution',
+  'application',
+  'lifecycleAlerts',
+  'stuckTaskDetector.ts',
+)
 // RFC-359 W4-B1 批 2e：恢复读 / 写只有一份 provider 中立实现。
 const RECOVERY = resolve(
   BACKEND_SRC,

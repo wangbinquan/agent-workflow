@@ -870,7 +870,7 @@ test('RFC-319 OPS-037：批量归档先给 dry-run 预览且一行不删，确�
 test('RFC-319 OPS-X6：被熔断隔离的任务在详情页亮出恢复横幅、展开列出可读的事件，点「解除隔离」后翻回普通历史 @nightly', async ({
   page,
 }) => {
-  // 隔离标记与恢复事件都只由**系统内部**的熔断器写（services/recoveryBreaker.ts:60-80），
+  // 隔离标记与恢复事件都只由**系统内部**的熔断器写（modules/task-execution/application/recovery/autoRecoveryBreaker.ts:60-80），
   // 没有任何用户面入口能造出来，只能直连落库。
   const now = Date.now()
   runSqlite(

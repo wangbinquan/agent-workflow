@@ -32,7 +32,7 @@ import {
   runLifecycleInvariants,
   STUCK_RULES,
   type LifecycleAlertRow,
-} from '../src/services/lifecycleInvariants'
+} from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

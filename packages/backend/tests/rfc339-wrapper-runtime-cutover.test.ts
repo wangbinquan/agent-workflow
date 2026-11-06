@@ -464,10 +464,9 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(existsSync(resolve(ROOT, 'packages/backend/src/services/dispatchFrontier.ts'))).toBe(
       false,
     )
-    for (const path of [
-      'packages/backend/src/services/runLiveness.ts',
-      'packages/backend/src/services/structuralDiff/service.ts',
-    ]) {
+    // RFC-452: services/runLiveness.ts moved into task-execution application/recovery, so only the legacy
+    // structural diff service is left to prove it reaches task-execution through the public entrypoints.
+    for (const path of ['packages/backend/src/services/structuralDiff/service.ts']) {
       const source = read(path)
       expect(source, path).toContain('@/modules/task-execution/public/')
       expect(source, path).not.toMatch(

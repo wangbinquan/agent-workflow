@@ -306,6 +306,12 @@ export function composeSystemOperationsTaskPorts() {
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createTaskExecutionMaintenanceJobHandlers } from './application/maintenanceJobs'
+// RFC-452: the maintenance job table runs the lifecycle invariant scan and the stuck-task detector, the daemon
+// session drains running tasks through graceful shutdown, and HTTP composition builds the tasks route's diagnostics.
+export { runLifecycleInvariants } from './application/lifecycleAlerts/lifecycleInvariants'
+export { runStuckTaskDetector } from './application/lifecycleAlerts/stuckTaskDetector'
+export { gracefulShutdown } from './application/recovery/gracefulShutdown'
+export { composeTaskDiagnostics } from './composition/taskDiagnostics'
 // RFC-402: bootstrap builds exactly one permit registry per daemon scope (and one per maintenance Worker graph).
 export { createExecutionPermitRegistry } from './engine/kernel/permits'
 export type { TaskExecutionPermitRegistry } from './application/ports/taskExecutionPermits'

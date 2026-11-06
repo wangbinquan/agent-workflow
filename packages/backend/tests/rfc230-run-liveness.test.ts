@@ -30,14 +30,17 @@ import { ulid } from 'ulid'
 import { NODE_KIND, type NodeKind, type WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { probeRunProcessAlive, reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
-import { listRecoveryEventsForTask } from '../src/services/recovery'
+import {
+  probeRunProcessAlive,
+  reconcileDeadRunningRuns,
+} from '../src/modules/task-execution/infrastructure/local/deadRunReconcile'
+import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import {
   classifyRunLiveness,
   livenessSourceOfKind,
   type LivenessRunRow,
   resolveRunLiveness,
-} from '../src/services/runLiveness'
+} from '../src/modules/task-execution/application/recovery/runLiveness'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const NOW = 1_000_000

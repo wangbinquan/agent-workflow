@@ -9,7 +9,10 @@ import type {
   DaemonProviderSessionComposeInput,
   ComposedDaemonProviderSession,
 } from './daemonSessionInput'
-import { createTaskExecutionShutdownController } from '@/modules/task-execution/composition'
+import {
+  createTaskExecutionShutdownController,
+  gracefulShutdown,
+} from '@/modules/task-execution/composition'
 import { composeDaemonLifecycle, type DaemonLifecycle } from '@/bootstrap/daemonLifecycleProgram'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
@@ -706,7 +709,6 @@ export async function composeDaemonSession(
     id: 'task-execution-graceful-shutdown',
     async close({ reason }: Parameters<DaemonProviderCloseParticipant['close']>[0]) {
       if (reason !== 'daemon-shutdown') return
-      const { gracefulShutdown } = await import('@/services/shutdown')
       await gracefulShutdown(
         {
           controller: createTaskExecutionShutdownController(runtime.taskExecution.executionModule),

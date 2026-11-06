@@ -5,7 +5,7 @@ import { contentRowColumns } from '@/platform/content/infrastructure/contentStor
 import { o2Ports } from './helpers/o2Closure'
 // RFC-053 PR-D — invariants R1/R2 (review ↔ doc_versions / node_runs).
 //
-// Calls the real services/lifecycleInvariants.runLifecycleInvariants(); each
+// Calls the real modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.runLifecycleInvariants(); each
 // case constructs a single-task DB shape that either satisfies or violates
 // the rule and asserts that:
 //   - the right `rule` is in (or absent from) result.openAlerts
@@ -35,7 +35,10 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { runLifecycleInvariants, type LifecycleAlertRow } from '../src/services/lifecycleInvariants'
+import {
+  runLifecycleInvariants,
+  type LifecycleAlertRow,
+} from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

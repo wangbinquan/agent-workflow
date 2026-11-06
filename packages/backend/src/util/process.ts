@@ -12,7 +12,7 @@ const log = createLogger('process-tree')
 //
 // `isProcessAlive` moved here from util/lock.ts (still re-exported there for
 // the daemon single-instance lock callers) so service-level pid governance —
-// orphan reaping (services/orphans.ts), resume/retry pre-rollback kills
+// orphan reaping (modules/task-execution/infrastructure/local/orphanRunReap.ts), resume/retry pre-rollback kills
 // (services/task.ts) and the runner's kill escalation (services/runner.ts) —
 // shares one liveness / kill vocabulary without importing the lock module.
 

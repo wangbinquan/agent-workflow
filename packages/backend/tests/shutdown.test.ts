@@ -24,7 +24,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { gracefulShutdown } from '../src/services/shutdown'
+import { gracefulShutdown } from '../src/modules/task-execution/application/recovery/gracefulShutdown'
 import {
   taskExecutionModule,
   createTaskExecutionShutdownController,

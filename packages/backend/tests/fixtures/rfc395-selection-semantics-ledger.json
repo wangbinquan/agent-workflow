@@ -374,8 +374,8 @@
       "whyFrameless": "旧唤醒证据沿既有 frontier 范围。"
     },
     {
-      "site": "src/services/lifecycleInvariants.ts#checkT3:1",
-      "path": "src/services/lifecycleInvariants.ts",
+      "site": "src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts#checkT3:1",
+      "path": "src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts",
       "symbol": "checkT3",
       "ordinal": 1,
       "source": "selection.familyHistory(ctx.taskId, { nodeId }, { topLevelOnly: true })",

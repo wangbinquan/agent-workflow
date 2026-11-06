@@ -11,7 +11,7 @@ import {
 } from '../../application/recoverTaskExecutions'
 import { taskAggregateWrite } from '../taskDefinitionWriteParticipant'
 import { compareAndWriteNodeRunInTx } from '../nodeRunWriteProtocol'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '../../application/runtimeSessionLease'
 import type { HostedExecutionStore } from './executionStore'
 
 /** RFC-370 §9.2 V1 — boot recovery never waits on the platform.

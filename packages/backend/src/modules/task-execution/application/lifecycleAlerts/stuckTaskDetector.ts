@@ -34,11 +34,11 @@ import {
   taskWorkspacePhase,
   type TaskWorkspacePhase,
 } from '@agent-workflow/shared'
-import type { TaskSubject } from '@/modules/task-execution/public/types'
+import type { TaskSubject } from '../../domain/taskSubject'
 import type {
   TaskRecoveryOperations,
   TaskRecoveryStuckRunSnapshot,
-} from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+} from '../ports/taskRecoveryOperations'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('lifecycle.stuck')

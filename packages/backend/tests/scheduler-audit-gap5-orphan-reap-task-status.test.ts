@@ -42,7 +42,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { reapOrphanRuns } from '../src/services/orphans'
+import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 // Same-ms inserts must keep a deterministic id order (freshness is pure ULID

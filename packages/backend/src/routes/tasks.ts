@@ -43,23 +43,16 @@ import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
 import { getCodeIntel } from '@/services/codeIntel/codeIntel'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
-import { getSessionTree } from '@/services/sessionView'
-import { getRuntimeInventory } from '@/services/execution/inventoryRead'
-import { getStartupVerification } from '@/services/execution/startupVerificationRead'
 import type { TaskWorkspaceQueries } from '@/modules/task-execution/public/queries'
-import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
-import { listRecoveryEventsForTask } from '@/services/recovery'
-import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
-import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-// RFC-434: task recovery is the task-execution public participant contract, not its application port.
-import type { TaskRecoveryOperations } from '@/modules/task-execution/public/participants'
 import type {
+  TaskDiagnostics,
   TaskExecutionReadModels,
+  TaskLifecycleAlertNotices,
   TaskRouteListFilters,
-  TaskRuntimeInventoryContent,
+  TaskRouteLifecycleAlertNotice,
 } from '@/modules/task-execution/public/types'
 import type { TaskRouteOperations } from '@/modules/task-execution/public/commands'
 
@@ -79,6 +72,19 @@ async function resolveStructuralDeepConfig(
   }
 }
 
+function broadcastLifecycleAlert(
+  row: TaskRouteLifecycleAlertNotice,
+  transition: 'new' | 'promoted',
+): void {
+  tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+    type: 'lifecycle.alert',
+    taskId: row.taskId,
+    rule: row.rule,
+    severity: row.severity,
+    transition,
+  })
+}
+
 function broadcastLifecycleAlertResolved(taskId: string): void {
   tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
     type: 'lifecycle.alert.resolved',
@@ -86,13 +92,19 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
   })
 }
 
+/** RFC-452: where a diagnose pass reports alert changes — the same broadcasts the repair path sends. */
+const LIFECYCLE_ALERT_NOTICES: TaskLifecycleAlertNotices = Object.freeze({
+  alert: broadcastLifecycleAlert,
+  resolved: broadcastLifecycleAlertResolved,
+})
+
 export interface TaskRouteDependencies {
   readonly workspaceQueries: TaskWorkspaceQueries
   readonly configuration: ApplicationConfigurationQueries
   readonly operations: TaskRouteOperations
   readonly taskExecutionReadModels: TaskExecutionReadModels
-  readonly runtimeInventoryContent: TaskRuntimeInventoryContent
-  readonly taskRecoveryOperations: TaskRecoveryOperations
+  /** RFC-452: alerts, recovery audit, diagnose and the node-run session / inventory / startup reads. */
+  readonly diagnostics: TaskDiagnostics
   readonly codeWorkspace: CodeReviewReads['workspace']
   /** RFC-370 §10 V16 — the selected revision content and artifact store. */
   readonly codeReview: Pick<ResolvedCodeReviewReads, 'content' | 'artifacts'>
@@ -113,8 +125,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   if (deps.operations === undefined) {
     throw new Error('task-route-operations-not-composed')
   }
-  if (deps.taskRecoveryOperations === undefined) {
-    throw new Error('task-recovery-operations-not-composed')
+  if (deps.diagnostics === undefined) {
+    throw new Error('task-diagnostics-not-composed')
   }
   if (deps.codeWorkspace === undefined) {
     throw new Error('task-code-workspace-not-composed')
@@ -128,9 +140,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   if (deps.codeReview === undefined) {
     throw new Error('task-code-review-not-composed')
   }
-  if (deps.runtimeInventoryContent === undefined)
-    throw new Error('task-runtime-inventory-content-not-composed')
-  const { operations, taskExecutionReadModels, taskRecoveryOperations } = deps
+  const { operations, taskExecutionReadModels, diagnostics } = deps
   const { codeWorkspace, repositoryWorkspace, changeNarrative, codeReview } = deps
   const codeReviewInput: CodeReviewReads = {
     workspace: codeWorkspace,
@@ -701,7 +711,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     },
     async (c) => {
       const taskId = c.req.param('id')
-      const alerts = await listOpenLifecycleAlertsForTask(taskRecoveryOperations, taskId)
+      const alerts = await diagnostics.openAlerts(taskId)
       return c.json({ alerts })
     },
   )
@@ -719,12 +729,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       summary: 'List recovery events',
     },
     async (c) => {
-      const taskId = c.req.param('id')
-      const [events, suspended] = await Promise.all([
-        listRecoveryEventsForTask(taskRecoveryOperations, taskId),
-        isAutoRecoverySuspended(taskRecoveryOperations, taskId),
-      ])
-      return c.json({ events, suspended })
+      return c.json(await diagnostics.recoveryHistory(c.req.param('id')))
     },
   )
 
@@ -743,7 +748,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
       await operations.requireOperator(actorOf(c), c.req.param('id'))
-      await clearAutoRecoverySuspension(taskRecoveryOperations, c.req.param('id'))
+      await diagnostics.clearRecoverySuspension(c.req.param('id'))
       return c.json({ ok: true })
     },
   )
@@ -768,35 +773,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
       await operations.requireOperator(actorOf(c), c.req.param('id'))
-      const taskId = c.req.param('id')
-      const result = await runLifecycleInvariants({
-        operations: taskRecoveryOperations,
-        scope: { taskId },
-        onAlert: (row, transition) => {
-          tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-            type: 'lifecycle.alert',
-            taskId: row.taskId,
-            rule: row.rule,
-            severity: row.severity,
-            transition,
-          })
-        },
-        onResolved: broadcastLifecycleAlertResolved,
-      })
-      const invariantIds = new Set(result.openAlerts.map((a) => a.id))
-      const allOpen = await listOpenLifecycleAlertsForTask(taskRecoveryOperations, taskId)
-      const extra = allOpen
-        .filter((a) => !invariantIds.has(a.id))
-        .map((a) => ({
-          id: a.id,
-          taskId: a.taskId,
-          rule: a.rule,
-          severity: a.severity,
-          detail: a.detail,
-          detectedAt: a.detectedAt,
-          resolvedAt: null,
-        }))
-      return c.json({ ...result, openAlerts: [...result.openAlerts, ...extra] })
+      return c.json(await diagnostics.diagnose(c.req.param('id'), LIFECYCLE_ALERT_NOTICES))
     },
   )
 
@@ -918,15 +895,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
         taskId: c.req.param('id'),
         alertId: c.req.param('alertId'),
         optionId: parsed.data.optionId,
-        onAlert: (row, transition) => {
-          tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-            type: 'lifecycle.alert',
-            taskId: row.taskId,
-            rule: row.rule,
-            severity: row.severity,
-            transition,
-          })
-        },
+        onAlert: broadcastLifecycleAlert,
         onResolved: broadcastLifecycleAlertResolved,
       })
       return c.json(result)
@@ -1040,16 +1009,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       summary: 'Node run session view',
     },
     async (c) => {
-      return c.json(
-        await getSessionTree(
-          taskExecutionReadModels.sessions,
-          c.req.param('id'),
-          c.req.param('nodeRunId'),
-          {},
-          operations.nodeRunPrompts,
-          operations.archivedEvents,
-        ),
-      )
+      return c.json(await diagnostics.sessionTree(c.req.param('id'), c.req.param('nodeRunId')))
     },
   )
 
@@ -1075,14 +1035,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       summary: 'Node run resolved inventory',
     },
     async (c) => {
-      return c.json(
-        await getRuntimeInventory(
-          taskExecutionReadModels.runtimeInventory,
-          c.req.param('id'),
-          c.req.param('nodeRunId'),
-          deps.runtimeInventoryContent,
-        ),
-      )
+      return c.json(await diagnostics.runtimeInventory(c.req.param('id'), c.req.param('nodeRunId')))
     },
   )
 
@@ -1101,11 +1054,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     },
     async (c) => {
       return c.json(
-        await getStartupVerification(
-          taskExecutionReadModels.startupVerification,
-          c.req.param('id'),
-          c.req.param('nodeRunId'),
-        ),
+        await diagnostics.startupVerification(c.req.param('id'), c.req.param('nodeRunId')),
       )
     },
   )

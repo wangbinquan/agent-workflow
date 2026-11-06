@@ -32,7 +32,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
-import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
+import { claimNewRuntimeSession } from '../src/modules/task-execution/application/runtimeSessionLease'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

@@ -10,20 +10,17 @@
 // tree client-side from raw event rows. Here we just do the IO and
 // pass-through.
 
-import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
+import type { TaskArchivedEventsReader } from '../public/types'
 import {
   isAgentNodeKind,
   parseSessionTree,
   type ParseSessionInputEvent,
   type SessionTree,
 } from '@agent-workflow/shared'
-import type {
-  TaskSessionReadModel,
-  TaskSessionRunSource,
-} from '@/modules/task-execution/public/types'
-import { readArchivedEvents } from '@/services/eventsArchive'
-import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
-import { selectNodeRunPromptOperations } from '@/modules/task-execution/public/participants'
+import type { TaskSessionReadModel, TaskSessionRunSource } from '../public/types'
+import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
+import type { NodeRunPromptOperations } from '../public/types'
+import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 

@@ -32,7 +32,7 @@ import {
   deriveMemberCurrentRuns,
   deriveBudgetUsed,
 } from './helpers/workgroupSelection'
-import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
+import { runLifecycleInvariants } from '@/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { freshestPriorRunWithOutput } from '@/modules/task-execution/application/agentRunHistory'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'

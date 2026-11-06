@@ -52,7 +52,10 @@ import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { OPTION_DEFINITIONS } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import { INVARIANT_RULES, STUCK_RULES } from '@/services/lifecycleInvariants'
+import {
+  INVARIANT_RULES,
+  STUCK_RULES,
+} from '@/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 
 const REPO = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -143,14 +146,16 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
   },
   {
     symbol: 'INVARIANT_RULES',
-    declaringFile: 'packages/backend/src/services/lifecycleInvariants.ts',
+    declaringFile:
+      'packages/backend/src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts',
     keys: [...INVARIANT_RULES],
     consumption: { via: 'runLifecycleInvariants' },
     why: '作为 ownedRules 传给 reconcileLifecycleAlerts，让不变量对账只碰自己的行；消费点在同文件的 daemon 入口函数里。',
   },
   {
     symbol: 'STUCK_RULES',
-    declaringFile: 'packages/backend/src/services/lifecycleInvariants.ts',
+    declaringFile:
+      'packages/backend/src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts',
     keys: [...STUCK_RULES],
     consumption: 'direct',
     why: '同上，但 ownedRules 的消费点在 stuckTaskDetector.ts —— 另一个文件，所以是 direct。',

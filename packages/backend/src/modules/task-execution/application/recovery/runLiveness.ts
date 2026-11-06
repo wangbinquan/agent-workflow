@@ -41,10 +41,7 @@
 import { isTerminalNodeRunStatus, type NodeKind, type NodeRunStatus } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import {
-  containerMemberRuns,
-  wrapperInnerDescendantIds,
-} from '@/modules/task-execution/public/queries'
+import { containerMemberRuns, wrapperInnerDescendantIds } from '../../public/queries'
 
 /**
  * 判定所需的最小行投影。刻意不用 `typeof nodeRuns.$inferSelect` —— 回收器

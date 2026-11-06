@@ -53,7 +53,9 @@ describe('RFC-202 source locks', () => {
   })
 
   test('shutdown survivors + checkpoint interrupts stamp the summary autoResume matches', () => {
-    const shutdown = read('packages/backend/src/services/shutdown.ts')
+    const shutdown = read(
+      'packages/backend/src/modules/task-execution/application/recovery/gracefulShutdown.ts',
+    )
     expect(shutdown).toContain(
       'dependencies.controller.shutdownActive(DAEMON_SHUTDOWN_ABORT_REASON, budgetMs)',
     )

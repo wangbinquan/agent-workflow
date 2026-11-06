@@ -1,5 +1,5 @@
 // RFC-280 T3 — read end for node_runs.startup_verification_json:
-// services/execution/startupVerificationRead.getStartupVerification + the
+// modules/task-execution/infrastructure/startupVerificationRead.getStartupVerification + the
 // GET /api/tasks/:id/node-runs/:nodeRunId/startup-verification route.
 // Locks: available:true round-trip through zod / available:false for NULL,
 // corrupt JSON and schema-mismatch rows / 404 task / 404 node-run.
@@ -14,7 +14,7 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { getStartupVerification } from '../src/services/execution/startupVerificationRead'
+import { getStartupVerification } from '../src/modules/task-execution/infrastructure/startupVerificationRead'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 

@@ -56,7 +56,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
+import { runStuckTaskDetector } from '../src/modules/task-execution/application/lifecycleAlerts/stuckTaskDetector'
 import { createUser } from './helpers/userFixture'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {

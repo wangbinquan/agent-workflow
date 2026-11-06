@@ -36,7 +36,7 @@ export interface RecoveryEventRow {
   createdAt: number
 }
 
-// Authoritative mirror of backend `services/recovery.ts` `RecoveryEventKind`
+// Authoritative mirror of backend `modules/task-execution/application/recovery/recoveryEvents.ts` `RecoveryEventKind`
 // (11 values). When the backend adds a kind, the bundle-completeness test
 // (recovery-section-kind-i18n.test.ts) flags the missing translation; until one
 // lands, labelForCode() falls back to the raw code (never blank, never a

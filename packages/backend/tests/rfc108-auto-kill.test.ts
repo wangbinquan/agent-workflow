@@ -18,11 +18,11 @@ import {
   findStalledRunningChildren,
   runHeartbeatKillOnce,
   type StalledRun,
-} from '../src/services/autoKill'
+} from '../src/modules/task-execution/application/recovery/heartbeatKill'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
-import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
-import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
+import { recordAutoRecoveryAttempt } from '../src/modules/task-execution/application/recovery/autoRecoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })

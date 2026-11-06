@@ -17,7 +17,7 @@ import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
+import { runStuckTaskDetector } from '../src/modules/task-execution/application/lifecycleAlerts/stuckTaskDetector'
 
 async function seedUser(
   db: PersistenceDb,

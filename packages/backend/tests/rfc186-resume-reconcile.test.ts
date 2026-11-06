@@ -41,7 +41,20 @@ describe('RFC-186 PR-2 — decideAssignmentReconcile', () => {
 
 describe('RFC-186 PR-2 — source wiring locks', () => {
   const read = (f: string) =>
-    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', f), 'utf8')
+    // RFC-452: the auto-resume loop moved into task-execution application/recovery.
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'recovery',
+        f,
+      ),
+      'utf8',
+    )
   const turnsDriver = readFileSync(
     resolve(
       import.meta.dir,

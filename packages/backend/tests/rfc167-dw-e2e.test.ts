@@ -40,7 +40,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
-import { autoResumeInterruptedTasks } from '../src/services/autoResume'
+import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import {
   DW_GATE_CAUSE,
   DW_GENERATE_CAUSE,

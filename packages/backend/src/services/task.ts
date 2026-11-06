@@ -205,7 +205,7 @@ export async function shutdownActiveTaskExecutions(
 // RFC-359：同名的 SQLite 专属 `markTaskExecutionShutdownSurvivor` 已删除。优雅停机的幸存者处置
 // 早在 W4-B1 批 2h 合成了两个引擎共用的一份
 // （`DrizzleTaskExecutionShutdownOperations.interruptSurvivor` / `.markRecoveryRequired`，
-// 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
+// 由 `modules/task-execution/application/recovery/gracefulShutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
 
 export interface TaskContinuationDependencies {
   readonly taskExecutionParticipants: Parameters<

@@ -1,8 +1,11 @@
 import { createFileTaskBackgroundConfigurationQuery } from '../infrastructure/local/fileTaskBackgroundConfiguration'
 import type { TaskBackgroundConfigurationQuery } from '../application/ports/taskBackgroundConfiguration'
-import { findStalledRunningChildren, runHeartbeatKillOnce } from '@/services/autoKill'
+import {
+  findStalledRunningChildren,
+  runHeartbeatKillOnce,
+} from '../application/recovery/heartbeatKill'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import { reconcileDeadRunningRuns } from '@/services/orphanReconcile'
+import { reconcileDeadRunningRuns } from '../infrastructure/local/deadRunReconcile'
 import { killStaleRunProcessTree } from '@/util/process'
 import type { TaskExecutionModule } from '../composition'
 import type { TaskAutoResumeCommand } from '../application/ports/taskAutoResumeCommand'

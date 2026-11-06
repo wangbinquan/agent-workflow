@@ -23,7 +23,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { buildActor } from '../src/auth/actor'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
-import { autoResumeInterruptedTasks } from '../src/services/autoResume'
+import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { abortAllActiveTasks } from '../src/services/task'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'

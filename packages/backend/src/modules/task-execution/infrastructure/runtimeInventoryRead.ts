@@ -38,7 +38,7 @@ import type {
   TaskRuntimeInventoryReadModel,
   TaskRuntimeInventorySource,
   TaskRuntimeInventoryContent,
-} from '@/modules/task-execution/public/types'
+} from '../public/types'
 // RFC-282 §4.2：per-runtime 模块只能经 `@/services/runtime` 索引访问——本读端
 // 是运行时无关层，直接 import opencode 内部会把它重新钉死在一个运行时上。
 import { getRuntimeDriver, isKnownRuntimeKind, type RuntimeKind } from '@/services/runtime'

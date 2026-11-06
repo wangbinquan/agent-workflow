@@ -48,7 +48,7 @@ import {
   INVARIANT_RULES,
   runLifecycleInvariants,
   type LifecycleAlertRow,
-} from '../src/services/lifecycleInvariants'
+} from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const VALID_TASK_STATUSES = [

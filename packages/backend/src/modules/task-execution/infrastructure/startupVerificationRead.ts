@@ -8,8 +8,8 @@ import {
   StartupVerificationRecordSchema,
   type StartupVerificationResponse,
 } from '@agent-workflow/shared'
-import type { TaskStartupVerificationReadModel } from '@/modules/task-execution/public/types'
-import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
+import type { TaskStartupVerificationReadModel } from '../public/types'
+import { createTaskExecutionReadModels } from './taskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
 
 export async function getStartupVerification(

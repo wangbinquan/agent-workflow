@@ -385,7 +385,15 @@ describe('RFC-062 grep guard', () => {
     // RFC-349: the provider-neutral read operation owns task/run status and
     // delegates only the opencode file decoding mechanism to inventory.ts.
     const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'inventoryRead.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'runtimeInventoryRead.ts',
+      ),
     ).text()
     expect(src).toContain("'in-flight'")
     // RFC-370 keeps the original live-file behavior behind the selected

@@ -592,6 +592,17 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   锁住「每条 `paths` / `paths-ignore` 的字面条目存在、每条 glob 的目录前缀存在」。原文件里有逻辑被拆到别处（如 RFC-451 的子模块
   参数解析归平台）时，拆出去的新文件也要登记，否则那段逻辑的改动同样不再触发。
 
+## 文件挪进模块后，模块内部别再经**本模块的 public 入口**取值：public 反向 import composition barrel，barrel 一导出它就成了求值环（RFC-452 实撞，2026-11-05）
+
+- 现象：集中验证里 70 多个用例文件在一两秒内全红，报的都是 `ReferenceError: Cannot access 'taskExecutionModuleInternal' before
+  initialization`（`modules/task-execution/public/participants.ts`）。tsc / eslint 全过——这是模块**求值顺序**的问题，类型层看不见。
+- 成因：迁入 task-execution 的会话树读端原样保留了旧取法——经 `public/participants` 取 `selectNodeRunPromptOperations`。它在 legacy 时只被
+  路由晚加载；迁入后被新的诊断装配用，而诊断装配从 composition barrel 导出。`public/participants` 自己又从 barrel 取 `taskExecutionModule`：
+  barrel 求值到一半 → 诊断装配 → 会话树读端 → `public/participants` → 读 barrel 里还没初始化的 const。
+- **定式**：模块内部的**值** import 一律直取声明处，不经本模块的 `public/*`（public 是给模块外的，它常常反向取 composition）；类型 import
+  会被擦除，不受影响。挪文件进模块时，把迁入文件里对本模块 `public/*` 的值 import 列出来逐个改指声明处；`backend-value-scc` /
+  `repo-value-scc` 计数（架构 counts）也会因为这个环从 0 变 1。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

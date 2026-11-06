@@ -50,8 +50,8 @@ import { deleteTask } from '../src/services/taskDelete'
 import { enforceLimits } from './helpers/resourceLimits'
 import { parseCallHumanWait } from '../src/services/limits'
 
-import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
-import { resolveRunLiveness } from '../src/services/runLiveness'
+import { reconcileDeadRunningRuns } from '../src/modules/task-execution/infrastructure/local/deadRunReconcile'
+import { resolveRunLiveness } from '../src/modules/task-execution/application/recovery/runLiveness'
 
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 

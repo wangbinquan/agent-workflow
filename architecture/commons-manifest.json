@@ -286,7 +286,7 @@
       "claimAudit": "Holds and is genuinely clean — no per-rule branching, no business identity, one GRACE_MS for all rules, key is (taskId, rule). The `ownedRules` partition is a real port, not a special case.",
       "core": false,
       "files": [
-        "packages/backend/src/services/lifecycleInvariants.ts"
+        "packages/backend/src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts"
       ],
       "guards": [],
       "id": "reconcilelifecyclealerts",
@@ -837,7 +837,7 @@
     },
     {
       "auditedBy": "lifecycle-state",
-      "claimAudit": "Holds. Adding a rule to the shared list fails compilation until the backend table covers it, and `lifecycle-repair-grep-guard` cross-checks every backend option id against the shared taxonomy at runtime. A compile-time union equality assert also lives in packages/backend/src/services/lifecycleInvariants.ts.",
+      "claimAudit": "Holds. Adding a rule to the shared list fails compilation until the backend table covers it, and `lifecycle-repair-grep-guard` cross-checks every backend option id against the shared taxonomy at runtime. A compile-time union equality assert also lives in packages/backend/src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts.",
       "core": false,
       "files": [
         "packages/shared/src/lifecycle-alerts.ts",

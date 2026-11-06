@@ -28,13 +28,13 @@ import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
-import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { reconcileDeadRunningRuns } from '../src/modules/task-execution/infrastructure/local/deadRunReconcile'
+import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import {
   claimNewRuntimeSession,
   markRuntimeSessionResetPending,
-} from '../src/services/runtimeSessionLease'
+} from '../src/modules/task-execution/application/runtimeSessionLease'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 

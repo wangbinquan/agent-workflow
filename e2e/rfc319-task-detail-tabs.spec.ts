@@ -23,8 +23,8 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/components/tasks/RecoverySection.tsx:80-95 隔离态 + 一键解除
 //   packages/frontend/src/components/tasks/WorkflowSyncBanner.tsx:70-124 「工作流已更新」横幅 + 同步
 //   packages/frontend/src/components/changes/ChangeNarrativeCard.tsx:78-160 变更叙述四态
-//   packages/backend/src/services/recoveryBreaker.ts:23-96          隔离标志的读 / 置 / 清
-//   packages/backend/src/services/autoResume.ts:175,207            隔离中的任务被 boot auto-resume 跳过
+//   packages/backend/src/modules/task-execution/application/recovery/autoRecoveryBreaker.ts:23-96          隔离标志的读 / 置 / 清
+//   packages/backend/src/modules/task-execution/application/recovery/autoResume.ts:175,207            隔离中的任务被 boot auto-resume 跳过
 //   packages/backend/src/services/task.ts:5455-5490                cascade=true 才把下游算进重铸集合
 //   packages/backend/src/services/task.ts:5384-5445                `__repo_prep__` 走自己的重试路径
 //   packages/backend/src/services/changeNarrative.ts:311-330       ready 从磁盘缓存读；404 = 按钮态

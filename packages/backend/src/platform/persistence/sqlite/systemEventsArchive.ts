@@ -352,7 +352,7 @@ async function archiveOldestForNode(
     let buf = ''
     for (const r of rows) {
       // 实现门 P1-4:sessionId / parentSessionId **必须**跟着落盘。会话树
-      // (services/sessionView.ts 的 parseSessionTree)完全靠这两列建树,丢了它们
+      // (modules/task-execution/infrastructure/sessionTreeRead.ts 的 parseSessionTree)完全靠这两列建树,丢了它们
       // 就不只是「少了历史」——deriveRootSessionId 会退化成「取残留事件里的第一个
       // sessionId」,那通常是子代理会话,于是整棵对话树以子代理为根渲染。
       // 字节水位把归档从「生产从未触发」变成长会话常态,这条不能等。

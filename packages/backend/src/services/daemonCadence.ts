@@ -27,11 +27,11 @@ export const MINUTE_MS = 60_000
 export const HOUR_MS = 60 * 60 * 1000
 
 export const DAEMON_CADENCE = {
-  /** autoKill 扫描（services/autoKill.ts；DEFAULT OFF 的自动闭环之一）。 */
+  /** autoKill 扫描（modules/task-execution/application/recovery/heartbeatKill.ts；DEFAULT OFF 的自动闭环之一）。 */
   autoKill: 5 * MINUTE_MS,
-  /** autoRepair 扫描（services/autoRepair.ts）。 */
+  /** autoRepair 扫描（modules/task-execution/application/recovery/autoRepair.ts）。 */
   autoRepair: 5 * MINUTE_MS,
-  /** stuck-task 检测（services/stuckTaskDetector.ts；阈值 S1-S5 见该模块）。 */
+  /** stuck-task 检测（modules/task-execution/application/lifecycleAlerts/stuckTaskDetector.ts；阈值 S1-S5 见该模块）。 */
   stuckTaskScan: 5 * MINUTE_MS,
   /**
    * RFC-350 不活跃超时收割（modules/task-execution/application/taskIdleTimeoutReaper.ts；
@@ -41,7 +41,7 @@ export const DAEMON_CADENCE = {
    */
   taskIdleTimeout: 5 * MINUTE_MS,
   /**
-   * 孤儿进程周期回收（services/orphanReconcile.ts）的**默认**周期：真正的周期是
+   * 孤儿进程周期回收（modules/task-execution/infrastructure/local/deadRunReconcile.ts）的**默认**周期：真正的周期是
    * `periodicOrphanReconcileMs` 这个旋钮（0 = 关），本值只是它的出厂默认，两者由
    * `tests/rfc349-orphan-reconcile-hot-apply.test.ts` 钉在一起。
    */
@@ -54,7 +54,7 @@ export const DAEMON_CADENCE = {
    * 所以监督拍永远不会比用户配得出来的最细节奏更粗。
    */
   orphanReconcileSupervisory: MINUTE_MS,
-  /** 生命周期不变量扫描（services/lifecycleInvariants.ts）。 */
+  /** 生命周期不变量扫描（modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts）。 */
   lifecycleInvariants: HOUR_MS,
   /** worktree/iso GC ticker（services/gc.ts）。 */
   worktreeGc: HOUR_MS,
@@ -121,7 +121,7 @@ export const MAINTENANCE_PHASE = {
   worktreeGc: 4 * MINUTE_MS,
   /** services/webhook/webhookGc.ts */
   webhookDeliveryGc: 8 * MINUTE_MS,
-  /** services/eventsArchive.ts —— 2.6GB 库上一轮实测 4-6s。 */
+  /** platform/persistence/sqlite/systemEventsArchive.ts —— 2.6GB 库上一轮实测 4-6s。 */
   eventsArchive: 12 * MINUTE_MS,
   /** services/maintenanceRetention.ts */
   retentionSweep: 16 * MINUTE_MS,
@@ -143,7 +143,7 @@ export const MAINTENANCE_PHASE = {
   intentScratchGc: 48 * MINUTE_MS,
   /** cli/start.ts —— RFC-247 D16 token 审计日志 GC。 */
   tokenAuditGc: 52 * MINUTE_MS,
-  /** services/lifecycleInvariants.ts —— 纯扫描，排最后。 */
+  /** modules/task-execution/application/lifecycleAlerts/lifecycleInvariants.ts —— 纯扫描，排最后。 */
   lifecycleInvariants: 56 * MINUTE_MS,
 } as const satisfies Record<string, number>
 

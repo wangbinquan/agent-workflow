@@ -24,7 +24,7 @@ import { legacyContentRef } from '@/platform/content/contentRef'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { getSessionTree } from '../src/services/sessionView'
+import { getSessionTree } from '../src/modules/task-execution/infrastructure/sessionTreeRead'
 
 const PARENT = 'ses_parent'
 const CHILD = 'ses_child'

@@ -12,12 +12,12 @@ import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { listRecoveryEventsForTask } from '../src/services/recovery'
+import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import {
   clearAutoRecoverySuspension,
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
-} from '../src/services/recoveryBreaker'
+} from '../src/modules/task-execution/application/recovery/autoRecoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

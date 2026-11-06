@@ -5,8 +5,8 @@
 // Returns rows ordered by detected_at ascending so the UI can group
 // "oldest first" without re-sorting.
 
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import type { InvariantSeverity, LifecycleAlertRule } from '@/services/lifecycleInvariants'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
+import type { InvariantSeverity, LifecycleAlertRule } from './lifecycleInvariants'
 
 export interface OpenLifecycleAlert {
   id: string

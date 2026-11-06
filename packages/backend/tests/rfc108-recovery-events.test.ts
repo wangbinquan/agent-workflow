@@ -13,8 +13,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { reapOrphanRuns } from '../src/services/orphans'
-import { listRecoveryEventsForTask, recordRecoveryEvent } from '../src/services/recovery'
+import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
+import {
+  listRecoveryEventsForTask,
+  recordRecoveryEvent,
+} from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import {
   __resetRecoveryCountersForTest,
   recoveryCountersSnapshot,

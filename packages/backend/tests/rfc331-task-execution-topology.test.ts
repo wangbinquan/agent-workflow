@@ -36,7 +36,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/routes/reviews.ts',
   'packages/backend/src/routes/taskQuestions.ts',
   'packages/backend/src/routes/tasks.ts',
-  'packages/backend/src/services/autoRepair.ts',
+  // RFC-452: services/autoRepair.ts moved into task-execution application/recovery (no longer a legacy consumer).
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：`services/multipartTaskStart.ts` 整份删除——
   // multipart 路由改走与 PostgreSQL 共用的启动参与者，这个 legacy 消费者随之出账。
@@ -47,8 +47,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
 
 const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   // RFC-434: `routes/tasks.ts` takes task recovery from the task-execution public participants now.
-  'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand',
-  'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
+  // RFC-452: the two `services/autoRepair.ts` edges left with the file (now task-execution application/recovery).
   // RFC-424：`services/task.ts` → `application/resumeRollbackTargets` 与 →
   // `infrastructure/frozenTaskTriggerPreflight` 两条边随测试专用的 `resumeKick` 一起删除（销账）。
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',

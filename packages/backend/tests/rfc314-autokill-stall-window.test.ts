@@ -26,14 +26,14 @@ import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
-import { findStalledRunningChildren } from '../src/services/autoKill'
+import { findStalledRunningChildren } from '../src/modules/task-execution/application/recovery/heartbeatKill'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { insertInBatches } from '../src/platform/persistence/batchInsert'
 
 const NOW = 1_788_000_000_000
 const STALL_MS = 60_000
-/** 与 services/autoKill.ts 的 STALL_TS_WINDOW_ROWS 对齐（那边不导出，这里显式复述）。 */
+/** 与 modules/task-execution/application/recovery/heartbeatKill.ts 的 STALL_TS_WINDOW_ROWS 对齐（那边不导出，这里显式复述）。 */
 const WINDOW = 200
 
 async function seedRun(

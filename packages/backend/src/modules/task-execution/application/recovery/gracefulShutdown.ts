@@ -14,9 +14,9 @@ import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
 import type {
   TaskExecutionShutdownController,
   TaskExecutionShutdownOperations,
-} from '@/modules/task-execution/application/ports/taskExecutionShutdownOperations'
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { recordRecoveryEvent } from '@/services/recovery'
+} from '../ports/taskExecutionShutdownOperations'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from './recoveryEvents'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('shutdown')

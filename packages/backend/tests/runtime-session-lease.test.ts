@@ -24,7 +24,7 @@ import {
   releaseRuntimeSessionLease,
   repairRuntimeSessionLeasesAfterOrphanReap,
   rotateRuntimeSessionLease,
-} from '../src/services/runtimeSessionLease'
+} from '../src/modules/task-execution/application/runtimeSessionLease'
 
 const HASH = 'a'.repeat(64)
 

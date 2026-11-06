@@ -15,7 +15,7 @@ import type {
   TaskRecoveryEventKind,
   TaskRecoveryEventRecord,
   TaskRecoveryOperations,
-} from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+} from '../ports/taskRecoveryOperations'
 import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
 import { createLogger } from '@/util/log'
 

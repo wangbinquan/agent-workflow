@@ -11,7 +11,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { archiveEvents } from './helpers/taskEventArchive'
-import { readArchivedEvents } from '../src/services/eventsArchive'
+import { readArchivedEvents } from '../src/platform/background/eventsArchiveReader'
 import {
   nodeRunEventsProjection,
   nodeRunStdoutProjection,

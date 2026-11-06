@@ -16,16 +16,16 @@
 // The actual resume is injected so this stays unit-testable without the full
 // launch machinery; start.ts passes a thunk that calls resumeTask with real deps.
 
-import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
+import { taskIdsWithRepoPrepRow } from './taskWorkspacePhase'
 import { taskWorkspacePhase } from '@agent-workflow/shared'
 
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { recordRecoveryEvent } from '@/services/recovery'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from './recoveryEvents'
 import {
   type BreakerConfig,
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
-} from '@/services/recoveryBreaker'
+} from './autoRecoveryBreaker'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('auto-resume')

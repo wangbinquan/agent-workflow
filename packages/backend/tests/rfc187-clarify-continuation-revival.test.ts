@@ -30,7 +30,7 @@ import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryC
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { autoResumeInterruptedTasks } from '../src/services/autoResume'
+import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 // RFC-359 W4-D19c-tail：判据 + 复活都改指生产那份（中立回合驱动）。合一时这两样**都没带过来**
 // ——auto-resume 那一半还在，但唤醒后驱动只铸普通 `wg-leader-round`，而 Q&A 注入只发生在澄清
 // 血缘的 rerun 上，于是人的回答照样丢。本次一并补回。

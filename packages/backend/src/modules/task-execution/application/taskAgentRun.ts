@@ -141,7 +141,7 @@ import {
   releaseRuntimeSessionLease,
   rotateRuntimeSessionLease,
   type RuntimeSessionLeaseToken,
-} from '@/services/runtimeSessionLease'
+} from './runtimeSessionLease'
 import { sha256Hex } from '@/util/hash'
 import type {
   AgentWorkspaceGitControlSnapshot as GitControlSnapshot,

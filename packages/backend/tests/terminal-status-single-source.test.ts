@@ -29,7 +29,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
   test('曾手抄终态数组的文件已全部改引 shared', () => {
     for (const rel of [
       'modules/source-control/application/workspaceMaintenance.ts',
-      'services/stuckTaskDetector.ts',
+      'modules/task-execution/application/lifecycleAlerts/stuckTaskDetector.ts',
       'modules/knowledge-evolution/application/fusionOrchestration.ts',
       'modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
     ]) {
@@ -50,7 +50,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
   test('daemon-restart 标记的 writers 与 provider recovery readers 共用 shared 常量', () => {
     expect(DAEMON_RESTART_ERROR_SUMMARY).toBe('daemon-restart')
     for (const rel of [
-      'services/orphans.ts',
+      'modules/task-execution/infrastructure/local/orphanRunReap.ts',
       'modules/task-execution/infrastructure/taskRecoveryOperations.ts',
       'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts',
     ]) {

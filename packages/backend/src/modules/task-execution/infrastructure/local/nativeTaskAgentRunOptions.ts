@@ -89,7 +89,7 @@ import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 
-import { type RuntimeSessionLeaseOperations } from '@/services/runtimeSessionLease'
+import { type RuntimeSessionLeaseOperations } from '../../application/runtimeSessionLease'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.

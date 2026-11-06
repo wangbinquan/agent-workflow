@@ -20,7 +20,7 @@ import {
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
-import { gracefulShutdown } from '@/services/shutdown'
+import { gracefulShutdown } from '@/modules/task-execution/application/recovery/gracefulShutdown'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedBundleTask, taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 

@@ -40,8 +40,8 @@ import {
   type CanonicalContinuationRequest,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
-import { reconcileDeadRunningRuns } from '@/services/orphanReconcile'
-import { listRecoveryEventsForTask } from '@/services/recovery'
+import { reconcileDeadRunningRuns } from '@/modules/task-execution/infrastructure/local/deadRunReconcile'
+import { listRecoveryEventsForTask } from '@/modules/task-execution/application/recovery/recoveryEvents'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [

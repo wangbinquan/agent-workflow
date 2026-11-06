@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { archiveEvents } from './helpers/taskEventArchive'
-import { readArchivedEvents } from '../src/services/eventsArchive'
+import { readArchivedEvents } from '../src/platform/background/eventsArchiveReader'
 import { readMaintenanceNumber } from '@/platform/persistence/maintenanceState'
 import { asc, count, max } from 'drizzle-orm'
 

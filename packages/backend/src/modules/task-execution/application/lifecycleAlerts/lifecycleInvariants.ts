@@ -1,4 +1,4 @@
-import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
+import { createRunHistorySnapshot } from '../runHistory'
 // RFC-053 P-3 — double-layer invariant scan.
 //
 // Seven invariants span the doc_versions / clarify_sessions / node_runs /
@@ -45,7 +45,7 @@ import type {
   TaskLifecycleInvariantScope,
   TaskLifecycleInvariantSnapshot,
   TaskRecoveryOperations,
-} from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+} from '../ports/taskRecoveryOperations'
 import { createLogger, type Logger } from '@/util/log'
 
 const log = createLogger('lifecycle.invariants')

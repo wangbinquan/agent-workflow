@@ -4,8 +4,8 @@
 // `assertWorktreePresentForResume` 同源」——**它们不是**：
 //
 //   ① services/task.ts          空路径 + workspaceState==='available' + 有 __repo_prep__ 行
-//   ② services/autoResume.ts    空路径 + workspacePrunedAt === null
-//   ③ services/stuckTaskDetector.ts  同 ②
+//   ② modules/task-execution/application/recovery/autoResume.ts    空路径 + workspacePrunedAt === null
+//   ③ modules/task-execution/application/lifecycleAlerts/stuckTaskDetector.ts  同 ②
 //
 // 分歧的具体后果（finding 的证伪方式逐字可复现）：一条**存量**物化失败的任务行
 // ——空路径、无墓碑、也从来没有过 `__repo_prep__` 行（迁移 0034 给它回填了空路径的

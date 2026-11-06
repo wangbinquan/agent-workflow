@@ -20,11 +20,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { reapOrphanRuns } from '../src/services/orphans'
+import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import {
   claimNewRuntimeSession,
   repairRuntimeSessionLeasesAfterOrphanReap,
-} from '../src/services/runtimeSessionLease'
+} from '../src/modules/task-execution/application/runtimeSessionLease'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 

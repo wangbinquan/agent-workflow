@@ -1,4 +1,4 @@
-import { runAutoRepairOnce, type AutoRepairDeps } from '@/services/autoRepair'
+import { runAutoRepairOnce, type AutoRepairDeps } from '../application/recovery/autoRepair'
 import type {
   TaskLifecycleAutoRepairCommand,
   TaskLifecycleAutoRepairPolicy,

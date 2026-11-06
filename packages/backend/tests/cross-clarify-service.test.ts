@@ -59,7 +59,7 @@ import {
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
 } from '../src/services/clarify/service'
-import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
+import { runLifecycleInvariants } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

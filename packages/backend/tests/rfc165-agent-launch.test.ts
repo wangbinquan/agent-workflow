@@ -90,7 +90,7 @@ import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalo
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgentRouteLaunch } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
-import { autoResumeInterruptedTasks } from '../src/services/autoResume'
+import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { createUser } from './helpers/userFixture'
 import {
   buildWorkflowValidationContext,

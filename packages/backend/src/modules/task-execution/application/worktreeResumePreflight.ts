@@ -15,7 +15,7 @@
 // `__repo_prep__` 事实经 `TaskRecoveryOperations`（application port）取，剩下的是纯函数
 // `taskWorkspacePhase` 与一次文件系统探测。所以它能原样落在 application 层给两边共用。
 //
-// 注意 `hasRepoPrepRow` 直接吃 port，不经 `services/taskWorkspacePhase` 那层包装——模块内部
+// 注意 `hasRepoPrepRow` 直接吃 port，不经 `application/recovery/taskWorkspacePhase` 那层包装——模块内部
 // 反向 import legacy 层是 RFC-317 T23 的红。
 
 import { isSingleRootRepository, taskWorkspacePhase, type Task } from '@agent-workflow/shared'

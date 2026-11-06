@@ -40,7 +40,7 @@ import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, openDb, type DbClient } from '../../src/db/client'
-import { reapOrphanRuns } from '../../src/services/orphans'
+import { reapOrphanRuns } from '../../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import { taskRecoveryOperations } from '../helpers/taskRecoveryOperations'
 
 const RUN_CHAOS = process.env.RUN_CHAOS === '1'

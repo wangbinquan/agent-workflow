@@ -15,16 +15,19 @@
 // listRepairOptionsForAlert / applyRepairOption.
 
 import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared'
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { recordRecoveryEvent } from '@/services/recovery'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from './recoveryEvents'
 import {
   type BreakerConfig,
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
-} from '@/services/recoveryBreaker'
-import { listAllOpenLifecycleAlerts, type OpenLifecycleAlert } from '@/services/taskAlerts'
+} from './autoRecoveryBreaker'
+import {
+  listAllOpenLifecycleAlerts,
+  type OpenLifecycleAlert,
+} from '../lifecycleAlerts/openLifecycleAlerts'
 import { createLogger } from '@/util/log'
-import type { TaskLifecycleAutoRepairResult } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
+import type { TaskLifecycleAutoRepairResult } from '../ports/taskLifecycleAutoRepairCommand'
 
 const log = createLogger('auto-repair')
 

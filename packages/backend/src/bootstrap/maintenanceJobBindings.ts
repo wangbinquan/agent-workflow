@@ -16,12 +16,14 @@ import { createDevelopmentAutomationMaintenanceJobHandlers } from '@/modules/dev
 import { createDigitalEmployeeMaintenanceJobHandlers } from '@/modules/digital-employee/composition'
 import { createIntentMaintenanceJobHandlers } from '@/modules/intent/composition'
 import { createResourceCatalogMaintenanceJobHandlers } from '@/modules/resource-catalog/composition'
-import { createTaskExecutionMaintenanceJobHandlers } from '@/modules/task-execution/composition'
+import {
+  createTaskExecutionMaintenanceJobHandlers,
+  runLifecycleInvariants,
+  runStuckTaskDetector,
+} from '@/modules/task-execution/composition'
 import { createSystemOperationsMaintenanceJobHandlers } from '@/modules/system-operations/composition'
 import { createTokenAuditMaintenanceJobHandlers } from '@/auth/application/maintenanceJobs'
 
-import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
-import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
 import { runPluginGenerationGc } from '@/services/pluginGenerationGc'
 
 type TaskExecutionMaintenanceCommands = Parameters<

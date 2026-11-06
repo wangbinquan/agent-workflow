@@ -16,7 +16,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
-import { reapOrphanRuns } from '@/services/orphans'
+import { reapOrphanRuns } from '@/modules/task-execution/infrastructure/local/orphanRunReap'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 const NOW = 1_788_969_900_000

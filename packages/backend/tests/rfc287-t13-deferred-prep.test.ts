@@ -387,7 +387,16 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
 
   test('回收器确实以 activeTasks 为豁免依据（判活单点未被绕过）', () => {
     const src = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'services', 'orphanReconcile.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'local',
+        'deadRunReconcile.ts',
+      ),
       'utf8',
     )
     // 三处清扫各有一道豁免，存在性断言只要活一处就算过（五轮门自查实测：只反转第一处
@@ -1536,7 +1545,8 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
       { status: 'interrupted', errorSummary: DAEMON_RESTART_ERROR_SUMMARY },
     )
 
-    const { autoResumeInterruptedTasks } = await import('@/services/autoResume')
+    const { autoResumeInterruptedTasks } =
+      await import('@/modules/task-execution/application/recovery/autoResume')
     let resumeCalls = 0
     const operations = taskRecoveryOperations(db)
     const r = await autoResumeInterruptedTasks({
@@ -1555,7 +1565,8 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     // 「不烧熔断」这半原来只在标题里、没有断言（四轮门自查实测：在 skip 之前插一句
     // recordAutoRecoveryAttempt，用例照样全绿，而那正是它要防的损害）。跑满
     // maxPerWindow+1 轮，任务必须仍在 skipped、且从未被隔离。
-    const { isAutoRecoverySuspended } = await import('@/services/recoveryBreaker')
+    const { isAutoRecoverySuspended } =
+      await import('@/modules/task-execution/application/recovery/autoRecoveryBreaker')
     for (let i = 0; i < 4; i++) {
       const again = await autoResumeInterruptedTasks({
         operations,
@@ -1581,7 +1592,8 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
       { status: 'interrupted', errorSummary: DAEMON_RESTART_ERROR_SUMMARY },
     )
 
-    const { autoResumeInterruptedTasks } = await import('@/services/autoResume')
+    const { autoResumeInterruptedTasks } =
+      await import('@/modules/task-execution/application/recovery/autoResume')
     let resumeCalls = 0
     const prepped: string[] = []
     const operations = taskRecoveryOperations(db)
@@ -1605,7 +1617,8 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     // 「熔断仍然计」这半原来零覆盖（五轮门自查实测：把 autoResume 里的
     // isAutoRecoverySuspended + recordAutoRecoveryAttempt 两道门整段删掉，用例全绿
     // ——而那正是「每次 boot 对一个永远拉不动的远端白跑一轮克隆」）。
-    const { isAutoRecoverySuspended } = await import('@/services/recoveryBreaker')
+    const { isAutoRecoverySuspended } =
+      await import('@/modules/task-execution/application/recovery/autoRecoveryBreaker')
     const before = prepped.length
     for (let i = 0; i < 5; i++) {
       await autoResumeInterruptedTasks({
@@ -2330,7 +2343,8 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
 // 五轮门终局对账点名的两处「有代码零测试」。
 describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
   test('S4：准备窗口内的 pending 不按 5 分钟判卡死，且文案不再说「调度器没认领」', async () => {
-    const { runStuckTaskDetector } = await import('@/services/stuckTaskDetector')
+    const { runStuckTaskDetector } =
+      await import('@/modules/task-execution/application/lifecycleAlerts/stuckTaskDetector')
     const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 's4-exempt')

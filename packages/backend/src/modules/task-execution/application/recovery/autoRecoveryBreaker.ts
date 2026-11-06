@@ -8,8 +8,8 @@
 // human clears it with one action. The quarantine flag is a SOFT flag (never a
 // terminal status); the persistent recovery_events row makes the trip auditable.
 
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { recordRecoveryEvent } from '@/services/recovery'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from './recoveryEvents'
 
 export interface BreakerConfig {
   maxPerWindow: number

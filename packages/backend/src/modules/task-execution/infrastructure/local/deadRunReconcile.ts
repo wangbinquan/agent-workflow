@@ -14,7 +14,7 @@
 // NEVER get a pid, so every wrapper whose inner scope outlived the 60s grace was
 // reaped mid-flight; its finalize then hit the terminal guard and failed the
 // whole task with `scheduler error`. The judgment now goes through
-// services/runLiveness.ts: driver → process → delegated → conservative-alive.
+// modules/task-execution/application/recovery/runLiveness.ts: driver → process → delegated → conservative-alive.
 // Two consequences worth stating out loud:
 //   - a task still owned by an in-process scheduler is off limits entirely
 //     (same rule lifecycleRepair has honored since RFC-097 audit S-23; this
@@ -28,13 +28,13 @@
 // loop (application/providerBackground.ts; its composition binding, since RFC-418) wires the real
 // isProcessAlive + binary-identity check and the real activeTasks registry.
 
-import type { TaskPeriodicRecoveryOperations } from '@/modules/task-execution/public/participants'
-import { recordRecoveryEvent } from '@/services/recovery'
+import type { TaskPeriodicRecoveryOperations } from '../../application/ports/taskRecoveryOperations'
+import { recordRecoveryEvent } from '../../application/recovery/recoveryEvents'
 import {
   type LivenessReason,
   type LivenessRunRow,
   resolveRunLiveness,
-} from '@/services/runLiveness'
+} from '../../application/recovery/runLiveness'
 import {
   isProcessAlive,
   killStaleRunProcessTree,

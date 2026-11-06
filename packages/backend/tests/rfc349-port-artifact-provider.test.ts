@@ -224,7 +224,7 @@ describeEachProvider('RFC-349 port-artifact provider cutover', (h) => {
     for (const relativePath of [
       'routes/port-artifacts.ts',
       'platform/content/local/rootFileQueries.ts',
-      'services/sessionView.ts',
+      'modules/task-execution/infrastructure/sessionTreeRead.ts',
     ]) {
       const source = readFileSync(resolve(import.meta.dir, '..', 'src', relativePath), 'utf8')
       expect(source).not.toMatch(/@\/db|bun:sqlite|drizzle-orm/)

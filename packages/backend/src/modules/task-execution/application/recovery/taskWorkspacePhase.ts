@@ -8,7 +8,7 @@
 // 这里给批量场景（autoResume / stuckTaskDetector 一次处理一批候选）提供一次查询，
 // 而不是每行一次；单行场景直接传 `[id]`。
 
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
 
 /**
  * 这批任务里，哪些已经落下了 `__repo_prep__` 行。
