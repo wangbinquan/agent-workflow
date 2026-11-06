@@ -81,6 +81,9 @@ describe('RFC-458 —— 两个文件迁出 services/', () => {
   test('src/ 与用例里零 import 旧路径', () => {
     expect(importsOfDeleted(walk(SRC))).toEqual([])
     expect(importsOfDeleted(walk(TESTS))).toEqual([])
+    // The repository-root perf gate (`tests/perf/run.ts`) imports backend sources by relative path; the first RFC-458
+    // push missed it (CI "Perf microbenchmark gate": Cannot find module …/services/envelope).
+    expect(importsOfDeleted(walk(join(REPO_ROOT, 'tests')))).toEqual([])
   }, 60_000)
 
   test('负对照：判据认得出别名与相对路径', () => {

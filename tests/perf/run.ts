@@ -29,7 +29,7 @@ import {
   detectEnvelopeKind,
   extractLastEnvelope,
   parseEnvelope,
-} from '../../packages/backend/src/services/envelope'
+} from '../../packages/shared/src/workflowOutputEnvelope'
 import { redactSensitiveString } from '../../packages/backend/src/util/redact'
 import { safeJoin } from '../../packages/backend/src/util/safePath'
 import { WorkflowDefinitionSchema } from '../../packages/shared/src/schemas/workflow'

@@ -1922,10 +1922,13 @@ expect(files.some((f) => f.endsWith(join('services', 'memoryDistiller.ts')))).to
 
 ```bash
 old=memoryDistiller
-grep -rn "services/$old" packages e2e scripts          # ① 字面量路径 / import
-grep -rn "'services', '$old" packages e2e scripts      # ② join('services', 'x.ts') 拼接
-grep -rn "\b$old\b" packages/backend/tests            # ③ 只提文件名、不带目录的断言
+grep -rn "services/$old" packages e2e scripts tests .github   # ① 字面量路径 / import
+grep -rn "'services', '$old" packages e2e scripts tests     # ② join('services', 'x.ts') 拼接
+grep -rn "\b$old\b" packages/backend/tests                   # ③ 只提文件名、不带目录的断言
 ```
+
+仓库根的 `tests/`（`tests/perf/run.ts`，主 CI「Perf microbenchmark gate」）按相对路径直取后端源码，也要在搜索范围里——RFC-458 第一次推送
+漏了它，perf 门报 `Cannot find module …/services/envelope`（2026-11-06）。
 
 ②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
 它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。
