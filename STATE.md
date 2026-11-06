@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-457 `services/` 的平台机制归 `platform`（In Progress；`design/RFC-457-services-platform-mechanisms/`）
+## 2026-11-06 RFC-457 `services/` 的平台机制归 `platform`（Done；`design/RFC-457-services-platform-mechanisms/`）
 
 - **来由**：RFC-294 W9-D 第四步。RFC-456 后 `services/` 93 个文件，其中 9 个是与业务无关的平台机制（后台节奏与相位表、维护 ticker、原始库
   快照、备份 VACUUM worker、可移植备份包、工作树备份、git 版本探测、配置生效监听、进程启动器兼容入口），只取 util / shared / platform，生产
@@ -20,6 +20,15 @@
   的 `epoch1-permission-text-backup`）；P0 两引擎各 17 阶段通过（PostgreSQL 第一次基线阶段两例负载超时，低负载重跑通过）；`rfc321` 工作树
   10 / 10。计数：`services/` 93 → 84、`legacy-horizontal-files` 214 → 205、`legacy-service-implementations` 88 → 79、`R1` 108 / `R2` 27
   不变，其余架构 counts 不变。
+- **落地**：`390ab1228`。
+- **CI**：exact SHA 主 CI run 42247835916：70 个 job 里 68 个通过，三个 OS 的单二进制 build smoke 都过；Playwright e2e（macos-latest 分片 1/4）
+  没有拿到托管 runner（GitHub 注记「The job was not acquired by Runner of type hosted even after multiple attempts」，macOS arm64 容量
+  不足），一步都没跑，汇总的 `CI required` 随之记红——托管 runner 容量所致，与本 RFC 改动无关。未重跑；以包含本候选、内容不变的后继
+  提交（本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 42247836059 通过。
+- **下一步**：RFC-458 拆 `services/envelope.ts`：workflow-output 信封解析器归 shared（与协议的渲染半边同处），端口内容包装与校验失败形状回
+  task-execution，顺带 `scriptPorts` 进 task-execution domain（`R1` −7、`R2` −4）。随后 source-control 一族（`gitSubmodule`、`mergeAgent`、
+  `commitPush*`、`repoCredentials`；平台的 workspace 隔离对前两者的 3 条依赖要先改经端口），`nodeRunMint` / `systemAgentRun` 等其余 `R2`
+  来源与运行时驱动一族。
 
 ## 2026-11-06 RFC-456 `services/` 单一 owner 的零散实现归位（Done；`design/RFC-456-services-single-owner-placement/`）
 

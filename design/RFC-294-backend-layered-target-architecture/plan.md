@@ -53,7 +53,7 @@
 | W6      | Done（2026-11-02，S7）                                         | RFC-395 T10 合成唯一状态机 `platform/atomic-apply`；RFC-401 合一资源写入栈（六类资源各一个写入参与者）、三入口错误收敛、持久 claim / lease，技能 / fusion / restore 接入，旧技能 operation 生命周期删除 |
 | W7      | Done（2026-10-31 核销）                                         | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴由 RFC-395 交付，逐条核对见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)                                                                                                                                                                             |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                                                                                                             |
-| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93                     |
+| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84                     |
 
 ### 1.2 已关闭后继索引
 
@@ -560,6 +560,12 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   先重画 task-execution ↔ runtime-management 的驱动接缝，解开 memory / intent / resource-catalog / system-operations / source-control
   经 `services/` 取驱动的地方）与 task-execution 独占的执行一族（`commitPush*`、`envelope`、`execution/outcome`、`ref/runtimeRef` 等，
   含 `services/task.ts`，E1）；余下 6 个转出随各自端口退役。
+- **2026-11-06 W9-D 第四步**（[RFC-457](../RFC-457-services-platform-mechanisms/proposal.md)）：与业务无关、只被平台 / 装配根 / 模块
+  infrastructure 与 composition 使用的 9 个文件归 `platform`——后台节奏与相位表、维护 ticker 进 `platform/background`，备份一族（原始库
+  快照、备份 VACUUM worker〔二进制额外入口，四处路径同步〕、可移植备份包、工作树备份）进 `platform/persistence`，git 版本探测进
+  `platform/workspace/local`，配置生效监听进 `platform/configuration`，进程启动器兼容入口删除；`services/` 93 → 84、`legacy-service-implementations`
+  88 → 79、`platform/` 取 `services/` 16 → 3（余 `gitSubmodule` / `mergeAgent`，随 source-control 一族），`R1` / `R2` 不变，越界类计数不变。
+  下一步：拆 `services/envelope.ts`（解析器归 shared，端口内容包装回 task-execution）。
 
 ## 5. 依赖顺序
 

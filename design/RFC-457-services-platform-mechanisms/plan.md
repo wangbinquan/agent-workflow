@@ -19,7 +19,7 @@
 - [x] AC-1 9 个文件迁出 `services/`、零引用；`platform/` 只余 3 条取 `services/` 的 import
 - [x] AC-2 架构计数按实测（`services/` 93 → 84、`R1` / `R2` 不变），越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿（含单二进制 build smoke）
+- [x] AC-4 exact SHA CI 全绿（含单二进制 build smoke）（环境性红格如实记录：macOS e2e 分片 1/4 没拿到托管 runner，见 §CI）
 
 ## 集中验证（2026-11-06，候选基于 `fe9618337`，文档基于 `bed86db80`）
 
@@ -71,6 +71,13 @@
   `epoch1-permission-text-backup` 等经 `createBackup` 走到 Worker 的用例在两份导出里结果与耗时相同，日志里没有回退到同线程的告警；
 - Windows workflow 的路径过滤：`gitVersion` 两处改指新位置，启动器兼容入口两处删除（`platform/execution/local/**` 已覆盖启动器本体与入口）；
 - 集中验证没有查出本 RFC 的问题。
+
+## CI（AC-4）
+
+- `390ab1228`：exact SHA 主 CI run 42247835916：70 个 job 里 68 个通过，三个 OS 的单二进制 build smoke 都过；Playwright e2e（macos-latest 分片 1/4）
+  没有拿到托管 runner（GitHub 注记「The job was not acquired by Runner of type hosted even after multiple attempts」，macOS arm64 容量
+  不足），一步都没跑，汇总的 `CI required` 随之记红——托管 runner 容量所致，与本 RFC 改动无关。未重跑；以包含本候选、内容不变的后继
+  提交（本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 42247836059 通过。
 
 ## PR / 提交
 
