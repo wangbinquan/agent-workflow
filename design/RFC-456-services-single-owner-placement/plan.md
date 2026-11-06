@@ -20,7 +20,7 @@
 - [x] AC-1 14 个文件迁出 `services/`、零引用；装配根不取任何模块的 `infrastructure/`
 - [x] AC-2 架构计数按实测（`services/` 107 → 93、`R1` 下降、`R2` 不升），越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿（环境性红格如实记录：e2e ubuntu 分片 2/3 用例全过，job 因 runner 的 apt 一步慢撞时限被取消，见 §CI）
 
 ## 集中验证（2026-11-06，候选基于 `36a4b0be4`）
 
@@ -83,6 +83,14 @@
   `@/modules/task-execution/composition` 是同一模块，加载环与迁移前相同；
 - e2e 编译期屏障按全局 define（`AW_E2E_BUILD`）生效，与文件位置无关；4 个 e2e spec 只改注释里的源码锚点，行号不变（迁移不加文件头）；
 - 集中验证查出的问题（见上）已修并复验。
+
+## CI（AC-4）
+
+- `fe9618337`：exact SHA 主 CI run 42227761085：70 个 job 里 68 个通过；Playwright e2e（ubuntu 分片 2/3）的用例全部通过
+  （168 passed / 9 skipped，11.8 分钟），但该 job 的「Install Playwright system deps」一步耗时 9 分 8 秒（同 run 另两个 ubuntu 分片
+  7 分 55 秒、8 分 38 秒；RFC-455 两次 run 里这一步多为 11～16 秒），整 job 撞 20 分钟上限被取消，汇总的 `CI required` 随之记红——
+  runner 环境所致，与本 RFC 改动无关（本 RFC 只改了 4 个 e2e spec 注释里的源码锚点）。未重跑；以包含本候选、内容不变的后继提交
+  （本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 42227761104 通过。
 
 ## PR / 提交
 

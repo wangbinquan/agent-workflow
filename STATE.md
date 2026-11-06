@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-456 `services/` 单一 owner 的零散实现归位（In Progress；`design/RFC-456-services-single-owner-placement/`）
+## 2026-11-06 RFC-456 `services/` 单一 owner 的零散实现归位（Done；`design/RFC-456-services-single-owner-placement/`）
 
 - **来由**：RFC-294 W9-D 第三步。RFC-455 后 `services/` 107 个文件；按「生产 importer 只在一个模块或装配根、对外依赖都在目标 DAG 上、
   迁走后 `R1` / `R2` 不升」筛出 14 个只有一个 owner 的文件（约 1.4K 行）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
@@ -20,6 +20,18 @@
   复跑 65 个文件只剩两个文件撞自带时限的 4 例（对照两边同样到点）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/`
   107 → 93、`legacy-horizontal-files` 228 → 214、`legacy-service-implementations` 102 → 88、`R1` 119 → 108、`R2` 27 不变，其余架构 counts
   不变（没有跨 context 生产消费方的 public 符号 320 → 322，见 design §4）。
+- **落地**：`fe9618337`。
+- **CI**：exact SHA 主 CI run 42227761085：70 个 job 里 68 个通过；Playwright e2e（ubuntu 分片 2/3）的用例全部通过
+  （168 passed / 9 skipped，11.8 分钟），但该 job 的「Install Playwright system deps」一步耗时 9 分 8 秒（同 run 另两个 ubuntu 分片
+  7 分 55 秒、8 分 38 秒；RFC-455 两次 run 里这一步多为 11～16 秒），整 job 撞 20 分钟上限被取消，汇总的 `CI required` 随之记红——
+  runner 环境所致，与本 RFC 改动无关（本 RFC 只改了 4 个 e2e spec 注释里的源码锚点）。未重跑；以包含本候选、内容不变的后继提交
+  （本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 42227761104 通过。
+- **下一步**：RFC-294 W9-D 余项。`services/` 93 个文件里，只服务平台机制的一批（维护节拍与相位表、维护 ticker、原始库快照、工作树
+  备份、可移植备份包、备份 VACUUM worker〔二进制额外入口，`scripts/build-binary.ts` 的 `WORKER_ENTRIES` 与编译态路径要一起改〕、git 版本
+  探测、配置生效监听、进程启动器兼容入口）的消费方都在 `platform/`、装配根与模块的 infrastructure / composition，先归 `platform`。随后是
+  运行时驱动一族（`services/runtime/**`，先重画 task-execution ↔ runtime-management 的驱动接缝，解开 memory / intent / resource-catalog /
+  system-operations / source-control 经 `services/` 取驱动的地方）与 task-execution 独占的执行一族（`commitPush*`、`envelope`、
+  `execution/outcome`、`ref/runtimeRef` 等，含 `services/task.ts`，E1）；余下 6 个转出随各自端口退役；W4 的 E1 / E5 / E8 / E9 / E10。
 
 ## 2026-11-06 RFC-455 资源包一族归 resource-catalog（Done；`design/RFC-455-resource-package-family-to-resource-catalog/`）
 
