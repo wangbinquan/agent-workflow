@@ -17,8 +17,11 @@
 //   if the block list shrinks.
 
 import { describe, expect, test } from 'bun:test'
-import { parseManifest, ecosystemForManifest } from '../src/services/structuralDiff/deps/manifests'
-import { dependencyChangesForManifest } from '../src/services/structuralDiff/deps/diff'
+import {
+  parseManifest,
+  ecosystemForManifest,
+} from '../src/modules/workspace-insight/domain/structuralDiff/deps/manifests'
+import { dependencyChangesForManifest } from '../src/modules/workspace-insight/domain/structuralDiff/deps/diff'
 
 // ── GAP 1: null↔string version transitions and null→null no-op ──────────────
 describe('dependencyChangesForManifest — null version transitions (line-45 guard)', () => {

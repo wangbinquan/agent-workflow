@@ -10,7 +10,7 @@
 // runtime-loads-in-Bun path.
 
 import { describe, expect, test } from 'bun:test'
-import { analyzeFile } from '../src/services/structuralDiff/baseline'
+import { analyzeFile } from '../src/modules/workspace-insight/engine/structuralDiff/baseline'
 import type { FileStructuralDiff } from '@agent-workflow/shared'
 
 /** Index changes as `${kind}:${qualifiedName}` → changeType. */

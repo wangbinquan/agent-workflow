@@ -23,8 +23,8 @@ import {
   parseNameStatusZ,
   runGit,
 } from '../src/util/git'
-import { computeFromWorktree } from '../src/services/structuralDiff/gitBackend'
-import { canonicalRepoKeys, canonicalRepoKeysWire } from '../src/services/repoLabels'
+import { computeFromWorktree } from '../src/modules/workspace-insight/application/structuralDiff/revisionAnalysis'
+import { canonicalRepoKeys, canonicalRepoKeysWire } from '@agent-workflow/shared'
 
 describe('parseNameStatusZ', () => {
   const z = (...tokens: string[]): string => tokens.join('\0') + '\0'

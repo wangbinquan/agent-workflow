@@ -19,13 +19,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { computeSummary, type ChangeNarrative, type StructuralDiff } from '@agent-workflow/shared'
-import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
+import { composeLocalCodeReviewArtifacts } from '@/modules/workspace-insight/composition/codeReviewArtifacts'
 import {
   composeCrewStationCodeReviewArtifacts,
   composeCrewStationCodeReviewObjectSweep,
   HOSTED_CODE_REVIEW_OWNER,
-} from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
-import type { HostedCodeReviewPublications } from '@/modules/code-capability/infrastructure/crewstation/objectCodeReviewArtifacts'
+} from '@/modules/workspace-insight/composition/crewstationCodeReviewArtifacts'
+import type { HostedCodeReviewPublications } from '@/modules/workspace-insight/infrastructure/crewstation/objectCodeReviewArtifacts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 

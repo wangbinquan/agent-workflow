@@ -87,7 +87,8 @@ describe('RFC-349 repository workspace provider boundary', () => {
       'modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
       'modules/source-control/application/repositoryGroups.ts',
       'modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh.ts',
-      'services/worktreeFileContent.ts',
+      // RFC-453: moved from services/worktreeFileContent.ts.
+      'modules/workspace-insight/application/fileContent.ts',
       'routes/cached-repos.ts',
       'routes/repoGroups.ts',
       'routes/repos.ts',

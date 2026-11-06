@@ -7,7 +7,7 @@
 //   - extraction gaps: JS/TS `#private`, C++ member methods, Rust trait sigs
 // Each assertion parses a real snippet through the actual tree-sitter grammar.
 import { describe, expect, test } from 'bun:test'
-import { extractSymbols } from '../src/services/structuralDiff/lang/extract'
+import { extractSymbols } from '../src/modules/workspace-insight/engine/lang/extract'
 import type { LangId, SymbolNode } from '@agent-workflow/shared'
 
 const GRAMMAR: Record<string, string> = {

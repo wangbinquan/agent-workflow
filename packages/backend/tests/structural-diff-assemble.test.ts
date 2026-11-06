@@ -8,8 +8,11 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assembleStructuralDiff } from '../src/services/structuralDiff/assemble'
-import { computeFromWorktree, computeBetweenRefs } from '../src/services/structuralDiff/gitBackend'
+import { assembleStructuralDiff } from '../src/modules/workspace-insight/engine/structuralDiff/assemble'
+import {
+  computeFromWorktree,
+  computeBetweenRefs,
+} from '../src/modules/workspace-insight/application/structuralDiff/revisionAnalysis'
 import { runGit } from '../src/util/git'
 
 describe('assembleStructuralDiff — in-memory', () => {

@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
 import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
-import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { createFileArchivedEventsReader } from '@/platform/background/eventsArchiveReader'
 import { Paths } from '@/util/paths'
@@ -23,7 +22,10 @@ import {
   createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
-import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
+import {
+  composeLocalCodeReviewArtifacts,
+  invalidateCallGraphIndex,
+} from '@/modules/workspace-insight/composition'
 import { composeLocalTaskRunSelection } from '@/modules/task-execution/composition/localTaskRunSelection'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'

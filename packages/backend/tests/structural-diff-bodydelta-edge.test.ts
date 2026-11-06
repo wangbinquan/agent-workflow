@@ -9,10 +9,10 @@
 //   2. newText === null fails the guard → undefined.
 //   3. a modified method whose after.range is undefined fails the guard →
 //      undefined (SymbolNode.range is optional in the schema).
-// See packages/backend/src/services/structuralDiff/bodyDelta.ts:40-61.
+// See packages/backend/src/modules/workspace-insight/domain/structuralDiff/bodyDelta.ts:40-61.
 
 import { describe, expect, test } from 'bun:test'
-import { bodyDeltaFor } from '../src/services/structuralDiff/bodyDelta'
+import { bodyDeltaFor } from '../src/modules/workspace-insight/domain/structuralDiff/bodyDelta'
 import type { SymbolChange, SymbolNode } from '@agent-workflow/shared'
 
 function method(id: string, range: { startLine: number; endLine: number }): SymbolNode {

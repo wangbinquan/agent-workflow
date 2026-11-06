@@ -4,9 +4,12 @@
 // Asserts on names/kinds/recv; runs real tree-sitter parses.
 
 import { describe, expect, test } from 'bun:test'
-import { parseSource } from '../src/services/structuralDiff/lang/parser'
-import { resolveLang } from '../src/services/structuralDiff/lang/grammars'
-import { extractCalls, type RawCall } from '../src/services/structuralDiff/callGraph/extractCalls'
+import { parseSource } from '../src/modules/workspace-insight/engine/lang/parser'
+import { resolveLang } from '../src/modules/workspace-insight/domain/lang/languages'
+import {
+  extractCalls,
+  type RawCall,
+} from '../src/modules/workspace-insight/engine/callGraph/extractCalls'
 
 async function calls(file: string, src: string): Promise<RawCall[]> {
   const g = resolveLang(file)

@@ -22,23 +22,30 @@ import {
   encodeScipFixture,
   occurrencesOf,
   parseScip,
-} from '../src/services/structuralDiff/deep/scip'
-import { ScipIndexCache } from '../src/services/structuralDiff/deep/indexCache'
-import { worktreeSnapshotDigest } from '../src/services/codeIntel/snapshot'
+} from '../src/modules/workspace-insight/domain/deep/scip'
+import { ScipIndexCache } from '../src/modules/workspace-insight/infrastructure/deep/scipIndexCache'
+import { worktreeSnapshotDigest } from '../src/modules/source-control/infrastructure/local/worktreeSnapshotDigest'
 import {
   getCodeIntel as getCodeIntelWithPort,
   type CodeIntelDeps,
-  type CodeIntelQuery,
-} from '../src/services/codeIntel/codeIntel'
+} from '../src/modules/workspace-insight/application/codeIntel/codeIntel'
+import type { CodeIntelQuery } from '../src/modules/workspace-insight/application/ports/taskWorkspaceInsight'
+import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
-import type { IndexerProbe } from '../src/services/structuralDiff/deep/indexers'
+import type { IndexerProbe } from '../src/modules/workspace-insight/domain/deep/indexers'
 
 const getCodeIntel = (
   db: PersistenceDb,
   taskId: string,
   query: CodeIntelQuery,
   deps?: CodeIntelDeps,
-) => getCodeIntelWithPort(createTaskCodeWorkspaceQueries(db), taskId, query, deps)
+) =>
+  getCodeIntelWithPort(
+    localCodeReviewReads(createTaskCodeWorkspaceQueries(db)),
+    taskId,
+    query,
+    deps,
+  )
 
 const dirs: string[] = []
 afterAll(() => {

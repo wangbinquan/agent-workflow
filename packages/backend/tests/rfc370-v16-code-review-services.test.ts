@@ -21,19 +21,22 @@ import type {
 import type {
   CodeReviewArtifactStore,
   StructuralDiffArtifactKey,
-} from '@/modules/code-capability/public/participants'
+} from '@/modules/workspace-insight/application/ports/codeReviewArtifacts'
 import type {
   RepositoryPresence,
   RepositoryRevisionContentFactory,
   RevisionFileRead,
   WorktreeFileRead,
 } from '@/modules/source-control/public/participants'
-import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
-import { getTaskFileContent } from '@/services/worktreeFileContent'
-import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
-import { getChangeNarrativeStatus } from '@/services/changeNarrative'
+import { getTaskStructuralDiff } from '@/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
+import { getTaskFileContent } from '@/modules/workspace-insight/application/fileContent'
+import { getCallTargets } from '@/modules/workspace-insight/application/callGraph/callTargets'
+import { getChangeNarrativeStatus } from '@/modules/workspace-insight/application/changeNarrative'
+import { composeStructuralDeepIndexing } from '@/modules/workspace-insight/composition'
 
 const TASK = '01V16CODEREVIEWSERVICES000'
+// RFC-453: the deep indexing is a required code-review read; hosted content never reaches it here.
+const deep = composeStructuralDeepIndexing()
 const REF = `cs-workspace:${TASK}/worktrees/${TASK}`
 
 function workspace(task: Partial<CodeWorkspaceTask> = {}): TaskCodeWorkspaceQueries {
@@ -148,6 +151,7 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
         workspace: workspace({ status: 'done', finishedAt: 1700 }),
         content: content.factory,
         artifacts: artifacts.store,
+        deep,
       },
       TASK,
       'task',
@@ -164,7 +168,7 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
     })
     const artifacts = artifactStore()
     const diff = await getTaskStructuralDiff(
-      { workspace: workspace(), content: content.factory, artifacts: artifacts.store },
+      { workspace: workspace(), content: content.factory, artifacts: artifacts.store, deep },
       TASK,
     )
     expect(diff.files.map((file) => file.filePath)).toEqual(['src/a.ts'])
@@ -188,6 +192,7 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
         workspace: workspace({ status: 'failed', finishedAt: 1800 }),
         content: content.factory,
         artifacts: artifacts.store,
+        deep,
       },
       TASK,
     )
@@ -208,6 +213,7 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
       workspace: workspace(),
       content: content.factory,
       artifacts: artifactStore().store,
+      deep,
     }
     const live = await getTaskStructuralDiff(reads, TASK, 'task', undefined, { mode: 'deep' })
     expect(live).toMatchObject({ engine: 'baseline', degradedReason: 'indexing-unavailable' })
@@ -216,6 +222,7 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
         workspace: workspace({ status: 'done', finishedAt: 1700 }),
         content: hostedContent({}).factory,
         artifacts: artifactStore(storedDiff()).store,
+        deep,
       },
       TASK,
       'task',
@@ -229,7 +236,12 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
     const content = hostedContent({ presence: 'directory' })
     await expect(
       getTaskStructuralDiff(
-        { workspace: workspace(), content: content.factory, artifacts: artifactStore().store },
+        {
+          workspace: workspace(),
+          content: content.factory,
+          artifacts: artifactStore().store,
+          deep,
+        },
         TASK,
       ),
     ).rejects.toMatchObject({ code: 'task-worktree-missing', status: 410 })
@@ -301,14 +313,21 @@ describe('RFC-370 §10 V16 file content, call targets and narrative through the 
 })
 
 describe('RFC-370 §10 V16 task routes require the selected code-review reads', () => {
-  test('mounting without them fails at composition, naming the missing dependency', () => {
-    // Every other dependency is present (an empty stand-in); only `codeReview`
-    // is missing, so the route refuses to mount instead of falling back to the
-    // daemon's own filesystem.
-    const deps = new Proxy(
-      {},
-      { get: (_target, key) => (key === 'codeReview' ? undefined : {}) },
-    ) as Parameters<typeof mountTaskRoutes>[1]
-    expect(() => mountTaskRoutes(new Hono(), deps)).toThrow('task-code-review-not-composed')
-  })
+  // RFC-453: the code-review reads are composed into the workspace-insight contract (`workspaceInsight`), and the
+  // narrative trigger's member gate is its own dependency (`changeNarrativeAccess`); each missing one is named.
+  for (const [missing, code] of [
+    ['workspaceInsight', 'task-workspace-insight-not-composed'],
+    ['changeNarrativeAccess', 'task-change-narrative-not-composed'],
+  ] as const) {
+    test(`mounting without ${missing} fails at composition, naming the missing dependency`, () => {
+      // Every other dependency is present (an empty stand-in); only `missing`
+      // is absent, so the route refuses to mount instead of falling back to the
+      // daemon's own filesystem.
+      const deps = new Proxy(
+        {},
+        { get: (_target, key) => (key === missing ? undefined : {}) },
+      ) as Parameters<typeof mountTaskRoutes>[1]
+      expect(() => mountTaskRoutes(new Hono(), deps)).toThrow(code)
+    })
+  }
 })

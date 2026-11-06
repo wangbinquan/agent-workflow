@@ -28,7 +28,7 @@ import { computeSummary } from '@agent-workflow/shared'
 import {
   assembleStructuralDiff,
   mergeStructuralDiffs,
-} from '../src/services/structuralDiff/assemble'
+} from '../src/modules/workspace-insight/engine/structuralDiff/assemble'
 
 describe('assembleStructuralDiff — applyViaImport edge branches (RFC-083)', () => {
   test('maven group:artifact dep flips viaImport via the ARTIFACT segment (not full name)', async () => {

@@ -17,7 +17,7 @@ import {
   TaskStatusSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { actorOf } from '@/auth/actor'
+import { actorOf, type Actor } from '@/auth/actor'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute, registerRouteMiddleware } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
@@ -31,17 +31,13 @@ import {
 } from '@/auth/tokenRedaction'
 import { parseBoolQuery } from '@/util/http'
 import { SyncWorkflowBodySchema, UpdateTaskMembersBodySchema } from '@agent-workflow/shared'
-import {
-  getTaskStructuralDiff,
-  type CodeReviewReads,
-  type ResolvedCodeReviewReads,
-} from '@/services/structuralDiff/service'
-import { getTaskFileContent } from '@/services/worktreeFileContent'
-import { getChangeNarrativeStatus, triggerChangeNarrative } from '@/services/changeNarrative'
-import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
-import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
-import { getCodeIntel } from '@/services/codeIntel/codeIntel'
-import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
+import type {
+  CodeIntelQuery,
+  FileSymbolsQuery,
+  ResolvedDeepConfig,
+  TaskFileContentQuery,
+  TaskWorkspaceInsight,
+} from '@/modules/workspace-insight/public/types'
 import { structuralScopeSchema } from '@agent-workflow/shared'
 import type { TaskWorkspaceQueries } from '@/modules/task-execution/public/queries'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
@@ -49,7 +45,6 @@ import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type {
   TaskDiagnostics,
-  TaskExecutionReadModels,
   TaskLifecycleAlertNotices,
   TaskRouteListFilters,
   TaskRouteLifecycleAlertNotice,
@@ -102,25 +97,19 @@ export interface TaskRouteDependencies {
   readonly workspaceQueries: TaskWorkspaceQueries
   readonly configuration: ApplicationConfigurationQueries
   readonly operations: TaskRouteOperations
-  readonly taskExecutionReadModels: TaskExecutionReadModels
   /** RFC-452: alerts, recovery audit, diagnose and the node-run session / inventory / startup reads. */
   readonly diagnostics: TaskDiagnostics
-  readonly codeWorkspace: CodeReviewReads['workspace']
-  /** RFC-370 §10 V16 — the selected revision content and artifact store. */
-  readonly codeReview: Pick<ResolvedCodeReviewReads, 'content' | 'artifacts'>
-  readonly repositoryWorkspace: Parameters<typeof getTaskFileContent>[0]
-  readonly changeNarrative: Pick<
-    Parameters<typeof triggerChangeNarrative>[0],
-    'requireMember' | 'resolveRuntime' | 'systemAgents'
-  >
+  /** RFC-453: the structural diff, change narrative, file content / symbols, code intel and call targets. */
+  readonly workspaceInsight: TaskWorkspaceInsight
+  /** RFC-239 — the change narrative's member gate (owner / collaborator / admin), run right before the trigger. */
+  readonly changeNarrativeAccess: {
+    requireMember(actor: Actor, taskId: string): Promise<void>
+  }
 }
 
 export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   // Keep direct dispatcher/tests fail-closed even though production callers
   // are statically required to supply the complete selected-provider bundle.
-  if (deps.taskExecutionReadModels === undefined) {
-    throw new Error('task-execution-read-models-not-composed')
-  }
   if (deps.workspaceQueries === undefined) throw new Error('task-workspace-queries-not-composed')
   if (deps.operations === undefined) {
     throw new Error('task-route-operations-not-composed')
@@ -128,25 +117,13 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   if (deps.diagnostics === undefined) {
     throw new Error('task-diagnostics-not-composed')
   }
-  if (deps.codeWorkspace === undefined) {
-    throw new Error('task-code-workspace-not-composed')
+  if (deps.workspaceInsight === undefined) {
+    throw new Error('task-workspace-insight-not-composed')
   }
-  if (deps.repositoryWorkspace === undefined) {
-    throw new Error('task-repository-workspace-not-composed')
-  }
-  if (deps.changeNarrative === undefined) {
+  if (deps.changeNarrativeAccess === undefined) {
     throw new Error('task-change-narrative-not-composed')
   }
-  if (deps.codeReview === undefined) {
-    throw new Error('task-code-review-not-composed')
-  }
-  const { operations, taskExecutionReadModels, diagnostics } = deps
-  const { codeWorkspace, repositoryWorkspace, changeNarrative, codeReview } = deps
-  const codeReviewInput: CodeReviewReads = {
-    workspace: codeWorkspace,
-    content: codeReview.content,
-    artifacts: codeReview.artifacts,
-  }
+  const { operations, diagnostics, workspaceInsight, changeNarrativeAccess } = deps
   registerRoute(
     app,
     {
@@ -505,7 +482,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       const nodeRunId = c.req.query('nodeRunId')
       const mode = c.req.query('mode') === 'deep' ? 'deep' : 'baseline'
       return c.json(
-        await getTaskStructuralDiff(codeReviewInput, c.req.param('id'), scope, nodeRunId, {
+        await workspaceInsight.structuralDiff(c.req.param('id'), scope, nodeRunId, {
           mode,
           deepCfg:
             mode === 'deep' ? await resolveStructuralDeepConfig(deps.configuration) : undefined,
@@ -532,7 +509,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       if (scope !== 'task') {
         throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
       }
-      const status = await getChangeNarrativeStatus(c.req.param('id'), codeReview.artifacts)
+      const status = await workspaceInsight.changeNarrativeStatus(c.req.param('id'))
       if (status === null) {
         throw new NotFoundError('narrative-not-found', 'no narrative generated for this task yet')
       }
@@ -562,16 +539,11 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
       const narrativeCfg = await deps.configuration.read()
-      const state = await triggerChangeNarrative(
-        {
-          workspace: codeReviewInput,
-          ...changeNarrative,
-          runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
-          defaultRuntime: narrativeCfg.defaultRuntime ?? null,
-        },
-        task,
-        actorOf(c),
-      )
+      await changeNarrativeAccess.requireMember(actorOf(c), task.id)
+      const state = await workspaceInsight.triggerChangeNarrative(task, {
+        runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
+        defaultRuntime: narrativeCfg.defaultRuntime ?? null,
+      })
       return c.json(state, 202)
     },
   )
@@ -598,7 +570,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
           `side query param must be 'base' or 'worktree'`,
         )
       }
-      const q: Parameters<typeof getTaskFileContent>[2] = {
+      const q: TaskFileContentQuery = {
         path: c.req.query('path') ?? '',
         side,
       }
@@ -606,11 +578,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       if (basePath !== undefined && basePath !== '') q.basePath = basePath
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(
-        await getTaskFileContent(repositoryWorkspace, c.req.param('id'), q, {
-          content: codeReview.content,
-        }),
-      )
+      return c.json(await workspaceInsight.fileContent(c.req.param('id'), q))
     },
   )
 
@@ -628,13 +596,13 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     },
     async (c) => {
       const side = c.req.query('side') === 'base' ? 'base' : 'worktree'
-      const q: Parameters<typeof getTaskFileSymbols>[2] = {
+      const q: FileSymbolsQuery = {
         path: c.req.query('path') ?? '',
         side,
       }
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getTaskFileSymbols(codeReviewInput, c.req.param('id'), q))
+      return c.json(await workspaceInsight.fileSymbols(c.req.param('id'), q))
     },
   )
 
@@ -651,7 +619,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       summary: 'Resolve an identifier',
     },
     async (c) => {
-      const q: Parameters<typeof getCodeIntel>[2] = {
+      const q: CodeIntelQuery = {
         path: c.req.query('path') ?? '',
         side: c.req.query('side') === 'base' ? 'base' : 'worktree',
         line: Number(c.req.query('line') ?? 0),
@@ -661,7 +629,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       }
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getCodeIntel(codeReviewInput, c.req.param('id'), q))
+      return c.json(await workspaceInsight.codeIntel(c.req.param('id'), q))
     },
   )
 
@@ -686,12 +654,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
           'methodRef query param required for /call-targets',
         )
       }
-      const targets = await getCallTargets(
-        taskExecutionReadModels.callGraphWorkspace,
-        c.req.param('id'),
-        methodRef,
-        codeReview.content,
-      )
+      const targets = await workspaceInsight.callTargets(c.req.param('id'), methodRef)
       return c.json({ targets })
     },
   )

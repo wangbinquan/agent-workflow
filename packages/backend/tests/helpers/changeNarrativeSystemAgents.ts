@@ -4,7 +4,7 @@ import { appHome } from '@/util/paths'
 import {
   triggerChangeNarrative as triggerSelectedNarrative,
   type ChangeNarrativeDeps as SelectedChangeNarrativeDeps,
-} from '@/services/changeNarrative'
+} from '@/modules/workspace-insight/application/changeNarrative'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 
@@ -12,6 +12,8 @@ export type NativeChangeNarrativeDeps = Omit<
   SelectedChangeNarrativeDeps,
   'systemAgents' | 'resolveRuntime'
 > & {
+  /** RFC-453: the tasks route's member gate, which the route runs right before the trigger. */
+  requireMember(actor: Actor, taskId: string): Promise<void>
   resolveRuntime(input: Parameters<SelectedChangeNarrativeDeps['resolveRuntime']>[0]): Promise<
     Omit<Awaited<ReturnType<SelectedChangeNarrativeDeps['resolveRuntime']>>, 'runtimeBinding'> & {
       readonly binaryPath: string | null
@@ -21,8 +23,10 @@ export type NativeChangeNarrativeDeps = Omit<
 }
 
 /** Existing native fixtures explicitly project into the complete selected family.
- * Business fields and profile accessors retain their actual receiver and read point. */
-export function triggerChangeNarrative(
+ * Business fields and profile accessors retain their actual receiver and read point.
+ * RFC-453: the member gate moved from the trigger's first statement into the tasks route, right before the call;
+ * this helper keeps that order (gate, then trigger) so the gate cases still read as the route runs them. */
+export async function triggerChangeNarrative(
   deps: NativeChangeNarrativeDeps,
   task: Task,
   actor: Actor,
@@ -34,9 +38,6 @@ export function triggerChangeNarrative(
   }
   const selected = Object.defineProperties<object>(
     {
-      requireMember(member: Actor, taskId: string) {
-        return deps.requireMember(member, taskId)
-      },
       async resolveRuntime(input: Parameters<SelectedChangeNarrativeDeps['resolveRuntime']>[0]) {
         return binding.bindRuntime(await deps.resolveRuntime(input))
       },
@@ -47,5 +48,6 @@ export function triggerChangeNarrative(
     },
     descriptors,
   ) as SelectedChangeNarrativeDeps
-  return triggerSelectedNarrative(selected, task, actor)
+  await deps.requireMember(actor, task.id)
+  return triggerSelectedNarrative(selected, task)
 }

@@ -4,7 +4,8 @@
 // volume (`../crewstation/codeReviewVolumeOperation.ts`).
 import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { extname, join, relative } from 'node:path'
+import { langIdForPath } from '@agent-workflow/shared'
 import {
   gitChangedEntries,
   gitChangedEntriesBetween,
@@ -14,9 +15,6 @@ import {
   readBlobAtRef,
 } from '@/util/git'
 import { toPortableRelativePath } from '@/util/platformExec'
-import { worktreeSnapshotDigest } from '@/services/codeIntel/snapshot'
-import { buildClassIndex, scanClassDecls } from '@/services/structuralDiff/callGraph/classIndex'
-import { resolveLang } from '@/services/structuralDiff/lang/grammars'
 import type {
   RepositoryClassIndex,
   RepositoryRevisionContent,
@@ -24,7 +22,9 @@ import type {
   RevisionFileRead,
   WorktreeFileRead,
 } from '../../application/ports/repositoryRevisionContent'
+import { buildClassIndex, scanClassDecls } from './classDeclarationIndex'
 import { openContainedFileWithin, type ContainedFileHooks } from './containedFileRead'
+import { worktreeSnapshotDigest } from './worktreeSnapshotDigest'
 
 /** A NUL in the first 8 KiB is the binary signal Git itself uses. */
 const NUL_PROBE_CHARS = 8192
@@ -65,7 +65,9 @@ async function listSourceFiles(root: string): Promise<string[]> {
       if (e.isDirectory()) {
         if (!CLASS_INDEX_IGNORE_DIRS.has(e.name) && !e.name.startsWith('.'))
           await walk(join(dir, e.name))
-      } else if (e.isFile() && resolveLang(e.name) !== null) {
+      } else if (e.isFile() && langIdForPath(extname(e.name)) !== null) {
+        // RFC-453: the analysis engine's language set, read from shared — `extname` + the table lookup is exactly
+        // the engine's `resolveLang` (the rfc453 test locks the two tables equal).
         // RFC-254 T32: these relative paths ARE the identifier. They become the
         // `ref` (`src/A.java#A.run`) and `ownerClass` that callers pass back in,
         // store, and display — and `relative` answers in the HOST spelling, so

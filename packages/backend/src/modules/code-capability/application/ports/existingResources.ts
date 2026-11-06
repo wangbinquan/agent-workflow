@@ -2,7 +2,3 @@
 export interface CapabilityAgentExistence {
   existingIds(ids: readonly string[]): Promise<readonly string[]>
 }
-
-export interface CodeReviewTaskExistence {
-  existingTaskIds(ids: readonly string[]): Promise<ReadonlySet<string>>
-}

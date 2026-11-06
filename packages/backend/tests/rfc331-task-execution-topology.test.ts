@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { SchedulerDriverPort } from '../src/modules/task-execution/public/commands'
-import { getCallTargets } from '../src/services/structuralDiff/callGraph/expandService'
+import { getCallTargets } from '../src/modules/workspace-insight/application/callGraph/callTargets'
 import { backendUnits, importEdges, sourceUnit, type SourceUnit } from './architecture/census'
 import {
   createNoopSchedulerDriver,
@@ -41,7 +41,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：`services/multipartTaskStart.ts` 整份删除——
   // multipart 路由改走与 PostgreSQL 共用的启动参与者，这个 legacy 消费者随之出账。
   // RFC-412: services/scheduler.ts deleted (its last mechanics moved into task-execution engine files).
-  'packages/backend/src/services/structuralDiff/callGraph/expandService.ts',
+  // RFC-453: services/structuralDiff/callGraph/expandService.ts moved into workspace-insight (no longer a legacy consumer).
   'packages/backend/src/services/task.ts',
 ])
 
@@ -89,7 +89,8 @@ function topologyBoundaryViolations(units: readonly SourceUnit[]): string[] {
         violations.push(`scheduler-to-task:${edge.syntax}`)
       }
       if (
-        unit.path === 'packages/backend/src/services/structuralDiff/callGraph/expandService.ts' &&
+        unit.path ===
+          'packages/backend/src/modules/workspace-insight/application/callGraph/callTargets.ts' &&
         /(?:^@\/services\/task$|(?:^|\/)task$)/.test(target)
       ) {
         violations.push(`callgraph-to-task:${edge.syntax}`)
@@ -295,7 +296,7 @@ describe('RFC-331 architecture cuts', () => {
         "const task = await import('@/services/task')\n",
       ),
       sourceUnit(
-        'packages/backend/src/services/structuralDiff/callGraph/expandService.ts',
+        'packages/backend/src/modules/workspace-insight/application/callGraph/callTargets.ts',
         "import type { Task } from '@/services/task'\n",
       ),
       sourceUnit(

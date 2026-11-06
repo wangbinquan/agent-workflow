@@ -49,7 +49,7 @@ import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresq
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
-import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
+import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import { createLogger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {

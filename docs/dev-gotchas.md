@@ -603,6 +603,17 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   会被擦除，不受影响。挪文件进模块时，把迁入文件里对本模块 `public/*` 的值 import 列出来逐个改指声明处；`backend-value-scc` /
   `repo-value-scc` 计数（架构 counts）也会因为这个环从 0 变 1。
 
+## 把纯函数 / 纯数据挪进模块的 `domain/`：连带的 `node:path` 也算越界（RFC-453 实撞，2026-11-05）
+
+- 现象：集中验证里 `tests/architecture/rfc317-module-boundary.test.ts` 的 `R2` 两条红——账本多出
+  `modules/workspace-insight/domain/lang/languages.ts -> node:path`，「`R2` 债务全部落在 application 层」也随之失败。tsc / eslint 全过。
+- 成因：`domain` 层除了不许反向 import legacy，还不许取宿主模块：`tests/architecture/census.ts` 的 `DOMAIN_FORBIDDEN_PACKAGES`
+  （`bun:sqlite`、`node:child_process`、`node:fs`、`node:path`、`node:process`）对 domain 文件逐条记进 `R2`。扩展名表本身是纯数据，
+  但原文件的 `resolveLang` 用 `extname` 取扩展名，整段挪进 domain 就带进了 `node:path`。
+- **定式**：往 `domain/` 挪文件前先 grep 这五个包；纯字符串能做的（取扩展名、拼相对路径）在 domain 里用纯字符串实现，并加一条与原
+  `node:path` 取法逐例比对的用例（目录名带点、点文件、尾随斜杠、`..`）——这也让 domain 的结果不随 Windows / POSIX 的 `path` 语义变化；
+  真要碰宿主的逻辑留在 `engine` / `infrastructure`。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

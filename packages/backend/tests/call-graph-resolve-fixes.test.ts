@@ -5,12 +5,15 @@
 //   #13 receiver class located but method absent → `external` (not resolved, not unresolved)
 
 import { describe, expect, test } from 'bun:test'
-import { expandMethod, type ExpandCtx } from '../src/services/structuralDiff/callGraph/service'
+import {
+  expandMethod,
+  type ExpandCtx,
+} from '../src/modules/workspace-insight/engine/callGraph/expandMethod'
 import {
   buildClassIndex,
   scanClassDecls,
-} from '../src/services/structuralDiff/callGraph/classIndex'
-import { resolveLang } from '../src/services/structuralDiff/lang/grammars'
+} from '../src/modules/source-control/infrastructure/local/classDeclarationIndex'
+import { resolveLang } from '../src/modules/workspace-insight/domain/lang/languages'
 
 function ctxOf(files: Record<string, string>): ExpandCtx {
   const index = buildClassIndex(

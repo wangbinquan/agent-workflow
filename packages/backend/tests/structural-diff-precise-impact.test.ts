@@ -8,12 +8,12 @@ import {
   parseScip,
   encodeScipFixture,
   type ScipDocument,
-} from '../src/services/structuralDiff/deep/scip'
+} from '../src/modules/workspace-insight/domain/deep/scip'
 import {
   computePreciseImpact,
   resolveChangedScipSymbol,
   preciseImpactFromBaseline,
-} from '../src/services/structuralDiff/deep/deepImpact'
+} from '../src/modules/workspace-insight/domain/deep/deepImpact'
 import type { FileStructuralDiff, SymbolNode } from '@agent-workflow/shared'
 
 const SYM_A = 'scip ts . . `a.ts`/A#foo().'

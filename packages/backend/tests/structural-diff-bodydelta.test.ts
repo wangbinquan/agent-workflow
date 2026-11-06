@@ -2,7 +2,10 @@
 // math + the applies-only-to-modified-callables gate.
 
 import { describe, expect, test } from 'bun:test'
-import { lineMultisetDelta, bodyDeltaFor } from '../src/services/structuralDiff/bodyDelta'
+import {
+  lineMultisetDelta,
+  bodyDeltaFor,
+} from '../src/modules/workspace-insight/domain/structuralDiff/bodyDelta'
 import type { SymbolChange, SymbolNode } from '@agent-workflow/shared'
 
 function method(id: string, range: { startLine: number; endLine: number }): SymbolNode {

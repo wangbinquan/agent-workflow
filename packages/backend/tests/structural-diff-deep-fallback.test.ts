@@ -5,11 +5,9 @@
 // into a clean baseline fallback). The baseline payload is always preserved.
 
 import { describe, expect, test } from 'bun:test'
-import {
-  computeDeepStructuralDiff,
-  DeepUnavailableError,
-} from '../src/services/structuralDiff/deep/service'
-import { encodeScipFixture } from '../src/services/structuralDiff/deep/scip'
+import { computeDeepStructuralDiff } from '../src/modules/workspace-insight/infrastructure/deep/deepStructuralDiff'
+import { DeepUnavailableError } from '../src/modules/workspace-insight/domain/deep/deepIndexing'
+import { encodeScipFixture } from '../src/modules/workspace-insight/domain/deep/scip'
 import { computeSummary, type StructuralDiff, type SymbolNode } from '@agent-workflow/shared'
 
 const chargeNode: SymbolNode = {

@@ -22,7 +22,7 @@ import type {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
+import { triggerChangeNarrative as triggerSelectedNarrative } from '@/modules/workspace-insight/application/changeNarrative'
 import { createLogger } from '@/util/log'
 import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
@@ -44,10 +44,12 @@ import {
   buildNarrativeInput as buildNarrativeInputWithPort,
   buildNarrativePrompt,
   extractJsonObject,
-  getChangeNarrativeStatus,
+  getChangeNarrativeStatus as getChangeNarrativeStatusInStore,
   resetChangeNarrativeStateForTests,
-} from '../src/services/changeNarrative'
-import { computeContentDigest } from '../src/services/structuralDiff/digest'
+} from '../src/modules/workspace-insight/application/changeNarrative'
+import { composeLocalCodeReviewArtifacts } from '../src/modules/workspace-insight/composition/codeReviewArtifacts'
+import { localCodeReviewReads } from './helpers/workspaceInsightReads'
+import { computeContentDigest } from '../src/modules/workspace-insight/domain/structuralDiff/digest'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunResult,
@@ -66,7 +68,10 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 import { createUser } from './helpers/userFixture'
 
 const buildNarrativeInput = (db: PersistenceDb, task: Task) =>
-  buildNarrativeInputWithPort(createTaskCodeWorkspaceQueries(db), task)
+  buildNarrativeInputWithPort(localCodeReviewReads(createTaskCodeWorkspaceQueries(db)), task)
+// RFC-453: the artifact store is a required parameter; these tests read the standalone appHome files.
+const getChangeNarrativeStatus = (taskId: string) =>
+  getChangeNarrativeStatusInStore(taskId, composeLocalCodeReviewArtifacts())
 
 let home: string
 beforeAll(() => {
@@ -287,7 +292,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
   function deps(db: PersistenceDb, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
     const runtimes = runtimeRegistryPersistence(db)
     const base: ChangeNarrativeDeps = {
-      workspace: createTaskCodeWorkspaceQueries(db),
+      workspace: localCodeReviewReads(createTaskCodeWorkspaceQueries(db)),
       async requireMember(actor, taskId) {
         const { tasks } = tablesOf(db)
         const rows = await db
@@ -360,7 +365,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     await triggerSelectedNarrative(
       {
         workspace: original.workspace,
-        requireMember: original.requireMember,
         async resolveRuntime(input) {
           const profile = await original.resolveRuntime(input)
           return {
@@ -375,7 +379,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         systemAgents: selected,
       },
       world.task,
-      world.owner,
     )
     await settleNarrative(world.task.id)
     const ready = await getChangeNarrativeStatus(world.task.id)
@@ -431,7 +434,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       triggerSelectedNarrative(
         {
           workspace: original.workspace,
-          requireMember: original.requireMember,
           async resolveRuntime(input) {
             const profile = await original.resolveRuntime(input)
             return {
@@ -449,7 +451,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
           systemAgents: selected,
         },
         world.task,
-        world.owner,
       )
     await trigger()
     await settleNarrative(world.task.id)
@@ -663,7 +664,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       await triggerSelectedNarrative(
         {
           workspace: original.workspace,
-          requireMember: original.requireMember,
           async resolveRuntime(input) {
             return binding.bindRuntime(await original.resolveRuntime(input))
           },
@@ -671,7 +671,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
           log,
         },
         world.task,
-        world.owner,
       )
       await settleNarrative(world.task.id)
       const state = await getChangeNarrativeStatus(world.task.id)

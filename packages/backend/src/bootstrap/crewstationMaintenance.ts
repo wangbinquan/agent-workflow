@@ -16,7 +16,7 @@ import {
   composeCrewStationReviewObjectSweep,
 } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
 import { existingTaskIds } from '@/modules/task-execution/composition'
-import { composeCrewStationCodeReviewObjectSweep } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
+import { composeCrewStationCodeReviewObjectSweep } from '@/modules/workspace-insight/composition'
 import {
   composeCrewStationIntentArtifacts,
   composeCrewStationIntentPluginRetention,

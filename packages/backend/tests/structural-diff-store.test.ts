@@ -1,15 +1,14 @@
 // RFC-083 — eager on-disk persistence of the task-scope structural diff (so the
 // view survives worktree-GC). File-based (no DB migration), best-effort.
+// RFC-453: the two standalone-file helpers (`writeStoredDiff` / `readStoredDiff`, only used here) were deleted;
+// the same round trip runs through the standalone artifact store they wrapped (generation `null`).
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  writeStoredDiff,
-  readStoredDiff,
-  isTerminalTaskStatus,
-} from '../src/services/structuralDiff/store'
+import { composeLocalCodeReviewArtifacts } from '../src/modules/workspace-insight/composition/codeReviewArtifacts'
+import { isTerminalTaskStatus } from '../src/modules/workspace-insight/domain/structuralDiff/terminalStatus'
 import { computeSummary, type StructuralDiff } from '@agent-workflow/shared'
 
 let home: string
@@ -41,12 +40,21 @@ function sample(taskId: string): StructuralDiff {
 describe('structural-diff store', () => {
   test('write → read round-trips', async () => {
     const d = sample('task_abc')
-    await writeStoredDiff(d)
-    expect(await readStoredDiff('task_abc', 'task')).toEqual(d)
+    const artifacts = composeLocalCodeReviewArtifacts()
+    await artifacts.writeStructuralDiff({ taskId: d.taskId, scope: d.scope, generation: null }, d)
+    expect(
+      await artifacts.readStructuralDiff({ taskId: 'task_abc', scope: 'task', generation: null }),
+    ).toEqual(d)
   })
 
   test('absent artifact reads as null', async () => {
-    expect(await readStoredDiff('task_missing', 'task')).toBeNull()
+    expect(
+      await composeLocalCodeReviewArtifacts().readStructuralDiff({
+        taskId: 'task_missing',
+        scope: 'task',
+        generation: null,
+      }),
+    ).toBeNull()
   })
 
   test('isTerminalTaskStatus', () => {

@@ -6,8 +6,8 @@ import {
   INDEXER_SPECS,
   indexersForFiles,
   resolveIndexerBin,
-  probeIndexer,
-} from '../src/services/structuralDiff/deep/indexers'
+} from '../src/modules/workspace-insight/domain/deep/indexers'
+import { probeIndexer } from '../src/modules/workspace-insight/infrastructure/deep/indexerProbe'
 
 describe('indexersForFiles (ext → indexer)', () => {
   test('maps each language to its indexer', () => {

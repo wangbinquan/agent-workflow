@@ -8,7 +8,7 @@ import { taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { resetChangeNarrativeStateForTests } from '../src/services/changeNarrative'
+import { resetChangeNarrativeStateForTests } from '../src/modules/workspace-insight/application/changeNarrative'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 

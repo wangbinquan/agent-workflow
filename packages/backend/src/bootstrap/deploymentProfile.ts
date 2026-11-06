@@ -71,7 +71,7 @@ import type {
 } from '@/modules/digital-employee/composition'
 import type { ScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
 import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionEnvironment'
-import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
+import type { CodeReviewArtifactStore } from '@/modules/workspace-insight/public/types'
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import type { Config } from '@agent-workflow/shared'

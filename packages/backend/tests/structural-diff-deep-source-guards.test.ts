@@ -11,14 +11,21 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SD = resolve(import.meta.dir, '..', 'src', 'services', 'structuralDiff')
-const read = (rel: string): string => readFileSync(resolve(SD, rel), 'utf8')
+// RFC-453: the family moved into the workspace-insight module (domain / engine / application / infrastructure).
+const WI = resolve(import.meta.dir, '..', 'src', 'modules', 'workspace-insight')
+const read = (rel: string): string => readFileSync(resolve(WI, rel), 'utf8')
+const BASELINE_PATH: Record<string, string> = {
+  'baseline.ts': 'engine/structuralDiff/baseline.ts',
+  'gitBackend.ts': 'application/structuralDiff/revisionAnalysis.ts',
+  'assemble.ts': 'engine/structuralDiff/assemble.ts',
+  'impact.ts': 'domain/structuralDiff/impact.ts',
+}
 
 describe('deep/ stays out of the always-on baseline path', () => {
   for (const f of ['baseline.ts', 'gitBackend.ts', 'assemble.ts', 'impact.ts']) {
     test(`${f} does not import deep/`, () => {
-      const src = read(f)
-      expect(src).not.toMatch(/from ['"]\.\/deep\//)
+      const src = read(BASELINE_PATH[f]!)
+      expect(src).not.toMatch(/from ['"][^'"]*\/deep\//)
       expect(src).not.toMatch(/protobufjs/)
     })
   }
@@ -35,22 +42,22 @@ describe('deep/ stays out of the always-on baseline path', () => {
 
 describe('two-tier confidence contract', () => {
   test("deep precise impact tags callers 'extracted'", () => {
-    expect(read('deep/deepImpact.ts')).toMatch(/confidence: 'extracted'/)
+    expect(read('domain/deep/deepImpact.ts')).toMatch(/confidence: 'extracted'/)
   })
   test("baseline heuristic impact tags callers 'inferred'", () => {
-    expect(read('impact.ts')).toMatch(/confidence: 'inferred'/)
+    expect(read('domain/structuralDiff/impact.ts')).toMatch(/confidence: 'inferred'/)
   })
 })
 
 describe('deep runner safety', () => {
   test('runIndexer wires a timeout + kills the process', () => {
-    const src = read('deep/runner.ts')
+    const src = read('infrastructure/deep/indexerRunner.ts')
     expect(src).toMatch(/setTimeout/)
     expect(src).toMatch(/\.kill\(/)
     expect(src).toMatch(/timeoutMs/)
   })
   test('indexer binary is resolved from settings/PATH, no hardcoded abs dev path', () => {
-    const src = read('deep/indexers.ts')
+    const src = read('domain/deep/indexers.ts')
     expect(src).not.toMatch(/\/Users\/|\/home\/|\/opt\//)
     expect(src).toMatch(/resolveIndexerBin/)
   })

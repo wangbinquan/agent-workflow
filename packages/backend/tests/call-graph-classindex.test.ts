@@ -4,8 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   scanClassDecls,
   buildClassIndex,
-  inferLocalTypes,
-} from '../src/services/structuralDiff/callGraph/classIndex'
+} from '../src/modules/source-control/infrastructure/local/classDeclarationIndex'
+import { inferLocalTypes } from '../src/modules/workspace-insight/domain/callGraph/localTypes'
 
 describe('scanClassDecls + buildClassIndex', () => {
   test('finds class/interface/struct/etc declaration names → file index', () => {

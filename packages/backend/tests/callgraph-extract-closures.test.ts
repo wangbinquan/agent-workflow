@@ -16,9 +16,12 @@
 //   PY  lambda x: self.handle(x) + [self.go(i) for i in xs] -> self.handle, self.go (both method)
 
 import { describe, expect, test } from 'bun:test'
-import { parseSource } from '../src/services/structuralDiff/lang/parser'
-import { resolveLang } from '../src/services/structuralDiff/lang/grammars'
-import { extractCalls, type RawCall } from '../src/services/structuralDiff/callGraph/extractCalls'
+import { parseSource } from '../src/modules/workspace-insight/engine/lang/parser'
+import { resolveLang } from '../src/modules/workspace-insight/domain/lang/languages'
+import {
+  extractCalls,
+  type RawCall,
+} from '../src/modules/workspace-insight/engine/callGraph/extractCalls'
 
 async function callsIn(file: string, src: string): Promise<RawCall[]> {
   const g = resolveLang(file)

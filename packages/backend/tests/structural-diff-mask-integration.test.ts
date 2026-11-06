@@ -13,7 +13,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { computeFromWorktree } from '../src/services/structuralDiff/gitBackend'
+import { computeFromWorktree } from '../src/modules/workspace-insight/application/structuralDiff/revisionAnalysis'
 import { runGit } from '../src/util/git'
 
 describe('RFC-087 masking integration (computeFromWorktree, Python #/docstring)', () => {

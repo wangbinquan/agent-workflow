@@ -19,7 +19,8 @@ const moduleImports = (text: string) =>
 test('O3 consumers no longer read the reshaped tables', () => {
   const consumers = [
     'modules/code-capability/infrastructure/capabilityMatrixRead.ts',
-    'modules/code-capability/infrastructure/crewstation/codeReviewObjectSweep.ts',
+    // RFC-453: moved with the code-review artifact store from code-capability.
+    'modules/workspace-insight/infrastructure/crewstation/codeReviewObjectSweep.ts',
     'modules/system-operations/infrastructure/local/doctorDiagnostics.ts',
     'modules/system-operations/infrastructure/resourceLimitAudit.ts',
   ]

@@ -8,7 +8,7 @@ import {
   resolveNodeScope,
   perRepoNodeRuns,
   type NodeRunRef,
-} from '../src/services/structuralDiff/refSelect'
+} from '../src/modules/workspace-insight/application/structuralDiff/nodeScope'
 
 const runs: NodeRunRef[] = [
   { seq: 1, id: 'a', snapshotRef: 'snapA', startedAt: 1 },

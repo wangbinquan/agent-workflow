@@ -36,7 +36,8 @@ import { ulid } from 'ulid'
 import { computeSummary, repoKeyWire, type StructuralDiff } from '@agent-workflow/shared'
 
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
-import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/public/participants'
+import { composeLocalCodeReviewArtifacts } from '@/modules/workspace-insight/composition/codeReviewArtifacts'
+import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/application/worktreeResumePreflight'
@@ -51,9 +52,9 @@ import { prepareResumeTaskProjection } from '@/modules/task-execution/infrastruc
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { taskDiffProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
-import { buildNarrativeInput } from '@/services/changeNarrative'
-import { getCodeIntel } from '@/services/codeIntel/codeIntel'
-import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
+import { buildNarrativeInput } from '@/modules/workspace-insight/application/changeNarrative'
+import { getCodeIntel } from '@/modules/workspace-insight/application/codeIntel/codeIntel'
+import { getTaskFileSymbols } from '@/modules/workspace-insight/application/codeIntel/fileSymbols'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import {
   createIsoUnderLock,
@@ -67,12 +68,12 @@ import {
   planNodeRunRollbackTargets,
   rollbackNodeRunWorktrees,
 } from '@/services/nodeRollback'
-import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
+import { getTaskStructuralDiff } from '@/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
 import {
   getCallTargets,
   invalidateCallGraphIndex,
-} from '@/services/structuralDiff/callGraph/expandService'
-import { getTaskFileContent } from '@/services/worktreeFileContent'
+} from '@/modules/workspace-insight/application/callGraph/callTargets'
+import { getTaskFileContent } from '@/modules/workspace-insight/application/fileContent'
 import { createLogger } from '@/util/log'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -512,7 +513,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           })
           change(task)
           const diff = await getTaskStructuralDiff(
-            createTaskCodeWorkspaceQueries(harness.db),
+            localCodeReviewReads(createTaskCodeWorkspaceQueries(harness.db)),
             task.id,
             scope,
             runId,
@@ -545,7 +546,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         })
         change(task)
         const read = getTaskStructuralDiff(
-          createTaskCodeWorkspaceQueries(harness.db),
+          localCodeReviewReads(createTaskCodeWorkspaceQueries(harness.db)),
           task.id,
           'wrapper',
           runId,
@@ -570,7 +571,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           storedDiff(task.id),
         )
         const narrative = await buildNarrativeInput(
-          createTaskCodeWorkspaceQueries(harness.db),
+          localCodeReviewReads(createTaskCodeWorkspaceQueries(harness.db)),
           task,
         )
         const files = narrative.groups.flatMap((g) => g.files)
@@ -591,7 +592,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           `${shape.name}: ${side} ${operation} resolves the selected member`,
           async () => {
             const { task } = await fixture(shape)
-            const reads = createTaskCodeWorkspaceQueries(harness.db)
+            const reads = localCodeReviewReads(createTaskCodeWorkspaceQueries(harness.db))
             for (const mount of shape.mounts) {
               const repo = mount === '' ? '.' : mount
               if (operation === 'symbols') {

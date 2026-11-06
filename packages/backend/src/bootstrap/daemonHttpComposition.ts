@@ -79,6 +79,7 @@ import { composeCodeHistoryQueries } from '@/modules/code-capability/composition
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
+import { composeTaskWorkspaceInsight } from '@/modules/workspace-insight/composition'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
@@ -263,7 +264,6 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       contentScope: (workspaceRef) =>
         createWorkspaceContentScope(workspaceRef, input.selections.workspaceContent),
     }),
-    taskExecutionReadModels: taskExecutionProvider.readModels,
     // RFC-452: the same recovery operations, read models, prompt / archived-event reads and inventory content the
     // route used to take one by one.
     diagnostics: composeTaskDiagnostics({
@@ -273,15 +273,30 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       archivedEvents: taskExecutionProvider.routes.tasks.archivedEvents,
       runtimeInventoryContent: input.selections.runtimeInventoryContent,
     }),
-    codeWorkspace,
-    // RFC-370 §10 V16: hosted reads answer from the task volume and persist as
-    // object publications; standalone PostgreSQL keeps native worktrees and files.
-    codeReview: Object.freeze({
+    // RFC-453: the same code workspace, revision content, artifact store, task worktrees, call-graph read model and
+    // narrative runtime / system agents the route used to take one by one. RFC-370 §10 V16: hosted reads answer from
+    // the task volume and persist as object publications; standalone PostgreSQL keeps native worktrees and files.
+    workspaceInsight: composeTaskWorkspaceInsight({
+      workspace: codeWorkspace,
       content: input.selections.repositoryRevisionContent,
       artifacts: input.selections.codeReviewArtifacts,
+      worktrees: createTaskWorktreeLocator(input.db),
+      callGraphWorkspace: taskExecutionProvider.readModels.callGraphWorkspace,
+      narrative: {
+        resolveRuntime: ({
+          runtimeName,
+          defaultRuntime,
+        }: {
+          readonly runtimeName: string | null
+          readonly defaultRuntime: string | null
+        }) =>
+          core.runtimeRegistry
+            .resolveRuntimeByName(runtimeName ?? defaultRuntime)
+            .then(narrativeSystemAgentBinding.bindRuntime),
+        systemAgents: narrativeSystemAgentBinding.family,
+      },
     }),
-    repositoryWorkspace: createTaskWorktreeLocator(input.db),
-    changeNarrative: Object.freeze({
+    changeNarrativeAccess: Object.freeze({
       async requireMember(actor: Actor, taskId: string) {
         const access = await resolveCollaborationTaskAccess(boundCollaborationContext, {
           actor,
@@ -297,17 +312,6 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
           )
         }
       },
-      resolveRuntime: ({
-        runtimeName,
-        defaultRuntime,
-      }: {
-        readonly runtimeName: string | null
-        readonly defaultRuntime: string | null
-      }) =>
-        core.runtimeRegistry
-          .resolveRuntimeByName(runtimeName ?? defaultRuntime)
-          .then(narrativeSystemAgentBinding.bindRuntime),
-      systemAgents: narrativeSystemAgentBinding.family,
     }),
   })
   const worktreeFiles = Object.freeze({

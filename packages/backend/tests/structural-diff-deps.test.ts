@@ -3,11 +3,14 @@
 // throw on half-edited manifests (an agent mid-change leaves these broken).
 
 import { describe, expect, test } from 'bun:test'
-import { parseManifest, ecosystemForManifest } from '../src/services/structuralDiff/deps/manifests'
+import {
+  parseManifest,
+  ecosystemForManifest,
+} from '../src/modules/workspace-insight/domain/structuralDiff/deps/manifests'
 import {
   dependencyChangesForManifest,
   aggregateDependencyChanges,
-} from '../src/services/structuralDiff/deps/diff'
+} from '../src/modules/workspace-insight/domain/structuralDiff/deps/diff'
 import type { DependencyChange } from '@agent-workflow/shared'
 
 function byName(changes: DependencyChange[]): Map<string, DependencyChange> {

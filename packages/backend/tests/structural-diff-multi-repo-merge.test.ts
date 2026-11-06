@@ -13,7 +13,10 @@ import type {
   ClassEdge,
 } from '@agent-workflow/shared'
 import { computeSummary } from '@agent-workflow/shared'
-import { mergeStructuralDiffs, prefixIdPath } from '../src/services/structuralDiff/assemble'
+import {
+  mergeStructuralDiffs,
+  prefixIdPath,
+} from '../src/modules/workspace-insight/engine/structuralDiff/assemble'
 
 function sym(filePath: string, qn: string, kind: 'class' | 'method'): SymbolNode {
   return {

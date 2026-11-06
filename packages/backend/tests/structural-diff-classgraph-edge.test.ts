@@ -1,5 +1,5 @@
 // RFC-089 / RFC-083 / RFC-086 — supplementary edge-case locks for the class
-// relationship graph (packages/backend/src/services/structuralDiff/classGraph.ts).
+// relationship graph (packages/backend/src/modules/workspace-insight/domain/structuralDiff/classGraph.ts).
 //
 // These cover two SUBTLE NEGATIVE invariants that the existing
 // structural-diff-class-graph.test.ts / structural-diff-anon-class.test.ts suites
@@ -26,8 +26,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   computeClassEdges,
   computeAnonCreationEdges,
-} from '../src/services/structuralDiff/classGraph'
-import type { ClassNode } from '../src/services/structuralDiff/classGraph'
+} from '../src/modules/workspace-insight/domain/structuralDiff/classGraph'
+import type { ClassNode } from '../src/modules/workspace-insight/domain/structuralDiff/classGraph'
 import type { FileStructuralDiff, SymbolNode } from '@agent-workflow/shared'
 
 const node = (key: string, name: string, file: string, a: number, b: number): ClassNode => ({

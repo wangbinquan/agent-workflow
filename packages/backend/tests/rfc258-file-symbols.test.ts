@@ -16,16 +16,19 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { runGit } from '../src/util/git'
-import {
-  getTaskFileSymbols as getTaskFileSymbolsWithPort,
-  type FileSymbolsQuery,
-} from '../src/services/codeIntel/fileSymbols'
+import { getTaskFileSymbols as getTaskFileSymbolsWithPort } from '../src/modules/workspace-insight/application/codeIntel/fileSymbols'
+import type { FileSymbolsQuery } from '../src/modules/workspace-insight/application/ports/taskWorkspaceInsight'
+import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const getTaskFileSymbols = (db: PersistenceDb, taskId: string, query: FileSymbolsQuery) =>
-  getTaskFileSymbolsWithPort(createTaskCodeWorkspaceQueries(db), taskId, query)
+  getTaskFileSymbolsWithPort(
+    localCodeReviewReads(createTaskCodeWorkspaceQueries(db)),
+    taskId,
+    query,
+  )
 
 const dirs: string[] = []
 afterAll(() => {

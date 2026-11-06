@@ -48,6 +48,8 @@ export {
   truncationNotice,
 } from '../domain/portArtifacts'
 export { aggregatorInputsMatch, compareRunSequence } from '../domain/runSelection/ordering'
+// RFC-453: the node-run timeline order (review rows by their round anchor) for workspace-insight's node scope.
+export { compareNodeRunsForTimeline } from '../application/reviewRoundTiming'
 export { decodeRunSlot, encodeRunSlot, runSlotsEqual } from '../domain/runSelection/slots'
 import { createNodeRunQueries as createNodeRunQueriesInternal } from '../infrastructure/nodeRunQueries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

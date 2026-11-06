@@ -22,7 +22,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
+import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
+import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { runGit } from '../src/util/git'
@@ -34,7 +35,8 @@ const getTaskStructuralDiff = (
   ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
     ? Rest
     : never
-) => getTaskStructuralDiffWithPort(createTaskCodeWorkspaceQueries(db), ...args)
+) =>
+  getTaskStructuralDiffWithPort(localCodeReviewReads(createTaskCodeWorkspaceQueries(db)), ...args)
 
 interface Harness {
   db: DbClient

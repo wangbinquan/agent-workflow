@@ -12,7 +12,8 @@ import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { runGit } from '../src/util/git'
-import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
+import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
+import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 
 describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) => {
@@ -21,7 +22,8 @@ describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) =
     ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
       ? Rest
       : never
-  ) => getTaskStructuralDiffWithPort(createTaskCodeWorkspaceQueries(db), ...args)
+  ) =>
+    getTaskStructuralDiffWithPort(localCodeReviewReads(createTaskCodeWorkspaceQueries(db)), ...args)
 
   const dirs: string[] = []
   afterAll(() => {

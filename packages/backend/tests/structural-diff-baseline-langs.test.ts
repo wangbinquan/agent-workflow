@@ -4,7 +4,7 @@
 // flagged). Locks that all 8 RFC-083 languages produce a sane changeset.
 
 import { describe, expect, test } from 'bun:test'
-import { analyzeFile } from '../src/services/structuralDiff/baseline'
+import { analyzeFile } from '../src/modules/workspace-insight/engine/structuralDiff/baseline'
 import type { FileStructuralDiff } from '@agent-workflow/shared'
 
 function changeIndex(file: FileStructuralDiff): Map<string, string> {

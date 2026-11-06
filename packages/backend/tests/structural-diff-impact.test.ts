@@ -4,8 +4,8 @@
 // documented follow-up).
 
 import { describe, expect, test } from 'bun:test'
-import { computeWithinFileImpact } from '../src/services/structuralDiff/impact'
-import { analyzeFile } from '../src/services/structuralDiff/baseline'
+import { computeWithinFileImpact } from '../src/modules/workspace-insight/domain/structuralDiff/impact'
+import { analyzeFile } from '../src/modules/workspace-insight/engine/structuralDiff/baseline'
 import type { SymbolChange, SymbolNode } from '@agent-workflow/shared'
 
 function sym(p: { qn: string; startLine: number; endLine: number }): SymbolNode {

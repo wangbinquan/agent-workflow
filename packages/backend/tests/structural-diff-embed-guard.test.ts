@@ -26,7 +26,7 @@ describe('grammar embed wiring (T13)', () => {
   })
 
   test('grammars.ts honors IS_EMBEDDED / GRAMMAR_FILES (binary uses bunfs paths)', () => {
-    const src = read('packages/backend/src/services/structuralDiff/lang/grammars.ts')
+    const src = read('packages/backend/src/modules/workspace-insight/engine/lang/grammars.ts')
     expect(src).toMatch(/import \{ GRAMMAR_FILES, IS_EMBEDDED \} from '@\/embed.generated'/)
     expect(src).toMatch(/if \(IS_EMBEDDED\)/)
   })
@@ -37,9 +37,9 @@ describe('WASM-only rule (no native tree-sitter)', () => {
     // Native bindings would reintroduce the per-arch prebuild matrix that the
     // single-binary distribution exists to avoid (design §0).
     const files = [
-      'packages/backend/src/services/structuralDiff/lang/parser.ts',
-      'packages/backend/src/services/structuralDiff/lang/extract.ts',
-      'packages/backend/src/services/structuralDiff/lang/queries.ts',
+      'packages/backend/src/modules/workspace-insight/engine/lang/parser.ts',
+      'packages/backend/src/modules/workspace-insight/engine/lang/extract.ts',
+      'packages/backend/src/modules/workspace-insight/engine/lang/queries.ts',
     ]
     for (const f of files) {
       const src = read(f)

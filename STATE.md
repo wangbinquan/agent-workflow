@@ -1,3 +1,20 @@
+## 2026-11-05 RFC-453 workspace-insight 一族归新模块 workspace-insight（In Progress；`design/RFC-453-workspace-insight-module/`）
+
+- **来由**：RFC-294 W4 B / D 第十八步、E5（RFC-452 后 `tasks` 是唯一 import `services/` 的路由，余 workspace-insight 一族 7 处）。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - 新模块 `modules/workspace-insight`：`services/structuralDiff/**`、`services/codeIntel/**`、`changeNarrative`、`worktreeFileContent` 共 32 个文件按职责
+    落位——纯分析进 `domain`，tree-sitter 引擎进 `engine`，面向任务的用例进 `application`，起子进程的 SCIP 深度索引进 `infrastructure/deep`
+    （用例经 `application/ports` 的深度索引端口调用，`composition` 绑定）；四个文件按函数拆开落位；
+  - code-capability 的 code-review 产物存储（端口、本机文件、托管对象、托管清扫、两个装配）迁入 workspace-insight，code-capability 的
+    `public/participants` 删除；
+  - source-control 收回工作树快照摘要与类声明索引，类索引遍历的语言判定改用 shared 的扩展名表（新用例锁两张表相等）；
+  - `repoLabels` 并入 shared `repoGroupLayout`，`reviewRoundStart` 迁入 task-execution 并经 `public/queries` 导出时间线比较器；
+  - `tasks` 路由 7 个端点只经 `public/types` 的 `TaskWorkspaceInsight`，叙述成员门留在路由、紧挨触发调用之前；`routes/` → `services/` 清零。
+- **不做**：分析算法与 UI；E5 设想的持久化叙述作业与洞察失效事件；`services/runtime`（W5）；code-capability 兼容岛的其余部分。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-452 的 Done 文档提交 `05b746aa4`：exact SHA 主 CI run 42140853784 首轮全绿（70 个 job）。
+
 ## 2026-11-05 RFC-452 任务恢复与诊断家族归 task-execution（Done；`design/RFC-452-task-recovery-and-diagnostics-into-task-execution/`）
 
 - **来由**：RFC-294 W4 B / D 第十七步（RFC-451 后只剩 `tasks` 路由 import `services/`，14 处分两族：任务诊断与恢复 7 处、workspace-insight 7 处）。

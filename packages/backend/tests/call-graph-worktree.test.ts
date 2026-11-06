@@ -8,8 +8,8 @@ import { join } from 'node:path'
 import {
   worktreeExpandCtx,
   invalidateCallGraphIndex,
-} from '../src/services/structuralDiff/callGraph/expandService'
-import { expandMethod } from '../src/services/structuralDiff/callGraph/service'
+} from '../src/modules/workspace-insight/application/callGraph/callTargets'
+import { expandMethod } from '../src/modules/workspace-insight/engine/callGraph/expandMethod'
 
 const dirs: string[] = []
 afterAll(async () => {

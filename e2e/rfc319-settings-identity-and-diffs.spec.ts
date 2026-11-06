@@ -73,8 +73,9 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/components/IntentMountDialog.tsx:61-82,103     未决 delta 回填 + replacesChangeId
 //   packages/backend/src/services/intent/workingSet.ts:494-521           一条未决变更；replacesChangeId 才允许顶掉
 //   packages/frontend/src/routes/tasks.detail.tsx:441-455,1248-1258      scope=node:<runId> → structural-diff 查询
-//   packages/backend/src/services/structuralDiff/service.ts:215-330      node 作用域的 between / to-worktree 解析
-//   packages/backend/src/services/structuralDiff/refSelect.ts:23-37      resolveNodeScope
+//   packages/backend/src/modules/workspace-insight/application/structuralDiff/taskStructuralDiff.ts:329-488
+//                                                                        node 作用域的 between / to-worktree 解析
+//   packages/backend/src/modules/workspace-insight/application/structuralDiff/nodeScope.ts:27-41 resolveNodeScope
 //   packages/backend/src/util/git.ts:2258-2268                           worktreeDiff 的 1 MiB 上限 + truncated
 //   packages/frontend/src/components/changes/ChangeReviewPanel.tsx:615-620 截断提示条
 //

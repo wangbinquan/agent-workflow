@@ -8,7 +8,7 @@ import {
   computeClassEdges,
   type ClassNode,
   type MemberRange,
-} from '../src/services/structuralDiff/classGraph'
+} from '../src/modules/workspace-insight/domain/structuralDiff/classGraph'
 
 describe('RFC-087 heritage → inherits edge (not references)', () => {
   test('a class whose heritage names another changed class yields inherits, even if the name is not in its body', async () => {

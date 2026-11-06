@@ -8,8 +8,8 @@
 // enclosing method.
 
 import { describe, expect, test } from 'bun:test'
-import { analyzeFile } from '../src/services/structuralDiff/baseline'
-import { computeAnonCreationEdges } from '../src/services/structuralDiff/classGraph'
+import { analyzeFile } from '../src/modules/workspace-insight/engine/structuralDiff/baseline'
+import { computeAnonCreationEdges } from '../src/modules/workspace-insight/domain/structuralDiff/classGraph'
 import type { FileStructuralDiff, SymbolNode } from '@agent-workflow/shared'
 
 const JAVA = `class GameFrame {

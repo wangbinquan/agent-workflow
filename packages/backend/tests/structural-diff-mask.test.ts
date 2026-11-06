@@ -5,7 +5,7 @@
 // the RFC-087 audit. Asserts the masked output blanks the identifier while
 // preserving line structure (newline count).
 import { describe, expect, test } from 'bun:test'
-import { maskCommentsAndStrings } from '../src/services/structuralDiff/lang/mask'
+import { maskCommentsAndStrings } from '../src/modules/workspace-insight/engine/lang/mask'
 import type { LangId } from '@agent-workflow/shared'
 
 const GRAMMAR: Record<string, string> = {

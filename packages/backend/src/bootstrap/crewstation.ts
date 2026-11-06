@@ -32,7 +32,7 @@ import {
   validateCrewStationEventSubscriptions,
 } from '@/modules/integration/composition/crewstationEvents'
 import { composeCrewStationReviewArtifacts } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
-import { composeCrewStationCodeReviewArtifacts } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
+import { composeCrewStationCodeReviewArtifacts } from '@/modules/workspace-insight/composition'
 import { logicalSchemaContract } from './persistenceSchema'
 import { composeCrewStationMaintenanceDescriptor } from './crewstationMaintenance'
 import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition/crewstationArtifacts'

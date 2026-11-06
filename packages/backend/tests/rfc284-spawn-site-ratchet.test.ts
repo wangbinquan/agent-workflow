@@ -137,7 +137,8 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 1,
     why: 'hardKill 的同步 kill/taskkill 兜底（杀进程原语，同 util/process 豁免理由）。',
   },
-  'services/structuralDiff/deep/runner.ts': {
+  // RFC-453: moved from services/structuralDiff/deep/runner.ts.
+  'modules/workspace-insight/infrastructure/deep/indexerRunner.ts': {
     governance: 'process-group',
     count: 2,
     why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',

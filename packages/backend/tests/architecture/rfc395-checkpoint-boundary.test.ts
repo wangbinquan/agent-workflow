@@ -154,8 +154,12 @@ test('the four single-non-root defect sites decide by mount layout, not by repo 
   expect(launch.match(/const space = inheritedCallSpace\(\{/g)).toHaveLength(2)
   expect(mechanics).not.toContain('inheritedCallSpace(')
   for (const [path, before] of [
-    ['services/structuralDiff/callGraph/expandService.ts', 'workspace.repos.length > 1'],
-    ['services/worktreeFileContent.ts', 'task.repos.length > 1'],
+    // RFC-453: both moved into workspace-insight's application layer.
+    [
+      'modules/workspace-insight/application/callGraph/callTargets.ts',
+      'workspace.repos.length > 1',
+    ],
+    ['modules/workspace-insight/application/fileContent.ts', 'task.repos.length > 1'],
   ]) {
     const text = source(path!)
     expect(text).not.toContain(before!)

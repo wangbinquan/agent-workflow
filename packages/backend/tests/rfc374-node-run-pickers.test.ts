@@ -23,8 +23,8 @@ import {
 import { selectSyncRollbackTargets } from '@/services/task'
 import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
 
-import { compareNodeRunsForTimeline } from '@/services/reviewRoundStart'
-import { resolveNodeScope } from '@/services/structuralDiff/refSelect'
+import { compareNodeRunsForTimeline } from '@/modules/task-execution/application/reviewRoundTiming'
+import { resolveNodeScope } from '@/modules/workspace-insight/application/structuralDiff/nodeScope'
 import { getTaskBranchTrace } from '@/modules/task-execution/application/branchTrace'
 import { loadInjectedSnapshotFromFirstAttempt } from '@/modules/memory/application/injection/injectMemory'
 import {

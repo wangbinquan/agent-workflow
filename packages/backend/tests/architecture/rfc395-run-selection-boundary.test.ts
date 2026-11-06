@@ -15,7 +15,8 @@ const backend = resolve(import.meta.dir, '../..')
 const oracle = 'src/modules/task-execution/infrastructure/migration/oracle/'
 // The target port implementation owns selection SQL; sibling business adapters do not.
 const targetReader = 'src/modules/task-execution/infrastructure/runSelection/table/reader.ts'
-const displayHelper = 'src/services/reviewRoundStart.ts'
+// RFC-453: moved from src/services/reviewRoundStart.ts.
+const displayHelper = 'src/modules/task-execution/application/reviewRoundTiming.ts'
 const legacy = new Set([
   'compareNodeRunMintOrder',
   'isFresherNodeRun',

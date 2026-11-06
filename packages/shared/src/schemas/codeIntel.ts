@@ -124,6 +124,10 @@ const EXT_LANG: Record<string, z.infer<typeof langIdSchema>> = {
   '.scala': 'scala',
   '.sc': 'scala',
 }
+/** RFC-453 — the table itself: the backend locks it equal to the grammar registry, and source-control's class
+ *  index filters source files with it. */
+export const LANG_ID_BY_EXTENSION: Readonly<Record<string, z.infer<typeof langIdSchema>>> = EXT_LANG
+
 export function langIdForPath(path: string): z.infer<typeof langIdSchema> | null {
   const dot = path.lastIndexOf('.')
   if (dot < 0) return null

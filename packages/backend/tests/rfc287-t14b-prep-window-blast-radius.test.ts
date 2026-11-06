@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { openContainedFile } from '@/services/worktreeFileContent'
-import { resolveRepoTarget } from '@/services/codeIntel/fileSymbols'
+import { openContainedFile } from '@/modules/workspace-insight/application/fileContent'
+import { resolveRepoTarget } from '@/modules/workspace-insight/application/codeIntel/fileSymbols'
 
 describe('AC-10 读洞①②：空根不得锚到 daemon 的 cwd（openContainedFile）', () => {
   // `resolve('')` 返回**当前进程的 cwd**。修复前 `GET /api/tasks/:id/file-content`

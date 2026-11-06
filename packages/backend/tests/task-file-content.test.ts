@@ -21,7 +21,7 @@ import {
   FILE_CONTENT_MAX_BYTES,
   getTaskFileContent,
   openContainedFile,
-} from '../src/services/worktreeFileContent'
+} from '../src/modules/workspace-insight/application/fileContent'
 import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

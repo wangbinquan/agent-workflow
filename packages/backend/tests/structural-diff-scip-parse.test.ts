@@ -10,7 +10,7 @@ import {
   buildSymbolIndex,
   ScipParseError,
   type ScipDocument,
-} from '../src/services/structuralDiff/deep/scip'
+} from '../src/modules/workspace-insight/domain/deep/scip'
 
 const SYM = 'scip-typescript npm . . `a.ts`/A#foo().'
 

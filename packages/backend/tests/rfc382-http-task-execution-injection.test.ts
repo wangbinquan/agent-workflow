@@ -41,7 +41,10 @@ describeEachProvider('RFC-382 task bundle HTTP injection', (harness) => {
         bundle.routeLaunch.workgroup,
       )
       expect(bundle.readModels).toBe(bundle.persistence.reads)
-      expect(http.composition.taskExecution.tasks.taskExecutionReadModels).toBe(bundle.readModels)
+      // RFC-453: the route's only read-model use (call targets) moved into workspace-insight's composed contract,
+      // so the tasks route no longer takes the read models.
+      expect('taskExecutionReadModels' in http.composition.taskExecution.tasks).toBe(false)
+      expect(http.composition.taskExecution.tasks.workspaceInsight).toBeDefined()
       expect(collaboration.mock.calls[0]?.[0].context).toBe(bundle.collaboration)
       const seeded = await seedBundleTask(harness, home, 'running', false)
       const response = await http.app.request('/api/tasks', {

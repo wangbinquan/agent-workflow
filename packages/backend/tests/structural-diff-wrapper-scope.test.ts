@@ -4,7 +4,7 @@
 // extraction; the compute itself reuses computeFromWorktree (tested elsewhere).
 
 import { describe, expect, test } from 'bun:test'
-import { parseWrapperGitBaseline } from '../src/services/structuralDiff/service'
+import { parseWrapperGitBaseline } from '../src/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
 
 describe('parseWrapperGitBaseline', () => {
   test('git wrapper with a baseline commit → the commit', () => {

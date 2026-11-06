@@ -9,7 +9,7 @@ import {
   collectClassMembers,
   computeClassEdges,
   type ClassNode,
-} from '../src/services/structuralDiff/classGraph'
+} from '../src/modules/workspace-insight/domain/structuralDiff/classGraph'
 import type { FileStructuralDiff, SymbolNode } from '@agent-workflow/shared'
 
 const node = (key: string, name: string, file: string, a: number, b: number): ClassNode => ({

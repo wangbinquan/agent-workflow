@@ -240,7 +240,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
-    file: 'services/structuralDiff/callGraph/expandService.ts',
+    file: 'modules/workspace-insight/application/callGraph/callTargets.ts',
     match: '`${dir}/`',
     count: 1,
     why: 'operands are structural-diff symbol refs prefixed by repo mount labels, normalized to posix before they reach here',

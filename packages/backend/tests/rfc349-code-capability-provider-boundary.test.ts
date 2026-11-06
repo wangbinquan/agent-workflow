@@ -44,10 +44,35 @@ describe('RFC-349 code-capability provider boundary', () => {
       ...files(join(MODULE, 'public')),
       // RFC-439: the two code HTTP bindings moved from `routes/` into the module's inbound layer.
       ...files(join(MODULE, 'inbound')),
-      join(BACKEND, 'src', 'services', 'codeIntel', 'codeIntel.ts'),
-      join(BACKEND, 'src', 'services', 'codeIntel', 'fileSymbols.ts'),
-      join(BACKEND, 'src', 'services', 'changeNarrative.ts'),
-      join(BACKEND, 'src', 'services', 'structuralDiff', 'service.ts'),
+      // RFC-453: the code-review services moved into the workspace-insight module's application layer.
+      join(
+        BACKEND,
+        'src',
+        'modules',
+        'workspace-insight',
+        'application',
+        'codeIntel',
+        'codeIntel.ts',
+      ),
+      join(
+        BACKEND,
+        'src',
+        'modules',
+        'workspace-insight',
+        'application',
+        'codeIntel',
+        'fileSymbols.ts',
+      ),
+      join(BACKEND, 'src', 'modules', 'workspace-insight', 'application', 'changeNarrative.ts'),
+      join(
+        BACKEND,
+        'src',
+        'modules',
+        'workspace-insight',
+        'application',
+        'structuralDiff',
+        'taskStructuralDiff.ts',
+      ),
     ]
     expect(candidates.length).toBeGreaterThanOrEqual(10)
     const violations = providerMechanismViolations(

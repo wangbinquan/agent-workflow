@@ -10,7 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resetTarProbeForTests, tarAvailable } from '@/util/archive'
-import { isWindowsBatchShim } from '@/services/structuralDiff/deep/indexers'
+import { isWindowsBatchShim } from '@/modules/workspace-insight/domain/deep/indexers'
 import { isAbsolute, resolve, resolve as resolvePath, win32 } from 'node:path'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import {

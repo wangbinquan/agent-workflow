@@ -27,7 +27,7 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/modules/task-execution/application/recovery/autoResume.ts:175,207            隔离中的任务被 boot auto-resume 跳过
 //   packages/backend/src/services/task.ts:5455-5490                cascade=true 才把下游算进重铸集合
 //   packages/backend/src/services/task.ts:5384-5445                `__repo_prep__` 走自己的重试路径
-//   packages/backend/src/services/changeNarrative.ts:311-330       ready 从磁盘缓存读；404 = 按钮态
+//   packages/backend/src/modules/workspace-insight/application/changeNarrative.ts:314-327 ready 从磁盘缓存读；404 = 按钮态
 //   packages/backend/src/services/scheduler.ts:2123-2135           只读成员的脏检查落 readonly_dirty_count
 //
 // 与已落地的姊妹文件的边界（不重复造轮子）：

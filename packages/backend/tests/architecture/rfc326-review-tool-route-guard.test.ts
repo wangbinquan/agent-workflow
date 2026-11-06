@@ -141,16 +141,18 @@ function mountedReviewRoutes(): string[] {
 
 describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both directions', () => {
   test('route composition fails explicitly when required read/context owners are absent', async () => {
+    // RFC-453: the route's only read-model use (call targets) moved into workspace-insight's contract, so the task
+    // read models left the route's dependencies; the workspace queries are now its first required owner.
     expect(() =>
       Reflect.apply(mountTaskRoutes, undefined, [new Hono(), { configPath: '' }]),
-    ).toThrow('task-execution-read-models-not-composed')
+    ).toThrow('task-workspace-queries-not-composed')
 
     expect(() =>
       Reflect.apply(mountTaskRoutes, undefined, [
         new Hono(),
-        { configPath: '', taskExecutionReadModels: {} },
+        { configPath: '', workspaceQueries: {} },
       ]),
-    ).toThrow('task-workspace-queries-not-composed')
+    ).toThrow('task-route-operations-not-composed')
 
     expect(() => Reflect.apply(mountReviewRoutes, undefined, [new Hono(), undefined, ''])).toThrow(
       'collaboration-route-operations-not-composed',

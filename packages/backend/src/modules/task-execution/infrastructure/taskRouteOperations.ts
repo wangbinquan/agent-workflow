@@ -36,6 +36,7 @@ import {
 } from '@/modules/resource-catalog/public/queries'
 
 import {
+  canonicalRepoKeysWire,
   CommitPushMetaSchema,
   NodeRunEventsResponseSchema,
   NodeRunSchema,
@@ -163,9 +164,11 @@ import {
   rollbackNodeRunWorktrees,
   snapshotMissingDetail,
 } from '@/services/nodeRollback'
-import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { canViewResource } from '@/services/resourceAcl'
-import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
+import {
+  compareNodeRunsForTimeline,
+  deriveReviewRoundTiming,
+} from '../application/reviewRoundTiming'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import {
   computeWorkflowSyncPreview,

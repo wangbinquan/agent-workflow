@@ -11,7 +11,10 @@
 // 彻底丢失方位——agent 拿到 `utils-2` 不知道该去哪个目录。
 
 import { describe, expect, test } from 'bun:test'
-import { mergeStructuralDiffs, prefixIdPath } from '@/services/structuralDiff/assemble'
+import {
+  mergeStructuralDiffs,
+  prefixIdPath,
+} from '@/modules/workspace-insight/engine/structuralDiff/assemble'
 import type { StructuralDiff } from '@agent-workflow/shared'
 
 /** 最小可用的单文件结构化 diff 夹具。 */
