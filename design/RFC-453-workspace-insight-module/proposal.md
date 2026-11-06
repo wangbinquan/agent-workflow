@@ -1,6 +1,6 @@
 # RFC-453 workspace-insight 一族归新模块 workspace-insight（RFC-294 W4 B / D 第十八步、E5）
 
-- **状态**：In Progress（2026-11-05）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-05，`6fb219f5b`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 B / D、E5（workspace-insight）
 - **前序**：[RFC-452](../RFC-452-task-recovery-and-diagnostics-into-task-execution/proposal.md)（`tasks` 路由只余 workspace-insight 一族 7 处 `services/` import）。

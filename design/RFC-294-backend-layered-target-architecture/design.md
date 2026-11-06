@@ -476,7 +476,9 @@ RFC-310 的 development effect journal 是领域恢复，不计作 AtomicApply �
 - **runtime-management**：profile / probe / diagnostic 与 runtime 选择（RFC-360 已落）。
 - **run-observability**：按 RFC-371 v2 形态保持：一次调用一行、按需聚合；它消费的任务事实端口作为 required 端口登记。
 - **workspace-insight**：从 `services/structuralDiff/`、`services/codeIntel/`、`services/changeNarrative.ts` 抽成模块，并接管
-  `code-capability` 的 `codeWorkspaceRead` 端口。
+  `code-capability` 的 `codeWorkspaceRead` 端口。（2026-11-05 [RFC-453](../RFC-453-workspace-insight-module/proposal.md) 完成模块抽取，
+  code-capability 的 code-review 产物存储一并迁入；`codeWorkspaceRead` 已不存在，任务代码工作区查询由 task-execution 的
+  `TaskCodeWorkspaceQueries`（`public/types`）提供，本模块经它读。）
 - **system-operations**：备份 / 恢复编排与执行权端口；物理恢复 generation 协议（W9-E）按 provider 能力分别实现。
 - **digital-employee / event-center / execution-contract / development-automation**：保持 RFC-310 的四域分工；development-automation
   的真实 SPI 由可选袋拆为按用例、非可选的 required 端口；无实现无调用的声明删除。

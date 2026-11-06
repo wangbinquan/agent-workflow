@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-453 workspace-insight 一族归新模块 workspace-insight（In Progress；`design/RFC-453-workspace-insight-module/`）
+## 2026-11-05 RFC-453 workspace-insight 一族归新模块 workspace-insight（Done；`design/RFC-453-workspace-insight-module/`）
 
 - **来由**：RFC-294 W4 B / D 第十八步、E5（RFC-452 后 `tasks` 是唯一 import `services/` 的路由，余 workspace-insight 一族 7 处）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -14,6 +14,19 @@
 - **不做**：分析算法与 UI；E5 设想的持久化叙述作业与洞察失效事件；`services/runtime`（W5）；code-capability 兼容岛的其余部分。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-452 的 Done 文档提交 `05b746aa4`：exact SHA 主 CI run 42140853784 首轮全绿（70 个 job）。
+- **落地**：`6fb219f5b`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修：迁入 domain 的 `languages.ts` 带着 `extname`（`node:path` 是 domain 禁包，`R2`
+  账本多一条，tsc / eslint 看不见；改用纯字符串取扩展名并锁与原 posix `extname` 逐例相同，记入 `docs/dev-gotchas.md`）、RFC-370 V16
+  的路由装配锁仍按已删除的 `codeReview` 依赖断言（改为两个新依赖各报各的错误码）。全量 SQLite 23404 pass，其余为负载超时、上述两处与
+  导出仓库所致的 `rfc321`；修复后受影响面 199 个文件 1906 pass / 0 fail；PostgreSQL 396 个文件的 lane 修复后超时文件补预算复跑 734 pass；
+  P0 两引擎各 17 阶段通过（PostgreSQL 一侧在负载降下来后单独重跑）。RFC-167 dw-confirm 的 `approve` 一例、RFC-363 的大目录分页一例与
+  RFC-395 V2 / V3 三个文件的自带时限用例在本机负载下仍到点，同一时刻在 RFC-452 导出仓库里同样到点（与本 RFC 无关）。计数：`services/`
+  187 → 153，import `services/` 的路由 1 → 0（B / D 退出门达成：`routes/`、`mcp/`、`ws/` 都不 import `services/`、不深引模块内部），
+  `R1` 148 / `R2` 33 不变，架构 counts 只有 legacy 两项各 −34。
+- **CI**：exact SHA 主 CI run 42156306149 首轮全绿（70 个 job）；windows-platform run 42156306183 与同 SHA 的 maintenance-soak 夜间
+  run 42156306405 随本提交触发并全绿。
+- **下一步**：W4 余项（E1、E5 的目标合同、E8、E9、E10）、W5 与 W9-C / E / D；`services/` 余 153 个文件，`R1` 148 条里 135 条出自
+  `services/`、`R2` 33 条——下一个 RFC 从中选一族归其 owner 模块。
 
 ## 2026-11-05 RFC-452 任务恢复与诊断家族归 task-execution（Done；`design/RFC-452-task-recovery-and-diagnostics-into-task-execution/`）
 

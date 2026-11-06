@@ -18,10 +18,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 旧文件删除、零引用；`routes/` → `services/` 为 0；source-control 不取 workspace-insight；平台 → 模块仍为 0
-- [ ] AC-2 架构计数不升（off-DAG 值边 0、值环 0、application 直接副作用文件不增、跨 context 内部文件对不增）；`R1` / `R2` 不增
-- [ ] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 旧文件删除、零引用；`routes/` → `services/` 为 0；source-control 不取 workspace-insight；平台 → 模块仍为 0
+- [x] AC-2 架构计数不升（off-DAG 值边 0、值环 0、application 直接副作用文件不增、跨 context 内部文件对不增）；`R1` / `R2` 不增
+- [x] AC-3 受影响用例与新增用例全部通过
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-05，候选基于 `05b746aa4`）
 
@@ -81,6 +81,12 @@
   目标用调用图读模型与修订内容，叙述状态用选定的产物存储）；
 - 其余装配根只改 import 来源（同一组函数）；
 - 集中验证查出的两处问题（见上）已修并复验。
+
+## CI（AC-4）
+
+`6fb219f5b`：exact SHA 主 CI run 42156306149 首轮全绿（70 个 job）；windows-platform run 42156306183（workflow 自身、装配根、
+source-control 的本机修订内容与叙述用例等触发清单里的文件）与同 SHA 的 maintenance-soak 夜间 run 42156306405（`daemonApplication.ts`）
+随本提交触发并全绿。
 
 ## PR / 提交
 
