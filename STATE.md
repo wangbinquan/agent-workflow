@@ -1,4 +1,4 @@
-## 2026-11-05 RFC-452 任务恢复与诊断家族归 task-execution（In Progress；`design/RFC-452-task-recovery-and-diagnostics-into-task-execution/`）
+## 2026-11-05 RFC-452 任务恢复与诊断家族归 task-execution（Done；`design/RFC-452-task-recovery-and-diagnostics-into-task-execution/`）
 
 - **来由**：RFC-294 W4 B / D 第十七步（RFC-451 后只剩 `tasks` 路由 import `services/`，14 处分两族：任务诊断与恢复 7 处、workspace-insight 7 处）。
   用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -15,6 +15,18 @@
 - **不做**：workspace-insight 一族（下一个 RFC）；`services/runtime`（W5）；`services/daemonCadence`；恢复循环的重新设计。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-451 的 Done 文档提交 `46f7160bb`：exact SHA 主 CI run 42108906335 首轮全绿（70 个 job）。
+- **落地**：`4f0ede4c5`。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修：模块求值环（barrel 导出诊断装配 → 会话树读端经本模块 `public/participants`
+  取值 → 回到 barrel，72 个文件在 PostgreSQL lane 加载即报 TDZ，tsc / eslint 看不见；改直取声明处，记入 `docs/dev-gotchas.md`）、装配里起初
+  带着编排与运行期「未装配」检查（`rfc423` / `rfc359-w5-t19b` 报出，编排迁入 application、依赖改必填）、`services/eventsArchive` 成了不可达
+  文件（删除）、`windows-platform` 触发清单的 4 个旧路径（RFC-451 的守卫报出）。全量 SQLite 23392 pass，其余为负载超时、导出仓库所致的
+  `rfc321` 与一条跑在装配重构同步前的守卫；最终内容上另跑 234 个文件 2216 pass；接 PostgreSQL 修复后超时文件补预算复跑全过；P0 两引擎各
+  17 阶段通过。RFC-363 的大目录分页一例、RFC-167 dw-confirm 的 `approve` 一例与 RFC-359 W6-T26 计划审计的 600 秒准备钩子在本机负载下仍到点，
+  同一时刻在 RFC-451 导出仓库里同样到点（与本 RFC 无关）。
+- **CI**：exact SHA 主 CI run 42136284144 首轮全绿（70 个 job）；windows-platform run 42136284181、integration-opencode run 42136284197、
+  git-protocols-e2e run 42136284147 随本提交触发并全绿；同 SHA 的 maintenance-soak 夜间 run 42136284202 与 visual-regression 夜间
+  run 42136284234 全绿。
+- **下一步**：B / D 余下 1 个路由：task-execution（`tasks`，余 workspace-insight 一族 7 处 `services/` import）——RFC-453。
 
 ## 2026-11-05 RFC-451 仓库镜像缓存家族归 source-control（Done；`design/RFC-451-repository-mirror-cache-into-source-control/`）
 

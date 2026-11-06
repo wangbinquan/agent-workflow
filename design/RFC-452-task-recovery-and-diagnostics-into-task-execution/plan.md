@@ -16,10 +16,10 @@
 
 ## 验收清单
 
-- [ ] AC-1 17 个旧文件删除、零引用；`tasks` 路由不再 import 诊断 / 恢复 7 个模块；平台 → 模块仍为 0
-- [ ] AC-2 计数按实测更新（`services/` 205 → 187，`R1` 166 → 148，`R2` 35 → 33）
-- [ ] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-1 17 个旧文件删除、零引用；`tasks` 路由不再 import 诊断 / 恢复 7 个模块；平台 → 模块仍为 0
+- [x] AC-2 计数按实测更新（`services/` 205 → 187，`R1` 166 → 148，`R2` 35 → 33）
+- [x] AC-3 受影响用例与新增用例全部通过（本机负载下的超时逐个复跑或同刻对照，见下）
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-05，候选基于 `46f7160bb`）
 
@@ -77,6 +77,12 @@
 - 装配根经 barrel 取的不变量扫描、卡死检测与优雅关停是同一组函数；`daemonSession` 原来在关停时动态 import `L/shutdown`，现在从它本就
   静态 import 的同一 barrel 取，关停流程不变；
 - 集中验证查出的四处问题（见上）已修并复验。
+
+## CI（AC-4）
+
+`4f0ede4c5`：exact SHA 主 CI run 42136284144 首轮全绿（70 个 job）；windows-platform run 42136284181、integration-opencode run 42136284197、
+git-protocols-e2e run 42136284147 随本提交触发并全绿；同 SHA 的 maintenance-soak 夜间 run 42136284202（触发清单改指的
+`systemEventsArchive.ts`）与 visual-regression 夜间 run 42136284234（前端 `RecoverySection.tsx` 的注释）全绿。
 
 ## PR / 提交
 
