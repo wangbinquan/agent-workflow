@@ -19,7 +19,7 @@
 - [x] AC-1 三个旧文件不在、零引用；owner 名实现只在 resource-catalog；保留表只有一份
 - [x] AC-2 架构计数按实测（`services/` 82 → 79、`R1` 101 → 99、`R2` 不变），越界类计数与 public surface 偏差不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-06，候选基于 `3354e7573`）
 
@@ -68,6 +68,10 @@
   `public/participants` 取 acquire / release；新用例断言两边是同一个函数、读写同一张表，引用计数行为不变；
 - identity-access 删去的两条再导出在 identity-access 之外只有已删的 `services/ownerScopedName.ts` 与改指的用例在用（tsc 兜底）；
 - 身份门面迁入用例 helper 后 7 个用例改取 helper，`rfc212` 的锚点随之改指，断言内容不变。
+
+## CI（AC-4）
+
+- `6f47af807`：exact SHA 主 CI run 42308388906 首轮全绿（70 个 job，含 macOS e2e 四个分片）；同 SHA 的 windows-platform 与 integration-opencode 未触发（两份路径过滤都未命中本 RFC 的改动）。
 
 ## PR / 提交
 

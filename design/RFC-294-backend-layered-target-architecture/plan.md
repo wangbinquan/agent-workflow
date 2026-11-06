@@ -53,7 +53,7 @@
 | W6      | Done（2026-11-02，S7）                                         | RFC-395 T10 合成唯一状态机 `platform/atomic-apply`；RFC-401 合一资源写入栈（六类资源各一个写入参与者）、三入口错误收敛、持久 claim / lease，技能 / fusion / restore 接入，旧技能 operation 生命周期删除 |
 | W7      | Done（2026-10-31 核销）                                         | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴由 RFC-395 交付，逐条核对见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)                                                                                                                                                                             |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                                                                                                             |
-| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84；2026-11-06 RFC-458（W9-D 第五步）：信封解析器归 shared、`services/` 84 → 82                     |
+| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84；2026-11-06 RFC-458（W9-D 第五步）：信封解析器归 shared、`services/` 84 → 82；2026-11-06 RFC-459（W9-D 第六步）：owner 作用域名与代理启动保留归 resource-catalog、`services/` 82 → 79                     |
 
 ### 1.2 已关闭后继索引
 
@@ -571,6 +571,12 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   domain。`services/` 84 → 82、`legacy-service-implementations` 79 → 77、`R1` 108 → 101、`R2` 27 → 23，越界类计数与 public surface 不变。
   下一步按 `R1` 大头：`resourceAcl`（RFC-345 继任合同）、`nodeRunMint` / `systemAgentRun`（系统 agent 运行端口）、`developmentDeliveryDeps`、
   `commitPushRunner`（source-control public）、`nodeRollback`（task-execution 回滚 participant）。
+- **2026-11-06 W9-D 第六步**（[RFC-459](../RFC-459-resource-catalog-owner-name-and-launch-reservation/proposal.md)）：owner
+  作用域名的谓词与冲突判定从 identity-access / `services/` 收回唯一的生产使用者 resource-catalog，代理启动保留表进 resource-catalog
+  application、task-execution 经 `public/participants` 取，只剩用例在用的身份门面迁入用例 helper。`services/` 82 → 79、
+  `legacy-service-implementations` 77 → 74、`R1` 101 → 99、`R2` 23 不变、不可达生产文件 27 → 26，越界类计数不变（public surface
+  identity-access −1、resource-catalog +2，偏差数不变）。下一步：intent / memory application 层经 `services/` 转手的纯件（调用目标
+  选择、运行期引用解析、信封 nonce）。
 
 ## 5. 依赖顺序
 

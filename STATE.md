@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-459 owner 作用域名与代理启动保留归 resource-catalog（In Progress；`design/RFC-459-resource-catalog-owner-name-and-launch-reservation/`）
+## 2026-11-06 RFC-459 owner 作用域名与代理启动保留归 resource-catalog（Done；`design/RFC-459-resource-catalog-owner-name-and-launch-reservation/`）
 
 - **来由**：RFC-294 W9-D 第六步。owner 作用域名的谓词与冲突判定实现在 identity-access、自己不用，唯一的生产使用者 resource-catalog 经
   `services/ownerScopedName.ts` 转手越界取它；代理启动保留表在 `services/`，task-execution 写、resource-catalog 的删除守卫读；
@@ -19,6 +19,12 @@
   `legacy-service-implementations` 77 → 74、不可达生产文件 27 → 26、`R1` 101 → 99、`R2` 23 不变；public surface 1487 → 1488（identity-access
   −1、resource-catalog +2，偏差数不变）；没有跨 context 消费方的 public 符号 322 → 323（identity-access 的 `OidcIdentityProfileAccess` 唯一的
   跨 context 消费方是迁出的身份门面；不设门，记为债），其余架构 counts 不变。
+- **落地**：`6f47af807`。
+- **CI**：exact SHA 主 CI run 42308388906 首轮全绿（70 个 job，含 macOS e2e 四个分片）；同 SHA 的 windows-platform 与 integration-opencode 未触发（两份路径过滤都未命中本 RFC 的改动）。
+- **下一步**：RFC-294 W9-D 余项（`services/` 79 个文件）。先收 intent / memory application 层经 `services/` 转手的纯件（call 选择器的
+  绑定判据、RuntimeRef 域 resolver、信封 nonce 与 seed 文件类型）；随后是运行时驱动一族（`services/runtime/**`，先重画 task-execution ↔
+  runtime-management 的驱动接缝）、application 层的 WS 推送改经端口、`R1` 大头（`resourceAcl`、`services/task.ts`、`nodeRunMint`、
+  `developmentDeliveryDeps`、`commitPushRunner`、`nodeRollback`）。
 
 ## 2026-11-06 RFC-458 workflow-output 信封解析器归 shared（Done；`design/RFC-458-envelope-parser-to-shared/`）
 
