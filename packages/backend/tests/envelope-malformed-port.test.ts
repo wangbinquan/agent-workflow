@@ -14,7 +14,7 @@
 // 字面 <port name= 时端口仍正常闭合、NOT malformed。
 
 import { describe, expect, test } from 'bun:test'
-import { parseEnvelope } from '../src/services/envelope'
+import { parseEnvelope } from '@agent-workflow/shared'
 
 describe('parseEnvelope malformedPorts — 未闭合/损坏端口检测', () => {
   test('用户场景：单端口 </port> 被污染成 </|DSML|port> → malformedPorts 命中、内容空、同时进 missingDeclared', () => {

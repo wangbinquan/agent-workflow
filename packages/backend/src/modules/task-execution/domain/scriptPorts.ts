@@ -24,8 +24,9 @@ import {
   SCRIPT_DEFAULT_OUTPUT_PORT,
   type ScriptFailureCode,
   type WorkflowNode,
+  extractLastEnvelope,
+  parseEnvelope,
 } from '@agent-workflow/shared'
-import { extractLastEnvelope, parseEnvelope } from './envelope'
 
 export type ScriptPortExtraction =
   | {

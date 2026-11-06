@@ -74,10 +74,12 @@ import {
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
   parseEnvelope,
+} from '@agent-workflow/shared'
+import {
   PortValidationError,
   serializePortValidationFailures,
   type PortValidationFailure,
-} from '@/services/envelope'
+} from './portOutputValidation'
 import { isPathishKindString } from '@/modules/task-execution/public/queries'
 
 import type { PortArtifactWorkspaceFile } from '@/modules/task-execution/public/types'

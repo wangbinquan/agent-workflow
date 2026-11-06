@@ -10,7 +10,7 @@ import {
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
   parseEnvelope,
-} from '../src/services/envelope'
+} from '@agent-workflow/shared'
 
 const N = 'abc123'
 

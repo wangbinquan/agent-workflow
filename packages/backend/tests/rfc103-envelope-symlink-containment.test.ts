@@ -8,7 +8,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolvePortContent } from '../src/services/envelope'
+import { resolvePortContent } from '../src/modules/task-execution/composition/portOutputValidation'
 import { ValidationError } from '../src/util/errors'
 
 describe('RFC-103 T7 端口 symlink realpath 包含', () => {

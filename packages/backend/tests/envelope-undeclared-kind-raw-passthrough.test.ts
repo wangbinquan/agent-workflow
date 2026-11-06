@@ -13,7 +13,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolvePortContent, resolvePortContentDetailed } from '../src/services/envelope'
+import {
+  resolvePortContent,
+  resolvePortContentDetailed,
+} from '../src/modules/task-execution/composition/portOutputValidation'
 
 describe('RFC-049 PR-B kind=undefined raw passthrough contract', () => {
   let worktree: string

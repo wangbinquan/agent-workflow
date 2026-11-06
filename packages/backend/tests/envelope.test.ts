@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { extractLastEnvelope, parseEnvelope } from '../src/services/envelope'
+import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 
 describe('extractLastEnvelope', () => {
   test('returns null when no envelope present', () => {

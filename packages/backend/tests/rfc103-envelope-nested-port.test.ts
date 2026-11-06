@@ -7,7 +7,7 @@
 // ② 重复 port 名「后者胜出」；③ extractLastEnvelope「最后一个 envelope 胜出」
 // 不被破坏；④ 负向：内容含字面 <port name= 时按文档残留限制 mis-frame（协议禁止）。
 import { describe, expect, test } from 'bun:test'
-import { parseEnvelope, extractLastEnvelope } from '../src/services/envelope'
+import { parseEnvelope, extractLastEnvelope } from '@agent-workflow/shared'
 
 describe('RFC-103 T6 parseEnvelope — 容器化端口边界', () => {
   test('端口内容含字面 </port> 被完整保留（不再截断）', () => {

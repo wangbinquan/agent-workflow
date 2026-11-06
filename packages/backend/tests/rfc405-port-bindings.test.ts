@@ -19,7 +19,8 @@ import {
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '@/modules/task-execution/domain/clarifyRules'
-import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
+import { CLARIFY_FORBIDDEN_PREFIX } from '@agent-workflow/shared'
+import { parsePortValidationFailuresJson } from '@/modules/task-execution/application/portOutputValidation'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'

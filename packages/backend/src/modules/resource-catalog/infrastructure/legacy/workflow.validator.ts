@@ -1549,7 +1549,7 @@ export function validateWorkflowDef(
         })
       }
       seenPorts.add(port.name)
-      // RFC-253 T43 / AC-40: `PORT_OPEN_RE` (services/envelope.ts) accepts
+      // RFC-253 T43 / AC-40: `PORT_OPEN_RE` (shared workflowOutputEnvelope.ts) accepts
       // `name="…"` or `name='…'`, so a name holding BOTH quote characters fits
       // inside neither form — no script could ever emit it, and the node would
       // fail `script-port-missing` on every single run. Refused at save time

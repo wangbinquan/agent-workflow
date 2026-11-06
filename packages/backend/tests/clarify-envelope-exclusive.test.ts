@@ -17,7 +17,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 
 import { describe, expect, test } from 'bun:test'
 
-import { detectEnvelopeKind } from '../src/services/envelope'
+import { detectEnvelopeKind } from '@agent-workflow/shared'
 
 describe('clarify ↔ output envelopes are exclusive-or per reply', () => {
   test('stdout with BOTH envelopes is detected as "both" (caller must reject)', () => {

@@ -77,7 +77,7 @@ describe('script node validation', () => {
     )
   })
 
-  // T43 / AC-40. `PORT_OPEN_RE` (services/envelope.ts) reads `name="…"` OR
+  // T43 / AC-40. `PORT_OPEN_RE` (shared workflowOutputEnvelope.ts) reads `name="…"` OR
   // `name='…'`; a name carrying both quotes fits in neither, so no script can
   // emit that port and every run ends in `script-port-missing`. A guaranteed
   // runtime failure belongs at save time.

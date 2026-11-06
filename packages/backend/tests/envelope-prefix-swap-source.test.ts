@@ -32,8 +32,10 @@ import { join } from 'node:path'
 
 // RFC-370 moved the complete validation policy and file effects out of the
 // compatibility facade. Keep every original assertion over those actual owners.
+// RFC-458: the parser moved to shared and the port-content wrappers to task-execution composition.
 const ENVELOPE_SRC = [
-  '../src/services/envelope.ts',
+  '../../shared/src/workflowOutputEnvelope.ts',
+  '../src/modules/task-execution/composition/portOutputValidation.ts',
   '../src/modules/task-execution/application/portOutputValidation.ts',
   '../src/modules/task-execution/infrastructure/local/filePortOutputValidation.ts',
 ]

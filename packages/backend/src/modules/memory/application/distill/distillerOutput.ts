@@ -8,7 +8,7 @@
 // 输入是**已规范化的 assistant 文本**（`runSystemAgent` 的 `eventText`），不是 stdout：
 // 逐行 `driver.parseEvent` 的规范化只有 pump 一个 owner，这里不再做第二遍。
 
-import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
+import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 
 export interface RawCandidate {
   scopeType: 'agent' | 'workflow' | 'repo' | 'global'

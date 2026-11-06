@@ -10,10 +10,10 @@ import {
 import type { PortOutputValidationContent } from '@/modules/task-execution/application/ports/portOutputValidation'
 import {
   NODE_VALIDATE_IO,
-  PortValidationError,
   resolvePortContent,
   resolvePortContentDetailed,
-} from '@/services/envelope'
+} from '@/modules/task-execution/composition/portOutputValidation'
+import { PortValidationError } from '@/modules/task-execution/application/portOutputValidation'
 
 function held<T>() {
   let release!: (value: T) => void

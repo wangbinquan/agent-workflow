@@ -21,7 +21,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { NODE_VALIDATE_IO } from '../src/services/envelope'
+import { NODE_VALIDATE_IO } from '../src/modules/task-execution/composition/portOutputValidation'
 import { existsInsideRoot, readInsideRoot } from '@/platform/content/local/rootFileQueries'
 
 let base: string

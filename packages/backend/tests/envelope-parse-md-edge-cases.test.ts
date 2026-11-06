@@ -3,14 +3,15 @@
 //
 // 5 attack vectors covered, plus the happy path and a no-op for legacy
 // `string` ports. If this goes red, check
-// packages/backend/src/services/envelope.ts:resolvePortContent — silent
+// packages/backend/src/modules/task-execution/composition/portOutputValidation.ts:resolvePortContent — silent
 // rewrites of the containment logic regress remote-code-read.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolvePortContent, parseEnvelope, extractLastEnvelope } from '../src/services/envelope'
+import { resolvePortContent } from '../src/modules/task-execution/composition/portOutputValidation'
+import { parseEnvelope, extractLastEnvelope } from '@agent-workflow/shared'
 import { ValidationError } from '../src/util/errors'
 
 describe('RFC-005 resolvePortContent', () => {

@@ -27,7 +27,7 @@ import {
   scriptEnvSuffix,
   type ScriptLanguage,
 } from '@agent-workflow/shared'
-import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
+import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 import { INTERPRETER_SPEC } from '@/platform/execution/local/scriptInterpreter'
 

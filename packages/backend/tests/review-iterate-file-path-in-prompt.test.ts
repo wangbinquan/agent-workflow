@@ -19,7 +19,7 @@ import { withO2Closure } from './helpers/o2Closure'
 //     → buildReviewPromptContext returns it via decisionReason
 //     → scheduler/runner inject it into the upstream re-run prompt.
 //
-// If this goes red, see services/envelope.ts (resolvePortContentDetailed),
+// If this goes red, see task-execution composition/portOutputValidation.ts (resolvePortContentDetailed),
 // services/review.ts (createDocVersion + renderCommentsForPrompt +
 // submitReviewDecision), and the doc_versions schema migration that adds
 // the source_file_path column.

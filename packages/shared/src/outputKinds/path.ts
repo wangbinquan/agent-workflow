@@ -19,7 +19,7 @@
 // out without touching call sites.
 //
 // 现状（RFC-317 T66 按源码订正）：**已接入 runtime**——本 handler 注册在
-// `registry.ts:149` 的 PARAMETRIC_HANDLERS 里，`services/envelope.ts:652`
+// `registry.ts:149` 的 PARAMETRIC_HANDLERS 里，task-execution `application/portOutputValidation.ts` 的 `portOutputValidationPolicy`
 // 对每个声明端口调 `getHandlerForParsedKind` 派发到它。原注释写的是
 // 「not yet called by runtime」。
 // 仍未兑现的只有 markdownFile.ts 的删除——该文件今天还在

@@ -15,7 +15,7 @@ import {
   detectEnvelopeKind,
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
-} from '../src/services/envelope'
+} from '@agent-workflow/shared'
 
 const NONCE = 'aw-nonce-0123456789abcdef'
 

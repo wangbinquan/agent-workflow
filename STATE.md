@@ -1,3 +1,25 @@
+## 2026-11-06 RFC-458 workflow-output 信封解析器归 shared（In Progress；`design/RFC-458-envelope-parser-to-shared/`）
+
+- **来由**：RFC-294 W9-D 第五步。`services/envelope.ts` 装着信封解析器（纯字符串处理）与 task-execution 的端口内容包装、校验失败形状两件事；
+  解析器留在 `services/` 让 intent / memory / task-execution 的 application 层取 `@/services/envelope`（`R2` 4 条），文件自己又取
+  task-execution 内部（`R1` 7 条）；协议的渲染半边（`envelopeOpenTag`、反问体解析、缺信封分类、脚本片段）早在 shared。用户 2026-11-02
+  「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：解析器进 `packages/shared/src/workflowOutputEnvelope.ts`（shared 入口导出）；校验失败的 JSON 形状进 task-execution
+  `application/portOutputValidation.ts`，`resolvePortContent{,Detailed}` 进 `composition/portOutputValidation.ts`；`scriptPorts` 进
+  task-execution `domain`。函数体原样；消费方按导出名分流。
+- **不做**：`commitPush` / `commitPushRunner`（执行器取 source-control composition，随 source-control 一族）；其余 `R2` 来源。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-457 的 Done 文档提交 `f3540d4ea`（`390ab1228` 的直接后继，只改 5 个文档文件）：主 CI run 42254803990 的 70 个 job 里 66 个
+  通过；macOS e2e 分片 1/4、3/4、4/4 同样没拿到托管 runner（「not acquired by Runner of type hosted」，一步都没跑），分片 2/4 与 macOS 的
+  单二进制 build smoke 通过。与 `390ab1228` 自己的 run 合起来，只有 macOS e2e 分片 1/4 两次都没跑上（同一批用例在 windows 分片 1/4 与 ubuntu 的三个分片里两次都过），
+  由下一次提交（本 RFC）的 CI 补跑；GitHub 托管 runner 容量所致，未重跑。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。静态：backend / shared / frontend 的 tsc 0 错，eslint 无告警；shared 包用例
+  2344 pass。全量 SQLite 23454 pass，其余为负载超时（21 个文件）与导出仓库所致的 `rfc321`；复跑 21 个文件只剩 RFC-167 `approve` 与 RFC-363
+  目录分页各一例（同一时刻在 RFC-457 导出仓库里同样到点）；PostgreSQL 556 个文件的 lane 只有超时与 `rfc321`，复跑 41 个文件只剩
+  `review-detail-render-rfc158` 自带 20 秒的一例（对照两边相同）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/`
+  84 → 82、`legacy-horizontal-files` 205 → 203、`legacy-service-implementations` 79 → 77、`R1` 108 → 101、`R2` 27 → 23，其余架构 counts
+  不变（public surface 不变：shared 的新导出不是模块 public 面）。
+
 ## 2026-11-06 RFC-457 `services/` 的平台机制归 `platform`（Done；`design/RFC-457-services-platform-mechanisms/`）
 
 - **来由**：RFC-294 W9-D 第四步。RFC-456 后 `services/` 93 个文件，其中 9 个是与业务无关的平台机制（后台节奏与相位表、维护 ticker、原始库

@@ -262,7 +262,7 @@ export const SCRIPT_SNIPPET_PLACEHOLDER = 'TODO'
 
 /**
  * A port name that can never appear in an envelope: `PORT_OPEN_RE`
- * (`services/envelope.ts`) accepts `name="…"` or `name='…'`, and a name holding
+ * (`workflowOutputEnvelope.ts`) accepts `name="…"` or `name='…'`, and a name holding
  * BOTH quote characters fits inside neither. Declaring one guarantees
  * `script-port-missing` on every single run, so the validator refuses it at
  * save time (AC-40) — the generator stays defensive anyway, since a definition

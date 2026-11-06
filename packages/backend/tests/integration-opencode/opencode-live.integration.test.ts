@@ -35,7 +35,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { detectEnvelopeKind, extractLastEnvelope, parseEnvelope } from '@/services/envelope'
+import { detectEnvelopeKind, extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 import {
   accumulateTokens,
   extractTextFromEvent,

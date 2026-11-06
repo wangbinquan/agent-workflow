@@ -1,5 +1,5 @@
 // RFC-023 PR-B T8 — locks the contract of detectEnvelopeKind +
-// extractClarifyEnvelopeBody inside services/envelope.ts. These two helpers
+// extractClarifyEnvelopeBody inside shared workflowOutputEnvelope.ts. These two helpers
 // are what runner.ts pivots on to decide whether the agent reply ought to be
 // parsed as a normal <workflow-output> (write port outputs as today) or as
 // the new <workflow-clarify> envelope (hand off to ClarifyService).
@@ -9,7 +9,7 @@
 // guard so the rule survives any future cleanup of this file.
 
 import { describe, expect, test } from 'bun:test'
-import { detectEnvelopeKind, extractClarifyEnvelopeBody } from '../src/services/envelope'
+import { detectEnvelopeKind, extractClarifyEnvelopeBody } from '@agent-workflow/shared'
 
 describe('detectEnvelopeKind', () => {
   test('returns "none" when stdout has neither envelope', () => {

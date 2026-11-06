@@ -63,7 +63,7 @@ CS RFC-042 数据库恢复 Job 另注入 `CS_DATABASE_RESTORE_REFERENCE`（托�
 `AW_ITERATION`、`AW_SHARD_KEY`、`AW_RUN_DIR`、`AW_INPUT_DIR`、`AW_DEPS_DIR`、
 `AW_OUTPUT_MODE`、`AW_REPOS_JSON`、`AW_PORT_NAMES`、`AW_PORT_<NAME>`、
 `AW_PORT_FILE_<NAME>`（大端口落盘间接层，`packages/shared/src/scriptNode.ts`）、
-`AW_PORT_MY_PORT`（同上，保留名）、`AW_PORT_DIFF`（`backend/src/services/scriptPorts.ts`，
+`AW_PORT_MY_PORT`（同上，保留名）、`AW_PORT_DIFF`（`backend/src/modules/task-execution/domain/scriptPorts.ts`，
 diff 端口的免拷贝特例）、`AW_PORT_PROMPT`（RFC-310 PR-11 数字员工 program 步骤：合成的
 script host 快照只有 `prompt` 一个输入端口，程序从这里拿平台提示词——见
 `backend/src/modules/task-execution/domain/digitalEmployeeHost.ts`）、`AW_PORT_CONTRACT_INPUT` /

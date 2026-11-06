@@ -1,5 +1,5 @@
 import type { TaskMechanicsState } from './taskMechanicsState'
-import { extractScriptPorts } from '@/services/scriptPorts'
+import { extractScriptPorts } from '../domain/scriptPorts'
 import type { ScriptNodeExecutionPorts } from '../application/ports/scriptNodeExecution'
 import { resolveUpstreamInputs } from '../application/nodeInputs'
 import { resolveSchedulerRunRow } from '../application/resolveSchedulerRunRow'

@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { createAgentNodeExecutionPorts } from '@/modules/task-execution/composition/agentNodeExecution'
 import { buildNodeExecutionWorkgroupHooks } from '@/modules/task-execution/composition/nodeExecution'
 import { ORCHESTRATOR_AGENT_ID } from '@/modules/task-execution/domain/orchestratorAgentIdentity'
-import { CLARIFY_FORBIDDEN_PREFIX } from '@/services/envelope'
+import { CLARIFY_FORBIDDEN_PREFIX } from '@agent-workflow/shared'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 
 type Calls = Record<string, unknown[]>

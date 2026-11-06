@@ -1,5 +1,5 @@
 // RFC-306 — locks the branch-activation judgment table (domain/branchActivation)
-// and the envelope-level branch marker parsing (services/envelope).
+// and the envelope-level branch marker parsing (shared workflowOutputEnvelope).
 //
 // Why these two live in one file: they are the two halves of "did the author
 // close this branch?" — the wire form and the graph rule. A regression in either
@@ -17,7 +17,7 @@ import {
   resolveNodeActivation,
   type EdgeActivation,
 } from '../src/modules/task-execution/domain/branchActivation'
-import { parseEnvelope, readPortActiveAttr } from '../src/services/envelope'
+import { parseEnvelope, readPortActiveAttr } from '@agent-workflow/shared'
 
 const active: EdgeActivation = { kind: 'active' }
 const inactive: EdgeActivation = { kind: 'inactive', reason: 'port-inactive' }

@@ -5,7 +5,7 @@
 // doc_versions.source_file_path so renderCommentsForPrompt can cite the
 // file the comments target in the iterate re-run prompt.
 //
-// If this goes red, see packages/backend/src/services/envelope.ts. The
+// If this goes red, see packages/backend/src/modules/task-execution/composition/portOutputValidation.ts. The
 // security boundary (containment / passthrough behavior) is locked
 // separately by envelope-parse-md-edge-cases.test.ts and
 // envelope-resolve-port-md-path.test.ts; this file focuses on the
@@ -15,7 +15,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolvePortContentDetailed } from '../src/services/envelope'
+import { resolvePortContentDetailed } from '../src/modules/task-execution/composition/portOutputValidation'
 
 describe('resolvePortContentDetailed sourcePath', () => {
   let worktree: string

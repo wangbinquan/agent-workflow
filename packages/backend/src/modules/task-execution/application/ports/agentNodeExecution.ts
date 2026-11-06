@@ -139,7 +139,7 @@ export interface AgentRules {
   parsePortValidationFailuresJson(raw: string | null): PortValidationFailure[] | null
   isClarifyRerunCause(cause: string | null | undefined): boolean
   continuesClarifyLineage(causesNewestFirst: ReadonlyArray<string | null | undefined>): boolean
-  /** The error-message prefix of a suppressed ask-back (`services/envelope`). */
+  /** The error-message prefix of a suppressed ask-back (`workflowOutputEnvelope` in shared). */
   readonly clarifyForbiddenPrefix: string
   /** RFC-098 B3 / RFC-407: a fan-out shard value's cross-generation reuse identity (sha256 hex). */
   shardValueHash(value: string): string

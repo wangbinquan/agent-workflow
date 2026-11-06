@@ -130,3 +130,56 @@ export function bindPortOutputValidationEffects(
     },
   }
 }
+
+// RFC-458 (RFC-294 W9-D): the `node_runs.port_validation_failures_json` shape, moved here from
+// `services/envelope.ts` next to `PortValidationFailure`.
+/**
+ * Convenience for callers that want to write a batch of port failures to the
+ * new column. Today we throw on the first failure (fail-fast — see RFC-049
+ * design.md §7), so the array is always length 1; the helper is shaped this
+ * way to anchor the JSON-payload schema for a future reduce-style validator.
+ */
+export function serializePortValidationFailures(
+  failures: ReadonlyArray<PortValidationFailure>,
+): string {
+  return JSON.stringify(failures)
+}
+
+/**
+ * Parse the raw JSON the runner persisted into
+ * `node_runs.port_validation_failures_json`. Defensive parsing — malformed
+ * payloads degrade to null rather than throw, so a corrupted column never
+ * 5xx's the task detail API. Same shape as RFC-046's parseInjectedSnapshotJson.
+ */
+export function parsePortValidationFailuresJson(
+  raw: string | null,
+): PortValidationFailure[] | null {
+  if (raw == null) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(parsed)) return null
+  const out: PortValidationFailure[] = []
+  for (const item of parsed) {
+    if (item == null || typeof item !== 'object') continue
+    const m = item as Record<string, unknown>
+    if (
+      typeof m.port !== 'string' ||
+      typeof m.kind !== 'string' ||
+      typeof m.subReason !== 'string'
+    ) {
+      continue
+    }
+    const entry: PortValidationFailure = {
+      port: m.port,
+      kind: m.kind as AgentOutputKind,
+      subReason: m.subReason,
+    }
+    if (typeof m.detail === 'string') entry.detail = m.detail
+    out.push(entry)
+  }
+  return out
+}

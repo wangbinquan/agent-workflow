@@ -33,7 +33,7 @@ import type { Actor } from '@/auth/actor'
 import { createLogger, type Logger } from '@/util/log'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
-import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
+import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 import type {
   IntentSystemAgentRunFamily as SystemAgentRunFamily,
   IntentSystemAgentRunResult as SystemAgentRunResult,

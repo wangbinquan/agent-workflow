@@ -8,7 +8,7 @@
 // upstream designer agent emitted an absolute path and the doc_version body
 // rendered as a one-line path string. PR-B's "fix" is to declare the kind.
 //
-// If any of these go red, check packages/backend/src/services/envelope.ts:
+// If any of these go red, check packages/backend/src/modules/task-execution/composition/portOutputValidation.ts:
 // resolvePortContentDetailed should be a single early-return passthrough
 // when kind === undefined; no fs probe.
 
@@ -16,7 +16,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolvePortContent } from '../src/services/envelope'
+import { resolvePortContent } from '../src/modules/task-execution/composition/portOutputValidation'
 import { ValidationError } from '../src/util/errors'
 
 describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () => {

@@ -5,7 +5,8 @@ import {
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '../domain/clarifyRules'
-import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
+import { CLARIFY_FORBIDDEN_PREFIX } from '@agent-workflow/shared'
+import { parsePortValidationFailuresJson } from '../application/portOutputValidation'
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'

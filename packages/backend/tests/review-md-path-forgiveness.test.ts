@@ -15,7 +15,7 @@ import { withO2Closure } from './helpers/o2Closure'
 //   * Agent does NOT declare outputKinds → doc_versions body holds the path
 //     string verbatim. The breaking change is intentional.
 //
-// If this goes red, see packages/backend/src/services/envelope.ts
+// If this goes red, see packages/backend/src/modules/task-execution/composition/portOutputValidation.ts
 // (resolvePortContentDetailed) and packages/backend/src/services/review.ts
 // (dispatchReviewNode upstream port resolve).
 

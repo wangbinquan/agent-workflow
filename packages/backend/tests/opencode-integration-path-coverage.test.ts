@@ -39,7 +39,8 @@ const CANONICAL = [
   // RFC-454: the runner and protocol re-exports in services/ are deleted; their bodies live here.
   'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
   'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgent*.ts',
-  'packages/backend/src/services/envelope.ts',
+  // RFC-458: the workflow-output envelope parser moved from services/envelope.ts to shared.
+  'packages/shared/src/workflowOutputEnvelope.ts',
   'packages/shared/src/prompt.ts',
   'packages/backend/src/services/runtime/opencode/**',
   // Process lifecycle changes can alter the live runtime path.

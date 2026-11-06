@@ -7,8 +7,8 @@
 // regression in "when do we commit" or "how do we classify a push failure" is
 // caught by a fast unit test, not an integration test.
 
-import type { DetectedEnvelopeKind } from '@/services/envelope'
-import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
+import type { DetectedEnvelopeKind } from '@agent-workflow/shared'
+import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 import type { Agent, Language, NodeRunStatus } from '@agent-workflow/shared'
 import {
   COMMIT_PUSH_NODE_PREFIX,
