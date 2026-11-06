@@ -7,4 +7,3 @@
 
 export { composeOidcIdentityOperations } from '../infrastructure/oidcIdentityCrossContext'
 export { composeOwnerIdentityQueries } from './ownerIdentityQueries'
-export { ownerScopedNameCondition } from '../infrastructure/ownerScopedName'

@@ -281,8 +281,6 @@ describe('RFC-347 exact production source locks', () => {
       'src/bootstrap/standalone.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',
-      'src/services/ownerScopedName.ts',
-      'src/services/userIdentities.ts',
     ])
     expect(source('src/modules/identity-access/composition.ts')).not.toContain('/ws/')
     for (const file of productionSources.filter(({ path }) => path.startsWith('src/ws/'))) {

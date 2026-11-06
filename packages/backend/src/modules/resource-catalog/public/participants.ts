@@ -40,6 +40,11 @@ export type {
 
 // Immutable skill trees consumed by the selected hosted Agent material compiler.
 export type { SkillPackageContentReader } from '../application/skills/packageContentReader'
+/** RFC-459: the in-process agent-launch reservation TaskExecution holds while a single-agent launch materializes. */
+export {
+  acquireAgentLaunch,
+  releaseAgentLaunch,
+} from '../application/agents/agentLaunchReservation'
 
 // Content owners participate in Intent apply; their contracts are capabilities.
 export type {

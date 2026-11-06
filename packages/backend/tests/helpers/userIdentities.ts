@@ -1,4 +1,4 @@
-// RFC-036/RFC-349 — compatibility facade for legacy tests and setup callers.
+// RFC-036/RFC-349 — compatibility facade for legacy tests (RFC-459 moved it out of production `services/`).
 // Production HTTP/OIDC routes receive the identity operations from bootstrap;
 // RFC-359 W4-D8 起两个 provider 共用同一份实现，这里只是 db 参数形态的旧门面。
 

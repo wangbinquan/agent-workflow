@@ -12,7 +12,7 @@ import { createSession } from './helpers/auth/sessionStore'
 
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createOidcProvidersService } from '../src/auth/oidc/providers'
-import { createIdentity } from '../src/services/userIdentities'
+import { createIdentity } from './helpers/userIdentities'
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'c'.repeat(64)

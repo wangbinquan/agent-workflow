@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createOidcProvidersService, type OidcProvidersService } from '../src/auth/oidc/providers'
-import { createIdentity } from '../src/services/userIdentities'
+import { createIdentity } from './helpers/userIdentities'
 import { DomainError } from '../src/util/errors'
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {

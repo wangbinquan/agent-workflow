@@ -24,7 +24,10 @@ import { createAgentPersistenceSemantics } from '@/modules/resource-catalog/infr
 import { createAgentRepository } from '@/modules/resource-catalog/infrastructure/agentRepository'
 import { createWorkflowPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/workflowPersistenceSemantics'
 import { createWorkflowRepository } from '@/modules/resource-catalog/infrastructure/workflowRepository'
-import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
+import {
+  acquireAgentLaunch,
+  releaseAgentLaunch,
+} from '@/modules/resource-catalog/application/agents/agentLaunchReservation'
 import { registerRevalidationTrigger } from '@/ws/revalidationHook'
 import { describeEachProvider } from './helpers/eachProvider'
 

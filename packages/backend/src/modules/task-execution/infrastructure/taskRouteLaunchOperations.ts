@@ -51,7 +51,10 @@ import {
   buildAgentHostSnapshot,
   validateAgentLaunchShape,
 } from '@/services/agentLaunch'
-import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
+import {
+  acquireAgentLaunch,
+  releaseAgentLaunch,
+} from '@/modules/resource-catalog/public/participants'
 import {
   assertTriggerPreflight,
   triggerSourceFromContext,

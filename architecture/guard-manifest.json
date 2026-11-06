@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1127
+      "lines": 1120
     },
     {
       "assertsAbsence": true,
@@ -2035,7 +2035,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc305-architecture-lock.test.ts",
       "id": "rfc305-architecture-lock",
-      "lines": 954,
+      "lines": 948,
       "mechanism": "ast",
       "minCorpusFiles": 900,
       "negativeFixture": true,

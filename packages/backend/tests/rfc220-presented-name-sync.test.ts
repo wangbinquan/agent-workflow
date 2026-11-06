@@ -18,7 +18,7 @@ import {
   createIdentity as createIdentityService,
   createUserWithIdentity as createUserWithIdentityService,
   syncPreferredSnapshot as syncPreferredSnapshotService,
-} from '../src/services/userIdentities'
+} from './helpers/userIdentities'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { applyEmailTrust } from '../src/auth/oidc/provisioning'
 import { DomainError } from '../src/util/errors'

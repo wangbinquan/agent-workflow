@@ -257,7 +257,6 @@ describe('RFC-305 identity-access architecture', () => {
       'OidcProviderRepository',
       'OwnerIdentityQueries',
       'createIdentityUserOperations',
-      'isOwnerScopedNameConflict',
     ])
     expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual([
       'GetUserAccess',
@@ -452,11 +451,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/composition/providerOperations',
-      'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/public/operations',
-      'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/composition/providerOperations',
-      'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/operations',
-      'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/ws/connections.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/ws/registry.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/ws/server.ts -> @/modules/identity-access/public/participants',

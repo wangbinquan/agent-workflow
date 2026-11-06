@@ -13,7 +13,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createIdentity } from '../src/services/userIdentities'
+import { createIdentity } from './helpers/userIdentities'
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

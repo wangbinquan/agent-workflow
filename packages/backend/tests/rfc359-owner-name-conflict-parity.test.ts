@@ -19,7 +19,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import { isOwnerScopedNameConflict } from '@/modules/identity-access/public/operations'
+import { isOwnerScopedNameConflict } from '@/modules/resource-catalog/application/ownerScopedName'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const CASES = [

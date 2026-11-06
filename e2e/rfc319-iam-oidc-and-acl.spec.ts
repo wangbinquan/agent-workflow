@@ -55,7 +55,7 @@
 //   packages/backend/src/routes/oidc-auth.ts:146-178         换 token + 取声明；失败一律 friendly(code) 400
 //   packages/backend/src/routes/oidc-auth.ts:210-299         provisioning 判定 → 建号 / 绑定 → `#aw_session=` 重定向
 //   packages/backend/src/auth/oidc/provisioning.ts:57-82 decideProvisioning 六分支（本文件只走 auto / invite）
-//   packages/backend/src/services/userIdentities.ts:256-275  bindInvitedUserWithIdentity：同一事务里置 active + 插身份
+//   packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts  bindInvitedUserWithIdentity：同一事务里置 active + 插身份
 //   packages/backend/src/util/oidcResponse.ts:5-45           友好页文案表 + friendly() 的 HTML 外壳
 //   packages/backend/src/auth/oidc/endpoints.ts:177-219      resolveEndpoints：discovery 合并 manual + 两级缓存
 //   packages/backend/src/auth/oidc/identity.ts:209-240       id_token + JWKS 可用时走验签路径

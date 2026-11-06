@@ -264,7 +264,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/services/runtime/opencode/plugin/aw-inventory-dump.mjs',
     'packages/backend/src/services/skillBootVerify.ts',
     'packages/backend/src/services/skillIdentityPaths.ts',
-    'packages/backend/src/services/userIdentities.ts',
     'packages/backend/src/services/workgroups.ts',
   ],
 }
@@ -328,12 +327,6 @@ const RETAINED_REACHABILITY_GROUPS = [
       'services/skillIdentityPaths.ts',
       'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
     ],
-  },
-  {
-    successor: 'RFC-375 section 4: user decision',
-    reason:
-      'The existing rfc212-revalidation-behavior.test.ts anchor still uses this historical address.',
-    files: ['services/userIdentities.ts'],
   },
   {
     successor: 'RFC-359 section 5hn: retain, no scheduled successor',

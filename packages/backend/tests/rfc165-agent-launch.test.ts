@@ -72,7 +72,7 @@ import {
   acquireAgentLaunch,
   isAgentLaunching,
   releaseAgentLaunch,
-} from '../src/services/agentLaunchReservation'
+} from '../src/modules/resource-catalog/application/agents/agentLaunchReservation'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 
 import {

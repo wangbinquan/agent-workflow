@@ -14,7 +14,7 @@ import { compatibleAuthRuntimeOf } from '@/auth/infrastructure/compatibleAuthRun
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import * as userFixture from './helpers/userFixture'
 import type { SearchInput } from './helpers/userFixture'
-import { ownerScopedNameCondition } from '@/modules/identity-access/infrastructure/ownerScopedName'
+import { ownerScopedNameCondition } from '@/modules/resource-catalog/infrastructure/ownerScopedName'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) => {

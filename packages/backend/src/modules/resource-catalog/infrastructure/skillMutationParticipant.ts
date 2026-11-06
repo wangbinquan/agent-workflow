@@ -16,7 +16,7 @@ import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
+import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { ConflictError, staleConflictError } from '@/util/errors'
 
 import type {

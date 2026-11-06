@@ -46,7 +46,7 @@ import { createAgentSkillReferenceLookup } from '../referenceLookup'
 import { SkillDeleteReferencedError, skillNameInUse } from '../skillMutationParticipant'
 import { skillApplyContentFor } from '../skillApplyContent'
 import { createSkillApplyScene } from '../skillAtomicApply'
-import { ownerScopedNameWhere } from '@/services/ownerScopedName'
+import { ownerScopedNameWhere } from '../ownerScopedName'
 import type {
   SkillContentReader,
   SkillContentReference,

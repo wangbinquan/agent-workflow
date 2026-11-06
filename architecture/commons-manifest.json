@@ -343,7 +343,8 @@
       "claimAudit": "Holds for the five original CRUD services (agent/skill/mcp/plugin/workgroup all import both). Does NOT hold inside the ACL kernel itself (resourceAcl.ts:664-679 and 709-723 hand-write both halves) nor for the 5 RFC-310 types (modules/development-automation/infrastructure/sqliteConfigResourceStore.ts:27-30 rolls its own looser detector).",
       "core": false,
       "files": [
-        "packages/backend/src/services/ownerScopedName.ts"
+        "packages/backend/src/modules/resource-catalog/application/ownerScopedName.ts",
+        "packages/backend/src/modules/resource-catalog/infrastructure/ownerScopedName.ts"
       ],
       "guards": [],
       "id": "ownerscopedname-ts",

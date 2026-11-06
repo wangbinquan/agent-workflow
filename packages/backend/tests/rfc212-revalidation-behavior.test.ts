@@ -479,7 +479,8 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
         reason: 'pat-revoked',
       },
       {
-        file: 'services/userIdentities.ts',
+        // RFC-459: the test-only identity facade moved from production `services/` to the test helpers.
+        file: '../tests/helpers/userIdentities.ts',
         marker: /function sqliteOperations\(/,
         reason: 'identity-deleted',
       },

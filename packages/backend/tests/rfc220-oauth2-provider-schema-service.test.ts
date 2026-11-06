@@ -27,7 +27,7 @@ import {
   redactedProvider,
   type OidcProvidersService,
 } from '../src/auth/oidc/providers'
-import { createIdentity } from '../src/services/userIdentities'
+import { createIdentity } from './helpers/userIdentities'
 import { DomainError } from '../src/util/errors'
 
 interface Harness {

@@ -1,3 +1,25 @@
+## 2026-11-06 RFC-459 owner 作用域名与代理启动保留归 resource-catalog（In Progress；`design/RFC-459-resource-catalog-owner-name-and-launch-reservation/`）
+
+- **来由**：RFC-294 W9-D 第六步。owner 作用域名的谓词与冲突判定实现在 identity-access、自己不用，唯一的生产使用者 resource-catalog 经
+  `services/ownerScopedName.ts` 转手越界取它；代理启动保留表在 `services/`，task-execution 写、resource-catalog 的删除守卫读；
+  `services/userIdentities.ts` 生产零引用、只剩 7 个用例。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：owner 名谓词进 resource-catalog `infrastructure/ownerScopedName.ts`（连同两个兼容名），冲突判定进 `application/ownerScopedName.ts`，
+  identity-access 删去实现与 composition / public 的再导出；保留表进 resource-catalog `application/agents/agentLaunchReservation.ts`，
+  `public/participants` 再导出 acquire / release 给 task-execution；身份门面迁入 `tests/helpers/userIdentities.ts`（RFC-375 §4 曾记为
+  「需用户决定」的保留项，本 RFC 不删代码、随 `rfc212` 锚点一起迁走，按授权决定，可推翻）。函数体原样。
+- **不做**：resource-catalog 三个仓储私有的 owner 名谓词与 ACL 内核的手抄（ACL-10，随 ACL 继任合同去重）；其余 `R1` 来源。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-458 的 Done 文档提交 `3354e7573`：exact SHA 主 CI run 42286990175 首轮全绿（70 个 job），作 RFC-458（`67229b932` + 修复
+  `8c715b39c`）的后继证据；macOS e2e 四个分片都跑过，RFC-457 两次都没跑上的分片 1/4 也在其中。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。静态：backend tsc 0 错，eslint 无告警。全量 SQLite 23467 pass，其余为负载
+  超时（21 个文件）与导出仓库所致的 `rfc321`；复跑 21 个文件只剩 RFC-167 `approve` 与 RFC-363 目录分页各一例（与 RFC-458 时相同；同一时刻
+  在 RFC-458 导出仓库里对照，`rfc167` 两边同一例到点、`rfc363` 两边都过）；PostgreSQL 276 个文件的 lane 只有超时，复跑 29 个文件全过；
+  P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/` 82 → 79、`legacy-horizontal-files` 203 → 200、
+  `legacy-service-implementations` 77 → 74、不可达生产文件 27 → 26、`R1` 101 → 99、`R2` 23 不变；public surface 1487 → 1488（identity-access
+  −1、resource-catalog +2，偏差数不变）；没有跨 context 消费方的 public 符号 322 → 323（identity-access 的 `OidcIdentityProfileAccess` 唯一的
+  跨 context 消费方是迁出的身份门面；不设门，记为债），其余架构 counts 不变。
+
 ## 2026-11-06 RFC-458 workflow-output 信封解析器归 shared（Done；`design/RFC-458-envelope-parser-to-shared/`）
 
 - **来由**：RFC-294 W9-D 第五步。`services/envelope.ts` 装着信封解析器（纯字符串处理）与 task-execution 的端口内容包装、校验失败形状两件事；

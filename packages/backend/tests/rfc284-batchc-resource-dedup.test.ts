@@ -32,7 +32,7 @@ import {
 import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { findAgentsUsingManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
 import { findAgentsDependingOn } from '../src/services/agentDeps'
-import { isOwnerNameUniqueViolation } from '../src/services/ownerScopedName'
+import { isOwnerNameUniqueViolation } from '../src/modules/resource-catalog/infrastructure/ownerScopedName'
 import {
   grantsOfResourceWhere,
   isVisibleToAudienceSnapshot,

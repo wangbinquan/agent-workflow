@@ -35,7 +35,6 @@ export {
   OWNER_IDENTITY_SQL_BATCH_SIZE,
   type OwnerIdentityQueries,
 } from '../application/ports/ownerIdentityQueries'
-export { isOwnerScopedNameConflict } from '../application/ownerScopedName'
 
 const PUBLIC_ERRORS = Object.freeze([
   'not-found',
