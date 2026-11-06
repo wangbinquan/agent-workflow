@@ -4,10 +4,12 @@
 //   (a) the dependency-cruiser rule exists,
 //   (b) CI actually RUNS depcheck (design-gate finding: the script existed
 //       for months while neither `lint` nor ci.yml ever invoked it), and
-//   (c) Resource Catalog's legacy/workgroup/constants.ts stays a ZERO-IMPORT leaf — it was
+//   (c) the workgroup host sentinels stay in a ZERO-IMPORT leaf — they were
 //       extracted precisely to cut `launch → task → scheduler → runner →
 //       rounds → launch` (RFC-079 class: top-level const evaluates to
 //       undefined under an unlucky init order; only build:binary caught it).
+//       RFC-454: the leaf is shared's `workgroupHostIdentity.ts` (resource-catalog's
+//       legacy `workgroup/constants.ts` duplicate is deleted).
 //   (d) production code never re-grows the cycle edge by importing the
 //       sentinel constants from workgroup/launch again.
 //   (e) **the gate can actually SEE the graph** — added 2026-08-03 (架构审视
@@ -195,8 +197,8 @@ describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', ()
 })
 
 describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs', () => {
-  const WG = 'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup'
-
+  // RFC-454: resource-catalog's legacy `workgroup/` directory is gone (its last two files, `constants` / `askerKey`,
+  // had no mode branch and no shardKey parsing); G5 counts the explicit owner files below, G7 scans all of backend src.
   // RFC-317 T18 / findings G-04 —— 这条棘轮原本是 `<=` + `strategies/ ⇒ Infinity`，
   // 两处都漏水：
   //   ① `<=`：某个文件收敛到低于快照后，差额变成**可复用的免费槽位**——下一个人
@@ -236,13 +238,6 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       // 那 3 个差额就是被回收的免费槽位，删掉条目即等于把上限收到 0。
     }
     const files: string[] = []
-    const walk = (dir: string): void => {
-      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
-        if (e.isDirectory()) walk(`${dir}/${e.name}`)
-        else if (e.name.endsWith('.ts')) files.push(`${dir}/${e.name}`)
-      }
-    }
-    walk(WG)
     const APP = 'packages/backend/src/modules/resource-catalog/application/workgroups'
     const applicationFiles = [`${APP}/workgroupRoomProjection.ts`]
     const TURNS = 'packages/backend/src/modules/task-execution/engine/task/workgroup'
@@ -261,9 +256,7 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
         ? `application/workgroups/${f.slice(f.lastIndexOf('/') + 1)}`
         : turnEngineFiles.includes(f)
           ? `task-execution/${f.slice(f.lastIndexOf('/') + 1)}`
-          : roomFiles.includes(f)
-            ? `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
-            : f.slice(WG.length + 1)
+          : `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
       const count = read(f).split("mode === '").length - 1
       if (count > 0) actual[rel] = count
     }
@@ -292,7 +285,7 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
         }
       }
     }
-    walk(WG)
+    walk('packages/backend/src')
     expect(offenders).toEqual([])
   })
 })

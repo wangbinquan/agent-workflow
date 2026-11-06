@@ -1759,7 +1759,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc217-architecture-locks.test.ts",
       "id": "rfc217-architecture-locks",
-      "lines": 466,
+      "lines": 459,
       "mechanism": "source-text",
       "minCorpusFiles": 300,
       "negativeFixture": true,
