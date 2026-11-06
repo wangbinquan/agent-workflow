@@ -1,3 +1,23 @@
+## 2026-11-06 RFC-455 资源包一族归 resource-catalog（In Progress；`design/RFC-455-resource-package-family-to-resource-catalog/`）
+
+- **来由**：RFC-294 W9-D（`services/` 实现文件按 owner 归位）、RFC-345 T6 未收口的「parse / preview / apply / export 组织到
+  `resource-catalog/application/package`」。RFC-454 后 `services/` 123 个文件，资源包一族 16 个文件的生产消费方全在 resource-catalog、
+  bootstrap 与 intent。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与
+  集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`services/resourcePackage/**` 的算法层进 resource-catalog `application/package`，`services/bundle/provider.ts` 与 MCP / 插件两个
+  操作修订摘要进 `domain`，执行适配器与插件安装绑定进 `composition`；`legacy/skill-zip.ts` 的 `decodeZip` 解码段拆进 `domain`；结构完全
+  相同的读端口只留 `ports.ts` 一份；intent 经 resource-catalog `public/queries` 取修订摘要。函数体原样。
+- **不做**：资源写入栈合一（S7）与结构相近的合同类型合并；`services/resourceAcl.ts` 的其余消费方；`legacy/skill-zip.ts` 其余部分。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-454 的 Done 文档提交 `b9057dacc`：exact SHA 主 CI run 42186447836 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑。本 RFC 的问题已修（tsc / eslint 看不见，全量 SQLite 与 PostgreSQL lane 都查出）：RFC-345 的 skill ZIP
+  路由锁读留下的 `legacy/skill-zip.ts` 找 `export function decodeZip`（解码段拆走后落空，改读 domain `zipArchive.ts`）；新用例的 zip 穿越
+  一例用 `encodeZip` 造样本，编码器先拒了、`decodeZip` 没跑到（改用 fflate 直接打包，断言 `zip-traversal` 码）。全量 SQLite 23422 pass，
+  其余为负载超时（23 个文件）、上述问题与导出仓库所致的 `rfc321`；修复后 25 个文件复跑只剩 RFC-167 `approve` 与 RFC-363 目录分页各一例
+  （同一时刻在 RFC-454 导出仓库里同样到点）；PostgreSQL 340 个文件的 lane 修复后复跑 19 个文件只剩 `rfc238` 自带 2 秒等待的几例（对照
+  两边都是 49 pass / 3 fail）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/` 123 → 107、`legacy-horizontal-files`
+  244 → 228、`legacy-service-implementations` 118 → 102、`R1` 121 → 119、`R2` 29 → 27，其余架构 counts 不变。
+
 ## 2026-11-05 RFC-454 `services/` 一跳转出清仓（Done；`design/RFC-454-services-one-hop-facade-sweep/`）
 
 - **来由**：RFC-294 W9-D 第一步。RFC-453 后入站适配器不再取 `services/`，余下 153 个文件里 36 个只做 `export … from`（早先迁移留下的

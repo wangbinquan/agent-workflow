@@ -1,4 +1,5 @@
 // RFC-271 依赖规划与生产回执合同；RFC-395 II-pre 删除未接线的 BundleApply 合同。
+// RFC-455：自 `services/bundle/provider.ts` 迁入（消费方全在 resource-catalog：原子应用与资源包算法层）。
 import type { AclResourceType, BundleResourceType } from '@agent-workflow/shared'
 import type { BundleOp, BundleOpKind } from '@agent-workflow/shared'
 

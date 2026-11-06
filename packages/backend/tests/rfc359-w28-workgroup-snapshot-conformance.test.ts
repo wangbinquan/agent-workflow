@@ -57,7 +57,7 @@ import {
   workgroupDraftMemberOf,
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { ValidationError } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

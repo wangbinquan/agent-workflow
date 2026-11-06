@@ -5,7 +5,7 @@
 // the exact same oracle again against its current Actor.
 
 import type { BundleOp, BundleResourceType, Permission } from '@agent-workflow/shared'
-import { resourceTypeOfOp } from '@/services/bundle/provider'
+import { resourceTypeOfOp } from '../../domain/bundlePlan'
 
 export type PackageWriteAction = 'new' | 'reuse' | 'overwrite'
 

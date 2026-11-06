@@ -290,3 +290,6 @@ export {
   parseFrozenWorkgroupGroup,
 } from '../domain/callClosure'
 export { assertWorkflowLaunchInputs } from '../domain/workflowLaunchInputs'
+// RFC-455 — the MCP / plugin operation revision digests (pure; intent's manifest reads them).
+export { mcpOperationConfigHashOf } from '../domain/mcpOperationRevision'
+export { pluginOperationConfigHashOf } from '../domain/pluginOperationRevision'

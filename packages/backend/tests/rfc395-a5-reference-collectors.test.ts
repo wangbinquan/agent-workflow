@@ -15,7 +15,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { headReferenceTraversals } from './helpers/rfc395A5HeadTraversals'
-import { directRefsOf } from '../src/services/resourcePackage/closure'
+import { directRefsOf } from '../src/modules/resource-catalog/application/package/closure'
 import { assertCanonicalWorkflowAgentIds } from '../src/modules/resource-catalog/infrastructure/workflowPersistence'
 import { ValidationError } from '../src/util/errors'
 

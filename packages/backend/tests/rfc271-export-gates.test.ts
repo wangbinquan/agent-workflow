@@ -26,7 +26,7 @@ import {
   assertNoDuplicateNames,
   assertPrivilegedNodesExportable,
   directRefsOf,
-} from '../src/services/resourcePackage/closure'
+} from '../src/modules/resource-catalog/application/package/closure'
 import { walkExportClosure } from './helpers/resourcePackageProvider'
 
 // ⚠️ **直接构造** Actor 而不是走 `buildActor`：后者按**角色**算权限、忽略调用方

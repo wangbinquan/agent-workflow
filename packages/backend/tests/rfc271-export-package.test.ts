@@ -32,8 +32,8 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
-import { applyPackageSecretInputs } from '../src/services/resourcePackage/secretInputs'
+import { decodeZip } from '../src/modules/resource-catalog/domain/zipArchive'
+import { applyPackageSecretInputs } from '../src/modules/resource-catalog/application/package/secretInputs'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

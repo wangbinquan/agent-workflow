@@ -19,8 +19,11 @@ import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { PackageManifestSchema, type ParsedPackage } from '@/services/resourcePackage/parse'
-import { signPreviewToken } from '@/services/resourcePackage/preview'
+import {
+  PackageManifestSchema,
+  type ParsedPackage,
+} from '@/modules/resource-catalog/application/package/parse'
+import { signPreviewToken } from '@/modules/resource-catalog/application/package/preview'
 import type { Logger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 

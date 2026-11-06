@@ -137,13 +137,17 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
 
   test('Skill ZIP route consumes one provider-bound whole-tree participant', () => {
     const route = source('routes/skills.ts')
-    const codec = source('modules/resource-catalog/infrastructure/legacy/skill-zip.ts')
+    // RFC-455: the ZIP decoder moved from the legacy skill-zip module into resource-catalog
+    // `domain/zipArchive.ts`; the skill ZIP participant reads it from there.
+    const codec = source('modules/resource-catalog/domain/zipArchive.ts')
+    const skillZip = source('modules/resource-catalog/infrastructure/legacy/skill-zip.ts')
 
     expect(route).toContain('readonly zipImport: SkillZipImportParticipant')
     expect(route).toContain('module.zipImport.parse(')
     expect(route).toContain('module.zipImport.commit(')
     expect(route).not.toMatch(/@\/services\/skill-zip|\bdeps\.db\b|\bDbClient\b/)
     expect(codec).toContain('export function decodeZip')
+    expect(skillZip).toContain("import { decodeZip } from '../../domain/zipArchive'")
     // RFC-345 T9: `services/skill-zip.ts` was deleted once its last production
     // consumer (the resource-package parser) read the codec from this module,
     // so the route must reach the archive only through the participant.

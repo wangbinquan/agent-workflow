@@ -44,7 +44,7 @@ import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
+import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider } from './helpers/eachProvider'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'

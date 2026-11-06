@@ -22,7 +22,7 @@
 //      一边成功。
 //   ④ **条目顺序按全路径排序**（取 SQLite 侧）。PostgreSQL 那份是逐目录排序的深度优先，于是
 //      `b.txt` 与 `b/c.txt` 的先后在两个引擎上相反——而这个顺序直接就是导出 ZIP 的条目次序
-//      （`services/resourcePackage/export.ts:213-218`）。全路径排序与引擎、与目录递归次序都无关，
+//      （`application/package/export.ts` 的打包遍历，RFC-455 前在 `services/resourcePackage/export.ts`）。全路径排序与引擎、与目录递归次序都无关，
 //      是这里唯一稳定的口径。
 //   ⑤ **技能目录里出现符号链接 / 非常规条目就抛错**（取 PostgreSQL 侧）。SQLite 那份的 `walkDir`
 //      静默跳过符号链接（"Symlinks intentionally skipped in v1"），导出的包因此**少文件且无提示**。

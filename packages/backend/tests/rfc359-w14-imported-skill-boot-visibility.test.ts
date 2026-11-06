@@ -36,7 +36,7 @@ import {
   isSkillBootVerified,
   resetSkillBootVerifyForTest,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
+import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { describeEachProvider } from './helpers/eachProvider'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'

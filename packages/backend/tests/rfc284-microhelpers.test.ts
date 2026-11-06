@@ -99,8 +99,8 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
         // raw digest（base64url(digest()) 非 hex idiom）：
         'auth/oidc/flow.ts',
         // shared 无 node:crypto 的 16 行镜像桥（设计门确认保留）：
-        'services/mcpOperationRevision.ts',
-        'services/pluginOperationRevision.ts',
+        'modules/resource-catalog/domain/mcpOperationRevision.ts',
+        'modules/resource-catalog/domain/pluginOperationRevision.ts',
       ].sort(),
     )
   })

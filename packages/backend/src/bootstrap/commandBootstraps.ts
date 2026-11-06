@@ -27,8 +27,8 @@ import {
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { Paths } from '@/util/paths'
 
 export async function composeUserCommandBootstrap() {

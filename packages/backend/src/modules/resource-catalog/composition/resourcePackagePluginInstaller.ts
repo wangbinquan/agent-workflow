@@ -3,19 +3,16 @@
 // 这个对象本来在 `main.ts` 的 PostgreSQL 分支里内联写着一份；SQLite 分支走的是
 // `services/bundle/legacyResourcePackageMutationDependencies.ts` 里另一份，**底下调的是
 // 同两个函数**（`plannedGenerationDir` / `installPlugin`）。两条 apply 引擎合一之后
-// 只剩一个装配口，绑定自然也只该有一份——放在这里，因为「插件怎么装到盘上」是
-// resource-catalog **外**的能力，模块只声明端口、由消费方填。
+// 只剩一个装配口，绑定自然也只该有一份。
+//
+// RFC-455：自 `services/resourcePackage/pluginInstallerAdapter.ts` 迁入 resource-catalog `composition`——它包着的
+// `infrastructure/local/filePluginInstallation` 本就在本模块里，绑定随之归本模块的装配；bootstrap 改取这里。
 
-import {
-  installPlugin,
-  plannedGenerationDir,
-} from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
+import { installPlugin, plannedGenerationDir } from '../infrastructure/local/filePluginInstallation'
 
 /**
- * 端口形状按**结构**声明，不从 resource-catalog 的 composition 里 import 类型：
- * legacy 层指向模块内部 / composition 的边是有账本的（`rfc317-module-boundary`），
- * 为一个四字段的端口新欠一条边不值得。真漂了在装配点就编译不过——`main.ts` /
- * `server.ts` 把这个对象交给 `composePostgresqlResourcePackageProvider`。
+ * 端口形状按**结构**声明（迁入前它在 legacy 层，取模块 composition 的类型要在 `rfc317-module-boundary` 记一条边）。
+ * 真漂了在装配点就编译不过——bootstrap 把这个对象交给 `composePostgresqlResourcePackageProvider`。
  */
 interface ResourcePackagePluginInstaller {
   plannedGenerationDirectory(input: {

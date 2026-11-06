@@ -17,9 +17,9 @@ import { AuthorityClaimRegistry } from '../../src/modules/identity-access/applic
 import { createMcpTransactionLifecycle } from '../../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePostgresqlResourcePackageProvider } from '../../src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createResourcePackageAtomicApplyOperations } from '../../src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import type { BundleReceipt } from '../../src/services/bundle/provider'
-import { createResourcePackagePluginInstaller } from '../../src/services/resourcePackage/pluginInstallerAdapter'
-import type { ParsedPackage } from '../../src/services/resourcePackage/parse'
+import type { BundleReceipt } from '../../src/modules/resource-catalog/domain/bundlePlan'
+import { createResourcePackagePluginInstaller } from '../../src/modules/resource-catalog/composition/resourcePackagePluginInstaller'
+import type { ParsedPackage } from '../../src/modules/resource-catalog/application/package/parse'
 
 type ProviderInput = Parameters<typeof composePostgresqlResourcePackageProvider>[0]
 

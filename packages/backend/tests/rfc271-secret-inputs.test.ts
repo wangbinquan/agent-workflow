@@ -23,7 +23,7 @@ import { DomainError } from '../src/util/errors'
 import {
   applyPackageSecretInputs,
   type PackageSecretInput,
-} from '../src/services/resourcePackage/secretInputs'
+} from '../src/modules/resource-catalog/application/package/secretInputs'
 
 const secret = (resourceType: string, resourceName: string, field: string): PackageSecretRef => ({
   resourceType,

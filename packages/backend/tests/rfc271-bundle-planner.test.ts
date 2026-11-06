@@ -21,7 +21,7 @@ import {
   opSlug,
   planBundleOps,
   resourceTypeOfOp,
-} from '../src/services/bundle/provider'
+} from '../src/modules/resource-catalog/domain/bundlePlan'
 
 const create = (kind: string, slug: string, payload: Record<string, unknown> = {}): BundleOp =>
   ({ opId: 'op-1', kind, slug, payload: { name: slug, ...payload } }) as unknown as BundleOp

@@ -5,7 +5,7 @@ import type { BundleOp, Permission } from '@agent-workflow/shared'
 import {
   missingImportPermissions,
   requiredImportPermissions,
-} from '../src/services/resourcePackage/importPermissions'
+} from '../src/modules/resource-catalog/application/package/importPermissions'
 
 const op = (kind: BundleOp['kind'], payload: Record<string, unknown> = {}): BundleOp =>
   ({ opId: 'op-1', kind, slug: 'entry', payload }) as BundleOp

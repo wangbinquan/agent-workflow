@@ -194,7 +194,7 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
  * apply 判据（新建的归属 / 可见性 / 零 grants / journal 终态、重放幂等、两类拒收码），
  * `rfc359-w12-mcp-mutation-conformance.test.ts` 也在两侧各驱动一遍 MCP 的发布与覆盖。
  * 两份都只对 **PG 那一侧**有直接的值 import——SQLite 那侧是经
- * `services/resourcePackage/executionAdapter.ts` / `helpers/resourcePackageProvider.ts` 传递进去的，
+ * `modules/resource-catalog/composition/resourcePackageExecution.ts` / `helpers/resourcePackageProvider.ts` 传递进去的，
  * 而本守卫的见证判据只认**直接**值 import。这与头注释那条「宁可低估，不要抹平」的偏斜政策一致：
  * 想把它翻成 `verified`，正解是让对拍**直接**调那两个 SQLite 侧入口，不是放宽判据。
  *

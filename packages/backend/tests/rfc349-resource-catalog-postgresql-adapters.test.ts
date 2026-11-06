@@ -373,27 +373,27 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(ports).toContain('ResourcePackageReadPort')
     expect(ports).not.toMatch(/PostgresqlDatabaseClient|DbClient|DbTxSync|drizzle-orm/)
 
+    // RFC-455: the algorithm layer moved from services/resourcePackage into resource-catalog application/package. It
+    // still reads only through the read port: no infrastructure or composition, by alias or relative path.
+    const PKG = 'src/modules/resource-catalog/application/package'
     for (const [file, entrypoint] of [
       ['closure', 'walkExportClosureFromReadPort'],
       ['preview', 'buildPackagePreviewFromReadPort'],
       ['export', 'exportResourcePackageFromReadPort'],
     ] as const) {
-      const text = source(`src/services/resourcePackage/${file}.ts`)
+      const text = source(`${PKG}/${file}.ts`)
       expect(text).toContain(entrypoint)
       expect(text).not.toMatch(
-        /@\/modules\/resource-catalog\/(?:application|composition|domain|infrastructure)\//,
+        /from ['"](?:@\/modules\/resource-catalog\/|(?:\.\.\/)+)(?:composition|infrastructure)\//,
       )
     }
 
-    const legacyReadPort = source('src/services/resourcePackage/providerReadPort.ts')
-    expect(legacyReadPort).toContain('ResourcePackageReadPort')
-    expect(legacyReadPort).not.toMatch(
-      /@\/modules\/resource-catalog\/(?:application|composition|domain|infrastructure)\//,
-    )
-    for (const file of ['closure', 'preview', 'export', 'providerReadPort', 'skillTree']) {
-      expect(source(`src/services/resourcePackage/${file}.ts`)).not.toMatch(
-        /from ['"](?:@\/db|drizzle-orm)/,
-      )
+    // The read port has one declaration (ports.ts); the moved document decoder only consumes it.
+    const packageDocument = source(`${PKG}/packageDocument.ts`)
+    expect(packageDocument).toContain('resourcePackageDocumentOf')
+    expect(packageDocument).not.toMatch(/interface ResourcePackage(?:ReadPort|ResourceSnapshot)\b/)
+    for (const file of ['closure', 'preview', 'export', 'packageDocument', 'skillTree']) {
+      expect(source(`${PKG}/${file}.ts`)).not.toMatch(/from ['"](?:@\/db|drizzle-orm)/)
     }
 
     const testBinding = source('tests/helpers/resourcePackageProvider.ts')

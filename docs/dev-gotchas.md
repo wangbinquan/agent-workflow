@@ -635,6 +635,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 - **删光一个目录时，本地导出仓库会骗人**：在导出仓库里按路径逐个删文件，目录本身留成空目录；`rfc217` 的 G5 / G7 用 `readdirSync`
   扫 resource-catalog 的 `legacy/workgroup/`，导出里扫到空目录照样绿，CI 的干净 checkout 里没有这个目录，直接 ENOENT 红
   （主 CI 一个后端分片）。导出仓库删文件后要连带删掉变空的目录；删光目录前 grep 用例里按目录扫描的写法（`readdirSync` / `walk(` 加该目录名）。
+- **从留下的文件里拆走一段，按路径搜不全（RFC-455 实撞，2026-11-06）**：`decodeZip` 从 `legacy/skill-zip.ts` 拆进 resource-catalog
+  `domain/zipArchive.ts`，skill-zip 本身还在，于是读它的文本锁不报 ENOENT，只是 `toContain('export function decodeZip')` 落空
+  （`rfc345-provider-neutral-classic-facades`）。拆段前除了按文件名搜，还要按被拆走的声明文本搜（`export function X`、`export const X`）。
+  同一轮的另一个坑：违规样本被**生产侧**先拒了——`util/zip` 的 `encodeZip` 自己就拒绝 `../` 路径，用它造穿越样本，抛错的是编码器，
+  被测的 `decodeZip` 根本没跑到。负样本要绕开同侧校验（这里用 fflate `zipSync` 直接打包），并断言被测方的错误码，不断言消息片段。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

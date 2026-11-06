@@ -28,8 +28,8 @@ import {
   asIntentResourceType,
   type Permission,
 } from '@agent-workflow/shared'
-import { requiredImportPermissions } from '../src/services/resourcePackage/importPermissions'
-import { resourceTypeOfOp } from '../src/services/bundle/provider'
+import { requiredImportPermissions } from '../src/modules/resource-catalog/application/package/importPermissions'
+import { resourceTypeOfOp } from '../src/modules/resource-catalog/domain/bundlePlan'
 
 const frameworkCreate = {
   opId: 'op-1',

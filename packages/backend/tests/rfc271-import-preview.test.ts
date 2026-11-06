@@ -26,15 +26,15 @@ import type { ResourceBundle } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { encodeZip } from '../src/util/zip'
-import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { collectPackageRequirements } from '../src/services/resourcePackage/requirements'
+import { parseResourcePackage } from '../src/modules/resource-catalog/application/package/parse'
+import { collectPackageRequirements } from '../src/modules/resource-catalog/application/package/requirements'
 import {
   groupHumanMemberSlots,
   humanMemberBaselineOf,
   previewBaselineOf,
   signPreviewToken,
   verifyPreviewToken,
-} from '../src/services/resourcePackage/preview'
+} from '../src/modules/resource-catalog/application/package/preview'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

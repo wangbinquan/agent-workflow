@@ -10,15 +10,12 @@ import { Zip, ZipPassThrough, zipSync, type Zippable } from 'fflate'
 import { buildActor } from '../src/auth/actor'
 import type { ResourcePackageOwnedResourceLookupPort } from '../src/modules/resource-catalog/application/package/ports'
 import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
-import type { ResourcePackageExecutionAdapter } from '../src/services/resourcePackage/executionAdapter'
+import type { ResourcePackageExecutionAdapter } from '../src/modules/resource-catalog/composition/resourcePackageExecution'
 import {
   registerResourcePackageRoutes,
   RESOURCE_PACKAGE_BODY_MAX_BYTES,
 } from '../src/routes/resourcePackages'
-import {
-  decodeZip,
-  ZIP_LIMITS,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
+import { decodeZip, ZIP_LIMITS } from '../src/modules/resource-catalog/domain/zipArchive'
 import { errorHandler, ValidationError } from '../src/util/errors'
 
 const LOCAL_FILE_HEADER = 0x04034b50

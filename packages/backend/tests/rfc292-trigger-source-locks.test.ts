@@ -219,8 +219,11 @@ describe('RFC-292 trigger namespace source locks', () => {
     for (const rel of [
       'services/runtime',
       'services/agentDeps.ts',
-      'services/resourcePackage',
-      'services/bundle',
+      // RFC-455：资源包一族迁入 resource-catalog（算法层、依赖规划与回执、两个装配绑定）。
+      'modules/resource-catalog/application/package',
+      'modules/resource-catalog/domain/bundlePlan.ts',
+      'modules/resource-catalog/composition/resourcePackageExecution.ts',
+      'modules/resource-catalog/composition/resourcePackagePluginInstaller.ts',
     ]) {
       const path = resolve(BACKEND_SRC, rel)
       const files = /\.ts$/.test(rel) ? [path] : sourceFiles(path)

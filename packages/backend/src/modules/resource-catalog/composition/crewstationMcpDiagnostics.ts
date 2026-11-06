@@ -5,7 +5,7 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
 import { verifyStartup } from '@/services/execution/startupVerification'
-import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
+import { mcpOperationConfigHashOf } from '../domain/mcpOperationRevision'
 import { ValidationError } from '@/util/errors'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import {

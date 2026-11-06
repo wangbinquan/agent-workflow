@@ -31,8 +31,11 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeZip } from '../src/util/zip'
-import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
+import { parseResourcePackage } from '../src/modules/resource-catalog/application/package/parse'
+import {
+  signPreviewToken,
+  verifyPreviewToken,
+} from '../src/modules/resource-catalog/application/package/preview'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'

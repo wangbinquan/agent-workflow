@@ -372,8 +372,13 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
     ['intent-runtime-code:' + INFRA + 'x.ts'],
   )
   expect(
-    only('packages/backend/src/services/bundle/provider.ts', 'export class BundleCycleError {}'),
-  ).toEqual(['bundle-cycle-error:packages/backend/src/services/bundle/provider.ts'])
+    only(
+      'packages/backend/src/modules/resource-catalog/domain/bundlePlan.ts',
+      'export class BundleCycleError {}',
+    ),
+  ).toEqual([
+    'bundle-cycle-error:packages/backend/src/modules/resource-catalog/domain/bundlePlan.ts',
+  ])
   expect(only(INFRA + 'x.ts', "throw new ConflictError('workflow-name-in-use', 'taken')")).toEqual([
     'retired-code:workflow-name-in-use:' + INFRA + 'x.ts',
   ])

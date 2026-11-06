@@ -1,3 +1,4 @@
+// RFC-455：自 `services/pluginOperationRevision.ts` 迁入；intent 的清单经 resource-catalog `public/queries` 取。
 import { createHash } from 'node:crypto'
 import {
   pluginOperationConfigHashWith,

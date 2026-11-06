@@ -3,18 +3,14 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
-import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import type { PackageResourceRef } from '@/modules/resource-catalog/public/types'
-import type {
-  BundleAppliedOp,
-  BundleReceipt,
-  BundleSkippedSecret,
-} from '@/services/bundle/provider'
-import type { HumanMemberMapping, ImportDecision } from '@/services/resourcePackage/commit'
-import { exportResourcePackageFromReadPort } from '@/services/resourcePackage/export'
-import { parseResourcePackage, type ParsedPackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreviewFromReadPort } from '@/services/resourcePackage/preview'
-import type { PackageSecretInput } from '@/services/resourcePackage/secretInputs'
+import type { ResourceRequestContext } from '../public/participants'
+import type { PackageResourceRef } from '../public/types'
+import type { BundleAppliedOp, BundleReceipt, BundleSkippedSecret } from '../domain/bundlePlan'
+import type { HumanMemberMapping, ImportDecision } from '../application/package/commit'
+import { exportResourcePackageFromReadPort } from '../application/package/export'
+import { parseResourcePackage, type ParsedPackage } from '../application/package/parse'
+import { buildPackagePreviewFromReadPort } from '../application/package/preview'
+import type { PackageSecretInput } from '../application/package/secretInputs'
 
 interface ResourcePackageExportFence {
   readonly expectedVersion?: number
@@ -46,7 +42,8 @@ interface ResourcePackageExportExecutionInput {
   readonly expect: ResourcePackageExportFence
 }
 
-/** Consumer-owned structural port implemented outside Resource Catalog. */
+/** RFC-455 — the package application's execution port, implemented over the `application/package` algorithm layer
+ *  (moved from `services/resourcePackage/executionAdapter.ts`; bootstrap binds it). */
 export interface ResourcePackageExecutionAdapter {
   inspect(context: CommandContext, input: ResourcePackageInspectExecutionInput): Promise<string>
   apply(context: CommandContext, input: ResourcePackageApplyExecutionInput): Promise<string>

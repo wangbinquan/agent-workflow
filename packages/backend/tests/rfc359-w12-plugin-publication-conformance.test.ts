@@ -40,7 +40,7 @@ import {
   installPlugin,
   plannedGenerationDir,
 } from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'

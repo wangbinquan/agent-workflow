@@ -481,7 +481,16 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       //
       // 端到端竞态覆盖仍缺，需要能精确注入 DB 时序的 seam。**这是已知缺口，不是已覆盖。**
       const src = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'services', 'resourcePackage', 'export.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'resource-catalog',
+          'application',
+          'package',
+          'export.ts',
+        ),
         'utf8',
       )
       const fenceFn = src.slice(
@@ -598,7 +607,16 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       // 真正的端到端竞态覆盖仍缺，留给能注入 FS 时序的场景（如 `readSkillTree` 加测试
       // seam）——**这是一个已知缺口，不是已覆盖**。
       const src = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'services', 'resourcePackage', 'export.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'resource-catalog',
+          'application',
+          'package',
+          'export.ts',
+        ),
         'utf8',
       )
       // ① 摘要把**字节**算进去（`Buffer.from(f.bytes)`），不是只有 path。

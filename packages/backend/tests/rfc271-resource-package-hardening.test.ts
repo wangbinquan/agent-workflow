@@ -19,11 +19,17 @@ import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { translateDecisions } from '../src/services/resourcePackage/commit'
+import { translateDecisions } from '../src/modules/resource-catalog/application/package/commit'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
-import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
-import { assignSlugs, serializeClosure } from '../src/services/resourcePackage/serialize'
+import { parseResourcePackage } from '../src/modules/resource-catalog/application/package/parse'
+import {
+  signPreviewToken,
+  verifyPreviewToken,
+} from '../src/modules/resource-catalog/application/package/preview'
+import {
+  assignSlugs,
+  serializeClosure,
+} from '../src/modules/resource-catalog/application/package/serialize'
 import { encodeZip } from '../src/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'

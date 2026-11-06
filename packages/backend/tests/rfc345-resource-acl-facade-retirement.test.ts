@@ -111,11 +111,6 @@ const REMOVE_OWNERS = {
     'packages/backend/src/modules/resource-catalog/public/operations.ts',
     'PluginCatalogModule',
   ),
-  resourcePackageRead: owner(
-    'RFC-294 W6',
-    'packages/backend/src/modules/resource-catalog/application/package/ports.ts',
-    'ResourcePackageReadPort',
-  ),
   skillBoot: owner(
     'RFC-294 W4-E1',
     'packages/backend/src/modules/resource-catalog/public/participants.ts',
@@ -378,27 +373,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['hasResourceAclBypass'],
     'knowledge-evolution ACL bypass',
     REMOVE_OWNERS.knowledgeEvolution,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'services/resourcePackage/closure.ts',
-    ['isVisibleRow'],
-    'resource-package closure visibility',
-    REMOVE_OWNERS.resourcePackageRead,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'services/resourcePackage/export.ts',
-    ['isVisibleRow'],
-    'resource-package export visibility',
-    REMOVE_OWNERS.resourcePackageRead,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'services/resourcePackage/preview.ts',
-    ['isVisibleRow'],
-    'resource-package preview visibility',
-    REMOVE_OWNERS.resourcePackageRead,
   ),
   edge(
     'services/resourceAcl.ts',

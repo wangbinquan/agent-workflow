@@ -28,8 +28,8 @@ import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/compos
 import { composePostgresqlResourcePackageProvider } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreviewFromReadPort } from '@/services/resourcePackage/preview'
+import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
+import { buildPackagePreviewFromReadPort } from '@/modules/resource-catalog/application/package/preview'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider } from './helpers/eachProvider'
 

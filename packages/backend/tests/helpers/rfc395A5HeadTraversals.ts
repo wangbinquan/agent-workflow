@@ -48,7 +48,7 @@ export const headReferenceTraversals = {
     ],
   },
   closure: {
-    path: 'packages/backend/src/services/resourcePackage/closure.ts',
+    path: 'packages/backend/src/modules/resource-catalog/application/package/closure.ts',
     names: ['parseJsonArray', 'parseJsonObject', 'definitionOf', 'directRefsOf'],
     functions: [
       "function parseJsonArray(value: unknown): unknown[] {\n  if (Array.isArray(value)) return value\n  if (typeof value !== 'string') return []\n  try {\n    const parsed = JSON.parse(value)\n    return Array.isArray(parsed) ? parsed : []\n  } catch {\n    return []\n  }\n}",

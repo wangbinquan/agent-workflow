@@ -3205,7 +3205,7 @@ diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionCo
      用户点保存后是「按钮点了没反应」，与 RES-35 在插件页修好的那类问题同形。
      B93 未就此写断言（会锁死一个错误形态）；RES-27 只断言了**请求根本没发出去**这条硬事实。
 2. **【真实缺陷，P3 / 数据整洁】导入配置包时跳过可选密钥，会在库里留下一个空的承载对象。**
-   `packages/backend/src/services/resourcePackage/secretInputs.ts:113-122` 跳过的密钥走
+   `packages/backend/src/modules/resource-catalog/application/package/secretInputs.ts:113-122`（RFC-455 前在 `services/resourcePackage/`）跳过的密钥走
    `delete slot.parent[slot.key]`，删的是**叶子键**；当该密钥是某个对象下的唯一一项时，父对象
    会以 `config.headers: {}` 的形态留在库里。功能无害（不会误当成凭据），但存量数据会逐渐积累
    空壳字段。RES-40 断言的是「`Authorization` 这个键整个消失、绝不留 `<REDACTED:SECRET>` 字面量」，
@@ -3760,7 +3760,7 @@ MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-3
 3. **【账本措辞与实现不符】WF-57 的非法 ref 是 422 不是 400**：`ValidationError('execution-contract-ref-invalid')`
    在本仓映射成 422；不存在的 ref 是 404 `execution-contract-not-found`。两者确实可分辨（这点账本说对了）。
 4. **【产品观察，P3 / 数据陈旧，未写成断言】配置包导入不重写 `agentName`。**
-   `services/resourcePackage/serialize.ts:437-442` 只把 `agentId` 抬成 `agentRef`、`agentName` 原样带走；
+   `modules/resource-catalog/application/package/serialize.ts:437-442`（RFC-455 前在 `services/resourcePackage/`）只把 `agentId` 抬成 `agentRef`、`agentName` 原样带走；
    `bundle/lower.ts:277-281` 只把 `agentRef` 落回 `agentId`。于是**导入时给代理起了新名字**之后，新工作流
    节点上的 `agentName` 仍是**源代理的名字**，与 `agentId` 指向的新代理不一致。运行期以 id 为准
    （`nodeTitle` 走 agentLookup by id），目前只是陈旧冗余；但 `agentName` 在 call 目标那一族是**被当作

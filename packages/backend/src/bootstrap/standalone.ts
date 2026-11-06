@@ -3,7 +3,7 @@
 import { join } from 'node:path'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
-import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
+import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { createFileArchivedEventsReader } from '@/platform/background/eventsArchiveReader'
 import { Paths } from '@/util/paths'

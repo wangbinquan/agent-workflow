@@ -131,7 +131,9 @@ describe('C3 · 救援态的本地 YAML 导出已下线', () => {
 })
 
 describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
-  const closure = read(resolve(BACKEND, 'src', 'services', 'resourcePackage', 'closure.ts'))
+  const closure = read(
+    resolve(BACKEND, 'src', 'modules', 'resource-catalog', 'application', 'package', 'closure.ts'),
+  )
 
   test('C4：缺特权权限 ⇒ **拒绝**，不降级成「导出但去掉那些节点」', () => {
     // 降级会产出一个「看起来能用、跑起来少一半」的包——比拒绝糟得多。
@@ -140,7 +142,9 @@ describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
   })
 
   test('C5：覆盖判据是 owner，不是 exact-id、也不是角色', () => {
-    const commit = read(resolve(BACKEND, 'src', 'services', 'resourcePackage', 'commit.ts'))
+    const commit = read(
+      resolve(BACKEND, 'src', 'modules', 'resource-catalog', 'application', 'package', 'commit.ts'),
+    )
     const adapter = read(
       resolve(
         BACKEND,

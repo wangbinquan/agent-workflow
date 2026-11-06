@@ -46,8 +46,8 @@ import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infr
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
-import { signPreviewToken } from '@/services/resourcePackage/preview'
+import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
+import { signPreviewToken } from '@/modules/resource-catalog/application/package/preview'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 

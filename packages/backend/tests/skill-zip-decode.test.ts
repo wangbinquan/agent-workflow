@@ -5,10 +5,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zipSync, type Zippable } from 'fflate'
 import { SKILL_ZIP_LIMITS } from '@agent-workflow/shared'
-import {
-  decodeZip,
-  ZIP_LIMITS,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
+import { decodeZip, ZIP_LIMITS } from '../src/modules/resource-catalog/domain/zipArchive'
 import { ValidationError } from '../src/util/errors'
 
 function makeZip(files: Record<string, Uint8Array | string>): Uint8Array {

@@ -41,7 +41,7 @@ import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrast
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { errorHandler } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'

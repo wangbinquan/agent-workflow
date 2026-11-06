@@ -61,7 +61,7 @@ import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/compos
 import { composePostgresqlResourcePackageProvider } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
+import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider } from './helpers/eachProvider'
 import { dropAbortTrigger, installAbortTrigger } from './helpers/faultTrigger'

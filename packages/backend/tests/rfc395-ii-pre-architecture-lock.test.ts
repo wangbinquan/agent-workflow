@@ -124,7 +124,7 @@ describe('RFC-395 II-pre deletion locks', () => {
     expect(readSource('platform/atomic-apply/convergence.ts')).toContain(
       'decideAtomicApplyConverge',
     )
-    const bundle = readSource('services/bundle/provider.ts')
+    const bundle = readSource('modules/resource-catalog/domain/bundlePlan.ts')
     for (const name of [
       'BundleApplyState',
       'StagedSkillVersionLike',

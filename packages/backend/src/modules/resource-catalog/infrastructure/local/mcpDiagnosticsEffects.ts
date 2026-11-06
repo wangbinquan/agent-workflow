@@ -229,7 +229,7 @@ export function createLocalMcpDiagnosticsEffects(
       return { row, binary, snapshotJson, target: captureTarget(binary), label: binary }
     },
     async currentMcpHash(mcp) {
-      const { mcpOperationConfigHashOf } = await import('@/services/mcpOperationRevision')
+      const { mcpOperationConfigHashOf } = await import('../../domain/mcpOperationRevision')
       return mcpOperationConfigHashOf(mcp)
     },
     cleanupWorkspace(row) {

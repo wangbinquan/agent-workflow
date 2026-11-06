@@ -13,7 +13,7 @@
 import { stringify as stringifyYaml } from 'yaml'
 import type { BundleResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { isVisibleRow } from '@/services/resourceAcl'
+import { isVisibleRow } from '../../domain/resourceAccess'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
@@ -25,7 +25,8 @@ import {
   type ExportClosure,
 } from './closure'
 import { expectTokenOf } from './preview'
-import { resourcePackageDocumentOf, type ResourcePackageReadPort } from './providerReadPort'
+import { resourcePackageDocumentOf } from './packageDocument'
+import { type ResourcePackageReadPort } from './ports'
 import { serializeClosure, type SerializedPackage } from './serialize'
 import { packagedSkillFileRef, type SkillTree } from './skillTree'
 import { collectBundleBuiltins, collectPackageRequirements } from './requirements'

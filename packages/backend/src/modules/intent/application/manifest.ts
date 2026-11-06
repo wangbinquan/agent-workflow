@@ -16,8 +16,10 @@
 
 import type { Agent, Mcp, Plugin, Workflow, Workgroup } from '@agent-workflow/shared'
 import { decodeIntentRef, encodeIntentRef, type AclResourceType } from '@agent-workflow/shared'
-import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
-import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
+import {
+  mcpOperationConfigHashOf,
+  pluginOperationConfigHashOf,
+} from '@/modules/resource-catalog/public/queries'
 
 export type IntentFence =
   | { kind: 'agent'; updatedAt: number; aclRevision: number }

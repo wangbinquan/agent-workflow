@@ -24,8 +24,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { collectBundleRefIssues } from '@agent-workflow/shared'
-import { translateDecisions } from '../src/services/resourcePackage/commit'
-import type { ParsedPackage } from '../src/services/resourcePackage/parse'
+import { translateDecisions } from '../src/modules/resource-catalog/application/package/commit'
+import type { ParsedPackage } from '../src/modules/resource-catalog/application/package/parse'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const read = (rel: string): string => readFileSync(resolve(BACKEND, rel), 'utf8')
@@ -350,7 +350,7 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     const routes = read('src/routes/resourcePackages.ts')
     expect(routes).toContain('parseRootFence(c)')
     expect(routes).toContain('expectedVersion')
-    const exportSrc = read('src/services/resourcePackage/export.ts')
+    const exportSrc = read('src/modules/resource-catalog/application/package/export.ts')
     // 客户端只需要知道 root revision。
     expect(exportSrc).toContain(
       'assertRootUnchanged(closure.root.type, closure.root.row, opts.expect)',
@@ -405,7 +405,7 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     ]) {
       expect({ key, present: routes.includes(key) }).toEqual({ key, present: true })
     }
-    const exportSrc = read('src/services/resourcePackage/export.ts')
+    const exportSrc = read('src/modules/resource-catalog/application/package/export.ts')
     // 形态取自 `expectTokenOf` 那一份定义，不另抄一套。
     // 导出 fence 必须**派生自共享的 token 定义**，不能在 export.ts 里手写一份字段表
     // ——手写的那份永远会落后于 schema。
@@ -445,7 +445,7 @@ describe('P2-2 / P2-7 · CLI 的两阶段与身份', () => {
 
 describe('P1-2 · 脱敏三件套必须真的被调用（写了没接上 = 没写）', () => {
   test('serialize 调了 argv / url / pluginSpec 三个 helper', () => {
-    const src = read('src/services/resourcePackage/serialize.ts')
+    const src = read('src/modules/resource-catalog/application/package/serialize.ts')
     expect(src).toContain('redactArgv(')
     expect(src).toContain('redactUrlKeepingShape(')
     expect(src).toContain('redactPluginSpec(')
@@ -453,8 +453,8 @@ describe('P1-2 · 脱敏三件套必须真的被调用（写了没接上 = 没�
 
   test('requirements.pluginSources 取的是**已脱敏**的那一份，不重读原行', () => {
     // 重读 `row.spec` 等于给密钥开第二条出口，且两处脱敏规则会随时间漂移。
-    const exportSrc = read('src/services/resourcePackage/export.ts')
-    const requirementsSrc = read('src/services/resourcePackage/requirements.ts')
+    const exportSrc = read('src/modules/resource-catalog/application/package/export.ts')
+    const requirementsSrc = read('src/modules/resource-catalog/application/package/requirements.ts')
     expect(exportSrc).toContain('collectPackageRequirements(serialized.bundle)')
     expect(requirementsSrc).toContain("spec: String(payload.spec ?? '')")
     expect(exportSrc).not.toContain("spec: String(r.row.spec ?? '')")
@@ -468,7 +468,7 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
     // 整条剔除，全程零报错。
     // RFC-359（apply 引擎合一，plan §5dv）：这几个中立判据搬到了
     // `services/resourcePackage/commit.ts`——原文件是 SQLite 专属编排，随合一退役。
-    const commit = read('src/services/resourcePackage/commit.ts')
+    const commit = read('src/modules/resource-catalog/application/package/commit.ts')
     expect(commit).toContain('export function humanMemberKey(')
     // 分隔符必须是可见字符。
     expect(commit).toContain('`${workgroupSlug}#${username}`')
@@ -492,8 +492,8 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
       return false
     }
     for (const rel of [
-      'src/services/resourcePackage/commit.ts',
-      'src/services/resourcePackage/preview.ts',
+      'src/modules/resource-catalog/application/package/commit.ts',
+      'src/modules/resource-catalog/application/package/preview.ts',
       'src/services/workflow.validator.ts',
     ]) {
       expect({ rel, hit: hasControlChar(read(rel)) }).toEqual({ rel, hit: false })
@@ -507,8 +507,8 @@ describe('P1-1 · 写权限点表两头受检', () => {
   // 中间件无从知道一个包会碰哪几类资源，而 commit 必须拿它当时的 Actor 再算一遍）。
   // 抽取是对的，守卫不该因为「文件搬了家」而红。
   const PERMISSION_SOURCES = [
-    'src/services/resourcePackage/preview.ts',
-    'src/services/resourcePackage/importPermissions.ts',
+    'src/modules/resource-catalog/application/package/preview.ts',
+    'src/modules/resource-catalog/application/package/importPermissions.ts',
   ]
   const permissionSource = (): string =>
     PERMISSION_SOURCES.map((p) => {
@@ -540,9 +540,9 @@ describe('P1-1 · 写权限点表两头受检', () => {
     // `missingPermissions`，让用户先看到缺什么全貌）。两种形态都满足用户定的
     // 「令牌有写权限才能导入」，守卫要的是**这条拒绝存在**。
     const sources = [
-      'src/services/resourcePackage/preview.ts',
-      'src/services/resourcePackage/commit.ts',
-      'src/services/resourcePackage/importPermissions.ts',
+      'src/modules/resource-catalog/application/package/preview.ts',
+      'src/modules/resource-catalog/application/package/commit.ts',
+      'src/modules/resource-catalog/application/package/importPermissions.ts',
     ]
       .map((p) => {
         try {

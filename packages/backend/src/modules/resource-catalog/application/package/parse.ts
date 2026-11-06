@@ -18,8 +18,8 @@ import {
   collectBundleRefIssues,
   type ResourceBundle,
 } from '@agent-workflow/shared'
-import { decodeZip } from '@/modules/resource-catalog/infrastructure/legacy/skill-zip'
-import { resourceTypeOfOp } from '@/services/bundle/provider'
+import { decodeZip } from '../../domain/zipArchive'
+import { resourceTypeOfOp } from '../../domain/bundlePlan'
 import { ValidationError } from '@/util/errors'
 import { PACKAGE_FORMAT_VERSION } from './export'
 import { packagedSkillFileRef } from './skillTree'

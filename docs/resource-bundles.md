@@ -74,7 +74,8 @@ payload 逐字段对齐**正式的** create/snapshot schema，不是 intent 版�
 
 ## 3. `BundleApply` 引擎
 
-`services/bundle/`。五段生命周期：
+`services/bundle/`（现状：RFC-395 起统一状态机在 `platform/atomic-apply`，资源包是它的场景适配器；依赖规划与回执合同 RFC-455 起在
+resource-catalog `domain/bundlePlan.ts`，资源包算法层在 `application/package/`）。五段生命周期：
 
 ```
 ① claim      journal 插入 'prepared'，UNIQUE(scope,key) 幂等

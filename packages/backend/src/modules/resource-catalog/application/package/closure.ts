@@ -34,9 +34,10 @@ import {
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { isVisibleRow } from '@/services/resourceAcl'
+import { isVisibleRow } from '../../domain/resourceAccess'
 import { ValidationError } from '@/util/errors'
-import { resourcePackageDocumentOf, type ResourcePackageReadPort } from './providerReadPort'
+import { resourcePackageDocumentOf } from './packageDocument'
+import { type ResourcePackageReadPort } from './ports'
 
 /** 闭包里的一条资源。`row` 是 canonical 行（未脱敏——脱敏在序列化段）。 */
 export interface ClosureResource {

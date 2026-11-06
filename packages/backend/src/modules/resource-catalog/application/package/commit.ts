@@ -26,14 +26,11 @@ import {
   type ResourceBundle,
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
-import { opSlug, resourceTypeOfOp } from '@/services/bundle/provider'
-import { missingImportPermissions } from '@/services/resourcePackage/importPermissions'
-import type { ParsedPackage } from '@/services/resourcePackage/parse'
-import type {
-  PackageSecretInput,
-  PackageSecretProjection,
-} from '@/services/resourcePackage/secretInputs'
-import type { ImportAction } from '@/services/resourcePackage/preview'
+import { opSlug, resourceTypeOfOp } from '../../domain/bundlePlan'
+import { missingImportPermissions } from './importPermissions'
+import type { ParsedPackage } from './parse'
+import type { PackageSecretInput, PackageSecretProjection } from './secretInputs'
+import type { ImportAction } from './preview'
 
 export interface ImportDecision {
   localSlug: string

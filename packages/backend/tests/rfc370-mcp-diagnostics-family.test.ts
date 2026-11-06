@@ -30,7 +30,7 @@ import type {
   McpRuntimeTestTurnRecord,
 } from '@/modules/resource-catalog/application/mcps/runtimeTestPersistence'
 import { ResourceOperationCoordinator } from '@/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
-import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
+import { mcpOperationConfigHashOf } from '@/modules/resource-catalog/domain/mcpOperationRevision'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
 

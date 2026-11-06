@@ -46,17 +46,17 @@ import {
   translateDecisions,
   translatedBundle,
   typeOfSlug,
-} from '@/services/resourcePackage/commit'
-import type { ParsedPackage } from '@/services/resourcePackage/parse'
-import { applyPackageSecretInputs } from '@/services/resourcePackage/secretInputs'
+} from '../application/package/commit'
+import type { ParsedPackage } from '../application/package/parse'
+import { applyPackageSecretInputs } from '../application/package/secretInputs'
 import {
   normalizeHumanMemberBaseline,
   verifyPreviewToken,
   type HumanMemberBaselineEntry,
-} from '@/services/resourcePackage/preview'
+} from '../application/package/preview'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
-import { opSlug, planBundleOps, resourceTypeOfOp } from '@/services/bundle/provider'
+import { opSlug, planBundleOps, resourceTypeOfOp } from '../domain/bundlePlan'
 
 type PostgresqlResourcePackageMutationSession = ReturnType<
   PostgresqlResourcePackageMutationSessionFactory['create']

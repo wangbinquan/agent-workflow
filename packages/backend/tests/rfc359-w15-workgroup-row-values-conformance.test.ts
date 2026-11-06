@@ -40,7 +40,7 @@ import {
 import { createWorkgroupRepository } from '@/modules/resource-catalog/infrastructure/workgroupRepository'
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { encodeZip } from '@/util/zip'
 import { ValidationError } from '@/util/errors'
 import { removeTempDirSync } from './fixtures/tempDir'

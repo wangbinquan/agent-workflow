@@ -82,7 +82,7 @@ import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composi
 import { composeTaskWorkspaceInsight } from '@/modules/workspace-insight/composition'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,

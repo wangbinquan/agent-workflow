@@ -179,9 +179,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'must-not-run')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const base = {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -230,9 +230,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'native-session')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -334,9 +334,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'native-reset-new')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName,
@@ -426,9 +426,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return failed
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName,
@@ -499,9 +499,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return failed
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName,
@@ -561,9 +561,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         })
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -629,9 +629,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         })
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -672,9 +672,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'native-idempotent')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const input = {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -749,9 +749,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'native-message-replay')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -833,9 +833,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'native-private')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(ownerActor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -884,9 +884,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'must-not-spawn')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -936,9 +936,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'must-not-prompt')
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -1015,9 +1015,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       killStaleRunProcessTree: async () => reapOutcome,
     })
     try {
-      const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-        mcp,
-      )
+      const hash = (
+        await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+      ).mcpOperationConfigHashOf(mcp)
       const created = await service.create(actor, mcp, {
         expectedMcpConfigHash: hash,
         runtimeName: 'test-opencode',
@@ -1104,9 +1104,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'orphan-session')
     mkdirSync(scratchRoot, { recursive: true })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
     await insertOne(db, mcpRuntimeTestSessions, {
       id: 'orphan-session',
@@ -1189,9 +1189,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const runtimeSessionId = 'native-recovered-opencode'
     const scratchRoot = join(root, 'mcp-runtime-tests', sessionId)
     mkdirSync(scratchRoot, { recursive: true })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
     await insertOne(db, mcpRuntimeTestSessions, {
       id: sessionId,
@@ -1273,9 +1273,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         })
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -1312,9 +1312,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => successResult(opts, 'native-after-resume'),
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const request = {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -1358,9 +1358,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         })
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -1415,9 +1415,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         })
       },
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const created = await service.create(actor, mcp, {
       expectedMcpConfigHash: hash,
       runtimeName: 'test-opencode',
@@ -1456,9 +1456,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     await service.start()
     const scratchRoot = join(root, 'mcp-runtime-tests', 'expired-queued-session')
     mkdirSync(scratchRoot, { recursive: true })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
     await insertOne(db, mcpRuntimeTestSessions, {
       id: 'expired-queued-session',
@@ -1548,7 +1548,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
         return successResult(opts, 'native-continuation')
       },
     })
-    const { mcpOperationConfigHashOf } = await import('../src/services/mcpOperationRevision')
+    const { mcpOperationConfigHashOf } =
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
     const primed = await service.create(actor, secondMcp, {
       expectedMcpConfigHash: mcpOperationConfigHashOf(secondMcp),
       runtimeName: 'test-opencode',
@@ -1615,9 +1616,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       },
     })
     await service.start()
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
     await insertOne(db, mcpRuntimeTestSessions, {
       id: sessionId,
@@ -1667,9 +1668,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'queued-session')
     mkdirSync(scratchRoot, { recursive: true })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
     await insertOne(db, mcpRuntimeTestSessions, {
       id: 'queued-session',
@@ -1722,9 +1723,9 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'queued-resume-session')
     mkdirSync(scratchRoot, { recursive: true })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
+    const hash = (
+      await import('../src/modules/resource-catalog/domain/mcpOperationRevision')
+    ).mcpOperationConfigHashOf(mcp)
     const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
     await insertOne(db, mcpRuntimeTestSessions, {
       id: 'queued-resume-session',

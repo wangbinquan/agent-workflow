@@ -11,8 +11,8 @@ import { createResourceCatalogQuery } from '../../src/modules/resource-catalog/i
 import { createMcpRepository } from '../../src/modules/resource-catalog/infrastructure/mcpRepository'
 import { createPluginRepository } from '../../src/modules/resource-catalog/infrastructure/pluginRepository'
 import { getAgentById } from '../../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { withMcpOperationConfigHash } from '../../src/services/mcpOperationRevision'
-import { withPluginOperationConfigHash } from '../../src/services/pluginOperationRevision'
+import { withMcpOperationConfigHash } from '../../src/modules/resource-catalog/domain/mcpOperationRevision'
+import { withPluginOperationConfigHash } from '../../src/modules/resource-catalog/domain/pluginOperationRevision'
 import {
   listSkillFiles,
   readSkillContent,

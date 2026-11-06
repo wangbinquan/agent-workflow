@@ -18,8 +18,14 @@ import {
   McpRemoteConfigSchema,
   PACKAGE_SECRET_PLACEHOLDER,
 } from '@agent-workflow/shared'
-import type { ClosureResource, ExportClosure } from '../src/services/resourcePackage/closure'
-import { assignSlugs, serializeClosure } from '../src/services/resourcePackage/serialize'
+import type {
+  ClosureResource,
+  ExportClosure,
+} from '../src/modules/resource-catalog/application/package/closure'
+import {
+  assignSlugs,
+  serializeClosure,
+} from '../src/modules/resource-catalog/application/package/serialize'
 
 const res = (
   type: ClosureResource['type'],

@@ -36,7 +36,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { expectTokenOf } from '../src/services/resourcePackage/preview'
+import { expectTokenOf } from '../src/modules/resource-catalog/application/package/preview'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const agentRow = async (

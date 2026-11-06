@@ -23,7 +23,7 @@ import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { expectTokenOf } from '../src/services/resourcePackage/preview'
+import { expectTokenOf } from '../src/modules/resource-catalog/application/package/preview'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 
 const actorOf = (id: string): Actor =>

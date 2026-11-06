@@ -36,11 +36,14 @@ import { stringify as stringifyYaml } from 'yaml'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
+import { decodeZip } from '../src/modules/resource-catalog/domain/zipArchive'
 import { encodeZip } from '../src/util/zip'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { MAX_DECLARED_BUILTINS, parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
+import {
+  MAX_DECLARED_BUILTINS,
+  parseResourcePackage,
+} from '../src/modules/resource-catalog/application/package/parse'
+import { verifyPreviewToken } from '../src/modules/resource-catalog/application/package/preview'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'

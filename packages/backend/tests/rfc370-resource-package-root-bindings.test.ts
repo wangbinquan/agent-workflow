@@ -11,7 +11,7 @@ import type {
   ResourcePackagePluginArtifactOwner,
   SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
+import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { sha256Hex } from '@/util/hash'
 import { encodeZip } from '@/util/zip'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

@@ -10,11 +10,11 @@ import {
 import { createResourcePackageAtomicApplyOperations } from '../../src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createResourcePackageReadPort } from '../../src/modules/resource-catalog/infrastructure/packageResourceRows'
 import { readPackageSkillTree } from '../../src/modules/resource-catalog/infrastructure/packageSkillTree'
-import { createPostgresqlResourcePackageExecutionAdapter } from '../../src/services/resourcePackage/executionAdapter'
-import { createResourcePackagePluginInstaller } from '../../src/services/resourcePackage/pluginInstallerAdapter'
-import { walkExportClosureFromReadPort } from '../../src/services/resourcePackage/closure'
-import { exportResourcePackageFromReadPort } from '../../src/services/resourcePackage/export'
-import { buildPackagePreviewFromReadPort } from '../../src/services/resourcePackage/preview'
+import { createPostgresqlResourcePackageExecutionAdapter } from '../../src/modules/resource-catalog/composition/resourcePackageExecution'
+import { createResourcePackagePluginInstaller } from '../../src/modules/resource-catalog/composition/resourcePackagePluginInstaller'
+import { walkExportClosureFromReadPort } from '../../src/modules/resource-catalog/application/package/closure'
+import { exportResourcePackageFromReadPort } from '../../src/modules/resource-catalog/application/package/export'
+import { buildPackagePreviewFromReadPort } from '../../src/modules/resource-catalog/application/package/preview'
 
 type ClosureParameters = Parameters<typeof walkExportClosureFromReadPort>
 type PreviewParameters = Parameters<typeof buildPackagePreviewFromReadPort>

@@ -172,7 +172,7 @@ function pluginArtifactJson(
 
 /**
  * 本引擎自己**生产写出**的回执格式。两套载荷格式互不认识，与落盘工件同源：
- * SQLite 的 `BundleReceipt.applied[]` 逐条是 `opId`（`services/bundle/provider.ts` 的
+ * SQLite 的 `BundleReceipt.applied[]` 逐条是 `opId`（`modules/resource-catalog/domain/bundlePlan.ts` 的
  * `BundleAppliedOp`），PostgreSQL 的逐条是 `operationId` 且解码器 `.strict()`。
  *
  * 按引擎喂生产真形状不是讲究：中立信封门只认 `journalId`，谁把 PG 的载荷 schema 一起搬到

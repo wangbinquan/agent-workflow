@@ -380,6 +380,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/intentContextAuthorization.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts -> @/modules/identity-access/public/participants',
+      // RFC-455: the resource-package execution adapter moved from services/resourcePackage into resource-catalog composition.
+      'packages/backend/src/modules/resource-catalog/composition/resourcePackageExecution.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts -> @/modules/identity-access/public/participants',
@@ -452,7 +454,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/public/operations',
-      'packages/backend/src/services/resourcePackage/executionAdapter.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
