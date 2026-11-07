@@ -19,7 +19,7 @@
 - [x] AC-1 两个判定文件只在 shared 定义一次、`services/execution/` 下不再有它们；`EMPTY_RUNTIME_PROFILE` 只在 runtime-management `public/types`；`taskAgentRun` 不再取 `services/execution/`
 - [x] AC-2 架构计数按实测（`R2` 7 → 3、`R1` 不变），public surface 偏差与越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `3229bcabb`，文档基于 `0f8f03c2e`）
 
@@ -80,6 +80,14 @@ opencode 集成用例（`tests/integration-opencode/rfc281-boundary.integration.
   runtime-management `public/types`，该文件零 import，不成环）；
 - 账本：`R2` 7 → 3（实测，`R1` 99 不变）；public surface 偏差实测 96、与精确清单逐条相等（`EMPTY_RUNTIME_PROFILE` 是闭合接口的值，不添
   偏差）；公共内核清单与 RFC-317 登记的两条 P3 的锚点改指迁入后的同一段代码（按内容重新定位行号）；guard-manifest 不变。
+
+## CI（AC-4）
+
+- `21968c3e3`：exact SHA 主 CI run 42361259041 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42361259059 与 integration-opencode run 42361259044 通过（后者加载了本 RFC 一并改指的 opencode 集成用例 `rfc281-boundary`，其中依赖真实 LLM 的用例按门控跳过）。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件合计 98 pass / 1 fail——
+  `rfc376-report` 的已提交报告对读撞自带的 300 秒（408.3 s；负载 64～84，RFC-464 的全量 SQLite 与 PostgreSQL lane 同时在跑）。该用例
+  只对已提交源生成两次报告、不读文档，在只差这 5 个文档文件的本 RFC 候选上 63 s 通过（见集中验证）；其余 11 个文件全过，读文档的
+  两个用例在最终文本上复跑通过。
 
 ## PR / 提交
 

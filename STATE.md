@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-463 启动核验与清单观测的判定进 shared、空运行参数归 runtime-management（In Progress；`design/RFC-463-startup-observation-judgments-to-shared/`）
+## 2026-11-07 RFC-463 启动核验与清单观测的判定进 shared、空运行参数归 runtime-management（Done；`design/RFC-463-startup-observation-judgments-to-shared/`）
 
 - **来由**：RFC-294 W9-D 第十步。`R2` 余下 7 条，其中 4 条是 task-execution `taskAgentRun` 为三个执行助手取 `services/execution/`：
   RFC-280 / RFC-297 的启动核验与清单观测判定（`startupVerification`、`inventoryObservation`，shared 已有形状上的纯函数，消费方横跨
@@ -17,6 +17,12 @@
   RFC-462 导出仓库里对照，两边同一例到点）与 `rfc321`；PostgreSQL 238 个文件的 lane 余 20 个文件（超时与 MCP 测试台用例自带的 2 秒等待），
   复跑全过；P0 两引擎各 17 阶段通过（PostgreSQL 等负载降到 28 才放行）；`rfc321` 工作树 10 / 10；文档用例 99 pass / 0 fail。计数：
   `R1` 99 不变、`R2` 7 → 3，`services/` 77 → 75，public surface 偏差 96 不变，其余架构 counts 不变。
+- **落地**：`21968c3e3`。
+- **CI**：exact SHA 主 CI run 42361259041 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42361259059 与 integration-opencode run 42361259044 通过（后者加载了本 RFC 一并改指的 opencode 集成用例 `rfc281-boundary`，其中依赖真实 LLM 的用例按门控跳过）。
+- **下一步**：RFC-294 W9-D 余项（`services/` 75 个文件；`R2` 3 条，都在驱动接缝上；`R1` 99 条）。RFC-464：task-execution 无实时捕获时
+  按缺席处理（不再借 opencode 驱动的 `NOOP_HANDLE`）、intent 的轮次事件 sink 实现自己端口声明的合同（不再经 `services/sessionEventSink`
+  取 runtime-management 的会话事件合同），`R2` 3 → 1；余下 1 条（runtime-management `agentMaterialEvidence` 取会话捕获 / 清扫上下文）要先
+  定会话捕获持久化端口的归属、随驱动一族归位。
 
 ## 2026-11-06 RFC-462 运行时观测词汇归 runtime-management（Done；`design/RFC-462-runtime-observation-vocabulary-to-runtime-management/`）
 
