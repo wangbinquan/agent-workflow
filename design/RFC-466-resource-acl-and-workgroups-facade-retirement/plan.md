@@ -18,7 +18,7 @@
 - [x] AC-1 两个 facade 不在、零引用；六个消费方按 G1 / G2 改取；生产树里不再有 `legacyCallClosure` 与 `assertWorkflowLaunchable`；G5 的符号收回
 - [x] AC-2 架构计数按实测（`R1` 96 → 86），public surface 偏差、未被消费的 public 符号与越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `83e179801`）
 
@@ -96,6 +96,11 @@
 - 账本：`R1` 96 → 86（实测，与账本逐条相等，`R2` 0）；public surface 偏差实测 94 不变、capability 归属清单 18 条逐条相等；public surface
   1501 → 1496（新转出 1 个、收回 6 个）、未被消费的 public 符号 323 → 322；commons-manifest 的 `resourceacl-ts` 内核改指 resource-catalog
   的四个文件；guard-manifest 刷新改到的守卫文件行数。
+
+## CI（AC-4）
+
+- `b29152824`：exact SHA 主 CI run 42401552131 首轮全绿（70 个 job），windows-platform run 42401552097 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 6 个 Done 文档文件，含 `docs/dev-gotchas.md` 的三条经验）的导出仓库上重跑上述文档用例：12 个文件全过，合计 100 pass / 0 fail（负载 14～18），读文档的两个用例在最终文本上复跑通过。
 
 ## PR / 提交
 

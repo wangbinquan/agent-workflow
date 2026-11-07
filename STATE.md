@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-466 退役 resourceAcl 与 workgroups 兼容 facade（In Progress；`design/RFC-466-resource-acl-and-workgroups-facade-retirement/`）
+## 2026-11-07 RFC-466 退役 resourceAcl 与 workgroups 兼容 facade（Done；`design/RFC-466-resource-acl-and-workgroups-facade-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十三步（facade 清仓）。`R1` 96 条里最大的一处是 RFC-345 T9 留下的 `services/resourceAcl.ts`（69 行纯
   re-export，9 条），另有一行 `export *` 的 `services/workgroups.ts`（1 条）。前者剩 6 个生产消费方：collaboration 评审写路径（参数里已有
@@ -24,6 +24,11 @@
   复跑 77 个文件余 `lifecycle-property` 的 PostgreSQL 3 例撞自带的 15 秒（RFC-465 导出仓库同一时刻对照，同样 3 例）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。
   计数：`R1` 96 → 86、`R2` 0，public surface 1501 → 1496、偏差 94 不变，未被消费的 public 符号 323 → 322，`services/` 75 → 73，
   不可达生产文件 26 → 24，越界类计数不变。
+- **落地**：`b29152824`。
+- **CI**：exact SHA 主 CI run 42401552131 首轮全绿（70 个 job），windows-platform run 42401552097 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 73 个文件；`R2` 0 条；`R1` 86 条）。`R1` 大头：`task`、`nodeRunMint`、
+  `developmentDeliveryDeps`、`systemAgentRun` 与 `execution/taskExecutionResourceDependencies`；运行时驱动一族归 runtime-management
+  infrastructure 之前，先把经 `services/` 取驱动的其他 context 换成 runtime-management 的端口或装配。
 
 ## 2026-11-07 RFC-465 会话捕获的持久化端口与请求合同归 runtime-management（Done；`design/RFC-465-session-capture-port-to-runtime-management/`）
 

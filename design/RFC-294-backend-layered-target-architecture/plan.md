@@ -53,7 +53,7 @@
 | W6      | Done（2026-11-02，S7）                                         | RFC-395 T10 合成唯一状态机 `platform/atomic-apply`；RFC-401 合一资源写入栈（六类资源各一个写入参与者）、三入口错误收敛、持久 claim / lease，技能 / fusion / restore 接入，旧技能 operation 生命周期删除 |
 | W7      | Done（2026-10-31 核销）                                         | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴由 RFC-395 交付，逐条核对见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)                                                                                                                                                                             |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                                                                                                             |
-| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84；2026-11-06 RFC-458（W9-D 第五步）：信封解析器归 shared、`services/` 84 → 82；2026-11-06 RFC-459（W9-D 第六步）：owner 作用域名与代理启动保留归 resource-catalog、`services/` 82 → 79；2026-11-06 RFC-460（W9-D 第七步）：调用目标选择与运行期引用解析归 shared 的 `ref/`、信封 nonce 归 `platform/contracts`、`services/` 79 → 77；2026-11-06 RFC-461（W9-D 第八步）：application 层的 WS 推送改经端口、`R2` 17 → 11；2026-11-07 RFC-462（W9-D 第九步）：运行时观测词汇归 runtime-management、`R2` 11 → 7；2026-11-07 RFC-463（W9-D 第十步）：启动核验与清单观测的判定归 shared、空运行参数归 runtime-management、`R2` 7 → 3、`services/` 77 → 75；2026-11-07 RFC-464（W9-D 第十一步）：无实时捕获按缺席处理、intent 自持轮次事件 sink 合同、`R2` 3 → 1；2026-11-07 RFC-465（W9-D 第十二步）：会话捕获的持久化端口与请求合同归 runtime-management、`R2` 1 → 0、`R1` 99 → 96                     |
+| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84；2026-11-06 RFC-458（W9-D 第五步）：信封解析器归 shared、`services/` 84 → 82；2026-11-06 RFC-459（W9-D 第六步）：owner 作用域名与代理启动保留归 resource-catalog、`services/` 82 → 79；2026-11-06 RFC-460（W9-D 第七步）：调用目标选择与运行期引用解析归 shared 的 `ref/`、信封 nonce 归 `platform/contracts`、`services/` 79 → 77；2026-11-06 RFC-461（W9-D 第八步）：application 层的 WS 推送改经端口、`R2` 17 → 11；2026-11-07 RFC-462（W9-D 第九步）：运行时观测词汇归 runtime-management、`R2` 11 → 7；2026-11-07 RFC-463（W9-D 第十步）：启动核验与清单观测的判定归 shared、空运行参数归 runtime-management、`R2` 7 → 3、`services/` 77 → 75；2026-11-07 RFC-464（W9-D 第十一步）：无实时捕获按缺席处理、intent 自持轮次事件 sink 合同、`R2` 3 → 1；2026-11-07 RFC-465（W9-D 第十二步）：会话捕获的持久化端口与请求合同归 runtime-management、`R2` 1 → 0、`R1` 99 → 96；2026-11-07 RFC-466（W9-D 第十三步）：退役 resourceAcl 与 workgroups 兼容 facade、`R1` 96 → 86、`services/` 75 → 73                     |
 
 ### 1.2 已关闭后继索引
 
@@ -612,6 +612,14 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   形状在其上加本机位置字段。`R2` 1 → 0、`R1` 99 → 96、跨 context 内部文件对 48 → 47、public surface 偏差 96 → 94，`services/` 75 不变，
   其余越界类计数不变。下一步：运行时驱动一族归 runtime-management infrastructure（先把经 `services/` 取驱动的其他 context 换成
   runtime-management 的端口或装配）。
+- **2026-11-07 W9-D 第十三步**（[RFC-466](../RFC-466-resource-acl-and-workgroups-facade-retirement/proposal.md)）：RFC-345 留下的
+  `services/resourceAcl.ts` 与 `services/workgroups.ts` 两个兼容 facade 删除——五个活消费方改取 owner 的合同（collaboration 自己的任务角色
+  端口、resource-catalog `public/queries` / `public/types` 的纯判定、task-execution `AgentLaunchResourceOperations.canViewWorkflow`，实现处
+  复用登记过的 resource-catalog 可见性判定），只剩用例在用的调用闭包预言（生产不可达）与完整启动门（无生产调用方）原样迁入
+  `tests/helpers/`；facade 退役后失去模块外消费方的 public 符号按 design §3.3 当场收回（intent 的审计判定落 domain、intent
+  `public/operations.ts` 删除，`callEdgeKey` 退出 resource-catalog public）。`services/` 75 → 73、`legacy-thin-facades` 6 → 5、
+  `export-star-barrels` 6 → 5、不可达生产文件 26 → 24、`R1` 96 → 86、`R2` 0，public surface 1501 → 1496、偏差 94 不变，未被消费的
+  public 符号 323 → 322，越界类计数不变。下一步：`R1` 大头（`task`、`nodeRunMint`、`developmentDeliveryDeps`、`systemAgentRun`）。
 
 ## 5. 依赖顺序
 

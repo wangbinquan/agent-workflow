@@ -635,6 +635,17 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   一起改——两条都只有跑全量守卫才看得到，tsc / eslint 不报。
 - **sha256 源码锁连依赖一起钉**：`tests/fixtures/rfc395-serialized-insert-source-locks.json` 的条目把调用方文件的摘要也钉住，只改
   三行 import 也失配（`rfc359-w8-t29`）。
+- **带 authority 入参的纯判定进 `public/types`**（RFC-466 实撞）：入参类型名以 `Authority` / `Capability` / `Actor` / `Claim` /
+  `Token` / `Tx` 结尾（例如 `ResourceAclAudienceAuthority`）的函数一经 `public/types` / `public/events` 转出，就命中 W0-R 的 capability
+  名称规则（`rfc294-architecture-preflight` 的 capability 归属用例红出 `… leaks through public/types`，SQLite 上那条用例很慢、高负载时
+  先撞时限，PostgreSQL lane 里才看到这句）。这类纯判定放 owner 的 `public/queries`（与其它纯判定同处），不要为过门改类型名。
+- **转出是某个 public 符号唯一的消费方**（RFC-466 实撞）：转出一删、或唯一的读者迁进用例树，架构报告的 `unconsumedPublicSymbols`
+  就涨（intent 的 `canAuditIntentSessions` 只有 facade 转出，`callEdgeKey` 只有迁走的预言在取）——按 RFC-294 design §3.3 当场收回。
+  只把值挪走、留下一个只剩 `export type` 的 public 文件，它没有值 import，会变成**新增的不可达生产文件**（type-only import 不算可达边）；
+  没有 importer 就整个删掉。删前后各采一次架构报告，比对 `unconsumedPublicSymbols` 与 `unreachable-production-files` 两张清单。
+- **钉调用行原文的源码兜底**（RFC-466 实撞）：把直调改成端口注入之前，按被改那一行的**原文**全仓搜用例——`rfc359-w58` 钉着
+  `canViewResource(dependencies.db, actor, 'workflow', workflow)`，改成 `dependencies.canViewWorkflow(...)` 后 1 ms 内红；兜底改成同时锁
+  注入的调用与实现处的那一条，等价于原来那一行。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
   RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
   `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。
