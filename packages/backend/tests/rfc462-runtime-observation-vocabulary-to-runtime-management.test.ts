@@ -4,7 +4,7 @@
 // ① 七个观测词汇（规范化事件一族、系统事件观测、驱动能力声明）在后端源码里只在 runtime-management 的两个端口文件各定义一次，
 //    `services/runtime/types.ts` 不再声明、只经 runtime-management `public/participants` 再导出。
 // ② task-execution 的 `ports/agentExecution` 与 `taskAgentRun`、runtime-management 的 `agentProtocol` 不再为它们取 `services/`；
-//    `agentMaterialEvidence` 只剩会话捕获 / 清扫上下文取 `services/runtime/types`（驱动接缝，非目标）。census AST，带负对照。
+//    `agentMaterialEvidence` 也不再取 `services/`（RFC-465 把会话捕获 / 清扫合同收回 runtime-management）。census AST，带负对照。
 // ③ `DeclarationFace` 仍是声明清单的面集合：驱动的 `declarationFaces` 记录与 shared `DeclaredInjectionManifest` 的键一一对应。
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -85,22 +85,12 @@ describe('RFC-462 —— 消费方改取 owner', () => {
     expect(run).toContain('@/modules/runtime-management/public/types')
   })
 
-  test('agentMaterialEvidence 只剩会话捕获 / 清扫上下文取 services/runtime/types', () => {
-    const text = readFileSync(join(SRC, RM_PORTS, 'agentMaterialEvidence.ts'), 'utf8')
-    const fromServices = /import type \{([^}]*)\} from '@\/services\/runtime\/types'/.exec(text)
-    expect(fromServices).not.toBeNull()
-    expect(
-      fromServices![1]!
-        .split(',')
-        .map((name) => name.trim())
-        .filter(Boolean)
-        .sort(),
-    ).toEqual([
-      'SessionCaptureContext',
-      'SystemAgentSessionSweepContext',
-      'SystemAgentSessionSweepOutcome',
-    ])
-    expect(specifiersOf(RM_PORTS + 'agentMaterialEvidence.ts')).toContain('./agentObservations')
+  // RFC-465: the session capture / sweep contracts it still took from services/runtime/types are now defined in
+  // agentMaterialEvidence itself, so the remaining list is empty.
+  test('agentMaterialEvidence 不再取 services/（RFC-465 收回会话捕获 / 清扫合同）', () => {
+    const specifiers = specifiersOf(RM_PORTS + 'agentMaterialEvidence.ts')
+    expect(specifiers.filter((specifier) => specifier.startsWith('@/services/'))).toEqual([])
+    expect(specifiers).toContain('./agentObservations')
   })
 
   test('负对照：判据认得出经 services/ 取的写法', () => {

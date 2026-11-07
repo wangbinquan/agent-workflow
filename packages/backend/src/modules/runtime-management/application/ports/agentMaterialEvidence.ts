@@ -1,19 +1,38 @@
 import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from '../../domain/usageMeter'
 import type { NormalizedEvent } from './agentObservations'
-import type {
-  SessionCaptureContext,
-  SystemAgentSessionSweepContext,
-  SystemAgentSessionSweepOutcome,
-} from '@/services/runtime/types'
+import type { SystemAgentEventSinkV1 } from './agentSessionEvents'
+import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePersistence'
 import type { AgentLiveCaptureRequest } from './agentLiveCapture'
+import type { Logger } from '@/util/log'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 
-/** All location and fixture fields belong to the selected implementation. */
-export type AgentSessionCaptureRequest = Omit<
-  SessionCaptureContext,
-  'worktreePath' | 'configDirEnv' | 'configDirName' | 'opencodeDbPath'
->
+/** Post-run subagent session capture. All location and fixture fields belong to
+ * the selected implementation (RFC-465: the driver context adds them). */
+export interface AgentSessionCaptureRequest {
+  /** Native store/directory lookup key for this captured epoch. */
+  rootSessionId: string
+  /** Optional final logical root bucket when lookup and resume epochs differ. */
+  logicalRootSessionId?: string
+  nodeRunId: string
+  taskId: string
+  persistence: RuntimeSessionCapturePersistence
+  log: Logger
+  /** opencode: partId-level dedupe from the live poller (skip already-written rows). */
+  alreadyInsertedPartIds?: ReadonlyMap<string, ReadonlySet<string>>
+}
 export type { AgentLiveCaptureRequest } from './agentLiveCapture'
+
+/** RFC-237 — post-exit child-session sweep into a system agent's event sink. */
+export interface SystemAgentSessionSweepRequest {
+  rootSessionId: string
+  sink: SystemAgentEventSinkV1
+  log: Logger
+}
+
+export interface SystemAgentSessionSweepOutcome {
+  failed: boolean
+  failureReason?: unknown
+}
 
 /** Live evidence owns writes; post-run capture consumes its same read view. */
 export interface AgentMaterialLiveCaptureStats {
@@ -44,6 +63,6 @@ export interface AgentMaterialEvidence {
   }): Promise<readonly NormalizedEvent[]>
   startLiveCapture?(request: AgentLiveCaptureRequest): AgentMaterialLiveCaptureHandle
   captureSessionsToSink?(
-    request: SystemAgentSessionSweepContext,
+    request: SystemAgentSessionSweepRequest,
   ): Promise<SystemAgentSessionSweepOutcome>
 }

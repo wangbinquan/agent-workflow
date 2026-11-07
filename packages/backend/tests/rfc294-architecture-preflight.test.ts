@@ -298,7 +298,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts',
   'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts -> packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts -> packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts',
-  'packages/backend/src/modules/runtime-management/application/ports/agentLiveCapture.ts -> packages/backend/src/modules/task-execution/application/ports/runtimeSessionCapturePersistence.ts',
   'packages/backend/src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts -> packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/crewstationRuntimeManagement.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/crewstationSystemAgentMaterial.ts',
@@ -351,11 +350,11 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/resource-catalog/public/participants.ts#HostedIntentResourceArtifacts: unsafe/open type UnknownKeyword',
   'modules/resource-catalog/public/participants.ts#SkillVersionCommitHooks: unsafe/open type FunctionType',
   'modules/resource-catalog/public/queries.ts#AgentResourceIntegrityQueries: unsafe/open type TypeQuery',
-  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/services/runtime/types#SessionCaptureContext',
-  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/services/runtime/types#SystemAgentSessionSweepContext',
-  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/services/runtime/types#SystemAgentSessionSweepOutcome',
   'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/util/log#Logger',
   'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: unsafe/open type FunctionType',
+  // RFC-465: newly visible once the session capture / sweep contracts moved into the module (it replaces the three
+  // `services/runtime/types` forbidden imports) — the sweep outcome's caught `failureReason?: unknown`.
+  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: unsafe/open type UnknownKeyword',
   // RFC-462: newly visible once the driver capability declaration moved into the module — the closed
   // `Readonly<Record<DeclarationFace, FaceSupport>>` that makes a new manifest face a compile error in every driver.
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type MappedType',

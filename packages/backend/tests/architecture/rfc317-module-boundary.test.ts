@@ -120,13 +120,17 @@ describe('RFC-317 T23 —— R2：模块内部不得反向 import legacy 层', (
     ).toEqual(ledgerKeys('R2-outbound-module-to-legacy'))
   })
 
+  // RFC-465 (RFC-294 W9-D) retired the last R2 edge, so the measured layer set is empty; what this locks is that no
+  // R2 debt ever sits outside the application layer (the equality test above keeps the edge set itself at the ledger).
   test('R2 债务**全部**落在 application 层（B0 实测口径；换层说明形态变了，要重新审）', () => {
-    const layers = [...new Set(OUTBOUND.map((edge) => edge.layer))].sort()
+    const outside = [...new Set(OUTBOUND.map((edge) => edge.layer))]
+      .filter((layer) => layer !== 'application')
+      .sort()
     expect(
-      layers,
+      outside,
       'B0 采数时 22 条 outbound 债务全在 application 层。出现别的层意味着' +
         'domain / engine 也开始反向依赖 legacy——那比 application 严重得多，必须单独审',
-    ).toEqual(['application'])
+    ).toEqual([])
   })
 })
 

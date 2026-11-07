@@ -1,6 +1,5 @@
 import type {
   NormalizedEvent,
-  NormalizedEventKind,
   RuntimeDriverCapabilities,
   SystemEventObservation,
 } from '@/modules/runtime-management/public/participants'
@@ -25,6 +24,14 @@ import type {
   RuntimeUsageMeter,
   RuntimeUsageMeterInput,
 } from '@/modules/runtime-management/public/participants'
+import type {
+  AgentSessionCaptureRequest,
+  SystemAgentSessionSweepOutcome,
+  SystemAgentSessionSweepRequest,
+} from '@/modules/runtime-management/public/participants'
+// RFC-465 (RFC-294 W9-D): the capture request and the system-agent sweep contract are runtime-management's
+// (application/ports/agentMaterialEvidence); the driver context below adds the native location fields.
+export type { SystemAgentSessionSweepOutcome }
 // RFC-111 PR-A — runtime abstraction types.
 //
 // The platform drives one agent CLI per node_run. Today that CLI is opencode,
@@ -43,7 +50,6 @@ import type {
 // startLiveCapture? land in later PRs. Type-only imports below keep this a
 // compile-time module (no runtime edge into db/log/shared).
 
-import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
 import type { Logger } from '@/util/log'
 import type {
   Agent,
@@ -228,18 +234,11 @@ export interface ListModelsOpts {
   beforeCacheWrite?: () => void | Promise<void>
 }
 
-/** run-after subagent session capture inputs (union; each driver takes what it
- *  needs — opencode: SQLite BFS + partId dedupe; claude: JSONL under claude's
- *  user-level config root). */
-export interface SessionCaptureContext {
-  /** Native store/directory lookup key for this captured epoch. */
-  rootSessionId: string
-  /** Optional final logical root bucket when lookup and resume epochs differ. */
-  logicalRootSessionId?: string
-  nodeRunId: string
-  taskId: string
-  persistence: RuntimeSessionCapturePersistence
-  log: Logger
+/** run-after subagent session capture inputs: runtime-management's capture
+ *  request (RFC-465) plus the native location fields (union; each driver takes
+ *  what it needs — opencode: SQLite BFS + partId dedupe; claude: JSONL under
+ *  claude's user-level config root). */
+export interface SessionCaptureContext extends AgentSessionCaptureRequest {
   /** Subprocess cwd (worktree) — claude's `/`→`-` slug is the projects subdir. */
   worktreePath: string
   /** RFC-154: selected config-dir profile (env var NAME + leaf dir name) of the
@@ -249,8 +248,6 @@ export interface SessionCaptureContext {
    *  opencode ignores both (SQLite capture). */
   configDirEnv?: string
   configDirName?: string
-  /** opencode: partId-level dedupe from the live poller (skip already-written rows). */
-  alreadyInsertedPartIds?: ReadonlyMap<string, ReadonlySet<string>>
   /** opencode: override SQLite path (tests). */
   opencodeDbPath?: string
 }
@@ -717,36 +714,11 @@ export interface RuntimeDriver {
    */
 }
 
-/** RFC-237 — inputs for `captureSessionsToSink?`. The sink slice is structural
- *  (sessionEventSink.ts imports from this module, so the nominal
- *  `SystemAgentEventSinkV1` cannot be named here without an import cycle);
- *  its `append` parameter shape is copied verbatim and checked structurally. */
-export interface SystemAgentSessionSweepContext {
-  rootSessionId: string
-  sink: {
-    append(event: {
-      ts: number
-      kind: NormalizedEventKind | 'text' | 'stderr' | 'subagent_capture_failed'
-      payload: string
-      sessionId: string | null
-      parentSessionId: string | null
-      source: 'stream' | 'live-child' | 'post-run-child'
-      externalEventId?: string
-    }): Promise<void>
-    markRootSessionResetPending?(sessionId: string): Promise<void>
-    setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void>
-    markTerminal(
-      state: 'complete' | 'truncated' | 'incomplete',
-      reason?: 'stream-persist-failed' | 'child-capture-failed' | 'post-exit-flush-timeout',
-    ): Promise<void>
-  }
-  log: Logger
-}
-
-export interface SystemAgentSessionSweepOutcome {
-  failed: boolean
-  failureReason?: unknown
-}
+/** RFC-237 — inputs for `captureSessionsToSink?`: runtime-management's sweep
+ *  request (RFC-465). Its sink is the nominal `SystemAgentEventSinkV1`; the
+ *  structural copy that stood here existed only because the nominal type could
+ *  not be named from this module without an import cycle. */
+export type SystemAgentSessionSweepContext = SystemAgentSessionSweepRequest
 
 /** Inputs for `readInventory` — the per-run config dir + the node kind (the
  *  snapshot reader gates its shape on agent-vs-non-agent). pureMode is read from

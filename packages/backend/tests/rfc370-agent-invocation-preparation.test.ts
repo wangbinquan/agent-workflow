@@ -4,7 +4,7 @@ import { createLocalAgentInvocationPreparation } from '../src/modules/task-execu
 import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { NativeAgentMaterialEvidenceHooks } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
-import type { RuntimeSessionCapturePersistence } from '../src/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
+import type { RuntimeSessionCapturePersistence } from '../src/modules/runtime-management/public/participants'
 import type {
   AgentProcessRequest,
   AgentProcessResult,

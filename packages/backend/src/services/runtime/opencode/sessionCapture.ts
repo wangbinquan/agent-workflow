@@ -26,7 +26,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
-import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
+import type { RuntimeSessionCapturePersistence } from '@/modules/runtime-management/public/participants'
 import { createLogger, type Logger } from '@/util/log'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import {

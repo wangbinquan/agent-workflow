@@ -21,7 +21,8 @@ import type { NodeActivationSnapshotReader } from './nodeActivationSnapshotReade
 import type { MergeStateLifecyclePersistence } from './mergeStateLifecyclePersistence'
 import type { TaskArtifactPathQueries } from './taskArtifactPathQueries'
 import type { TaskRecoveryOperations } from './taskRecoveryOperations'
-import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePersistence'
+// RFC-465: the runtime drivers' capture write port is runtime-management's; task-execution implements it.
+import type { RuntimeSessionCapturePersistence } from '@/modules/runtime-management/public/participants'
 import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'
 
 /** Bootstrap-selected task-execution persistence. Every member is a named

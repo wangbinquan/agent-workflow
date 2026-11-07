@@ -1,5 +1,5 @@
 /** Logical live-evidence request and handle; native store locations stay private. */
-import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
+import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePersistence'
 import type { Logger } from '@/util/log'
 
 export interface AgentLiveCaptureRequest {

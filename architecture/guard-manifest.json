@@ -198,7 +198,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
       "id": "rfc317-module-boundary",
-      "lines": 498,
+      "lines": 502,
       "mechanism": "ast",
       "minCorpusFiles": 500,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1120
+      "lines": 1119
     },
     {
       "assertsAbsence": true,
@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 534,
+      "lines": 533,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,

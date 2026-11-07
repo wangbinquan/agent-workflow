@@ -96,7 +96,17 @@ export type {
   DeclarationFace,
   RuntimeDriverCapabilities,
 } from '../application/ports/agentProtocol'
-export type { AgentMaterialEvidence } from '../application/ports/agentMaterialEvidence'
+export type {
+  AgentMaterialEvidence,
+  AgentSessionCaptureRequest,
+  SystemAgentSessionSweepRequest,
+  SystemAgentSessionSweepOutcome,
+} from '../application/ports/agentMaterialEvidence'
+/** RFC-465: the runtime drivers' capture write port; task-execution implements it. */
+export type {
+  RuntimeSessionCaptureEvent,
+  RuntimeSessionCapturePersistence,
+} from '../application/ports/runtimeSessionCapturePersistence'
 export type {
   AgentMaterialSeedFile,
   AgentMaterialWorkspace,

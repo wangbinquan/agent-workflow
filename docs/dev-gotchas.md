@@ -81,6 +81,9 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   RFC-395 横向表引用债务（`tests/fixtures/rfc395-horizontal-table-ownership-debt.json`）与 `rfc294-review-offered-edge-dag` 的例外
   清单都按文件路径钉死，要同批改；原来藏在 platform / composition 里的 `services/` 依赖搬进模块 `application/` 后会在 R2 里现形，
   优先改成由 bootstrap 注入，不要加账本。
+- 账本按 ratchet 清零时，先查钉「剩余债务落在哪」的用例：形如 `expect(layers).toEqual(['application'])` 的断言把「债务非空」也一并钉了，
+  销掉最后一条当场就红（2026-11-07 RFC-465 把 `R2` 清零时 `rfc317-module-boundary` 实撞，集中验证才查出）。这类不变量写成「指定范围
+  之外为空」（例如 `filter((layer) => layer !== 'application')` 等于 `[]`）：债务还在时约束不变，清零后照样成立。
 
 ## 被 import 的模块不要写 top-level await：Bun 1.4.3 打包器会漏输出 `__promiseAll`（2026-10-31 RFC-400 实撞）
 

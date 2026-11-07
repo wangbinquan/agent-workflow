@@ -7,7 +7,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { insertInBatches } from '@/platform/persistence/batchInsert'
-import type { RuntimeSessionCapturePersistence } from '../application/ports/runtimeSessionCapturePersistence'
+import type { RuntimeSessionCapturePersistence } from '@/modules/runtime-management/public/participants'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
 

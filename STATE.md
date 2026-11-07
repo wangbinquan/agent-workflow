@@ -1,3 +1,24 @@
+## 2026-11-07 RFC-465 会话捕获的持久化端口与请求合同归 runtime-management（In Progress；`design/RFC-465-session-capture-port-to-runtime-management/`）
+
+- **来由**：RFC-294 W9-D 第十二步。`R2` 只剩 1 条：runtime-management 的材料证据端口为会话捕获与系统代理的子会话清扫取
+  `services/runtime/types` 的三个形状；其中捕获上下文带 task-execution 的会话捕获持久化端口，而目标 DAG 里 runtime-management 不取
+  task-execution（同一个端口还让实时捕获请求形成一条 runtime-management → task-execution 的跨 context 内部文件对，驱动取它记 3 条 `R1`）。
+  端口的调用方是运行时驱动、实现方是 task-execution：消费方拥有端口。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：持久化端口迁入 runtime-management（kind 用观测词汇，`public/participants` 导出），实时捕获请求、task-execution 的聚合端口与实现、
+  驱动的两个会话捕获实现改取它；材料证据端口直接定义捕获请求与清扫合同并按名导出（清扫 sink 直接取 `SystemAgentEventSinkV1`），
+  `services/runtime/types` 的驱动侧形状在其上加本机位置字段；`rfc462` 精确清单、两份跨 context 内部文件对清单与 public surface 偏差清单随之改。
+- **不做**：驱动一族（`services/runtime/**`）本身归 runtime-management infrastructure（下一步）；驱动接口与实现的行为。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-464 的 Done 文档提交 `22350f436`（只改 5 个文档文件）：exact SHA 主 CI run 42376387885 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，查出一处本 RFC 的缺陷并已修正复验：`rfc317-module-boundary` 把「R2 债务全部落在 application
+  层」写成 `toEqual(['application'])`，`R2` 清零后两边都红，改为「application 之外为空」（教训记入 `docs/dev-gotchas.md`）。backend
+  tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 23494 pass，其余为负载超时（29 个文件）、上述缺陷与导出仓库所致的 `rfc321`；
+  复跑 34 个文件余 RFC-167 `approve`、`rfc363` 各一例（同一时刻在 RFC-464 导出仓库里对照，两边同一例到点）；PostgreSQL 220 个文件的
+  lane 余 22 个文件（超时、MCP 测试台用例自带的 2 秒等待与上述缺陷），复跑全过；P0 两引擎各 17 阶段通过（PostgreSQL 等负载降到 27 才
+  放行）；`rfc321` 工作树 10 / 10；文档用例 96 pass / 0 fail。计数：`R1` 99 → 96、`R2` 1 → 0，跨 context 内部文件对 48 → 47，
+  public surface 偏差 96 → 94，`services/` 75 不变，其余架构 counts 不变。
+
 ## 2026-11-07 RFC-464 无实时捕获按缺席处理、intent 自持轮次事件 sink 合同（Done；`design/RFC-464-live-capture-absence-and-intent-turn-sink/`）
 
 - **来由**：RFC-294 W9-D 第十一步。`R2` 余下 3 条都在驱动接缝上，其中两条不用先重画接缝：task-execution `taskAgentRun` 在驱动没有

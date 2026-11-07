@@ -1,8 +1,11 @@
-import type { NodeExecutionEventSnapshot } from './nodeExecutionPersistence'
+// RFC-465 (RFC-294 W9-D): the runtime drivers call this port and task-execution implements it (it writes its own
+// node_run_events), so the port is owned here, by its caller.
+import type { PersistedEventKind } from './agentObservations'
 
+/** One captured transcript row: a persisted observation kind, the pump's stderr, or the capture's own failure marker. */
 export interface RuntimeSessionCaptureEvent {
   readonly ts: number
-  readonly kind: NodeExecutionEventSnapshot['kind']
+  readonly kind: PersistedEventKind | 'stderr' | 'subagent_capture_failed'
   readonly payload: string
   readonly sessionId: string | null
   readonly parentSessionId: string | null

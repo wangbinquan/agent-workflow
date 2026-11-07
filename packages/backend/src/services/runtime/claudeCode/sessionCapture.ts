@@ -34,7 +34,7 @@ import {
 import type {
   RuntimeSessionCaptureEvent,
   RuntimeSessionCapturePersistence,
-} from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
+} from '@/modules/runtime-management/public/participants'
 import type { Logger } from '@/util/log'
 import { parseEvent } from './events'
 

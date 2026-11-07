@@ -14,7 +14,7 @@ import type {
 import type {
   RuntimeSessionCaptureEvent,
   RuntimeSessionCapturePersistence,
-} from '../src/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
+} from '../src/modules/runtime-management/public/participants'
 import { getRuntimeDriver, bindNativeAgentMaterialEvidence } from '../src/services/runtime'
 import { cwdSlug } from '../src/services/runtime/claudeCode/sessionCapture'
 import { NOOP_HANDLE } from '../src/services/runtime/opencode/subagentLiveCapture'
