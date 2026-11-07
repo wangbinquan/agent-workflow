@@ -21,7 +21,7 @@ import { getAgentResourceStatus } from '../src/modules/resource-catalog/applicat
 import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
+import { assertWorkflowLaunchable } from './helpers/workflowLaunchGate'
 import { getWorkflow } from '../src/services/workflow'
 import {
   createTestTaskExecutionLaunchParticipant,

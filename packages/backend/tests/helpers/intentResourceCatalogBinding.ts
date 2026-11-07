@@ -19,7 +19,7 @@ import {
   readSkillFile,
 } from '../../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getWorkflow } from '../../src/services/workflow'
-import { getWorkgroupById } from '../../src/services/workgroups'
+import { getWorkgroupById } from '../../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { Paths } from '../../src/util/paths'
 import type {
   IntentResourceCatalogBinding,

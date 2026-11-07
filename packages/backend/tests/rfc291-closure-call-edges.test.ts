@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
-import { freezeCallClosure } from '../src/modules/task-execution/infrastructure/legacyCallClosure'
+import { freezeCallClosure } from './helpers/legacyCallClosure'
 import { parseCallClosure } from '../src/modules/resource-catalog/domain/callClosure'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -246,7 +246,7 @@ registerProviderCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-
 
 // RFC-359 AC-6 —— 这一格**留在单引擎**，不是遗漏：对拍的 freeze 侧是
 // `services/execution/closure.ts` 的 `freezeCallClosure(db: DbClient, …)`
-// （正身 `modules/task-execution/infrastructure/legacyCallClosure.ts:267`），形参钉死在
+// （正身 `tests/helpers/legacyCallClosure.ts`，RFC-466 自 task-execution infrastructure 迁入），形参钉死在
 // bun:sqlite 的同步客户端上——它就是 RFC-349 留下的 legacy SQLite 特征行走本身。
 // 换成中立的 `createTaskExecutionResourceBinding(...).freezeCallClosure` 等于换掉被测函数，
 // 那不是迁移而是改判据，所以这里照旧只在 SQLite 上对拍。

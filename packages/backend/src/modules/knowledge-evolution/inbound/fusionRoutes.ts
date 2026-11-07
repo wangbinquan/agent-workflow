@@ -36,7 +36,7 @@ import {
   listVisibleFusionSummaries,
   type FusionViewer,
 } from '../application/fusionViews'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
+import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'

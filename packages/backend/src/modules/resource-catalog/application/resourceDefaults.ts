@@ -34,10 +34,6 @@ export function assertInitialResourceOwner(
   )
 }
 
-export function canAuditIntentSessions(actor: Actor): boolean {
-  return actor.permissions.has('intent:audit')
-}
-
 export function resolveTaskRole(
   actor: Actor,
   taskOwnerUserId: string | null,

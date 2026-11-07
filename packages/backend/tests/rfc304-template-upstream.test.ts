@@ -23,7 +23,7 @@ import type { Actor } from '../src/auth/actor'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 import { readUpstreamReport } from '../src/modules/code-capability/application/templateUpstreamStatus'
 import { createTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/templateUpstreamPersistence'
-import { updateResourceAcl } from '../src/services/resourceAcl'
+import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
 import {
   judgeUpstream,
   mergeUnoverridden,

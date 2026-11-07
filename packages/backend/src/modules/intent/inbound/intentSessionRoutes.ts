@@ -43,7 +43,7 @@ import { NotFoundError, ValidationError } from '@/util/errors'
 import type { IntentSessionEventPublisher } from '@/modules/intent/ports/intentSessionEvents'
 import type { IntentApplyOperations } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
-import { canAuditIntentSessions } from '@/modules/intent/public/operations'
+import { canAuditIntentSessions } from '@/modules/intent/domain/sessionAudit'
 import {
   intentSessionListJourneyOf,
   intentSessionSummaryOf,

@@ -417,17 +417,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
 
     expect(existsSync(resolve(sourceRoot, 'services/resourceAccessPolicy.ts'))).toBe(false)
-    const facade = readFileSync(resolve(sourceRoot, 'services/resourceAcl.ts'), 'utf8')
-    for (const forbiddenImplementation of [
-      "from 'drizzle-orm'",
-      "from '@/db/schema'",
-      'resourceGrants',
-      '.select(',
-      '.transaction(',
-    ]) {
-      expect(facade).not.toContain(forbiddenImplementation)
-    }
-    expect(facade).not.toContain('resolveLegacyResourceAclIdentityPersistence')
+    // RFC-466: the services/resourceAcl compatibility facade is retired — its consumers take resource-catalog's own
+    // contracts — so no facade is left that could hold ACL implementation.
+    expect(existsSync(resolve(sourceRoot, 'services/resourceAcl.ts'))).toBe(false)
     expect(existsSync(resolve(sourceRoot, 'services/resourceAclIdentityPersistence.ts'))).toBe(
       false,
     )

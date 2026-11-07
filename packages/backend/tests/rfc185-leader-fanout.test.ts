@@ -53,7 +53,7 @@ import {
   getWorkgroupById,
   listWorkgroups,
   workgroupDraftSnapshotOf,
-} from '../src/services/workgroups'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,

@@ -91,10 +91,16 @@ describe('RFC-359 W58 —— 预览只有一份，且它从共用判据取（源
     expect(routes, '路由层又自己算预览了 ⇒ 两份实现必然再次漂移（这正是合并前的形状）。').toContain(
       'computeWorkflowSyncPreview(',
     )
+    // RFC-466：可见性判定改经 `AgentLaunchResourceOperations.canViewWorkflow` 注入（原先直调 `services/resourceAcl` facade），
+    // 实现处仍是同一条 `canViewResource(db, actor, 'workflow', …)`——两处一起锁，才等价于原来那一条。
     expect(
       routes,
       '预览又走可启动性授权了 ⇒ 内置工作流会被 loadAuthorized 挡住、横幅内容直接是错的。',
-    ).toContain("canViewResource(dependencies.db, actor, 'workflow', workflow)")
+    ).toContain('await dependencies.canViewWorkflow(actor, workflow)')
+    expect(
+      read('modules/task-execution/infrastructure/agentLaunchResourceOperations.ts'),
+      '注入的可见性判定不再是 canViewResource ⇒ 预览又可能走可启动性授权。',
+    ).toContain("canViewResource(db, actor, 'workflow', workflow)")
   })
 
   test('共用实现接的是那两条判据（不是又抄了一份）', () => {

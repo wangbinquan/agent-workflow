@@ -69,14 +69,11 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
 
   test('public operations no longer republishes internal compatibility mechanics', () => {
     const operations = source('modules/resource-catalog/public/operations.ts')
-    const facade = source('services/resourceAcl.ts')
 
     expect(operations).not.toMatch(/from ['"]\.\.\/(?:application|composition|infrastructure)\//)
     expect(operations).not.toContain('compatibility surface')
-    expect(facade).toContain('exact compatibility facade')
-    expect(facade).not.toMatch(/from ['"](?:@\/db|drizzle-orm)/)
-    expect(facade).not.toMatch(/\b(?:DbClient|DbTxSync|dbTxSync)\b/)
-    expect(facade).toContain('updateResourceAclComposition')
+    // RFC-466: the services/resourceAcl compatibility facade itself is retired.
+    expect(existsSync(resolve(sourceRoot, 'services/resourceAcl.ts'))).toBe(false)
   })
 
   test('retained ancillary helpers are neutral while consumer-zero facades retire', () => {

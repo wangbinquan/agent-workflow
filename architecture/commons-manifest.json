@@ -355,10 +355,13 @@
     },
     {
       "auditedBy": "resource-acl-catalog",
-      "claimAudit": "Claims to be 'the single authority for can this actor see / modify this resource' (file header line 4-6). HOLDS for the read/visibility half: all 7 `.from(resourceGrants)` reads in production live in this file, and every visibility predicate branch-matches. DOES NOT hold for the MODIFY half: routes/developmentConfig.ts gates revise/publish/archive on 5 of the 12 types with canViewResource only, never requireResourceOwner (see F1). ACL_TABLES itself is the GOOD pattern — an object literal indexed by the full AclResourceType union, so a 13th type is a compile error at `ACL_TABLES[type]`.",
+      "claimAudit": "Claims to be 'the single authority for can this actor see / modify this resource' (file header line 4-6). HOLDS for the read/visibility half: all 7 `.from(resourceGrants)` reads in production live in this file, and every visibility predicate branch-matches. DOES NOT hold for the MODIFY half: routes/developmentConfig.ts gates revise/publish/archive on 5 of the 12 types with canViewResource only, never requireResourceOwner (see F1). ACL_TABLES itself is the GOOD pattern — an object literal indexed by the full AclResourceType union, so a 13th type is a compile error at `ACL_TABLES[type]`. RFC-466: the services/resourceAcl.ts compatibility facade is retired; the kernel files are the resource-catalog sources that now hold these single sources (create defaults, composition visibility + updateResourceAcl, domain predicates, ACL_TABLES + grant SQL).",
       "core": true,
       "files": [
-        "packages/backend/src/services/resourceAcl.ts"
+        "packages/backend/src/modules/resource-catalog/application/resourceDefaults.ts",
+        "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
+        "packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts",
+        "packages/backend/src/modules/resource-catalog/infrastructure/resourceVisibility.ts"
       ],
       "guards": [],
       "id": "resourceacl-ts",

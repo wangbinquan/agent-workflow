@@ -695,7 +695,7 @@ test('源码锁：作者面持久化与 foreign ACL 不再有 provider 专属文
     'modules/resource-catalog/application/ports/resourceAclPersistence.ts',
     'modules/resource-catalog/composition/resourceAcl.ts',
     'modules/digital-employee/application/ports/authoringStore.ts',
-    'services/resourceAcl.ts',
+    // RFC-466: `services/resourceAcl.ts` (the RFC-345 compatibility facade) is retired.
     'server.ts',
     'bootstrap/daemonHttpComposition.ts',
     'bootstrap/daemonModules/resourceCatalog.ts',

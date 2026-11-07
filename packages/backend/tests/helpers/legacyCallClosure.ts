@@ -1,6 +1,9 @@
 // RFC-349 compatibility adapter. New launches freeze through TaskExecutionResourceBinding; the SQLite walk remains
 // as an exact behavior oracle for historical focused tests. RFC-454: the stored-closure codec moved to
 // resource-catalog's `domain/callClosure.ts` (exported through its public entries).
+// RFC-466 (RFC-294 W9-D): moved verbatim from task-execution `infrastructure/` (no production path reaches it) into the
+// test helpers; its grant / visibility / workgroup reads now name resource-catalog directly instead of the retired
+// `services/resourceAcl` and `services/workgroups` facades.
 //
 // A parent task whose definition contains call nodes freezes EVERY transitively
 // referenced workflow definition (by authoritative NAME selector) into
@@ -13,10 +16,8 @@
 // name fails the LAUNCH closed with id-only payloads (design-gate P2-6 —
 // names are display data the launcher may not be entitled to echo).
 
-import {
-  callEdgeKey,
-  createWorkflowExecutionQueries,
-} from '@/modules/resource-catalog/public/queries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { callEdgeKey } from '@/modules/resource-catalog/domain/callClosure'
 import type {
   FrozenWorkflowRef,
   FrozenWorkgroupRef,
@@ -26,8 +27,9 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
-import { getWorkgroupById } from '@/services/workgroups'
+import { isVisibleRow } from '@/modules/resource-catalog/domain/resourceAccess'
+import { listGrantedResourceIds } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { pickCallTarget } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 import {

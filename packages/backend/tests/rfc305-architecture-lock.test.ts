@@ -361,7 +361,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/intent/composition/platformInventory.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/composition/resourceCatalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/intent/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/knowledge-evolution/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts -> @/modules/identity-access/public/participants',

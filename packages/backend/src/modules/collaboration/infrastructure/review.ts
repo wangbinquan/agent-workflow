@@ -219,7 +219,6 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/util/errors'
-import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
 import {
@@ -3247,13 +3246,16 @@ interface PreparedRerun {
  * `decidedByRole` / batch `authorRole` say so, not the route's snapshot.
  */
 function assertActingMember(
+  taskRolePolicy: CollaborationTaskRolePolicy,
   actor: Actor | undefined,
   taskId: string,
   ownerUserId: string | null,
   isMember: boolean,
 ): TaskActorRole | null {
   if (actor === undefined) return null
-  const role = resolveTaskRole(actor, ownerUserId, isMember)
+  // RFC-466: the task role comes from collaboration's own port (resource-catalog implements it with the same
+  // resolveTaskRole), not from the retired services/resourceAcl facade.
+  const role = taskRolePolicy.resolveTaskRole(actor, ownerUserId, isMember)
   if (role !== null) return role
   throw new ForbiddenError(
     'not-task-member',
@@ -3300,7 +3302,13 @@ function assertDecisionAdmissible(
       `review_iteration changed under you (server=${run.reviewIteration}, client=${args.expectedReviewIteration})`,
     )
   }
-  const role = assertActingMember(args.actor, run.taskId, task.ownerUserId, isMember)
+  const role = assertActingMember(
+    args.taskRolePolicy,
+    args.actor,
+    run.taskId,
+    task.ownerUserId,
+    isMember,
+  )
   // RFC-303: the review row itself moves to `done` (approve) or back to `pending`
   // (reject / iterate); a fenced task refuses the latter — checked before any
   // worktree is touched, with the SAME predicate the Tx helpers apply.

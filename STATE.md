@@ -1,3 +1,30 @@
+## 2026-11-07 RFC-466 退役 resourceAcl 与 workgroups 兼容 facade（In Progress；`design/RFC-466-resource-acl-and-workgroups-facade-retirement/`）
+
+- **来由**：RFC-294 W9-D 第十三步（facade 清仓）。`R1` 96 条里最大的一处是 RFC-345 T9 留下的 `services/resourceAcl.ts`（69 行纯
+  re-export，9 条），另有一行 `export *` 的 `services/workgroups.ts`（1 条）。前者剩 6 个生产消费方：collaboration 评审写路径（参数里已有
+  自己的任务角色端口）、integration 与 knowledge-evolution（取 resource-catalog domain 的纯判定）、task-execution 工作流同步两处（取
+  `canViewResource`），以及两段只剩用例在用的代码——`services/taskLaunchGate.ts` 的 `assertWorkflowLaunchable`（无生产调用方）与
+  task-execution `legacyCallClosure.ts`（生产不可达，RFC-349 留作行为预言，也是 `services/workgroups.ts` 唯一的生产消费方）。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，
+  不派 Codex。
+- **范围**：五个活消费方改取 owner 合同（任务角色端口、resource-catalog `public/queries` 新增导出 `isVisibleToAudienceSnapshot`、task-execution
+  `AgentLaunchResourceOperations.canViewWorkflow`，实现处复用登记过的 resource-catalog 可见性判定那一对）；两段只剩用例在用的代码原样迁入
+  `tests/helpers/`；两个 facade 删除，用例改取定义处；facade 退役后失去模块外消费方的 public 符号当场收回（intent 的
+  `canAuditIntentSessions` 落 intent `domain/sessionAudit.ts`、已无 importer 的 intent `public/operations.ts` 删除、resource-catalog 里无人引用的
+  同名副本删除，`callEdgeKey` 退出 resource-catalog `public/queries`）；RFC-345 / RFC-454 / RFC-376 / RFC-349 / RFC-395 / RFC-305 的精确清单、
+  公共内核清单与账本随之改。
+- **不做**：`taskLaunchGate` 余下的快照校验（随 E1）；其余 RFC-345 facade；两个行为预言本身是否退役。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-465 的 Done 文档提交 `83e179801`（只改 5 个文档文件）：exact SHA 主 CI run 42385671604 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的三处问题并已修正复验：`public/types` 转出 `isVisibleToAudienceSnapshot`
+  违反 RFC-294 W0-R 的 capability 规则（改经 `public/queries`）；W58 源码兜底钉着改掉的那一行（改锁注入的判定与实现处那一条）；
+  facade 退役留下两个失去模块外消费方的 public 符号（当场收回，intent `public/operations.ts` 删除）。backend tsc 0 错、eslint 无告警、
+  `depcheck` 通过；全量 SQLite 23498 pass，其余为负载超时（31 个文件）、上述问题、导出仓库所致的 `rfc321` 与组合场景 S-RFC074 一例；
+  复跑 91 个文件余 RFC-167 `approve`、`rfc363` 各一例（同一时刻在 RFC-465 导出仓库里对照，两边同一例到点）；PostgreSQL 309 个文件的 lane 余 49 个文件（46 个只有超时、上述两处与 MCP 测试台），
+  复跑 77 个文件余 `lifecycle-property` 的 PostgreSQL 3 例撞自带的 15 秒（RFC-465 导出仓库同一时刻对照，同样 3 例）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。
+  计数：`R1` 96 → 86、`R2` 0，public surface 1501 → 1496、偏差 94 不变，未被消费的 public 符号 323 → 322，`services/` 75 → 73，
+  不可达生产文件 26 → 24，越界类计数不变。
+
 ## 2026-11-07 RFC-465 会话捕获的持久化端口与请求合同归 runtime-management（Done；`design/RFC-465-session-capture-port-to-runtime-management/`）
 
 - **来由**：RFC-294 W9-D 第十二步。`R2` 只剩 1 条：runtime-management 的材料证据端口为会话捕获与系统代理的子会话清扫取

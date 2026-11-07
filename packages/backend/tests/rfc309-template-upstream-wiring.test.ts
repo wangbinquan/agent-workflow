@@ -39,14 +39,14 @@ import {
 } from '../src/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
 import {
-  assertNameUnchangedForEditor,
   canViewResource,
   filterVisibleRows,
   getResourceAcl,
   requireResourceEdit,
   requireResourceGovern,
   updateResourceAcl,
-} from '../src/services/resourceAcl'
+} from '../src/modules/resource-catalog/composition/resourceAcl'
+import { assertNameUnchangedForEditor } from '../src/modules/resource-catalog/application/resourceAccess'
 import type { Permission } from '@agent-workflow/shared'
 import { errorHandler } from '../src/util/errors'
 

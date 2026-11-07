@@ -92,7 +92,8 @@ describe('RFC-282 D3 — call domain', () => {
 
   test('freezeCallClosure walks on the call codec (source wiring)', () => {
     const text = readFileSync(
-      resolve(BACKEND_SRC, 'modules/task-execution/infrastructure/legacyCallClosure.ts'),
+      // RFC-466: the freeze-walk oracle moved from task-execution infrastructure into the test helpers.
+      resolve(import.meta.dir, 'helpers/legacyCallClosure.ts'),
       'utf8',
     )
     expect(text).toContain('decodeCallRef')

@@ -30,8 +30,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // RFC-457：备份 VACUUM / quick_check 的 worker 入口迁入 `platform/persistence/sqlite`，与它包着的 provider 机制同目录，
   // 不再是业务层取 provider 机制，这条债销账。
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,createLegacySqliteNodeRunOperations',
-  'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: export:getAclResourceAccessRow,export:getAclResourceAccessRowInTx,export:getAclResourceIdentityRowInTx,export:getAclResourceOwner,export:getAclResourceOwnerInTx,export:listAclResourceIdentityRowsByIds,export:listAclResourceIdentityRowsByIdsInTx,export:listAclResourceIdentityRowsByNames,export:listAclResourceIdentityRowsByNamesInTx,export:listOwnedAclResourceNames,export:loadAclResourceNamesByIds',
-  'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository :: export:AclColumnRef,export:grantsOfResourceWhere,export:listGrantedResourceIds,export:listGrantedResourceIdsInTx,export:listResourceGrantUserIdsInTx,export:listResourceGrants,export:listWritableGrantedResourceIds,export:loadGrantLevel,export:visibleRowsCondition',
+  // RFC-466：`services/resourceAcl.ts` 兼容 facade 退役（消费方改取 resource-catalog 自己的合同），这两条债销账。
   // RFC-367：`services/runtime/opencode/distillSessionCapture.ts` 随事后蒸馏会话走查一并删除
   // （记录改由 runSystemAgent 的实时事件流经 memory 自己的 sink 落库），这条债销账。
   // RFC-371：该只读边读取 OpenCode 原生文件格式，两种 AW provider 共用；随 runtime W9-D 一起迁移。

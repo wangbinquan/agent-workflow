@@ -18,7 +18,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { listGrantedResourceIdsInTx } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
-import { listGrantedResourceIds } from '../src/services/resourceAcl'
+import { listGrantedResourceIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 

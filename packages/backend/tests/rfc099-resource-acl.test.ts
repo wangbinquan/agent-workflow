@@ -20,12 +20,11 @@ import {
 import {
   canViewResource,
   filterVisibleRows,
-  isVisibleRow,
-  listGrantedResourceIds,
   requireResourceGovern,
-  resolveTaskRole,
-  type AclRow,
-} from '../src/services/resourceAcl'
+} from '../src/modules/resource-catalog/composition/resourceAcl'
+import { resolveTaskRole } from '../src/modules/resource-catalog/application/resourceDefaults'
+import { isVisibleRow, type AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
+import { listGrantedResourceIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { ForbiddenError, NotFoundError } from '../src/util/errors'
 
 function actorOfUser(id: string, role: 'admin' | 'user' | 'guest', patScopes?: string[]): Actor {

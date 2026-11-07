@@ -33,7 +33,7 @@ import { getAgentById } from '../src/modules/resource-catalog/infrastructure/leg
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
-import { getWorkgroupById } from '../src/services/workgroups'
+import { getWorkgroupById } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,

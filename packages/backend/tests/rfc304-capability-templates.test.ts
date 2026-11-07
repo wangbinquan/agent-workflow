@@ -28,12 +28,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Actor } from '../src/auth/actor'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 import {
-  assertNameUnchangedForEditor,
   canViewResource,
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
-} from '../src/services/resourceAcl'
+} from '../src/modules/resource-catalog/composition/resourceAcl'
+import { assertNameUnchangedForEditor } from '../src/modules/resource-catalog/application/resourceAccess'
 import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

@@ -82,6 +82,7 @@ import { monotonicFactory } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
   taskLifecycleCommittedEventCodec,
@@ -249,6 +250,8 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       validateHostWorkflow: async () => ({ ok: true, issues: [] }),
+      // RFC-466: workflow visibility is the production seam (resource-catalog's view policy on the same db).
+      canViewWorkflow: composeAgentLaunchResourceOperations({ db }).canViewWorkflow,
       resourceAuthorityFor: resourceAuthorityFor(db),
       // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
       launches: { launch: async () => ({}) } as never,

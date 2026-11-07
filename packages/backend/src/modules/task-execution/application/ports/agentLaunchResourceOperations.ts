@@ -37,9 +37,20 @@ export interface AgentLaunchWorkflowValidation {
   }>
 }
 
+/** The ACL facts of a workflow row that the visibility check reads (RFC-099). */
+export interface AgentLaunchWorkflowAclRow {
+  readonly id: string
+  readonly ownerUserId?: string | null
+  readonly visibility?: 'public' | 'private'
+  readonly builtin?: boolean | null
+}
+
 /** Provider-selected Resource Catalog seam used by single-agent task launch. */
 export interface AgentLaunchResourceOperations {
   loadVisibleAgent(actor: Actor, agentId: string): Promise<Agent | null>
+  /** RFC-466: workflow visibility for the task workflow-sync routes (the same resource-catalog
+   * view policy the agent lookup applies). */
+  canViewWorkflow(actor: Actor, workflow: AgentLaunchWorkflowAclRow): Promise<boolean>
   validateHostWorkflow(
     definition: WorkflowDefinition,
     candidate?: AgentLaunchWorkflowValidationCandidate,

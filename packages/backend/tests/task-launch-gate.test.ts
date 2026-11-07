@@ -13,7 +13,7 @@ import type { CreateWorkflow } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
+import { assertWorkflowLaunchable } from './helpers/workflowLaunchGate'
 import { ForbiddenError, NotFoundError } from '../src/util/errors'
 import { createWorkflow } from './helpers/model/resourceWrites'
 

@@ -22,7 +22,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { resolveTaskRole } from '../src/services/resourceAcl'
+import { resolveTaskRole } from '../src/modules/resource-catalog/application/resourceDefaults'
 import { createUser, patchUser } from './helpers/userFixture'
 import { ValidationError } from '../src/util/errors'
 

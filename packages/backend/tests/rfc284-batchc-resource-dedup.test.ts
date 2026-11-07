@@ -33,11 +33,11 @@ import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infras
 import { findAgentsUsingManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
 import { findAgentsDependingOn } from '../src/services/agentDeps'
 import { isOwnerNameUniqueViolation } from '../src/modules/resource-catalog/infrastructure/ownerScopedName'
+import { isVisibleToAudienceSnapshot } from '../src/modules/resource-catalog/domain/resourceAccess'
 import {
   grantsOfResourceWhere,
-  isVisibleToAudienceSnapshot,
   listResourceGrantUserIdsInTx,
-} from '../src/services/resourceAcl'
+} from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { scheduledRowsReferencing } from '../src/modules/resource-catalog/domain/scheduledTaskRefs'
 import { isSkillNameOccupiedForOwner } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 

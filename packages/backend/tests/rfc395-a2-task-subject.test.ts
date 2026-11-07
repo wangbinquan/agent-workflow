@@ -1,3 +1,4 @@
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-a A2: all subject readers must work without catalog host rows on either provider.
@@ -370,7 +371,9 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       const task = fixture(row)
       await taskFixture(db, task)
       const kind = legacySubjectOracle(row).kind
-      const dependencies = { db, activity, resourceAuthorityFor }
+      // RFC-466: the sync gate and preview take workflow visibility from the production seam.
+      const canViewWorkflow = composeAgentLaunchResourceOperations({ db }).canViewWorkflow
+      const dependencies = { db, activity, resourceAuthorityFor, canViewWorkflow }
       if (kind === 'agent' || kind === 'code-round')
         await assertManualExecutionAllowedProjection(dependencies, actor, task.id!)
       else

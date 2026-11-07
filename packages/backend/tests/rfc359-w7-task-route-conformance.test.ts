@@ -39,6 +39,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -201,6 +202,8 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       },
       // 本对拍只驱动到前置门为止，这几样一次也不会被调到。
       validateHostWorkflow: async () => ({ ok: true, issues: [] }),
+      // RFC-466: workflow visibility is the production seam (resource-catalog's view policy on the same db).
+      canViewWorkflow: composeAgentLaunchResourceOperations({ db }).canViewWorkflow,
       resourceAuthorityFor: resourceAuthorityFor(db),
       launches: { launch: async () => unusedDependency('launches.launch') } as never,
       persistence: createTaskExecutionPersistence(db, {

@@ -26,7 +26,7 @@ import { composePluginServiceBindingForTest, createPlugin } from './helpers/plug
 import { resetNpmProbeCacheForTests } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
-import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
+import { assertWorkflowLaunchable } from './helpers/workflowLaunchGate'
 import { createUser } from './helpers/userFixture'
 import { createAgent, updateAgent, createWorkflow } from './helpers/model/resourceWrites'
 

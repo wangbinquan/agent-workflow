@@ -39,7 +39,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
-import { getWorkgroupById, workgroupDraftSnapshotOf } from '../src/services/workgroups'
+import {
+  getWorkgroupById,
+  workgroupDraftSnapshotOf,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import {
   createAgent,
   updateAgent,

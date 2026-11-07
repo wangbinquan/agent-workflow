@@ -294,6 +294,11 @@ const RETIRED_FACADES = [
   'services/workflowLaunchInputs.ts',
   'services/workgroup/askerKey.ts',
   'services/workgroup/constants.ts',
+  // RFC-466: the remaining consumers take resource-catalog's own contracts (collaboration its task-role port,
+  // integration / knowledge-evolution `public/types`, task-execution `AgentLaunchResourceOperations.canViewWorkflow`)
+  // and the two test-only users (the call-closure oracle and the full launch gate) moved to the test helpers.
+  'services/resourceAcl.ts',
+  'services/workgroups.ts',
 ] as const
 
 const edge = (
@@ -330,28 +335,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   // RFC-359 W4-D16：bootstrap 不再从 services 门面借 MCP 运行时测试的同步失效函数——生命周期已是
   // resource-catalog 自己的中立实现（createMcpTransactionLifecycle），两条边随之销账。
-  edge(
-    'services/resourceAcl.ts',
-    'modules/collaboration/infrastructure/review.ts',
-    ['resolveTaskRole'],
-    'review task role projection',
-    REMOVE_OWNERS.collaboration,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'modules/integration/composition/digitalEmployeeToolConnections.ts',
-    ['isVisibleToAudienceSnapshot'],
-    'digital-employee tool visibility',
-    REMOVE_OWNERS.digitalEmployeeTools,
-  ),
   // RFC-395 II-a A5: action runner delegates the built-in agent write to the catalog participant; the facade edge is gone.
-  edge(
-    'services/resourceAcl.ts',
-    'modules/task-execution/infrastructure/legacyCallClosure.ts',
-    ['isVisibleRow', 'listGrantedResourceIds'],
-    'task call-closure visibility',
-    REMOVE_OWNERS.taskExecution,
-  ),
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）：**这条边销账**——`syncWorkflow` 的七道
   // 前置门合一之后，SQLite 路由不再自己判工作流可见性（共用的 `assertTaskWorkflowSyncable`
   // 判），它对 `canViewResource` 的依赖随之消失。上一刀记的「过渡态净增 2」回落了一条；
@@ -360,27 +344,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // 共用实现住在 `taskRouteOperations.ts` 里，于是这条边在那个文件上**新出现**。
   // SQLite 那一侧没有减少（它的 `syncWorkflow` 写侧还在用同一个）——**过渡态**，
   // 随写侧那一刀一起回落（同 `cross-context-observed-imports` 那笔 allowGrowth 的理由）。
-  edge(
-    'services/resourceAcl.ts',
-    'modules/task-execution/infrastructure/taskRouteOperations.ts',
-    ['canViewResource'],
-    'shared task route resource visibility (preview)',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'modules/knowledge-evolution/inbound/fusionRoutes.ts',
-    ['hasResourceAclBypass'],
-    'knowledge-evolution ACL bypass',
-    REMOVE_OWNERS.knowledgeEvolution,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'services/taskLaunchGate.ts',
-    ['canViewResource'],
-    'task launch resource visibility',
-    REMOVE_OWNERS.taskExecution,
-  ),
   edge(
     'services/skillBootVerify.ts',
     'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
@@ -407,13 +370,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     REMOVE_OWNERS.taskExecutionResources,
   ),
   edge(
-    'services/workflow.ts',
-    'services/taskLaunchGate.ts',
-    ['getWorkflow'],
-    'task launch Workflow lookup',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
     'services/workflow.validator.ts',
     'services/task.ts',
     ['buildWorkflowValidationContext', 'validateWorkflowDef'],
@@ -429,13 +385,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   // RFC-424：`services/workgroup/state.ts` → `services/task.ts` 的最后一个符号 `setDwStateTx`
   // 随测试专用的动态工作流续跑准入删除，整条边销账。
-  edge(
-    'services/workgroups.ts',
-    'modules/task-execution/infrastructure/legacyCallClosure.ts',
-    ['getWorkgroupById'],
-    'task call-closure Workgroup lookup',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
 ]
 
 const RETIRED_RESOURCE_ACL_SYMBOLS = [
@@ -890,7 +839,8 @@ test('resource ACL compatibility barrels retire only consumer-zero symbols', () 
   const sourceRoot = resolve(import.meta.dir, '../src')
   const publicOperationsPath = resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts')
   const publicOperations = readFileSync(publicOperationsPath, 'utf8')
-  const legacyFacade = readFileSync(resolve(sourceRoot, 'services/resourceAcl.ts'), 'utf8')
+  // RFC-466: the services/resourceAcl facade itself is retired; only the public half of this lock remains.
+  expect(existsSync(resolve(sourceRoot, 'services/resourceAcl.ts'))).toBe(false)
   const packageCli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
   const packageComposition = readFileSync(
     resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageOperations.ts'),
@@ -908,7 +858,6 @@ test('resource ACL compatibility barrels retire only consumer-zero symbols', () 
   for (const retiredSymbol of RETIRED_RESOURCE_ACL_SYMBOLS) {
     const exactSymbol = new RegExp(`\\b${retiredSymbol}\\b`)
     expect(exactSymbol.test(publicOperations), `${retiredSymbol} public export`).toBe(false)
-    expect(exactSymbol.test(legacyFacade), `${retiredSymbol} facade export`).toBe(false)
   }
 
   expect(packageCli).not.toContain("from '@/services/resourceAcl'")

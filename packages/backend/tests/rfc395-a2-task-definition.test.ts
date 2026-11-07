@@ -1,4 +1,5 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 // RFC-395 II-a A2: preserve all three definition CAS operations, config projections and exact room bytes on both providers.
 import { buildActor } from '@/auth/actor'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
@@ -276,6 +277,8 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
           if (conflict) await patchTaskFixture(harness.db, { id: taskId }, { status: 'canceled' })
           return { ok: true, issues: [] }
         },
+        // RFC-466: workflow visibility is the production seam on the same db.
+        canViewWorkflow: composeAgentLaunchResourceOperations({ db: harness.db }).canViewWorkflow,
         async resumeTaskAs() {
           resumed = true
         },

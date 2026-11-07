@@ -17,7 +17,7 @@ import {
   getWorkgroupById,
   workgroupDraftSnapshotOf,
   workgroupSnapshotHashOf,
-} from '../src/services/workgroups'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { DomainError } from '../src/util/errors'
 import {
   createAgent,

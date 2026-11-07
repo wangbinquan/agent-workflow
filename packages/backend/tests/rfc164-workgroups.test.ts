@@ -41,7 +41,7 @@ import {
   getWorkgroupById,
   listWorkgroups,
   workgroupDraftSnapshotOf,
-} from '../src/services/workgroups'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 import { createWorkgroup, renameWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
 

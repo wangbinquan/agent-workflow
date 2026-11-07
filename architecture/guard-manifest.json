@@ -451,7 +451,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "id": "rfc349-provider-cutover",
-      "lines": 410,
+      "lines": 409,
       "mechanism": "source-text",
       "minCorpusFiles": 1500,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1119
+      "lines": 1112
     },
     {
       "assertsAbsence": true,
@@ -2035,7 +2035,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc305-architecture-lock.test.ts",
       "id": "rfc305-architecture-lock",
-      "lines": 948,
+      "lines": 947,
       "mechanism": "ast",
       "minCorpusFiles": 900,
       "negativeFixture": true,

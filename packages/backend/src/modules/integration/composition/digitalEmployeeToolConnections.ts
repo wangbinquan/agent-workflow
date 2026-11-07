@@ -1,5 +1,5 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { isVisibleToAudienceSnapshot } from '@/services/resourceAcl'
+import { isVisibleToAudienceSnapshot } from '@/modules/resource-catalog/public/queries'
 import { developmentAdapterContentSchema } from '../domain/developmentAdapterDefinition'
 import {
   createDevelopmentToolConnectionStore,

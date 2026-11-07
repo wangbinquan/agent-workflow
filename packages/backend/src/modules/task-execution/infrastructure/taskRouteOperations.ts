@@ -164,7 +164,6 @@ import {
   rollbackNodeRunWorktrees,
   snapshotMissingDetail,
 } from '@/services/nodeRollback'
-import { canViewResource } from '@/services/resourceAcl'
 import {
   compareNodeRunsForTimeline,
   deriveReviewRoundTiming,
@@ -254,6 +253,8 @@ export interface TaskRouteOperationsDependencies {
    * `composeAgentLaunchResourceOperations` 的这一个方法。
    */
   readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
+  /** RFC-466: workflow visibility for the sync preview and the sync gate, from the same seam. */
+  readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
@@ -1503,6 +1504,7 @@ export async function taskWorkflowSyncPreviewProjection(
     readonly db: PersistenceDb
     readonly activity: ActiveTaskExecutionParticipant
     readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+    readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
   }>,
   actor: Actor,
   taskId: string,
@@ -1521,7 +1523,7 @@ export async function taskWorkflowSyncPreviewProjection(
   if (subject.kind === 'digital-employee') return builtinWorkflowSyncPreview(task, 1)
   const workflow = await getWorkflow(dependencies.db, task.workflowId)
   if (workflow === null) return notSyncableWorkflowPreview(task, 'workflow-deleted')
-  if (!(await canViewResource(dependencies.db, actor, 'workflow', workflow))) {
+  if (!(await dependencies.canViewWorkflow(actor, workflow))) {
     return notSyncableWorkflowPreview(task, 'workflow-not-visible')
   }
   return await computeWorkflowSyncPreview(
@@ -1721,6 +1723,7 @@ export async function assertTaskWorkflowSyncable(
   dependencies: Readonly<{
     readonly db: PersistenceDb
     readonly activity: ActiveTaskExecutionParticipant
+    readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
   }>,
   actor: Actor,
   taskId: string,
@@ -1750,7 +1753,7 @@ export async function assertTaskWorkflowSyncable(
   if (workflow === null) {
     throw new NotFoundError('workflow-deleted', `workflow '${task.workflowId}' no longer exists`)
   }
-  if (!(await canViewResource(dependencies.db, actor, 'workflow', workflow))) {
+  if (!(await dependencies.canViewWorkflow(actor, workflow))) {
     throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
   }
   return { task, workflow }
@@ -1776,6 +1779,7 @@ export interface TaskWorkflowSyncDependencies {
   readonly activity: ActiveTaskExecutionParticipant
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
+  readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
   readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
   readonly now?: () => number
   readonly id?: () => string
@@ -1789,7 +1793,11 @@ export async function syncWorkflow(
   //（`assertTaskWorkflowSyncable`）。主体仍是这一侧自己的——它与 `resume` / `retry` 是同一套
   // 准入机制，归那一刀。
   await assertTaskWorkflowSyncable(
-    { db: dependencies.db, activity: dependencies.activity },
+    {
+      db: dependencies.db,
+      activity: dependencies.activity,
+      canViewWorkflow: dependencies.canViewWorkflow,
+    },
     input.actor,
     input.taskId,
   )
@@ -2601,6 +2609,7 @@ export function createTaskRouteOperations(
           db: dependencies.db,
           activity: dependencies.activity,
           resourceAuthorityFor: dependencies.resourceAuthorityFor,
+          canViewWorkflow: dependencies.canViewWorkflow,
         },
         actor,
         taskId,
@@ -2613,6 +2622,7 @@ export function createTaskRouteOperations(
           activity: dependencies.activity,
           resourceAuthorityFor: dependencies.resourceAuthorityFor,
           validateHostWorkflow: dependencies.validateHostWorkflow,
+          canViewWorkflow: dependencies.canViewWorkflow,
           resumeTaskAs,
           ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
           ...(dependencies.id === undefined ? {} : { id: dependencies.id }),

@@ -463,6 +463,12 @@ async function harness(input: {
         async validateHostWorkflow() {
           return { ok: true, issues: [] }
         },
+        // RFC-466: only the workflow-sync routes read workflow visibility through this seam; launch never does.
+        async canViewWorkflow() {
+          throw new Error(
+            'route launch must not read workflow visibility through AgentLaunchResourceOperations',
+          )
+        },
       }),
       integrity: integrity(integrityCalls),
     },

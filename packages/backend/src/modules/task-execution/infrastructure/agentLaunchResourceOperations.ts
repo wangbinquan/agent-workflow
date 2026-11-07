@@ -49,6 +49,10 @@ export function createAgentLaunchResourceOperations(input: {
   }
   return Object.freeze({
     loadVisibleAgent: (actor: Actor, agentId: string) => agents.get(actor, agentId),
+    canViewWorkflow: (
+      actor: Actor,
+      workflow: Parameters<AgentLaunchResourceOperations['canViewWorkflow']>[1],
+    ) => canViewResource(db, actor, 'workflow', workflow),
     async validateHostWorkflow(
       definition: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[0],
       candidate?: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[1],

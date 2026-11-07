@@ -218,7 +218,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/services/workflow.ts',
     'packages/backend/src/services/workflow.validator.ts',
     // RFC-424：`services/workgroup/state.ts` 随其最后一个生产消费者删除（销账）。
-    'packages/backend/src/services/workgroups.ts',
+    // RFC-466：`services/workgroups.ts` 随其唯一的生产消费者（`legacyCallClosure`，迁入用例 helper）删除（销账）。
   ],
   'direct-setinterval-sites': [
     'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker.start#setInterval#1',
@@ -251,7 +251,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts',
     'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     'packages/backend/src/modules/task-execution/composition/systemAgentRun.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts',
+    // RFC-466：`legacyCallClosure.ts`（RFC-349 冻结行走预言）迁入 `tests/helpers/`，`services/workgroups.ts` 删除（销账）。
     'packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
@@ -263,7 +263,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/services/runtime/opencode/plugin/aw-inventory-dump.mjs',
     'packages/backend/src/services/skillBootVerify.ts',
     'packages/backend/src/services/skillIdentityPaths.ts',
-    'packages/backend/src/services/workgroups.ts',
   ],
 }
 // END COMMITTED BASELINES
@@ -372,12 +371,6 @@ const RETAINED_REACHABILITY_GROUPS = [
       'modules/intent/application/maintenance.ts',
       'modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts',
     ],
-  },
-  {
-    successor: 'RFC-294 W9-D: resource-catalog execution-query port',
-    reason:
-      'RFC-349 freeze-walk oracle for historical focused tests and the services/workgroups re-export it reads; RFC-454 moved the stored-closure codec out, leaving both test-only.',
-    files: ['modules/task-execution/infrastructure/legacyCallClosure.ts', 'services/workgroups.ts'],
   },
   {
     successor: 'RFC-294 W9-D: retire with the resource-catalog legacy workflow family',

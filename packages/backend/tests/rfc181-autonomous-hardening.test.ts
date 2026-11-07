@@ -59,7 +59,7 @@ import {
   getWorkgroupById,
   listWorkgroups,
   workgroupDraftSnapshotOf,
-} from '../src/services/workgroups'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 
 import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/task-execution/domain/workgroup/turnTransitions'
 

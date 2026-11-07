@@ -281,8 +281,9 @@ export type {
   WorkflowExecutionDocument,
 } from '../application/ports/executionResourceQueries'
 // RFC-454 — the stored call-closure codec and the launch-input check (pure; task-execution and integration read them).
+// RFC-466: `callEdgeKey` left this list with its only outside reader (task-execution's legacy call-closure oracle,
+// now a test helper); resource-catalog's own validator reads it from the domain.
 export {
-  callEdgeKey,
   childClosureSubset,
   frozenWorkflowFromClosure,
   frozenWorkgroupFromClosure,
@@ -293,3 +294,7 @@ export { assertWorkflowLaunchInputs } from '../domain/workflowLaunchInputs'
 // RFC-455 — the MCP / plugin operation revision digests (pure; intent's manifest reads them).
 export { mcpOperationConfigHashOf } from '../domain/mcpOperationRevision'
 export { pluginOperationConfigHashOf } from '../domain/pluginOperationRevision'
+// RFC-466 — visibility against a pre-fetched audience snapshot (pure; integration's Digital Employee tool-connection
+// catalog reads it, previously through the legacy `services/resourceAcl` facade). It takes the audience authority
+// projection, so it is a query-side export: authority types do not cross `public/types` (RFC-294 W0-R).
+export { isVisibleToAudienceSnapshot } from '../domain/resourceAccess'

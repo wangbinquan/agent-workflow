@@ -9,7 +9,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { workgroupDraftSnapshotOf } from '../src/services/workgroups'
+import { workgroupDraftSnapshotOf } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import {
   resetBroadcastersForTests,
   WORKGROUPS_CHANNEL,
