@@ -19,7 +19,7 @@
 - [x] AC-1 三处 WS 推送经端口、三处类型改取 owner 的出口
 - [x] AC-2 架构计数按实测（`R2` 17 → 11、`R1` 不变），越界类计数与 public surface 不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-06～07，候选基于 `a4831eda5`，文档基于 `4d3189753`）
 
@@ -58,7 +58,8 @@
   127 个受保护源文件的哈希一致、导出仓库工作树干净。
 - **RFC-321 发布账本**：工作树里 10 / 10（导出仓库只有候选提交，该用例在导出里恒红）。
 - **文档用例**（RFC 索引状态、设计与实现对齐、RFC-294 设计对齐与两条评审规则、测试套件策略、`rfc376-report` 等 11 个文件，
-  加 RFC-461 用例）：在最终文档上 96 pass / 0 fail。
+  加 RFC-461 用例）：在最终文档上 96 pass / 0 fail（当时导出仓库漏同步了 RFC-460 的 3 个 Done 文档文件；Done 文档提交前在与
+  HEAD 逐字相同的导出仓库上重跑同一批用例，见 §CI）。
 - **计数复核**（`scripts/architecture-report.ts` 在两份导出仓库的提交上采数，c460 → c461）：`R1-inbound-module-internals` 99 不变、
   `R2-outbound-module-to-legacy` 17 → 11（账本与实测相等）；public surface 偏差 102 → 101（见实现门）；跨 context import 7965 → 7960；
   写入口清单 2352 → 2353（命名启发式把蒸馏文件的本地类型别名 `RuntimeKind` 算进去，与已在清单里的 `RunDistillOptions` 同理，不设门）；
@@ -83,6 +84,11 @@
 - 端口包构造仍不读选项（native 兼容用例的 Proxy 断言照旧），`status` 是普通成员，没有 getter；
 - 架构报告顺带少了一条 public surface 偏差：runtime-management 的 `SystemAgentEventSinkV1` 原先因经 `services/runtime/types` 取
   `NormalizedEventKind` 记为「forbidden type import」，改取同模块定义后消失。
+
+## CI（AC-4）
+
+- `bf61fc4a6`：exact SHA 主 CI run 42333934853 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42333934678 与 integration-opencode run 42333934666 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：96 pass / 0 fail。
 
 ## PR / 提交
 

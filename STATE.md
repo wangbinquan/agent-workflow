@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-461 application 层的 WS 推送改经端口、运行时类型改取 owner 的出口（In Progress；`design/RFC-461-application-ws-push-through-ports/`）
+## 2026-11-06 RFC-461 application 层的 WS 推送改经端口、运行时类型改取 owner 的出口（Done；`design/RFC-461-application-ws-push-through-ports/`）
 
 - **来由**：RFC-294 W9-D 第八步。`R2` 还剩 17 条，其中 6 条与运行时驱动一族无关：task-execution `taskAgentRun` 与 memory 蒸馏 / 调度在
   application 层直推 `ws/broadcaster`（3 条；task-execution 自己早有 `NodeStatusEvents` 端口），三处类型经 `services/` 转手取 owner 早已公开的
@@ -18,6 +18,13 @@
   文件的 lane 除上述问题外只有超时，复跑 21 个文件余 `scheduler-default-retries` 与 `rfc099` 各一处（对照两边都过 / 低负载下两边都过）；
   P0：SQLite 17 阶段通过，PostgreSQL 第一次被本会话自己的复跑压到负载 148 作废、重跑 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`R1` 99
   不变、`R2` 17 → 11，public surface 偏差 102 → 101，其余架构 counts 不变。
+- **落地**：`bf61fc4a6`。
+- **CI**：exact SHA 主 CI run 42333934853 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42333934678 与 integration-opencode run 42333934666 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 77 个文件；`R2` 11 条，全在运行时驱动一族；`R1` 99 条）。运行时驱动一族先拆
+  `services/runtime/types.ts`：只依赖 shared 与 runtime-management 的观测词汇（规范化事件、系统代理会话清扫、驱动能力）可进
+  runtime-management 的端口；`SessionCaptureContext` 依赖 task-execution 的会话捕获持久化端口，要先把该端口的归属定下来（runtime-management
+  → task-execution 不是目标 DAG 给的边）；带 `unknown` 字段的类型进 runtime-management public 会抬 public surface 偏差，迁移前逐项核对。
+  `R1` 侧可先做的：任务删除编排（task-execution 与 collaboration 两个参与者，task-execution → collaboration 不是目标 DAG 给的边，需端口）。
 
 ## 2026-11-06 RFC-460 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（Done；`design/RFC-460-shared-ref-resolvers-and-envelope-nonce/`）
 

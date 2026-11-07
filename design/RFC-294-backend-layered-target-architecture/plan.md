@@ -53,7 +53,7 @@
 | W6      | Done（2026-11-02，S7）                                         | RFC-395 T10 合成唯一状态机 `platform/atomic-apply`；RFC-401 合一资源写入栈（六类资源各一个写入参与者）、三入口错误收敛、持久 claim / lease，技能 / fusion / restore 接入，旧技能 operation 生命周期删除 |
 | W7      | Done（2026-10-31 核销）                                         | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴由 RFC-395 交付，逐条核对见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)                                                                                                                                                                             |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                                                                                                             |
-| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84；2026-11-06 RFC-458（W9-D 第五步）：信封解析器归 shared、`services/` 84 → 82；2026-11-06 RFC-459（W9-D 第六步）：owner 作用域名与代理启动保留归 resource-catalog、`services/` 82 → 79；2026-11-06 RFC-460（W9-D 第七步）：调用目标选择与运行期引用解析归 shared 的 `ref/`、信封 nonce 归 `platform/contracts`、`services/` 79 → 77                     |
+| W9      | A/B 由 S2 关闭（2026-11-03 S2 Done）；C/E 开放；D 部分          | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6；2026-11-05 RFC-454（W9-D 第一步）：`services/` 的一跳转出 36 → 6、`services/` 153 → 123；2026-11-06 RFC-455（W9-D 第二步）：资源包一族 16 个文件归 resource-catalog、`services/` 123 → 107；2026-11-06 RFC-456（W9-D 第三步）：单一 owner 的 14 个文件按层归位、`services/` 107 → 93；2026-11-06 RFC-457（W9-D 第四步）：平台机制 9 个文件归 `platform`、`services/` 93 → 84；2026-11-06 RFC-458（W9-D 第五步）：信封解析器归 shared、`services/` 84 → 82；2026-11-06 RFC-459（W9-D 第六步）：owner 作用域名与代理启动保留归 resource-catalog、`services/` 82 → 79；2026-11-06 RFC-460（W9-D 第七步）：调用目标选择与运行期引用解析归 shared 的 `ref/`、信封 nonce 归 `platform/contracts`、`services/` 79 → 77；2026-11-06 RFC-461（W9-D 第八步）：application 层的 WS 推送改经端口、`R2` 17 → 11                     |
 
 ### 1.2 已关闭后继索引
 
@@ -582,6 +582,11 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   `platform/contracts`（task-execution 的旧名与 `services/nodeRunMint` 的包装删除），intent 端口自己命名 seed 文件形状。`services/`
   79 → 77、`legacy-service-implementations` 74 → 72、`R1` 99 不变、`R2` 23 → 17，越界类计数与 public surface 不变。下一步：application
   层的 WS 推送改经端口、借道 `services/` 的运行时类型改取 owner 的出口；随后是运行时驱动一族。
+- **2026-11-06 W9-D 第八步**（[RFC-461](../RFC-461-application-ws-push-through-ports/proposal.md)）：task-execution agent 运行的
+  `node.status` ping 经端口包的 `NodeStatusEvents`，memory 蒸馏与调度的 WS 通知经工作存储端口的 `events`（infrastructure 实现），三处借道
+  `services/` 的运行时类型改取 owner 的出口（同模块定义处、runtime-management public、task-execution 合同上的别名）。`R2` 17 → 11（余下 11 条
+  全在运行时驱动一族），memory 的 application 层不再取 `services/` 与 `ws/`，public surface 偏差 102 → 101，`R1` 与其余越界类计数不变。
+  下一步：拆 `services/runtime/types.ts`（观测词汇进 runtime-management 端口；`SessionCaptureContext` 先定会话捕获持久化端口的归属）。
 
 ## 5. 依赖顺序
 
