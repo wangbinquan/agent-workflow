@@ -19,7 +19,7 @@
 - [x] AC-1 两个旧文件不在、零引用；三件各只有一处定义；intent dump 不再取 `services/systemAgentRun`
 - [x] AC-2 架构计数按实测（`services/` 79 → 77、`R2` 23 → 17、`R1` 不变），越界类计数与 public surface 不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-06，候选基于 `6f47af807`，文档基于 `51af6bbf9`）
 
@@ -72,6 +72,10 @@
 - 消费方只换说明符、不换名字（nonce 两个旧名统一成 `generateEnvelopeNonce`）：intent、memory、task-execution 与 `services/` 都改取 shared
   或 platform，没有新增模块之间的边（`R1` 99 不变，`R2` 只少不多）；
 - shared 入口新增的 10 个导出名在 shared 与 frontend 里没有同名，`depcheck` 分层门通过（shared 内 `ref/runtime.ts` → `schemas/agent` 不成环）。
+
+## CI（AC-4）
+
+- `a4831eda5`：exact SHA 主 CI run 42321998955 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42321998956 与 integration-opencode run 42321998967 通过。
 
 ## PR / 提交
 

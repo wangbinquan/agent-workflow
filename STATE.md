@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-460 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（In Progress；`design/RFC-460-shared-ref-resolvers-and-envelope-nonce/`）
+## 2026-11-06 RFC-460 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（Done；`design/RFC-460-shared-ref-resolvers-and-envelope-nonce/`）
 
 - **来由**：RFC-294 W9-D 第七步。intent 与 memory 的 application 层还有 11 条 `R2`，其中 6 条只是经 `services/` 转手取三件纯件和一个类型：
   call 选择器的绑定判据（`services/execution/callRefTarget.ts`）、RFC-271 的 RuntimeRef 域 resolver（`services/ref/runtimeRef.ts`，只建在
@@ -19,6 +19,11 @@
   相同：`rfc374` / `rfc384` 同例到点、`rfc395-gate-open-v2` 两边都过）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/`
   79 → 77、`legacy-horizontal-files` 200 → 198、`legacy-service-implementations` 74 → 72、`R1` 99 不变、`R2` 23 → 17；public surface 与其余
   架构 counts 不变。
+- **落地**：`a4831eda5`。
+- **CI**：exact SHA 主 CI run 42321998955 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42321998956 与 integration-opencode run 42321998967 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 77 个文件，`R2` 17 条）。先收与运行时驱动一族无关的 6 条 `R2`：application 层直推
+  `ws/broadcaster` 的三处（task-execution `taskAgentRun`、memory 蒸馏与调度）改经端口，三处借道 `services/` 的运行时类型改取 owner 的
+  出口；随后是运行时驱动一族（`services/runtime/**`）与 `R1` 大头。
 
 ## 2026-11-06 RFC-459 owner 作用域名与代理启动保留归 resource-catalog（Done；`design/RFC-459-resource-catalog-owner-name-and-launch-reservation/`）
 

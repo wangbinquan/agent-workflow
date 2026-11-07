@@ -1,6 +1,6 @@
 # RFC-460 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（RFC-294 W9-D 第七步）
 
-- **状态**：In Progress（2026-11-06）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-06，落地 `a4831eda5`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.6 W9-D（`services/` 实现文件按 owner 归位）
 - **前序**：[RFC-459](../RFC-459-resource-catalog-owner-name-and-launch-reservation/proposal.md)（owner 作用域名与代理启动保留归
