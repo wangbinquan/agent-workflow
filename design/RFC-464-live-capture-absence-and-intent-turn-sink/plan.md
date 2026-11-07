@@ -18,7 +18,7 @@
 - [x] AC-1 `taskAgentRun` 不取 `services/runtime`、无 `NOOP_HANDLE`，无实时捕获时不起、不停、不带去重表；intent application 零取 `@/services/`，端口不反取 application 层的 sink 类
 - [x] AC-2 架构计数按实测（`R2` 3 → 1、`R1` 不变），public surface 偏差与越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `21968c3e3`，文档基于 `2796fd6d0`）
 
@@ -77,6 +77,11 @@
 - 账本：`R2` 3 → 1（实测，`R1` 99 不变）；public surface 偏差实测 96、与精确清单逐条相等；guard-manifest 不变（改到的用例都不是登记的守卫
   文件）；`rfc454` 钉的 `services/sessionEventSink` 生产消费方精确清单删去 intent `turnSession`，RFC-143 与 RFC-048 的源码锁改到新的形状
   （起捕获仍只此一处、仍可选；stop 仍在子进程退出之后、会话捕获之前；去重表转发锚点不变）。
+
+## CI（AC-4）
+
+- `aad1b4a76`：exact SHA 主 CI run 42371129335 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42371129264 与 integration-opencode run 42371129258 通过（后者由本 RFC 改动的 `taskAgentRun` 触发，两个 job 各 5 pass / 10 skip，跳过的是按 `RUN_OPENCODE_INTEGRATION` 与凭据门控的真实 opencode 用例）；同 SHA 上定时的 e2e-full-nightly run 42372713446 也通过（5 个 job）。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件合计 94 pass / 1 fail：`rfc376-report` 的已提交报告对读撞自带的 300 秒（负载 45～82，RFC-465 的全量用例同时在跑；该用例不读文档，在只差这 5 个文档文件的候选上 63 s 通过），其余 11 个文件全过，读文档的两个用例在最终文本上复跑通过。
 
 ## PR / 提交
 

@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-464 无实时捕获按缺席处理、intent 自持轮次事件 sink 合同（In Progress；`design/RFC-464-live-capture-absence-and-intent-turn-sink/`）
+## 2026-11-07 RFC-464 无实时捕获按缺席处理、intent 自持轮次事件 sink 合同（Done；`design/RFC-464-live-capture-absence-and-intent-turn-sink/`）
 
 - **来由**：RFC-294 W9-D 第十一步。`R2` 余下 3 条都在驱动接缝上，其中两条不用先重画接缝：task-execution `taskAgentRun` 在驱动没有
   实时子会话捕获时借 opencode 驱动的 `NOOP_HANDLE`（取 `services/runtime`），而 runtime-management 的材料证据合同写明「缺席即原意的不支持」；
@@ -18,6 +18,11 @@
   同一例到点）；PostgreSQL 217 个文件的 lane 余 19 个文件（超时、MCP 测试台用例自带的 2 秒等待与一例启动恢复），复跑全过；P0 两引擎
   各 17 阶段通过（PostgreSQL 等负载降到 25 才放行）；`rfc321` 工作树 10 / 10；文档用例 95 pass / 0 fail。计数：`R1` 99 不变、
   `R2` 3 → 1，`services/` 75 不变，public surface 偏差 96 不变，其余架构 counts 不变。
+- **落地**：`aad1b4a76`。
+- **CI**：exact SHA 主 CI run 42371129335 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42371129264 与 integration-opencode run 42371129258 通过（后者由本 RFC 改动的 `taskAgentRun` 触发，两个 job 各 5 pass / 10 skip，跳过的是按 `RUN_OPENCODE_INTEGRATION` 与凭据门控的真实 opencode 用例）；同 SHA 上定时的 e2e-full-nightly run 42372713446 也通过（5 个 job）。
+- **下一步**：RFC-294 W9-D 余项（`services/` 75 个文件；`R2` 1 条；`R1` 99 条）。余下这条 `R2` 是 runtime-management
+  `agentMaterialEvidence` 取 `services/runtime/types` 的会话捕获 / 清扫上下文（带 task-execution 的会话捕获持久化端口与日志器）：先把会话
+  捕获持久化端口的归属定下来（runtime-management 定义捕获写入的端口、task-execution 实现），随后驱动一族归 runtime-management。
 
 ## 2026-11-07 RFC-463 启动核验与清单观测的判定进 shared、空运行参数归 runtime-management（Done；`design/RFC-463-startup-observation-judgments-to-shared/`）
 
