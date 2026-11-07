@@ -320,7 +320,7 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
   // silently drop back to name-only dispatch (PR-1 left node→agent by name).
   // ── RFC-271 T6d 显式改判（2026-08-08）────────────────────────────────────
   // 本用例原本锚定 scheduler.ts 里三行确切文本。RFC-271 决策 29 把三处 agentId
-  // 裸读收口到 `services/ref/runtimeRef.ts` 的单一读取点，那三行不再存在。
+  // 裸读收口到 RuntimeRef 的单一读取点（RFC-460 起在 shared 的 `ref/runtime.ts`），那三行不再存在。
   //
   // **守卫的意图不变**（id-first、绝不回退 name-only），锚点搬到新读取点；并且
   // **加强**了：既然只剩一个读取点，就可以断言 scheduler.ts 里**没有任何**直接的
@@ -329,8 +329,9 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
     // RFC-407: the composite keeps the fan-out lines (now in engine/node/agent-single/) in the
     // absence scans below.
     const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
+    // RFC-460: the RuntimeRef resolvers moved to the shared ref directory.
     const runtimeRef = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'ref', 'runtimeRef.ts'),
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'ref', 'runtime.ts'),
       'utf8',
     )
     const fanoutStrategy = readFileSync(

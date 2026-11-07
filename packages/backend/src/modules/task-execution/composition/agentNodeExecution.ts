@@ -10,7 +10,7 @@ import { parsePortValidationFailuresJson } from '../application/portOutputValida
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
-import { agentRefOfNode, fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
+import { agentRefOfNode, fanoutInnerAgentRefKey } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'
 import { sha256Hex } from '@/util/hash'
 import { decideResumeSessionId } from '../domain/sessionModeFallback'

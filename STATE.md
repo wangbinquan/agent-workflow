@@ -1,3 +1,25 @@
+## 2026-11-06 RFC-460 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（In Progress；`design/RFC-460-shared-ref-resolvers-and-envelope-nonce/`）
+
+- **来由**：RFC-294 W9-D 第七步。intent 与 memory 的 application 层还有 11 条 `R2`，其中 6 条只是经 `services/` 转手取三件纯件和一个类型：
+  call 选择器的绑定判据（`services/execution/callRefTarget.ts`）、RFC-271 的 RuntimeRef 域 resolver（`services/ref/runtimeRef.ts`，只建在
+  shared 的 ref AST / codec / 调用策略之上）、信封 nonce（实现在 task-execution application，`services/nodeRunMint.ts` 再包一层给 intent /
+  memory）与 `services/systemAgentRun` 的 seed 文件类型（intent 端口已按结构声明同一形状）。用户 2026-11-02「好，你继续推进RFC294，过程中你以
+  最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：调用目标选择进 `packages/shared/src/ref/callTarget.ts`、运行期引用解析进 `packages/shared/src/ref/runtime.ts`（shared 入口导出）；
+  信封 nonce 的唯一实现进 `platform/contracts/envelopeNonce.ts`（`generateEnvelopeNonce`；task-execution 的 `generateNodeRunEnvelopeNonce`
+  与 `services/nodeRunMint` 的包装删除）；intent 端口命名 `IntentSystemSeedFile`，dump 构造器改用。函数体原样。
+- **不做**：intent / memory 余下 5 条 `R2`（会话事件 sink 类型与 `services/runtime/types` 随运行时驱动一族；memory 的 WS 推送与 task-execution
+  `taskAgentRun` 的一起改经端口）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-459 的 Done 文档提交 `51af6bbf9`（只改 5 个文档文件）：exact SHA 主 CI run 42313575657 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。静态：backend / shared / frontend 的 tsc 0 错，eslint 无告警，`depcheck` 通过；
+  shared 包用例 2344 pass。全量 SQLite 23475 pass，其余为负载超时（17 个文件）与导出仓库所致的 `rfc321`；复跑 17 个文件只剩 RFC-167
+  `approve` 与 RFC-363 目录分页各一例（与 RFC-458 / RFC-459 时相同；同一时刻在 RFC-459 导出仓库里对照，`rfc167` 两边同一例到点、`rfc363`
+  两边都过）；PostgreSQL 260 个文件的 lane 只有超时，复跑 17 个文件余 `rfc374` 两例、`rfc384` 与 `rfc395-gate-open-v2` 各一例（对照两边
+  相同：`rfc374` / `rfc384` 同例到点、`rfc395-gate-open-v2` 两边都过）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`services/`
+  79 → 77、`legacy-horizontal-files` 200 → 198、`legacy-service-implementations` 74 → 72、`R1` 99 不变、`R2` 23 → 17；public surface 与其余
+  架构 counts 不变。
+
 ## 2026-11-06 RFC-459 owner 作用域名与代理启动保留归 resource-catalog（Done；`design/RFC-459-resource-catalog-owner-name-and-launch-reservation/`）
 
 - **来由**：RFC-294 W9-D 第六步。owner 作用域名的谓词与冲突判定实现在 identity-access、自己不用，唯一的生产使用者 resource-catalog 经

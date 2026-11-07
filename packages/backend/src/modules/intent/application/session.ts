@@ -21,7 +21,7 @@ import type {
 } from '@/modules/intent/application/ports/intentPersistence'
 import type { IntentContextResourceReference } from '@/modules/resource-catalog/public/participants'
 import { canAuditIntentSessions } from '@/modules/intent/public/operations'
-import { generateEnvelopeNonce } from '@/services/nodeRunMint'
+import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   allocateHandle,

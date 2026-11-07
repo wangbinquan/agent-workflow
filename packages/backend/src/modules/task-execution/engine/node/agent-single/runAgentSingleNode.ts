@@ -43,7 +43,7 @@ export async function runAgentSingleNode(
   const { taskId, definition } = task
   const { node, iteration } = args
 
-  // RFC-271 T6d：解析走统一 resolver（services/ref/runtimeRef.ts），但**两个错误码
+  // RFC-271 T6d：解析走统一 resolver（shared `ref/runtime.ts`；RFC-460 前在 services/ref/runtimeRef.ts），但**两个错误码
   // 与归属逐字不变**——主派发是节点级失败，与 fanout hydration 的静默跳过不同。
   const agentIdRef = pickString(node, 'agentId')
   const agentName = pickString(node, 'agentName') ?? agentIdRef ?? node.id

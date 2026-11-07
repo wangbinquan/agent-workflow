@@ -6,7 +6,7 @@ import { projectWorkgroupRunSelections } from './runSelection/workgroupProjectio
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { generateNodeRunEnvelopeNonce } from '../application/buildNodeRunMintRecord'
+import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import {
   type WorkgroupHostLedgerFailRunOperation,
   type WorkgroupHostLedgerMintReceipt,
@@ -158,7 +158,7 @@ async function applyOperation(
   if (operation.kind === 'mint-host-run') {
     // Returning the inserted value avoids a SERIALIZABLE predicate read on
     // node_runs while sibling workgroup turns are inserting into the same page.
-    const envelopeNonce = generateNodeRunEnvelopeNonce()
+    const envelopeNonce = generateEnvelopeNonce()
     await createNodeRunMintParticipantInTx(transaction).mint({
       ...nodeRunMintIdentityForSlot(
         operation.cause === 'wg-gate'

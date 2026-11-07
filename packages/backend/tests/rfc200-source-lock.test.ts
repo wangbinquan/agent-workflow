@@ -14,12 +14,12 @@ const read = (path: string): string => readFileSync(resolve(ROOT, path), 'utf8')
 
 describe('RFC-200 source wiring locks', () => {
   test('one persisted run nonce drives prompt emit and every runner parse API', () => {
-    const mint = read('packages/backend/src/services/nodeRunMint.ts')
+    // RFC-460: the one generator lives in platform/contracts; node runs, Intent and Memory all take it there.
+    const nonce = read('packages/backend/src/platform/contracts/envelopeNonce.ts')
     const mintRecord = read(
       'packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts',
     )
-    expect(mint).toContain('return generateNodeRunEnvelopeNonce()')
-    expect(mintRecord).toContain("return randomBytes(8).toString('hex')")
+    expect(nonce).toContain("return randomBytes(8).toString('hex')")
     expect(mintRecord).toContain('envelopeNonce: input.envelopeNonce')
 
     expect(mintRecord).toContain(

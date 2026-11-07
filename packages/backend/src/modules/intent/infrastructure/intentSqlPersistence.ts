@@ -22,7 +22,7 @@ import {
 
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import { generateEnvelopeNonce } from '@/services/nodeRunMint'
+import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import {
   mergeHandleWatermarks,
   parseHandleWatermark,

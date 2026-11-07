@@ -76,7 +76,7 @@ export type RefResult<T> =
   | { readonly ok: false; readonly reason: 'unreadable'; readonly ref: ResourceRefAst }
 
 // （RFC-282 D3：原 `RefResolver<T,Ctx>` 接口对象零实现、零消费——生产采用的是
-//  「函数 + RefCallPolicy 实参」形态（services/ref/runtimeRef.ts），接口已删除。）
+//  「函数 + RefCallPolicy 实参」形态（`./runtime.ts`，RFC-460 前在 services/ref/runtimeRef.ts），接口已删除。）
 
 // --- 已定案的调用实例（design 里逐字写死的那几个） ---
 //

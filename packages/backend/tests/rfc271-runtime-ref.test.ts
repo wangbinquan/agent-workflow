@@ -16,11 +16,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { DISPATCH_CALL_POLICY, FANOUT_HYDRATE_CALL_POLICY } from '@agent-workflow/shared'
-import {
-  agentRefOfNode,
-  fanoutInnerAgentRefKey,
-  resolveNodeAgentRef,
-} from '@/services/ref/runtimeRef'
+import { agentRefOfNode, fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@agent-workflow/shared'
 
 /** 只回答 getById 的 provider-neutral 桩——resolver 不该碰别的。 */
 const stubAgents = (rows: Record<string, unknown>) => ({

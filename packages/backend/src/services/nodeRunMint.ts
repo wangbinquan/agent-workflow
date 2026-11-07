@@ -32,10 +32,7 @@ import type {
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
-import {
-  buildNodeRunMintRecord,
-  generateNodeRunEnvelopeNonce,
-} from '@/modules/task-execution/application/buildNodeRunMintRecord'
+import { buildNodeRunMintRecord } from '@/modules/task-execution/application/buildNodeRunMintRecord'
 import type {
   NodeRunLifecyclePersistence,
   NodeRunMintInput,
@@ -144,17 +141,6 @@ export interface MintNodeRunArgs extends Pick<
  *
  * Resolution order per field: `overrides` ≻ `inheritFrom` ≻ default.
  */
-/**
- * RFC-200 — a fresh, unpredictable per-run envelope nonce (16 hex chars = 64
- * bits of `crypto` randomness). Unpredictable is load-bearing: the whole point
- * is that untrusted upstream content — authored BEFORE this run existed — cannot
- * guess it to forge a `<workflow-output nonce="…">` the parser would accept. A
- * time-ordered id (ULID) would be guessable, so this must stay `randomBytes`.
- */
-export function generateEnvelopeNonce(): string {
-  return generateNodeRunEnvelopeNonce()
-}
-
 /**
  * RFC-200 read seam shared by every prompt producer and the runner parser.
  * NULL means the row was dispatched before migration 0097 (or is a legacy

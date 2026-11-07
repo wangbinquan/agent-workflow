@@ -10,7 +10,7 @@ import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
+import { fanoutInnerAgentRefKey } from '@agent-workflow/shared'
 
 import {
   consumedMapsEqual,
@@ -226,7 +226,7 @@ export function fanoutInnerAgentKey(node: {
   agentId?: unknown
   agentName?: unknown
 }): string | null {
-  // RFC-271 T6d：判据收到 `services/ref/runtimeRef.ts` 的单一读取点。
+  // RFC-271 T6d：判据收到 RuntimeRef 的单一读取点（RFC-460 起在 shared 的 `ref/runtime.ts`）。
   // 语义与返回值逐字不变——name-only 节点仍返回 null 并 fail closed。
   return fanoutInnerAgentRefKey(node)
 }

@@ -36,7 +36,7 @@ import { ConflictError, SkillQuarantinedError } from '@/util/errors'
 import { resolveDependsClosure, type AgentDependencyLookup } from '@/services/agentDeps'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
 import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
-import { agentSkillRef, runtimeRefKey } from '@/services/ref/runtimeRef'
+import { agentSkillRef, runtimeRefKey } from '@agent-workflow/shared'
 import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,

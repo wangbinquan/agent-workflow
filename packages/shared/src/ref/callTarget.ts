@@ -1,3 +1,6 @@
+// RFC-460 (RFC-294 W9-D): moved verbatim from `packages/backend/src/services/execution/callRefTarget.ts` — a pure
+// resolution rule over shared types, used by Intent, TaskExecution and the legacy services layer alike.
+//
 // RFC-291 面 D (T6a) — the ONE place that decides which row a call selector
 // binds to.
 //

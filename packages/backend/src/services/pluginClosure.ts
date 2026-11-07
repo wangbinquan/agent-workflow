@@ -20,7 +20,7 @@
 
 import { agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, Plugin } from '@agent-workflow/shared'
-import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
+import { runtimeIdRef, runtimeRefKey } from '@agent-workflow/shared'
 
 export interface PluginClosureQuery {
   loadByIds(ids: readonly string[]): Promise<readonly Plugin[]>

@@ -62,7 +62,7 @@ import {
   type DistillProtocolFailureCode,
   type RawCandidate,
 } from './distillerOutput'
-import { generateEnvelopeNonce } from '@/services/nodeRunMint'
+import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/modules/memory/domain/sourceContext'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'

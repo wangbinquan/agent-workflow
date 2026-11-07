@@ -18,7 +18,7 @@ import {
   formatManagedInjectionNameConflict,
 } from '@/services/runtime/injectionIdentity'
 import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
-import { pickCallTarget } from '@/services/execution/callRefTarget'
+import { pickCallTarget } from '@agent-workflow/shared'
 
 export const taskExecutionResourceDependencies = Object.freeze({
   rowToAgent,

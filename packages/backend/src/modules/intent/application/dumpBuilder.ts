@@ -46,11 +46,11 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { NotFoundError } from '@/util/errors'
-import { pickCallTarget } from '@/services/execution/callRefTarget'
+import { pickCallTarget } from '@agent-workflow/shared'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
 import { renderPlatformInventoryFile, type IntentPlatformInventory } from './platformInventory'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
-import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
+import type { IntentSystemSeedFile } from './ports/intentSystemAgent'
 import {
   allocateHandle,
   buildAgentFence,
@@ -148,7 +148,7 @@ export interface IntentRuntimeInventory {
 
 export interface IntentDumpResult {
   manifest: IntentContextManifest
-  seedFiles: SystemAgentSeedFile[]
+  seedFiles: IntentSystemSeedFile[]
   /** parentHandle → number of ACL-invisible closure members (no names). */
   hiddenDependencies: Array<{ parentHandle: string; count: number }>
   /** type → dropped row count when the inventory cap truncated the summary. */
@@ -443,7 +443,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const catalog = await loadVisibleCatalog(input.resourceCatalog)
   const alloc = createHandleAllocator(input.priorManifest, input.handleWatermark)
   const nonce = input.envelopeNonce
-  const rawSeedFiles: SystemAgentSeedFile[] = []
+  const rawSeedFiles: IntentSystemSeedFile[] = []
   const seedFiles = rawSeedFiles
   const manifest: IntentContextManifest = []
   const hiddenDependencies: Array<{ parentHandle: string; count: number }> = []
@@ -859,7 +859,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   // One choke point: fence EVERY dumped body (mounted resources + inventory)
   // with the turn nonce and its source label, so untrusted resource text can
   // never be read as platform instructions (Codex impl-gate P1-4).
-  const fencedSeedFiles: SystemAgentSeedFile[] =
+  const fencedSeedFiles: IntentSystemSeedFile[] =
     nonce === undefined
       ? rawSeedFiles
       : rawSeedFiles.map((file) => ({

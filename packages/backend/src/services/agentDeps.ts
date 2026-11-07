@@ -93,7 +93,8 @@ export async function resolveDependsClosure(
   // `validateDependsOn` —— 走它会形成 agentDeps → runtimeRef → agent → agentDeps
   // 的环（`bun run depcheck` 的 no-circular 会红）。
   // 2026-10-23 更正：以上为当时的依赖环；RFC-395 II-b O 已删除 Agent facade，
-  // 实现路径为 modules/resource-catalog/infrastructure/legacy/agent.ts。
+  // 实现路径为 modules/resource-catalog/infrastructure/legacy/agent.ts；RFC-460 起 RuntimeRef 在 shared 的
+  // `ref/runtime.ts`。
   //
   // 这不是绕开统一入口：`runtimeRefKey` 本身**就只是** `resourceRefKey` 的一行
   // 转发，shared 的那个才是键的单一定义。三处运行期消费者走 runtimeRef 是因为它们

@@ -12,7 +12,7 @@
 //   · 候选集之外的行永远不会被选中（可见性由调用方过滤 ⇒ 不可见即不在集合里）
 
 import { describe, expect, test } from 'bun:test'
-import { pickCallTarget } from '../src/services/execution/callRefTarget'
+import { pickCallTarget } from '@agent-workflow/shared'
 
 /** ULID 按字典序即按铸造时间序——这里用可读的假 id 保持同一性质。 */
 const older = { id: '01AAAA', name: 'build' }

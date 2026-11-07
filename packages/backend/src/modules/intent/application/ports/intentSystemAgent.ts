@@ -15,6 +15,14 @@ export interface IntentSystemWorkspaceScope {
   readonly name?: string
 }
 
+/** A file the platform writes into the agent's scratch working directory before
+ * spawn; `path` is relative (RFC-460: named here instead of borrowing the
+ * system-agent run primitive's identical shape). */
+export interface IntentSystemSeedFile {
+  readonly path: string
+  readonly content: string
+}
+
 /** Intent's execution demand; the complete producer family satisfies it
  * directly, without a wrapper or a second execution/material implementation. */
 export interface IntentSystemAgentRunRequest {
@@ -41,7 +49,7 @@ export interface IntentSystemAgentRunRequest {
   readonly configDirName?: string | null
   readonly model?: string | null
   readonly isSandbox?: boolean
-  readonly seedFiles?: readonly { readonly path: string; readonly content: string }[]
+  readonly seedFiles?: readonly IntentSystemSeedFile[]
   readonly workspaceScope: IntentSystemWorkspaceScope
   readonly timeoutMs?: number
   readonly maxEventTextBytes?: number

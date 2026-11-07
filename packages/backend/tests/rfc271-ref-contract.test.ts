@@ -162,7 +162,11 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
   })
 
   test('resolver **绝不 throw** —— 直接抛会被 runScope 冒泡成任务级 scheduler error', () => {
-    const runtimeRef = readFileSync(SRC('services', 'ref', 'runtimeRef.ts'), 'utf8')
+    // RFC-460: the RuntimeRef resolvers moved to the shared ref directory.
+    const runtimeRef = readFileSync(
+      join(import.meta.dir, '..', '..', 'shared', 'src', 'ref', 'runtime.ts'),
+      'utf8',
+    )
     // ⚠️ 先剥注释再扫：这个文件的注释里就写着「绝不 throw」，裸文本扫描会自己撞
     // 上自己（同一个坑在 RFC-217 的架构守卫上踩过）。
     const code = stripComments(runtimeRef)

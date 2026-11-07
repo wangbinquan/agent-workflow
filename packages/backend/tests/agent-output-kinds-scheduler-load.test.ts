@@ -71,7 +71,7 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
 
   // ── RFC-271 T6d 显式改判（2026-08-08）────────────────────────────────────
   // 本用例原本锚定 scheduler.ts 里对 getAgentById 的直接 import 与调用。RFC-271
-  // 决策 29 把三处 agentId 裸读收口到 `services/ref/runtimeRef.ts`，那两处锚点
+  // 决策 29 把三处 agentId 裸读收口到 RuntimeRef（RFC-460 起在 shared 的 `ref/runtime.ts`），那两处锚点
   // 搬到了新读取点。
   //
   // **守卫的意图不变**：仍然只有一个 canonical loader，没有 scheduler 私有的
@@ -79,8 +79,9 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
   // bug——要么在 row→Agent 契约的其余部分漂移）。锚点跟着读取点走。
   test('the canonical getAgentById loader is the only agent loader', () => {
     const src = readFileSync(SCHEDULER_SRC, 'utf8')
+    // RFC-460: the RuntimeRef resolvers moved to the shared ref directory.
     const runtimeRef = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'ref', 'runtimeRef.ts'),
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'ref', 'runtime.ts'),
       'utf8',
     )
 

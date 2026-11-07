@@ -1,7 +1,7 @@
 // Transitional test inputs name the role explicitly; only fixture framing is completed here.
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type { RunSlot } from '@/modules/task-execution/application/ports/runSelection'
-import { generateNodeRunEnvelopeNonce } from '@/modules/task-execution/application/buildNodeRunMintRecord'
+import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 
 type FixtureMintInput = Omit<NodeRunMintInput, 'slot' | 'envelopeNonce' | 'executionGeneration'> &
   Partial<Pick<NodeRunMintInput, 'slot' | 'envelopeNonce' | 'executionGeneration'>>
@@ -45,9 +45,7 @@ export function withTargetMintIdentity(input: FixtureMintInput): NodeRunMintInpu
     ...input,
     slot,
     envelopeNonce:
-      input.envelopeNonce ??
-      input.overrides?.identity?.envelopeNonce ??
-      generateNodeRunEnvelopeNonce(),
+      input.envelopeNonce ?? input.overrides?.identity?.envelopeNonce ?? generateEnvelopeNonce(),
     executionGeneration: input.executionGeneration ?? { kind: 'current' },
   }
 }

@@ -1,5 +1,4 @@
 import { decodeConsumedEdges } from '../domain/consumedInputs'
-import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 
 import {
@@ -25,11 +24,6 @@ export function defaultContinuationSlotKey(frame: {
   return sha256Hex(
     JSON.stringify({ nodeId: frame.nodeId, iteration: frame.iteration, shardKey: frame.shardKey }),
   )
-}
-
-/** Unpredictable 64-bit envelope capability bound to one persisted run. */
-export function generateNodeRunEnvelopeNonce(): string {
-  return randomBytes(8).toString('hex')
 }
 
 /** Pure provider-neutral insert decision shared by both transaction adapters. */

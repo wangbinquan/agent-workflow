@@ -28,7 +28,7 @@ import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
-import { pickCallTarget } from '@/services/execution/callRefTarget'
+import { pickCallTarget } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 import {
   collectWorkflowCallRefs,

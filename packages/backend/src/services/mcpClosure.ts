@@ -19,7 +19,7 @@
 
 import { agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, Mcp } from '@agent-workflow/shared'
-import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
+import { runtimeIdRef, runtimeRefKey } from '@agent-workflow/shared'
 
 export interface McpClosureQuery {
   loadByIds(ids: readonly string[]): Promise<readonly Mcp[]>

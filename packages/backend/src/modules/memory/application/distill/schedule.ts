@@ -39,7 +39,7 @@ import {
 } from '@/modules/memory/application/distill/memoryDistiller'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
-import { agentRefOfNode } from '@/services/ref/runtimeRef'
+import { agentRefOfNode } from '@agent-workflow/shared'
 import type {
   MemoryDistillReviewedArtifactReader,
   MemoryDistillRuntimeResolver,
@@ -265,7 +265,7 @@ export function extractAgentIdsFromSnapshot(workflowSnapshot: string): string[] 
     if (typeof node !== 'object' || node === null) continue
     if (node.kind !== 'agent-single') continue
     if (node.agentId === QUARANTINED_SNAPSHOT_AGENT_ID) continue
-    // RFC-284 T22：判据改走唯一读取点（services/ref/runtimeRef.agentRefOfNode），
+    // RFC-284 T22：判据改走唯一读取点（shared `ref/runtime.ts` 的 agentRefOfNode；RFC-460 前在 services/ref/runtimeRef），
     // QUARANTINED 过滤仍留本地（上一行）——它是 distill 语义不是 ref 语义。
     const ref = agentRefOfNode(node)
     if (ref !== null && ref.k === 'id') ids.add(ref.id)

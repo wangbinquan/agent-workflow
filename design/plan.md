@@ -490,6 +490,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-457](./RFC-457-services-platform-mechanisms/proposal.md) | `services/` 的平台机制归 `platform`（RFC-294 W9-D 第四步）：后台节奏与相位表、维护 ticker、备份一族（原始库快照、备份 VACUUM worker、可移植备份包、工作树备份）、git 版本探测与配置生效监听 8 个文件迁入 `platform`，进程启动器兼容入口删除；`platform/` 取 `services/` 的 import 16 → 3。纯结构重构，无用户可见变化。 | Done |
 | [RFC-458](./RFC-458-envelope-parser-to-shared/proposal.md) | workflow-output 信封解析器归 shared、端口内容解析归 task-execution（RFC-294 W9-D 第五步）：`services/envelope.ts` 拆开——解析器进 `packages/shared`（与协议的渲染半边同处），端口内容包装与校验失败形状回 task-execution，`scriptPorts` 进 task-execution domain；`R1` 108 → 101、`R2` 27 → 23。纯结构重构，无用户可见变化。 | Done |
 | [RFC-459](./RFC-459-resource-catalog-owner-name-and-launch-reservation/proposal.md) | owner 作用域名与代理启动保留归 resource-catalog（RFC-294 W9-D 第六步）：owner 名的谓词与冲突判定从 identity-access / `services/` 收回 resource-catalog，代理启动保留表进 resource-catalog application（task-execution 经 public 取），只剩用例在用的身份门面迁入用例 helper；`services/` 82 → 79、`R1` 101 → 99。纯结构重构，无用户可见变化。 | Done |
+| [RFC-460](./RFC-460-shared-ref-resolvers-and-envelope-nonce/proposal.md) | 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（RFC-294 W9-D 第七步）：call 选择器的绑定判据与 RuntimeRef 域 resolver 迁入 shared 的 `ref/`，信封 nonce 的唯一实现进 `platform/contracts`，intent 端口自己命名 seed 文件形状；intent / memory application 层的 `R2` 少 6 条，`services/` 79 → 77。纯结构重构，无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

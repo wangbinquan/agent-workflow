@@ -1,3 +1,6 @@
+// RFC-460 (RFC-294 W9-D): moved from `packages/backend/src/services/ref/runtimeRef.ts`; only the imports changed
+// (shared-relative). The resolvers sit on this directory's AST, codecs and call policies.
+//
 // RFC-271 决策 29（T6d）—— `RuntimeRef` 域的 resolver。
 //
 // 把 scheduler 里三处各写各的 `agentId` 裸读收成一处。它们此前是：
@@ -17,14 +20,10 @@
 // 冒泡成任务级 "scheduler error"，把 node/wrapper 级归属整个丢掉。各调用点自己
 // 把 Result 映射成它原有的错误码。
 
-import type { Agent, AgentSkillRef } from '@agent-workflow/shared'
-import {
-  decodeRuntimeIdRef,
-  resourceRefKey,
-  type RefCallPolicy,
-  type RefResult,
-  type ResourceRefAst,
-} from '@agent-workflow/shared'
+import type { Agent, AgentSkillRef } from '../schemas/agent'
+import { resourceRefKey, type ResourceRefAst } from './ast'
+import { decodeRuntimeIdRef } from './codecs'
+import type { RefCallPolicy, RefResult } from './resolution'
 
 export interface RuntimeAgentLookup {
   getById(agentId: string): Promise<Agent | null>
