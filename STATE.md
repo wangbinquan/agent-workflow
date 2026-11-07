@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-465 会话捕获的持久化端口与请求合同归 runtime-management（In Progress；`design/RFC-465-session-capture-port-to-runtime-management/`）
+## 2026-11-07 RFC-465 会话捕获的持久化端口与请求合同归 runtime-management（Done；`design/RFC-465-session-capture-port-to-runtime-management/`）
 
 - **来由**：RFC-294 W9-D 第十二步。`R2` 只剩 1 条：runtime-management 的材料证据端口为会话捕获与系统代理的子会话清扫取
   `services/runtime/types` 的三个形状；其中捕获上下文带 task-execution 的会话捕获持久化端口，而目标 DAG 里 runtime-management 不取
@@ -18,6 +18,12 @@
   lane 余 22 个文件（超时、MCP 测试台用例自带的 2 秒等待与上述缺陷），复跑全过；P0 两引擎各 17 阶段通过（PostgreSQL 等负载降到 27 才
   放行）；`rfc321` 工作树 10 / 10；文档用例 96 pass / 0 fail。计数：`R1` 99 → 96、`R2` 1 → 0，跨 context 内部文件对 48 → 47，
   public surface 偏差 96 → 94，`services/` 75 不变，其余架构 counts 不变。
+- **落地**：`27ac7027a`。
+- **CI**：exact SHA 主 CI run 42382117801 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42382117811 与 integration-opencode run 42382117799 通过（后者由本 RFC 改动的 `services/runtime/opencode/sessionCapture.ts` 触发，两个 job 各 5 pass / 10 skip，跳过的是按 `RUN_OPENCODE_INTEGRATION` 与凭据门控的真实 opencode 用例）；同 SHA 上定时的 git-protocols-e2e run 42382230522 与 evidence-soak-nightly run 42384309640 也通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 75 个文件；`R2` 0 条；`R1` 96 条）。运行时驱动一族（`services/runtime/**`，36 个文件）归
+  runtime-management infrastructure 之前，先把经 `services/` 取驱动的其他 context（resource-catalog 的 MCP 测试台、system-operations 的
+  doctor、memory、bootstrap）换成 runtime-management 的端口或装配；`R1` 大头是 `resourceAcl` 兼容 facade（6 个生产消费方，其中
+  `legacyCallClosure` 已不可达）、`task`、`nodeRunMint`、`developmentDeliveryDeps`。
 
 ## 2026-11-07 RFC-464 无实时捕获按缺席处理、intent 自持轮次事件 sink 合同（Done；`design/RFC-464-live-capture-absence-and-intent-turn-sink/`）
 

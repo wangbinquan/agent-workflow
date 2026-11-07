@@ -18,7 +18,7 @@
 - [x] AC-1 端口只在 runtime-management 定义、旧文件不在、零引用旧路径；runtime-management 的 application / domain / engine / public 零取 `@/services/` 与 task-execution；驱动侧三个形状由 runtime-management 合同给出
 - [x] AC-2 架构计数按实测（`R2` 1 → 0、`R1` 99 → 96、跨 context 内部文件对 48 → 47），public surface 偏差与越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `aad1b4a76`，文档基于 `22350f436`）
 
@@ -79,6 +79,11 @@
 - 账本：`R2` 1 → 0、`R1` 99 → 96（实测，与账本逐条相等）；public surface 偏差实测 94、与精确清单逐条相等（删 3 条、增 1 条）；跨 context
   内部文件对的两份精确清单删去 `agentLiveCapture` 那一对；guard-manifest 刷新三个改到的守卫文件的行数（`rfc294-architecture-preflight`
   534 → 533、`rfc376-structural-guards` 1120 → 1119，以及集中验证后修正的 `rfc317-module-boundary` 498 → 502）。
+
+## CI（AC-4）
+
+- `27ac7027a`：exact SHA 主 CI run 42382117801 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42382117811 与 integration-opencode run 42382117799 通过（后者由本 RFC 改动的 `services/runtime/opencode/sessionCapture.ts` 触发，两个 job 各 5 pass / 10 skip，跳过的是按 `RUN_OPENCODE_INTEGRATION` 与凭据门控的真实 opencode 用例）；同 SHA 上定时的 git-protocols-e2e run 42382230522 与 evidence-soak-nightly run 42384309640 也通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件全过，合计 96 pass / 0 fail（负载 14～22，`rfc376-report` 64 s），读文档的两个用例在最终文本上复跑通过。
 
 ## PR / 提交
 
