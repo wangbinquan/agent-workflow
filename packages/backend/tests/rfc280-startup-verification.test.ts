@@ -1,4 +1,4 @@
-// RFC-280 T3 — startup verification layer (services/execution/startupVerification.ts).
+// RFC-280 T3 — startup verification layer (packages/shared/src/startupVerification.ts since RFC-463).
 //
 // Locks the three-state observation model (design-gate P1-4) and the
 // reason-preserving MCP diff (P1-5): "cannot observe" must never read as
@@ -14,7 +14,7 @@ import {
   observationFromClaudeInit,
   observationFromInventory,
   verifyStartup,
-} from '@/services/execution/startupVerification'
+} from '@agent-workflow/shared'
 
 function declaredWith(
   overrides: Partial<ReturnType<typeof emptyDeclaredManifest>>,

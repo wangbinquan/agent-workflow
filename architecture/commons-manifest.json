@@ -243,15 +243,15 @@
       "claimAudit": "Half holds. The switch keys are registry-driven and exhaustive, but the source payload bags are per-runtime named (`claudeInit`, `snapshot`/`loadSnapshot`) and one file's header explicitly claims the opposite (see EK-01).",
       "core": true,
       "files": [
-        "packages/backend/src/services/execution/startupVerification.ts",
-        "packages/backend/src/services/execution/inventoryObservation.ts"
+        "packages/shared/src/startupVerification.ts",
+        "packages/shared/src/inventoryObservation.ts"
       ],
       "guards": [],
       "id": "execution-startupverification-inventoryobservation",
-      "layer": "engine",
-      "owner": "task-execution",
+      "layer": "domain",
+      "owner": "shared-contracts",
       "singleSourceOf": "Cross-runtime startup-verification and inventory-observation kernels; capability-keyed exhaustive switch on `capabilities.startupObservation`.",
-      "title": "execution/startupVerification + inventoryObservation"
+      "title": "shared startupVerification + inventoryObservation"
     },
     {
       "auditedBy": "critic",

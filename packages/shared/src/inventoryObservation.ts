@@ -12,21 +12,23 @@
 // pipeline 化，它与下面这个函数是同一语义的两份实现且零调用方——按仓规「删除优于
 // deprecate、别为快一点留过渡态」已移除。真做 pipeline 化时按当时的 pump 形态重写
 // （届时它已叠了 conversation-reset 状态机，与旧设计未必吻合）。
+//
+// RFC-463（RFC-294 W9-D）：自 `packages/backend/src/services/execution/inventoryObservation.ts` 原样迁入 shared，
+// 与 `assembleFace` / `missingDeclared` 同包；驱动能力只取判定读到的两个字段。
 
+import type { InventorySnapshot } from './inventory'
 import {
   INVENTORY_FACES,
   declaredNamesForFace,
   assembleFace,
   inventoryFacesFromSnapshot,
   type InventoryFaces,
-  type InventorySnapshot,
   type ObservedInventoryFaces,
   type ObservedInventoryItem,
   type RuntimeInventoryObservation,
-  type StartupObservation,
-} from '@agent-workflow/shared'
-import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
-import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
+} from './schemas/runtimeInventory'
+import type { DeclaredInjectionManifest, StartupObservation } from './schemas/startupVerification'
+import type { StartupObservationCapabilities } from './startupVerification'
 
 /**
  * RFC-297 T18 —— 结算时从「本轮观测到的东西」构造统一清单观测。
@@ -35,10 +37,10 @@ import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
  * 已声明未加载」与「banner 报未加载」不可能分叉。
  */
 export function buildRuntimeInventoryObservation(input: {
-  capabilities: RuntimeDriverCapabilities
+  capabilities: StartupObservationCapabilities
   /** 本轮是否可能产生新观测（false = 复用了既有原生会话）。 */
   freshRun: boolean
-  declared: DeclaredManifestV1
+  declared: DeclaredInjectionManifest
   /** claude：流内 init 事件累积出的观测。 */
   claudeInit: ClaudeInitLike | null
   /** opencode：退出后读到的 dump 快照（含失败桩）。 */
@@ -92,7 +94,7 @@ type SnapshotLike = InventorySnapshot
 
 /** 结构化取数：两个观测源转成同一形状；都没有则 null。 */
 function observedFacesOf(input: {
-  capabilities: RuntimeDriverCapabilities
+  capabilities: StartupObservationCapabilities
   claudeInit: ClaudeInitLike | null
   snapshot: SnapshotLike | null
   streamObservation?: StartupObservation | null

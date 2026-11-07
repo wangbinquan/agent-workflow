@@ -12,27 +12,36 @@
 //
 // Leaf module：除 shared 的纯函数外无运行时依赖（RFC-297 T3 引入 missingDeclared
 // 的值导入——shared 不反向依赖 backend，故不成环）。
+//
+// RFC-463（RFC-294 W9-D）：自 `packages/backend/src/services/execution/startupVerification.ts` 原样迁入 shared，
+// 与它所依赖的 schema 同包；task-execution 的 agent 运行与 resource-catalog 的 MCP 测试台共用这一份。驱动能力只取
+// 判定读到的两个字段（`StartupObservationCapabilities`）。
 
+import type { InventorySnapshot } from './inventory'
 import type {
   DeclaredInjectionManifest,
-  InventorySnapshot,
   ObservedMcpServer,
   StartupObservation,
-  StartupVerificationRecord,
   StartupVerificationResult,
-} from '@agent-workflow/shared'
+} from './schemas/startupVerification'
 // RFC-297 T3：missing 判定单点化——清单面的来源对账（assembleFace）与这里的
 // 差集判定必须永远给出同一批名字，否则「清单里标已声明未加载」与「banner 报
 // 未加载」会各说各话。
-import { missingDeclared } from '@agent-workflow/shared'
-// Type-only：编译期擦除，不给这个叶子模块引入运行时边。
-import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
+import { missingDeclared } from './schemas/runtimeInventory'
+/**
+ * RFC-282 C2 —— 运行时启动清单从哪里来（驱动的静态表态）。runtime-management 的
+ * `RuntimeDriverCapabilities.startupObservation` 就是这个联合类型。
+ */
+export type StartupObservationSource = 'inventory-file' | 'init-event' | 'none'
 
-export type {
-  ObservedMcpServer,
-  StartupObservation,
-  StartupVerificationRecord,
-  StartupVerificationResult,
+/**
+ * RFC-463 —— 判定读到的两个驱动能力字段（runtime-management 的 `RuntimeDriverCapabilities`
+ * 结构上满足它）。
+ */
+export interface StartupObservationCapabilities {
+  readonly startupObservation: StartupObservationSource
+  /** 设计门 P1-7 —— 观测是否只在本轮新跑出清单时才存在（opencode 的 dump 插件按 fresh run 写文件）。 */
+  readonly observationRequiresFreshRun: boolean
 }
 
 /** declared 是否有任何值得验证/告警的内容 —— 全空则调用方不落库（列保持 NULL）。 */
@@ -141,7 +150,7 @@ export function observationFromInventory(
  * exhaustive switch 保留：新增一个观测源种类会让这里编译不过，正是该锁住的点。
  */
 export async function observationForVerification(
-  capabilities: RuntimeDriverCapabilities,
+  capabilities: Pick<StartupObservationCapabilities, 'startupObservation'>,
   sources: {
     /** claude：流内 init 事件累积出的观测。 */
     claudeInit: ClaudeInitObservation | null

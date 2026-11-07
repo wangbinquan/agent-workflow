@@ -31,7 +31,7 @@ import { join } from 'node:path'
 
 import type { Agent } from '@agent-workflow/shared'
 import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
-import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
+import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
 import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
 import { machineSkillRoots, opencodeDataDir } from '@/services/runtime/opencode/boundary'
 import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'

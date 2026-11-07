@@ -6,7 +6,7 @@ import type { AgentMaterialIntent } from '@/modules/runtime-management/public/pa
 import { compileHostedNativeMaterial } from '@/modules/task-execution/infrastructure/crewstation/nativeMaterial'
 import { createHostedNativePluginReader } from '@/modules/resource-catalog/composition/crewstationNativePlugin'
 import { createCrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
-import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
+import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
 import { createLogger } from '@/util/log'
 
 const agent: Agent = {

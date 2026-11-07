@@ -1,13 +1,15 @@
 import type { Agent, DeclaredInjectionManifest } from '@agent-workflow/shared'
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
-import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
+import {
+  EMPTY_RUNTIME_PROFILE,
+  type RuntimeProfile,
+} from '@/modules/runtime-management/public/types'
 import type {
   BusinessNativeAgent,
   BusinessNativeConfig,
   BusinessNativePlugin,
 } from '@/platform/crewstation/nativeMaterial'
 import {
-  EMPTY_RUNTIME_PROFILE,
   declareSkills,
   emptyDeclaredManifest,
   partitionMcpsForInjection,

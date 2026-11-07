@@ -9,10 +9,8 @@ import type {
   AgentMaterialWorkspace,
 } from '../src/modules/runtime-management/public/participants'
 import type { TaskAgentMaterialDeclaration } from '../src/modules/task-execution/application/ports/taskAgentMaterial'
-import {
-  emptyDeclaredManifest,
-  EMPTY_RUNTIME_PROFILE,
-} from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { EMPTY_RUNTIME_PROFILE } from '../src/modules/runtime-management/public/types'
 import { createLogger } from '../src/util/log'
 
 function unused(): never {

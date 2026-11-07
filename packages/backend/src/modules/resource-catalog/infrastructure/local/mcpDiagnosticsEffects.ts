@@ -3,7 +3,10 @@ import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import {
   DEFAULT_CONFIG_DIR_PROFILE,
+  observationForVerification,
+  verifyStartup,
   type Config,
+  type StartupObservation,
   type StartupVerificationResult,
 } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'
@@ -13,11 +16,6 @@ import {
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
-import {
-  observationForVerification,
-  verifyStartup,
-  type StartupObservation,
-} from '@/services/execution/startupVerification'
 import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
   type StaleRunKillOutcome,
@@ -110,7 +108,7 @@ export function createLocalMcpDiagnosticsEffects(
       const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
       // RFC-282 C2 — observation source from the driver's static declaration
       // (the presence-proxy sent a third runtime down the claude branch).
-      // RFC-297 T12：判据收进 execution 层单点，测试台与 runner 共用同一份
+      // RFC-297 T12：判据收进单点（RFC-463 起在 shared），测试台与 runner 共用同一份
       // （此前两处各写一遍同样的 switch）。取数时机仍归调用方（它持有 runRoot），
       // 判据归被调方——收口后这里只剩一次赋值，故 const。
       const observation: StartupObservation = await observationForVerification(

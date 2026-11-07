@@ -1925,13 +1925,19 @@ expect(files.some((f) => f.endsWith(join('services', 'memoryDistiller.ts')))).to
 
 ```bash
 old=memoryDistiller
-grep -rn "services/$old" packages e2e scripts tests .github   # ① 字面量路径 / import
+grep -rn "services/$old" packages e2e scripts tests .github architecture   # ① 字面量路径 / import（含 architecture/ 账本）
 grep -rn "'services', '$old" packages e2e scripts tests     # ② join('services', 'x.ts') 拼接
 grep -rn "\b$old\b" packages/backend/tests                   # ③ 只提文件名、不带目录的断言
 ```
 
 仓库根的 `tests/`（`tests/perf/run.ts`，主 CI「Perf microbenchmark gate」）按相对路径直取后端源码，也要在搜索范围里——RFC-458 第一次推送
 漏了它，perf 门报 `Cannot find module …/services/envelope`（2026-11-06）。
+
+`architecture/` 也要在搜索范围里（RFC-463，2026-11-07）：`commons-manifest.json` 的公共内核 `files` 有存在性断言
+（`rfc317-architecture-ledgers`，会红），`commons-debt.json` 的 `registeredFindings[].anchors`（`文件:行号`）**没有任何断言**，文件搬走后
+静默过期——按内容在新文件里重新定位行号改指。清点消费方的 grep 也不要接 `| head`：RFC-463 清点 `EMPTY_RUNTIME_PROFILE` 时 `head` 截掉了
+opencode 集成用例（`packages/backend/tests/integration-opencode/`，只在 integration-opencode workflow 里跑，本地全量与主 CI 的后端分片都
+不跑它），靠 backend `tsc` 才报出。
 
 ②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
 它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。

@@ -1,3 +1,23 @@
+## 2026-11-07 RFC-463 启动核验与清单观测的判定进 shared、空运行参数归 runtime-management（In Progress；`design/RFC-463-startup-observation-judgments-to-shared/`）
+
+- **来由**：RFC-294 W9-D 第十步。`R2` 余下 7 条，其中 4 条是 task-execution `taskAgentRun` 为三个执行助手取 `services/execution/`：
+  RFC-280 / RFC-297 的启动核验与清单观测判定（`startupVerification`、`inventoryObservation`，shared 已有形状上的纯函数，消费方横跨
+  task-execution 与 resource-catalog 的 MCP 测试台，二者在目标 DAG 里互不相取），与 `agentInjection` 里的空运行参数 `EMPTY_RUNTIME_PROFILE`。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为
+  已批准，不派 Codex。
+- **范围**：两个判定文件原样迁入 `packages/shared/src/`（判定只读驱动能力的 `startupObservation` / `observationRequiresFreshRun`，由 shared
+  命名，runtime-management 的能力声明改用同一联合类型），`EMPTY_RUNTIME_PROFILE` 迁入 runtime-management `public/types`；task-execution 两处、
+  resource-catalog 的 MCP 测试台两处与用例改指；公共内核清单与两条 P3 登记的锚点随之改指。
+- **不做**：余下 3 条 `R2`（`NOOP_HANDLE`、会话捕获 / 清扫上下文、intent 取会话事件 sink，都在驱动接缝上）；`agentInjection` 的其余内容。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-462 的 Done 文档提交 `0f8f03c2e`（只改 5 个文档文件）：exact SHA 主 CI run 42353439856 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题（开发期 backend tsc 查出一处漏改的 opencode 集成用例，已一并改指）。
+  四个包 tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 23472 pass，其余为负载超时（34 个文件）、导出仓库所致的 `rfc321`、
+  `cli` 等守护进程就绪撞自带的 10 秒与紧跟同文件一条超时用例的一例；复跑 37 个文件余 RFC-167 `approve`、`rfc363` 各一例（同一时刻在
+  RFC-462 导出仓库里对照，两边同一例到点）与 `rfc321`；PostgreSQL 238 个文件的 lane 余 20 个文件（超时与 MCP 测试台用例自带的 2 秒等待），
+  复跑全过；P0 两引擎各 17 阶段通过（PostgreSQL 等负载降到 28 才放行）；`rfc321` 工作树 10 / 10；文档用例 99 pass / 0 fail。计数：
+  `R1` 99 不变、`R2` 7 → 3，`services/` 77 → 75，public surface 偏差 96 不变，其余架构 counts 不变。
+
 ## 2026-11-06 RFC-462 运行时观测词汇归 runtime-management（Done；`design/RFC-462-runtime-observation-vocabulary-to-runtime-management/`）
 
 - **来由**：RFC-294 W9-D 第九步。`R2` 余下 11 条全在运行时驱动一族；驱动合同 `services/runtime/types.ts` 里的观测词汇（规范化事件一族、

@@ -75,6 +75,17 @@ export interface RuntimeProfile {
   extraArgs?: readonly string[] | null
 }
 
+// RFC-463 (RFC-294 W9-D): moved verbatim from `services/execution/agentInjection.ts` to sit with the type.
+/** RFC-113: a profile that omits all params (the binary uses its own defaults). */
+export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
+  model: null,
+  variant: null,
+  temperature: null,
+  steps: null,
+  maxSteps: null,
+  isSandbox: false,
+}
+
 export interface RuntimeView extends RuntimeProfile {
   name: string
   protocol: RuntimeProtocol

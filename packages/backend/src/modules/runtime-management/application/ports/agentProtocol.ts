@@ -3,6 +3,7 @@ import type {
   DeclaredInjectionManifest,
   FaceSupport,
   InventoryDeclaration,
+  StartupObservationSource,
 } from '@agent-workflow/shared'
 import type { NormalizedEvent, SystemEventObservation } from './agentObservations'
 import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from '../../domain/usageMeter'
@@ -51,7 +52,7 @@ export interface RuntimeDriverCapabilities {
    * runtime must state its source explicitly instead of falling into an
    * if-opencode-else-claude branch.
    */
-  readonly startupObservation: 'inventory-file' | 'init-event' | 'none'
+  readonly startupObservation: StartupObservationSource
   /**
    * 设计门 P1-7 — whether the observation exists only when THIS run produced
    * a fresh inventory. opencode's dump plugin writes the file per fresh run;

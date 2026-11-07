@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { TaskAgentRunFamily } from '@/modules/task-execution/application/ports/taskAgentRunFamily'
-import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
+import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'

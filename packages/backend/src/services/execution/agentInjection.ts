@@ -13,11 +13,15 @@
 //   - disabled 行不参与冲突判定，进入 declared.skippedDisabledMcps（落差③：
 //     不再静默丢弃，T3 起在节点告警面可见）。
 //
-// Leaf module：只 type-import shared 与 RuntimeProfile —— 不得引入对
-// driver / runner / scheduler 的运行时依赖（会成环）。
+// Leaf module：只 type-import shared 与 RuntimeProfile，值只取零 import 的 runtime-management
+// `public/types` 里的 EMPTY_RUNTIME_PROFILE（RFC-463）—— 不得引入对 driver / runner / scheduler
+// 的运行时依赖（会成环）。
 
 import type { Agent, DeclaredInjectionManifest, Mcp, Plugin } from '@agent-workflow/shared'
-import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
+import {
+  EMPTY_RUNTIME_PROFILE,
+  type RuntimeProfile,
+} from '@/modules/runtime-management/public/types'
 
 export class AgentInjectionError extends Error {
   constructor(
@@ -27,16 +31,6 @@ export class AgentInjectionError extends Error {
     super(message)
     this.name = 'AgentInjectionError'
   }
-}
-
-/** RFC-113: a profile that omits all params (the binary uses its own defaults). */
-export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
-  model: null,
-  variant: null,
-  temperature: null,
-  steps: null,
-  maxSteps: null,
-  isSandbox: false,
 }
 
 /**

@@ -64,13 +64,13 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
     }
   })
 
-  // RFC-297 T12：判据本身收进 execution 层单点 `observationForVerification`
+  // RFC-297 T12：判据本身收进单点 `observationForVerification`（RFC-463 起在 shared）
   // ——它此前在 runner 与 MCP 测试台各写一遍，第三个运行时接入要记得改两处，
   // 漏一处就悄悄落回二选一。锁随判据一起搬：穷尽分支断言移到单点所在文件，
   // runner 侧只保留「fresh-run 守卫仍在取观测之前」这条顺序不变量（P1-7/P2-E：
   // 顺序一反，每个 followup 都会被标成「无法验证」）。
   test('the capability switch is single-point and exhaustive (incl. the third-runtime arm)', () => {
-    const text = read('services/execution/startupVerification.ts')
+    const text = read('../../shared/src/startupVerification.ts')
     expect(text).toContain('switch (capabilities.startupObservation)')
     expect(text).toContain("case 'inventory-file':")
     expect(text).toContain("case 'init-event':")

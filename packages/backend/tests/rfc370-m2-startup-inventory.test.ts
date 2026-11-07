@@ -7,8 +7,11 @@ import {
   hostedStartupObservation,
 } from '@/platform/crewstation/startupInventory'
 import { hostedEventRecord } from '@/modules/task-execution/infrastructure/crewstation/runtimeEvents'
-import { verifyStartup, observationForVerification } from '@/services/execution/startupVerification'
-import { buildRuntimeInventoryObservation } from '@/services/execution/inventoryObservation'
+import {
+  buildRuntimeInventoryObservation,
+  observationForVerification,
+  verifyStartup,
+} from '@agent-workflow/shared'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { getRuntimeDriver } from '@/services/runtime'
 

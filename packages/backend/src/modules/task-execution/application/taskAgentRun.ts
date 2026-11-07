@@ -108,16 +108,16 @@ import type {
   PersistedEventKind,
   StartupInventory,
 } from '@/modules/runtime-management/public/participants'
-import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
+import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
 import {
   declaredHasContent,
   observationForVerification,
   verifyStartup,
   type StartupVerificationRecord,
-} from '@/services/execution/startupVerification'
+} from '@agent-workflow/shared'
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
-import { buildRuntimeInventoryObservation } from '@/services/execution/inventoryObservation'
+import { buildRuntimeInventoryObservation } from '@agent-workflow/shared'
 import {
   FINAL_REAP_MARGIN_MS,
   MANAGED_PROCESS_MAX_LINE_CHARS,
@@ -2117,7 +2117,7 @@ export async function runNode(
 
     let startupVerificationJson: string | null = null
     if (declaredHasContent(injectionDeclared) && !observationSkippedByDesign) {
-      // RFC-297 T12：按 driver 表态取观测的判据收进 execution 层单点
+      // RFC-297 T12：按 driver 表态取观测的判据收进单点（RFC-463 起在 shared）
       // （`observationForVerification`），runner 不再自己 switch 运行时——
       // 该判据此前在这里与 MCP 测试台各写一遍，第三个运行时接入要记得改两处。
       const observation = await observationForVerification(caps, {
