@@ -98,7 +98,7 @@ import { renderUserPrompt } from '@agent-workflow/shared'
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
 // (tests, memoryDistiller) used to resolve from '@/services/runner'; RFC-454 deleted that re-export, so they import the declaration sites.
-import { type RuntimeKind } from '@/services/runtime'
+import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
@@ -107,7 +107,7 @@ import type {
   NormalizedEvent,
   PersistedEventKind,
   StartupInventory,
-} from '@/services/runtime/types'
+} from '@/modules/runtime-management/public/participants'
 import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
 import {
   declaredHasContent,

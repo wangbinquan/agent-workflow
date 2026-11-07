@@ -1,6 +1,6 @@
 import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from '../../domain/usageMeter'
+import type { NormalizedEvent } from './agentObservations'
 import type {
-  NormalizedEvent,
   SessionCaptureContext,
   SystemAgentSessionSweepContext,
   SystemAgentSessionSweepOutcome,

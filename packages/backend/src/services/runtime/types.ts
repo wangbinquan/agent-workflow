@@ -1,13 +1,24 @@
 import type {
+  NormalizedEvent,
   NormalizedEventKind,
-  TerminalResultObservation,
+  RuntimeDriverCapabilities,
+  SystemEventObservation,
 } from '@/modules/runtime-management/public/participants'
+// RFC-462 (RFC-294 W9-D): the observation vocabulary (normalized events, system-event observation, the driver's
+// static capability declaration) lives in runtime-management; re-exported so the drivers' imports stay put.
 export type {
   NormalizedEventKind,
   TerminalResultObservation,
   SystemAgentOutputEvidence,
   DeclaredRuntimeCapabilities,
   StartupInventory,
+  NormalizedTokenDelta,
+  PersistedEventKind,
+  NormalizedEvent,
+  NormalizedEventData,
+  SystemEventObservation,
+  DeclarationFace,
+  RuntimeDriverCapabilities,
 } from '@/modules/runtime-management/public/participants'
 
 import type {
@@ -37,12 +48,9 @@ import type { Logger } from '@/util/log'
 import type {
   Agent,
   FaceSupport,
-  InventoryDeclaration,
   InventorySnapshot,
   Mcp,
   RuntimeConfigDirProfile,
-  RuntimeInventoryPayload,
-  StartupObservation,
 } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from './opencode/subagentLiveCapture'
 // Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
@@ -127,96 +135,6 @@ export interface RuntimeTokenUsage {
   cacheCreate: number
   cacheRead: number
   total: number
-}
-
-/** Per-event token contribution a driver extracts from one stdout event. */
-export interface NormalizedTokenDelta {
-  input: number
-  output: number
-  cacheCreate: number
-  cacheRead: number
-}
-
-/**
- * RFC-297 T5 —— 允许落 `node_run_events` 的 kind 子集。镜像该列的 enum
- * （`db/schema.ts`），其中**刻意不含** `startup_inventory`：合成事件没有原文行，
- * 其载荷的正式归宿是 `node_runs` 的清单列。
- *
- * 写成类型而不只是运行时的 `persist` 标志，是为了让「忘了过滤」在**编译期**报错，
- * 而不是半夜被 DB 的约束拒绝。
- */
-export type PersistedEventKind = Exclude<NormalizedEventKind, 'startup_inventory'>
-
-/**
- * One stdout line normalized into the runtime-agnostic shape the generic pump
- * consumes. A driver's `parseEvent` returns this for every line it recognizes
- * as a structured event, or `null` to route the line through the pump's
- * non-JSON fallback (kind=text, raw payload, pushed to the agent-text buffer).
- */
-export interface NormalizedEvent {
-  /** node_run_events.kind for the persisted row. */
-  kind: NormalizedEventKind
-  /**
-   * Visible agent text this event contributes to the `<workflow-output>`
-   * envelope buffer. `null`/`undefined` = no text (event still persists).
-   */
-  text?: string | null
-  /**
-   * Runtime-native session identity observed on this root-conversation event.
-   * The pump captures the first value for resume and rejects an unannounced
-   * change. Drivers must omit sidechain/subagent-local ids.
-   */
-  sessionId?: string
-  /**
-   * A runtime-declared conversation boundary. `outgoingSessionId` is the
-   * native id being replaced; `newConversationId` is correlation metadata and
-   * is NOT necessarily the next resumable native id. The pump learns that id
-   * from the first subsequent root event carrying `sessionId`.
-   */
-  conversationReset?: {
-    outgoingSessionId: string
-    newConversationId: string
-  }
-  /** Event timestamp (ms epoch) if the runtime provided one. */
-  timestamp?: number
-  /** Token usage this event contributes, if any. */
-  tokens?: NormalizedTokenDelta
-  /** The original stdout line, persisted verbatim into node_run_events.payload. */
-  rawLine: string
-  /**
-   * RFC-297 T5 — kind-specific structured payload. Every field above is a
-   * cross-cutting concern the generic pump reads; this is where a driver hands
-   * a *particular* observation to whichever stage cares, without every other
-   * stage having to know it exists.
-   */
-  data?: NormalizedEventData
-  /**
-   * RFC-297 T5 — whether this event lands in `node_run_events`. Defaults to
-   * true (every event historically persisted). Synthetic events whose payload
-   * has a proper home elsewhere set false: the inventory snapshot can run to
-   * tens of KB and already persists to its own column.
-   *
-   * PR-2 只立契约，消费点在 PR-3 接入 pump 时落地——那批同时会给合成事件引入
-   * 独立的 kind 并收紧落库侧的类型（本列 enum 不含它）。
-   */
-  persist?: boolean
-}
-
-/**
- * RFC-297 T5 — the kind-specific payloads an event may carry. Optional by
- * construction: a stage reads only its own key and ignores the rest.
- */
-export interface NormalizedEventData {
-  /** The runtime's own startup inventory, already normalized by the driver. */
-  inventory?: RuntimeInventoryPayload
-  /** A selected execution adapter may transport the runtime's own typed
-   * observation, including absence or corruption, in the event stream. */
-  startupObservation?: StartupObservation
-}
-
-export interface SystemEventObservation {
-  runtimeEventType: string | null
-  terminalResult: Exclude<TerminalResultObservation, 'not-observed'> | null
 }
 
 /**
@@ -636,12 +554,6 @@ export interface BusinessNodeSpawnContext {
  * `buildBusinessSpawn` + optional `readInventory?`/`startLiveCapture?` land in
  * later RFC-143 PRs; this interface reflects PR-1's surface.
  */
-/**
- * RFC-282 A3 — the faces of `DeclaredManifestV1` a driver must take a stance
- * on. Derived with `keyof`, so ADDING a manifest face is a compile error in
- * every driver's `declarationFaces` record until it states support (§4.4-2).
- */
-export type DeclarationFace = keyof DeclaredManifestV1
 
 /**
  * RFC-297 T1 — the authoritative definition moved to shared so the frontend can
@@ -652,54 +564,6 @@ export type DeclarationFace = keyof DeclaredManifestV1
  * unobservable = injected, but no observation channel (e.g. opencode × plugin).
  */
 export type { FaceSupport }
-
-/**
- * RFC-282 A3 — a driver's STATIC self-declaration, consumed by the boot
- * self-check (every registered driver must cover every face) and later (C2)
- * by the runner's observation switch.
- *
- * 命名注意（设计门 P2-4）：**不叫 `RuntimeCapabilities`** —— 本文件已有
- * `DeclaredRuntimeCapabilities`，语义是「运行时启动清单里**观测到**的能力」，
- * 与这里「driver **静态声明**的能力」完全不同却只差一个词。
- *
- * A3 deliberately carries ONLY the three new dimensions. The existing
- * per-driver scalars (`minVersion` / `acceptsExtraArgs` /
- * `acceptsSandboxCompatibilityMarker`) stay where they are — folding them in
- * here while their consumers still read the driver fields would be a second
- * copy of each value, which is exactly what this RFC exists to kill.
- */
-export interface RuntimeDriverCapabilities {
-  /**
-   * Where this runtime's startup inventory comes from. The runner switches on
-   * this (C2) instead of the `readInventory !== undefined` proxy; a third
-   * runtime must state its source explicitly instead of falling into an
-   * if-opencode-else-claude branch.
-   */
-  readonly startupObservation: 'inventory-file' | 'init-event' | 'none'
-  /**
-   * 设计门 P1-7 — whether the observation exists only when THIS run produced
-   * a fresh inventory. opencode's dump plugin writes the file per fresh run;
-   * a followup (reused session, plugin not re-run) has nothing to read, and
-   * verifying anyway would hang an "unverifiable" banner on every followup
-   * (RFC-280 实现门 P2-E). claude's init event fires every run.
-   */
-  readonly observationRequiresFreshRun: boolean
-  /** Per-face stance; the boot self-check refuses to start on a missing face. */
-  readonly declarationFaces: Readonly<Record<DeclarationFace, FaceSupport>>
-  /**
-   * RFC-297 T5 — what this runtime can report on each inventory face, and on
-   * each rich field within a face. Drives the unified inventory read end and
-   * the frontend's column selection, so "this runtime has no such concept"
-   * (`unsupported`, e.g. claude × plugin) stays distinguishable from "it has
-   * the concept and loaded zero of them".
-   *
-   * Same ratchet as `declarationFaces` above: the type is derived with mapped
-   * types over the closed face/field unions, so adding a face — or adding a
-   * rich field to an existing face — is a compile error in every driver until
-   * it states a stance.
-   */
-  readonly inventory: InventoryDeclaration
-}
 
 export interface RuntimeDriver {
   readonly kind: RuntimeKind

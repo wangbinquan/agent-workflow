@@ -6,7 +6,10 @@
 // receives records it never has to parse, so the node / system / smoke logic
 // (envelope, session leases, event persistence, usage, final status) is the
 // same for both targets.
-import type { NormalizedEvent, SystemEventObservation } from '@/services/runtime/types'
+import type {
+  NormalizedEvent,
+  SystemEventObservation,
+} from '@/modules/runtime-management/public/participants'
 import type { Logger } from '@/util/log'
 import type { AgentExecutionParticipants } from './agentExecutionBinding'
 

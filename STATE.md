@@ -1,3 +1,21 @@
+## 2026-11-06 RFC-462 运行时观测词汇归 runtime-management（In Progress；`design/RFC-462-runtime-observation-vocabulary-to-runtime-management/`）
+
+- **来由**：RFC-294 W9-D 第九步。`R2` 余下 11 条全在运行时驱动一族；驱动合同 `services/runtime/types.ts` 里的观测词汇（规范化事件一族、
+  系统事件观测、驱动能力声明）是闭合数据类型，只依赖 shared 与 runtime-management 自己的事件种类，task-execution 的 agent 运行与
+  runtime-management 自己的协议端口却为它们取 `services/`。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：七个观测词汇原样迁入 runtime-management `application/ports/agentObservations.ts` 与 `agentProtocol.ts`，`public/participants`
+  导出，`services/runtime/types` 改为再导出；task-execution `ports/agentExecution` 与 `taskAgentRun`、runtime-management `agentProtocol` /
+  `agentMaterialEvidence` 改取 owner。
+- **不做**：驱动接口、执行上下文与驱动实现（带函数成员、日志器与 task-execution 的持久化端口，要先重画驱动接缝）；余下 7 条 `R2`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-461 的 Done 文档提交 `1c4bd3f30`（只改 5 个文档文件）：exact SHA 主 CI run 42336674601 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 23471 pass，
+  其余为负载超时（28 个文件）、导出仓库所致的 `rfc321` 与紧跟同文件一条超时用例的一例；复跑 30 个文件余 RFC-167 `approve`、`rfc363` 各一例
+  （同一时刻在 RFC-461 导出仓库里对照，两边同一例到点）与 `rfc321`；PostgreSQL 172 个文件的 lane 只有超时（5 个文件），复跑全过；P0 两引擎
+  各 17 阶段通过（PostgreSQL 等负载降到 28 才放行）；`rfc321` 工作树 10 / 10；文档用例 95 pass / 0 fail。计数：`R1` 99 不变、`R2` 11 → 7，public
+  surface 偏差 101 → 96，其余架构 counts 不变。
+
 ## 2026-11-06 RFC-461 application 层的 WS 推送改经端口、运行时类型改取 owner 的出口（Done；`design/RFC-461-application-ws-push-through-ports/`）
 
 - **来由**：RFC-294 W9-D 第八步。`R2` 还剩 17 条，其中 6 条与运行时驱动一族无关：task-execution `taskAgentRun` 与 memory 蒸馏 / 调度在

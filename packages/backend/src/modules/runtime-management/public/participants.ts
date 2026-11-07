@@ -91,7 +91,11 @@ export interface RuntimeSelectionParticipantInTx {
   ): Promise<FrozenRuntimeRef>
 }
 /** Runtime-owned offered members consumed by task invocation composition. */
-export type { AgentInvocationProtocol } from '../application/ports/agentProtocol'
+export type {
+  AgentInvocationProtocol,
+  DeclarationFace,
+  RuntimeDriverCapabilities,
+} from '../application/ports/agentProtocol'
 export type { AgentMaterialEvidence } from '../application/ports/agentMaterialEvidence'
 export type {
   AgentMaterialSeedFile,
@@ -113,6 +117,11 @@ export type {
   DeclaredRuntimeCapabilities,
   NormalizedEventKind,
   TerminalResultObservation,
+  NormalizedTokenDelta,
+  PersistedEventKind,
+  NormalizedEvent,
+  NormalizedEventData,
+  SystemEventObservation,
 } from '../application/ports/agentObservations'
 export type {
   SessionCaptureIncompleteReason,
