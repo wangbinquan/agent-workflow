@@ -1,6 +1,6 @@
 # RFC-462 运行时观测词汇归 runtime-management（RFC-294 W9-D 第九步）
 
-- **状态**：In Progress（2026-11-06）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-07，落地 `3229bcabb`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.6 W9-D（`services/` 实现文件按 owner 归位）
 - **前序**：[RFC-461](../RFC-461-application-ws-push-through-ports/proposal.md)（application 层的 WS 推送改经端口，`R2` 17 → 11，余下全在运行时

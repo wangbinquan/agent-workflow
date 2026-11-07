@@ -1,4 +1,4 @@
-## 2026-11-06 RFC-462 运行时观测词汇归 runtime-management（In Progress；`design/RFC-462-runtime-observation-vocabulary-to-runtime-management/`）
+## 2026-11-06 RFC-462 运行时观测词汇归 runtime-management（Done；`design/RFC-462-runtime-observation-vocabulary-to-runtime-management/`）
 
 - **来由**：RFC-294 W9-D 第九步。`R2` 余下 11 条全在运行时驱动一族；驱动合同 `services/runtime/types.ts` 里的观测词汇（规范化事件一族、
   系统事件观测、驱动能力声明）是闭合数据类型，只依赖 shared 与 runtime-management 自己的事件种类，task-execution 的 agent 运行与
@@ -15,6 +15,12 @@
   （同一时刻在 RFC-461 导出仓库里对照，两边同一例到点）与 `rfc321`；PostgreSQL 172 个文件的 lane 只有超时（5 个文件），复跑全过；P0 两引擎
   各 17 阶段通过（PostgreSQL 等负载降到 28 才放行）；`rfc321` 工作树 10 / 10；文档用例 95 pass / 0 fail。计数：`R1` 99 不变、`R2` 11 → 7，public
   surface 偏差 101 → 96，其余架构 counts 不变。
+- **落地**：`3229bcabb`。
+- **CI**：exact SHA 主 CI run 42350015904 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42350015919 与 integration-opencode run 42350015862 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 77 个文件；`R2` 7 条，全在运行时驱动一族；`R1` 99 条）。RFC-463：启动核验与清单观测的
+  判定进 shared（消费方横跨 task-execution 的 agent 运行与 resource-catalog 的 MCP 测试台，二者在目标 DAG 里互不相取）、空运行参数
+  `EMPTY_RUNTIME_PROFILE` 归 runtime-management `public/types`（`R2` 7 → 3）；余下 3 条在驱动接缝上（`NOOP_HANDLE`、会话捕获 / 清扫上下文、
+  intent 取会话事件 sink），要先重画 task-execution ↔ runtime-management 的驱动接缝。
 
 ## 2026-11-06 RFC-461 application 层的 WS 推送改经端口、运行时类型改取 owner 的出口（Done；`design/RFC-461-application-ws-push-through-ports/`）
 

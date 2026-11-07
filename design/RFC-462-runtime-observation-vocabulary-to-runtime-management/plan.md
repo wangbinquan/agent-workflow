@@ -18,7 +18,7 @@
 - [x] AC-1 七个观测词汇只在 runtime-management 定义一次；四处不再为它们取 `services/`
 - [x] AC-2 架构计数按实测（`R2` 11 → 7、`R1` 不变），public surface 偏差与越界类计数不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-06～07，候选基于 `1c4bd3f30`）
 
@@ -69,6 +69,14 @@
   `AgentInvocationProtocol: unsafe/open type MappedType`：能力声明进模块后，表面遍历第一次走进 `declarationFaces` 的
   `Readonly<Record<DeclarationFace, FaceSupport>>`（闭合面集上的映射类型，正是「新增清单面在每个驱动里编译期报错」的那道棘轮），
   登记进 `rfc294-architecture-preflight` 的精确清单并写明来由。
+
+## CI（AC-4）
+
+- `3229bcabb`：exact SHA 主 CI run 42350015904 首轮全绿（70 个 job）；同 SHA 的 windows-platform run 42350015919 与 integration-opencode run 42350015862 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件合计 94 pass / 1 fail——
+  `rfc376-report` 的「同一已提交源两次读出逐字相同的报告」两次都撞自带的 300 秒（306.8 s；单独复跑 409.4 s；负载 35～50，本会话
+  RFC-463 的全量 SQLite 与 PostgreSQL lane 同时在跑）。该用例只对已提交源生成两次报告、不读文档，RFC-462 候选上 71 s 通过；其余
+  11 个文件全过。负载降下来后的复跑记在 RFC-463。
 
 ## PR / 提交
 
