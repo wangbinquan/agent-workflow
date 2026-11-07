@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-467 注入预言一族迁入用例树、资源快照策略束只留外部策略（In Progress；`design/RFC-467-injection-oracle-relocation/`）
+## 2026-11-07 RFC-467 注入预言一族迁入用例树、资源快照策略束只留外部策略（Done；`design/RFC-467-injection-oracle-relocation/`）
 
 - **来由**：RFC-294 W9-D 第十四步（facade 清仓）。不可达生产文件 24 个里有 6 个是同一族：task-execution
   `legacyTaskExecutionInjectionResolver.ts`（RFC-349 留下的注入解析行为预言，生产不可达）与只有它在 src 里 import 的 `services/agentDeps.ts`、
@@ -19,6 +19,11 @@
   lane 余 45 个文件（42 个只有超时，另 3 个是 MCP 测试台与旧任务真实执行的自带计时到点），复跑 55 个文件余 9 个文件 11 例，都是用例自带的计时到点（同一时刻在 RFC-466 导出仓库里对照：7 个两边全过，`rfc167`、`rfc359-w9` 两边同一例到点）；P0 两引擎各 17 阶段
   通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 86 → 79、`R2` 0，public surface 1496 → 1495、偏差 94 不变，未被消费的
   public 符号 322 不变，`services/` 73 → 68，不可达生产文件 24 → 18，越界类计数不变。
+- **落地**：`40bc62047`。
+- **CI**：exact SHA 主 CI run 42421165407 首轮全绿（70 个 job），windows-platform run 42421165437 与 integration-opencode run 42421165408 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 68 个文件；`R2` 0 条；`R1` 79 条）。`R1` 大头：`task`、`nodeRunMint`、
+  `developmentDeliveryDeps`、`systemAgentRun`；`nodeRunMint` 拆分时冻结运行时解析归 runtime-management（由它自己拥有窄端口，顺带退掉
+  runtime-management → task-execution 的 `nodeRunRuntimePersistence` 那一对），其余归 task-execution。
 
 ## 2026-11-07 RFC-466 退役 resourceAcl 与 workgroups 兼容 facade（Done；`design/RFC-466-resource-acl-and-workgroups-facade-retirement/`）
 

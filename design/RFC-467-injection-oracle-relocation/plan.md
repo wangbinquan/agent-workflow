@@ -18,7 +18,7 @@
 - [x] AC-1 六个文件不在 src、零引用；预言与三个实现在 `tests/helpers/`；策略束与端口只剩四个外部策略字段
 - [x] AC-2 架构计数按实测（`R1` 86 → 79），越界类计数、public surface 偏差与未被消费的 public 符号不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `450e480d2`）
 
@@ -85,6 +85,11 @@ helper `agentDeps` 与 RFC-395 A5 引用端口用例改取定义处，RFC-467 �
   用例调用（生产不可达，迁移前 src 里的 importer 只有预言自己）；两个技能转出只是 `export *`。
 - 账本：`R1` 86 → 79（实测与账本逐条相等，`R2` 0）；public surface 偏差 94、capability 归属清单 18 条逐条相等；RFC-395 表归属债务夹具去掉
   预言的三条；guard-manifest 刷新 RFC-376 结构守卫的行数。
+
+## CI（AC-4）
+
+- `40bc62047`：exact SHA 主 CI run 42421165407 首轮全绿（70 个 job），windows-platform run 42421165437 与 integration-opencode run 42421165408 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件全过，合计 96 pass / 0 fail（负载 12～22），读文档的两个用例在最终文本上复跑通过。
 
 ## PR / 提交
 
