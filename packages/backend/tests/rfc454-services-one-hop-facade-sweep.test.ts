@@ -77,9 +77,9 @@ const DELETED = [
 
 /** The one-hop re-exports this RFC leaves, with their exact production consumers (design §4). */
 const REMAINING: Readonly<Record<string, readonly string[]>> = {
+  // RFC-461: memory's distill work-store port takes `SystemAgentEventSinkV1` from runtime-management `public/participants`.
   'services/sessionEventSink': [
     'modules/intent/application/turnSession.ts',
-    'modules/memory/application/ports/distillWorkStore.ts',
     'modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
     'modules/memory/infrastructure/memoryDistillWorkStore.ts',
     'services/runtime/opencode/sessionCapture.ts',

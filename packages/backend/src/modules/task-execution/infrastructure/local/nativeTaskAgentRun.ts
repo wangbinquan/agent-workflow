@@ -7,6 +7,7 @@ import type {
 } from '../../application/ports/taskAgentMaterial'
 import type { RunNodeOptions } from './nativeTaskAgentRunOptions'
 import { bindLocalAgentExecutionParticipants } from './agentExecutionEffect'
+import { broadcastNodeStatus } from '../nodeStatusEvents'
 import { detectPluginLoadFailure } from './nativeTaskAgentPluginLoadDiagnostics'
 import {
   selectNodeRunPromptOperations,
@@ -146,6 +147,7 @@ export function bindNativeTaskAgentRunPurpose(opts: RunNodeOptions): TaskAgentRu
         },
       }
     },
+    status: { broadcastNodeStatus },
     bindExecutionParticipants(input) {
       return bindLocalAgentExecutionParticipants(input)
     },

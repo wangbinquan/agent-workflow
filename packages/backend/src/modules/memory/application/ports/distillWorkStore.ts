@@ -1,14 +1,22 @@
 import type { ClarifyAnswerContent } from '@/modules/collaboration/public/types'
 import type { TaskWorkgroupConfig } from '@/modules/task-execution/public/types'
-import type { Memory, MemoryDistillJob, ResolvedDistillScope } from '@agent-workflow/shared'
+import type {
+  Memory,
+  MemoryDistillJob,
+  MemoryDistillJobWsMessage,
+  MemoryWsMessage,
+  ResolvedDistillScope,
+} from '@agent-workflow/shared'
 import type { DistillTaskFacts } from '@/modules/memory/domain/distillAdmission'
 import type {
   RuntimeKind,
   RuntimeObservationIdentity,
 } from '@/modules/runtime-management/public/types'
-import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import type {
+  AgentMaterialContentReference,
+  SystemAgentEventSinkV1,
+} from '@/modules/runtime-management/public/participants'
 import type { MemoryDistillJobRecord } from './distillReadStore'
-import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 
 export interface MemoryDistillTaskScopeRecord {
   readonly workflowSnapshot: string
@@ -159,7 +167,14 @@ export interface MemoryDistillSessionSinkInput {
  * retry, and candidate creation.  Every method is asynchronous so the same
  * application workflow runs unchanged against SQLite and PostgreSQL.
  */
+/** RFC-461: the distill work's WS notifications; each follows the matching work-store write. */
+export interface MemoryDistillEvents {
+  memory(message: MemoryWsMessage): void
+  distillJob(message: MemoryDistillJobWsMessage): void
+}
+
 export interface MemoryDistillWorkStore {
+  readonly events: MemoryDistillEvents
   findTaskScope(taskId: string): Promise<MemoryDistillTaskScopeRecord | null>
   enqueue(input: {
     readonly id: string

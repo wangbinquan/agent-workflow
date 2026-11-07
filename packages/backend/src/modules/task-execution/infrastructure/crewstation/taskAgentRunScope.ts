@@ -23,6 +23,7 @@ import {
   type HostedAgentProfile,
 } from './agentInvocationPreparation'
 import type { HostedExecution } from './execution'
+import { broadcastNodeStatus } from '../nodeStatusEvents'
 
 /** The hosted task-run selection's inputs (declared with the adapter that interprets them). */
 export interface HostedTaskRunSelectionInput {
@@ -153,6 +154,7 @@ export function openHostedTaskAgentRun(
         },
       })
     },
+    status: { broadcastNodeStatus },
     bindExecutionParticipants: run.participants.bind,
   }
 }

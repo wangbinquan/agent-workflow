@@ -29,6 +29,7 @@ import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecu
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { MemoryIsolationFactory, MemoryIsolationStore } from './helpers/isolationWorkspace'
+import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 
 function unselected(): never {
   throw new Error('selected compile rejection must precede physical execution')
@@ -159,6 +160,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
                         },
                       }
                     },
+                    status: { broadcastNodeStatus },
                     bindExecutionParticipants: unselected,
                   }
                   return purpose

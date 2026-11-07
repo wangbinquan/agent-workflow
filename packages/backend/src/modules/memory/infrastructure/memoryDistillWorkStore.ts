@@ -15,14 +15,27 @@ import { and, asc, eq, inArray, lte } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
+  MemoryDistillEvents,
   MemoryDistillSessionSinkInput,
   MemoryDistillWorkStore,
 } from '../application/ports/distillWorkStore'
+import {
+  MEMORY_CHANNEL,
+  MEMORY_DISTILL_JOB_CHANNEL,
+  memoryBroadcaster,
+  memoryDistillJobBroadcaster,
+} from '@/ws/broadcaster'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import { createMemoryDistillSessionEventSink } from './memoryDistillSessionEventSink'
 import { listMemoryDistillJobs } from './memoryDistillReadStore'
 
 export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
+  /** RFC-461: the distill work's WS notifications, moved here verbatim from the application layer. */
+  readonly events: MemoryDistillEvents = {
+    memory: (message) => memoryBroadcaster.broadcast(MEMORY_CHANNEL, message),
+    distillJob: (message) =>
+      memoryDistillJobBroadcaster.broadcast(MEMORY_DISTILL_JOB_CHANNEL, message),
+  }
   private readonly sinkFactory: (input: MemoryDistillSessionSinkInput) => SystemAgentEventSinkV1
 
   constructor(

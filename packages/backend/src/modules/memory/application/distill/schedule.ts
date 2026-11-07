@@ -37,7 +37,6 @@ import {
   type RunDistillOptions,
   rowToDistillJob,
 } from '@/modules/memory/application/distill/memoryDistiller'
-import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 import { agentRefOfNode } from '@agent-workflow/shared'
 import type {
@@ -198,7 +197,7 @@ export async function enqueueDistillJob(
     createdAt: now,
     outputLang,
   })
-  publish({ type: 'distill.queued', jobId, debounceKey })
+  publish(store, { type: 'distill.queued', jobId, debounceKey })
   return { jobId, debounceKey, nextRunAt: now + debounceMs }
 }
 
@@ -448,7 +447,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
     const siblings = await options.store.listPendingSiblings(head.debounceKey)
     const ids = siblings.map((s) => s.id)
     await options.store.markRunning(ids, now)
-    publish({ type: 'distill.started', jobId: head.id })
+    publish(options.store, { type: 'distill.started', jobId: head.id })
     try {
       const result = await runDistill({
         store: options.store,
@@ -466,7 +465,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         timeoutMs: options.timeoutMs,
       })
       await options.store.markDone(ids, (options.now ?? Date.now)())
-      publish({
+      publish(options.store, {
         type: 'distill.done',
         jobId: head.id,
         candidatesCreated: result.candidatesCreated,
@@ -496,7 +495,11 @@ export async function distillTick(options: DistillTickOptions): Promise<{
           retryAt: failedAt + backoff,
         })
       }
-      publish({ type: 'distill.failed', jobId: head.id, error: message.slice(0, 200) })
+      publish(options.store, {
+        type: 'distill.failed',
+        jobId: head.id,
+        error: message.slice(0, 200),
+      })
       failed += 1
     }
   }
@@ -530,7 +533,7 @@ export async function retryFailedJob(
 ): Promise<boolean> {
   const row = await store.retryFailed(jobId, Date.now())
   if (row === null) return false
-  publish({ type: 'distill.queued', jobId: row.id, debounceKey: row.debounceKey })
+  publish(store, { type: 'distill.queued', jobId: row.id, debounceKey: row.debounceKey })
   return true
 }
 
@@ -554,6 +557,7 @@ export async function listDistillJobs(
 // Internals
 // ---------------------------------------------------------------------------
 
-function publish(msg: MemoryDistillJobWsMessage): void {
-  memoryDistillJobBroadcaster.broadcast(MEMORY_DISTILL_JOB_CHANNEL, msg)
+// RFC-461: the job notifications go out through the work store's events port (infrastructure publishes them).
+function publish(store: MemoryDistillWorkStore, msg: MemoryDistillJobWsMessage): void {
+  store.events.distillJob(msg)
 }

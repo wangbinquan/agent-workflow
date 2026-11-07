@@ -1,4 +1,4 @@
-import type { NormalizedEventKind } from '@/services/runtime/types'
+import type { NormalizedEventKind } from './agentObservations'
 
 export type SessionEventSource = 'stream' | 'live-child' | 'post-run-child'
 export type SessionCaptureTerminalState = 'complete' | 'truncated' | 'incomplete'

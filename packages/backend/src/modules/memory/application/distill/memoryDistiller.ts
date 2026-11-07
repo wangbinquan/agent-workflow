@@ -50,7 +50,6 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
-import type { RuntimeKind, SystemAgentOutputEvidence } from '@/services/runtime/types'
 import {
   classifyMissingEnvelope,
   type SystemAgentRunFamily,
@@ -64,7 +63,6 @@ import {
 } from './distillerOutput'
 import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/modules/memory/domain/sourceContext'
-import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 import type {
   MemoryDistillClarifyWorkRecord,
@@ -86,6 +84,10 @@ export {
   DISTILLER_SYSTEM_PROMPT,
   type DistillerOutputLang,
 }
+
+/** RFC-461: the run family's own contract types — the protocol its requests take and the evidence its results carry. */
+type RuntimeKind = Parameters<SystemAgentRunFamily['run']>[0]['protocol']
+type SystemAgentOutputEvidence = SystemAgentRunResult['outputEvidence']
 
 const log = createLogger('memory-distiller')
 
@@ -1059,7 +1061,7 @@ export async function validateAndPersistCandidate(
   }
 
   await store.insertCandidate({ memory })
-  memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
+  store.events.memory({
     type: 'memory.candidate.created',
     memory: {
       id: memory.id,

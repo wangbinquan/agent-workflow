@@ -12,6 +12,7 @@ import type { TaskExecutionEffectPersistence } from './taskExecutionEffectStore'
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
 import type { Logger } from '@/util/log'
 import type { CompiledAgentInvocation } from './agentInvocationPreparation'
+import type { NodeStatusEvents } from './nodeExecutionSupport'
 
 /** Complete AW declaration. Resource locations, readers and command fixtures
  * belong to the selected preparation, which adds its own ordered references. */
@@ -69,6 +70,8 @@ export interface TaskAgentRunPurpose {
   /** Content dialect of this purpose, shared by validation and archival. */
   readonly outputWorkspaceRef: string
   readonly outputValidation: PortOutputContentValidation
+  /** RFC-461: the runner's idempotent `node.status` pings, published by the selected infrastructure. */
+  readonly status: NodeStatusEvents
   /** Selection stays after the original envelope-nonce await. */
   selectMaterial(
     runtime: RuntimeKind,

@@ -361,7 +361,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: forbidden type import @/services/runtime/types#RuntimeDriverCapabilities',
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: forbidden type import @/services/runtime/types#SystemEventObservation',
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type UnknownKeyword',
-  'modules/runtime-management/application/ports/agentSessionEvents.ts#SystemAgentEventSinkV1: forbidden type import @/services/runtime/types#NormalizedEventKind',
   'modules/runtime-management/domain/usageMeter.ts#JsonObject: unsafe/open type UnknownKeyword',
   'modules/runtime-management/domain/usageMeter.ts#modelKey: unsafe/open type UnknownKeyword',
   'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',

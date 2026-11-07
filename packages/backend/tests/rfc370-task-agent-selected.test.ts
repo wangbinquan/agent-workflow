@@ -37,6 +37,7 @@ import type { RuntimeKind } from '../src/modules/runtime-management/public/types
 import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
 import { getRuntimeDriver } from '../src/services/runtime'
 import { createLogger } from '../src/util/log'
+import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 
 function agent(): Agent {
   return {
@@ -148,6 +149,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         selectMaterial() {
           return material
         },
+        status: { broadcastNodeStatus },
         bindExecutionParticipants: noRead,
       }
       const policy: TaskAgentRunPolicy = {
@@ -404,6 +406,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
           calls.push('select-material')
           return material
         },
+        status: { broadcastNodeStatus },
         bindExecutionParticipants(input) {
           expect(input.persistence).toBe(policy.persistence.effects)
           expect(input.nodeExecution()).toBe(policy.persistence.nodeExecution)

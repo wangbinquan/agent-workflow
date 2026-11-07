@@ -128,8 +128,6 @@ const KILL_ESCALATION_GRACE_MS = 10_000
 import { NOOP_HANDLE } from '@/services/runtime'
 
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
-import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
-
 import type { NodeExecutionEventWrite } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 
 import { maskDiagnosticsText } from '@agent-workflow/shared'
@@ -556,13 +554,7 @@ export async function runNode(
   // inject-snapshot block above) fires only AFTER the row really is running —
   // a WS listener that re-reads the DB on receipt must observe the same
   // status it was told about.
-  taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-    id: -1,
-    type: 'node.status',
-    nodeRunId: opts.nodeRunId,
-    nodeId: opts.nodeId,
-    status: 'running',
-  })
+  purpose.status.broadcastNodeStatus(opts.taskId, opts.nodeRunId, opts.nodeId, 'running')
 
   let effectiveResumeSessionId =
     opts.promptMode?.kind === 'followup' ? opts.promptMode.resumeSessionId : opts.resumeSessionId
@@ -1034,13 +1026,7 @@ export async function runNode(
       const now = Date.now()
       if (now - lastParentBroadcastTs < PARENT_BROADCAST_THROTTLE_MS) return
       lastParentBroadcastTs = now
-      taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-        id: -1,
-        type: 'node.status',
-        nodeRunId: opts.nodeRunId,
-        nodeId: opts.nodeId,
-        status: 'running',
-      })
+      purpose.status.broadcastNodeStatus(opts.taskId, opts.nodeRunId, opts.nodeId, 'running')
     }
 
     /**
@@ -1344,13 +1330,7 @@ export async function runNode(
           // triggers the right invalidation. Empty ticks don't reach this
           // callback so we never spam empty broadcasts.
           void info
-          taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-            id: -1,
-            type: 'node.status',
-            nodeRunId: opts.nodeRunId,
-            nodeId: opts.nodeId,
-            status: 'running',
-          })
+          purpose.status.broadcastNodeStatus(opts.taskId, opts.nodeRunId, opts.nodeId, 'running')
         },
       }) ?? NOOP_HANDLE
     spawnedCleanupHooks.push(() => livePoller.stop())

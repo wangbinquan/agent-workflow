@@ -5,7 +5,7 @@
 //    零 import 旧路径（census AST，带负对照）。
 // ② 调用目标选择与运行期引用解析在后端与 shared 的源码里只有 shared `ref/` 一处定义，shared 入口导出的就是它。
 // ③ 信封 nonce 只有 `platform/contracts/envelopeNonce.ts` 一处实现（task-execution 的旧名不在了），仍是 16 位小写 hex、每次不同。
-// ④ intent 的 dump / 会话 / turn 与 memory 的调度不再取 `services/`，memory 蒸馏只剩 `services/runtime/types`（随运行时驱动一族）；
+// ④ intent 的 dump / 会话 / turn 与 memory 的调度不再取 `services/`（memory 蒸馏余下的 `services/runtime/types` 由 RFC-461 收掉）；
 //    dump 的 seed 文件就是 intent 端口命名的那个形状。
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -158,7 +158,7 @@ describe('RFC-460 —— 信封 nonce 只有一处实现', () => {
 })
 
 describe('RFC-460 —— intent 与 memory 的这几处不再经 services/ 转手', () => {
-  test('intent dump / 会话 / turn、memory 调度零取 services/；memory 蒸馏只剩运行时类型', () => {
+  test('intent dump / 会话 / turn、memory 调度与蒸馏零取 services/', () => {
     expect(servicesImportsOf('modules/intent/application/dumpBuilder.ts')).toEqual([])
     expect(servicesImportsOf('modules/intent/application/session.ts')).toEqual([])
     expect(servicesImportsOf('modules/intent/application/turnEngine.ts')).toEqual([])
@@ -166,9 +166,8 @@ describe('RFC-460 —— intent 与 memory 的这几处不再经 services/ 转�
       servicesImportsOf('modules/intent/infrastructure/intentSqlPersistence.ts'),
     ).not.toContain('@/services/nodeRunMint')
     expect(servicesImportsOf('modules/memory/application/distill/schedule.ts')).toEqual([])
-    expect(servicesImportsOf('modules/memory/application/distill/memoryDistiller.ts')).toEqual([
-      '@/services/runtime/types',
-    ])
+    // RFC-461: the distiller's two runtime types now come from the task-execution run-family contract.
+    expect(servicesImportsOf('modules/memory/application/distill/memoryDistiller.ts')).toEqual([])
   })
 
   test('dump 的 seed 文件就是 intent 端口命名的形状', () => {

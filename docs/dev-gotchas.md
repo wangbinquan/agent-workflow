@@ -627,6 +627,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   裸读 `.nodeIds`），在 collaboration 时不受约束。
 - **开放类型进 public**：带 `unknown` 字段的类型从 infrastructure 改经 owner 的 `public/*` 导出，W0-R public surface 偏差随之 +2
   （`rfc294-architecture-preflight`；偏差记在第一条走到该声明的导出链上，看上去像是别的符号的问题）。
+  反过来也一样（RFC-461 实撞）：把 public 声明里借道 `services/` 的类型改取定义处，偏差 −1，同一个用例的精确清单随即报 **stale**，
+  要同时删去那条登记；上一个 RFC 的用例若钉了「还剩下的」（RFC-460 钉 memory 蒸馏只剩 `services/runtime/types`），后继 RFC 收掉它时
+  一起改——两条都只有跑全量守卫才看得到，tsc / eslint 不报。
 - **sha256 源码锁连依赖一起钉**：`tests/fixtures/rfc395-serialized-insert-source-locks.json` 的条目把调用方文件的摘要也钉住，只改
   三行 import 也失配（`rfc359-w8-t29`）。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
@@ -8803,6 +8806,11 @@ CI 上（Linux）同一份代码 `actualPasses=26`，`current-before` / `current
 
 看它抛出的错误与函数名是不是 `scripts/rfc359-p0-mutations.ts` 里为该阶段登记的那几条正则。
 整体结论仍以 CI 的 `Backend tests (real PostgreSQL)` 那一格为准。
+
+**2026-11-06 更正**：bun 1.4.3 起本机会逐条打 `(pass) …`，RFC-457～461 的集中验证里两引擎的整个 harness 都在本机跑通（17 个阶段）。
+仍要防的是负载：PostgreSQL 半边的 `current-before` 跑的是一批默认 5 秒时限的用例，负载一高就撞超时、harness 以 SIGTERM（exit 143）
+收场，后面的变异阶段一个都不跑。开跑前等负载降下来只防住一半——**开跑后自己也别再起重负载**（RFC-461 实撞：负载门放行的同一分钟
+起了三路 SQLite 复跑，负载冲到 148，整轮作废重跑）。
 
 **这类守卫对「合一」特别敏感**：它用 `source.split(snippet).length !== N` 钉住注入点**个数**。
 合掉一对孪生工厂，注入点就从 2 变 1，守卫报 `mutation sites drifted`——

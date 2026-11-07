@@ -1,3 +1,24 @@
+## 2026-11-06 RFC-461 application 层的 WS 推送改经端口、运行时类型改取 owner 的出口（In Progress；`design/RFC-461-application-ws-push-through-ports/`）
+
+- **来由**：RFC-294 W9-D 第八步。`R2` 还剩 17 条，其中 6 条与运行时驱动一族无关：task-execution `taskAgentRun` 与 memory 蒸馏 / 调度在
+  application 层直推 `ws/broadcaster`（3 条；task-execution 自己早有 `NodeStatusEvents` 端口），三处类型经 `services/` 转手取 owner 早已公开的
+  类型（runtime-management 的观测事件种类、会话事件 sink，memory 所用 task-execution 系统代理运行合同上的协议与输出证据）。用户 2026-11-02
+  「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`TaskAgentRunPurpose` 加 `status: NodeStatusEvents`（构造处接 infrastructure 的 `broadcastNodeStatus`）；`MemoryDistillWorkStore` 加
+  `events`（infrastructure 的工作存储用原来的两个 broadcaster 实现）；三处类型改取同模块定义处、runtime-management public 与 task-execution
+  合同上的别名。消息频道、载荷与推送时机原样。
+- **不做**：余下 11 条 `R2` 与 memory infrastructure 取 `services/sessionEventSink` 的两处（随运行时驱动一族）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-460 的 Done 文档提交 `4d3189753`（只改 5 个文档文件）：exact SHA 主 CI run 42325613271 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑。**查出本 RFC 的三处问题**，都是钉住「还剩下的」的用例没随之更新：`rfc294-architecture-preflight` 的
+  public surface 偏差精确清单（改取定义处后一条偏差消失、清单报 stale）、`rfc454` 钉的 `services/sessionEventSink` 消费方、`rfc460` 钉的
+  「memory 蒸馏只剩 `services/runtime/types`」——修复后两引擎复跑都通过，记入 `docs/dev-gotchas.md`。其余：backend tsc 0 错、eslint 无告警、
+  `depcheck` 通过；全量 SQLite 23468 pass，其余为负载超时（23 个文件）、导出仓库所致的 `rfc321` 与 `rfc398` 一例（复跑通过）；复跑 28 个
+  文件余 RFC-167 `approve`、`rfc300` / `rfc354` / `rfc363` 各一例（同一时刻在 RFC-460 导出仓库里对照，两边相同或都过）；PostgreSQL 214 个
+  文件的 lane 除上述问题外只有超时，复跑 21 个文件余 `scheduler-default-retries` 与 `rfc099` 各一处（对照两边都过 / 低负载下两边都过）；
+  P0：SQLite 17 阶段通过，PostgreSQL 第一次被本会话自己的复跑压到负载 148 作废、重跑 17 阶段通过；`rfc321` 工作树 10 / 10。计数：`R1` 99
+  不变、`R2` 17 → 11，public surface 偏差 102 → 101，其余架构 counts 不变。
+
 ## 2026-11-06 RFC-460 调用目标选择、运行期引用解析与信封 nonce 出 `services/`（Done；`design/RFC-460-shared-ref-resolvers-and-envelope-nonce/`）
 
 - **来由**：RFC-294 W9-D 第七步。intent 与 memory 的 application 层还有 11 条 `R2`，其中 6 条只是经 `services/` 转手取三件纯件和一个类型：

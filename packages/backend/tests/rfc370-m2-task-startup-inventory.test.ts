@@ -27,6 +27,7 @@ import { hostedEventRecord } from '@/modules/task-execution/infrastructure/crews
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { getRuntimeDriver } from '@/services/runtime'
 import { createLogger } from '@/util/log'
+import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 
 describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
   for (const runtime of ['opencode', 'claude-code'] as const)
@@ -213,6 +214,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             },
           },
           selectMaterial: () => material,
+          status: { broadcastNodeStatus },
           bindExecutionParticipants: () => ({
             taskEffect: Object.freeze({}) as NonNullable<AgentExecutionParticipants['taskEffect']>,
           }),

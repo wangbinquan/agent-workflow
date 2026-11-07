@@ -18,6 +18,7 @@ import type { NodeRunRuntimePersistence } from '../src/modules/task-execution/ap
 import type { RuntimeExecutionQueries } from '../src/modules/runtime-management/public/queries'
 import { getRuntimeDriver } from '../src/services/runtime'
 import { createLogger } from '../src/util/log'
+import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 
 function noRead(): never {
   throw new Error('unselected family operation')
@@ -124,6 +125,7 @@ test('normal family entry selects one whole purpose, waits for the original nonc
       expect(received).toBe(workspace)
       throw selectedError
     },
+    status: { broadcastNodeStatus },
     bindExecutionParticipants: noRead,
   }
   const family: TaskAgentRunFamily = {

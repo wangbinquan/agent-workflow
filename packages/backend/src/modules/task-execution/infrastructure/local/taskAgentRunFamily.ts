@@ -15,6 +15,7 @@ import type {
 import { createTaskAgentMaterialPreparation } from '../../application/taskAgentMaterialPreparation'
 import { createLocalAgentInvocationPreparation } from './agentInvocationPreparation'
 import { bindLocalAgentExecutionParticipants } from './agentExecutionEffect'
+import { broadcastNodeStatus } from '../nodeStatusEvents'
 import { createFilePortOutputValidationContent } from './filePortOutputValidation'
 import { detectPluginLoadFailure } from './nativeTaskAgentPluginLoadDiagnostics'
 import type {
@@ -194,6 +195,7 @@ export function createLocalTaskAgentRunFamily(
             },
           }
         },
+        status: { broadcastNodeStatus },
         bindExecutionParticipants: (participant) =>
           bindLocalAgentExecutionParticipants(participant),
       }
