@@ -1,6 +1,35 @@
 import type { WorkflowOutputEvidence } from '@agent-workflow/shared'
 import type { Logger } from '@/util/log'
-import type { IntentTurnSessionEventSink } from '../turnSession'
+import type { IntentTurnEventRecord, IntentTurnRecord } from './intentPersistence'
+
+/** RFC-464: the terminal capture states a turn settles to (the persistence port's `captureState`). */
+export type IntentTurnCaptureTerminalState = Exclude<
+  IntentTurnRecord['captureState'],
+  'live' | null
+>
+/** RFC-464: why a turn's capture ended incomplete (the persistence port's `captureIncompleteReason`). */
+export type IntentTurnCaptureIncompleteReason = NonNullable<
+  IntentTurnRecord['captureIncompleteReason']
+>
+/** RFC-464: one event the system agent run observed — the fields the turn event log stores. */
+export type IntentTurnObservedEvent = Pick<
+  IntentTurnEventRecord,
+  'ts' | 'kind' | 'payload' | 'sessionId' | 'parentSessionId' | 'source'
+> & { readonly externalEventId?: string }
+
+/** RFC-464: the observation-only sink a turn hands its system agent run. Declared here (intent does
+ * not take runtime-management); the runner's session event sink contract is the same shape, locked by
+ * the RFC-464 test member by member. Persisting it never decides the run's business result. */
+export interface IntentTurnEventSink {
+  append(event: IntentTurnObservedEvent): Promise<void>
+  /** Persist that the current native root was invalidated before a replacement is known. */
+  markRootSessionResetPending?(sessionId: string): Promise<void>
+  setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void>
+  markTerminal(
+    state: IntentTurnCaptureTerminalState,
+    reason?: IntentTurnCaptureIncompleteReason,
+  ): Promise<void>
+}
 
 /** Opaque selected content identity. Intent only forwards this exact object;
  * interpretation and lifetime remain with its selected content owner. */
@@ -54,7 +83,7 @@ export interface IntentSystemAgentRunRequest {
   readonly timeoutMs?: number
   readonly maxEventTextBytes?: number
   readonly abortSignal?: AbortSignal
-  readonly eventSink?: IntentTurnSessionEventSink
+  readonly eventSink?: IntentTurnEventSink
   readonly retainScratchOnSuccess?: boolean
   readonly log?: Logger
 }

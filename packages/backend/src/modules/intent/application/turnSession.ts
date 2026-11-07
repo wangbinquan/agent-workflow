@@ -11,10 +11,11 @@ import type {
   IntentTurnRecord,
 } from '@/modules/intent/application/ports/intentPersistence'
 import type {
-  SessionCaptureIncompleteReason,
-  SessionCaptureTerminalState,
-  SystemAgentEventSinkV1,
-} from '@/services/sessionEventSink'
+  IntentTurnCaptureIncompleteReason,
+  IntentTurnCaptureTerminalState,
+  IntentTurnEventSink,
+  IntentTurnObservedEvent,
+} from '@/modules/intent/application/ports/intentSystemAgent'
 import { DomainError, NotFoundError } from '@/util/errors'
 
 export const INTENT_TURN_EVENT_ROW_LIMIT = 10_000
@@ -61,7 +62,7 @@ export function projectIntentTurnExecution(
  * One ordered writer per turn. The promise tail serializes parent stream and
  * post-run child imports so event_seq never races across capture sources.
  */
-export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
+export class IntentTurnSessionEventSink implements IntentTurnEventSink {
   private tail: Promise<void> = Promise.resolve()
   /** Once capture settles/caps, later observations bypass SQLite entirely. */
   private stopped = false
@@ -75,8 +76,8 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
    */
   private terminalIntent:
     | {
-        state: SessionCaptureTerminalState
-        reason?: SessionCaptureIncompleteReason
+        state: IntentTurnCaptureTerminalState
+        reason?: IntentTurnCaptureIncompleteReason
       }
     | undefined
 
@@ -86,7 +87,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
     private readonly onUpdated?: (eventSeq: number) => void,
   ) {}
 
-  append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
+  append(event: IntentTurnObservedEvent): Promise<void> {
     if (this.stopped) return Promise.resolve()
     return this.enqueue(async () => {
       if (this.stopped) return
@@ -146,8 +147,8 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
   }
 
   markTerminal(
-    state: SessionCaptureTerminalState,
-    reason?: SessionCaptureIncompleteReason,
+    state: IntentTurnCaptureTerminalState,
+    reason?: IntentTurnCaptureIncompleteReason,
   ): Promise<void> {
     const terminal = this.rememberTerminalIntent(
       this.resetPendingFrom === undefined ? state : 'incomplete',
@@ -165,11 +166,11 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
   }
 
   private rememberTerminalIntent(
-    state: SessionCaptureTerminalState,
-    reason?: SessionCaptureIncompleteReason,
-  ): { state: SessionCaptureTerminalState; reason?: SessionCaptureIncompleteReason } {
+    state: IntentTurnCaptureTerminalState,
+    reason?: IntentTurnCaptureIncompleteReason,
+  ): { state: IntentTurnCaptureTerminalState; reason?: IntentTurnCaptureIncompleteReason } {
     const current = this.terminalIntent
-    const rank = (value: SessionCaptureTerminalState): number =>
+    const rank = (value: IntentTurnCaptureTerminalState): number =>
       value === 'incomplete' ? 2 : value === 'truncated' ? 1 : 0
     if (current === undefined || rank(state) > rank(current.state)) {
       const next = {

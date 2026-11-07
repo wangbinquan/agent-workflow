@@ -675,7 +675,8 @@ export interface RuntimeDriver {
 
   /** opencode only — spin up the live subagent SQLite poller alongside the run
    *  (was an UNCONDITIONAL start, spinning uselessly on claude runs — the
-   *  RFC-143 空转 bug). claude omits this → runner uses NOOP_HANDLE. */
+   *  RFC-143 空转 bug). claude omits this → the runner starts no live capture
+   *  (RFC-464: absence stays absent, no borrowed no-op handle). */
   startLiveCapture?(ctx: LivePollOptions): LivePollerHandle
 
   /**

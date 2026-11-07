@@ -86,8 +86,6 @@ export { CLAUDE_PLATFORM_OWNED_FLAGS } from './claudeCode/spawn'
 // Startup-inventory run-root projection (the provider-neutral task read model
 // supplies stored rows; only the in-flight file fallback remains here).
 export { readSnapshotFromRunDir, runRootFor } from './opencode/inventory'
-// Live-capture null object (runner's no-capability fallback handle).
-export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
 // Distiller session sweep failure marker (memory distill session view).
 // RFC-367: the constant outlived its old home (the retired post-run distill
 // SQLite walk). Its neutral definition lives in runtime-management's public

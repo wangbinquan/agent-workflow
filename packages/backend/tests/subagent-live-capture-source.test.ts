@@ -24,14 +24,14 @@ function read(p: string): string {
 describe('RFC-048 source-layout guards', () => {
   test('runner.ts spins up the poller exactly once and stops it after child.exited', () => {
     // RFC-143: the poller start + post-run capture are now driver capability
-    // methods (opencode implements; claude omits → NOOP_HANDLE), so the anchors
+    // methods (opencode implements; claude omits → no poller, RFC-464), so the anchors
     // moved from free fns to the selected material evidence participant.
     // The lifecycle contract this guards (poller started once, stopped after the
     // bounded exit wait and BEFORE the post-run capture) is unchanged.
     const src = readTaskAgentSources()
     const startCount = (src.match(/materialEvidence\.startLiveCapture\?\.\(/g) ?? []).length
     expect(startCount).toBe(1)
-    const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\.stop\(\)/
+    const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\?\.stop\(\)/
     const stmtMatch = stmtPattern.exec(src)
     expect(stmtMatch).not.toBeNull()
     // RFC-280 T7 / RFC-370: the bounded exit wait stays in the unified native

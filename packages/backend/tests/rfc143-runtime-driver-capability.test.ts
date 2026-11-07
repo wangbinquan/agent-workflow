@@ -213,8 +213,8 @@ describe('RFC-143 (B) 能力接口', () => {
 describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () => {
   it('claude driver 省略 startLiveCapture（空转 bug：live poll 是 opencode 专属）', () => {
     // 修复前：runner 无条件 startLiveSubagentCapture → claude run 每 1.5s 空开
-    // opencode SQLite、恒 0 命中。修复后：claude driver 无此方法 → runner 落
-    // NOOP_HANDLE，poller 根本不启动。
+    // opencode SQLite、恒 0 命中。修复后：claude driver 无此方法 → poller 根本
+    // 不启动（RFC-464 起 runner 不再借 no-op 句柄，缺席即缺席）。
     expect(getRuntimeDriver('claude-code').startLiveCapture).toBeUndefined()
     expect(typeof getRuntimeDriver('opencode').startLiveCapture).toBe('function')
   })
@@ -224,10 +224,12 @@ describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () 
     expect(typeof getRuntimeDriver('opencode').readInventory).toBe('function')
   })
 
-  it('runner live poller 走 driver.startLiveCapture? + NOOP fallback（不再无条件启动）', () => {
+  it('runner live poller 走 driver.startLiveCapture?，缺席即不起、不停（不再无条件启动）', () => {
     const src = readTaskAgentSources()
     expect(src).toContain('materialEvidence.startLiveCapture?.(')
-    expect(src).toContain('?? NOOP_HANDLE')
+    // RFC-464: was `?? NOOP_HANDLE` — the absent capability is no longer papered over with a borrowed no-op.
+    expect(src).not.toContain('NOOP_HANDLE')
+    expect(src).toContain('livePoller?.stop()')
     // 无条件启动的旧形态不得复活。
     expect(src).not.toMatch(/const livePoller = startLiveSubagentCapture\(/)
   })

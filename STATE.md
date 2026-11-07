@@ -1,3 +1,24 @@
+## 2026-11-07 RFC-464 无实时捕获按缺席处理、intent 自持轮次事件 sink 合同（In Progress；`design/RFC-464-live-capture-absence-and-intent-turn-sink/`）
+
+- **来由**：RFC-294 W9-D 第十一步。`R2` 余下 3 条都在驱动接缝上，其中两条不用先重画接缝：task-execution `taskAgentRun` 在驱动没有
+  实时子会话捕获时借 opencode 驱动的 `NOOP_HANDLE`（取 `services/runtime`），而 runtime-management 的材料证据合同写明「缺席即原意的不支持」；
+  intent 的轮次事件 sink 为了实现 runtime-management 的会话事件合同经 `services/sessionEventSink` 转手（intent → runtime-management 不是
+  目标 DAG 给的边），而 sink 写进去的形状早由 intent 的持久化端口命名。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`taskAgentRun` 无实时捕获时不起、不停、会话捕获不带去重表（有句柄时照旧），`services/runtime/index` 删去 `NOOP_HANDLE` 再导出；
+  intent 系统代理运行端口声明 `IntentTurnEventSink` 与三个形状（由持久化端口的记录类型派生），轮次 sink 实现它、端口不再反取 application
+  层的 sink 类；RFC-143 / RFC-048 的源码锁与 `rfc454` 的消费方精确清单随之改到新形状。
+- **不做**：runtime-management `agentMaterialEvidence` 取会话捕获 / 清扫上下文（余下 1 条 `R2`，要先定会话捕获持久化端口的归属、随驱动一族
+  归位）；驱动接口、执行上下文与驱动实现。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-463 的 Done 文档提交 `2796fd6d0`（只改 5 个文档文件）：exact SHA 主 CI run 42364318584 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题（开发期静态自查查出两处本 RFC 用例自身的写法问题，已改正）。
+  backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 23488 pass，其余为负载超时（28 个文件）、导出仓库所致的 `rfc321` 与
+  撞用例自带 20 秒流程看门狗的一例；复跑 30 个文件余 RFC-167 `approve`、`rfc363` 各一例（同一时刻在 RFC-463 导出仓库里对照，两边
+  同一例到点）；PostgreSQL 217 个文件的 lane 余 19 个文件（超时、MCP 测试台用例自带的 2 秒等待与一例启动恢复），复跑全过；P0 两引擎
+  各 17 阶段通过（PostgreSQL 等负载降到 25 才放行）；`rfc321` 工作树 10 / 10；文档用例 95 pass / 0 fail。计数：`R1` 99 不变、
+  `R2` 3 → 1，`services/` 75 不变，public surface 偏差 96 不变，其余架构 counts 不变。
+
 ## 2026-11-07 RFC-463 启动核验与清单观测的判定进 shared、空运行参数归 runtime-management（Done；`design/RFC-463-startup-observation-judgments-to-shared/`）
 
 - **来由**：RFC-294 W9-D 第十步。`R2` 余下 7 条，其中 4 条是 task-execution `taskAgentRun` 为三个执行助手取 `services/execution/`：

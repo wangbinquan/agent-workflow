@@ -125,7 +125,6 @@ import {
 
 /** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000
-import { NOOP_HANDLE } from '@/services/runtime'
 
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import type { NodeExecutionEventWrite } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
@@ -1309,31 +1308,32 @@ export async function runNode(
     const liveCtrl = new AbortController()
     spawnedCleanupHooks.push(() => liveCtrl.abort())
     // RFC-143: live subagent capture is an opencode-only capability. claude's
-    // driver omits `startLiveCapture` → NOOP_HANDLE (was an UNCONDITIONAL start
-    // that spun uselessly against opencode's SQLite on every claude run).
-    const livePoller =
-      materialEvidence.startLiveCapture?.({
-        nodeRunId: opts.nodeRunId,
-        taskId: opts.taskId,
-        nodeId: opts.nodeId,
-        getRootSessionId: () => sessionId ?? null,
-        persistence: opts.persistence.runtimeSessionCapture,
-        log: log.child('subagent-live-poll'),
-        pollMs: livePollMs,
-        consecutiveFailureLimit: liveFailureLimit,
-        signal: liveCtrl.signal,
-        onInsert: (info) => {
-          // Reuse the existing `node.status: running` broadcast lane so the
-          // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
-          // without an additional WS schema entry. The status hasn't actually
-          // changed — we're piggybacking the cheap idempotent ping that already
-          // triggers the right invalidation. Empty ticks don't reach this
-          // callback so we never spam empty broadcasts.
-          void info
-          purpose.status.broadcastNodeStatus(opts.taskId, opts.nodeRunId, opts.nodeId, 'running')
-        },
-      }) ?? NOOP_HANDLE
-    spawnedCleanupHooks.push(() => livePoller.stop())
+    // driver omits `startLiveCapture` → no live capture at all (was an UNCONDITIONAL
+    // start that spun uselessly against opencode's SQLite on every claude run).
+    // RFC-464: absence keeps its unsupported meaning — nothing to stop, and the
+    // post-run capture gets no dedupe map (its only reader treats none as empty).
+    const livePoller = materialEvidence.startLiveCapture?.({
+      nodeRunId: opts.nodeRunId,
+      taskId: opts.taskId,
+      nodeId: opts.nodeId,
+      getRootSessionId: () => sessionId ?? null,
+      persistence: opts.persistence.runtimeSessionCapture,
+      log: log.child('subagent-live-poll'),
+      pollMs: livePollMs,
+      consecutiveFailureLimit: liveFailureLimit,
+      signal: liveCtrl.signal,
+      onInsert: (info) => {
+        // Reuse the existing `node.status: running` broadcast lane so the
+        // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
+        // without an additional WS schema entry. The status hasn't actually
+        // changed — we're piggybacking the cheap idempotent ping that already
+        // triggers the right invalidation. Empty ticks don't reach this
+        // callback so we never spam empty broadcasts.
+        void info
+        purpose.status.broadcastNodeStatus(opts.taskId, opts.nodeRunId, opts.nodeId, 'running')
+      },
+    })
+    spawnedCleanupHooks.push(() => livePoller?.stop())
     // A one-shot binding so onStderrLine can reference it before its decl below.
 
     const persistStderrLine = async (line: string, sourceKey?: string): Promise<void> => {
@@ -1488,7 +1488,7 @@ export async function runNode(
     // RFC-048: stop the live poller before the post-run BFS so no concurrent
     // SELECT races against the final captureChildSessions read.
     liveCtrl.abort()
-    livePoller.stop()
+    livePoller?.stop()
     if (spawnFailed) {
       // RFC-111 (Codex impl-gate P1-2): a missing / unspawnable runtime binary.
       // Mark the node failed cleanly; the executor already reaped nothing (no
@@ -1535,7 +1535,9 @@ export async function runNode(
             taskId: opts.taskId,
             persistence: opts.persistence.runtimeSessionCapture,
             log,
-            alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
+            ...(livePoller === undefined
+              ? {}
+              : { alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession }),
           })
         } catch (err) {
           log.warn('subagent-capture-unhandled', {
