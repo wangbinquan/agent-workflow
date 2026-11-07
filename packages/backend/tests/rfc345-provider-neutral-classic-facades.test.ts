@@ -77,12 +77,11 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   })
 
   test('retained ancillary helpers are neutral while consumer-zero facades retire', () => {
+    // RFC-467: `agentDeps` / `pluginClosure` (only the RFC-349 injection oracle used them) moved to the test helpers.
     for (const relative of ['services/agentDeps.ts', 'services/pluginClosure.ts']) {
-      const helper = source(relative)
-      expect(helper, relative).not.toMatch(/from ['"](?:@\/db|drizzle-orm)/)
+      expect(existsSync(resolve(sourceRoot, relative)), relative).toBe(false)
     }
     expect(existsSync(resolve(sourceRoot, 'services/agentRefs.ts'))).toBe(false)
-    expect(source('services/agentDeps.ts')).toContain('lookup: AgentDependencyLookup')
     expect(
       source('modules/resource-catalog/application/agents/agentDependencyValidation.ts'),
     ).toContain('reader: AgentDependencyReader')
@@ -108,7 +107,6 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
         '@/modules/resource-catalog/application/agents/ports',
       )
     }
-    expect(source('services/pluginClosure.ts')).toContain('query: PluginClosureQuery')
   })
 
   test('Workflow validation and D15 admission are provider-owned queries', () => {

@@ -1,3 +1,7 @@
+// RFC-467 — moved from `src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts` (unreachable from
+// production entry points) together with the three services only it imported (`agentDeps` / `mcpClosure` / `pluginClosure`,
+// now siblings here). The behaviour is unchanged; the two skill helpers and the two row mappers it used to take through
+// `services/` facades and the execution policy bundle come from their resource-catalog definitions.
 import { contentRefColumns } from '@/platform/content/contentStore'
 // RFC-349 compatibility adapter for the retired SQLite injection resolver.
 // Production task execution consumes TaskExecutionResourceBinding; this file
@@ -33,19 +37,20 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import { ConflictError, SkillQuarantinedError } from '@/util/errors'
-import { resolveDependsClosure, type AgentDependencyLookup } from '@/services/agentDeps'
-import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
-import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
+import { resolveDependsClosure, type AgentDependencyLookup } from './agentDeps'
+import { collectMcpIdsFromClosure, loadMcpsByIds } from './mcpClosure'
+import { collectPluginIdsFromClosure, loadPluginsByIds } from './pluginClosure'
 import { agentSkillRef, runtimeRefKey } from '@agent-workflow/shared'
 import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,
   type ManagedInjectionIdentity,
 } from '@/services/runtime/injectionIdentity'
-import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
+import { isSkillInjectableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
-import { skillFilesRel } from '@/services/skillIdentityPaths'
+import { mcpFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
+import { pluginFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
+import { skillFilesRel } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import type { AgentInjectionSpecV1, ResolvedSkill } from '@/services/runtime/types'
 
 /** Advisory notes produced during resolution (reserved; the disabled-MCP skip
@@ -180,7 +185,7 @@ export async function resolveInjection(
             .select()
             .from(mcps)
             .where(inArray(mcps.id, [...ids]))
-        ).map(taskExecutionResourceDependencies.rowToMcp)
+        ).map(mcpFromPersistenceRow)
       },
     },
     mcpIds,
@@ -229,7 +234,7 @@ export async function resolveInjection(
             .select()
             .from(plugins)
             .where(inArray(plugins.id, [...ids]))
-        ).map(taskExecutionResourceDependencies.rowToPlugin)
+        ).map(pluginFromPersistenceRow)
       },
     },
     pluginIds,

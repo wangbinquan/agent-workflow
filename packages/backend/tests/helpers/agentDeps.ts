@@ -1,3 +1,5 @@
+// RFC-467 — moved verbatim from `src/services/agentDeps.ts`: its only production importer was the RFC-349 injection
+// behaviour oracle (`legacyTaskExecutionInjectionResolver`, unreachable from production entry points), which moved here too.
 // RFC-022: dependency-closure helpers shared by agent CRUD, the scheduler,
 // the workflow validator, and the two closure HTTP endpoints.
 //
@@ -24,7 +26,7 @@
 //     Reverse index used by compatibility consumers. The injected provider
 //     owns its exact storage predicate and returns closed identity rows.
 
-import { validateAgentDependencies } from '@/modules/resource-catalog/public/queries'
+import { validateAgentDependencies } from '@/modules/resource-catalog/application/agents/agentDependencyValidation'
 import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
 import { agentReferenceIds, resourceRefKey } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'

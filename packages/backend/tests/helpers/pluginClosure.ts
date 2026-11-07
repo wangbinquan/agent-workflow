@@ -1,3 +1,5 @@
+// RFC-467 — moved verbatim from `src/services/pluginClosure.ts`: its only production importer was the RFC-349 injection
+// behaviour oracle (`legacyTaskExecutionInjectionResolver`, unreachable from production entry points), which moved here too.
 // RFC-031 — plugin dependsOn-closure helpers used by the scheduler before
 // each runNode spawn. Kept tiny + pure so the same code is exercised by
 // isolated unit tests, scheduler integration tests, and live spawn paths.

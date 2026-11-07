@@ -288,9 +288,10 @@ export interface TaskAgentRunPolicy {
   dependents?: readonly Agent[]
   /**
    * RFC-028: MCP server configs to inject under `mcp.<name>` in the inline
-   * OPENCODE_CONFIG_CONTENT. Scheduler pre-loads these via
-   * `collectMcpNamesFromClosure` + `loadMcpsByNames` (see services/mcpClosure)
-   * over the dependsOn closure. Empty / undefined → omit the `mcp` key
+   * OPENCODE_CONFIG_CONTENT. The resource-catalog task-execution resource
+   * snapshot pre-loads these over the dependsOn closure (RFC-467: the older
+   * `services/mcpClosure` helpers survive only as the RFC-349 test oracle in
+   * `tests/helpers/`). Empty / undefined → omit the `mcp` key
    * entirely; the user's repo `.opencode/config.json` + `~/.config/opencode/`
    * MCPs still load naturally (deep-merge baseline). See docs/OPENCODE_CONFIG.md
    * §1 and §3.3 for the field-name translation rules.

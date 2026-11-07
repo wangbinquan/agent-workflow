@@ -1,3 +1,25 @@
+## 2026-11-07 RFC-467 注入预言一族迁入用例树、资源快照策略束只留外部策略（In Progress；`design/RFC-467-injection-oracle-relocation/`）
+
+- **来由**：RFC-294 W9-D 第十四步（facade 清仓）。不可达生产文件 24 个里有 6 个是同一族：task-execution
+  `legacyTaskExecutionInjectionResolver.ts`（RFC-349 留下的注入解析行为预言，生产不可达）与只有它在 src 里 import 的 `services/agentDeps.ts`、
+  `mcpClosure.ts`、`pluginClosure.ts` 和两个 `export *` facade（`skillBootVerify.ts`、`skillIdentityPaths.ts`，各 1 条 `R1`）。bootstrap 注入
+  resource-catalog 任务执行资源快照的策略束（`services/execution/taskExecutionResourceDependencies.ts`，5 条 `R1`）里 4 个字段只给预言用，
+  另 2 个是 resource-catalog 自己的函数绕到 `services/` 再注入回来。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用
+  提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：预言与三个实现原样迁入 `tests/helpers/`，两个 facade 删除，用例改取 helper 与定义处；策略束与 resource-catalog 端口只留 4 个外部
+  策略，适配器直接取 resource-catalog 自己的 `assertNotBuiltin` 与 `isSkillInjectableThisBoot`；唯一的模块外读者随预言迁走的
+  `validateAgentDependencies` 退出 resource-catalog `public/queries`；RFC-376 / RFC-345 / RFC-454 / RFC-395 等精确清单、账本随之改。
+- **不做**：预言本身是否退役；integration 触发器资源快照适配器里同样注入的 `assertNotBuiltin`；策略束文件本身的去处。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-466 的 Done 文档提交 `450e480d2`（只改 6 个文档文件）：exact SHA 主 CI run 42404869588 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的一处问题并已修正复验：预言迁走后 resource-catalog `public/queries` 转出的
+  `validateAgentDependencies` 失去唯一的模块外读者（当场收回，未被消费的 public 符号回到 322）。backend tsc 0 错、eslint 无告警、
+  `depcheck` 通过；全量 SQLite 第 1、2、4 片合计 16965 pass，其余为负载超时、导出仓库所致的 `rfc321` 与组合场景 S-RFC074 一例；第 3 片
+  在负载 67～79 下撞 2 小时上限被终止，按 bun 的分片规则重建它的 729 个文件整片复跑；复跑 868 个文件余 RFC-167 `approve`、`rfc363` 各一例（同一时刻在 RFC-466 导出仓库里对照，两边同一例到点）；PostgreSQL 353 个文件的
+  lane 余 45 个文件（42 个只有超时，另 3 个是 MCP 测试台与旧任务真实执行的自带计时到点），复跑 55 个文件余 9 个文件 11 例，都是用例自带的计时到点（同一时刻在 RFC-466 导出仓库里对照：7 个两边全过，`rfc167`、`rfc359-w9` 两边同一例到点）；P0 两引擎各 17 阶段
+  通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 86 → 79、`R2` 0，public surface 1496 → 1495、偏差 94 不变，未被消费的
+  public 符号 322 不变，`services/` 73 → 68，不可达生产文件 24 → 18，越界类计数不变。
+
 ## 2026-11-07 RFC-466 退役 resourceAcl 与 workgroups 兼容 facade（Done；`design/RFC-466-resource-acl-and-workgroups-facade-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十三步（facade 清仓）。`R1` 96 条里最大的一处是 RFC-345 T9 留下的 `services/resourceAcl.ts`（69 行纯

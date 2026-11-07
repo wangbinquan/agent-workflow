@@ -20,7 +20,7 @@ import type { McpCatalogModule } from '../../src/modules/resource-catalog/public
 import type { McpOperationContext } from '../../src/modules/resource-catalog/public/participants'
 import type { McpCatalogResource } from '../../src/modules/resource-catalog/public/types'
 import { ResourceOperationCoordinator } from '../../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
-import type { McpClosureQuery } from '../../src/services/mcpClosure'
+import type { McpClosureQuery } from './mcpClosure'
 import { monotonicNow } from '../../src/util/time'
 
 export interface McpCatalogTestBinding {

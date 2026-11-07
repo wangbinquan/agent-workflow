@@ -46,16 +46,15 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
     expect(snapshots).toContain('../mcpPersistence')
     expect(snapshots).toContain('../pluginPersistence')
     expect(snapshots).not.toMatch(/@\/services\/(?:mcp|plugin)['"]/)
-    // 策略束里只剩 legacy 行为神谕（`legacyTaskExecutionInjectionResolver`）还要的三个行映射器；
-    // 快照适配器与可见性判据都不再经这里注入。
+    // RFC-467：legacy 行为神谕（`legacyTaskExecutionInjectionResolver`）迁入用例树，它要的三个行映射器随之离开策略束；
+    // 快照适配器与可见性判据都不再经这里注入，策略束不再取 resource-catalog 的任何内部文件。
     const dependencies = readFileSync(
       resolve(import.meta.dir, '../src/services/execution/taskExecutionResourceDependencies.ts'),
       'utf8',
     )
     expect(dependencies).not.toMatch(/rowTo(?:WorkflowDetail|Workgroup)\b/)
     expect(dependencies).not.toContain('canViewResourceInTx')
-    expect(dependencies).toContain('infrastructure/mcpPersistence')
-    expect(dependencies).toContain('infrastructure/pluginPersistence')
+    expect(dependencies).not.toContain('@/modules/resource-catalog/')
   })
 })
 

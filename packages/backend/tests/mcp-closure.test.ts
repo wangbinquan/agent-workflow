@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
+import { collectMcpIdsFromClosure, loadMcpsByIds } from './helpers/mcpClosure'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 import { describeEachProvider } from './helpers/eachProvider'
 

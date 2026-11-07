@@ -16,7 +16,6 @@
 import {
   agentSkillReferences,
   agentReferenceIds,
-  type AclResourceType,
   type Agent,
   type Mcp,
   type Plugin,
@@ -37,6 +36,8 @@ import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersist
 import { workgroupFromRows } from '../workgroupRepository'
 import { agentSnapshot, workflowSnapshot, workgroupSnapshot } from './resourceSnapshotProjection'
 import { canViewResourceForTx } from '../resourceAclTransaction'
+import { assertNotBuiltin } from '../../domain/systemResources'
+import { isSkillInjectableThisBoot } from '../legacy/skillBootVerify'
 import type { TaskExecutionResourceSnapshotPorts } from '../../application/participants/taskExecutionResourceSnapshot'
 import type { ResourceRequestContext } from '../../public/participants'
 import type {
@@ -62,16 +63,11 @@ type ManagedInjectionNameConflict = Readonly<{
   readonly secondId: string
 }>
 
+/**
+ * The policy this adapter takes from outside Resource Catalog (RFC-467: its own `assertNotBuiltin` and
+ * `isSkillInjectableThisBoot` are imported directly; the never-read `skillFilesRel` is gone).
+ */
 export interface TaskExecutionResourceDependencies {
-  readonly assertNotBuiltin: (
-    type: AclResourceType,
-    row: Readonly<{ readonly builtin?: boolean | null }>,
-  ) => void
-  readonly isSkillInjectableThisBoot: (skill: {
-    readonly id: string
-    readonly sourceKind: 'managed' | 'project'
-  }) => boolean
-  readonly skillFilesRel: (skillId: string) => string
   readonly findManagedInjectionNameConflict: (input: {
     readonly agents: readonly Readonly<{ readonly id: string; readonly name: string }>[]
     readonly managedSkills: readonly Readonly<{ readonly id: string; readonly name: string }>[]
@@ -155,7 +151,7 @@ export function createTaskExecutionResourceSnapshotPorts(
     if (row === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', row))) {
       throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
     }
-    dependencies.assertNotBuiltin('workflow', row)
+    assertNotBuiltin('workflow', row)
     return workflowSnapshot(workflowDetailOf(workflowFromPersistenceRow(row)))
   }
 
@@ -319,7 +315,7 @@ export function createTaskExecutionResourceSnapshotPorts(
           `agent '${root.name}' references a missing managed Skill`,
         )
       }
-      if (!dependencies.isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
+      if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
         return requestFailure(
           new SkillQuarantinedError(row.name).code,
           `agent '${root.name}' references quarantined Skill '${row.name}'`,

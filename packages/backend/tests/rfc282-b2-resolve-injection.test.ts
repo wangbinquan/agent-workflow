@@ -27,7 +27,7 @@ import { ulid } from 'ulid'
 import ts from 'typescript'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { resolveInjection } from '../src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver'
+import { resolveInjection } from './helpers/legacyTaskExecutionInjectionResolver'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { buildCommitAgent } from '../src/services/commitPush'
 import { buildMergeAgent } from '../src/services/mergeAgent'
@@ -35,8 +35,8 @@ import {
   activateBootReverifyForTest,
   markSkillBootVerified,
   resetSkillBootVerifyForTest,
-} from '../src/services/skillBootVerify'
-import { skillFilesRel } from '../src/services/skillIdentityPaths'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { skillFilesRel } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import { createLogger } from '../src/util/log'
 import type { Agent } from '@agent-workflow/shared'
 

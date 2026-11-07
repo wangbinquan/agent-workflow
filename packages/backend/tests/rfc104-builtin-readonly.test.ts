@@ -696,7 +696,11 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
       ),
       'utf-8',
     )
-    expect(snapshotAdapter).toContain("dependencies.assertNotBuiltin('workflow', row)")
+    // RFC-467: the adapter takes Resource Catalog's own `assertNotBuiltin` directly instead of through the policy bundle.
+    expect(snapshotAdapter).toContain(
+      "import { assertNotBuiltin } from '../../domain/systemResources'",
+    )
+    expect(snapshotAdapter).toContain("    assertNotBuiltin('workflow', row)\n")
     expect(tasksSrc).toContain('operations.launchWorkflow(actor, parsed.data)')
     expect(tasksSrc).toContain('operations.launchMultipart(c.req.raw, actorOf(c))')
     // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除。

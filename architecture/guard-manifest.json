@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1112
+      "lines": 1097
     },
     {
       "assertsAbsence": true,

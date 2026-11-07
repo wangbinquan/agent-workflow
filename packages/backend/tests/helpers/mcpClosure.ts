@@ -1,3 +1,5 @@
+// RFC-467 — moved verbatim from `src/services/mcpClosure.ts`: its only production importer was the RFC-349 injection
+// behaviour oracle (`legacyTaskExecutionInjectionResolver`, unreachable from production entry points), which moved here too.
 // RFC-028 — MCP dependsOn-closure helpers used by the scheduler before each
 // runNode spawn. Kept tiny + pure on purpose so the same code is exercised
 // by isolated unit tests, scheduler integration tests, and live spawn paths.

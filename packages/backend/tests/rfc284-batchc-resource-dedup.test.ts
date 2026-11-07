@@ -31,7 +31,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/referenceLookup'
 import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { findAgentsUsingManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
-import { findAgentsDependingOn } from '../src/services/agentDeps'
+import { findAgentsDependingOn } from './helpers/agentDeps'
 import { isOwnerNameUniqueViolation } from '../src/modules/resource-catalog/infrastructure/ownerScopedName'
 import { isVisibleToAudienceSnapshot } from '../src/modules/resource-catalog/domain/resourceAccess'
 import {
@@ -139,12 +139,13 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
   })
 
   test('结构锁：四域反查统一走关系表，workflow 走当前 revision 的依赖索引', () => {
-    for (const f of [
-      'modules/resource-catalog/infrastructure/legacy/skillReferenceGuard.ts',
-      'services/agentDeps.ts',
-    ]) {
+    for (const f of ['modules/resource-catalog/infrastructure/legacy/skillReferenceGuard.ts']) {
       expect(SRC(f)).not.toContain('like(agents.')
     }
+    // RFC-467: `agentDeps` (only the RFC-349 injection oracle used it) moved to the test helpers.
+    expect(readFileSync(resolve(import.meta.dir, 'helpers', 'agentDeps.ts'), 'utf8')).not.toContain(
+      'like(agents.',
+    )
     for (const [f, _column, collector] of [
       // RFC-359 W4-D16：Mcp 仓库只剩一份中立实现。
       [

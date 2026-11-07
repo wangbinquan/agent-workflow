@@ -363,16 +363,6 @@
       "removeWhen": "RFC-395 T11 identity-access/userAccessPersistence 边界任务：先由 RFC-294 设计门确认 resource-catalog 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
     },
     {
-      "table": "mcps",
-      "owner": "resource-catalog",
-      "file": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
-      "module": "task-execution",
-      "tableId": "mcps",
-      "kind": "other",
-      "why": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts 的执行注入资源的技能、MCP、插件解析及可用性投影仍使用 mcps；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
-      "removeWhen": "RFC-395 T11 task-execution/legacyTaskExecutionInjectionResolver 端口任务：在 resource-catalog 实现对应的 legacyTaskExecutionInjectionResolver query/participant 并迁移该联合操作。"
-    },
-    {
       "table": "memories",
       "owner": "memory",
       "file": "runtime-management/infrastructure/realtimeStore.ts",
@@ -421,16 +411,6 @@
       "kind": "other",
       "why": "intent/infrastructure/intentApplyArtifactLifecycle.ts 的应用 journal 中插件与技能版本的事务清理仍使用 plugins；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
       "removeWhen": "RFC-395 T11 intent/intentApplyArtifactLifecycle 端口任务：在 resource-catalog 实现对应的 intentApplyArtifactLifecycle query/participant 并迁移该联合操作。"
-    },
-    {
-      "table": "plugins",
-      "owner": "resource-catalog",
-      "file": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
-      "module": "task-execution",
-      "tableId": "plugins",
-      "kind": "other",
-      "why": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts 的执行注入资源的技能、MCP、插件解析及可用性投影仍使用 plugins；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
-      "removeWhen": "RFC-395 T11 task-execution/legacyTaskExecutionInjectionResolver 端口任务：在 resource-catalog 实现对应的 legacyTaskExecutionInjectionResolver query/participant 并迁移该联合操作。"
     },
     {
       "table": "recoveryEvents",
@@ -741,16 +721,6 @@
       "kind": "other",
       "why": "knowledge-evolution/infrastructure/fusionRepository.ts 的融合候选、技能版本、记忆成员的同事务写入仍使用 skills；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
       "removeWhen": "RFC-395 T11 knowledge-evolution/fusionRepository 端口任务：在 resource-catalog 实现对应的 fusionRepository query/participant 并迁移该联合操作。"
-    },
-    {
-      "table": "skills",
-      "owner": "resource-catalog",
-      "file": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
-      "module": "task-execution",
-      "tableId": "skills",
-      "kind": "other",
-      "why": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts 的执行注入资源的技能、MCP、插件解析及可用性投影仍使用 skills；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
-      "removeWhen": "RFC-395 T11 task-execution/legacyTaskExecutionInjectionResolver 端口任务：在 resource-catalog 实现对应的 legacyTaskExecutionInjectionResolver query/participant 并迁移该联合操作。"
     },
     {
       "table": "taskCollaborators",

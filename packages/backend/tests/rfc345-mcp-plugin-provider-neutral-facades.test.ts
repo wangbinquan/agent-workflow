@@ -17,11 +17,7 @@ const DATABASE_MECHANISM = /(?:@\/db(?:\/|['"])|drizzle-orm|dbTxSync|DbClient|Db
 
 describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => {
   test('remaining business facades consume only injected Resource Catalog contracts', () => {
-    for (const relative of [
-      'services/mcpClosure.ts',
-      'modules/resource-catalog/application/mcps/probeRecords.ts',
-      'services/pluginClosure.ts',
-    ]) {
+    for (const relative of ['modules/resource-catalog/application/mcps/probeRecords.ts']) {
       expect(source(relative), relative).not.toMatch(DATABASE_MECHANISM)
     }
 
@@ -29,8 +25,9 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     expect(existsSync(resolve(sourceRoot, 'services/plugin.ts'))).toBe(false)
     expect(source('routes/plugins.ts')).toContain('PluginOperationDescriptors')
     expect(source('routes/plugins.ts')).toContain('PluginQueries')
-    expect(source('services/mcpClosure.ts')).toContain('query: McpClosureQuery')
-    expect(source('services/pluginClosure.ts')).toContain('query: PluginClosureQuery')
+    // RFC-467: the MCP / plugin closure helpers (only the RFC-349 injection oracle used them) moved to the test helpers.
+    expect(existsSync(resolve(sourceRoot, 'services/mcpClosure.ts'))).toBe(false)
+    expect(existsSync(resolve(sourceRoot, 'services/pluginClosure.ts'))).toBe(false)
   })
 
   test('probe persistence has closed public DTOs and real SQLite/PostgreSQL adapters', () => {

@@ -20,7 +20,7 @@ import {
   collectPluginIdsFromClosure,
   loadPluginsByIds,
   type PluginClosureQuery,
-} from '../src/services/pluginClosure'
+} from './helpers/pluginClosure'
 import { createPlugin, type PluginServiceBinding } from './helpers/pluginServiceBinding'
 import {
   checkForUpdate,

@@ -2,7 +2,7 @@
 //
 // 锁四件事：
 // ① 30 个只做 `export … from` 的转出与 resource-catalog legacy 目录里随之失去消费方的 3 个文件已删除，`src/` 与用例里零 import
-//    （census AST，别名与相对路径都认，带负对照）；余下 5 个转出（RFC-466 删去 `services/workgroups`）的生产消费方清单精确相等（不增）。
+//    （census AST，别名与相对路径都认，带负对照）；余下 3 个转出（RFC-466 删去 `services/workgroups`，RFC-467 删去两个技能转出）的生产消费方清单精确相等（不增）。
 // ② 被转出藏住的越界依赖按真实使用者下沉后的行为不变：task-execution `domain/clarifyRules` 的四个澄清判定、resource-catalog
 //    `domain/callClosure` 的闭包编解码与边键、平台 `scriptInterpreter` 的解释器登记、shared 的 workgroup 宿主节点 id 与
 //    collaboration `domain` 的澄清提问者键、shared 的 `stringifyWorkflowYaml` / `extractWorkflowAgentRefs`。
@@ -89,12 +89,8 @@ const REMAINING: Readonly<Record<string, readonly string[]>> = {
   // `services/workgroups` is deleted — its only production consumer, `legacyCallClosure`, moved to the test helpers.
   'services/workflow': ['modules/task-execution/infrastructure/taskRouteOperations.ts'],
   'services/workflow.validator': ['services/task.ts', 'services/taskLaunchGate.ts'],
-  'services/skillBootVerify': [
-    'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-  ],
-  'services/skillIdentityPaths': [
-    'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-  ],
+  // RFC-467: `services/skillBootVerify` / `services/skillIdentityPaths` are deleted — their only production consumer, the
+  // RFC-349 injection oracle, moved to the test helpers and takes the resource-catalog definitions.
 }
 
 function walk(dir: string): string[] {
@@ -140,7 +136,7 @@ describe('RFC-454 —— 转出删除', () => {
     expect(importsMatching(walk(TESTS), isDeleted)).toEqual([])
   }, 60_000)
 
-  test('余下 5 个转出的生产消费方精确相等（不增）', () => {
+  test('余下 3 个转出的生产消费方精确相等（不增）', () => {
     const files = walk(SRC)
     for (const [facade, consumers] of Object.entries(REMAINING)) {
       expect(existsSync(join(SRC, `${facade}.ts`))).toBe(true)

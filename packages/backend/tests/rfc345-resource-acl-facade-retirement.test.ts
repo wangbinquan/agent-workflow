@@ -37,11 +37,6 @@ const REMOVE_OWNERS = {
     'packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts',
     'ResourceAuthorizationApplication',
   ),
-  agentDependencies: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'AgentDependencyQueries',
-  ),
   agentCatalog: owner(
     'RFC-345 T9',
     'packages/backend/src/modules/resource-catalog/public/operations.ts',
@@ -111,20 +106,10 @@ const REMOVE_OWNERS = {
     'packages/backend/src/modules/resource-catalog/public/operations.ts',
     'PluginCatalogModule',
   ),
-  skillBoot: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'SkillCatalogBootParticipant',
-  ),
   skillBootRestore: owner(
     'RFC-294 W9-E',
     'packages/backend/src/modules/resource-catalog/public/participants.ts',
     'SkillCatalogBootParticipant',
-  ),
-  skillQueries: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'SkillQueries',
   ),
   skillVersion: owner(
     'RFC-294 W4-E4a',
@@ -299,6 +284,11 @@ const RETIRED_FACADES = [
   // and the two test-only users (the call-closure oracle and the full launch gate) moved to the test helpers.
   'services/resourceAcl.ts',
   'services/workgroups.ts',
+  // RFC-467: the RFC-349 injection behaviour oracle moved to the test helpers with `agentDeps` (its only production
+  // consumer); the two skill re-exports it read are deleted and it takes the resource-catalog definitions.
+  'services/agentDeps.ts',
+  'services/skillBootVerify.ts',
+  'services/skillIdentityPaths.ts',
 ] as const
 
 const edge = (
@@ -326,13 +316,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // RFC-359 AC-1（plan §5hl）：这条边**销账**——数字员工执行的两份 composer 合一后，
   // Agent 查询改成由装配方交进来的 `agents` 端口（三个组合根各自绑自己的目录查询面），
   // composer 自己不再 import `services/agent` 的 `getAgentById`。债是还掉的，不是挪走的。
-  edge(
-    'services/agentDeps.ts',
-    'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-    ['AgentDependencyLookup', 'resolveDependsClosure'],
-    'task Agent dependency closure',
-    REMOVE_OWNERS.agentDependencies,
-  ),
   // RFC-359 W4-D16：bootstrap 不再从 services 门面借 MCP 运行时测试的同步失效函数——生命周期已是
   // resource-catalog 自己的中立实现（createMcpTransactionLifecycle），两条边随之销账。
   // RFC-395 II-a A5: action runner delegates the built-in agent write to the catalog participant; the facade edge is gone.
@@ -344,20 +327,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // 共用实现住在 `taskRouteOperations.ts` 里，于是这条边在那个文件上**新出现**。
   // SQLite 那一侧没有减少（它的 `syncWorkflow` 写侧还在用同一个）——**过渡态**，
   // 随写侧那一刀一起回落（同 `cross-context-observed-imports` 那笔 allowGrowth 的理由）。
-  edge(
-    'services/skillBootVerify.ts',
-    'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-    ['isSkillInjectableThisBoot'],
-    'task Skill boot availability',
-    REMOVE_OWNERS.skillBoot,
-  ),
-  edge(
-    'services/skillIdentityPaths.ts',
-    'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-    ['skillFilesRel'],
-    'task Skill file projection',
-    REMOVE_OWNERS.skillQueries,
-  ),
   // RFC-359 AC-1（第 13 刀）**销账**：手动执行门两个引擎合一，SQLite 那份本地实现
   //（`getWorkflow` 判内置）随之删除——共用那份走 `builtinCandidateWorkflow` +
   // 资源权威，不再经 legacy Workflow 门面。债是还掉的，不是挪走的。

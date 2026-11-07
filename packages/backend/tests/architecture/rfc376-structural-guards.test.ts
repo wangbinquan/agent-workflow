@@ -213,8 +213,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   ],
   'export-star-barrels': [
     'packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts',
-    'packages/backend/src/services/skillBootVerify.ts',
-    'packages/backend/src/services/skillIdentityPaths.ts',
+    // RFC-467：`services/skillBootVerify.ts` / `services/skillIdentityPaths.ts` 两个转出删除（唯一的生产消费方 RFC-349 注入预言迁入
+    // `tests/helpers/`，改取 resource-catalog 定义处），销账。
     'packages/backend/src/services/workflow.ts',
     'packages/backend/src/services/workflow.validator.ts',
     // RFC-424：`services/workgroup/state.ts` 随其最后一个生产消费者删除（销账）。
@@ -252,17 +252,13 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     'packages/backend/src/modules/task-execution/composition/systemAgentRun.ts',
     // RFC-466：`legacyCallClosure.ts`（RFC-349 冻结行走预言）迁入 `tests/helpers/`，`services/workgroups.ts` 删除（销账）。
-    'packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
+    // RFC-467：RFC-349 注入预言与只有它在用的 `agentDeps` / `mcpClosure` / `pluginClosure` 迁入 `tests/helpers/`，两个技能转出
+    // 删除（销账，6 个）。
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
     'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-    'packages/backend/src/services/agentDeps.ts',
     'packages/backend/src/services/driverLease.ts',
-    'packages/backend/src/services/mcpClosure.ts',
-    'packages/backend/src/services/pluginClosure.ts',
     'packages/backend/src/services/runtime/opencode/plugin/aw-inventory-dump.mjs',
-    'packages/backend/src/services/skillBootVerify.ts',
-    'packages/backend/src/services/skillIdentityPaths.ts',
   ],
 }
 // END COMMITTED BASELINES
@@ -313,19 +309,8 @@ const RETAINED_REACHABILITY_GROUPS = [
       'RFC-108 historical contract retained for reproduction, as documented in its file header.',
     files: ['services/driverLease.ts'],
   },
-  {
-    successor: 'RFC-375 section 4: user decision after RFC-349/RFC-359',
-    reason:
-      'Injection behavior oracles must retire together, as required by rfc345-resource-acl-facade-retirement.test.ts.',
-    files: [
-      'services/agentDeps.ts',
-      'services/mcpClosure.ts',
-      'services/pluginClosure.ts',
-      'services/skillBootVerify.ts',
-      'services/skillIdentityPaths.ts',
-      'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-    ],
-  },
+  // RFC-467: the RFC-349/RFC-359 injection behaviour oracles left the production tree together — moved verbatim to
+  // `tests/helpers/` (still the parity baseline, not retired; retiring them stays the RFC-375 section 3 user decision).
   {
     successor: 'RFC-359 section 5hn: retain, no scheduled successor',
     reason: 'Retained provider dialect reference with a prior explicit keep decision.',

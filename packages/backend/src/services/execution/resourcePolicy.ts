@@ -60,7 +60,9 @@ export const PLUGIN_DISABLED_SITES: readonly string[] = [
   'services/workflow.validator.ts',
   'modules/resource-catalog/infrastructure/legacy/agent.ts',
   'modules/resource-catalog/application/agents/agentResourceIntegrity.ts',
-  'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
+  // RFC-467: the task-execution emitter is the resource-catalog task-execution resource snapshot (the RFC-349 oracle
+  // that used to be listed here moved to the test helpers).
+  'modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts',
 ]
 
 export const DISABLED_RESOURCE_POLICY: Readonly<

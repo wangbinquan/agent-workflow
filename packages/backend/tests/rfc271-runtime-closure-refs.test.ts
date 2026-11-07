@@ -24,9 +24,9 @@ import {
   type Agent,
 } from '@agent-workflow/shared'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { resolveDependsClosure } from '../src/services/agentDeps'
-import { collectMcpIdsFromClosure } from '../src/services/mcpClosure'
-import { collectPluginIdsFromClosure } from '../src/services/pluginClosure'
+import { resolveDependsClosure } from './helpers/agentDeps'
+import { collectMcpIdsFromClosure } from './helpers/mcpClosure'
+import { collectPluginIdsFromClosure } from './helpers/pluginClosure'
 import { agentSkillRef, runtimeIdRef, runtimeRefKey } from '@agent-workflow/shared'
 import { createAgent } from './helpers/model/resourceWrites'
 
@@ -162,7 +162,8 @@ describeEachProvider('resolveDependsClosure —— onMissing 留在调用级', (
 test('两种归属**必须**由调用点给出：策略是必填参数，没有「默认硬失败」这一档', () => {
   // 源码级断言：可选参数 + 默认值会让「这是调用点的选择」这件事从签名里消失，
   // 下一个人就会以为硬失败是 dependsOn 域的固有语义（它不是）。
-  const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'agentDeps.ts'), 'utf8')
+  // RFC-467: `agentDeps` moved to the test helpers with the RFC-349 injection oracle (its only production consumer).
+  const src = readFileSync(join(import.meta.dir, 'helpers', 'agentDeps.ts'), 'utf8')
   expect(src).toContain('opts: ResolveClosureOpts,')
   expect(src).not.toContain('opts: ResolveClosureOpts = {}')
   expect(src).not.toContain('allowMissing?:')

@@ -23,7 +23,7 @@ import {
   findAgentsDependingOn,
   resolveDependsClosure,
   validateDependsOn,
-} from '../src/services/agentDeps'
+} from './helpers/agentDeps'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { DomainError } from '../src/util/errors'
 import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'

@@ -16,7 +16,7 @@ import {
   createWorkflowAgentReferenceLookup,
   createWorkflowCallReferenceLookup,
 } from '@/modules/resource-catalog/infrastructure/referenceLookup'
-import { validateAgentDependencies } from '@/modules/resource-catalog/public/queries'
+import { validateAgentDependencies } from '@/modules/resource-catalog/application/agents/agentDependencyValidation'
 import { agentFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { createAgentDependencyReadPort } from '@/modules/resource-catalog/infrastructure/agentDependencyRead'
 import { assertAgentDependencyGraph } from '@/modules/resource-catalog/domain/agentDependencies'

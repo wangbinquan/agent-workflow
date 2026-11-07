@@ -7,22 +7,21 @@
 // （具名 Resource Catalog participant）。`tests/architecture/rfc359-w5-adapter-production-consumer.test.ts`
 // 把它记成零生产消费者的 provider 适配器，本波按「适配器不许留在 src 装成 provider 对等」清理：
 // 神谕本体（`resolveInjection`）仍在 src 等它整体退役，这个纯测试绑定搬到测试侧。
+// RFC-467：神谕本体也已迁入 `tests/helpers/`；行映射器改取 resource-catalog 定义处（策略束原先转出的就是这一个）。
 //
 // 行为逐字不变：同一条 `select … from agents where id = ? limit 1` + 同一个行映射器。
 
 import { readAgentFixtures, agentFixtureReferences } from './model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { AgentDependencyLookup } from '@/services/agentDeps'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import type { AgentDependencyLookup } from './agentDeps'
+import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 
 export function legacyInjectionAgentLookup(db: PersistenceDb): AgentDependencyLookup {
   return Object.freeze({
     async get(id: string) {
       const rows = await readAgentFixtures(db, { id }, { limit: 1 })
-      return rows[0] === undefined
-        ? null
-        : taskExecutionResourceDependencies.rowToAgent(rows[0], agentFixtureReferences(rows[0]))
+      return rows[0] === undefined ? null : rowToAgent(rows[0], agentFixtureReferences(rows[0]))
     },
   })
 }

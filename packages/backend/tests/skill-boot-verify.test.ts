@@ -339,16 +339,9 @@ test('resolveInjection fails closed on a non-injectable managed skill (source lo
   // and the gate flipped from a THROW (task-level attribution via runScope)
   // to a typed failure (node-level, like every sibling fence) — registered
   // §7-7 change; behavior lock in rfc282-b2-resolve-injection.test.ts.
+  // RFC-467: the resolver (the RFC-349 behaviour oracle) moved to the test helpers.
   const src = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'infrastructure',
-      'legacyTaskExecutionInjectionResolver.ts',
-    ),
+    resolve(import.meta.dir, 'helpers', 'legacyTaskExecutionInjectionResolver.ts'),
     'utf8',
   )
   // The pre-spawn resolver still gates managed skills on the injection

@@ -267,7 +267,8 @@ export interface McpDiagnosticsQueries {
   ): Promise<McpDiagnosticsTranscript>
 }
 
-export { validateAgentDependencies } from '../application/agents/agentDependencyValidation'
+// RFC-467: `validateAgentDependencies` left this entry point — its only outside reader (`services/agentDeps`, used only by
+// the RFC-349 injection oracle) moved to the test helpers; Resource Catalog's own agent application imports it directly.
 
 export {
   createAgentExecutionQueries,
