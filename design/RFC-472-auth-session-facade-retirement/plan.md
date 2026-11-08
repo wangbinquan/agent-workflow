@@ -19,7 +19,7 @@
 - [x] AC-1 本文件不在、零引用；intent 不取 identity-access 的值；属主重新准入的实现与 intent 端口逐项相同；REST 只有一个 Bearer 读点
 - [x] AC-2 架构计数按实测（`R1` 57 → 53），越界类计数、public surface 偏差与未被消费的 public 符号不升
 - [x] AC-3 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI：`15af9f024` 主 CI run 42526736015 有两格红，逐格归因见下：design/ 链接检查查出 RFC-370 证据表一条指向本 RFC 删除的 `src/auth/session.ts` 的链接（本 RFC 的缺陷，Done 提交改正）；shard 27/44 的 `rfc395-staging-page-cost` 一例撞默认 5 秒（与本 RFC 无关）；其余 67 个 job、windows-platform、maintenance-soak-nightly 与 visual-regression-nightly 通过
 
 ## 集中验证（2026-11-08，候选基于 `9e3ba73a9`）
 
@@ -95,6 +95,20 @@
 - 账本：`R1` 57 → 53（实测与账本逐条相等，`R2` 0）；public surface 1493 → 1494（`parseLocalBearerHeader`，有生产消费方）；偏差 94、未被消费的
   public 符号 322、capability 归属清单 18 逐条相等；guard-manifest 只刷新 `rfc305-architecture-lock` 的登记行数（947 → 949，其余登记的
   守卫文件行数未变）。
+
+## CI（AC-4）
+
+- `15af9f024` 主 CI run 42526736015：70 个 job 里 67 个通过，两格红，「CI required」汇总格随之红——
+  1. **Markdown link check（design/）**：`design/RFC-370-crewstation-hosted-deployment/evidence.md` 第 12 行的证据链接指向本 RFC 删除的
+     `packages/backend/src/auth/session.ts`。本 RFC 的缺陷：RFC-472 用例只锁了代码里的路径字面量，没有扫 design/ 的相对链接
+     （`docs/dev-gotchas.md` 已有这条定式，本 RFC 没跑）。Done 提交把它改指同一事实的现行位置——单机 HTTP 入口的 Bearer 语法
+     `modules/identity-access/domain/localBearerCredential.ts`（`parseLocalBearerHeader`），并在 dev-gotchas 那一条补记本次。
+  2. **Backend tests（ubuntu-latest shard 27/44）**：`rfc395-staging-page-cost`「page insertion equals sequential insertion and failed pages
+     retain neither rows nor group entries」撞 bun 默认 5 秒（5.47 s）。该用例是迁移暂存库的纯本地计算，import 闭包不含本 RFC 改到的任何生产
+     文件；仓里登记的整文件耗时 1.73 s；父提交 `9e3ba73a9` 的主 CI run 42506637095 全绿（含该用例）。判为与提交内容无关的 runner 时序偶发红，
+     用例属 RFC-395，未改、未重跑，如实记录。
+- windows-platform push run 42526735929、maintenance-soak-nightly push run 42526735930 与 visual-regression-nightly push run 42526735968 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 7 个 Done 文件：5 个 Done 文档、RFC-370 证据表的链接改正与 dev-gotchas 的一条补记）的导出仓库上重跑上述文档用例：12 个文件全过（100 pass）。
 
 ## PR / 提交
 

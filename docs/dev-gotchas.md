@@ -5746,6 +5746,10 @@ for f in subprocess.run(['git', 'ls-files', '*.md'], capture_output=True, text=T
 PY
 ```
 
+RFC-472（2026-11-08）第三次撞：删 `src/auth/session.ts` 时用例只锁了代码里的路径字面量（RFC-470 的教训），没跑上面这段，
+exact SHA 主 CI 的 design/ 链接检查红在 RFC-370 `evidence.md` 一条指向它的链接上。删除 / 迁移源文件的 RFC，在自己的用例里把
+`design/**/*.md` 与 `docs/**/*.md` 的相对链接一并锁住（RFC-473 的用例即此做法），比提交前手跑脚本更不容易漏。
+
 ## 账本类的数，只信会执行那份数据的程序打印出来的值（RFC-317 T66 实撞）
 
 > 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。

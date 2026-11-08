@@ -1,4 +1,4 @@
-## 2026-11-08 RFC-472 退役 identity-access 的兼容转出 auth/session：intent 的属主重新准入改走自有端口（In Progress；`design/RFC-472-auth-session-facade-retirement/`）
+## 2026-11-08 RFC-472 退役 identity-access 的兼容转出 auth/session：intent 的属主重新准入改走自有端口（Done；`design/RFC-472-auth-session-facade-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十九步（legacy 兼容转出清仓）。`src/auth/session.ts` 是 RFC-370 留下的 identity-access 兼容转出（取 identity-access
   composition，4 条 `R1`），生产调用方三个：装配根的守护进程准入、intent dispatcher 启动恢复时的属主重新准入（目标 DAG 上 intent 对
@@ -24,6 +24,14 @@
   擦线通过、120 秒时限下两边 18 / 18）；P0 两引擎各 17 阶段通过；shared 2344 pass、frontend gate 7361 pass、system-mocks 30 秒时限
   111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 57 → 53、`R2` 0，`legacy-horizontal-files` 181 → 180，public surface
   1493 → 1494，偏差 94、未被消费的 public 符号 322 不变，越界类计数不变。
+- **落地**：`15af9f024`。
+- **CI**：`15af9f024` 主 CI run 42526736015 两格红：design/ 链接检查查出 RFC-370 证据表一条指向本 RFC 删除的 `src/auth/session.ts` 的链接（本 RFC
+  的缺陷，Done 提交改指现行的 Bearer 语法位置，dev-gotchas 补记）；Backend tests（ubuntu-latest shard 27/44）的 `rfc395-staging-page-cost`
+  一例撞默认 5 秒（5.47 s；纯本地暂存计算、不在本 RFC 的 import 闭包里，父提交主 CI 全绿，与本 RFC 无关，用例属 RFC-395，未改、未重跑）；
+  「CI required」随之红，其余 67 个 job、windows-platform、maintenance-soak-nightly 与 visual-regression-nightly 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 60 个文件；`R2` 0 条；`R1` 53 条）。`R1` 大头：`task`（9）、`systemAgentRun`（5）、
+  `commitPushRunner`（4）、`runtimeSmoke`（4）；`systemAgentRun` / `runtimeSmoke` 绑着运行时驱动一族（`services/runtime/**`），随它一起归
+  runtime-management。
 
 ## 2026-11-08 RFC-471 开发交付的代码托管桥归 integration：services/developmentDeliveryDeps 退役（Done；`design/RFC-471-development-delivery-code-host-bridge/`）
 
