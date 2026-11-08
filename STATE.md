@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-468 拆分 nodeRunMint：冻结运行时归 runtime-management、铸行入口归 task-execution（In Progress；`design/RFC-468-node-run-mint-split/`）
+## 2026-11-07 RFC-468 拆分 nodeRunMint：冻结运行时归 runtime-management、铸行入口归 task-execution（Done；`design/RFC-468-node-run-mint-split/`）
 
 - **来由**：RFC-294 W9-D 第十五步（`services/` 实现文件按 owner 归位）。`services/nodeRunMint.ts` 记 8 条 `R1`（全部取 task-execution
   内部），是四块拼在一起的：冻结运行时（生产只有 runtime-management 的任务运行时绑定在调，它取 task-execution 端口作参数类型，是
@@ -22,6 +22,10 @@
   P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 79 → 71、`R2` 0，跨 context 内部文件对 47 → 46，
   `services/` 68 → 67，public surface 1495 → 1496（`public/operations` 转出 `mintNodeRun`）、偏差 94 不变，未被消费的 public 符号 322 不变，
   越界类计数不变。
+- **落地**：`7499f4b1b`。
+- **CI**：exact SHA 主 CI run 42441460537 首轮全绿（70 个 job，含上一提交偶发红的 macOS e2e 第 3 片），windows-platform run 42441460457 与 git-protocols-e2e run 42441460459 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 67 个文件；`R2` 0 条；`R1` 71 条）。`R1` 大头：`task`（9）、`developmentDeliveryDeps`（7）、
+  `systemAgentRun`（5）、`auth/session` / `commitPushRunner` / `runtime/index` / `runtimeSmoke`（各 4）。
 
 ## 2026-11-07 RFC-467 注入预言一族迁入用例树、资源快照策略束只留外部策略（Done；`design/RFC-467-injection-oracle-relocation/`）
 

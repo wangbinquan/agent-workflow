@@ -20,7 +20,7 @@
       `public/operations`；澄清血缘判定在 `domain/clarifyRules`；`schedulerMintCause` 只有一份
 - [x] AC-2 架构计数按实测（`R1` 79 → 71、跨 context 内部文件对 47 → 46），越界类计数、public surface 偏差与未被消费的 public 符号不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `4e4b93b95`）
 
@@ -78,6 +78,11 @@
   锁）；`continuesClarifyLineage`、`schedulerMintCause` 留下的都是生产在用的那一份；删除的导出全仓零调用方（census AST 核过，含动态 import）。
 - 账本：`R1` 79 → 71（实测与账本逐条相等，`R2` 0）；public surface 偏差 94、capability 归属清单逐条相等；跨 context 内部文件对的两份精确清单
   各去掉一对；guard-manifest 刷新三个守卫文件的行数。
+
+## CI（AC-4）
+
+- `7499f4b1b`：exact SHA 主 CI run 42441460537 首轮全绿（70 个 job，含上一提交偶发红的 macOS e2e 第 3 片），windows-platform run 42441460457 与 git-protocols-e2e run 42441460459 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件全过，合计 98 pass / 0 fail（负载 16～21），读文档的两个用例在最终文本上复跑通过。
 
 ## PR / 提交
 
