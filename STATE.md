@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-470 退役最后两个薄转出 workflow / workflow.validator 与 taskLaunchGate：任务启动资源适配器归 resource-catalog（In Progress；`design/RFC-470-workflow-facades-retirement/`）
+## 2026-11-07 RFC-470 退役最后两个薄转出 workflow / workflow.validator 与 taskLaunchGate：任务启动资源适配器归 resource-catalog（Done；`design/RFC-470-workflow-facades-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十七步（facade 清仓）。`legacy-thin-facades` 只剩 RFC-345 的 `services/workflow.ts` / `services/workflow.validator.ts`
   （`export *` 转出 resource-catalog 的旧函数），生产消费方是 task-execution 工作流同步路由的两处 `getWorkflow`、`services/task.ts` 同步预览的
@@ -25,6 +25,14 @@
   仓库里对照，两边同样到点）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 66 → 64、`R2` 0，
   `services/` 64 → 61，`legacy-thin-facades` 2 → 0，跨 context 内部文件对 46 → 43，public surface 1497、偏差 94、未被消费的 public 符号 322
   不变，越界类计数不变。
+- **落地**：`acb919d09`（CI 修复 `1a73472b7`）。
+- **CI**：`acb919d09` 主 CI run 42473199829 四格红：shared 用例按路径读已删的 `services/workflow.validator.ts`（本 RFC 的缺陷，
+  windows-platform run 42473199780 同因红），由 `1a73472b7` 修复；另两格与本 RFC 无关——RFC-371 文档里的外链被 GitHub 回 504 / 502，
+  `rfc311-perf-guards` PostgreSQL 一侧的任务目录过滤视图偶发慢计划（本地在 RFC-469 导出仓库里同样复现，先于本 RFC，归属不明）；「CI required」
+  随之红。`1a73472b7` 主 CI run 42476792248 67 个 job 通过，余下 actionlint 与 lychee 两格是 GitHub release 下载失败、检查未执行（未重跑）；
+  windows-platform 手动派发 run 42479766547 通过（含 Shared package suite）。
+- **下一步**：RFC-294 W9-D 余项（`services/` 61 个文件；`R2` 0 条；`R1` 64 条）。`R1` 大头：`task`（9）、`developmentDeliveryDeps`（7）、
+  `systemAgentRun`（5）；运行时驱动一族（`services/runtime/**`）归 runtime-management。
 
 ## 2026-11-07 RFC-469 退役三个薄转出：taskAuthorization、sessionEventSink、taskExecutionCallClosure（Done；`design/RFC-469-thin-services-facade-retirement/`）
 
