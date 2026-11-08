@@ -676,6 +676,13 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   只有发布二进制 ModuleNotFound、备份悄悄退回主线程（RFC-311 实现门 P0-1）。RFC-457 用例把四处锁成同一个存在的文件。另：legacy 文件迁入
   `platform/` 后，`rfc349-provider-cutover` 等只扫业务 / 传输面（模块 application/domain/engine/public 与 `services/` `routes/` 等）的
   exact 债清单会少一条——那是还债，同步删掉条目，别当成守卫坏了。
+- **锁「零引用」别用 census `importEdges`（RFC-469 实撞，2026-11-07）**：它按**绑定**逐条出边（每个 named / default / namespace
+  绑定一条），`import {} from 'x'` 一条边都没有——生产里正有过这种空导入（`services/task.ts` 对 `services/taskAuthorization` 的那一行），
+  是 RFC-469 用例的负对照把它抓出来的。锁「某文件已无人引用」改用 `ts.preProcessFile(text, true, true).importedFiles`：空 `import {}`、
+  副作用 import、`export … from`、`import type`、`typeof import()`、嵌套的动态 `import()` 与 `require()` 都在，注释和字符串里的不算。
+  反过来，架构报告的可达性认这种空导入：删掉它，只经它可达的 `legacySqliteTaskAuthorization.ts` 就成了不可达生产文件（18 → 19），删前先查
+  被导入文件还有没有别的生产入口。同一轮另一处：把一行函数并回唯一调用方后，读调用方源码的 `not.toContain('freezeCallClosure(')` 锁
+  （`rfc345-resource-catalog-contracts` T4a）正好撞上被并入的函数体——并入前先搜读调用方源码的否定锁，按原意改成「除那一份函数体外」。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

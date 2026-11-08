@@ -38,7 +38,7 @@ import type {
 } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
-import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import type { SystemAgentEventSinkV1 } from '@/modules/runtime-management/public/participants'
 import type { SystemAgentObservationRun } from '@/modules/task-execution/public/participants'
 
 export interface SystemAgentSeedFile {

@@ -28,7 +28,7 @@ import {
   countPendingReviews,
   listReviewSummaries,
 } from '@/modules/collaboration/infrastructure/review'
-import { visibleTaskIdsOf } from '../src/services/taskAuthorization'
+import { legacySqliteVisibleTaskIdsOf as visibleTaskIdsOf } from './helpers/legacySqliteTaskAuthorization'
 
 type Db = PersistenceDb
 

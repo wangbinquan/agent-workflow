@@ -79,12 +79,8 @@ const DELETED = [
 const REMAINING: Readonly<Record<string, readonly string[]>> = {
   // RFC-461: memory's distill work-store port takes `SystemAgentEventSinkV1` from runtime-management `public/participants`.
   // RFC-464: intent's turn sink implements the contract its own system-agent port declares.
-  'services/sessionEventSink': [
-    'modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
-    'modules/memory/infrastructure/memoryDistillWorkStore.ts',
-    'services/runtime/opencode/sessionCapture.ts',
-    'services/systemAgentRun.ts',
-  ],
+  // RFC-469: `services/sessionEventSink` is deleted — its four consumers take the session-event types from runtime-management
+  // `public/participants` (which now also offers `SessionCaptureTerminalState`).
   // RFC-466: `services/taskLaunchGate.ts` no longer reads `services/workflow` (its full gate moved to the test helpers);
   // `services/workgroups` is deleted — its only production consumer, `legacyCallClosure`, moved to the test helpers.
   'services/workflow': ['modules/task-execution/infrastructure/taskRouteOperations.ts'],

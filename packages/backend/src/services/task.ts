@@ -101,11 +101,9 @@ import {
   setNodeRunStatusInTransaction,
   workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
-import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { resolveRepoGroupLayout } from '@/modules/source-control/public/queries'
-import {} from '@/services/taskAuthorization'
 import { ConflictError, DomainError, ValidationError, diagnosticTextOf } from '@/util/errors'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
@@ -123,6 +121,15 @@ const { composeSourceControlTaskPorts, isTaskDriverActive, PersistedRepositoryPr
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionContext' | 'signal'>
+
+// RFC-345 T4a / RFC-349 T4a — provider-neutral atomic reference-closure freeze (RFC-469: moved here from
+// `services/execution/taskExecutionCallClosure.ts`; this file is its only caller).
+async function freezeTaskExecutionCallClosure(
+  root: Readonly<{ readonly id: string; readonly definition: WorkflowDefinition }>,
+  resourceAuthority: TaskExecutionResourceAuthority,
+): Promise<string | null> {
+  return await resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)
+}
 
 /**
  * RFC-243 / RFC-345 T4a — closure freezing needs the exact Resource Catalog

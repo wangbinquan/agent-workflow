@@ -1,3 +1,7 @@
+// RFC-469 — moved verbatim from `src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts`: its only
+// production importer was `services/taskAuthorization.ts` (itself reached only through an empty `import {}` in
+// `services/task.ts`); the RFC-311 badge-count regression test still exercises it. Production callers use the
+// provider-neutral `TaskAuthorizationQueries`.
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // 任务可见性 / 归属范围谓词的**兼容出口**。
 //
@@ -21,8 +25,8 @@ import {
   taskListVisibilityCondition,
   type TaskListOwnershipScope,
   type TaskListRowRef,
-} from './taskListPage/authorization'
-import type { TaskListPageDb } from './taskListPage/db'
+} from '@/modules/task-execution/infrastructure/taskListPage/authorization'
+import type { TaskListPageDb } from '@/modules/task-execution/infrastructure/taskListPage/db'
 
 /** SQLite-only predicate compatibility while callers move to closed ports. */
 export interface LegacySqliteTaskAuthorizationRef extends TaskListRowRef {

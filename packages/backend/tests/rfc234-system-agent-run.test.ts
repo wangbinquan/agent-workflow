@@ -23,7 +23,7 @@ import {
   releaseSystemAgentScratch,
   runSystemAgent,
 } from '../src/services/systemAgentRun'
-import type { SystemAgentEventSinkV1 } from '../src/services/sessionEventSink'
+import type { SystemAgentEventSinkV1 } from '../src/modules/runtime-management/public/participants'
 import type { Logger } from '../src/util/log'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

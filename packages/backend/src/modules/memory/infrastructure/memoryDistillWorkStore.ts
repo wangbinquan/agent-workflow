@@ -25,7 +25,7 @@ import {
   memoryBroadcaster,
   memoryDistillJobBroadcaster,
 } from '@/ws/broadcaster'
-import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import type { SystemAgentEventSinkV1 } from '../application/ports/distillWorkStore'
 import { createMemoryDistillSessionEventSink } from './memoryDistillSessionEventSink'
 import { listMemoryDistillJobs } from './memoryDistillReadStore'
 

@@ -135,6 +135,7 @@ export type {
 } from '../application/ports/agentObservations'
 export type {
   SessionCaptureIncompleteReason,
+  SessionCaptureTerminalState,
   SystemAgentEventSinkV1,
 } from '../application/ports/agentSessionEvents'
 export type {

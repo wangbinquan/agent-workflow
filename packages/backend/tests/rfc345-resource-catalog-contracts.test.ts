@@ -857,11 +857,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'services/execution/taskExecutionResources.ts'),
       'utf8',
     )
-    const closure = readFileSync(
-      resolve(sourceRoot, 'services/execution/taskExecutionCallClosure.ts'),
-      'utf8',
-    )
+    // RFC-469: the one-line closure freeze moved into its only caller, `services/task.ts`; its body
+    // is the one direct `freezeCallClosure(` call that file may make (`CLOSURE_FREEZE_BODY` below).
     const task = readFileSync(resolve(sourceRoot, 'services/task.ts'), 'utf8')
+    const CLOSURE_FREEZE_BODY =
+      'resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)'
     const taskRoute = readFileSync(resolve(sourceRoot, 'routes/tasks.ts'), 'utf8')
     // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除，
     // multipart 编排与 PostgreSQL 共用一份（`launchMultipartTask`，在这个文件里）。
@@ -935,10 +935,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(dependencies).not.toContain("from '@/services/resourceAcl'")
     expect(resources).not.toContain('modules/resource-catalog/composition')
     expect(resources).toContain('createTaskExecutionResourceSession')
-    expect(closure).not.toContain('participant.loadAuthorized')
-    expect(closure).toContain(
-      'resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)',
-    )
+    expect(task).not.toContain('participant.loadAuthorized')
+    expect(task).toContain(CLOSURE_FREEZE_BODY)
     expect(binding).toContain("from '@/modules/resource-catalog/public/participants'")
     expect(binding).toContain('participant.loadAuthorized(pair.authority, requests)')
     expect(binding).toContain('TaskExecutionResourceSnapshotInTx')
@@ -956,7 +954,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
 
     expect(task).toContain('freezeTaskExecutionCallClosure(')
-    expect(task).not.toContain('freezeCallClosure(')
+    // Outside the merged helper's one body, the launch path never calls `freezeCallClosure(` itself
+    // (a second copy of the body would survive the single `replace` and fail here too).
+    expect(task.replace(CLOSURE_FREEZE_BODY, '')).not.toContain('freezeCallClosure(')
     expect(taskRoute).not.toContain('modules/identity-access/composition')
     expect(taskRoute).not.toContain('modules/resource-catalog/composition/taskExecution')
     expect(multipart).not.toContain('modules/identity-access/composition')

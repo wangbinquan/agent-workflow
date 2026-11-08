@@ -17,6 +17,14 @@ import type {
   SystemAgentEventSinkV1,
 } from '@/modules/runtime-management/public/participants'
 import type { MemoryDistillJobRecord } from './distillReadStore'
+// RFC-469: the session-event types memory's distill sink implements, re-exported from the one memory port that already
+// takes them from runtime-management, so memory's infrastructure reads them here (it used to go through a `services/`
+// facade; importing runtime-management directly from those files would add off-DAG offered pairs).
+export type {
+  SessionCaptureIncompleteReason,
+  SessionCaptureTerminalState,
+  SystemAgentEventSinkV1,
+} from '@/modules/runtime-management/public/participants'
 
 export interface MemoryDistillTaskScopeRecord {
   readonly workflowSnapshot: string

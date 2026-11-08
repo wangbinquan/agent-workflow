@@ -1,3 +1,24 @@
+## 2026-11-07 RFC-469 退役三个薄转出：taskAuthorization、sessionEventSink、taskExecutionCallClosure（In Progress；`design/RFC-469-thin-services-facade-retirement/`）
+
+- **来由**：RFC-294 W9-D 第十六步（facade 清仓）。`services/` 里三个只转手的文件合计 5 条 `R1`：`taskAuthorization.ts` 在生产里只剩
+  `services/task.ts` 的一行空导入；`sessionEventSink.ts` 转出 runtime-management 会话事件端口的类型（RFC-454 登记的留下转出）；
+  `execution/taskExecutionCallClosure.ts` 是一个一行调用的函数、唯一调用方是 `services/task.ts`。用户 2026-11-02「好，你继续推进RFC294，过程中
+  你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：三个文件删除；空导入去掉；会话 sink 类型改取 runtime-management `public/participants`（补转出 `SessionCaptureTerminalState`；
+  memory 的两个文件经 memory 自己的蒸馏端口，不新增 off-DAG 文件对）；随之生产不可达的旧 SQLite 任务授权迁入 `tests/helpers/`；一行函数并入
+  `services/task.ts`；RFC-349 / RFC-359 W5 / RFC-454 精确清单、架构报告 owner 表与账本随之改。
+- **不做**：`services/workflow.ts` / `workflow.validator.ts`（转出要传库句柄的旧函数，随消费方归位）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-468 的 Done 文档提交 `50e6cb0f9`（只改 5 个文档文件）：exact SHA 主 CI run 42444070654 首轮全绿（70 个 job）。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的四处问题，都已修复并复验——memory 的蒸馏文件直取 runtime-management 多出 2 个 off-DAG
+  offered 文件对（改经 memory 自己的蒸馏端口）；删去空导入后旧 SQLite 任务授权生产不可达（迁入 `tests/helpers/`）；RFC-345 T4a 的否定锁撞上
+  并入的函数体（按原意改写）；RFC-469 用例的负对照查出 census 不给空 `import {}` 出边（改用 `preProcessFile`）。backend tsc 0 错、eslint 无告警、
+  `depcheck` 通过；全量 SQLite 四片全部跑完（分片时限 3 小时），合计 23521 pass，其余为负载超时、上述问题与导出仓库所致的 `rfc321`；修复后复跑
+  211 个文件余 RFC-167 `approve` 与 `rfc363` 目录分页各一例（同一时刻在 RFC-468 导出仓库里对照，两边同一例到点）；PostgreSQL 416 个文件的 lane 余 72 个文件（66 个只有超时，4 个是上述问题，2 个是负载下的连锁超时），修复后复跑 227 个
+  文件余 3 个文件 5 例，都是用例自带的计时到点（同一时刻在 RFC-468 导出仓库里对照，两边同样到点）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 71 → 66、`R2` 0，`services/` 67 → 64，public
+  surface 1496 → 1497（runtime-management `public/participants` 转出 `SessionCaptureTerminalState`）、偏差 94 不变，未被消费的 public 符号 322
+  不变，越界类计数不变。
+
 ## 2026-11-07 RFC-468 拆分 nodeRunMint：冻结运行时归 runtime-management、铸行入口归 task-execution（Done；`design/RFC-468-node-run-mint-split/`）
 
 - **来由**：RFC-294 W9-D 第十五步（`services/` 实现文件按 owner 归位）。`services/nodeRunMint.ts` 记 8 条 `R1`（全部取 task-execution

@@ -14,7 +14,7 @@ import type {
   SessionCaptureIncompleteReason,
   SessionCaptureTerminalState,
   SystemAgentEventSinkV1,
-} from '@/services/sessionEventSink'
+} from '../application/ports/distillWorkStore'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('memory-distill-session-event-sink')

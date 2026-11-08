@@ -28,7 +28,7 @@ import { homedir } from 'node:os'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import type { RuntimeSessionCapturePersistence } from '@/modules/runtime-management/public/participants'
 import { createLogger, type Logger } from '@/util/log'
-import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import type { SystemAgentEventSinkV1 } from '@/modules/runtime-management/public/participants'
 import {
   openReadonlySqliteDatabase,
   type ReadonlySqliteDatabase,

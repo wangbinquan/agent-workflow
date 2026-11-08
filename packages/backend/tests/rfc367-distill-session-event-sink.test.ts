@@ -147,7 +147,7 @@ describeEachProvider('RFC-367 distill session event sink', (harness) => {
   })
 
   test('a persistence failure never propagates to the caller', async () => {
-    // Contract from services/sessionEventSink.ts: the auxiliary record must
+    // Contract from runtime-management's session-event port (`SystemAgentEventSinkV1`): the auxiliary record must
     // never decide the agent's business result.
     const jobId = await seedJob(db)
     const brokenDb = {
