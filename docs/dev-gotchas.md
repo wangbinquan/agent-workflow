@@ -1596,6 +1596,13 @@ git commit -F msg -- "${MINE[@]}"
 已经提交但**还没推**的，`git commit --amend -- <完整清单>` 就地补上（回执会从
 `create mode` 变成 `rename … (98%)`）。
 
+**第四次（2026-11-08，RFC-470）撞在「删文件」上，形状一样**：删掉 `services/workflow.validator.ts`（RFC-345 起只剩一行
+`export *`）时，用例 import 的改指脚本又只遍历了 `packages/backend/tests`；`packages/shared/tests/wrapper-kind-single-source.test.ts`
+按路径读它（一条早已空转的锚），CI 的 Lint 腿（shared 用例）与 Windows 的 shared 套件双红——集中验证只跑 backend 的两个引擎，看不见。
+删除 / 搬移文件与改名同理：收尾按**路径**全仓 grep（`git grep -n '<旧路径>' -- packages e2e scripts .github`），并把
+`packages/shared` / `packages/system-mocks` 的 `bun test` 与 `packages/frontend` 的 `vitest` 算进集中验证——只要它们读后端源码，
+就在爆炸半径里。
+
 ## zsh 不对未加引号的 `$FILES` 做分词：`git add $FILES` 整串当一个路径（2026-09-04 一天撞两次；**2026-09-07 第四次**）
 
 bash 里 `FILES="a b c"; git add $FILES` 是三个路径，zsh 里是**一个**叫 `a b c` 的路径：
