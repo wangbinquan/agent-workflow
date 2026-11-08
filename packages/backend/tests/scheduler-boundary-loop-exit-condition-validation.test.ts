@@ -32,7 +32,7 @@
 import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 
-import { validateWorkflowDef } from '../src/services/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 // Minimal Agent for the validation context so the validator knows node 'audit'
 // exposes the 'findings' output port. The exitCondition PORT check only runs

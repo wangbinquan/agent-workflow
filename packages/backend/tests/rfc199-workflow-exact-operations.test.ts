@@ -18,7 +18,10 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
+import {
+  getWorkflow,
+  workflowDraftSnapshotOf,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { tmpdir } from 'node:os'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {

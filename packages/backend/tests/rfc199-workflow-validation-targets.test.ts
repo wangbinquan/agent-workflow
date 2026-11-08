@@ -11,7 +11,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   validateAgentClarifyMultiplicity,
   validateWorkflowDef,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 const EMPTY_CONTEXT = { agents: [], skills: [] }
 

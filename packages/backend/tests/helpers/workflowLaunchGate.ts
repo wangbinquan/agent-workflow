@@ -9,9 +9,9 @@ import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
-import { getWorkflow } from '@/services/workflow'
+import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { NotFoundError } from '@/util/errors'
-import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+import { assertWorkflowSnapshotLaunchable } from '@/modules/resource-catalog/composition/agentLaunchResources'
 
 type LaunchableWorkflow = NonNullable<Awaited<ReturnType<typeof getWorkflow>>>
 

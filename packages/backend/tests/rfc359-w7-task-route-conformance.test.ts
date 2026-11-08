@@ -39,7 +39,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -204,6 +204,8 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       validateHostWorkflow: async () => ({ ok: true, issues: [] }),
       // RFC-466: workflow visibility is the production seam (resource-catalog's view policy on the same db).
       canViewWorkflow: composeAgentLaunchResourceOperations({ db }).canViewWorkflow,
+      // RFC-470: the workflow row through the same production seam.
+      readWorkflow: composeAgentLaunchResourceOperations({ db }).readWorkflow,
       resourceAuthorityFor: resourceAuthorityFor(db),
       launches: { launch: async () => unusedDependency('launches.launch') } as never,
       persistence: createTaskExecutionPersistence(db, {

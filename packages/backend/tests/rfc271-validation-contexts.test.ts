@@ -21,7 +21,7 @@ import { callEdgeKey } from '../src/modules/resource-catalog/domain/callClosure'
 import {
   loadWorkflowValidationContext,
   validateWorkflowDef,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 type Node = WorkflowDefinition['nodes'][number]
 const node = (f: Record<string, unknown>): Node => f as unknown as Node

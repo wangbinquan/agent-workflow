@@ -469,6 +469,12 @@ async function harness(input: {
             'route launch must not read workflow visibility through AgentLaunchResourceOperations',
           )
         },
+        // RFC-470: likewise the workflow row — only the workflow-sync routes read it through this seam.
+        async readWorkflow() {
+          throw new Error(
+            'route launch must not read workflow rows through AgentLaunchResourceOperations',
+          )
+        },
       }),
       integrity: integrity(integrityCalls),
     },

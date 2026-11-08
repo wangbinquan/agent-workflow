@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { validateWorkflowDefinition } from '@/services/workflow.validator'
+import { validateWorkflowDefinition } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 function codesFor(nodes: WorkflowNode[], edges: WorkflowDefinition['edges'] = []): string[] {
   const definition: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges }

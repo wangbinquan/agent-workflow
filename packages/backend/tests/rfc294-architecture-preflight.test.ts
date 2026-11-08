@@ -318,9 +318,7 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts -> packages/backend/src/modules/source-control/composition/taskAgentWorkspaceContents.ts',
   'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
   'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+  // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
   'packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts',
   'packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts',

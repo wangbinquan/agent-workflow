@@ -56,7 +56,10 @@ import { attachWorkspaceCleanupToMultipartError } from '../src/modules/task-exec
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
+import {
+  getWorkflow,
+  workflowDraftSnapshotOf,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'

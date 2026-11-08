@@ -89,13 +89,13 @@ import {
 import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgentRouteLaunch } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
-import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/resource-catalog/composition/agentLaunchResources'
 import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { createUser } from './helpers/userFixture'
 import {
   buildWorkflowValidationContext,
   validateWorkflowDef,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

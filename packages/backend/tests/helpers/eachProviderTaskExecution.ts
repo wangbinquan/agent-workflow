@@ -52,7 +52,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { validateWorkflowDef } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { eq } from 'drizzle-orm'
 import { join } from 'node:path'

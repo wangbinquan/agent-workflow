@@ -83,8 +83,9 @@ const REMAINING: Readonly<Record<string, readonly string[]>> = {
   // `public/participants` (which now also offers `SessionCaptureTerminalState`).
   // RFC-466: `services/taskLaunchGate.ts` no longer reads `services/workflow` (its full gate moved to the test helpers);
   // `services/workgroups` is deleted — its only production consumer, `legacyCallClosure`, moved to the test helpers.
-  'services/workflow': ['modules/task-execution/infrastructure/taskRouteOperations.ts'],
-  'services/workflow.validator': ['services/task.ts', 'services/taskLaunchGate.ts'],
+  // RFC-470: `services/workflow` / `services/workflow.validator` are deleted — the workflow-sync routes read the row and
+  // validate through task-execution's agent-launch resource seam (resource-catalog implements it), the scheduled-task
+  // snapshot gate moved into resource-catalog, and the tests take the resource-catalog definitions.
   // RFC-467: `services/skillBootVerify` / `services/skillIdentityPaths` are deleted — their only production consumer, the
   // RFC-349 injection oracle, moved to the test helpers and takes the resource-catalog definitions.
 }

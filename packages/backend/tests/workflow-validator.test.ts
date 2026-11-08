@@ -6,7 +6,10 @@
 
 import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { extractTemplateVars, validateWorkflowDef } from '../src/services/workflow.validator'
+import {
+  extractTemplateVars,
+  validateWorkflowDef,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 // RFC-223 (PR-1): agent refs are stored BY ID. This helper takes skill /
 // dependsOn NAMES and maps them to the `skill-<name>` / `agent-<name>` id

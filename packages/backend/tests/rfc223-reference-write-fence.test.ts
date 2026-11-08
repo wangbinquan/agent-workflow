@@ -38,7 +38,10 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
-import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
+import {
+  getWorkflow,
+  workflowDraftSnapshotOf,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import {
   getWorkgroupById,
   workgroupDraftSnapshotOf,

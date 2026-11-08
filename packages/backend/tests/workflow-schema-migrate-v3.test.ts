@@ -9,7 +9,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 
-import { migrateDefinitionToLatest } from '../src/services/workflow'
+import { migrateDefinitionToLatest } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 
 const linearDef = (schemaVersion: 1 | 2 | 3): WorkflowDefinition => ({
   $schema_version: schemaVersion,

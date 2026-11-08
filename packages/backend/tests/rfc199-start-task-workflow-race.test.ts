@@ -43,7 +43,10 @@ import {
   createFileFusionWorkspaceEffects,
   fusionWorkDirectory,
 } from '@/modules/source-control/infrastructure/local/fileFusionWorkspaceEffects'
-import { getWorkflow, workflowDraftSnapshotOf } from '@/services/workflow'
+import {
+  getWorkflow,
+  workflowDraftSnapshotOf,
+} from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 
 import { createRepoGroup } from '@/modules/source-control/application/repositoryGroups'
 import { runGit } from '../src/util/git'

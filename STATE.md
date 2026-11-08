@@ -1,3 +1,31 @@
+## 2026-11-07 RFC-470 退役最后两个薄转出 workflow / workflow.validator 与 taskLaunchGate：任务启动资源适配器归 resource-catalog（In Progress；`design/RFC-470-workflow-facades-retirement/`）
+
+- **来由**：RFC-294 W9-D 第十七步（facade 清仓）。`legacy-thin-facades` 只剩 RFC-345 的 `services/workflow.ts` / `services/workflow.validator.ts`
+  （`export *` 转出 resource-catalog 的旧函数），生产消费方是 task-execution 工作流同步路由的两处 `getWorkflow`、`services/task.ts` 同步预览的
+  静态校验与 `services/taskLaunchGate.ts`（定时任务的快照校验门）；task-execution 的启动资源适配器直取 resource-catalog 的三个内部文件。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为
+  已批准，不派 Codex。
+- **范围**：启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、按结构满足、装配根注入），端口补 `readWorkflow`、校验候选补
+  `frozenClosureJson`、校验问题带 `code`；同步预览与同步门经端口读行，同步预览经注入的 `validateHostWorkflow` 校验；快照校验门原样迁入
+  resource-catalog；三个 `services/` 文件删除，用例改取 resource-catalog 的定义处；RFC-345 兼容登记表清零，RFC-294 preflight / RFC-376 /
+  RFC-328 / RFC-454 / RFC-165 / RFC-271 清单与账本随之改。
+- **不做**：RFC-345 登记表点名的继任合同（`TaskExecutionResourceBinding`、`WorkflowValidationQueries`）：前者按可启动性装载、后者要用户权威且
+  不带冻结闭包，与同步预览 / 定时任务门的语义不符（proposal §3）；`services/task.ts` 本身、`services/runtime/**`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-469 的 Done 文档提交 `4d63ca40c`（只改 5 个文档文件）：exact SHA 主 CI run 42459797504 有一格红——Backend tests
+  （ubuntu-latest shard 41/44）的 `rfc401-atomic-apply-lease`「a long staging renews its lease so recovery cannot take it over」PostgreSQL
+  一侧 `cas-lost:lease`（545 ms：用例每 20 ms 实时把假时钟推进三分之一个租约，靠 5 ms 一次的续租计时器赶在过期前续上，续租没赶上就被
+  恢复接管），「CI required」汇总格随之红，其余 68 个 job 全绿。该提交代码与 `e9fb623f8` 逐字相同，而 `e9fb623f8` 的主 CI run 42457010625
+  同一分片、同一用例通过（397.69 ms）：判为与提交内容无关的时序性偶发红，用例属 RFC-401（`9498cca64`），未改、未重跑，如实记录；后继
+  提交的 CI 会再跑这一格。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片全部跑完
+  （分片时限 3 小时），合计 23525 pass，其余为负载超时与导出仓库所致的 `rfc321`；复跑 252 个文件，余 RFC-167 `approve` 与 `rfc363` 目录
+  分页各一例（同一时刻在 RFC-469 导出仓库里对照，两边同一例到点）；PostgreSQL 447 个文件的 lane 余 58 个文件（55 个只有超时，`rfc321`，
+  以及负载下的连锁超时与用例自带的等待到点各一个），复跑 263 个文件，余 3 个文件 5 例，都是用例自带的计时到点（同一时刻在 RFC-469 导出
+  仓库里对照，两边同样到点）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 66 → 64、`R2` 0，
+  `services/` 64 → 61，`legacy-thin-facades` 2 → 0，跨 context 内部文件对 46 → 43，public surface 1497、偏差 94、未被消费的 public 符号 322
+  不变，越界类计数不变。
+
 ## 2026-11-07 RFC-469 退役三个薄转出：taskAuthorization、sessionEventSink、taskExecutionCallClosure（Done；`design/RFC-469-thin-services-facade-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十六步（facade 清仓）。`services/` 里三个只转手的文件合计 5 条 `R1`：`taskAuthorization.ts` 在生产里只剩

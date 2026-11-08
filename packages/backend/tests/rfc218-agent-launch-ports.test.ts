@@ -59,7 +59,7 @@ import { createUser } from './helpers/userFixture'
 import {
   buildWorkflowValidationContext,
   validateWorkflowDef,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createAgent } from './helpers/model/resourceWrites'
 

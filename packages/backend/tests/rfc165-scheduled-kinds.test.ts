@@ -61,7 +61,7 @@ import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/co
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/resource-catalog/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'

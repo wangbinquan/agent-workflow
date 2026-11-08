@@ -85,7 +85,6 @@ import {
   taskExecutionModule,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/public/participants'
-import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import type { killStaleRunProcessTree } from '@/util/process'
 // RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 task-execution `public/operations`
 // 上同名的 bun:sqlite 专属**同步**版按名字区分开。
@@ -922,11 +921,34 @@ export function buildSyncRunSummary(
  * that need the preserved runs' actual produced ports), and whether the live
  * definition currently fails static validation.
  */
+/**
+ * RFC-470: the static validation the preview runs, injected by the route (the production value is the
+ * agent-launch resource seam's `validateHostWorkflow` — resource-catalog's `validateWorkflowDef` over
+ * `loadWorkflowValidationContext(db, candidate)`). Written structurally here: a `services/` file taking a module's
+ * internal port counts toward `R1`.
+ */
+type WorkflowSyncPreviewValidation = (
+  definition: WorkflowDefinition,
+  candidate: Readonly<{
+    definition: WorkflowDefinition
+    currentWorkflow: Readonly<{ id: string; name: string }>
+    frozenClosureJson: string | null
+  }>,
+) => Promise<{
+  readonly ok: boolean
+  readonly issues: readonly {
+    readonly code: string
+    readonly message: string
+    readonly severity?: string
+  }[]
+}>
+
 export async function computeWorkflowSyncPreview(
   db: PersistenceDb,
   task: Task,
   workflow: Workflow,
   resourceAuthority: TaskExecutionResourceAuthority,
+  validateHostWorkflow: WorkflowSyncPreviewValidation,
 ): Promise<WorkflowSyncPreview> {
   // RFC-104 built-in workflows are never manually executed (POST sync-workflow
   // would 403) — so the banner must not appear for them (Codex impl-gate F4).
@@ -980,14 +1002,11 @@ export async function computeWorkflowSyncPreview(
   }
 
   const diff = diffWorkflowForSync(oldDef, newDef, buildSyncRunSummary(runs, producedPortsByNode))
-  const validation = validateWorkflowDef(
-    newDef,
-    await buildWorkflowValidationContext(db, {
-      definition: newDef,
-      currentWorkflow: { id: workflow.id, name: workflow.name },
-      frozenClosureJson: candidateClosureJson,
-    }),
-  )
+  const validation = await validateHostWorkflow(newDef, {
+    definition: newDef,
+    currentWorkflow: { id: workflow.id, name: workflow.name },
+    frozenClosureJson: candidateClosureJson,
+  })
   const validationIssues = validation.ok
     ? []
     : validation.issues

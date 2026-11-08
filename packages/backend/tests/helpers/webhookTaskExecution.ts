@@ -19,7 +19,7 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import type { SecretBox } from '../../src/auth/secretBox'
 import type { DbClient } from '../../src/db/client'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
-import { composeAgentLaunchResourceOperations } from '../../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../../src/modules/resource-catalog/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDeferredRepositoryPreparation } from '../../src/modules/task-execution/composition/deferredRepositoryPreparation'
 import { createTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'

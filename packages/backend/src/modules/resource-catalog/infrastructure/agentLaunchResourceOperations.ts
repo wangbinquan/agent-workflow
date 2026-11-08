@@ -1,16 +1,62 @@
+// RFC-470 (RFC-294 W9-D): resource-catalog implements task-execution's agent-launch resource port. The port stays
+// with its consumer (task-execution `application/ports/agentLaunchResourceOperations.ts`); the implementation lives
+// with the owner of these capabilities (agent / workflow visibility, the workflow row, workflow static validation)
+// and the assembly root hands it over. The shapes below are the port's, written here so resource-catalog does not
+// import task-execution; `tests/rfc470-workflow-facades-retirement.test.ts` locks them equal at compile time.
+import type { Agent, WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import {
-  loadWorkflowValidationContext,
-  validateWorkflowDef,
-} from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
-import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
+import { getAgentById } from './legacy/agent'
+import { getWorkflow } from './legacy/workflow'
+import { loadWorkflowValidationContext, validateWorkflowDef } from './legacy/workflow.validator'
+import { canViewResource } from '../composition/resourceAcl'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type {
-  AgentLaunchResourceOperations,
-  AgentLaunchVisibleAgentQuery,
-  AgentLaunchWorkflowValidation,
-} from '../application/ports/agentLaunchResourceOperations'
+
+export interface AgentLaunchValidationIssue {
+  readonly code: string
+  readonly severity?: string
+  readonly message: string
+  readonly [key: string]: unknown
+}
+
+export interface AgentLaunchVisibleAgentQuery {
+  get(actor: Actor, agentId: string): Promise<Agent | null>
+}
+
+export interface AgentLaunchWorkflowValidationCandidate {
+  readonly definition: WorkflowDefinition
+  readonly currentWorkflow: Readonly<{ id: string; name: string }>
+  readonly frozenClosureJson?: string | null
+}
+
+export interface AgentLaunchWorkflowValidation {
+  validate(
+    definition: WorkflowDefinition,
+    candidate?: AgentLaunchWorkflowValidationCandidate,
+  ): Promise<{
+    readonly ok: boolean
+    readonly issues: readonly AgentLaunchValidationIssue[]
+  }>
+}
+
+export interface AgentLaunchWorkflowAclRow {
+  readonly id: string
+  readonly ownerUserId?: string | null
+  readonly visibility?: 'public' | 'private'
+  readonly builtin?: boolean | null
+}
+
+export interface AgentLaunchResourceOperations {
+  loadVisibleAgent(actor: Actor, agentId: string): Promise<Agent | null>
+  canViewWorkflow(actor: Actor, workflow: AgentLaunchWorkflowAclRow): Promise<boolean>
+  readWorkflow(workflowId: string): Promise<WorkflowDetail | null>
+  validateHostWorkflow(
+    definition: WorkflowDefinition,
+    candidate?: AgentLaunchWorkflowValidationCandidate,
+  ): Promise<{
+    readonly ok: boolean
+    readonly issues: readonly AgentLaunchValidationIssue[]
+  }>
+}
 
 /**
  * RFC-359 AC-1（plan §5ge）—— **两个 provider 唯一的一份**。
@@ -25,6 +71,9 @@ import type {
  * 处方仍是「装配者提供答案」，但这里用**缺省实参**收口：两个口子都可选，
  * 不给就用建立在 `db` 上的那份缺省实现——于是 SQLite 的两个 bootstrap 调用点一个字都不用改，
  * PG bootstrap 照旧传自己的那两份。
+ *
+ * RFC-470: moved here from task-execution `infrastructure/` (bodies unchanged) and gained `readWorkflow` — the same
+ * `getWorkflow` the workflow-sync routes used to take through the `services/workflow` re-export.
  */
 export function createAgentLaunchResourceOperations(input: {
   readonly db: PersistenceDb
@@ -53,6 +102,7 @@ export function createAgentLaunchResourceOperations(input: {
       actor: Actor,
       workflow: Parameters<AgentLaunchResourceOperations['canViewWorkflow']>[1],
     ) => canViewResource(db, actor, 'workflow', workflow),
+    readWorkflow: (workflowId: string) => getWorkflow(db, workflowId),
     async validateHostWorkflow(
       definition: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[0],
       candidate?: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[1],

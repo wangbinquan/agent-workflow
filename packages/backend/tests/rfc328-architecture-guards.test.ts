@@ -271,9 +271,7 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // 与 PostgreSQL 那一支同形（那边一直是 bootstrap 交）。
   // RFC-423：触发器参与者整体迁入 infrastructure（`taskExecutionTrigger.ts`），这条债随文件改指。
   'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts',
-  'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
-  'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
-  'resource-catalog/infrastructure/legacy/workflow.validator: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
+  // RFC-470：`agentLaunchResourceOperations.ts` 迁入 resource-catalog（实现 task-execution 的端口、装配根注入），这三条桥销账。
   // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组启动的资源面收成两个 provider 唯一的一份，
   // 形状与紧邻的 `agentLaunchResourceOperations.ts` 三条**逐字对称**（同一处置、同一层）。
   // 净账是减：此前 SQLite 那半在 `startWorkgroupTask`（470 行）里读库、PG 那半在守护进程根里

@@ -1,4 +1,4 @@
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-a A2: all subject readers must work without catalog host rows on either provider.
@@ -31,7 +31,10 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createDatabaseTaskLifecycleWsProjection } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { getTask, layoutBuiltinWorkflowSnapshot } from '@/services/task'
-import { getWorkflow, listWorkflows } from '@/services/workflow'
+import {
+  getWorkflow,
+  listWorkflows,
+} from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { createWorkflowMutationParticipant } from '@/modules/resource-catalog/infrastructure/workflowMutationParticipant'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
@@ -372,8 +375,22 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       await taskFixture(db, task)
       const kind = legacySubjectOracle(row).kind
       // RFC-466: the sync gate and preview take workflow visibility from the production seam.
-      const canViewWorkflow = composeAgentLaunchResourceOperations({ db }).canViewWorkflow
-      const dependencies = { db, activity, resourceAuthorityFor, canViewWorkflow }
+      const seam = composeAgentLaunchResourceOperations({ db })
+      const canViewWorkflow = seam.canViewWorkflow
+      // RFC-470: the host-specific guards answer before the workflow row is read (this test's title), so reading it
+      // fails the case; the preview's validation is the production seam's.
+      const readWorkflow = async (): Promise<never> => {
+        throw new Error('host-specific guards must not load a workflow row')
+      }
+      const validateHostWorkflow = seam.validateHostWorkflow
+      const dependencies = {
+        db,
+        activity,
+        resourceAuthorityFor,
+        canViewWorkflow,
+        readWorkflow,
+        validateHostWorkflow,
+      }
       if (kind === 'agent' || kind === 'code-round')
         await assertManualExecutionAllowedProjection(dependencies, actor, task.id!)
       else

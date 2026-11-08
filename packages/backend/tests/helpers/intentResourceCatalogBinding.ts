@@ -18,7 +18,7 @@ import {
   readSkillContent,
   readSkillFile,
 } from '../../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getWorkflow } from '../../src/services/workflow'
+import { getWorkflow } from '../../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { getWorkgroupById } from '../../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { Paths } from '../../src/util/paths'
 import type {

@@ -43,7 +43,7 @@ import {
   countPendingReviews,
 } from '@/modules/collaboration/infrastructure/review'
 import { listClarifyRoundSummaries } from '../src/modules/collaboration/infrastructure/clarifyRounds'
-import { scheduledRowsReferencingWorkflow } from '../src/services/workflow'
+import { scheduledRowsReferencingWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'
 

@@ -3,7 +3,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
-import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+import { assertWorkflowSnapshotLaunchable } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
 /** RFC-381: save and dispatch admission use the same candidate-aware launch gate. */

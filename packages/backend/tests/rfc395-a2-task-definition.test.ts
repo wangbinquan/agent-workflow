@@ -1,5 +1,5 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 // RFC-395 II-a A2: preserve all three definition CAS operations, config projections and exact room bytes on both providers.
 import { buildActor } from '@/auth/actor'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
@@ -279,6 +279,8 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
         },
         // RFC-466: workflow visibility is the production seam on the same db.
         canViewWorkflow: composeAgentLaunchResourceOperations({ db: harness.db }).canViewWorkflow,
+        // RFC-470: the workflow row through the same production seam.
+        readWorkflow: composeAgentLaunchResourceOperations({ db: harness.db }).readWorkflow,
         async resumeTaskAs() {
           resumed = true
         },

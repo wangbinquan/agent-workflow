@@ -36,14 +36,14 @@ import {
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { admitTransferredWorkspace } from '@/modules/task-execution/infrastructure/transferredWorkspaceAdmission'
 import { loadFrozenSpaceLayout } from '@/modules/task-execution/infrastructure/frozenWorkspaceLayout'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import type { ChildWorkflowLaunchRequest } from '@/modules/task-execution/application/ports/childExecutionLaunchOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
-import { getWorkflow } from '@/services/workflow'
+import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import {
   getTask,
   composeDeferredRepositoryPreparationStep,

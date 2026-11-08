@@ -17,7 +17,10 @@ import type { WorkflowDefinition, WorkflowDetail, WorkflowNode } from '@agent-wo
 import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { getWorkflow, workflowDraftSnapshotOf } from '@/services/workflow'
+import {
+  getWorkflow,
+  workflowDraftSnapshotOf,
+} from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { REDACTED, serializeWorkflowFor, workflowReadLensFor } from '@/auth/tokenRedaction'
 import { DomainError } from '@/util/errors'
 import {

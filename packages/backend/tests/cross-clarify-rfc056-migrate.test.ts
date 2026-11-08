@@ -8,7 +8,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 
-import { migrateDefinitionToLatest } from '../src/services/workflow'
+import { migrateDefinitionToLatest } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 
 describe('RFC-056 — v3/v4 shapes survive migration to the current schema', () => {
   test('v3 doc with RFC-023 clarify node walks to latest with shape preserved', () => {

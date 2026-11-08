@@ -63,7 +63,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/resource-catalog/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 

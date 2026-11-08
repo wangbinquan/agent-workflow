@@ -27,7 +27,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 import { extractWorkflowWorkflowRefs } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
-import { getWorkflow } from '../src/services/workflow'
+import { getWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { workflowDefinitionToSelectors } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.yaml'
 import { copyWorkflow, createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 

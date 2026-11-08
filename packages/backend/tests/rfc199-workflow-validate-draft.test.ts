@@ -15,7 +15,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { getWorkflow } from '../src/services/workflow'
+import { getWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { createUser } from './helpers/userFixture'
 import { createWorkflow } from './helpers/model/resourceWrites'
 

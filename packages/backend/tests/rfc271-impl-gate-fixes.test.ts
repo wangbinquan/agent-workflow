@@ -494,7 +494,8 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
     for (const rel of [
       'src/modules/resource-catalog/application/package/commit.ts',
       'src/modules/resource-catalog/application/package/preview.ts',
-      'src/services/workflow.validator.ts',
+      // RFC-470: the `services/workflow.validator.ts` re-export is gone; check the validator source itself.
+      'src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
     ]) {
       expect({ rel, hit: hasControlChar(read(rel)) }).toEqual({ rel, hit: false })
     }

@@ -40,7 +40,7 @@ import {
   excludeBuiltinAgents,
   excludeBuiltinWorkflows,
 } from '../src/modules/resource-catalog/domain/systemResources'
-import { listWorkflows } from '../src/services/workflow'
+import { listWorkflows } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,

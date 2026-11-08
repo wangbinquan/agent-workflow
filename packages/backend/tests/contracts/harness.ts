@@ -28,7 +28,7 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { composeDatabaseMigrationModule } from '../../src/modules/system-operations/composition/databaseMigration'
-import { getWorkflow } from '../../src/services/workflow'
+import { getWorkflow } from '../../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { createUser } from '../helpers/userFixture'
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

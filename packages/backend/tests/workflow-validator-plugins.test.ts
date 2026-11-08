@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import { validateWorkflowDef } from '../src/services/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 // RFC-223 (PR-1): agent refs are stored BY ID; this helper maps dependsOn /
 // plugin NAMES to the `id-<name>` / `plugin-<name>` id convention. Workflow

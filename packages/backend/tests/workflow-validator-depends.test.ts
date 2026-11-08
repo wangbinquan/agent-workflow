@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
-import { validateWorkflowDef } from '../src/services/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 // RFC-223 (PR-1): agent refs are stored BY ID. The `agent()` / `skill()`
 // fixtures use the stable `agent-<name>` / `skill-<name>` id convention, and

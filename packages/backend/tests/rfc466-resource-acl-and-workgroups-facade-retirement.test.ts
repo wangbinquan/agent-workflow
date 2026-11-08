@@ -118,16 +118,18 @@ describe('RFC-466 —— 原消费方改取 owner 的合同', () => {
     ).toContain(
       '  canViewWorkflow(actor: Actor, workflow: AgentLaunchWorkflowAclRow): Promise<boolean>\n',
     )
+    // RFC-470: the implementation moved to resource-catalog (it satisfies task-execution's port structurally).
     expect(
-      read('modules/task-execution/infrastructure/agentLaunchResourceOperations.ts'),
+      read('modules/resource-catalog/infrastructure/agentLaunchResourceOperations.ts'),
     ).toContain(") => canViewResource(db, actor, 'workflow', workflow),")
     expect(read('modules/task-execution/composition/providerRuntime.ts')).toContain(
       'taskRouteLaunchDependencies.agent.resources.canViewWorkflow(actor, workflow)',
     )
   })
 
-  test('services/taskLaunchGate 只留生产在用的快照校验', () => {
-    const gate = read('services/taskLaunchGate.ts')
+  // RFC-470: the snapshot gate moved verbatim to resource-catalog (`services/taskLaunchGate.ts` is deleted).
+  test('快照校验门只留生产在用的快照校验', () => {
+    const gate = read('modules/resource-catalog/infrastructure/workflowSnapshotLaunchGate.ts')
     expect(gate).toContain('export async function assertWorkflowSnapshotLaunchable(')
     expect(gate).not.toContain('export async function assertWorkflowLaunchable(')
     expect(gate).not.toMatch(/\bcanViewResource\b/)

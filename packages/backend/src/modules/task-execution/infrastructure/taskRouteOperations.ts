@@ -177,7 +177,6 @@ import {
 } from '@/services/task'
 
 import { deleteTask } from '@/services/taskDelete'
-import { getWorkflow } from '@/services/workflow'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { createLogger } from '@/util/log'
@@ -255,6 +254,8 @@ export interface TaskRouteOperationsDependencies {
   readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
   /** RFC-466: workflow visibility for the sync preview and the sync gate, from the same seam. */
   readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
+  /** RFC-470: the workflow row for the sync preview and the sync gate, from the same seam. */
+  readonly readWorkflow: AgentLaunchResourceOperations['readWorkflow']
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
@@ -1505,6 +1506,8 @@ export async function taskWorkflowSyncPreviewProjection(
     readonly activity: ActiveTaskExecutionParticipant
     readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
     readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
+    readonly readWorkflow: AgentLaunchResourceOperations['readWorkflow']
+    readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
   }>,
   actor: Actor,
   taskId: string,
@@ -1521,7 +1524,7 @@ export async function taskWorkflowSyncPreviewProjection(
     return notSyncableWorkflowPreview(task, 'task-active')
   }
   if (subject.kind === 'digital-employee') return builtinWorkflowSyncPreview(task, 1)
-  const workflow = await getWorkflow(dependencies.db, task.workflowId)
+  const workflow = await dependencies.readWorkflow(task.workflowId)
   if (workflow === null) return notSyncableWorkflowPreview(task, 'workflow-deleted')
   if (!(await dependencies.canViewWorkflow(actor, workflow))) {
     return notSyncableWorkflowPreview(task, 'workflow-not-visible')
@@ -1531,6 +1534,7 @@ export async function taskWorkflowSyncPreviewProjection(
     task,
     workflow,
     dependencies.resourceAuthorityFor(actor),
+    dependencies.validateHostWorkflow,
   )
 }
 
@@ -1724,6 +1728,7 @@ export async function assertTaskWorkflowSyncable(
     readonly db: PersistenceDb
     readonly activity: ActiveTaskExecutionParticipant
     readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
+    readonly readWorkflow: AgentLaunchResourceOperations['readWorkflow']
   }>,
   actor: Actor,
   taskId: string,
@@ -1738,7 +1743,7 @@ export async function assertTaskWorkflowSyncable(
       'agent/workgroup host tasks run a synthesized snapshot — there is no workflow to sync from',
     )
   }
-  const workflow = await getWorkflow(dependencies.db, task.workflowId)
+  const workflow = await dependencies.readWorkflow(task.workflowId)
   if (workflow !== null) assertNotBuiltin('workflow', workflow)
   await dependencies.activity.awaitReleasedSettled(taskId)
   if (dependencies.activity.isActive(taskId)) {
@@ -1780,6 +1785,7 @@ export interface TaskWorkflowSyncDependencies {
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
   readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
+  readonly readWorkflow: AgentLaunchResourceOperations['readWorkflow']
   readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
   readonly now?: () => number
   readonly id?: () => string
@@ -1797,6 +1803,7 @@ export async function syncWorkflow(
       db: dependencies.db,
       activity: dependencies.activity,
       canViewWorkflow: dependencies.canViewWorkflow,
+      readWorkflow: dependencies.readWorkflow,
     },
     input.actor,
     input.taskId,
@@ -2610,6 +2617,8 @@ export function createTaskRouteOperations(
           activity: dependencies.activity,
           resourceAuthorityFor: dependencies.resourceAuthorityFor,
           canViewWorkflow: dependencies.canViewWorkflow,
+          readWorkflow: dependencies.readWorkflow,
+          validateHostWorkflow: dependencies.validateHostWorkflow,
         },
         actor,
         taskId,
@@ -2623,6 +2632,7 @@ export function createTaskRouteOperations(
           resourceAuthorityFor: dependencies.resourceAuthorityFor,
           validateHostWorkflow: dependencies.validateHostWorkflow,
           canViewWorkflow: dependencies.canViewWorkflow,
+          readWorkflow: dependencies.readWorkflow,
           resumeTaskAs,
           ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
           ...(dependencies.id === undefined ? {} : { id: dependencies.id }),

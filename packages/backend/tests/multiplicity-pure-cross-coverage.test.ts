@@ -23,7 +23,7 @@
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 
-import { validateWorkflowDef } from '../src/services/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 function agent(name: string, outputs: string[] = []): Agent {
   return {

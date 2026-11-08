@@ -51,7 +51,7 @@ import {
   createTaskExecutionPersistence,
   createTaskExecutionResourceBinding,
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'

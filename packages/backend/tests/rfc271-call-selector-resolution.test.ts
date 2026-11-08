@@ -22,7 +22,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   loadWorkflowValidationContext,
   validateWorkflowDef,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 type Node = WorkflowDefinition['nodes'][number]
 type Edge = WorkflowDefinition['edges'][number]

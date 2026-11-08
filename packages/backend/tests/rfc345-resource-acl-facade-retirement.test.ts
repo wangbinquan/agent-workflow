@@ -25,174 +25,6 @@ interface ObservedCompatibilityDebt {
   readonly removeOwners: readonly RemoveOwner[]
 }
 
-const owner = (wave: string, path: string, exportName: string): RemoveOwner => ({
-  wave,
-  path,
-  exportName,
-})
-
-const REMOVE_OWNERS = {
-  acl: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts',
-    'ResourceAuthorizationApplication',
-  ),
-  agentCatalog: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/operations.ts',
-    'AgentCatalogModule',
-  ),
-  agentQueries: owner(
-    'RFC-294 W4',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'AgentQueries',
-  ),
-  agentReferences: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'AgentReferenceQueries',
-  ),
-  collaboration: owner(
-    'RFC-294 W4-B',
-    'packages/backend/src/modules/collaboration/application/ports/reviewTaskAccess.ts',
-    'ReviewTaskAccessPort',
-  ),
-  developmentConfig: owner(
-    'RFC-294 W4-E8',
-    'packages/backend/src/modules/development-automation/application/configOperations.ts',
-    'DevelopmentConfigOperations',
-  ),
-  digitalEmployeeTools: owner(
-    'RFC-294 W4-E9',
-    'packages/backend/src/modules/digital-employee/public/types.ts',
-    'DigitalEmployeePlatformToolCatalogParticipant',
-  ),
-  integrationConfig: owner(
-    'RFC-294 W4-E8',
-    'packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts',
-    'DevelopmentAdapterResourceAclIdentityProvider',
-  ),
-  knowledgeEvolution: owner(
-    'RFC-294 W4-E3',
-    'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
-    'MemoryResourceScopeAccessParticipant',
-  ),
-  mcpCatalog: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/operations.ts',
-    'McpCatalogModule',
-  ),
-  mcpRuntimePersistence: owner(
-    'RFC-294 W4-E6',
-    'packages/backend/src/modules/resource-catalog/application/mcps/runtimeTestPersistence.ts',
-    'McpRuntimeTestPersistence',
-  ),
-  portableImportReferences: owner(
-    'RFC-294 W4-E4a',
-    'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts',
-    'PortableImportReferenceApplication',
-  ),
-  // RFC-352（2026-09-03）已把 memory 名下的两条边销账：`sqliteMemoryCatalog.ts` 与
-  // `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types`，
-  // 于是它们从下面的 exact 账本里删除（账本与实测必须逐条相等，留着就是 stale）。
-  // owner 定义保留：它记录的是「W4-E2 该往哪个 public 合同收」这条裁决，还有后续边会用到。
-  memory: owner(
-    'RFC-294 W4-E2',
-    'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
-    'MemoryResourceScopeAccessParticipant',
-  ),
-  pluginCatalog: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/operations.ts',
-    'PluginCatalogModule',
-  ),
-  skillBootRestore: owner(
-    'RFC-294 W9-E',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'SkillCatalogBootParticipant',
-  ),
-  skillVersion: owner(
-    'RFC-294 W4-E4a',
-    'packages/backend/src/modules/resource-catalog/public/types.ts',
-    'SkillCatalogVersion',
-  ),
-  skillZip: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'SkillZipImportParticipant',
-  ),
-  scheduledTask: owner(
-    'RFC-294 W4-B',
-    'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
-    'MemoryResourceScopeAccessParticipant',
-  ),
-  taskExecution: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'TaskExecutionResourceSnapshotInTx',
-  ),
-  taskExecutionResources: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts',
-    'TaskExecutionResourceBinding',
-  ),
-  taskExecutionPersistence: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/task-execution/application/ports/taskEngineApplicationPersistence.ts',
-    'TaskEngineApplicationPersistence',
-  ),
-  childExecutionLaunch: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/task-execution/application/ports/childExecutionLaunchOperations.ts',
-    'ChildExecutionLaunchOperations',
-  ),
-  workgroupTurns: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/task-execution/public/commands.ts',
-    'WorkgroupTurnsOperations',
-  ),
-  collaborationQuestions: owner(
-    'RFC-294 W4-B',
-    'packages/backend/src/modules/collaboration/application/ports/questionDispatchCommand.ts',
-    'QuestionDispatchCommandPort',
-  ),
-  executionContractResources: owner(
-    'RFC-294 W4-E7',
-    'packages/backend/src/modules/execution-contract/application/ports.ts',
-    'ExecutionContractResourcePort',
-  ),
-  systemOperations: owner(
-    'RFC-349 provider cutover',
-    'packages/backend/src/modules/system-operations/composition.ts',
-    'SystemOperationsModule',
-  ),
-  workflowCatalog: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/operations.ts',
-    'WorkflowCatalogModule',
-  ),
-  workflowQueries: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'WorkflowQueries',
-  ),
-  workflowValidation: owner(
-    'RFC-294 W4-E1',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'WorkflowValidationQueries',
-  ),
-  workgroupCatalog: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/operations.ts',
-    'WorkgroupCatalogModule',
-  ),
-  workgroupQueries: owner(
-    'RFC-345 T9',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'WorkgroupQueries',
-  ),
-} as const
-
 interface FacadeDefinition {
   readonly facade: string
   readonly compatibilityMarker: boolean
@@ -289,26 +121,24 @@ const RETIRED_FACADES = [
   'services/agentDeps.ts',
   'services/skillBootVerify.ts',
   'services/skillIdentityPaths.ts',
+  // RFC-470: the last two thin re-exports. The workflow-sync routes read the workflow row through task-execution's
+  // agent-launch resource seam (`AgentLaunchResourceOperations.readWorkflow`, implemented by resource-catalog next to
+  // `canViewWorkflow`), the sync preview validates through the same seam's `validateHostWorkflow` (with the
+  // candidate's frozen call closure), and the scheduled-task snapshot gate moved into resource-catalog. The successors
+  // RFC-345 registered for these edges (`TaskExecutionResourceBinding`, `WorkflowValidationQueries`) were not used: the
+  // former loads by launchability where the preview needs visibility, the latter requires a user authority and has no
+  // frozen-closure input (RFC-470 proposal §3).
+  'services/workflow.ts',
+  'services/workflow.validator.ts',
 ] as const
-
-const edge = (
-  facadePath: string,
-  consumer: string,
-  importedSymbols: readonly string[],
-  useCase: string,
-  ...removeOwners: readonly RemoveOwner[]
-): ObservedCompatibilityDebt => ({
-  facade: facadePath,
-  consumer,
-  importedSymbols,
-  useCase,
-  removeOwners,
-})
 
 /**
  * Source-backed, reviewed successor ledger. Every row names the exact consumer,
  * symbols/use-case and an existing non-facade successor contract. There is no
  * stem fallback: a new edge must be reviewed and added explicitly.
+ *
+ * RFC-470: the ledger is empty — every facade in FACADE_DEFINITIONS is retired. The successor-owner map and the row
+ * helper went with the last three rows (git history keeps them); a new compatibility edge needs a reviewed row again.
  */
 const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // RFC-395 O2: review reads Agent snapshots through ReviewUpstreamAgentPort;
@@ -331,27 +161,9 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   //（`getWorkflow` 判内置）随之删除——共用那份走 `builtinCandidateWorkflow` +
   // 资源权威，不再经 legacy Workflow 门面。债是还掉的，不是挪走的。
   // RFC-359 AC-1（同上，第 6 刀）：共用预览在 PG 命名的文件里查工作流行；过渡态，随写侧那一刀回落。
-  edge(
-    'services/workflow.ts',
-    'modules/task-execution/infrastructure/taskRouteOperations.ts',
-    ['getWorkflow'],
-    'shared task route Workflow lookup (preview)',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflow.validator.ts',
-    'services/task.ts',
-    ['buildWorkflowValidationContext', 'validateWorkflowDef'],
-    'task Workflow validation',
-    REMOVE_OWNERS.workflowValidation,
-  ),
-  edge(
-    'services/workflow.validator.ts',
-    'services/taskLaunchGate.ts',
-    ['loadWorkflowValidationContext', 'validateWorkflowDef'],
-    'task launch Workflow validation',
-    REMOVE_OWNERS.workflowValidation,
-  ),
+  // RFC-470：上面登记的三条边（`services/workflow.ts` → `taskRouteOperations.ts` 的 `getWorkflow`；
+  // `services/workflow.validator.ts` → `services/task.ts` 与 `services/taskLaunchGate.ts` 的校验）**销账**，两个转出删除（见上方
+  // RETIRED_FACADES 的注释）。
   // RFC-424：`services/workgroup/state.ts` → `services/task.ts` 的最后一个符号 `setDwStateTx`
   // 随测试专用的动态工作流续跑准入删除，整条边销账。
 ]

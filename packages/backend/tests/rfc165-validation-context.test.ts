@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
+import { buildWorkflowValidationContext } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const ROOT = join(import.meta.dir, '..')
@@ -40,7 +40,10 @@ describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
       'src/services/task.ts',
       'src/routes/tasks.ts',
       'src/routes/workflows.ts',
-      'src/services/workflow.validator.ts',
+      // RFC-470: the `services/workflow.validator.ts` re-export is gone; the launch-resource seam and the scheduled-task
+      // snapshot gate (both resource-catalog now) are the remaining validator callers outside the validator itself.
+      'src/modules/resource-catalog/infrastructure/agentLaunchResourceOperations.ts',
+      'src/modules/resource-catalog/infrastructure/workflowSnapshotLaunchGate.ts',
     ]
     for (const rel of productionCallers) {
       const src = read(rel)

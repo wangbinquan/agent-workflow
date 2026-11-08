@@ -43,7 +43,10 @@ import {
 } from './helpers/mcpServiceBinding'
 import { nextResourceCopyName } from '../src/modules/resource-catalog/domain/resourceCopyName'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getWorkflow, workflowRevisionOf } from '../src/services/workflow'
+import {
+  getWorkflow,
+  workflowRevisionOf,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { workgroupRevisionOf } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import {
   createAgent,

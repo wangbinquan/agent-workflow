@@ -97,8 +97,9 @@ describe('RFC-359 W58 —— 预览只有一份，且它从共用判据取（源
       routes,
       '预览又走可启动性授权了 ⇒ 内置工作流会被 loadAuthorized 挡住、横幅内容直接是错的。',
     ).toContain('await dependencies.canViewWorkflow(actor, workflow)')
+    // RFC-470：实现迁入 resource-catalog（按结构满足 task-execution 的端口），判定仍是同一条。
     expect(
-      read('modules/task-execution/infrastructure/agentLaunchResourceOperations.ts'),
+      read('modules/resource-catalog/infrastructure/agentLaunchResourceOperations.ts'),
       '注入的可见性判定不再是 canViewResource ⇒ 预览又可能走可启动性授权。',
     ).toContain("canViewResource(db, actor, 'workflow', workflow)")
   })

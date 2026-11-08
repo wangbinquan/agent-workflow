@@ -165,6 +165,7 @@ type ProviderRouteOperationsAssembled =
   | 'resourceAuthorityFor'
   | 'validateHostWorkflow'
   | 'canViewWorkflow'
+  | 'readWorkflow'
   | 'launches'
   | 'repair'
 
@@ -336,6 +337,8 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
       taskRouteLaunchDependencies.agent.resources.validateHostWorkflow(definition, candidate),
     canViewWorkflow: (actor, workflow) =>
       taskRouteLaunchDependencies.agent.resources.canViewWorkflow(actor, workflow),
+    readWorkflow: (workflowId) =>
+      taskRouteLaunchDependencies.agent.resources.readWorkflow(workflowId),
     launches,
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,

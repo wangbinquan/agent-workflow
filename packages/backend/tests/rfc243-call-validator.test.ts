@@ -25,7 +25,7 @@ import { dwCallNodeRejections } from '../src/modules/task-execution/domain/dynam
 import {
   loadWorkflowValidationContext,
   validateWorkflowDef,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 type Node = WorkflowDefinition['nodes'][number]
 type Edge = WorkflowDefinition['edges'][number]
@@ -442,7 +442,7 @@ describe('RFC-243 §5.4(7) — dw generated definitions reject call nodes', () =
 })
 
 // RFC-243 PR-4 —— 4g call-workgroup 规则（fanout 内层拒绝 / advisory 存在性）。
-import { validateWorkflowDef as validateDef4g } from '../src/services/workflow.validator'
+import { validateWorkflowDef as validateDef4g } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 describe('RFC-243 4g — call-workgroup rules', () => {
   const baseCtx = { agents: [], skills: [], mcps: [], plugins: [] }
   const wgNode = (over: Record<string, unknown> = {}) => ({

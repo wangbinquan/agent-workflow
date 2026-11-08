@@ -21,7 +21,7 @@ import {
 } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { getWorkflow } from '../src/services/workflow'
+import { getWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { previewWorkflowYaml } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.yaml'
 import { getWorkgroupById } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { ulid } from 'ulid'

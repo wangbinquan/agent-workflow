@@ -136,7 +136,8 @@ describe('RFC-148 — 存量模板兼容（实现门 high 采纳）', () => {
   })
 
   test('legacy 死 token 只降级为 deprecation warning，不阻断启动', async () => {
-    const { validateWorkflowDef } = await import('../src/services/workflow.validator')
+    const { validateWorkflowDef } =
+      await import('../src/modules/resource-catalog/infrastructure/legacy/workflow.validator')
     const def = {
       $schema_version: 4,
       inputs: [],

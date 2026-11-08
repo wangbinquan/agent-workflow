@@ -11,7 +11,7 @@ import {
   workflowDraftSnapshotOf,
   workflowRevisionOf,
   workflowSnapshotHashOf,
-} from '../src/services/workflow'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { copyWorkflow, createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'

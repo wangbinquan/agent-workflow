@@ -39,7 +39,7 @@ import {
   migrateDefinitionToLatest,
   workflowDraftSnapshotOf,
   workflowSnapshotHashOf,
-} from '../src/services/workflow'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { DomainError } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

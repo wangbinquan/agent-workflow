@@ -15,7 +15,7 @@ import ts from 'typescript'
 import {
   projectWorkflowValidationContext,
   type ValidatorContext,
-} from '../src/services/workflow.validator'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 type InventoryFamily = 'agent' | 'skill' | 'mcp' | 'plugin'
 

@@ -1,7 +1,9 @@
-import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
+import type { Agent, WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 
 export interface AgentLaunchValidationIssue {
+  /** RFC-470: the stable rule code (resource-catalog's issues always carry it); the sync preview reports it. */
+  readonly code: string
   readonly severity?: string
   readonly message: string
   readonly [key: string]: unknown
@@ -24,6 +26,11 @@ export interface AgentLaunchVisibleAgentQuery {
 export interface AgentLaunchWorkflowValidationCandidate {
   readonly definition: WorkflowDefinition
   readonly currentWorkflow: Readonly<{ id: string; name: string }>
+  /**
+   * RFC-470: the workflow-sync preview judges the call-node rules against the candidate's frozen call closure
+   * (resource-catalog's validation context reads it when present).
+   */
+  readonly frozenClosureJson?: string | null
 }
 
 /** Provider-selected full Resource Catalog validation context. */
@@ -51,6 +58,9 @@ export interface AgentLaunchResourceOperations {
   /** RFC-466: workflow visibility for the task workflow-sync routes (the same resource-catalog
    * view policy the agent lookup applies). */
   canViewWorkflow(actor: Actor, workflow: AgentLaunchWorkflowAclRow): Promise<boolean>
+  /** RFC-470: the workflow row by id for the task workflow-sync routes (no visibility check — `canViewWorkflow` judges it,
+   * so the routes keep telling `workflow-deleted` from `workflow-not-visible`). */
+  readWorkflow(workflowId: string): Promise<WorkflowDetail | null>
   validateHostWorkflow(
     definition: WorkflowDefinition,
     candidate?: AgentLaunchWorkflowValidationCandidate,

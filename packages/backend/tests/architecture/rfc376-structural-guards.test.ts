@@ -110,9 +110,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts -> packages/backend/src/modules/source-control/composition/taskAgentWorkspaceContents.ts',
     'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
     'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+    // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
     'packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts',
     'packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts',
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts',
@@ -214,8 +212,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts',
     // RFC-467：`services/skillBootVerify.ts` / `services/skillIdentityPaths.ts` 两个转出删除（唯一的生产消费方 RFC-349 注入预言迁入
     // `tests/helpers/`，改取 resource-catalog 定义处），销账。
-    'packages/backend/src/services/workflow.ts',
-    'packages/backend/src/services/workflow.validator.ts',
+    // RFC-470：最后两个 RFC-345 兼容转出 `services/workflow.ts` / `services/workflow.validator.ts` 删除（消费方改经 task-execution 的
+    // 启动资源端口与 resource-catalog 的定义处），销账。
     // RFC-424：`services/workgroup/state.ts` 随其最后一个生产消费者删除（销账）。
     // RFC-466：`services/workgroups.ts` 随其唯一的生产消费者（`legacyCallClosure`，迁入用例 helper）删除（销账）。
   ],

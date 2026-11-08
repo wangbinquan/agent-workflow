@@ -73,7 +73,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
-import { validateWorkflowDef } from '../src/services/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 

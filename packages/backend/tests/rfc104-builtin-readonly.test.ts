@@ -51,7 +51,7 @@ import {
 } from '../src/modules/resource-catalog/domain/systemResources'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
-import { listWorkflows } from '../src/services/workflow'
+import { listWorkflows } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ForbiddenError } from '../src/util/errors'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'

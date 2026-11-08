@@ -40,7 +40,10 @@ import {
 } from '@agent-workflow/shared'
 import { buildIntentDoc, INTENT_TURN_GUIDANCE } from '@/modules/intent/domain/intentDoc'
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
-import { validateWorkflowDef, type ValidatorContext } from '../src/services/workflow.validator'
+import {
+  validateWorkflowDef,
+  type ValidatorContext,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { assertScriptAuthorAllowed } from '../src/modules/resource-catalog/domain/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '../src/modules/resource-catalog/domain/codeHostAuthorGate'
 

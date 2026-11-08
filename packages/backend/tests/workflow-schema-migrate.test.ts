@@ -10,7 +10,7 @@
 //     storing, so new writes always land at the latest version.
 //   - Pure helper: idempotent (latest → latest is identity).
 //
-// If this goes red, check packages/backend/src/services/workflow.ts and
+// If this goes red, check packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts and
 // packages/shared/src/schemas/workflow.ts in lock-step.
 
 import { readWorkflowFixtures, workflowFixture } from './helpers/model'
@@ -23,7 +23,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
 import { ulid } from 'ulid'
-import { getWorkflow, migrateDefinitionToLatest } from '../src/services/workflow'
+import {
+  getWorkflow,
+  migrateDefinitionToLatest,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 describe('migrateDefinitionToLatest pure helper', () => {
