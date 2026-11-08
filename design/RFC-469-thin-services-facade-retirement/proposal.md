@@ -1,6 +1,6 @@
 # RFC-469 退役三个薄转出：taskAuthorization、sessionEventSink、taskExecutionCallClosure（RFC-294 W9-D 第十六步）
 
-- **状态**：In Progress（2026-11-07）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-07，落地 `e9fb623f8`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.6 W9-D（facade 清仓：consumer 归零后删除）
 - **前序**：[RFC-454](../RFC-454-services-one-hop-facade-sweep/proposal.md)（一跳转出清扫，留下的转出按真实消费方逐条登记）；

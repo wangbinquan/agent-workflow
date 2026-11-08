@@ -19,7 +19,7 @@
 - [x] AC-1 三个文件不在、零引用；会话 sink 类型的消费方取 runtime-management public；`freezeTaskExecutionCallClosure` 并入 `services/task.ts`
 - [x] AC-2 架构计数按实测（`R1` 71 → 66），越界类计数、public surface 偏差与未被消费的 public 符号不升
 - [x] AC-3 受影响用例与新增用例全部通过
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证（2026-11-07，候选基于 `50e6cb0f9`）
 
@@ -86,6 +86,11 @@
   `freezeCallClosure(`」（多出第二份同样红）；RFC-469 用例的零引用判据用 `preProcessFile`，负对照覆盖空 `import {}`、动态 import 与注释。
 - 账本：`R1` 71 → 66（实测与账本逐条相等，`R2` 0）；public surface 偏差 94、capability 归属清单逐条相等；RFC-349 provider 切换债务销账两条、
   RFC-359 W5 provider 命名文件债务销账一条；guard-manifest 刷新改到的守卫文件行数。
+
+## CI（AC-4）
+
+- `e9fb623f8`：exact SHA 主 CI run 42457010625 首轮全绿（70 个 job），windows-platform run 42457010690、integration-opencode run 42457010702 与 git-protocols-e2e run 42457010626 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件全过（97 pass / 0 fail）。
 
 ## PR / 提交
 

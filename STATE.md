@@ -1,4 +1,4 @@
-## 2026-11-07 RFC-469 退役三个薄转出：taskAuthorization、sessionEventSink、taskExecutionCallClosure（In Progress；`design/RFC-469-thin-services-facade-retirement/`）
+## 2026-11-07 RFC-469 退役三个薄转出：taskAuthorization、sessionEventSink、taskExecutionCallClosure（Done；`design/RFC-469-thin-services-facade-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十六步（facade 清仓）。`services/` 里三个只转手的文件合计 5 条 `R1`：`taskAuthorization.ts` 在生产里只剩
   `services/task.ts` 的一行空导入；`sessionEventSink.ts` 转出 runtime-management 会话事件端口的类型（RFC-454 登记的留下转出）；
@@ -18,6 +18,10 @@
   文件余 3 个文件 5 例，都是用例自带的计时到点（同一时刻在 RFC-468 导出仓库里对照，两边同样到点）；P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 71 → 66、`R2` 0，`services/` 67 → 64，public
   surface 1496 → 1497（runtime-management `public/participants` 转出 `SessionCaptureTerminalState`）、偏差 94 不变，未被消费的 public 符号 322
   不变，越界类计数不变。
+- **落地**：`e9fb623f8`。
+- **CI**：exact SHA 主 CI run 42457010625 首轮全绿（70 个 job），windows-platform run 42457010690、integration-opencode run 42457010702 与 git-protocols-e2e run 42457010626 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 64 个文件；`R2` 0 条；`R1` 66 条）。`R1` 大头：`task`（9）、`developmentDeliveryDeps`（7）、
+  `systemAgentRun`（5）；`services/workflow` / `workflow.validator` 两个转出随消费方归位。
 
 ## 2026-11-07 RFC-468 拆分 nodeRunMint：冻结运行时归 runtime-management、铸行入口归 task-execution（Done；`design/RFC-468-node-run-mint-split/`）
 
