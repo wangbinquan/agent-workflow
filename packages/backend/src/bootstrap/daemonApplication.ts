@@ -408,8 +408,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     repositoryPublicationTransport: input.repositoryPublicationTransport,
     developmentWorkspaceRepositoryPreparation: input.developmentWorkspaceRepositoryPreparation,
   })
-  const { repositoryTransport, codeHostConnections, developmentDeliveryProvider } =
-    repositoryCredentials
+  const { repositoryTransport, codeHostConnections, developmentCodeHost } = repositoryCredentials
   const repositoryTransportRepository = core.repositoryTransportCredentialRepository
   const memoryModules = composeDaemonMemoryModules({
     db: input.db,
@@ -529,7 +528,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     workspaceMaintenance,
     taskExecutions: taskExecutionProvider.trigger.taskExecutions,
     digitalEmployeeWorkStart,
-    developmentDeliveryProvider,
+    developmentCodeHostBinding: developmentCodeHost.binding,
     developmentPurposeRoot,
     adapters: {
       customObserverPrograms: input.customObserverPrograms,

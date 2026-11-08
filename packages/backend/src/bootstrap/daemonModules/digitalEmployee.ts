@@ -40,7 +40,7 @@ import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
 } from '@/modules/source-control/composition'
-import { buildDevelopmentDeliveryDeps } from '@/services/developmentDeliveryDeps'
+import { composeDevelopmentDeliveryDeps } from '@/modules/development-automation/composition/developmentDelivery'
 import {
   ensureDigitalEmployeeAgentTemplates,
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
@@ -117,6 +117,7 @@ export interface DaemonDigitalEmployeeInput {
   readonly repository: Pick<
     DaemonRepositoryCredentials,
     | 'developmentDeliveryProvider'
+    | 'developmentCodeHost'
     | 'repositoryPublicationTransport'
     | 'developmentWorkspaceRepositoryPreparation'
   >
@@ -329,10 +330,12 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     appHome,
     reactionRounds,
     approvalGateway: integration.developmentApprovalGateway,
-    ...buildDevelopmentDeliveryDeps(
-      repository.developmentDeliveryProvider,
-      input.developmentPurposeRoot.pipeline.staging,
-    ),
+    ...composeDevelopmentDeliveryDeps({
+      provider: repository.developmentDeliveryProvider,
+      mrEffects: repository.developmentCodeHost.mrEffects,
+      mrFacts: repository.developmentCodeHost.mrFacts,
+      staging: input.developmentPurposeRoot.pipeline.staging,
+    }),
     conflictMerge,
     graphDelivery: graph.care,
     sourceControl: {

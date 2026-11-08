@@ -7,6 +7,7 @@ import {
   createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
 import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
+import { composeDevelopmentCodeHostDelivery } from '@/modules/integration/composition/codeHostEffects'
 import {
   composeRepositoryTransportCredentials,
   type RepositoryTransportCredentialRepository,
@@ -61,13 +62,20 @@ export function composeDaemonRepositoryCredentials(input: {
   const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
     db: input.db,
     secretBox: input.secretBox,
-    connections: codeHostConnections,
-    // RFC-450: every resolved MR binding sends through integration's code-host requests.
-    requests: codeHostRequests,
     pipeline: composeSelectedPipelineEvidenceRunnerFor(
       input.db,
       input.developmentPurposeRoot.pipeline,
     ),
+  })
+  // RFC-471: integration binds a repository to its code host from the delivery provider's remotes; the
+  // MR effects, raw MR facts and claim keys built on that binding are injected into development automation.
+  const developmentCodeHost = composeDevelopmentCodeHostDelivery({
+    repositories: {
+      resolve: (repositoryId) => developmentDeliveryProvider.resolveRepository(repositoryId),
+    },
+    connections: codeHostConnections,
+    // RFC-450: every resolved MR binding sends through integration's code-host requests.
+    requests: codeHostRequests,
   })
   const developmentWorkspaceRepositoryPreparation = input.developmentWorkspaceRepositoryPreparation(
     {
@@ -84,6 +92,7 @@ export function composeDaemonRepositoryCredentials(input: {
     repositoryEndpointDiscovery,
     repositoryPublicationTransport,
     developmentDeliveryProvider,
+    developmentCodeHost,
     developmentWorkspaceRepositoryPreparation,
   })
 }

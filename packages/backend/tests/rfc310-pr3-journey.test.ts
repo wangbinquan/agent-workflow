@@ -315,7 +315,8 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
     db,
     automation,
     admissionLookup: fx.lookup,
-    deliveryProvider: opened.modules.repository.developmentDeliveryProvider,
+    mrEffects: opened.modules.repository.developmentCodeHost.mrEffects,
+    repositoryClaimKeys: opened.modules.repository.developmentCodeHost.claimKeys,
     legacyAdmissionsEnabled: async () => true,
   })
 }

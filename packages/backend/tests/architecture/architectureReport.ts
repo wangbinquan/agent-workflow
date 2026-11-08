@@ -329,7 +329,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/commitPush.ts': 'source-control',
   'packages/backend/src/services/commitPushRunner.ts': 'source-control',
   'packages/backend/src/services/demoSeed.ts': 'bootstrap',
-  'packages/backend/src/services/developmentDeliveryDeps.ts': 'development-automation',
   'packages/backend/src/services/digitalEmployeeAgentTemplates.ts': 'digital-employee',
   'packages/backend/src/services/driverLease.ts': 'runtime-management',
   'packages/backend/src/services/execution/agentInjection.ts': 'runtime-management',

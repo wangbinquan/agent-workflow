@@ -109,7 +109,7 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     ),
     taskExecutions: taskExecution.trigger.taskExecutions,
     digitalEmployeeWorkStart: { launch: (request) => employee.workStart.launch(request) },
-    developmentDeliveryProvider: repository.developmentDeliveryProvider,
+    developmentCodeHostBinding: repository.developmentCodeHost.binding,
     developmentPurposeRoot,
     adapters: {
       customObserverPrograms: standalone.customObserverPrograms,

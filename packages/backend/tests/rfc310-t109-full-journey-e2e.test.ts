@@ -248,7 +248,7 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
   ;(fx as unknown as Record<string, unknown>).t109PolicyId = policy.id
 
   mrEffects = composeDevelopmentMrEffects({ binding: () => hostBinding() })
-  // 与 buildDevelopmentMrFactsDeps 的生产投影同形（binding 直给以绕开
+  // 与 composeDevelopmentMrFactsCollector（RFC-471 前叫 buildDevelopmentMrFactsDeps）的生产投影同形（binding 直给以绕开
   // secret-keyfile connection 配置）：claim 行 → 真三读 fence 采集打 mock →
   // projectMrCells + threads bodyDigest。生产投影若改形，本测试会红——对拍锁。
   const mergeRequestFacts: MergeRequestFactsCollectorPort = {

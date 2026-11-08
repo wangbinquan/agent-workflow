@@ -1,9 +1,5 @@
-export {
-  composeSelectedDevelopmentPipelineEvidence,
-  composeLegacyDevelopmentPipelineEvidence,
-  type LegacyPipelineEvidencePort,
-} from '../composition/pipelineEvidence'
-
+// RFC-471: the pipeline evidence compositions are no longer public — their only cross-module consumer
+// (`services/developmentDeliveryDeps.ts`) moved into this module's `composition/developmentDelivery.ts`.
 export {
   assertEvidenceStagingFactory,
   assertEvidenceStagingLease,

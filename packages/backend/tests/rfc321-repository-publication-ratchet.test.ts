@@ -384,7 +384,14 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     ]
       .map(read)
       .join('\n')
-    const developmentRest = read('packages/backend/src/services/developmentDeliveryDeps.ts')
+    // RFC-471: `services/developmentDeliveryDeps.ts` is gone — the development half of the delivery bridge is
+    // DA's composition plus its delivery provider; the code-host binding moved into integration's codeHostEffects.
+    const developmentRest = [
+      'packages/backend/src/modules/development-automation/composition/developmentDelivery.ts',
+      'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
+    ]
+      .map(read)
+      .join('\n')
     const integrationRest = read(
       'packages/backend/src/modules/integration/composition/codeHostEffects.ts',
     )
@@ -412,6 +419,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(nodeMechanics).not.toContain('resolveCodeHostConnectionsFromKeyFile')
     expect(developmentRest).not.toContain('resolveCodeHostConnectionsFromKeyFile')
     expect(integrationRest).not.toContain('RepositoryCredentialSubject')
+    expect(integrationRest).not.toContain('resolveCodeHostConnectionsFromKeyFile')
     expect(reconcilerPorts).not.toContain('RepositoryCredentialSubject')
     expect(nodeMechanics).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
     expect(developmentRest).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')

@@ -22,7 +22,6 @@ import {
   canonicalDigest,
   canonicalStringify,
 } from '@/modules/development-automation/domain/canonicalJson'
-import type { DevelopmentDeliveryProvider } from '@/services/developmentDeliveryDeps'
 
 const roots: string[] = []
 const identityRuntimes: ReturnType<typeof createIdentityAccessRuntime>[] = []
@@ -33,12 +32,9 @@ afterEach(async () => {
 const unused = async (): Promise<never> => {
   throw new Error('reading evidence must not dispatch a delivery effect')
 }
-const deliveryProvider: DevelopmentDeliveryProvider = {
-  resolveRepository: unused,
-  resolveBinding: unused,
-  readMrFactTarget: unused,
-  pipeline: { collect: unused, trigger: unused, rerun: unused },
-}
+// RFC-471: mission operations receive the code-host MR effects and claim keys instead of the delivery provider.
+const mrEffects = { ensure: unused, reply: unused, observe: unused }
+const repositoryClaimKeys = { resolve: unused }
 
 describe('RFC-370 selected evidence range policy', () => {
   test('invalid ranges do not call content, and a selected failure is propagated', async () => {
@@ -192,7 +188,8 @@ describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => 
       db: harness.db,
       automation,
       admissionLookup: fx.lookup,
-      deliveryProvider,
+      mrEffects,
+      repositoryClaimKeys,
       legacyAdmissionsEnabled: async () => true,
     })
     const before = await fx.store.getMission(missionId)

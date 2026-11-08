@@ -1,9 +1,11 @@
+// RFC-471: `PipelineStagingFactories` is no longer offered here — its only cross-context consumers were
+// the retired `services/developmentDeliveryDeps.ts` bridge and the removed pipeline-evidence participants;
+// the module's own composition reads it from the port.
 export type {
   EvidenceStagingFactory,
   EvidenceStagingLease,
   EvidenceStagingNamespace,
   EvidenceStagingReference,
-  PipelineStagingFactories,
 } from '../application/ports/evidenceStaging'
 
 // The external-approval subject codec is a real cross-context contract: the

@@ -64,7 +64,7 @@ export function integrationBundleFixture(
       },
     },
     // These tests never execute an external code-host observer.
-    developmentDeliveryProvider: {} as IntegrationInput['developmentDeliveryProvider'],
+    developmentCodeHostBinding: {} as IntegrationInput['developmentCodeHostBinding'],
     // RFC-431: the bundle receives the standalone profile's selections.
     developmentPurposeRoot: composeDevelopmentPurposeRoot({
       selection: standalone.developmentPurposes,

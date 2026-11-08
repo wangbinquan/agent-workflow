@@ -1,84 +1,37 @@
-// RFC-310/RFC-349 — provider-neutral development delivery composition.
-// Database clients, schema objects and query builders live in provider adapters.
+// RFC-471（RFC-294 W9-D）—— 开发交付的组装：由 `services/developmentDeliveryDeps.ts` 迁来，函数体原样，只把
+// 「`provider.resolveBinding` 再调 integration」换成注入的端口——MR effects（`MrEffectsPort`）与 MR 原始事实
+// （`DevelopmentMrFactsSourcePort`），实现是 integration `composition/codeHostEffects.ts` 的组装，按结构满足、装配根注入。
+// MR 事实的 cell 投影、快照摘要（`snapshotRef`）与线程摘要只在这里做。
 
 import type {
   MergeRequestFactsCollectorPort,
+  MrEffectsPort,
   PipelineEvidencePort,
   RepoRemotePort,
-} from '@/modules/development-automation/application/ports/reconcilerPorts'
-import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
-import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
+} from '../application/ports/reconcilerPorts'
+import type { DevelopmentMrFactsSourcePort } from '../application/ports/developmentDelivery'
+import type { PipelineStagingFactories } from '../application/ports/evidenceStaging'
+import { canonicalDigest } from '../domain/canonicalJson'
+import { projectMrCells } from '../domain/mrFacts'
+import type { DevelopmentDeliveryProvider } from '../infrastructure/developmentDeliveryProvider'
+import type { SelectedPipelineEvidenceExecution } from '../composition'
 import {
-  collectMergeRequestFacts,
-  replyMergeRequestThread,
-} from '@/modules/integration/application/mrFacts'
-import {
-  ensureMergeRequest,
-  observeMergeRequest,
-  type MrEnsureConnectionDeps,
-} from '@/modules/integration/application/mrEnsure'
-import type { DevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
-import type {
-  PipelineEvidenceExecution,
-  SelectedPipelineEvidenceExecution,
-} from '@/modules/integration/public/participants'
-import type { PipelineStagingFactories } from '@/modules/development-automation/public/types'
-import {
-  composeSelectedDevelopmentPipelineEvidence,
   composeLegacyDevelopmentPipelineEvidence,
+  composeSelectedDevelopmentPipelineEvidence,
   type LegacyPipelineEvidencePort,
-} from '@/modules/development-automation/public/participants'
+} from './pipelineEvidence'
 import { sha256Hex } from '@/util/hash'
 
-export interface DevelopmentDeliveryProvider {
-  resolveRepository(repositoryId: string): Promise<{
-    readonly remoteUrl: string
-    readonly defaultBranch: string | null
-  } | null>
-  resolveBinding(repositoryId: string): Promise<MrEnsureConnectionDeps | null>
-  readMrFactTarget(input: {
-    readonly missionId: string
-    readonly mrClaimId: string
-  }): Promise<{ readonly repositoryId: string; readonly mrIid: string } | null>
-  readonly pipeline: SelectedPipelineEvidenceExecution
-}
+type PipelineEvidenceExecution = Parameters<typeof composeLegacyDevelopmentPipelineEvidence>[0]
 
-export function createDevelopmentMrEffects(
-  provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
-): DevelopmentMrEffects {
-  const missing = (repositoryId: string) => ({
-    ok: false as const,
-    code: 'code-host-connection-missing',
-    detail: `no code-host binding for repository ${repositoryId}`,
-  })
-  return {
-    async ensure(repositoryId, input) {
-      const binding = await provider.resolveBinding(repositoryId)
-      if (binding === null) return missing(repositoryId)
-      const out = await ensureMergeRequest(binding, input)
-      return out.ok ? { ok: true, mr: out.mr } : out
-    },
-    async reply(repositoryId, input) {
-      const binding = await provider.resolveBinding(repositoryId)
-      if (binding === null) return missing(repositoryId)
-      const out = await replyMergeRequestThread(binding, input)
-      return out.ok ? { ok: true, noteRef: out.noteRef } : out
-    },
-    async observe(repositoryId, mrRef) {
-      const binding = await provider.resolveBinding(repositoryId)
-      if (binding === null) return missing(repositoryId)
-      const out = await observeMergeRequest(binding, mrRef)
-      return out.ok ? { ok: true, observation: out.mr } : out
-    },
-  }
-}
-
-export function buildDevelopmentDeliveryDeps(
-  provider: DevelopmentDeliveryProvider,
-  staging: PipelineStagingFactories,
-): {
+export function composeDevelopmentDeliveryDeps(deps: {
+  readonly provider: DevelopmentDeliveryProvider
+  readonly mrEffects: MrEffectsPort
+  readonly mrFacts: DevelopmentMrFactsSourcePort
+  readonly staging: PipelineStagingFactories
+}): {
   readonly repoRemote: RepoRemotePort
-  readonly mrEffects: DevelopmentMrEffects
+  readonly mrEffects: MrEffectsPort
   readonly pipelineEvidence: PipelineEvidencePort
   readonly mrFacts: {
     collect(
@@ -120,20 +73,14 @@ export function buildDevelopmentDeliveryDeps(
     >
   }
 } {
+  const provider = deps.provider
   const repoRemote: RepoRemotePort = {
     resolve: (repositoryId) => provider.resolveRepository(repositoryId),
   }
   const mrFacts = {
     async collect(repositoryId: string, mrRef: string, selfMarker: string) {
-      const binding = await provider.resolveBinding(repositoryId)
-      if (binding === null) {
-        return {
-          ok: false as const,
-          code: 'code-host-connection-missing',
-          detail: `no code-host binding for repository ${repositoryId}`,
-        }
-      }
-      const result = await collectMergeRequestFacts(binding, mrRef, { selfMarker })
+      // RFC-471: a missing binding is the source's `code-host-connection-missing` (same code, same text).
+      const result = await deps.mrFacts.collect(repositoryId, mrRef, { selfMarker })
       if (!result.ok) return result
       return {
         ok: true as const,
@@ -164,34 +111,18 @@ export function buildDevelopmentDeliveryDeps(
   }
   return {
     repoRemote,
-    mrEffects: createDevelopmentMrEffects(provider),
+    mrEffects: deps.mrEffects,
     mrFacts,
-    pipelineEvidence: buildDevelopmentPipelineDeps(provider.pipeline, staging).pipelineEvidence,
+    pipelineEvidence: composeDevelopmentPipelineDeps(provider.pipeline, deps.staging)
+      .pipelineEvidence,
   }
 }
 
-export async function resolveRepoClaimKey(
-  provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
-  repositoryId: string,
-): Promise<{ readonly codeHostEndpointRef: string; readonly stableProjectRef: string } | null> {
-  const binding = await provider.resolveBinding(repositoryId)
-  if (binding === null) return null
-  return {
-    codeHostEndpointRef: binding.provider,
-    stableProjectRef: decodeURIComponent(binding.project),
-  }
-}
-
-export async function resolveDevelopmentRepoBinding(
-  provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
-  repositoryId: string,
-): Promise<MrEnsureConnectionDeps | null> {
-  return await provider.resolveBinding(repositoryId)
-}
-
-export function buildDevelopmentMrFactsDeps(
-  provider: Pick<DevelopmentDeliveryProvider, 'readMrFactTarget' | 'resolveBinding'>,
-): { readonly mergeRequestFacts: MergeRequestFactsCollectorPort } {
+export function composeDevelopmentMrFactsCollector(deps: {
+  readonly provider: Pick<DevelopmentDeliveryProvider, 'readMrFactTarget'>
+  readonly mrFacts: DevelopmentMrFactsSourcePort
+}): { readonly mergeRequestFacts: MergeRequestFactsCollectorPort } {
+  const provider = deps.provider
   return {
     mergeRequestFacts: {
       async collect(input) {
@@ -203,14 +134,16 @@ export function buildDevelopmentMrFactsDeps(
           mrClaimId: input.mrClaimId,
         })
         if (target === null) throw new Error(`mr claim ${input.mrClaimId} or mission not found`)
-        const binding = await provider.resolveBinding(target.repositoryId)
-        if (binding === null) {
-          throw new Error(`no code-host binding for repository ${target.repositoryId}`)
-        }
-        const out = await collectMergeRequestFacts(binding, target.mrIid, {
+        const out = await deps.mrFacts.collect(target.repositoryId, target.mrIid, {
           selfMarker: input.missionId,
         })
-        if (!out.ok) throw new Error(`mr facts collect failed: ${out.code}: ${out.detail}`)
+        if (!out.ok) {
+          // RFC-471: the binding is resolved by the source; its missing-binding code keeps the original text.
+          if (out.code === 'code-host-connection-missing') {
+            throw new Error(`no code-host binding for repository ${target.repositoryId}`)
+          }
+          throw new Error(`mr facts collect failed: ${out.code}: ${out.detail}`)
+        }
         const snapshot = out.snapshot
         const snapshotRef = canonicalDigest(snapshot)
         const now = Date.now()
@@ -238,16 +171,16 @@ export function buildDevelopmentMrFactsDeps(
 }
 
 /** Explicit legacy bridge; actual roots pass a complete neutral staging selection. */
-export function buildDevelopmentPipelineDeps(runner: PipelineEvidenceExecution): {
+export function composeDevelopmentPipelineDeps(runner: PipelineEvidenceExecution): {
   readonly pipelineEvidence: LegacyPipelineEvidencePort
 }
-export function buildDevelopmentPipelineDeps(
+export function composeDevelopmentPipelineDeps(
   runner: SelectedPipelineEvidenceExecution,
   staging: PipelineStagingFactories,
 ): {
   readonly pipelineEvidence: PipelineEvidencePort
 }
-export function buildDevelopmentPipelineDeps(
+export function composeDevelopmentPipelineDeps(
   runner: PipelineEvidenceExecution | SelectedPipelineEvidenceExecution,
   staging?: PipelineStagingFactories,
 ): { readonly pipelineEvidence: LegacyPipelineEvidencePort | PipelineEvidencePort } {

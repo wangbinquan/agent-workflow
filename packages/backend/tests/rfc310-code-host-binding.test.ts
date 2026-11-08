@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { matchRepoProvider } from '@/modules/development-automation/domain/repositoryProviderMatch'
+// RFC-471: matchRepoProvider follows its only production caller (the code-host binding) back to integration.
+import { matchRepoProvider } from '@/modules/integration/domain/repositoryProviderMatch'
 
 const LOCAL_GITLAB = {
   provider: 'gitlab' as const,

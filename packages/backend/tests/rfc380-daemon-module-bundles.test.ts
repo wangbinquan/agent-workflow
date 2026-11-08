@@ -189,6 +189,8 @@ describeEachProvider('RFC-380 passive module bundles', (harness) => {
             'digitalEmployeeAgentTemplates',
           ].sort(),
         )
+        // RFC-471: the bundle also carries integration's development code-host assembly
+        // (binding, MR effects, raw MR facts, claim keys) that DA and the event observer consume.
         expect(Object.keys(session.repositoryCredentials).sort()).toEqual(
           [
             'repositoryWorkspaceStore',
@@ -198,6 +200,7 @@ describeEachProvider('RFC-380 passive module bundles', (harness) => {
             'repositoryEndpointDiscovery',
             'repositoryPublicationTransport',
             'developmentDeliveryProvider',
+            'developmentCodeHost',
             'developmentWorkspaceRepositoryPreparation',
           ].sort(),
         )

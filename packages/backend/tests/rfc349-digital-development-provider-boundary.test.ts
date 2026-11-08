@@ -48,8 +48,15 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
       ...['developmentConfig.ts', 'developmentMissions.ts', 'missionInputUploads.ts'].map((name) =>
         join(BACKEND, 'src', 'routes', name),
       ),
-      ...['developmentDeliveryDeps.ts', 'digitalEmployeeAgentTemplates.ts'].map((name) =>
-        join(BACKEND, 'src', 'services', name),
+      ...['digitalEmployeeAgentTemplates.ts'].map((name) => join(BACKEND, 'src', 'services', name)),
+      // RFC-471: the delivery bridge left `services/developmentDeliveryDeps.ts` for this composition file.
+      join(
+        BACKEND,
+        'src',
+        'modules',
+        'development-automation',
+        'composition',
+        'developmentDelivery.ts',
       ),
     ]
     expect(candidates.length).toBeGreaterThanOrEqual(10)

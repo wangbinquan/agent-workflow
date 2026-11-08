@@ -5,7 +5,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 /**
  * Test-only adapter for fixtures whose "cached repository" is an intentionally
  * local, already-prepared Git directory. Production composition must use the
- * credential-aware fetch adapter from developmentDeliveryDeps.
+ * credential-aware fetch adapter (source-control `developmentWorkspaceRepositoryPreparation`; RFC-451 moved it
+ * out of the now-deleted `services/developmentDeliveryDeps`).
  */
 export function staticCachedRepositoryPreparation(db: PersistenceDb): {
   readonly prepare: (input: { readonly repositoryId: string }) => Promise<{

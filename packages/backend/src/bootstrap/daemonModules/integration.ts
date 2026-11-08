@@ -38,7 +38,6 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
-import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import {
   createWebhookDispatcher,
   supportsEventCenterCodeHostDelivery,
@@ -80,7 +79,10 @@ export function composeDaemonIntegrationModules(input: {
   readonly digitalEmployeeWorkStart: Parameters<
     typeof createWebhookDispatchExecutionRuntime
   >[0]['digitalEmployeeWorkStart']
-  readonly developmentDeliveryProvider: Parameters<typeof resolveDevelopmentRepoBinding>[0]
+  /** RFC-471: the repository → code-host binding integration composed for development delivery. */
+  readonly developmentCodeHostBinding: Parameters<
+    typeof composeDevelopmentCodeHostEventObserver
+  >[0]['binding']
   readonly developmentPurposeRoot: {
     readonly approval: Parameters<typeof composeSelectedApprovalGatewayRunnerFor>[1]
   }
@@ -171,8 +173,7 @@ export function composeDaemonIntegrationModules(input: {
       ],
       observer: composeDevelopmentEmployeeEventObserver({
         codeHost: composeDevelopmentCodeHostEventObserver({
-          binding: (repositoryId) =>
-            resolveDevelopmentRepoBinding(input.developmentDeliveryProvider, repositoryId),
+          binding: input.developmentCodeHostBinding,
         }),
         approval: composeDevelopmentApprovalEventObserver({
           gateway: developmentApprovalGateway,

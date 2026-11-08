@@ -97,7 +97,7 @@ import type {
 } from '@/modules/integration/public/participants'
 // RFC-392: the purpose boundary also owns the existing selected pipeline contract import.
 export type { SelectedPipelineEvidenceExecution }
-import type { PipelineStagingFactories } from './public/types'
+import type { PipelineStagingFactories } from './application/ports/evidenceStaging'
 import {
   createActionBaselineResolver,
   createRepositoryLocationRead,

@@ -331,7 +331,9 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/collaboration/infrastructure/taskDeletionParticipant.ts#createTaskDeletionCollaborationParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/development-automation/composition/pipelineEvidence.ts#composeSelectedDevelopmentPipelineEvidence: unsafe/open type ObjectKeyword',
+  // RFC-471: composeSelectedDevelopmentPipelineEvidence is no longer public (its only consumer moved into the module); the
+  // same open `object` field of the evidence staging namespace is now first reached through assertEvidenceStagingFactory.
+  'modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingFactory: unsafe/open type ObjectKeyword',
   'modules/identity-access/public/participants.ts#HttpAuthenticationParticipant: unsafe/open type FunctionType',
   'modules/identity-access/public/participants.ts#WebSocketAuthenticationParticipant: unsafe/open type FunctionType',
   'modules/identity-access/public/participants.ts#WebSocketCredential: unsafe/open type ObjectKeyword',

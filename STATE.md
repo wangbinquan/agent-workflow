@@ -1,3 +1,30 @@
+## 2026-11-08 RFC-471 开发交付的代码托管桥归 integration：services/developmentDeliveryDeps 退役（In Progress；`design/RFC-471-development-delivery-code-host-bridge/`）
+
+- **来由**：RFC-294 W9-D 第十八步（`services/` 业务实现按 owner 归位）。`services/developmentDeliveryDeps.ts` 是开发交付的代码托管桥，取
+  development-automation（DA）与 integration 各三个内部文件（7 条 `R1`）；DA 的 mission 操作与交付 provider 从它取 MR effects 与 integration 的
+  绑定类型——DA 经 `services/` 绕到 integration 内部，而目标 DAG 上是 integration 实现 DA 的开发效果 SPI。MR effects 有两份实现（生产走本文件、
+  4 个 e2e 走 integration composition）。RFC-450 把本文件记为留下的债。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
+  不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：integration 组装仓库 → 代码托管绑定（`matchRepoProvider` 随调用方从 DA domain 迁回）、MR effects（合一份，绑定可异步）、MR 原始事实
+  与认领键；DA 自有端口按结构消费，三个组装函数迁入 DA composition（投影、快照摘要与错误文案逐字不变），mission 操作改收端口，交付 provider
+  去掉绑定；装配根接线；本文件删除。
+- **不做**：DA 现有的三个 off-DAG offered 文件对（取 integration public 的 pipeline 执行与适配器绑定类型）；`services/repoCredentials.ts`；
+  `services/task.ts`、`services/runtime/**`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。`matchRepoProvider` 的放置与 RFC-399 A2 相反（回 integration），理由见
+  proposal §6.1。
+- **附带**：RFC-470 的 Done 文档提交 `dacdc3f96`（只改 5 个文档文件）：exact SHA 主 CI run 42480858762 有一格红——Backend tests
+  （ubuntu-latest shard 40/44）的 `rfc398-postgresql-provisioning`「same-environment automatic retry > verification rollback → repair →
+  --retry allocates fresh target and scratch and boots」：用例 helper（`tests/helpers/rfc398AutoUpgrade.ts:142`）轮询读 JSON 时读到半写的
+  文件（`JSON Parse error: Unexpected EOF`，88.9 s），「CI required」汇总格随之红，其余 68 个 job 全绿。父提交 `1a73472b7` 的主 CI run
+  42476792248 同一分片、同一用例通过（108.98 s），两者只差这 5 个文档文件：判为与提交内容无关的时序性偶发红，用例属 RFC-398，未改、
+  未重跑，如实记录；后继提交的 CI 会再跑这一格。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的两处问题，均已修复并复验：DA public 转出的三个 pipeline 证据组装与 `PipelineStagingFactories`
+  在本文件删除后无人消费（四个都不再转出，加 AST 锁）；`tests/rfc380-daemon-module-bundles` 的 bundle 键名单漏补 `developmentCodeHost`。backend
+  tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片全部跑完（分片时限 3 小时），合计 23540 pass，其余为负载超时、导出仓库所致的
+  `rfc321` 与上面第二处；复跑 177 个文件，余导出所致的 `rfc321` 与 RFC-167 `approve`、`rfc363` 目录分页各一例（同一时刻在 RFC-470 导出仓库里对照，两边同一例到点）；PostgreSQL 30 秒时限复跑 246 个能到引擎选择的文件，余 6 个文件 11 例，都是用例自带的计时到点或负载下的先后断言（同一时刻在 RFC-470 导出仓库里逐个对照，每一对结果相同）；修复改动的闭包多出的
+  30 个用例两引擎补跑全过；P0 两引擎各 17 阶段通过；system-mocks 30 秒时限 111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：
+  `R1` 64 → 57、`R2` 0，`services/` 61 → 60，public surface 1497 → 1493，偏差 94、未被消费的 public 符号 322 不变，越界类计数不变。
+
 ## 2026-11-07 RFC-470 退役最后两个薄转出 workflow / workflow.validator 与 taskLaunchGate：任务启动资源适配器归 resource-catalog（Done；`design/RFC-470-workflow-facades-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十七步（facade 清仓）。`legacy-thin-facades` 只剩 RFC-345 的 `services/workflow.ts` / `services/workflow.validator.ts`

@@ -33,7 +33,8 @@ import { createCutoverStore } from '../infrastructure/cutoverStore'
 import { createMissionInputUploadPersistence } from '../infrastructure/missionInputUploadPersistence'
 import { createMissionPersistence } from '../infrastructure/missionStore'
 import type { MissionInputUploadPersistence } from '../application/missionInputUploadOperations'
-import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
+import type { FactSnapshotReader, MrEffectsPort } from '../application/ports/reconcilerPorts'
+import type { RepositoryCodeHostClaimKeysPort } from '../application/ports/developmentDelivery'
 import type { MissionPersistence } from '../application/ports/missionStore'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
 import type {
@@ -46,11 +47,6 @@ import type {
   DevelopmentMissionListInput,
   DevelopmentMissionOperations,
 } from '../public/operations'
-import {
-  createDevelopmentMrEffects,
-  resolveRepoClaimKey,
-  type DevelopmentDeliveryProvider,
-} from '@/services/developmentDeliveryDeps'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -103,7 +99,9 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
 
 export interface DevelopmentMissionOperationCompositionOptions {
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
-  readonly deliveryProvider: DevelopmentDeliveryProvider
+  /** RFC-471: integration's MR effects and claim keys, injected by assembly (DA-owned ports, structurally satisfied). */
+  readonly mrEffects: MrEffectsPort
+  readonly repositoryClaimKeys: RepositoryCodeHostClaimKeysPort
   readonly admissionLookup: AdmissionLookup
   /** Bootstrap-owned daemon participant shared by REST, MCP and recovery. */
   readonly automation: DevelopmentAutomationModule
@@ -216,7 +214,7 @@ function composeDevelopmentMissionOperationsFromPersistence(
     mintId: () => ulid(),
   }
   const adoptPorts = {
-    mrEffects: createDevelopmentMrEffects(deps.deliveryProvider),
+    mrEffects: deps.mrEffects,
   }
 
   const operations: DevelopmentMissionOperations = {
@@ -668,7 +666,7 @@ function composeDevelopmentMissionOperationsFromPersistence(
           .strict(),
         raw,
       )
-      const claimKey = await resolveRepoClaimKey(deps.deliveryProvider, body.repositoryId)
+      const claimKey = await deps.repositoryClaimKeys.resolve(body.repositoryId)
       if (claimKey === null) {
         throw new ValidationError(
           'cutover-repo-binding-missing',

@@ -107,6 +107,8 @@ const FACTORIES = new Set([
   'createRepositoryEndpointDiscovery',
   'createRepositoryPublicationTransport',
   'createDevelopmentDeliveryProvider',
+  // RFC-471: the code-host side of development delivery is a member of the repository credentials bundle.
+  'composeDevelopmentCodeHostDelivery',
   'composeSelectedPipelineEvidenceRunnerFor',
   'createDevelopmentWorkspaceRepositoryPreparation',
   'composeResourceCatalogFor',

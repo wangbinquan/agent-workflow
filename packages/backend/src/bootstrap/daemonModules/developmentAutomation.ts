@@ -16,10 +16,10 @@ import {
   bindConflictMergeParticipant,
 } from '@/modules/source-control/composition'
 import {
-  buildDevelopmentDeliveryDeps,
-  buildDevelopmentPipelineDeps,
-  buildDevelopmentMrFactsDeps,
-} from '@/services/developmentDeliveryDeps'
+  composeDevelopmentDeliveryDeps,
+  composeDevelopmentMrFactsCollector,
+  composeDevelopmentPipelineDeps,
+} from '@/modules/development-automation/composition/developmentDelivery'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -42,7 +42,7 @@ export interface DaemonDevelopmentAutomationInput {
   readonly workspaceEffects: ReturnType<typeof selectDevelopmentWorkspaceEffectBinding>
   readonly repository: Pick<
     DaemonRepositoryCredentials,
-    'developmentDeliveryProvider' | 'repositoryPublicationTransport'
+    'developmentDeliveryProvider' | 'developmentCodeHost' | 'repositoryPublicationTransport'
   >
   readonly integration: Pick<DaemonIntegrationModules, 'developmentApprovalGateway'>
   readonly hostTasks: DaemonTaskExecutionModules['hostTasks']
@@ -115,15 +115,20 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
       publicationTransport: repository.repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: conflictMergeEffects }),
-    ...buildDevelopmentDeliveryDeps(
-      repository.developmentDeliveryProvider,
-      developmentPurposeRoot.pipeline.staging,
-    ),
-    ...buildDevelopmentPipelineDeps(
+    ...composeDevelopmentDeliveryDeps({
+      provider: repository.developmentDeliveryProvider,
+      mrEffects: repository.developmentCodeHost.mrEffects,
+      mrFacts: repository.developmentCodeHost.mrFacts,
+      staging: developmentPurposeRoot.pipeline.staging,
+    }),
+    ...composeDevelopmentPipelineDeps(
       repository.developmentDeliveryProvider.pipeline,
       developmentPurposeRoot.pipeline.staging,
     ),
-    ...buildDevelopmentMrFactsDeps(repository.developmentDeliveryProvider),
+    ...composeDevelopmentMrFactsCollector({
+      provider: repository.developmentDeliveryProvider,
+      mrFacts: repository.developmentCodeHost.mrFacts,
+    }),
     approvalGateway: integration.developmentApprovalGateway,
     agentLauncher: composeAgentActionExecution({
       ...hostTasks,
@@ -145,7 +150,8 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
   const missionOperations = composeDevelopmentMissionOperations({
     repositoryBaselines: input.repositoryBaselines,
     db,
-    deliveryProvider: repository.developmentDeliveryProvider,
+    mrEffects: repository.developmentCodeHost.mrEffects,
+    repositoryClaimKeys: repository.developmentCodeHost.claimKeys,
     admissionLookup,
     automation,
     legacyAdmissionsEnabled: createLegacyMissionAdmissionsEnabledQuery(writerCutover),

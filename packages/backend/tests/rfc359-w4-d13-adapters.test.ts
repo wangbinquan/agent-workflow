@@ -19,6 +19,7 @@ import { createMissionPersistence } from '@/modules/development-automation/infra
 import { createPlaybookSagaPersistence } from '@/modules/development-automation/infrastructure/playbookSagaStore'
 import type { CodeHostConnectionsService } from '@/modules/integration/application/ports/codeHostConnections'
 import { codeHostRequests } from '@/modules/integration/composition'
+import { composeDevelopmentCodeHostBinding } from '@/modules/integration/composition/codeHostEffects'
 import { rememberVolatileRepoUrl, sealRepoUrl } from '@/services/repoCredentials'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -323,9 +324,13 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
     const provider = createDevelopmentDeliveryProvider({
       db: harness.db,
       secretBox: box,
+      pipeline: {} as SelectedPipelineEvidenceExecution,
+    })
+    // RFC-471: the code-host binding moved to integration; it reads the repository remote through this provider.
+    const binding = composeDevelopmentCodeHostBinding({
+      repositories: { resolve: (repositoryId) => provider.resolveRepository(repositoryId) },
       connections: { resolve: async () => null } as unknown as CodeHostConnectionsService,
       requests: codeHostRequests,
-      pipeline: {} as SelectedPipelineEvidenceExecution,
     })
     expect(await provider.resolveRepository('missing')).toBeNull()
     const bare = await seedRepo(harness.db)
@@ -344,7 +349,7 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
       defaultBranch: 'main',
     })
     // 没有匹配的代码托管连接 → 绑定为 null（目录能解析 URL 不等于能交付）。
-    expect(await provider.resolveBinding(sealed)).toBeNull()
+    expect(await binding(sealed)).toBeNull()
 
     const missionId = await newMission(harness.db, { repositoryId: sealed })
     await createMissionPersistence(harness.db).claimMr({
