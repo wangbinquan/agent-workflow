@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ScriptNodeSchema } from '@agent-workflow/shared'
-import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
+import {
+  actorOfDirectAuthority,
+  admitDaemonIdentity,
+} from '@/modules/identity-access/composition/authentication'
 import {
   GraphEmployeeContextSchema,
   graphEmployeeRuntimeCodec,

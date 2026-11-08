@@ -2035,7 +2035,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc305-architecture-lock.test.ts",
       "id": "rfc305-architecture-lock",
-      "lines": 947,
+      "lines": 949,
       "mechanism": "ast",
       "minCorpusFiles": 900,
       "negativeFixture": true,

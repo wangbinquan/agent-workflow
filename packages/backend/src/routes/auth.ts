@@ -14,9 +14,6 @@ import {
   type UserIdentity,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
-// RFC-285 B4：本文件原有一份同名 extractRawToken 私有副本（第二读点，含
-// ?token= query 支持）——收编进 auth/session 的共享 REST 入口，query 面退役。
-import { extractBearerToken } from '@/auth/session'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
 import { hashAuthToken, type AuthRuntime } from '@/auth/application/authRuntime'
 import { assertMatrixGrantable, PatMatrixError } from '@/auth/application/patPolicy'
@@ -36,7 +33,9 @@ import type {
   DirectCommandContextFactory,
 } from '@/modules/identity-access/public/participants'
 import type { GetUserProfile } from '@/modules/identity-access/public/queries'
-import { UserAccessError } from '@/modules/identity-access/public/types'
+// RFC-285 B4：本文件原有一份同名 extractRawToken 私有副本（第二读点，含 ?token= query 支持），已收编进共享的
+// REST 入口、query 面退役；RFC-472 起这个唯一的 Bearer 读点由 identity-access 的 public 提供。
+import { parseLocalBearerHeader, UserAccessError } from '@/modules/identity-access/public/types'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 interface AuthRouteIdentityAccess {
@@ -204,7 +203,7 @@ export function mountAuthRoutes(
       summary: 'Log out the current session',
     },
     async (c) => {
-      const token = extractBearerToken(c)
+      const token = parseLocalBearerHeader(c.req.header('Authorization'))
       if (token && token.startsWith(SESSION_TOKEN_PREFIX)) {
         const resolved = await auth.lookupActiveSessionByHash(hashAuthToken(token), Date.now(), {
           touch: false,
@@ -313,7 +312,7 @@ export function mountAuthRoutes(
       })
 
       // Revoke every other session for this user; keep the current one.
-      const currentToken = extractBearerToken(c)
+      const currentToken = parseLocalBearerHeader(c.req.header('Authorization'))
       const currentHash = currentToken ? hashAuthToken(currentToken) : null
       await auth.revokeAllSessionsForUser(actor.user.id)
       if (currentHash) {

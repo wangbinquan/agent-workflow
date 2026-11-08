@@ -21,7 +21,7 @@ import { resolve } from 'node:path'
 import { readFileSync, readdirSync } from 'node:fs'
 import { createLogger } from '../src/util/log'
 import { createSession, revokeSession } from './helpers/auth/sessionStore'
-import { describeCredential } from '../src/auth/session'
+import { describeCredential } from '@/modules/identity-access/composition/authentication'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createUser, disableUser, patchUser } from './helpers/userFixture'
 

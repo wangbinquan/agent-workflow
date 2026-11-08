@@ -1,6 +1,7 @@
-// RFC-036 — Actor type + helpers. Resolved by auth/session.ts multiAuth and
-// stored on the Hono context via `c.set('actor', actor)`. Services / route
-// handlers call actorOf(c) to access the current identity.
+// RFC-036 — Actor type + helpers. Resolved by the HTTP authentication
+// middleware (identity-access `inbound/http/authentication.ts` over the selected
+// credential adapter) and stored on the Hono context via `c.set('actor', actor)`.
+// Services / route handlers call actorOf(c) to access the current identity.
 
 import type { Context } from 'hono'
 import {

@@ -20,7 +20,9 @@ type TestDirectCredential =
 
 /** Test-only adapter for exercising a runtime after the credential store has
  * been replaced by a fixture.  Production admitted credentials are minted
- * only in auth/session.ts after its real credential lookup succeeds. */
+ * only in identity-access's local credential admission
+ * (`infrastructure/local/localCredentialAdmission.ts`) after its real
+ * credential lookup succeeds. */
 export function admitTestDirectAuthority(
   admission: DirectAuthorityAdmission,
   credential: TestDirectCredential,

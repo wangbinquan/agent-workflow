@@ -60,7 +60,7 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { actorOfDirectAuthority } from '@/auth/session'
+import { actorOfDirectAuthority } from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'

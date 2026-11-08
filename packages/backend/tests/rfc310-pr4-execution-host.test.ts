@@ -24,7 +24,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import type { Actor } from '@/auth/actor'
-import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
+import {
+  actorOfDirectAuthority,
+  admitDaemonIdentity,
+} from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'

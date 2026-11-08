@@ -1,15 +1,13 @@
 // RFC-370: bootstrap selects credential adapters; inbound middleware only
-// consumes the public authentication query. Compatibility exports keep legacy
-// local credential consumers on the same implementation during their cutover.
+// consumes the public authentication query. RFC-472: the legacy `auth/session`
+// facade is retired — the admission exports below serve bootstrap (daemon
+// identity, durable-work owner re-admission) and the credential test fixtures.
 export {
   createCrewStationSourceTokenVerifier as composeCrewStationSourceTokenVerifier,
   crewStationPlatformSourceAudiences,
 } from '../infrastructure/crewstation/crewStationSourceToken'
 export { createCrewStationRecoveryRequester as composeCrewStationRecoveryRequester } from '../infrastructure/crewstation/crewStationRecoveryRequester'
-export {
-  createLocalHttpAuthentication as composeLocalHttpAuthentication,
-  parseLocalBearerHeader,
-} from '../infrastructure/local/httpAuthentication'
+export { createLocalHttpAuthentication as composeLocalHttpAuthentication } from '../infrastructure/local/httpAuthentication'
 export { createHttpAuthenticationMiddleware as composeHttpAuthenticationMiddleware } from '../inbound/http/authentication'
 export {
   admitDaemonIdentity,
@@ -18,18 +16,10 @@ export {
   describeCredential,
   resolveActor,
   resolveActorWithWsCredential,
-  resolveIdentity,
-  reresolveActor,
-  reresolveIdentity,
   type DirectAuthorityAdmissionRuntime,
-  type ResolvedUpgradeIdentity,
-  type WsCredentialFingerprint,
   type WsCredentialWithExpiry,
 } from '../infrastructure/local/localCredentialAdmission'
-export {
-  createLocalWebSocketAuthentication as composeLocalWebSocketAuthentication,
-  extractUpgradeToken,
-} from '../infrastructure/local/webSocketAuthentication'
+export { createLocalWebSocketAuthentication as composeLocalWebSocketAuthentication } from '../infrastructure/local/webSocketAuthentication'
 
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -38,7 +28,11 @@ import type {
   WebSocketAuthenticationParticipant,
 } from '../public/participants'
 import { createLocalHttpAuthentication } from '../infrastructure/local/httpAuthentication'
-import type { DirectAuthorityAdmissionRuntime } from '../infrastructure/local/localCredentialAdmission'
+import {
+  actorOfDirectAuthority,
+  admitDurableWorkOwner,
+  type DirectAuthorityAdmissionRuntime,
+} from '../infrastructure/local/localCredentialAdmission'
 import { createLocalWebSocketAuthentication } from '../infrastructure/local/webSocketAuthentication'
 import { createCrewStationCredentialAdapters } from '../infrastructure/crewstation/crewStationAuthentication'
 import {
@@ -103,4 +97,17 @@ export function composeCrewStationCredentialAdapters(input: {
       identityAccess: deps.identityAccess,
       administratorSubjects,
     })
+}
+
+/** RFC-472 — re-admission of a durable-work owner, in the shape a consumer-owned port receives (intent's
+ * `IntentOwnerAdmissionPort`, satisfied structurally and wired by bootstrap). The owner's registered actor —
+ * the projection the authority registry itself minted, which `authorityForLegacyProjection` resolves back —
+ * or null for a disabled or deleted account, whose work the caller skips. */
+export function composeDurableWorkOwnerAdmission(identityAccess: DirectAuthorityAdmissionRuntime) {
+  return Object.freeze({
+    async admitOwner(ownerUserId: string) {
+      const admitted = await admitDurableWorkOwner(identityAccess, ownerUserId)
+      return admitted === null ? null : actorOfDirectAuthority(admitted)
+    },
+  })
 }

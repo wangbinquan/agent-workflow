@@ -4,6 +4,7 @@ import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 import { createInFlightCoalescer } from '@/util/inFlight'
 import type { DirectAuthorityIdentity } from '../../public/participants'
 import type { HttpAuthenticationParticipant } from '../../public/participants'
+import { parseLocalBearerHeader } from '../../domain/localBearerCredential'
 import { resolveIdentity, type DirectAuthorityAdmissionRuntime } from './localCredentialAdmission'
 
 export interface LocalHttpAuthenticationDependencies {
@@ -81,12 +82,4 @@ export function createLocalHttpAuthentication(
       return { kind: 'authenticated', identity } as const
     },
   } satisfies HttpAuthenticationParticipant)
-}
-
-/** Standalone HTTP credential syntax, also used by the legacy Hono facade. */
-export function parseLocalBearerHeader(header: string | null | undefined): string | null {
-  if (!header) return null
-  const match = header.match(/^Bearer\s+(\S+)\s*$/i)
-  if (!match || !match[1]) return null
-  return match[1]
 }

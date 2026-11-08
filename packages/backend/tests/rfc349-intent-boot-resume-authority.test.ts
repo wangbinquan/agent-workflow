@@ -22,7 +22,10 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { admitDurableWorkOwner } from '../src/auth/session'
+import {
+  admitDurableWorkOwner,
+  composeDurableWorkOwnerAdmission,
+} from '@/modules/identity-access/composition/authentication'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -247,7 +250,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
     const resumed = await resumeQueuedIntentWorkingSets({
       persistence,
       events: { publish: (event) => published.push(event) },
-      identityAccess,
+      ownerAdmission: composeDurableWorkOwnerAdmission(identityAccess),
       appHome: '/tmp',
       configSnapshot: DEFAULT_CONFIG,
       runtimeResolver: composeIntentTurnRuntimeResolver(persistence),
@@ -295,7 +298,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
     await resumeQueuedIntentWorkingSets({
       persistence: createIntentPersistence(db),
       events: { publish: () => {} },
-      identityAccess,
+      ownerAdmission: composeDurableWorkOwnerAdmission(identityAccess),
       appHome: '/tmp',
       configSnapshot: DEFAULT_CONFIG,
       runtimeResolver: composeIntentTurnRuntimeResolver(persistence),

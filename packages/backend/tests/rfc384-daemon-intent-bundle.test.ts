@@ -13,7 +13,11 @@ import { Hono, type Context } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_CONFIG, canonicalIntentJson, type Config } from '@agent-workflow/shared'
-import { admitDurableWorkOwner, actorOfDirectAuthority } from '@/auth/session'
+import {
+  admitDurableWorkOwner,
+  actorOfDirectAuthority,
+  composeDurableWorkOwnerAdmission,
+} from '@/modules/identity-access/composition/authentication'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import {
   composeDaemonIntentModules,
@@ -115,6 +119,7 @@ function fixture(harness: ProviderDatabaseHarness) {
     },
     log: { warn: (message, fields) => errors.push({ message, fields }) },
     core: f.core.identityAccess,
+    ownerAdmission: composeDurableWorkOwnerAdmission(f.core.identityAccess),
     resources: f.tasks.resourceCatalog,
     observation: { intentSystemAgentBinding: worker, intentHttpSystemAgentBinding: http },
     digitalEmployee: f.employee,
@@ -258,7 +263,9 @@ describeEachProvider('RFC-384 intent bundle', (harness) => {
       expect(bundle.dispatch.graphValidation).toBe(bundle.graphValidation)
       expect(bundle.routes.intentTurnRuntime.dumpAuxiliary).toBe(bundle.dumpAuxiliary)
       expect(bundle.dispatch.dumpAuxiliary).toBe(bundle.dumpAuxiliary)
-      expect(Object.keys(bundle.routes.identityAccess)).toEqual(['directAuthority'])
+      // RFC-472: worker and HTTP families share identity-access's structural owner admission.
+      expect(bundle.routes.ownerAdmission).toBe(bundle.dispatch.ownerAdmission)
+      expect(Object.keys(bundle.routes.ownerAdmission)).toEqual(['admitOwner'])
       expect(bundle.dispatch.systemAgents).not.toBe(bundle.routes.intentTurnRuntime.systemAgents)
       expect(composeDaemonIntentModules(f.input).applyOperations).not.toBe(bundle.applyOperations)
     } finally {

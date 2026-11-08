@@ -1,9 +1,11 @@
 // RFC-383: preserve caller-specific admission errors while replacing PG's boot-time actor holder.
+// RFC-472: the daemon core takes admission from the identity-access composition (the `auth/session`
+// facade is retired), so the spy replaces that module's export.
 import { expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as session from '@/auth/session'
+import * as authentication from '@/modules/identity-access/composition/authentication'
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { bootDeclaration } from './helpers/daemonProgramSource'
@@ -13,7 +15,7 @@ describeEachProvider('RFC-383 per-call daemon admission', (harness) => {
     try {
       const f = employeeAutomationFixture(harness, appHome)
       const formerHolder = await f.core.daemonActor('daemon-system-identity-unavailable')
-      const admission = spyOn(session, 'admitDaemonIdentity').mockResolvedValue(null)
+      const admission = spyOn(authentication, 'admitDaemonIdentity').mockResolvedValue(null)
       try {
         expect(formerHolder.user.id).toBe('__system__')
         await expect(

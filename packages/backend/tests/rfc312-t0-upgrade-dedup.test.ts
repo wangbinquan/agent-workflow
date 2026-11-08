@@ -20,7 +20,7 @@ import { randomBytes } from 'node:crypto'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createSession } from './helpers/auth/sessionStore'
-import { resolveActorWithWsCredential } from '../src/auth/session'
+import { resolveActorWithWsCredential } from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 

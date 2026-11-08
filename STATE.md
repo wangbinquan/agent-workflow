@@ -1,3 +1,30 @@
+## 2026-11-08 RFC-472 退役 identity-access 的兼容转出 auth/session：intent 的属主重新准入改走自有端口（In Progress；`design/RFC-472-auth-session-facade-retirement/`）
+
+- **来由**：RFC-294 W9-D 第十九步（legacy 兼容转出清仓）。`src/auth/session.ts` 是 RFC-370 留下的 identity-access 兼容转出（取 identity-access
+  composition，4 条 `R1`），生产调用方三个：装配根的守护进程准入、intent dispatcher 启动恢复时的属主重新准入（目标 DAG 上 intent 对
+  identity-access 只有类型依赖，这是一条经 legacy 文件藏起来的值依赖）与 `routes/auth.ts` 登出 / 改密码的 Bearer 读点；`multiAuth` 只剩一个
+  用例在用。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，
+  按授权记为已批准，不派 Codex。
+- **范围**：intent 声明自有的属主重新准入端口（identity-access composition 的 `composeDurableWorkOwnerAdmission` 按结构满足、装配根接线），
+  dispatcher 与会话路由改收端口；装配根直取 identity-access composition；Bearer 语法迁 identity-access `domain`、经 `public/types` 提供给
+  `routes/auth.ts`；composition 里只为本文件而在的转出删除；本文件删除、`multiAuth` 退役；用例改取定义处，三份路径清单、B4 文本锁与架构报告
+  owner 表随之改。
+- **不做**：`routes/auth.ts` 迁入模块（取多个 legacy `src/auth/*` 文件，迁入会生出 `R2`）；`auth/` 其余文件；`services/task.ts`、
+  `services/systemAgentRun.ts`、`services/runtime/**`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-471 的 Done 文档提交 `9e3ba73a9`（只改 5 个文档文件，含 proposal 里那条 RFC-310 链接的改正）：exact SHA 主 CI
+  run 42506637095 的 70 个 job 全绿（design/ 链接检查通过）。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的三处问题，均已修复并复验：intent 束直取 identity-access composition，违反 RFC-380
+  （`bootstrap/daemonModules/` 里只有 provider core 取 identity-access），改为应用根组装、注入；`rfc305-architecture-lock` 的 identity-access
+  `public/types` 导出名清单漏登记 `parseLocalBearerHeader`；RFC-472 用例的负对照把裸文件名交给 `relative(REPO_ROOT, …)`，结果随进程 cwd
+  变（从 `packages/backend` 跑才红），改传绝对路径。backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片全部跑完（分片时限
+  3 小时），合计 23561 pass，其余为负载超时与超时残留、导出仓库所致的 `rfc321` 与上面前两处；复跑 339 个文件，余导出所致的 `rfc321` 与 RFC-167 `approve`、`rfc363` 目录分页各一例（同一时刻在 RFC-471 导出仓库里对照，两边同一例到点）；PostgreSQL 30 秒
+  时限复跑 363 个能到引擎选择的文件，余 9 个文件 17 例：本 RFC 用例一例即上面第三处，其余 16 例都是用例自带的计时到点或撞 30 秒（同一时刻在 RFC-471 导出仓库里
+  逐个对照：6 个文件两边同一批用例到点，`tasks` 对照一侧同一例到点，`scheduler-wrapper-scope-dependencies` 多出的一例对照一侧 29.4 秒
+  擦线通过、120 秒时限下两边 18 / 18）；P0 两引擎各 17 阶段通过；shared 2344 pass、frontend gate 7361 pass、system-mocks 30 秒时限
+  111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 57 → 53、`R2` 0，`legacy-horizontal-files` 181 → 180，public surface
+  1493 → 1494，偏差 94、未被消费的 public 符号 322 不变，越界类计数不变。
+
 ## 2026-11-08 RFC-471 开发交付的代码托管桥归 integration：services/developmentDeliveryDeps 退役（Done；`design/RFC-471-development-delivery-code-host-bridge/`）
 
 - **来由**：RFC-294 W9-D 第十八步（`services/` 业务实现按 owner 归位）。`services/developmentDeliveryDeps.ts` 是开发交付的代码托管桥，取

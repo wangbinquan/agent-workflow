@@ -24,7 +24,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
+import {
+  actorOfDirectAuthority,
+  admitDaemonIdentity,
+} from '@/modules/identity-access/composition/authentication'
 import { createInMemoryDb } from '@/db/client'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'

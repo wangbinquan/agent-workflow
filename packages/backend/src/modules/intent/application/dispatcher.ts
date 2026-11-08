@@ -8,11 +8,7 @@ import type {
 } from '@/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
-import {
-  actorOfDirectAuthority,
-  admitDurableWorkOwner,
-  type DirectAuthorityAdmissionRuntime,
-} from '@/auth/session'
+import type { IntentOwnerAdmissionPort } from '@/modules/intent/application/ports/intentOwnerAdmission'
 import type { Config } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import type { IntentSessionEventPublisher } from '../ports/intentSessionEvents'
@@ -29,9 +25,9 @@ const log = createLogger('intentDispatcher')
 
 export interface IntentDispatchDeps {
   persistence: IntentPersistence
-  /** Boot recovery re-admits each session's owner through this seam; see
-   *  `admitDurableWorkOwner`. */
-  identityAccess: DirectAuthorityAdmissionRuntime
+  /** Boot recovery re-admits each session's owner through this port (RFC-472;
+   *  identity-access implements it, bootstrap wires it). */
+  ownerAdmission: IntentOwnerAdmissionPort
   appHome: string
   configSnapshot: Config
   runtimeResolver: IntentTurnRuntimeResolver
@@ -233,9 +229,8 @@ export async function resumeQueuedIntentWorkingSets(
     // resolves the actor back to its registered authority (RFC-345), and a
     // projection the registry never minted throws `foreign-legacy-actor-projection`
     // — which is exactly how every queued successor silently died after a crash.
-    const admitted = await admitDurableWorkOwner(deps.identityAccess, session.ownerUserId)
-    if (admitted === null) continue
-    const actor = actorOfDirectAuthority(admitted)
+    const actor = await deps.ownerAdmission.admitOwner(session.ownerUserId)
+    if (actor === null) continue
     const next = await activateIntentWorkingSetChange(
       deps.persistence,
       intentResourceVisibility(deps.resourceCatalogFor(actor)),

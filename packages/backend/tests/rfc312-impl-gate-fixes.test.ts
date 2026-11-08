@@ -35,7 +35,7 @@ import {
 } from '../src/ws/connections'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
-import { describeCredential } from '../src/auth/session'
+import { describeCredential } from '@/modules/identity-access/composition/authentication'
 
 import { createLogger } from '../src/util/log'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'

@@ -7,8 +7,9 @@
 //     credentials for. It exists because registering an identity provider is
 //     `oidc:configure` and setting someone's role is `users:write`, and after
 //     bootstrap completes the daemon token authenticates nothing (RFC-221,
-//     backend/src/auth/session.ts). Created through the daemon's own CLI, which
-//     writes through the real identity-access services rather than raw SQL.
+//     backend identity-access `infrastructure/local/localCredentialAdmission.ts`).
+//     Created through the daemon's own CLI, which writes through the real
+//     identity-access services rather than raw SQL.
 //   * one OIDC provider row pointing at the mock IdP this package serves.
 //   * four accounts — one per platform role — provisioned by REALLY walking the
 //     authorization-code flow, then patched to their target role. Provisioning

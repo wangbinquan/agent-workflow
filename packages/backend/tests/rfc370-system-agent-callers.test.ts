@@ -15,6 +15,7 @@ import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '@/auth/actor'
 import { runIntentTurn } from '@/modules/intent/application/turnEngine'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { composeDurableWorkOwnerAdmission } from '@/modules/identity-access/composition/authentication'
 import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
@@ -301,7 +302,7 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
     mountIntentSessionRoutes(http, {
       appHome: root,
       configuration: { read: () => structuredClone(DEFAULT_CONFIG) },
-      identityAccess,
+      ownerAdmission: composeDurableWorkOwnerAdmission(identityAccess),
       directAuthority: identityAccess.directAuthority,
       intentPersistence: persistence,
       intentApply: {

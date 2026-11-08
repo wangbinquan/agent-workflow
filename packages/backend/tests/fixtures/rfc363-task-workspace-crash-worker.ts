@@ -17,7 +17,10 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
+import {
+  actorOfDirectAuthority,
+  admitDaemonIdentity,
+} from '@/modules/identity-access/composition/authentication'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import {
   createRootTaskLaunchKernel,

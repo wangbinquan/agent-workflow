@@ -2,7 +2,6 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
 import type { Actor } from '@/auth/actor'
-import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 import { type DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { type AuthRuntime } from '@/auth/application/authRuntime'
 import { type TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
@@ -13,7 +12,11 @@ import {
   createIdentityAccessRuntime,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
-import { type CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
+import {
+  actorOfDirectAuthority,
+  admitDaemonIdentity,
+  type CredentialAdapterSelection,
+} from '@/modules/identity-access/composition/authentication'
 import { type HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { composeRuntimeProfileParticipants } from '@/modules/resource-catalog/composition/runtimeProfileParticipants'
 import {

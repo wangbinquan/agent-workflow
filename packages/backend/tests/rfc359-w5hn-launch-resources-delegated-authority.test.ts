@@ -29,7 +29,7 @@ import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalo
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { directOperationAuthority } from '@/routes/operationAuthority'
-import { admitDaemonIdentity } from '@/auth/session'
+import { admitDaemonIdentity } from '@/modules/identity-access/composition/authentication'
 import { createUser } from './helpers/userFixture'
 import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
@@ -166,7 +166,7 @@ describeEachProvider('RFC-359 AC-1 —— 启动资源面接受委派 actor', (h
   })
 
   // 反向：直连（凭据边缘铸出来的）actor 仍然能被投影——上一条不是「这个函数永远抛」。
-  // `auth/session.ts:289-305` 把这条规律写在注释里很久了：「hand-built actors fail with
+  // identity-access `localCredentialAdmission.ts` 里 `admitDurableWorkOwner` 的注释把这条规律写了很久：「hand-built actors fail with
   // `foreign-legacy-actor-projection`」。知识一直在，装配还是踩了——所以要有行为判据。
   test('直连 actor 仍可被投影成 direct authority（上一条不是同义反复）', async () => {
     const identity = await admitDaemonIdentity(identityAccess)

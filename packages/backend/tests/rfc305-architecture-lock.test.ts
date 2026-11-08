@@ -271,6 +271,8 @@ describe('RFC-305 identity-access architecture', () => {
       'ResolvedAuthoritySubject',
       'UserAccessError',
       'UserAccessErrorKind',
+      // RFC-472: the standalone Bearer syntax, REST's one reader (routes/auth.ts); defined in the domain.
+      'parseLocalBearerHeader',
     ])
     expect(exportedNames(resolve(publicRoot, 'participants.ts'))).toEqual([
       'AdmittedDaemonCredential',
@@ -314,8 +316,6 @@ describe('RFC-305 identity-access architecture', () => {
   test('module composition and public contracts have only the reviewed consumers', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
       'packages/backend/src/auth/oidc/providers.ts -> @/modules/identity-access/public/operations',
-      'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
-      'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       // RFC-427: the CLI user / package command assembly moved here from main.ts.
       'packages/backend/src/bootstrap/commandBootstraps.ts -> @/modules/identity-access/composition',
       'packages/backend/src/bootstrap/commandBootstraps.ts -> @/modules/identity-access/composition/userOperations',
@@ -323,6 +323,8 @@ describe('RFC-305 identity-access architecture', () => {
       // 凭据适配器、来源令牌校验与恢复请求人解析。
       'packages/backend/src/bootstrap/crewstation.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition',
+      // RFC-472: the application root composes identity-access's owner admission for intent's port.
+      'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/userOperations',

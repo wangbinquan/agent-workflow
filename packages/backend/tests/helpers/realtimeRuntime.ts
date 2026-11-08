@@ -1,7 +1,7 @@
 import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
 import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 import { composeLocalWebSocketAuthentication } from '../../src/modules/identity-access/composition/authentication'
-import type { WsCredentialWithExpiry } from '../../src/auth/session'
+import type { WsCredentialWithExpiry } from '@/modules/identity-access/composition/authentication'
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import { createAuthRuntimeFor } from '../../src/auth/composition'
 import type { DbClient } from '../../src/db/client'

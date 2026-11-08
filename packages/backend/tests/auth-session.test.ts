@@ -1,15 +1,21 @@
 // RFC-036 — three-track auth middleware integration.
+// RFC-472: the `auth/session` facade (and its `multiAuth` wrapper) is retired; the app below mounts the
+// middleware the way bootstrap does — the local HTTP credential adapter behind the transport middleware.
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { READ_POINTS, type Permission } from '@agent-workflow/shared'
 import { actorOf, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
-import { multiAuth } from '../src/auth/session'
+import { createAuthRuntimeFor } from '@/auth/composition'
+import {
+  composeHttpAuthenticationMiddleware,
+  composeLocalHttpAuthentication,
+} from '@/modules/identity-access/composition/authentication'
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -22,11 +28,13 @@ function buildApp(db: PersistenceDb): Hono {
   const app = new Hono()
   app.use(
     '/api/*',
-    multiAuth({
-      db,
-      daemonToken: DAEMON_TOKEN,
-      identityAccess: createIdentityAccessRuntime({ db }),
-    }),
+    composeHttpAuthenticationMiddleware(
+      composeLocalHttpAuthentication({
+        auth: createAuthRuntimeFor({ db }),
+        daemonToken: DAEMON_TOKEN,
+        identityAccess: createIdentityAccessRuntime({ db }),
+      }),
+    ),
   )
   app.get('/api/whoami', (c) => {
     const a = actorOf(c)
@@ -60,7 +68,7 @@ async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 
   })
 }
 
-describeEachProvider('multiAuth — daemon token track', (harness) => {
+describeEachProvider('HTTP auth middleware — daemon token track', (harness) => {
   let db: PersistenceDb
 
   beforeEach(() => {
@@ -108,7 +116,7 @@ describeEachProvider('multiAuth — daemon token track', (harness) => {
   })
 })
 
-describeEachProvider('multiAuth — session token track', (harness) => {
+describeEachProvider('HTTP auth middleware — session token track', (harness) => {
   let db: PersistenceDb
 
   beforeEach(() => {
@@ -152,7 +160,7 @@ describeEachProvider('multiAuth — session token track', (harness) => {
   })
 })
 
-describeEachProvider('multiAuth — PAT track', (harness) => {
+describeEachProvider('HTTP auth middleware — PAT track', (harness) => {
   let db: PersistenceDb
 
   beforeEach(() => {
@@ -211,7 +219,7 @@ describeEachProvider('multiAuth — PAT track', (harness) => {
   })
 })
 
-describeEachProvider('multiAuth — no token / malformed header', (harness) => {
+describeEachProvider('HTTP auth middleware — no token / malformed header', (harness) => {
   let db: PersistenceDb
 
   beforeEach(() => {
@@ -235,16 +243,42 @@ describeEachProvider('multiAuth — no token / malformed header', (harness) => {
     expect(res.status).toBe(401)
   })
 
-  // RFC-285 B4 源码文本锁：REST 面（auth/session + 全部 routes/）不得 import
-  // WS 专用的 extractUpgradeToken；auth/token.ts 的 tokenAuth 死体不得复活。
-  test('B4 双入口边界文本锁：REST 不碰 upgrade 入口，tokenAuth 不复活', () => {
+  // RFC-285 B4 源码文本锁：REST 面（全部 routes/）不得 import WS 专用的 extractUpgradeToken；
+  // auth/token.ts 的 tokenAuth 死体不得复活。RFC-472：auth/session 兼容转出退役，REST 唯一的 Bearer 读点是
+  // identity-access `public/types` 转出的 parseLocalBearerHeader（定义在 domain），routes/auth.ts 经它读当前请求的令牌。
+  test('B4 双入口边界文本锁：REST 只有一个 Bearer 读点、不碰 upgrade 入口，tokenAuth 不复活', () => {
     const src = (rel: string): string =>
       readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
-    expect(src('auth/session.ts')).toContain('export function extractBearerToken')
-    expect(src('auth/session.ts')).toContain('  extractUpgradeToken,')
+    expect(existsSync(resolve(import.meta.dir, '..', 'src', 'auth', 'session.ts'))).toBe(false)
+    const bearer = src('modules/identity-access/domain/localBearerCredential.ts')
+    expect(bearer).toContain('export function parseLocalBearerHeader')
+    const publicTypes = src('modules/identity-access/public/types.ts')
+    expect(publicTypes).toContain(
+      "export { parseLocalBearerHeader } from '../domain/localBearerCredential'",
+    )
+    expect(publicTypes).not.toContain('extractUpgradeToken')
+    const authRoutes = src('routes/auth.ts')
+    expect(authRoutes).toContain(
+      "import { parseLocalBearerHeader, UserAccessError } from '@/modules/identity-access/public/types'",
+    )
+    // Every Authorization read in routes/ goes through that one reader; no route parses `Bearer` itself.
+    const routeFiles = readdirSync(resolve(import.meta.dir, '..', 'src', 'routes')).filter((f) =>
+      f.endsWith('.ts'),
+    )
+    let authorizationReads = 0
+    for (const route of routeFiles) {
+      const text = src(join('routes', route))
+      const reads = text.match(/header\('Authorization'\)/g) ?? []
+      const viaReader =
+        text.match(/parseLocalBearerHeader\(c\.req\.header\('Authorization'\)\)/g) ?? []
+      expect(reads.length).toBe(viaReader.length)
+      expect(text.match(/\^Bearer/g) ?? []).toHaveLength(0)
+      authorizationReads += reads.length
+    }
+    expect(authorizationReads).toBe(2)
     // RFC-370: query extraction belongs solely to the selected local WS adapter.
     const queryReader = /searchParams\.get\('token'\)|req\.query\('token'\)/g
-    expect(src('auth/session.ts').match(queryReader) ?? []).toHaveLength(0)
+    expect(bearer.match(queryReader) ?? []).toHaveLength(0)
     const localWs = src('modules/identity-access/infrastructure/local/webSocketAuthentication.ts')
     expect(localWs.match(queryReader) ?? []).toHaveLength(1)
     expect(

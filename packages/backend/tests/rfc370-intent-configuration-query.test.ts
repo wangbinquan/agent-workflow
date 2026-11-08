@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { composeDurableWorkOwnerAdmission } from '@/modules/identity-access/composition/authentication'
 import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
@@ -55,7 +56,7 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
     mountIntentSessionRoutes(http, {
       appHome: appHome(),
       configuration,
-      identityAccess,
+      ownerAdmission: composeDurableWorkOwnerAdmission(identityAccess),
       directAuthority: identityAccess.directAuthority,
       intentPersistence: intentPersistenceForTest(db),
       intentApply: {

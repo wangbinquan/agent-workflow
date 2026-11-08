@@ -30,7 +30,10 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { StartTaskSchema, WorkflowDefinitionSchema } from '@agent-workflow/shared'
-import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
+import {
+  admitDaemonIdentity,
+  actorOfDirectAuthority,
+} from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'

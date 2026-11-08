@@ -114,7 +114,7 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
 export interface IntentSessionRouteDependencies {
   readonly appHome: string
   readonly configuration: { read(): Config | Promise<Config> }
-  readonly identityAccess: IntentDispatchDeps['identityAccess']
+  readonly ownerAdmission: IntentDispatchDeps['ownerAdmission']
   readonly directAuthority: DirectAuthorityBinding
   readonly intentApply: IntentApplyOperations
   readonly intentPersistence: IntentPersistence
@@ -149,7 +149,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     return dispatchIntentTurn(
       {
         persistence: deps.intentPersistence,
-        identityAccess: deps.identityAccess,
+        ownerAdmission: deps.ownerAdmission,
         appHome,
         configSnapshot,
         ...selectedIntentTurnRuntime(deps.intentTurnRuntime),

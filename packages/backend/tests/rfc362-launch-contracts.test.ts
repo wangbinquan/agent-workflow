@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
-import { admitDaemonIdentity } from '@/auth/session'
+import { admitDaemonIdentity } from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type {
   IdempotentCommandContext,

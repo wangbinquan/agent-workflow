@@ -4,7 +4,10 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 import { readTaskFixtures, taskFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
+import {
+  admitDaemonIdentity,
+  actorOfDirectAuthority,
+} from '@/modules/identity-access/composition/authentication'
 // RFC-382: compose the real provider task bundle with recorded scheduler delivery and real database participants.
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { join } from 'node:path'

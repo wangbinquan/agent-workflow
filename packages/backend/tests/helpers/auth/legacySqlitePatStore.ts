@@ -94,7 +94,7 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
 export interface ResolvedPat {
   user: PersistenceTables['users']['$inferSelect']
   scopes: ReadonlyArray<Permission>
-  /** RFC-247 D2 — the purpose gate reads this; see auth/session.ts. */
+  /** RFC-247 D2 — the purpose gate reads this; see identity-access `localCredentialAdmission.ts`. */
   purpose: PatPurpose
   patId: string
   /** RFC-212 — surfaced so a WS credential can carry the PAT's expiry. */

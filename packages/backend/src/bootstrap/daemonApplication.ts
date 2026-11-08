@@ -91,6 +91,7 @@ import type { BuildScheduleLaunch } from '@/modules/integration/composition/sche
 import type { ScheduleAuthorityRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { type RuntimeDiagnosticDependencies } from '@/modules/runtime-management/composition/runtimeManagement'
 import { type WebhookDispatcher } from '@/modules/integration/composition/webhookDispatch'
+import { composeDurableWorkOwnerAdmission } from '@/modules/identity-access/composition/authentication'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { reconcileRepositoryTransportConnectionProjections } from '@/modules/source-control/composition'
 import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
@@ -622,6 +623,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     configuration,
     log,
     core: identityAccess,
+    // RFC-472: identity-access satisfies intent's owner-admission port; the worker and HTTP families share it.
+    ownerAdmission: composeDurableWorkOwnerAdmission(identityAccess),
     resources: resourceCatalogModules,
     observation: observationModules,
     digitalEmployee: digitalEmployeeModules,

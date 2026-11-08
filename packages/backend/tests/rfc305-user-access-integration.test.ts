@@ -27,7 +27,7 @@ import {
 import { createUser, patchUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
-import { resolveActor } from '../src/auth/session'
+import { resolveActor } from '@/modules/identity-access/composition/authentication'
 
 describe('RFC-305 identity-access integration', () => {
   let db: DbClient

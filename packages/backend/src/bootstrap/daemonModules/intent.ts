@@ -37,6 +37,9 @@ export interface DaemonIntentInput {
   readonly configuration: ApplicationConfigurationQueries
   readonly log: Pick<Logger, 'warn'>
   readonly core: Pick<DaemonProviderCore['identityAccess'], 'contexts' | 'directAuthority'>
+  /** RFC-472: intent's owner-admission port, satisfied by identity-access and injected by the application root
+   *  (RFC-380: bundles other than the provider core never import identity-access). */
+  readonly ownerAdmission: IntentDispatchDeps['ownerAdmission']
   readonly resources: Pick<
     DaemonResourceCatalogModules,
     | 'resourceCatalog'
@@ -64,7 +67,7 @@ export interface DaemonIntentInput {
 }
 
 export function composeDaemonIntentModules(input: DaemonIntentInput) {
-  const { db, appHome, configuration, core, resources, observation } = input
+  const { db, appHome, configuration, core, ownerAdmission, resources, observation } = input
   const authorityFor = (actor: Actor) => directOperationAuthority(core.directAuthority, actor)
   const resourceCatalogFor = composeIntentResourceCatalogBinding({
     resourceCatalog: resources.resourceCatalog,
@@ -112,11 +115,10 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     platformInventory,
   })
   const events = createIntentSessionWsPublisher()
-  const identityAccess = Object.freeze({ directAuthority: core.directAuthority })
   const dispatch: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence,
     events,
-    identityAccess,
+    ownerAdmission,
     appHome,
     runtimeResolver: composeIntentTurnRuntimeResolver(
       persistence,
@@ -136,7 +138,7 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     appHome,
     configuration,
     events,
-    identityAccess,
+    ownerAdmission,
     directAuthority: core.directAuthority,
     intentApply: applyOperations,
     intentPersistence: persistence,

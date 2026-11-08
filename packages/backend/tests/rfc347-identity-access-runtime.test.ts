@@ -263,8 +263,6 @@ describe('RFC-347 exact production source locks', () => {
       'src/modules/identity-access/composition.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([
-      // RFC-370: standalone compatibility facade binds through the module composition.
-      'src/auth/session.ts',
       'src/bootstrap/commandBootstraps.ts',
       // RFC-370 M0 / §9.2 V9: hosted assembly lives only in bootstrap, which
       // composes the CrewStation credential adapters.

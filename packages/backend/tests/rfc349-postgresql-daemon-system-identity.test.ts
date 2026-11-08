@@ -29,7 +29,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '../src/auth/actor'
-import { actorOfDirectAuthority, admitDaemonIdentity } from '../src/auth/session'
+import {
+  actorOfDirectAuthority,
+  admitDaemonIdentity,
+} from '@/modules/identity-access/composition/authentication'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'

@@ -9,7 +9,10 @@ import { ulid } from 'ulid'
 import ts from 'typescript'
 import { StartTaskSchema, WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
+import {
+  admitDaemonIdentity,
+  actorOfDirectAuthority,
+} from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'

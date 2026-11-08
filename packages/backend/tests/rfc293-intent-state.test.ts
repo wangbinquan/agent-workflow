@@ -31,6 +31,7 @@ import {
 import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { composeDurableWorkOwnerAdmission } from '@/modules/identity-access/composition/authentication'
 import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentDumpAuxiliaryQueries } from '../src/modules/intent/composition/auxiliaryQueries'
@@ -550,7 +551,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       await resumeQueuedIntentWorkingSets({
         persistence,
         events: { publish: () => {} },
-        identityAccess: createIdentityAccessRuntime({ db }),
+        ownerAdmission: composeDurableWorkOwnerAdmission(createIdentityAccessRuntime({ db })),
         appHome: '/tmp',
         configSnapshot: DEFAULT_CONFIG,
         runtimeResolver: composeIntentTurnRuntimeResolver(persistence),

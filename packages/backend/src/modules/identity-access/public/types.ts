@@ -45,3 +45,6 @@ export class UserAccessError extends Error {
     this.name = 'UserAccessError'
   }
 }
+
+/** RFC-472 — the standalone `Authorization: Bearer <token>` syntax (RFC-285 B4: REST's one Bearer reader). */
+export { parseLocalBearerHeader } from '../domain/localBearerCredential'

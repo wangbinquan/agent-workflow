@@ -11,7 +11,7 @@ import { createInFlightCoalescer } from '@/util/inFlight'
 import { PAT_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { AdmittedPatCredential } from '../../public/participants'
-import { parseLocalBearerHeader } from '../local/httpAuthentication'
+import { parseLocalBearerHeader } from '../../domain/localBearerCredential'
 import type {
   AdmittedSessionCredential,
   DirectAuthorityIdentity,

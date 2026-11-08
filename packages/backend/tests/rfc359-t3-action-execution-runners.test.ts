@@ -25,7 +25,7 @@ import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { actorOfDirectAuthority } from '@/auth/session'
+import { actorOfDirectAuthority } from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/infrastructure/hostTaskLaunch'
 // RFC-415: the runners are task-execution application; the environment gains the task status read and the workspace
