@@ -1,15 +1,15 @@
 import { portFallbackMount } from '@/platform/content/locations/portArchive'
 import {
   computeRemaining,
+  continuesClarifyLineage,
   findClarifyNode,
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '../domain/clarifyRules'
-import { CLARIFY_FORBIDDEN_PREFIX } from '@agent-workflow/shared'
+import { CLARIFY_FORBIDDEN_PREFIX, isClarifyRerunCause } from '@agent-workflow/shared'
 import { parsePortValidationFailuresJson } from '../application/portOutputValidation'
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type { TaskMechanicsState } from './taskMechanicsState'
-import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode, fanoutInnerAgentRefKey } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'
 import { sha256Hex } from '@/util/hash'

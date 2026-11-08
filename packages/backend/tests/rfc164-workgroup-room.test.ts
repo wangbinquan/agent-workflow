@@ -1024,7 +1024,8 @@ describeEachProviderHttpApplication(
     test('RFC-207：移除最后一个人工成员 → 遣散在途 clarify park', async () => {
       const { workgroupAssignments } = tablesOf(db)
       const { clarifyRounds } = tablesOf(db)
-      const { mintNodeRun } = await import('../src/services/nodeRunMint')
+      const { mintNodeRun } =
+        await import('../src/modules/task-execution/infrastructure/legacyNodeRunMint')
 
       // RFC-207 — the autonomous switch this test used to drive is gone. Losing the
       // LAST human is the equivalent transition: nobody is left to answer, so an

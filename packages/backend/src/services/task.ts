@@ -25,6 +25,7 @@ import {
   createTaskDetailQueries,
   createTaskPreparationQueries,
   createTaskTriggerQueries,
+  nextRetryIndex,
 } from '@/modules/task-execution/public/queries'
 import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
@@ -72,7 +73,11 @@ import { join } from 'node:path'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { setNodeRunStatus, setTaskStatus } from '@/modules/task-execution/public/operations'
+import {
+  mintNodeRun,
+  setNodeRunStatus,
+  setTaskStatus,
+} from '@/modules/task-execution/public/operations'
 import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
@@ -99,7 +104,6 @@ import {
 import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import { mintNodeRun, nextRetryIndex } from '@/services/nodeRunMint'
 import { resolveRepoGroupLayout } from '@/modules/source-control/public/queries'
 import {} from '@/services/taskAuthorization'
 import { ConflictError, DomainError, ValidationError, diagnosticTextOf } from '@/util/errors'

@@ -57,7 +57,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createNodeIso, snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { mintNodeRun } from '../src/services/nodeRunMint'
+import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 // RFC-413: the wrapper iso helper moved into engine/kernel/wrapperIsolation.ts on the isolation mechanics ports;
 // the cases drive it through the real binding over the fake execution state.
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/engine/kernel/wrapperIsolation'

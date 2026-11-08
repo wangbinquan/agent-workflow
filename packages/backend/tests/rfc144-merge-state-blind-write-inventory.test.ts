@@ -16,7 +16,8 @@
 //   2. 「`.insert(nodeRuns)` 且 `.values({...})` 含 `mergeState:`」在生产代码
 //      全域为零——mint 恒生 merge_state=NULL 是状态机的入口不变量
 //      （begin-isolation 的合法 from 只有 NULL）。
-//   3. `buildMintNodeRunValues`（nodeRunMint.ts）不得出现 mergeState 字段
+//   3. 铸行记录工厂 `buildNodeRunMintRecord`（task-execution application；RFC-468 删去了 `services/nodeRunMint.ts`
+//      里转调它的 `buildMintNodeRunValues`）不得出现 mergeState 字段
 //      ——同一不变量的工厂侧源码锁。
 //
 // 射程 packages/backend/src/**（生产代码）；测试 seeding 直写在射程外。
@@ -168,9 +169,12 @@ describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to provi
     expect(protocol).toContain('if (inserted.length !== 1)')
   })
 
-  test('buildMintNodeRunValues carries no mergeState field (mint-NULL 入口不变量的工厂侧锁)', () => {
+  test('buildNodeRunMintRecord carries no mergeState field (mint-NULL 入口不变量的工厂侧锁)', () => {
     const mint = stripCommentLines(
-      readFileSync(join(BACKEND_SRC, 'services', 'nodeRunMint.ts'), 'utf8'),
+      readFileSync(
+        join(BACKEND_SRC, 'modules', 'task-execution', 'application', 'buildNodeRunMintRecord.ts'),
+        'utf8',
+      ),
     )
     expect(/\bmergeState\s*:/.test(mint)).toBe(false)
   })

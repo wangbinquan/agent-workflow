@@ -35,7 +35,7 @@ import { autoResumeInterruptedTasks } from '../src/modules/task-execution/applic
 // ——auto-resume 那一半还在，但唤醒后驱动只铸普通 `wg-leader-round`，而 Q&A 注入只发生在澄清
 // 血缘的 rerun 上，于是人的回答照样丢。本次一并补回。
 import { isKilledClarifyContinuation } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
-import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
+import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '@agent-workflow/shared'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global

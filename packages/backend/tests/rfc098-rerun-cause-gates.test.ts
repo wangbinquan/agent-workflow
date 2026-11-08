@@ -37,7 +37,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { RERUN_CAUSES, type RerunCause } from '@agent-workflow/shared'
-import { isClarifyRerunCause } from '../src/services/nodeRunMint'
+import { isClarifyRerunCause } from '@agent-workflow/shared'
 import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE

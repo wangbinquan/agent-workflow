@@ -1,3 +1,28 @@
+## 2026-11-07 RFC-468 拆分 nodeRunMint：冻结运行时归 runtime-management、铸行入口归 task-execution（In Progress；`design/RFC-468-node-run-mint-split/`）
+
+- **来由**：RFC-294 W9-D 第十五步（`services/` 实现文件按 owner 归位）。`services/nodeRunMint.ts` 记 8 条 `R1`（全部取 task-execution
+  内部），是四块拼在一起的：冻结运行时（生产只有 runtime-management 的任务运行时绑定在调，它取 task-execution 端口作参数类型，是
+  runtime-management → task-execution 唯一的跨 context 内部文件对）、铸行入口（生产只有 `services/task.ts` 的延迟仓库准备在调）、澄清血缘
+  判定与几个转出、零调用方的导出与一份 `schedulerMintCause` 副本。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
+  不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：冻结运行时原样迁入 runtime-management `infrastructure/local/frozenTaskRuntime.ts`，它要的持久化由 runtime-management 自己拥有窄端口
+  （`application/ports/taskRuntimeFreezePersistence.ts`，不经 public 导出），task-execution 的实现按结构满足；铸行入口迁入 task-execution
+  `infrastructure/legacyNodeRunMint.ts`、经 `public/operations` 给 `services/task.ts`；`continuesClarifyLineage` 归 `domain/clarifyRules`；
+  副本与零调用方导出删除，`services/nodeRunMint.ts` 删除；RFC-294 preflight / RFC-376 / RFC-349 / RFC-328 精确清单、commons 内核与账本随之改。
+- **不做**：`services/task.ts` 本身的去处；task-execution 自己的 `NodeRunRuntimePersistence` 端口。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-467 的 Done 文档提交 `4e4b93b95`（只改 5 个文档文件）：exact SHA 主 CI run 42424044158 有一格红——Playwright e2e
+  （macos-latest shard 3/4）的 `e2e/system-mocks.spec.ts`「daemon probes the unified MCP mock over Streamable HTTP and compiled stdio」首轮
+  拿到系统 mock 的 404（`SSE error: Non-200 status code (404)`），串行组重试时同组前一个用例撞 `already seeded` 500（同一用例体跑两遍的
+  已知形状，见 `docs/dev-gotchas.md`）；其余 68 个 job 全绿。该提交代码与 `40bc62047` 逐字相同，而 `40bc62047` 的主 CI run 42421165407
+  同一 job 通过：判为与提交内容无关的偶发红，未重跑，如实记录；后继提交的 CI 会再跑这一格。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片全部跑完
+  （分片时限 3 小时），合计 23510 pass，其余为负载超时、导出仓库所致的 `rfc321`、`rfc363` 进程恢复与 `rfc310` system mock 各一例；复跑 36 个
+  文件余 RFC-167 `approve`、`rfc363` 目录分页各一例（同一时刻在 RFC-467 导出仓库里对照，两边同一例到点）与 `rfc363` 进程恢复一例（对照时两边都 8 / 8 通过）；PostgreSQL 463 个文件的 lane 余 73 个文件（72 个只有超时，另 1 个是连接池在负载下连锁超时），复跑 73 个文件余 4 个文件 8 例，都是用例自带的计时到点（同一时刻在 RFC-467 导出仓库里对照，两边同样到点）；
+  P0 两引擎各 17 阶段通过；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 79 → 71、`R2` 0，跨 context 内部文件对 47 → 46，
+  `services/` 68 → 67，public surface 1495 → 1496（`public/operations` 转出 `mintNodeRun`）、偏差 94 不变，未被消费的 public 符号 322 不变，
+  越界类计数不变。
+
 ## 2026-11-07 RFC-467 注入预言一族迁入用例树、资源快照策略束只留外部策略（Done；`design/RFC-467-injection-oracle-relocation/`）
 
 - **来由**：RFC-294 W9-D 第十四步（facade 清仓）。不可达生产文件 24 个里有 6 个是同一族：task-execution

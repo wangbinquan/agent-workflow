@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { RERUN_CAUSES } from '@agent-workflow/shared'
-import { isClarifyRerunCause } from '../src/services/nodeRunMint'
+import { isClarifyRerunCause } from '@agent-workflow/shared'
 
 describe('RFC-187 §3-3 — wg-protocol-retry cause', () => {
   test('the cause exists and is NOT a clarify rerun (safe enum default)', () => {

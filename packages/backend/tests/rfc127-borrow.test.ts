@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { mintNodeRun } from '../src/services/nodeRunMint'
+import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 describeEachProvider(
@@ -88,7 +88,7 @@ describe('RFC-132 ③ — TaskExecution 无 borrow 应用(source-level lock)', (
     expect(src).not.toContain('buildBorrowedAgent')
     expect(src).not.toContain('isBorrowed')
     // RFC-287 T8：取行前奏（含「retry/revival 行的 agentOverrideName 恒 null」这条）
-    // 收编进 nodeRunMint 的 resolveSchedulerRunRow，nodeMechanics.ts 只保留**表态**。
+    // 收编进 task-execution 的 resolveSchedulerRunRow，nodeMechanics.ts 只保留**表态**。
     // 不变量没变，事实源反而更硬：以前四条线各写一遍、漏一条无人知；现在漏表态
     // 直接是编译错（必填布尔）。两处一起锁——node mechanics 表态 + 收编函数落实。
     expect(src).toMatch(/clearAgentOverride: true/)

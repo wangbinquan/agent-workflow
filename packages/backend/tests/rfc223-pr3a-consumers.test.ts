@@ -25,7 +25,7 @@ import {
   type MemberLite,
 } from './helpers/workgroupSelection'
 import { extractAgentIdsFromSnapshot } from '../src/modules/memory/application/distill/schedule'
-import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
+import { buildNodeRunMintRecord } from '../src/modules/task-execution/application/buildNodeRunMintRecord'
 import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { createAgent, renameAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
@@ -144,11 +144,12 @@ describe('extractAgentIdsFromSnapshot', () => {
 })
 
 // ---------------------------------------------------------------------------
-// nodeRunMint — the borrow / workgroup-member producer stamps agentOverrideId.
+// The mint record factory — the borrow / workgroup-member producer stamps agentOverrideId (RFC-468: the
+// `buildMintNodeRunValues` wrapper is gone; this is the factory it called).
 // ---------------------------------------------------------------------------
-describe('buildMintNodeRunValues — agentOverrideId', () => {
+describe('buildNodeRunMintRecord — agentOverrideId', () => {
   test('stamps both override name and id', () => {
-    const v = buildMintNodeRunValues(
+    const v = buildNodeRunMintRecord(
       withTargetMintIdentity({
         role: 'node-attempt',
         syntheticKind: null,
@@ -169,7 +170,7 @@ describe('buildMintNodeRunValues — agentOverrideId', () => {
   })
 
   test('defaults to null when not overridden', () => {
-    const v = buildMintNodeRunValues(
+    const v = buildNodeRunMintRecord(
       withTargetMintIdentity({
         role: 'node-attempt',
         syntheticKind: null,

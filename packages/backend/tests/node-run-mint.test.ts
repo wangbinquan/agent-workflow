@@ -22,7 +22,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { mintNodeRun, schedulerMintCause } from '../src/services/nodeRunMint'
+import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
+import { schedulerMintCause } from '../src/modules/task-execution/application/resolveSchedulerRunRow'
 
 const TASK_ID = 'task-mint'
 
@@ -397,7 +398,7 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
     for (const f of files) {
       const src = readFileSync(resolvePath(import.meta.dir, '..', 'src', f), 'utf8')
       // RFC-287 T8：nodeMechanics.ts 的取行前奏收编进 resolveSchedulerRunRow（与
-      // nextRetryIndex 同住 nodeRunMint），因此它**不再直接调**——改为经收编函数
+      // nextRetryIndex 同在 task-execution application），因此它**不再直接调**——改为经收编函数
       // 到达。锁的不变量（铸点一律经单一实现、手写 max-over-retryIndex 归零）没
       // 变，反而更强：nodeMechanics.ts 现在连 retryIndex 都不自己算。
       expect(src).toMatch(/nextRetryIndex\(|resolveSchedulerRunRow\(/)

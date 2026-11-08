@@ -54,7 +54,7 @@ import {
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { mintNodeRun } from '../src/services/nodeRunMint'
+import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 import {
   getWorkgroupById,
   listWorkgroups,

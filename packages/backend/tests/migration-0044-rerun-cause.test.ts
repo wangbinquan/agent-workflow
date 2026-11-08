@@ -4,7 +4,7 @@
 //   The scheduler's injection gates (gate-2 isClarifyRerun and friends,
 //   scheduler.ts dispatch region) switched from proxy signals (retryIndex
 //   parity × derived clarify generation) to the explicit per-row cause
-//   written by the mint factory (services/nodeRunMint.ts). This locks
+//   written by the mint factory (task-execution `application/buildNodeRunMintRecord.ts`). This locks
 //   (a) the column exists with the exact snake_case name the runtime reads,
 //   (b) a row round-trips its cause through the drizzle schema,
 //   (c) a historical-style row leaves it NULL (pre-0044 rows gate FALSE on

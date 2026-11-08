@@ -29,7 +29,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTaskExecutionContext :: assertTaskExecutionContext,createTaskExecutionContext,runWithTaskExecutionContext',
   // RFC-457：备份 VACUUM / quick_check 的 worker 入口迁入 `platform/persistence/sqlite`，与它包着的 provider 机制同目录，
   // 不再是业务层取 provider 机制，这条债销账。
-  'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,createLegacySqliteNodeRunOperations',
+  // RFC-468：`services/nodeRunMint.ts` 删除，铸行入口迁入 task-execution infrastructure（机制边界），这条债销账。
   // RFC-466：`services/resourceAcl.ts` 兼容 facade 退役（消费方改取 resource-catalog 自己的合同），这两条债销账。
   // RFC-367：`services/runtime/opencode/distillSessionCapture.ts` 随事后蒸馏会话走查一并删除
   // （记录改由 runSystemAgent 的实时事件流经 memory 自己的 sink 落库），这条债销账。

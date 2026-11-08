@@ -329,14 +329,29 @@
       "claimAudit": "Holds. Direct inserts are grep-guarded (rfc098-node-run-mint-grep-guard) with an explicit escape-hatch comment. The 4-line prelude parameterizes its 5 real differences as booleans rather than branching on node kind — the approved shape. No business-identity branch found in the mint path.",
       "core": true,
       "files": [
-        "packages/backend/src/services/nodeRunMint.ts"
+        "packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts",
+        "packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts"
       ],
       "guards": [],
       "id": "mintnoderun-buildmintnoderunvalues-resolveschedulerr",
-      "layer": "engine",
+      "layer": "application",
       "owner": "task-execution",
-      "singleSourceOf": "The single node_runs INSERT factory + the shared 'resolve the run row' prelude for 4 dispatch lines; also owns runtime freezing (resolveFrozenRuntime).",
-      "title": "mintNodeRun / buildMintNodeRunValues / resolveSchedulerRunRow"
+      "singleSourceOf": "The single node_runs INSERT record factory + the shared 'resolve the run row' prelude for 4 dispatch lines (RFC-468: the services/nodeRunMint.ts wrappers are retired; runtime freezing moved to runtime-management, kernel frozen-task-runtime).",
+      "title": "buildNodeRunMintRecord / resolveSchedulerRunRow"
+    },
+    {
+      "auditedBy": "execution-kernel",
+      "claimAudit": "RFC-468: split out of mintnoderun-buildmintnoderunvalues-resolveschedulerr when services/nodeRunMint.ts was retired. The code moved verbatim (only its persistence parameter type became Runtime Management's own narrow port), so that kernel's 2026-08-23 audit verdict covers it.",
+      "core": true,
+      "files": [
+        "packages/backend/src/modules/runtime-management/infrastructure/local/frozenTaskRuntime.ts"
+      ],
+      "guards": [],
+      "id": "frozen-task-runtime",
+      "layer": "infrastructure",
+      "owner": "runtime-management",
+      "singleSourceOf": "Freeze-on-first-dispatch of a node run's runtime (protocol, binary, params, configDir, observation identity) and its registry-independent read-back (resolveFrozenRuntimeWith / frozenRuntimeOfSessionWith).",
+      "title": "resolveFrozenRuntimeWith / frozenRuntimeOfSessionWith"
     },
     {
       "auditedBy": "resource-acl-catalog",

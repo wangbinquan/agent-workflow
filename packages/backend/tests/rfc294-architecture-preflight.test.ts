@@ -298,7 +298,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts',
   'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts -> packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts -> packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts',
-  'packages/backend/src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts -> packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/crewstationRuntimeManagement.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/crewstationSystemAgentMaterial.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/runtimeManagement.ts',

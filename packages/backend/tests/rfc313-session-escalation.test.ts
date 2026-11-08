@@ -33,7 +33,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { countAgentTextEvents } from '../src/modules/task-execution/application/agentRunHistory'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { mintNodeRun } from '../src/services/nodeRunMint'
+import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/modules/task-execution/engine/kernel/assembly'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 

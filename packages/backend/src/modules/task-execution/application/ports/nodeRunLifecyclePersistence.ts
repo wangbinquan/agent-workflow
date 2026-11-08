@@ -37,10 +37,29 @@ export interface NodeRunMintInput {
   readonly id?: string
   readonly taskId: string
   readonly nodeId: string
+  /**
+   * Statuses a row may be BORN with. Everything else (canceled / interrupted /
+   * skipped / exhausted) is only reachable via lifecycle transitions on an
+   * existing row.
+   *
+   *   - 'pending'         — the common case (scheduler / rerun mints)
+   *   - 'running'         — commit&push container row ONLY (child row)
+   *   - 'done'            — virtual IO rows (input / output nodes)
+   *   - 'failed'          — retryNode 'queued for retry' placeholder rows
+   *   - 'awaiting_review' — review park
+   *   - 'awaiting_human'  — clarify / cross-clarify park
+   *
+   * (RFC-468: this and the three notes below came from `services/nodeRunMint.ts`'s retired copy of this input.)
+   */
   readonly status: Extract<
     NodeRunStatus,
     'pending' | 'running' | 'done' | 'failed' | 'awaiting_review' | 'awaiting_human'
   >
+  /**
+   * WHY this row exists (RFC-098 WP-10 / audit S-25). Persisted on
+   * `node_runs.rerun_cause` (migration 0044) and read back by the
+   * scheduler's injection gates instead of proxy signals.
+   */
   readonly cause: RerunCause
   readonly retryIndex?: number
   /**
@@ -51,7 +70,15 @@ export interface NodeRunMintInput {
   /** RFC-354 — explicit breadcrumb; omitted = derived from the container row by the adapter. */
   readonly scopePath?: string
   readonly iteration?: number
+  /**
+   * THE single inheritance list (RFC-098 survey §wp10-三): when a mint is a re-incarnation of a prior row,
+   * exactly these fields carry over; null / undefined = defaults.
+   */
   readonly inheritFrom?: NodeRunMintInheritance | null
+  /**
+   * Explicit per-site deviations; they always win over `inheritFrom`. `undefined` = "not overridden"
+   * (inherit / default); explicit `null` is a real value (e.g. review-rerun rows force parentNodeRunId null).
+   */
   readonly overrides?: NodeRunMintOverrides
   /**
    * RFC-359 W4-B1 批 2g：与行同一事务落库的初始输出。io-virtual 行（input / output 节点）是

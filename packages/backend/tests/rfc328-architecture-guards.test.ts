@@ -21,7 +21,7 @@ type GuardUnit = Pick<SourceUnit, 'path' | 'text' | 'source'>
 
 const WORKER_MUTATION_FILES = new Set([
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
-  'packages/backend/src/services/nodeRunMint.ts',
+  // RFC-468: `services/nodeRunMint.ts` is deleted (it never wrote rows itself; `mintNodeRunTx` retired with RFC-359).
   // RFC-454: the runner body (the `services/runner.ts` re-export it was listed under is deleted).
   'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
   'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts',
@@ -201,7 +201,6 @@ const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
       'writeTaskStatusTx',
     ]),
   ],
-  ['packages/backend/src/services/nodeRunMint.ts', new Set(['mintNodeRunTx'])],
   ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
   [
     'packages/backend/src/modules/task-execution/infrastructure/taskPreparationParticipant.ts',

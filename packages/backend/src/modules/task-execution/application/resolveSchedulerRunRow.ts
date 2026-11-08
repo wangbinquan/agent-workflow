@@ -54,7 +54,12 @@ export interface ResolvedSchedulerRunRow<R> {
   readonly adopted: boolean
 }
 
-function schedulerMintCause(
+/**
+ * RFC-098 对抗检视修订 #11 — the scheduler main-mint cause merge rule: maps the freshest existing top-level row's
+ * status to the cause recorded on the fresh row. The one implementation (RFC-468 deleted the copy that lived in
+ * `services/nodeRunMint.ts`); exported for its branch-by-branch unit test.
+ */
+export function schedulerMintCause(
   latestExisting: { readonly status: NodeRunStatus } | undefined,
 ): Extract<RerunCause, 'initial' | 'stale-redispatch' | 'revival'> {
   switch (latestExisting?.status) {
@@ -70,6 +75,29 @@ function schedulerMintCause(
   }
 }
 
+// -----------------------------------------------------------------------------
+// RFC-287 T8（G2）—— 取行前奏的单一实现。
+//
+// 迁移前四条线各手抄一份：L4 agent / L7 script / L8 call / L9 code-host。四份的
+// 骨干完全一致（查同节点同迭代的行 → 取最新一行 isFresherNodeRun → 有 pending 就
+// 复用并盖 provenance 戳，否则按 schedulerMintCause 铸新行），差异只落在**五个
+// 维度**上（用 difflib 逐行对差实证，不是照设计文档抄的）：
+//
+//   ① reviewIteration 继承        —— 仅 L4/L8
+//   ② agentOverrideName 显式置空  —— 仅 L4/L8（RFC-132 ③：重试/复活行不再带借用）
+//   ③ 复用 pending 行时追 retryIndex —— L9 不追（它压根不追这个维度）
+//   ④ 收尾广播 pending             —— L9 不广播（它铸完直接转 running，多播一条
+//                                     WS 事件会让前台看到不存在的 pending 态）
+//   ⑤ 领养短路                     —— 仅 L8：RFC-243-LOCK 的领养区**不进收编**
+//                                     （那里可能复用一条 running/interrupted/canceled
+//                                     的行并直接转 running，与「铸行」是两码事），
+//                                     以 preResolve 回调在拿到 latestExisting 后短路。
+//
+// 三条既有测试守着这四线的差异：rfc098-rerun-cause-gates（cause 分档）、
+// rfc243 系列（领养区）、rfc284-t21（nextRetryIndex 收编）。
+//
+// （RFC-468：本段注释随 `services/nodeRunMint.ts` 里那层旧包装的删除迁来；行为即下面这个函数。）
+// -----------------------------------------------------------------------------
 /** Provider-neutral form of the scheduler's four shared run-row preludes. */
 export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>(
   input: ResolveSchedulerRunRowInput<R>,

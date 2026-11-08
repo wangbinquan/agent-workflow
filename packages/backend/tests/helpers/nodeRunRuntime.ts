@@ -1,7 +1,10 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 import { composeNodeRunRuntimePersistence as composeWithSelection } from '@/modules/task-execution/composition/nodeRunRuntime'
-import { resolveFrozenRuntimeWith, frozenRuntimeOfSessionWith } from '@/services/nodeRunMint'
+import {
+  resolveFrozenRuntimeWith,
+  frozenRuntimeOfSessionWith,
+} from '@/modules/runtime-management/infrastructure/local/frozenTaskRuntime'
 export function composeNodeRunRuntimePersistence(db: PersistenceDb) {
   return composeWithSelection(db, composeRuntimeSelectionParticipantInTx)
 }

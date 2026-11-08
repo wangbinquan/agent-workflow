@@ -62,6 +62,9 @@ export {
   type TaskStatusUpdateExtra,
   type WorkspacePruneCause,
 } from '../infrastructure/taskLifecycle'
+// RFC-468: the single-row mint the same legacy callers use (`services/task.ts`'s deferred repository preparation),
+// moved here from `services/nodeRunMint.ts`.
+export { mintNodeRun } from '../infrastructure/legacyNodeRunMint'
 export {
   registerTerminalWorkspacePrunePolicy,
   resolveTerminalWorkspacePruneDecision,

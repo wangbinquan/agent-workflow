@@ -351,7 +351,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/maintenanceState.ts': 'platform',
   'packages/backend/src/services/mergeAgent.ts': 'source-control',
   'packages/backend/src/services/nodeRollback.ts': 'task-execution',
-  'packages/backend/src/services/nodeRunMint.ts': 'task-execution',
   'packages/backend/src/services/nodeRunPrompt.ts': 'task-execution',
   'packages/backend/src/services/ownerIdentity.ts': 'identity-access',
   'packages/backend/src/services/portArtifacts.ts': 'task-execution',

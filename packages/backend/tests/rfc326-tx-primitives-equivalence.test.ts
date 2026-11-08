@@ -42,7 +42,8 @@ import {
   transitionNodeRunStatus,
   transitionNodeRunStatusTx,
 } from '../src/modules/task-execution/public/operations'
-import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
+import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
+import type { NodeRunMintInput } from '../src/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { hasActingMembership } from '@/modules/collaboration/infrastructure/taskCollab'
@@ -260,7 +261,7 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
 // 依然承重——只是后者现在由中立的 `createNodeRunMintParticipantInTx(tx)` 承担（同一个
 // `nodeRunMintProgram`，异步解释）。判据一条没少：新行、被退役的同代旧行、以及同样的拒绝。
 describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retired merge states)', () => {
-  const args: MintNodeRunArgs = withTargetMintIdentity({
+  const args: NodeRunMintInput = withTargetMintIdentity({
     role: 'node-attempt',
     syntheticKind: null,
     taskId: TASK,
@@ -322,7 +323,7 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
 
   test('same refusal: a top-level born-running mint is rejected by both before any write', async () => {
     const [a, b] = await pair()
-    const bad: MintNodeRunArgs = { ...args, status: 'running' }
+    const bad: NodeRunMintInput = { ...args, status: 'running' }
     let ea: unknown
     let eb: unknown
     try {
@@ -369,7 +370,8 @@ describe('RFC-326 AC-19 — 行动权谓词（合一后只剩异步一个面）'
 })
 
 describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers untouched)', () => {
-  const SRC = resolve(import.meta.dir, '..', 'src', 'services')
+  // RFC-468: the mint entry moved from `services/nodeRunMint.ts` to task-execution infrastructure.
+  const SRC = resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', 'infrastructure')
   const SQLITE_TASK_LIFECYCLE = resolve(
     import.meta.dir,
     '..',
@@ -432,7 +434,7 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
   // RFC-359：同步孪生 `mintNodeRunTx` 已退役（生产零调用方），所以这里只剩「入口本身不写行」
   // 这一半。要在自己的事务里铸行的调用方走中立的 `createNodeRunMintParticipantInTx(tx)`。
   test('mintNodeRun delegates to the lifecycle port and inserts nothing itself', () => {
-    const src = readFileSync(resolve(SRC, 'nodeRunMint.ts'), 'utf8')
+    const src = readFileSync(resolve(SRC, 'legacyNodeRunMint.ts'), 'utf8')
     const body = bodyOf(src, 'export async function mintNodeRun(')
     expect(body).toContain('createLegacySqliteNodeRunOperations(db).lifecycle.mint(args)')
     expect(body).not.toMatch(/(?:\.insert\(\s*nodeRuns\s*\)|\binsertOne\([^,]+,\s*nodeRuns\s*,)/)

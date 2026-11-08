@@ -17,7 +17,7 @@ import {
 //   ① **单一实现**：没有任何线再自己写这段前奏（反向扫描，比正向枚举更耐改名）；
 //   ② **五项差异逐线钉死**：谁继承 reviewIteration、谁清 agentOverrideName、谁追
 //      retryIndex、谁广播 pending、谁走领养短路——每一项都是真差异，统一任一项都
-//      是行为变更（依据见 nodeRunMint.ts 上那段表格注释与各线的源注）。
+//      是行为变更（依据见 task-execution `application/resolveSchedulerRunRow.ts` 上那段表格注释与各线的源注）。
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -138,7 +138,7 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     const PRELUDE_CORPUS = `${SCHEDULER}\n${WORKGROUP_HOST_SOURCE}\n${AGENT_NODE_SOURCE}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}\n${CHILD_CALL_NODE_SOURCE}`
     // 前奏的两个特征形状：①「找 pending 行并盖 consumed 戳」；②「按
     // schedulerMintCause 铸 pending 行」。两者在 scheduler.ts 里都必须归零
-    // ——它们现在只存在于 nodeRunMint.ts 的收编函数里。
+    // ——它们现在只存在于 resolveSchedulerRunRow.ts 的收编函数里。
     expect(PRELUDE_CORPUS).not.toContain("topLevelRows.find((row) => row.status === 'pending')")
     expect(PRELUDE_CORPUS).not.toMatch(/cause: schedulerMintCause\(/)
     // 正向：收编函数里各有且仅有一处（RFC-369 起 pending 候选还要排除已被同帧更新一代取代的行）。

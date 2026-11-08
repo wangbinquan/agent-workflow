@@ -4,7 +4,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 //
 // 两组锁：
 //  (A) 派生单源——RUNTIME_PROTOCOLS / BUILTIN_RUNTIMES / ProtocolSchema 从
-//      DRIVERS 派生，且 nodeRunMint / runtimeRegistry 不再硬编码
+//      DRIVERS 派生，且冻结运行时（RFC-468 起在 runtime-management 的 frozenTaskRuntime）/ runtimeRegistry 不再硬编码
 //      `'opencode' || 'claude-code'` 字面量集合。
 //  (B) 能力接口——RuntimeDriver 已长出 PR-1 的必需能力方法（可空 minVersion /
 //      defaultBinary / probe / listModels / captureSessions），两个内建 driver
@@ -66,8 +66,9 @@ describe('RFC-143 (A) 派生单源', () => {
     expect(isKnownRuntimeKind(undefined)).toBe(false)
   })
 
-  it('nodeRunMint 不再硬编码 kind 字面量集合（改走 isKnownRuntimeKind）', () => {
-    const src = SRC('services/nodeRunMint.ts')
+  it('冻结运行时不再硬编码 kind 字面量集合（改走 isKnownRuntimeKind）', () => {
+    // RFC-468: the freeze moved from `services/nodeRunMint.ts` to runtime-management.
+    const src = SRC('modules/runtime-management/infrastructure/local/frozenTaskRuntime.ts')
     expect(src).not.toMatch(/=== 'opencode' \|\| .*=== 'claude-code'/)
     expect(src).toContain('isKnownRuntimeKind(')
   })
@@ -457,7 +458,9 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     )
     // RFC-412: services/scheduler.ts is deleted.
     expect(() => SRC('services/scheduler.ts')).toThrow()
-    expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')
+    expect(SRC('modules/runtime-management/infrastructure/local/frozenTaskRuntime.ts')).toContain(
+      'configBackedBinary',
+    )
     // T19 同批：registry 对二进制缓存驱逐保持 kind-blind（走 driver 可选能力面，
     // 不具名依赖 opencode 缓存实现）。
     expect(SRC('modules/runtime-management/application/runtimeRegistry.ts')).not.toContain(

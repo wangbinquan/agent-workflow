@@ -5,17 +5,17 @@ import type {
 } from '../../application/ports/taskAgentRuntimeBindings'
 import type { AgentMaterialContentReference } from '../../application/ports/agentMaterial'
 import type { RuntimeExecutionQueries } from '../../public/queries'
-import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
+import type { TaskRuntimeFreezePersistence } from '../../application/ports/taskRuntimeFreezePersistence'
 import {
   frozenRuntimeOfSessionWith,
   resolveFrozenRuntimeWith,
   type FrozenRuntime,
-} from '@/services/nodeRunMint'
+} from './frozenTaskRuntime'
 
 /** The existing persistence/freeze algorithm remains the one implementation.
  * Its native binary column is private to this selected owner and compiler. */
 export function createLocalTaskAgentRuntimeBindings(input: {
-  readonly persistence: NodeRunRuntimePersistence
+  readonly persistence: TaskRuntimeFreezePersistence
   readonly registry: RuntimeExecutionQueries
   readBinaryConfiguration(): Promise<
     { opencodePath?: string | null; claudeCodePath?: string | null } | undefined

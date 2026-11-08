@@ -172,9 +172,10 @@ describe('RFC-349 runtime registry provider operations', () => {
     expect(bundle).toContain(
       'nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx)',
     )
-    expect(source('src/services/nodeRunMint.ts')).not.toContain(
-      'export async function resolveFrozenRuntime(',
-    )
+    // RFC-468: the freeze moved from `services/nodeRunMint.ts` to runtime-management.
+    expect(
+      source('src/modules/runtime-management/infrastructure/local/frozenTaskRuntime.ts'),
+    ).not.toContain('export async function resolveFrozenRuntime(')
   })
 
   test('PostgreSQL composition resolves the same closed row without a SQLite facade', async () => {
