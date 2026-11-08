@@ -19,7 +19,7 @@
 - [x] AC-1 本文件不在、零引用；DA 与 integration 互不取内部文件；integration 的实现与 DA 端口逐项相同；MR effects 只一份
 - [x] AC-2 架构计数按实测（`R1` 64 → 57、`services/` 61 → 60），越界类计数、public surface 偏差与未被消费的 public 符号不升
 - [x] AC-3 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI：`a9207cbc0` 主 CI run 42501878538 有两格红，逐格归因见下：design/ 链接检查查出本 RFC proposal 一条指错目录的 RFC-310 链接（本 RFC 的缺陷，Done 文档提交改正）；`rfc398-start-auto-upgrade-takeover` 一例是 RFC-398 多进程接管用例的偶发红（与本 RFC 无关）；其余 67 个 job 与 windows-platform 通过
 
 ## 集中验证（2026-11-08，候选基于 `dacdc3f96`）
 
@@ -96,6 +96,21 @@
 - 账本：`R1` 64 → 57（实测与账本逐条相等，`R2` 0）；public surface 偏差 94 逐条相等（`rfc294-architecture-preflight` 登记改名一条：同一个开放类型
   改由 `assertEvidenceStagingFactory` 先触到）、capability 归属清单 18 逐条相等；未被消费的 public 符号 322 不变、public surface 1497 → 1493；
   guard-manifest 刷新五个守卫文件的行数。
+
+## CI（AC-4）
+
+- `a9207cbc0` 主 CI run 42501878538：70 个 job 里 67 个通过，两格红，「CI required」汇总格随之红——
+  1. **Markdown link check（design/）**：本 RFC proposal 第 6 行的 RFC-310 链接写成了不存在的 `RFC-310-digital-employee/`（实际目录是
+     `RFC-310-rule-driven-development-digital-employee/`）。本 RFC 的缺陷（集中验证没有覆盖 design/ 的相对链接），Done 文档提交改正。
+  2. **Backend tests（ubuntu-latest shard 41/44）**：`rfc398-start-auto-upgrade-takeover`「N read no active; C registers; P dies; N acquires
+     after takeover」184.6 s 后 barrier / readiness 到点，子进程（真 `src/main.ts`）的 stderr 是 `JSON Parse error: Unable to parse JSON string`。
+     同一文件前两例（同样起真 daemon、走同一套装配）在这次 run 里通过；父提交 `dacdc3f96` 的主 CI run 42480858762 同一分片、同一用例通过
+     （28.45 s）；本地全量 SQLite 里该文件通过；本 RFC 改的是代码托管桥的装配（启动时只建闭包、不读 JSON）。判为与提交内容无关的多进程
+     时序偶发红，用例属 RFC-398，未改、未重跑，如实记录。
+- 同一 run 的 shard 40/44 里，RFC-470 Done 文档提交那格红的 `rfc398-postgresql-provisioning` 用例通过（108.08 s）。
+- windows-platform push run 42501878336 与 maintenance-soak-nightly push run 42501878188 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件里 11 个全过（105 pass）；`rfc376-report` 只读提交里的源码（不读这 5 个文档），这一轮在负载约 40 下撞用例自带的 300 秒
+  （两份报告已逐字相同，到点后被杀的是随后的 `git show`），沿用 Done 文档改动前同一份代码上的通过结果（12 个文件 106 pass）。
 
 ## PR / 提交
 

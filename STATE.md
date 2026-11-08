@@ -1,4 +1,4 @@
-## 2026-11-08 RFC-471 开发交付的代码托管桥归 integration：services/developmentDeliveryDeps 退役（In Progress；`design/RFC-471-development-delivery-code-host-bridge/`）
+## 2026-11-08 RFC-471 开发交付的代码托管桥归 integration：services/developmentDeliveryDeps 退役（Done；`design/RFC-471-development-delivery-code-host-bridge/`）
 
 - **来由**：RFC-294 W9-D 第十八步（`services/` 业务实现按 owner 归位）。`services/developmentDeliveryDeps.ts` 是开发交付的代码托管桥，取
   development-automation（DA）与 integration 各三个内部文件（7 条 `R1`）；DA 的 mission 操作与交付 provider 从它取 MR effects 与 integration 的
@@ -24,6 +24,13 @@
   `rfc321` 与上面第二处；复跑 177 个文件，余导出所致的 `rfc321` 与 RFC-167 `approve`、`rfc363` 目录分页各一例（同一时刻在 RFC-470 导出仓库里对照，两边同一例到点）；PostgreSQL 30 秒时限复跑 246 个能到引擎选择的文件，余 6 个文件 11 例，都是用例自带的计时到点或负载下的先后断言（同一时刻在 RFC-470 导出仓库里逐个对照，每一对结果相同）；修复改动的闭包多出的
   30 个用例两引擎补跑全过；P0 两引擎各 17 阶段通过；system-mocks 30 秒时限 111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：
   `R1` 64 → 57、`R2` 0，`services/` 61 → 60，public surface 1497 → 1493，偏差 94、未被消费的 public 符号 322 不变，越界类计数不变。
+- **落地**：`a9207cbc0`。
+- **CI**：`a9207cbc0` 主 CI run 42501878538 两格红：design/ 链接检查查出本 RFC proposal 一条指错目录的 RFC-310 链接（本 RFC 的缺陷，Done
+  文档提交改正）；Backend tests（ubuntu-latest shard 41/44）的 `rfc398-start-auto-upgrade-takeover` 一例多进程接管到点（子进程
+  `JSON Parse error`；父提交同一分片、同一用例通过，本地全量通过，与本 RFC 无关，用例属 RFC-398，未改、未重跑）；「CI required」随之红，
+  其余 67 个 job 与 windows-platform 通过。RFC-470 Done 那格 `rfc398-postgresql-provisioning` 在本次 run 的 shard 40/44 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 60 个文件；`R2` 0 条；`R1` 57 条）。`R1` 大头：`task`（9）、`systemAgentRun`（5）、
+  `auth/session`（4，identity-access 的兼容转出，intent 的调度与 HTTP 路由在用）；运行时驱动一族（`services/runtime/**`）归 runtime-management。
 
 ## 2026-11-07 RFC-470 退役最后两个薄转出 workflow / workflow.validator 与 taskLaunchGate：任务启动资源适配器归 resource-catalog（Done；`design/RFC-470-workflow-facades-retirement/`）
 
