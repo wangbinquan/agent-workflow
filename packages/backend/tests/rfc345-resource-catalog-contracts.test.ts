@@ -854,7 +854,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const resources = readFileSync(
-      resolve(sourceRoot, 'services/execution/taskExecutionResources.ts'),
+      resolve(sourceRoot, 'modules/task-execution/infrastructure/taskExecutionResources.ts'),
       'utf8',
     )
     // RFC-469: the one-line closure freeze moved into its only caller, `services/task.ts`; its body

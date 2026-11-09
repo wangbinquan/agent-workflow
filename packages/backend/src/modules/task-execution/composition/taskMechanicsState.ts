@@ -8,7 +8,7 @@ import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
 import type { DagScopeArgs } from '../application/ports/dagScope'
-import type { TaskAgentResourceSession } from '@/services/execution/taskExecutionResources'
+import type { TaskAgentResourceSession } from '../infrastructure/taskExecutionResources'
 
 /**
  * One scope invocation: the wrapper that owns it (null at the workflow root) and its RFC-354 frame. RFC-420: the

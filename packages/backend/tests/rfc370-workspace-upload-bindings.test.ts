@@ -16,7 +16,7 @@ import {
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import {
   createRootTaskLaunchKernel,

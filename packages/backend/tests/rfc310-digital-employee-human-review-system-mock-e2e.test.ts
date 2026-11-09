@@ -32,7 +32,7 @@ import { createInMemoryDb } from '@/db/client'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {

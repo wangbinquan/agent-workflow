@@ -1,6 +1,6 @@
 import type { TaskMechanicsState } from './taskMechanicsState'
 import { buildMergeAgent, buildMergeResolvePrompt, mergeResolveNodeId } from '@/services/mergeAgent'
-import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
+import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecutionResources'
 import { runTaskAgentWithFamily } from './taskAgentRunFamily'
 import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import type { MergeConflictPorts } from '../application/ports/mergeConflictResolution'

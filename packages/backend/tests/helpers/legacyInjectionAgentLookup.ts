@@ -3,7 +3,7 @@
 // 它此前住在被神谕的那个 src 文件里，叫 `createSqliteLegacyAgentDependencyLookup`，并自陈
 // 「Explicit SQLite test/compatibility binding. Production provider sessions inject their
 // Resource Catalog lookup instead of reaching this factory.」——也就是说它**从来只有测试在调**：
-// 生产的注入解析走 `services/execution/taskExecutionResources.ts::resolveTaskExecutionInjection`
+// 生产的注入解析走 `modules/task-execution/infrastructure/taskExecutionResources.ts::resolveTaskExecutionInjection`
 // （具名 Resource Catalog participant）。`tests/architecture/rfc359-w5-adapter-production-consumer.test.ts`
 // 把它记成零生产消费者的 provider 适配器，本波按「适配器不许留在 src 装成 provider 对等」清理：
 // 神谕本体（`resolveInjection`）仍在 src 等它整体退役，这个纯测试绑定搬到测试侧。

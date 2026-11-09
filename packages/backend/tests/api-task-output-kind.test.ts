@@ -22,7 +22,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { taskExecutionKind } from '@agent-workflow/shared'
 import { CODE_ROUND_NODE_ID, synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
-import { getExecutionOutcome } from '@/services/execution/outcome'
+import { getExecutionOutcome } from '@/modules/task-execution/infrastructure/executionOutcome'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

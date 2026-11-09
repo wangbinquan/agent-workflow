@@ -26,7 +26,7 @@ import type {
   CodeHostRequestPort,
 } from '../application/ports/codeHostNodeExecution'
 import type { DynamicWorkflowLayerOneValidation } from '../application/ports/dynamicWorkflowGenerate'
-import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import type { TaskExecutionResourceBinding } from '../application/ports/taskExecutionResourceSnapshots'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'

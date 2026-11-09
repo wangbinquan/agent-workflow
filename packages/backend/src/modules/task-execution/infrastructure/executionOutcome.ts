@@ -1,4 +1,4 @@
-import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
+import { createRunHistorySnapshot } from '../application/runHistory'
 // RFC-243 T4 — the unified outcome projection (design §1.3). One answer to
 // "the task finished — what did it produce?" for all four execution kinds:
 //
@@ -21,17 +21,54 @@ import { createRunHistorySnapshot } from '@/modules/task-execution/public/querie
 //
 // `projectExecutionOutcome` is a pure function over pre-fetched rows (unit
 // tested directly); `getExecutionOutcome` is the thin DB assembler.
+//
+// RFC-473: moved here from `services/execution/outcome.ts` (bodies unchanged); the `ExecutionOutcome` shape it
+// returns moved with it from the retired `services/execution/types.ts`.
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
-import { workgroupLaunchMode } from '@/modules/task-execution/public/queries'
-import type { TaskWorkgroupConfig } from '@/modules/task-execution/public/types'
-import type { TaskReadSubject } from '@/modules/task-execution/public/types'
-import type { TaskExecutionOutcomeReadModel } from '@/modules/task-execution/public/types'
-import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
+import { type TaskWorkgroupConfig, workgroupLaunchMode } from '../domain/taskWorkgroupConfig'
+import type { TaskReadSubject } from '../domain/taskSubject'
+import type { TaskExecutionOutcomeReadModel } from '../public/types'
+import { createTaskExecutionReadModels } from './taskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
 import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import type { ExecutionOutcome } from './types'
+
+/**
+ * The unified result projection (design §1.3). `outputs` is {} for any
+ * non-done task; `error` mirrors the tasks-row triple verbatim (repo
+ * convention: error_summary is the human line, error_message carries the
+ * machine code — projected as-is, not re-interpreted).
+ */
+export type ExecutionOutcome = {
+  taskId: string
+  status: TaskStatus
+  terminal: boolean
+  outputs: Record<
+    string,
+    {
+      content: string
+      kind: string | null
+      archiveJson?: string | null
+      /**
+       * RFC-306 D17 — false when the child produced NOTHING for this port
+       * because a branch inside the child was closed (its output node was
+       * skipped, or the bound port was marked inactive). A parent `call-workflow`
+       * node copies the flag onto its own port row, so a branch decision taken
+       * inside a child workflow keeps propagating in the parent graph. Absent ⇒
+       * active (every pre-RFC-306 projection).
+       */
+      active?: boolean
+    }
+  >
+  /** Non-fatal projection notes (e.g. legacy workgroup task without a result anchor). */
+  warnings: string[]
+  error?: {
+    summary: string | null
+    message: string | null
+    failedNodeId: string | null
+  }
+}
 
 export type OutcomeTaskRow = {
   subjectKind?: TaskReadSubject['kind']

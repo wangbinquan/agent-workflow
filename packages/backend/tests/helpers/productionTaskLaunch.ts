@@ -41,7 +41,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import type { ChildWorkflowLaunchRequest } from '@/modules/task-execution/application/ports/childExecutionLaunchOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import {

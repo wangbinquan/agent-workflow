@@ -58,7 +58,7 @@ import {
   resolveIsolatedConflict,
 } from '@/modules/task-execution/infrastructure/isolationWorkspaceView'
 import { buildMergeAgent } from '@/services/mergeAgent'
-import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
+import { resolveSyntheticTaskAgentInjection } from '@/modules/task-execution/infrastructure/taskExecutionResources'
 import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import type { Logger } from '@/util/log'

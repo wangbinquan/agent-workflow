@@ -1,6 +1,10 @@
 // RFC-345 T4a — task-execution consumer adapter for the named Resource
 // Catalog participant. Every call binds one exact authority/actor pair to one
 // 只读快照事务；callers see frozen data-only snapshots.
+//
+// RFC-473: moved here from `services/execution/taskExecutionResources.ts` (bodies unchanged). It re-exports nothing:
+// the port types live in `application/ports/taskExecutionResourceSnapshots` (public via `public/commands`) and the
+// binding factory in `infrastructure/taskExecutionResourceSnapshots`.
 
 import { join } from 'node:path'
 
@@ -21,18 +25,7 @@ import type {
   TaskExecutionResourceAuthority,
   TaskExecutionResourceAuthorityPair,
   TaskExecutionResourceBinding,
-} from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
-
-/**
- * Consumer-owned structural seam. Bootstrap composition may satisfy it, but
- * task execution never imports the Resource Catalog composition directory.
- */
-export type {
-  TaskExecutionResourceAuthority,
-  TaskExecutionResourceAuthorityPair,
-  TaskExecutionResourceBinding,
-} from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
-export { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
+} from '../application/ports/taskExecutionResourceSnapshots'
 
 export async function loadTaskExecutionResourceSnapshot<
   K extends TaskExecutionResourceRequest['kind'],

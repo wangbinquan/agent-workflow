@@ -256,7 +256,7 @@ test('negative fixtures: the port and the run-history reads reject legacy servic
     for (const target of [
       '@/services/clarifyRounds',
       '@/services/sessionModeFallback',
-      '@/services/execution/taskExecutionResources',
+      '@/services/execution/triggerPreflight',
       '@/modules/collaboration/public/participants',
     ])
       for (const text of [`import type { X } from '${target}'`, `export * from '${target}'`])

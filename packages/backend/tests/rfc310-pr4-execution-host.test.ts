@@ -32,10 +32,8 @@ import { createIdentityAccessRuntime } from '@/modules/identity-access/compositi
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import {
-  createTaskExecutionResourceBinding,
-  type TaskExecutionResourceAuthority,
-} from '@/services/execution/taskExecutionResources'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
+import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { createInMemoryDb, type DbClient } from '../src/db/client'

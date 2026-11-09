@@ -8,7 +8,7 @@ import {
 } from '../domain/clarifyRules'
 import { CLARIFY_FORBIDDEN_PREFIX, isClarifyRerunCause } from '@agent-workflow/shared'
 import { parsePortValidationFailuresJson } from '../application/portOutputValidation'
-import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
+import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecutionResources'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import { agentRefOfNode, fanoutInnerAgentRefKey } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'

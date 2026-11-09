@@ -188,7 +188,7 @@ export { taskRollbackPlan } from '../infrastructure/taskRollbackCodec'
 export { taskRepositoryNodePaths } from '../domain/taskRepository'
 export { projectStoredTaskRepositorySummary } from '../infrastructure/taskRepositorySurface'
 
-export { decodeTaskWorkgroupConfig, workgroupLaunchMode } from '../domain/taskWorkgroupConfig'
+export { decodeTaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
 export { decodeTaskRepositoryMount } from '../infrastructure/taskRepositoryCodec'
 export { taskWorkgroupConfigFromRow } from '../infrastructure/taskWorkgroupConfig'
 

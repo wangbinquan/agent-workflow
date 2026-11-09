@@ -354,8 +354,8 @@
       "whyFrameless": "旧归因 SQL 没有 container 条件。"
     },
     {
-      "site": "src/services/execution/outcome.ts#projectOutputNodePorts:1",
-      "path": "src/services/execution/outcome.ts",
+      "site": "src/modules/task-execution/infrastructure/executionOutcome.ts#projectOutputNodePorts:1",
+      "path": "src/modules/task-execution/infrastructure/executionOutcome.ts",
       "symbol": "projectOutputNodePorts",
       "ordinal": 1,
       "source": "createRunHistorySnapshot( '', runs.map((row) => ({ ...row, taskId: '' })), ).familyHistory('', { nodeId }, { topLevelOnly: true, statusIn: ['done', 'skipped'] })",

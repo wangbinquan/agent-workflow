@@ -41,7 +41,7 @@ import type {
 import { localActionWorkspaceEntries } from '@/modules/task-execution/infrastructure/local/localActionWorkspaceEntries'
 import { readTaskStatus } from '@/modules/task-execution/infrastructure/taskExecutionTaskReads'
 import { watchTaskTerminal } from '@/modules/task-execution/infrastructure/executionWatch'
-import { getExecutionOutcome } from '@/services/execution/outcome'
+import { getExecutionOutcome } from '@/modules/task-execution/infrastructure/executionOutcome'
 import {
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,

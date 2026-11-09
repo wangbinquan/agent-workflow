@@ -7,8 +7,10 @@
 //
 // 它自己没有任何 provider 判断：`watchTaskTerminal` 与 `getExecutionOutcome` 都是中立实现。
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { ExecutionOutcome } from '@/services/execution/types'
-import { getExecutionOutcome } from '@/services/execution/outcome'
+import {
+  type ExecutionOutcome,
+  getExecutionOutcome,
+} from '@/modules/task-execution/infrastructure/executionOutcome'
 import {
   watchTaskTerminal,
   type TerminalWatchResult,

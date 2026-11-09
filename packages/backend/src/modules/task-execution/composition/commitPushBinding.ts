@@ -14,7 +14,7 @@ import {
   commitPushNodeId,
 } from '@/services/commitPush'
 import { runCommitPush } from '@/services/commitPushRunner'
-import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
+import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecutionResources'
 import { readTaskCommitExcludePatterns } from '../application/operationConfiguration'
 import type { AutoCommitPushPorts } from '../application/ports/commitPush'
 import type { ReadonlyInspectionPorts } from '../application/ports/readonlyInspection'

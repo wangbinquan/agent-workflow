@@ -28,8 +28,8 @@ import { createTaskExecutionPersistence } from '../../src/modules/task-execution
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/webhookDispatch'
-import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
-import type { ExecutionInvoker } from '../../src/services/execution/types'
+import type { TaskExecutionResourceAuthority } from '../../src/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
+import type { ExecutionInvoker } from '../../src/modules/task-execution/public/commands'
 import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'
 import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 

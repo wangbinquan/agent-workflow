@@ -12,7 +12,7 @@ import { composeIntegrationTriggerSnapshots } from '../../src/modules/resource-c
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
+import { createTaskExecutionResourceBinding } from '../../src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { assertNotBuiltin } from '../../src/modules/resource-catalog/domain/systemResources'
 import {
   createScheduledTask as createScheduledTaskService,

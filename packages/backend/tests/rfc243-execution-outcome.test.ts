@@ -28,7 +28,7 @@ import {
   projectExecutionOutcome,
   type OutcomeRunRow,
   type OutcomeTaskRow,
-} from '../src/services/execution/outcome'
+} from '../src/modules/task-execution/infrastructure/executionOutcome'
 
 function baseTask(overrides: Partial<OutcomeTaskRow> = {}): OutcomeTaskRow {
   return {

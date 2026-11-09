@@ -24,7 +24,7 @@ import { readTaskFixtures, workflowFixture } from './helpers/model'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ExecutionInvoker } from '../src/services/execution/types'
+import type { ExecutionInvoker } from '../src/modules/task-execution/public/commands'
 import { launchTestTask, type TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 

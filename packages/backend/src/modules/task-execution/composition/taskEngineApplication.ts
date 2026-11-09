@@ -25,7 +25,7 @@ import type { SchedulerRuntimeTopology } from '../public/participants'
 import {
   createTaskAgentResourceSession,
   type TaskAgentResourceSession,
-} from '@/services/execution/taskExecutionResources'
+} from '../infrastructure/taskExecutionResources'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
 /**

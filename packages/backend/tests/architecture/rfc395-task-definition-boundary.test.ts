@@ -344,7 +344,10 @@ test('each reader uses its launch or runtime side', () => {
     // RFC-395 II-a A7: rowToTask and its launch projection moved to the owner query.
     ['modules/task-execution/infrastructure/taskDetailQueries.ts', '.launch.workgroupName'],
     ['modules/task-execution/infrastructure/taskDetailQueries.ts', '.launch.goal'],
-    ['services/execution/outcome.ts', 'workgroupLaunchMode(task.workgroupConfig?.launch)'],
+    [
+      'modules/task-execution/infrastructure/executionOutcome.ts',
+      'workgroupLaunchMode(task.workgroupConfig?.launch)',
+    ],
     [
       'modules/task-execution/engine/task/dynamicWorkflowGenerate.ts',
       'row.workgroupConfig?.runtime.config',

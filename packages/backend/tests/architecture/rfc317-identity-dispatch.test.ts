@@ -2,7 +2,7 @@
 //
 // 事故形态（**本仓真的发生过**）
 // -----------------------------
-// `services/execution/outcome.ts` 里留着一段前人写的注释：code-round 任务曾经掉进
+// `modules/task-execution/infrastructure/executionOutcome.ts`（原 `services/execution/outcome.ts`）里留着一段前人写的注释：code-round 任务曾经掉进
 // workgroup 分支，`workgroupModeOf(null)` 返回 null，于是结果是
 // `status: 'done'` + `outputs: {}` + 一条 `workgroup-config-unparsable` 警告——
 // **一个看起来成功、实则空输出、还赖在它根本没有的 workgroup 配置头上的结果**。

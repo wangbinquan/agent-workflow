@@ -1,3 +1,29 @@
+## 2026-11-08 RFC-473 执行结果投影与资源会话归 task-execution：services/execution 的三个文件迁入（In Progress；`design/RFC-473-execution-outcome-and-resource-sessions/`）
+
+- **来由**：RFC-294 W9-D 第二十步（`services/` 业务实现按 owner 归位）。`services/execution/` 下的结果投影 `outcome.ts`（取 task-execution
+  读模型，1 条 `R1`）、它唯一有生产消费方的类型文件 `types.ts` 与资源会话 `taskExecutionResources.ts`（转出 task-execution 的端口类型与绑定
+  工厂，3 条 `R1`）owner 都是 task-execution，生产消费方全在 task-execution 内部，模块外只取 task-execution `public/commands` 早已转出的两个
+  类型。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为
+  已批准，不派 Codex。
+- **范围**：投影迁为 task-execution `infrastructure/executionOutcome.ts`（`ExecutionOutcome` 随迁；`types.ts` 删除——其余三个类型零消费、
+  `ExecutionInvoker` 只是 public 的转出），资源会话迁为 `infrastructure/taskExecutionResources.ts`、去掉四个转出；模块内外消费方改取定义处或
+  `public/commands`；`public/queries` 收回失去模块外消费方的 `workgroupLaunchMode`；公共内核清单、EK-07 锚点、选择语义账本、路径锁、owner 表与
+  `windows-platform` 的路径过滤随迁。
+- **不做**：`services/nodeRollback.ts`（collaboration 的评审与反问直接调它，迁入要么在 task-execution public 上开出数据库句柄、要么给
+  collaboration 自有的回滚端口——另一个 RFC 的量）；`services/execution/` 余下五个文件（消费方跨四个 context）；`services/task.ts`、
+  `services/runtime/**`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-472 的 Done 文档提交 `4a6878673`（7 个文档文件，含 RFC-370 证据表那条指向已删文件的链接的改正与 dev-gotchas 的补记）：
+  exact SHA 主 CI run 42530424575 的 70 个 job 全绿（design/ 链接检查通过）。
+- **集中验证**：都在候选导出仓库里跑，没有查出本 RFC 的问题。backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片全部跑完
+  （分片时限 3 小时），合计 23562 pass，其余为负载超时与超时残留、导出仓库所致的 `rfc321` 与一例 system-mock 连接重置；复跑 183 个文件，余导出所致的 `rfc321` 与 RFC-167 `approve`、`rfc300` Webhook 清理、`rfc363` 目录分页、`rfc354` 嵌套闭包各一例（都撞用例自带的
+  计时；同一时刻在 RFC-472 导出仓库里对照，`rfc354` 两边都过，其余三个两边同一例到点）；
+  PostgreSQL 30 秒时限复跑 197 个能到引擎选择的文件，另跑 27 个经改到的用例 helper 取到的用例，主清单 187 个全过、另跑的 27 个 26 个全过，余 11 个文件 33 例都是撞用例自带或 30 秒的时限（同一时刻在 RFC-472
+  导出仓库里逐个对照：7 个文件两边同一批用例到点，2 个两边都全过，`s17` 再跑一对两边同样到点；`rfc310` 的两个 `[postgresql]` 用例两边
+  都在 173～181 秒之间、擦着自带的 180 秒）；P0 两引擎各 17 阶段通过；shared
+  2344 pass、frontend gate 7361 pass、system-mocks 30 秒时限 111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 53 → 49、`R2` 0，
+  `legacy-horizontal-files` 180 → 177、`services/` 60 → 57，public surface 1494 → 1493，偏差 94、未被消费的 public 符号 322 不变，越界类计数不变。
+
 ## 2026-11-08 RFC-472 退役 identity-access 的兼容转出 auth/session：intent 的属主重新准入改走自有端口（Done；`design/RFC-472-auth-session-facade-retirement/`）
 
 - **来由**：RFC-294 W9-D 第十九步（legacy 兼容转出清仓）。`src/auth/session.ts` 是 RFC-370 留下的 identity-access 兼容转出（取 identity-access

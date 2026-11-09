@@ -1255,7 +1255,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc395-task-definition-boundary.test.ts",
       "id": "rfc395-task-definition-boundary",
-      "lines": 625,
+      "lines": 628,
       "mechanism": "ast",
       "minCorpusFiles": 1001,
       "negativeFixture": true,

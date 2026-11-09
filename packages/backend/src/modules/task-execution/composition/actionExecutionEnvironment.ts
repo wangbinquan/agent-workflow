@@ -25,7 +25,7 @@ import { localActionWorkspaceEntries } from '../infrastructure/local/localAction
 export { localActionWorkspaceEntries }
 import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
 import { watchTaskTerminal } from '../infrastructure/executionWatch'
-import { getExecutionOutcome } from '@/services/execution/outcome'
+import { getExecutionOutcome } from '../infrastructure/executionOutcome'
 
 export interface ActionExecutionEnvironmentDependencies {
   readonly db: PersistenceDb

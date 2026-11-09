@@ -201,7 +201,7 @@
       "claimAudit": "Dispatch is compile-time exhaustive (`const unhandled: never = kind`, outcome.ts:265-271) - the approved pattern. But the projection reaches directly into one domain's table and service (see EK-07).",
       "core": true,
       "files": [
-        "packages/backend/src/services/execution/outcome.ts"
+        "packages/backend/src/modules/task-execution/infrastructure/executionOutcome.ts"
       ],
       "guards": [],
       "id": "projectexecutionoutcome",

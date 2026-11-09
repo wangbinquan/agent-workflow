@@ -6,7 +6,7 @@ import {
   registerKnownChildTask,
 } from '../infrastructure/childBudget'
 import { watchTaskTerminal } from '../infrastructure/executionWatch'
-import { getExecutionOutcome } from '@/services/execution/outcome'
+import { getExecutionOutcome } from '../infrastructure/executionOutcome'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import type { ChildCallNodeExecutionPorts } from '../application/ports/childCallNodeExecution'
 import { buildChildRuntime, delegatedCallActor } from '../application/childCallInheritance'

@@ -100,7 +100,7 @@ import {
   setNodeRunStatusInTransaction,
   workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
-import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
+import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/public/commands'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { resolveRepoGroupLayout } from '@/modules/source-control/public/queries'
 import { ConflictError, DomainError, ValidationError, diagnosticTextOf } from '@/util/errors'
