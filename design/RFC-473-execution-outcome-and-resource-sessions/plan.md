@@ -19,7 +19,7 @@
 - [x] AC-1 三个旧文件不在、零引用；新位置函数体逐字相同；`server.ts` 与 `services/task.ts` 的两个类型取自 task-execution public
 - [x] AC-2 架构计数按实测（`R1` 53 → 49），越界类计数、public surface 偏差与未被消费的 public 符号不升
 - [x] AC-3 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI：`7e7711fbf` 主 CI run 42554226816 的 70 个 job 全绿；windows-platform push run 42554226882（路径过滤命中资源会话的新路径）、integration-opencode push run 42554227008 与 git-protocols-e2e push run 42554226879 通过
 
 ## 集中验证（2026-11-08，候选基于 `4a6878673`）
 
@@ -86,6 +86,15 @@
   legacy 样例换成仍在的 `triggerPreflight`（判据按 `services/` 前缀，不变）；EK-07 的锚点改指新文件里同一段代码。
 - 账本：`R1` 53 → 49（实测与账本逐条相等，`R2` 0）；public surface 1494 → 1493（`workgroupLaunchMode`）；偏差 94、未被消费的 public 符号 322
   逐条相等；guard-manifest 只刷新 `rfc395-task-definition-boundary` 的登记行数（625 → 628，其余登记的守卫文件行数未变）。
+
+## CI（AC-4）
+
+- `7e7711fbf` 主 CI run 42554226816：70 个 job 全绿（含 design/ 链接检查与「CI required」汇总格）。
+- windows-platform push run 42554226882（两份路径过滤里改指的资源会话新路径命中）、integration-opencode push run 42554227008（2 个 job）与
+  git-protocols-e2e push run 42554226879 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件 100 pass / 1 fail——11 个文件全过；`rfc376-report` 的「同一提交读两次」一例撞用例自带的
+  300 秒（325 s，单独再跑一次 304 s 同样到点），本机此时在跑 RFC-474 的全量 SQLite（四个分片）。该例只读提交里的 TS 源码，这 5 个 Done 文档
+  不是它的输入；验证期在同一份源码上的文档复跑里它 86 s 通过，Done 提交的 CI 在干净 runner 上再跑它。
 
 ## PR / 提交
 

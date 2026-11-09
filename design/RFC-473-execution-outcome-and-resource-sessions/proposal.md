@@ -1,6 +1,6 @@
 # RFC-473 执行结果投影与资源会话归 task-execution：`services/execution/` 的三个文件迁入（RFC-294 W9-D 第二十步）
 
-- **状态**：In Progress（2026-11-08）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-08，落地 `7e7711fbf`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.6 W9-D（`services/` 业务实现按 owner 归位）
 - **前序**：[RFC-243](../RFC-243-unified-executor/proposal.md)（统一结果投影与执行器合同类型）；

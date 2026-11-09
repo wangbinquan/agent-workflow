@@ -1,4 +1,4 @@
-## 2026-11-08 RFC-473 执行结果投影与资源会话归 task-execution：services/execution 的三个文件迁入（In Progress；`design/RFC-473-execution-outcome-and-resource-sessions/`）
+## 2026-11-08 RFC-473 执行结果投影与资源会话归 task-execution：services/execution 的三个文件迁入（Done；`design/RFC-473-execution-outcome-and-resource-sessions/`）
 
 - **来由**：RFC-294 W9-D 第二十步（`services/` 业务实现按 owner 归位）。`services/execution/` 下的结果投影 `outcome.ts`（取 task-execution
   读模型，1 条 `R1`）、它唯一有生产消费方的类型文件 `types.ts` 与资源会话 `taskExecutionResources.ts`（转出 task-execution 的端口类型与绑定
@@ -23,6 +23,11 @@
   都在 173～181 秒之间、擦着自带的 180 秒）；P0 两引擎各 17 阶段通过；shared
   2344 pass、frontend gate 7361 pass、system-mocks 30 秒时限 111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 53 → 49、`R2` 0，
   `legacy-horizontal-files` 180 → 177、`services/` 60 → 57，public surface 1494 → 1493，偏差 94、未被消费的 public 符号 322 不变，越界类计数不变。
+- **落地**：`7e7711fbf`。
+- **CI**：`7e7711fbf` 主 CI run 42554226816 的 70 个 job 全绿；windows-platform、integration-opencode 与 git-protocols-e2e 的 push run 均通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 57 个文件；`R2` 0 条；`R1` 49 条）。`R1` 大头：`task`（9）、`systemAgentRun`（5）、
+  `commitPushRunner`（4）、`runtimeSmoke`（4）、`nodeRollback`（3，collaboration 的评审与反问直接调它，要给 collaboration 一个自有的回滚端口）；
+  `systemAgentRun` / `runtimeSmoke` 绑着运行时驱动一族（`services/runtime/**`），随它一起归 runtime-management。
 
 ## 2026-11-08 RFC-472 退役 identity-access 的兼容转出 auth/session：intent 的属主重新准入改走自有端口（Done；`design/RFC-472-auth-session-facade-retirement/`）
 
