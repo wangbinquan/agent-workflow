@@ -17,7 +17,7 @@
 // flipped at runtime in dev (`bun --compile` rewrites `embed.generated.ts`).
 
 import { describe, expect, test } from 'bun:test'
-import { evaluateMigrationsStatus } from '../src/cli/doctor'
+import { evaluateMigrationsStatus } from '../src/modules/system-operations/domain/doctorDiagnostics'
 
 describe('doctor: evaluateMigrationsStatus', () => {
   describe('embedded mode (single binary)', () => {

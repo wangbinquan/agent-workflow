@@ -1,3 +1,30 @@
+## 2026-11-08 RFC-474 入口适配器经 bootstrap 装配：CLI 命令、路由挂载与首启示例不再直取模块内部（In Progress；`design/RFC-474-entry-adapter-bootstrap-assembly/`）
+
+- **来由**：RFC-294 W9-D 第二十一步。`R1` 余 49 条，其中 11 条出在五个入口适配器上，账本写的退役条件都是「由 bootstrap 注入、经 owner 的
+  composition 或 public 收口，不加目录或 bootstrap 豁免」：应用根 `server.ts` 直取 knowledge-evolution 的两个 inbound 路由挂载；`cli/config-cli.ts`
+  自己组装 system-operations 的文件配置存储；`cli/doctor.ts` 是 RFC-370 留下的 Doctor 兼容转出（生产上只有 `main.ts` 取 `formatDoctor`）；
+  `cli/migrationReport.ts` 直调 development-automation 的分析与 legacy 读取；`services/demoSeed.ts` 取 code-capability composition 的参与方类型、
+  自己选单机完成标记。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与
+  集中验证，按授权记为已批准，不派 Codex。
+- **范围**：knowledge-evolution 新增 `composition/routes.ts` 转出两个挂载（RFC-439 同形），`server.ts` 改取；`bootstrap/commandBootstraps.ts`
+  组装 config 的文件存储、doctor 的报告（`runDoctorCommand()`，`formatDoctor` 经 system-operations 的 Doctor composition 交出）与
+  migration-report 的依赖（development-automation 新增 `composition/migrationReport.ts`），`main.ts` 注入；`cli/doctor.ts` 删除、11 个用例改取
+  定义处；首启示例的完成标记由 `daemonApplication` 的 `demo-seed` 启动步骤组装后传入（必填），code-capability 新增 `public/types.ts`
+  转出示例参与方类型。
+- **取舍**：单机 `config get|set` 改走与 selected 同一条异步路径（RFC-370 为不改当时默认命令留下的同步重载随默认装配迁到 bootstrap 一起
+  收口；`main.ts` 本就 await，输出、错误文本与退出码不变）；migration-report 的 provider 解析留在 CLI（RFC-349 / RFC-395 AF-D10 锁住的形状）。
+- **不做**：`services/demoSeed.ts` 的归属（示例编排横跨 resource-catalog 与 code-capability，留在 `services/`）；其余 38 条 `R1`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-473 的 Done 文档提交 `5343645f1`（5 个文档文件）：exact SHA 主 CI run 42559063606 的 70 个 job 全绿（本机 Done 前文档复跑里
+  撞用例自带 300 秒的 `rfc376-report` 在 CI 的干净 runner 上通过）。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的一处问题，已修复并复验：首启示例的参与方类型新建了 code-capability `public/participants.ts`，
+  而 RFC-453 已退役并锁住这个路径（`rfc453-workspace-insight-module` 报出），改放 `public/types.ts`。backend tsc 0 错、eslint 无告警、`depcheck`
+  通过；全量 SQLite 四片全部跑完（分片时限 3 小时），合计 23561 pass，其余为负载超时与超时残留、导出仓库所致的 `rfc321`、一例用例自带的 20 秒
+  流程时限与上面那处问题；复跑 209 个文件，余导出所致的 `rfc321` 与 RFC-167 `approve`、`rfc363` 目录分页各一例（同一时刻在 RFC-473 导出仓库里对照，两边同一例到点）；PostgreSQL 30 秒时限复跑 285 个能到引擎选择的文件，276 个全过，余 9 个文件 18 例都是撞用例自带或 30 秒的时限（同一时刻在 RFC-473 导出仓库里逐个对照：6 个文件
+  两边同一批用例到点，2 个两边都全过，`rfc310-employee-case-runtime` 再跑一对两边同一例到点）；P0 两引擎各 17 阶段通过；shared 2344 pass、
+  frontend gate 7361 pass、system-mocks 30 秒时限 111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 49 → 38、`R2` 0，21 项闸门计数不变，public surface 1493 → 1495（code-capability
+  的两个示例类型，都有消费方），偏差 94、未被消费的 public 符号 322 不变。
+
 ## 2026-11-08 RFC-473 执行结果投影与资源会话归 task-execution：services/execution 的三个文件迁入（Done；`design/RFC-473-execution-outcome-and-resource-sessions/`）
 
 - **来由**：RFC-294 W9-D 第二十步（`services/` 业务实现按 owner 归位）。`services/execution/` 下的结果投影 `outcome.ts`（取 task-execution

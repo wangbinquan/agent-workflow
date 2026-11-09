@@ -12,7 +12,12 @@ import { createSecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { loadConfig } from '@/config'
-import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
+import {
+  composeDoctorApplication,
+  formatDoctor,
+} from '@/modules/system-operations/composition/doctorDiagnostics'
+import { composeFileCliConfiguration } from '@/modules/system-operations/composition/cliConfiguration'
+import { composeLegacyAssetMigrationReport } from '@/modules/development-automation/composition/migrationReport'
 import {
   composeLocalSystemOperations,
   prepareDatabaseProviderForBoot,
@@ -222,14 +227,28 @@ export function composeRestoreCommandOperations() {
   })
 }
 
-/** `doctor`: the local diagnostics. */
-export function runDoctorDiagnostics() {
-  return composeDoctorApplication({
+/** `doctor`: the local diagnostics and the report the command prints (RFC-474: the report moved here from `cli/doctor.ts`). */
+export async function runDoctorCommand() {
+  const result = await composeDoctorApplication({
     diagnostics: createLocalDoctorDiagnosticsFactory(logicalSchemaContract),
   }).run()
+  return { ok: result.ok, output: formatDoctor(result) }
 }
 
 /** `db …`: the local database migration operations. */
 export function composeLocalDatabaseMigrationCommandOperations() {
   return composeLocalDatabaseMigrationOperations(logicalSchemaContract)
+}
+
+/** `config get|set` (RFC-474): the installation's configuration file; the daemon need not run. */
+export function composeConfigCommandPersistence() {
+  return composeFileCliConfiguration(Paths.config)
+}
+
+/** `migration-report` (RFC-474): the schema contract and the legacy asset analysis over the client the command opens. */
+export function composeMigrationReportCommandDependencies() {
+  return Object.freeze({
+    contract: logicalSchemaContract,
+    analysis: composeLegacyAssetMigrationReport,
+  })
 }

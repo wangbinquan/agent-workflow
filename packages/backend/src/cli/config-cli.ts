@@ -6,32 +6,28 @@
 //   set worktreeAutoGc '{"enabled":true}'    -> object
 //
 // Top-level keys only; for nested fields, set the whole nested object as JSON.
+//
+// RFC-474: the storage is injected — `main.ts` hands over the installation's configuration file composed by bootstrap
+// (`composeConfigCommandPersistence()`); a selected deployment's storage goes through the same path. Reads and writes are
+// awaited either way, and run with the storage itself as `this`.
 
 import type { Config } from '@agent-workflow/shared'
-import {
-  composeFileCliConfiguration,
-  type ApplicationConfigurationPersistencePort,
-} from '@/modules/system-operations/composition/cliConfiguration'
-import { Paths } from '@/util/paths'
 
-export function configGetCommand(args: string[]): { output: string }
-export function configGetCommand(
-  args: string[],
-  selected: Pick<ApplicationConfigurationPersistencePort, 'load'>,
-): Promise<{ output: string }>
-export function configGetCommand(
-  args: string[],
-  selected?: Pick<ApplicationConfigurationPersistencePort, 'load'>,
-): { output: string } | Promise<{ output: string }> {
-  if (selected !== undefined) return readSelectedConfiguration(args, selected)
-  return formatConfigurationRead(args, composeFileCliConfiguration(Paths.config).load())
+/** The read half of the configuration storage (system-operations' `ApplicationConfigurationPersistencePort` satisfies it). */
+export interface ConfigCommandReader {
+  load(): Config | Promise<Config>
 }
 
-async function readSelectedConfiguration(
+/** The write half: storage validates the patch and preserves unrelated settings. */
+export interface ConfigCommandWriter {
+  applyPatch(patch: unknown): Config | Promise<Config>
+}
+
+export async function configGetCommand(
   args: string[],
-  selected: Pick<ApplicationConfigurationPersistencePort, 'load'>,
+  storage: ConfigCommandReader,
 ): Promise<{ output: string }> {
-  return formatConfigurationRead(args, await selected.load())
+  return formatConfigurationRead(args, await storage.load())
 }
 
 function formatConfigurationRead(args: string[], cfg: Config): { output: string } {
@@ -49,27 +45,12 @@ function formatConfigurationRead(args: string[], cfg: Config): { output: string 
   return { output: formatValue(value) + '\n' }
 }
 
-export function configSetCommand(args: string[]): { output: string }
-export function configSetCommand(
+export async function configSetCommand(
   args: string[],
-  selected: Pick<ApplicationConfigurationPersistencePort, 'applyPatch'>,
-): Promise<{ output: string }>
-export function configSetCommand(
-  args: string[],
-  selected?: Pick<ApplicationConfigurationPersistencePort, 'applyPatch'>,
-): { output: string } | Promise<{ output: string }> {
-  if (selected !== undefined) return writeSelectedConfiguration(args, selected)
-  const { key, parsedValue } = parseConfigurationWrite(args)
-  const updated = composeFileCliConfiguration(Paths.config).applyPatch({ [key]: parsedValue })
-  return formatConfigurationWrite(key, updated)
-}
-
-async function writeSelectedConfiguration(
-  args: string[],
-  selected: Pick<ApplicationConfigurationPersistencePort, 'applyPatch'>,
+  storage: ConfigCommandWriter,
 ): Promise<{ output: string }> {
   const { key, parsedValue } = parseConfigurationWrite(args)
-  const updated = await selected.applyPatch({ [key]: parsedValue })
+  const updated = await storage.applyPatch({ [key]: parsedValue })
   return formatConfigurationWrite(key, updated)
 }
 

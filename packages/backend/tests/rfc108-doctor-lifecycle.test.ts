@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { evaluateLifecycleHealth } from '../src/cli/doctor'
+import { evaluateLifecycleHealth } from '../src/modules/system-operations/domain/doctorDiagnostics'
 
 describe('RFC-108 T16 — evaluateLifecycleHealth', () => {
   test('all zero → clean message, ok=true', () => {

@@ -17,8 +17,7 @@ import type {
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { CheckResult } from '@/modules/system-operations/domain/doctorDiagnostics'
 import * as decisions from '@/modules/system-operations/domain/doctorDiagnostics'
-import * as compatibility from '@/cli/doctor'
-import * as native from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
+import * as doctorComposition from '@/modules/system-operations/composition/doctorDiagnostics'
 
 const members = [
   'loadRuntimeConfiguration',
@@ -350,17 +349,14 @@ describe('RFC-370 Doctor native pairing and actual standalone root', () => {
     expect(queries.count()).toBe(3)
   })
 
-  test('native compatibility helpers preserve the exact selected implementation values', () => {
-    expect(compatibility.checkConfig).toBe(native.checkConfig)
-    expect(compatibility.checkConfiguredDatabase).toBe(native.checkConfiguredDatabase)
-    expect(compatibility.evaluateLifecycleHealth).toBe(decisions.evaluateLifecycleHealth)
-    expect(compatibility.evaluateGitCheck).toBe(decisions.evaluateGitCheck)
-    expect(compatibility.evaluateSshCheck).toBe(decisions.evaluateSshCheck)
-    expect(compatibility.evaluateMigrationsStatus).toBe(decisions.evaluateMigrationsStatus)
-    expect(compatibility.formatDoctor).toBe(decisions.formatDoctor)
+  // RFC-474: the `cli/doctor.ts` compatibility exports are retired (their consumers take the definitions); the report formatter
+  // reaches bootstrap through the Doctor composition, as the domain's own value.
+  test('the Doctor composition hands bootstrap the exact domain report formatter', () => {
+    expect(doctorComposition.formatDoctor).toBe(decisions.formatDoctor)
   })
 
-  // RFC-427: main's Doctor arm calls bootstrap's runDoctorDiagnostics, which chooses the native complete family.
+  // RFC-427: main's Doctor arm calls bootstrap, which chooses the native complete family. RFC-474: that entry is
+  // `runDoctorCommand`, which also returns the report it formats from the result.
   test('the actual main Doctor arm explicitly chooses the native complete family', () => {
     const callsIn = (relative: string, pick: (node: ts.Node) => boolean) => {
       const file = readFileSync(resolve(import.meta.dir, '../src/' + relative), 'utf8')
@@ -388,11 +384,11 @@ describe('RFC-370 Doctor native pairing and actual standalone root', () => {
         node.expression.text === 'doctor',
     )
     expect(arm.roots).toBe(1)
-    expect(arm.calls.filter((value) => value === 'runDoctorDiagnostics()')).toHaveLength(1)
+    expect(arm.calls.filter((value) => value === 'runDoctorCommand()')).toHaveLength(1)
     expect(arm.calls.filter((value) => value === 'doctorCommand()')).toHaveLength(0)
     const run = callsIn(
       'bootstrap/commandBootstraps.ts',
-      (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'runDoctorDiagnostics',
+      (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'runDoctorCommand',
     )
     expect(run.roots).toBe(1)
     expect(
@@ -407,6 +403,7 @@ describe('RFC-370 Doctor native pairing and actual standalone root', () => {
           'composeDoctorApplication({diagnostics:createLocalDoctorDiagnosticsFactory(logicalSchemaContract)}).run()',
       ),
     ).toHaveLength(1)
+    expect(run.calls.filter((value) => value === 'formatDoctor(result)')).toHaveLength(1)
     const common = readFileSync(
       resolve(import.meta.dir, '../src/modules/system-operations/application/doctorDiagnostics.ts'),
       'utf8',

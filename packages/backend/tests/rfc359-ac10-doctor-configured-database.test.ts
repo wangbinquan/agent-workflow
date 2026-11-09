@@ -31,7 +31,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { checkConfiguredDatabase } from '@/cli/doctor'
+import { checkConfiguredDatabase } from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
 
 const homes: string[] = []
 let previousHome: string | undefined

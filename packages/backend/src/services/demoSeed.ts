@@ -5,9 +5,8 @@
 import { DEMO_RESOURCE_ID_PREFIX } from '@agent-workflow/shared'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { CodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import type { CodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/public/types'
 import type { DemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/public/participants'
-import { composeInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
 import type { InstallationSeedCompletionPort } from '@/modules/system-operations/public/participants'
 import { createLogger } from '@/util/log'
 
@@ -32,7 +31,8 @@ export interface DemoSeedResult {
 export interface DemoSeedParticipants {
   readonly resourceCatalog: DemoResourceCatalogSeedParticipant
   readonly codeCapability: CodeCapabilityDemoSeedParticipant
-  readonly completion?: InstallationSeedCompletionPort
+  /** RFC-474: bootstrap selects the installation's completion marker at each boot call and hands it in. */
+  readonly completion: InstallationSeedCompletionPort
 }
 
 function resourceCatalogSeedInput() {
@@ -146,10 +146,7 @@ function resourceCatalogSeedInput() {
 /** Seed once per install. Failure is non-fatal and leaves the marker absent so
  * the next start retries the complete owner-native sequence. */
 export async function seedDemoContent(participants: DemoSeedParticipants): Promise<DemoSeedResult> {
-  return await offerDemoContent(
-    participants,
-    composeInstallationSeedCompletion(participants.completion),
-  )
+  return await offerDemoContent(participants, participants.completion)
 }
 
 async function offerDemoContent(

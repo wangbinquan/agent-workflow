@@ -116,6 +116,7 @@ import { recoverInterruptedDeliveries } from '@/modules/integration/composition/
 import { Paths } from '@/util/paths'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import { composeInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import type { createLogger } from '@/util/log'
@@ -800,6 +801,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       const result = await seedDemoContent({
         resourceCatalog: composeDemoResourceCatalogSeedParticipant(input.db),
         codeCapability: composeCodeCapabilityDemoSeedParticipant(input.db),
+        // RFC-474: the standalone marker is selected here, at each boot call (it was the seed's own default).
+        completion: composeInstallationSeedCompletion(),
       })
       if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
     },

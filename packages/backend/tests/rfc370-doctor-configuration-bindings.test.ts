@@ -7,7 +7,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
-import { checkConfig, checkConfiguredDatabase } from '@/cli/doctor'
+import {
+  checkConfig,
+  checkConfiguredDatabase,
+} from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
 import { loadConfig } from '@/config'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { Paths } from '@/util/paths'

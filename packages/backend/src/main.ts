@@ -20,15 +20,16 @@ import { restoreCommand, parseRestoreArguments, RESTORE_USAGE } from './cli/rest
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
-import { formatDoctor } from './cli/doctor'
 import { selectDeployment } from './bootstrap/deployment'
 import {
   composeBackupCommandOperations,
+  composeConfigCommandPersistence,
   composeLocalDatabaseMigrationCommandOperations,
+  composeMigrationReportCommandDependencies,
   composePackageCommandBootstrap,
   composeRestoreCommandOperations,
   composeUserCommandBootstrap,
-  runDoctorDiagnostics,
+  runDoctorCommand,
 } from './bootstrap/commandBootstraps'
 import { runManagedProcessOutputProbe } from './bootstrap/managedProcessOutputProbe'
 import { migrationReportCommand } from './cli/migrationReport'
@@ -189,9 +190,9 @@ async function main(): Promise<void> {
     }
 
     case 'doctor': {
-      const result = await runDoctorDiagnostics()
-      process.stdout.write(formatDoctor(result))
-      if (!result.ok) process.exit(1)
+      const { ok, output } = await runDoctorCommand()
+      process.stdout.write(output)
+      if (!ok) process.exit(1)
       break
     }
 
@@ -259,10 +260,10 @@ async function main(): Promise<void> {
       const action = Bun.argv[3]
       const rest = Bun.argv.slice(4)
       if (action === 'get') {
-        const { output } = configGetCommand(rest)
+        const { output } = await configGetCommand(rest, composeConfigCommandPersistence())
         process.stdout.write(output)
       } else if (action === 'set') {
-        const { output } = configSetCommand(rest)
+        const { output } = await configSetCommand(rest, composeConfigCommandPersistence())
         process.stdout.write(output)
       } else {
         console.error('usage: agent-workflow config <get|set> ...')
@@ -283,7 +284,10 @@ async function main(): Promise<void> {
     }
 
     case 'migration-report': {
-      const { output } = await migrationReportCommand(Bun.argv.slice(3), logicalSchemaContract)
+      const { output } = await migrationReportCommand(
+        Bun.argv.slice(3),
+        composeMigrationReportCommandDependencies(),
+      )
       process.stdout.write(output)
       break
     }

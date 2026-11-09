@@ -6,7 +6,7 @@
 // that contract and the win32-specific hint (OpenSSH is an Optional Feature).
 
 import { describe, expect, test } from 'bun:test'
-import { evaluateSshCheck } from '@/cli/doctor'
+import { evaluateSshCheck } from '@/modules/system-operations/domain/doctorDiagnostics'
 
 describe('RFC-254 T21 — doctor ssh probe (advisory)', () => {
   test('present: ok, reports the banner, notes ssh:// is available', () => {

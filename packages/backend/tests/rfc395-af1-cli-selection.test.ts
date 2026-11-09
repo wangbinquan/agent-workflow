@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { migrationReportCommand } from '@/cli/migrationReport'
+// RFC-474: the report's analysis is injected; take the dependencies `main.ts` hands the command.
+import { composeMigrationReportCommandDependencies } from '@/bootstrap/commandBootstraps'
 import { checkConfiguredDatabase } from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
 import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import { createFileDatabasePreOpenRecovery } from '@/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery'
@@ -36,9 +38,9 @@ const tasks = {
 }
 test('AF-D10 report refuses and doctor accepts an uninstalled home without creating db.sqlite', () =>
   withHome(async (root) => {
-    await expect(migrationReportCommand([], logicalSchemaContract)).rejects.toThrow(
-      'requires an installed database generation',
-    )
+    await expect(
+      migrationReportCommand([], composeMigrationReportCommandDependencies()),
+    ).rejects.toThrow('requires an installed database generation')
     expect((await checkConfiguredDatabase(logicalSchemaContract, tasks))[0]).toMatchObject({
       ok: true,
       message: 'SQLite (no database yet)',
@@ -61,7 +63,10 @@ test('AF-D10 report and doctor follow the SQLite pointer even when configuration
       JSON.stringify({ database: { provider: 'postgresql', urlEnv: 'AF1_UNUSED_PG_PROFILE' } }),
     )
     expect(
-      JSON.parse((await migrationReportCommand(['--json'], logicalSchemaContract)).output),
+      JSON.parse(
+        (await migrationReportCommand(['--json'], composeMigrationReportCommandDependencies()))
+          .output,
+      ),
     ).toBeObject()
     const report = await checkConfiguredDatabase(logicalSchemaContract, tasks)
     expect(report[0]!.message).toContain('sqlite generation')

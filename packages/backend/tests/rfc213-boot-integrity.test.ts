@@ -138,7 +138,8 @@ describe('RFC-213 doctor DB-integrity check (AC-10, read-only)', () => {
     const dbPath = join(home, 'db.sqlite')
     const rootPage = await seedManyPages(dbPath)
 
-    const { checkDbIntegrity } = await import('../src/cli/doctor')
+    const { checkDbIntegrity } =
+      await import('../src/modules/system-operations/infrastructure/local/doctorDiagnostics')
     const healthy = checkDbIntegrity()
     expect(healthy.ok).toBe(true)
 

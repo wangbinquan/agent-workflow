@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBox } from '../src/auth/secretBox'
 import { openDb, type DbClient } from '../src/db/client'
-import { checkSealedCredentials } from '../src/cli/doctor'
+import { checkSealedCredentials } from '../src/modules/system-operations/infrastructure/local/doctorDiagnostics'
 import { sealRepoUrl } from '../src/services/repoCredentials'
 
 const tmps: string[] = []

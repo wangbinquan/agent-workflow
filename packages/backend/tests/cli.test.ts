@@ -13,8 +13,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
+import { composeConfigCommandPersistence } from '../src/bootstrap/commandBootstraps'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { formatDoctor } from '../src/cli/doctor'
+import { formatDoctor } from '../src/modules/system-operations/domain/doctorDiagnostics'
 import { doctorCommand } from '../src/bootstrap/doctorDiagnostics'
 import { migrateCommand } from '../src/bootstrap/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
@@ -48,52 +49,80 @@ describe('CLI subcommands (P-1-05)', () => {
   })
 
   // --- config get / set ---
+  // RFC-474: the commands take the storage `main.ts` injects — the installation's configuration file, composed by bootstrap
+  // at each call (so it follows this test's AGENT_WORKFLOW_HOME).
 
-  test('config get with no args returns full default config', () => {
-    const { output } = configGetCommand([])
+  test('config get with no args returns full default config', async () => {
+    const { output } = await configGetCommand([], composeConfigCommandPersistence())
     const cfg = JSON.parse(output) as Record<string, unknown>
     expect(cfg.$schema_version).toBe(1)
     expect(cfg.maxConcurrentNodes).toBe(4)
     expect(cfg.theme).toBe('system')
   })
 
-  test('config get <key> returns just that value', () => {
-    const { output } = configGetCommand(['maxConcurrentNodes'])
+  test('config get <key> returns just that value', async () => {
+    const { output } = await configGetCommand(
+      ['maxConcurrentNodes'],
+      composeConfigCommandPersistence(),
+    )
     expect(output.trim()).toBe('4')
   })
 
-  test('config get <unknown-key> throws', () => {
-    expect(() => configGetCommand(['totally-not-a-key'])).toThrow(/unknown config key/)
+  test('config get <unknown-key> throws', async () => {
+    await expect(
+      configGetCommand(['totally-not-a-key'], composeConfigCommandPersistence()),
+    ).rejects.toThrow(/unknown config key/)
   })
 
-  test('config set <key> <number> updates and persists', () => {
-    const { output } = configSetCommand(['maxConcurrentNodes', '8'])
+  test('config set <key> <number> updates and persists', async () => {
+    const { output } = await configSetCommand(
+      ['maxConcurrentNodes', '8'],
+      composeConfigCommandPersistence(),
+    )
     expect(output.trim()).toBe('maxConcurrentNodes = 8')
-    expect(configGetCommand(['maxConcurrentNodes']).output.trim()).toBe('8')
+    expect(
+      (
+        await configGetCommand(['maxConcurrentNodes'], composeConfigCommandPersistence())
+      ).output.trim(),
+    ).toBe('8')
   })
 
-  test('config set <key> <string> works (JSON parse falls back to raw string)', () => {
-    configSetCommand(['theme', 'dark'])
-    expect(configGetCommand(['theme']).output.trim()).toBe('dark')
+  test('config set <key> <string> works (JSON parse falls back to raw string)', async () => {
+    await configSetCommand(['theme', 'dark'], composeConfigCommandPersistence())
+    expect(
+      (await configGetCommand(['theme'], composeConfigCommandPersistence())).output.trim(),
+    ).toBe('dark')
   })
 
-  test('config set rejects invalid value type via schema', () => {
-    expect(() => configSetCommand(['maxConcurrentNodes', '-5'])).toThrow()
+  test('config set rejects invalid value type via schema', async () => {
+    await expect(
+      configSetCommand(['maxConcurrentNodes', '-5'], composeConfigCommandPersistence()),
+    ).rejects.toThrow()
   })
 
-  test('config set with nested object JSON works', () => {
-    configSetCommand(['worktreeAutoGc', '{"enabled":true,"olderThanDays":7}'])
-    const wgcRaw = configGetCommand(['worktreeAutoGc']).output.trim()
+  test('config set with nested object JSON works', async () => {
+    await configSetCommand(
+      ['worktreeAutoGc', '{"enabled":true,"olderThanDays":7}'],
+      composeConfigCommandPersistence(),
+    )
+    const wgcRaw = (
+      await configGetCommand(['worktreeAutoGc'], composeConfigCommandPersistence())
+    ).output.trim()
     const wgc = JSON.parse(wgcRaw) as Record<string, unknown>
     expect(wgc.enabled).toBe(true)
     expect(wgc.olderThanDays).toBe(7)
   })
 
-  test('config set/get round-trips RFC-300 Webhook workspace cleanup switch', () => {
-    configSetCommand(['webhookTaskWorkspaceAutoCleanup', 'true'])
-    expect(configGetCommand(['webhookTaskWorkspaceAutoCleanup']).output.trim()).toBe('true')
-    configSetCommand(['webhookTaskWorkspaceAutoCleanup', 'false'])
-    expect(configGetCommand(['webhookTaskWorkspaceAutoCleanup']).output.trim()).toBe('false')
+  test('config set/get round-trips RFC-300 Webhook workspace cleanup switch', async () => {
+    const storage = composeConfigCommandPersistence()
+    await configSetCommand(['webhookTaskWorkspaceAutoCleanup', 'true'], storage)
+    expect(
+      (await configGetCommand(['webhookTaskWorkspaceAutoCleanup'], storage)).output.trim(),
+    ).toBe('true')
+    await configSetCommand(['webhookTaskWorkspaceAutoCleanup', 'false'], storage)
+    expect(
+      (await configGetCommand(['webhookTaskWorkspaceAutoCleanup'], storage)).output.trim(),
+    ).toBe('false')
   })
 
   // --- migrate ---
@@ -211,7 +240,9 @@ describe('CLI subcommands (P-1-05)', () => {
   test(
     'start --port overrides config.json bindPort (RFC-319 T36)',
     async () => {
-      const defaults = JSON.parse(configGetCommand([]).output) as Record<string, unknown>
+      const defaults = JSON.parse(
+        (await configGetCommand([], composeConfigCommandPersistence())).output,
+      ) as Record<string, unknown>
       // 一个空闲端口：只用来当「config 里的那个值」，不真的去绑它。
       const probe = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data() {} } })
       const configPort = probe.port

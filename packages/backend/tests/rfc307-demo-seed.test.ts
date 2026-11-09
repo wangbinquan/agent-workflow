@@ -35,15 +35,18 @@ import {
 import { lookupStageContract } from '../src/modules/code-capability/domain/capabilityRegistry'
 import { composeCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeInstallationSeedCompletion } from '../src/modules/system-operations/composition/installationSeedCompletion'
 
 let db: PersistenceDb
 let home: string
 let priorHome: string | undefined
 
+// RFC-474: the completion marker is handed in, selected at each call like bootstrap's boot step (so it follows this test's home).
 const seed = () =>
   seedDemoContent({
     resourceCatalog: composeDemoResourceCatalogSeedParticipant(db),
     codeCapability: composeCodeCapabilityDemoSeedParticipant(db),
+    completion: composeInstallationSeedCompletion(),
   })
 
 function seedFixture(harness: ProviderHarness): void {

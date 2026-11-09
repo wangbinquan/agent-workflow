@@ -3,7 +3,10 @@ import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/compo
 // never opens or describes the retained SQLite generation as live state.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { checkPostgresqlLifecycleHealth, checkPostgresqlSealedCredentials } from '@/cli/doctor'
+import {
+  checkPostgresqlLifecycleHealth,
+  checkPostgresqlSealedCredentials,
+} from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,

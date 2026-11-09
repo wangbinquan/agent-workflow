@@ -1,4 +1,5 @@
-// Selected CLI storage is asynchronous; the standalone CLI contract stays sync.
+// Selected CLI storage is asynchronous. RFC-474: the standalone storage (the installation's file) is composed by bootstrap and
+// injected through the same handler, so both are awaited; the standalone output and error texts are unchanged.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -6,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { configGetCommand, configSetCommand } from '@/cli/config-cli'
 import type { ApplicationConfigurationPersistencePort } from '@/modules/system-operations/composition/cliConfiguration'
+import { composeConfigCommandPersistence } from '@/bootstrap/commandBootstraps'
 import {
   mergeValidatedConfigurationPatch,
   validateConfigurationPatch,
@@ -197,16 +199,25 @@ describe('RFC-370 CLI configuration selected storage', () => {
     expect(readFileSync(join(directory, 'config.json'), 'utf8')).toBe(fileText)
   })
 
-  test('standalone commands keep their synchronous result and synchronous errors', () => {
-    const get: { output: string } = configGetCommand(['maxConcurrentNodes'])
-    expect(get).toEqual({ output: '23\n' })
-    expect(get).not.toBeInstanceOf(Promise)
-    const set: { output: string } = configSetCommand(['maxConcurrentNodes', '9'])
-    expect(set).toEqual({ output: 'maxConcurrentNodes = 9\n' })
-    expect(set).not.toBeInstanceOf(Promise)
-    expect(configGetCommand(['maxConcurrentNodes'])).toEqual({ output: '9\n' })
-    expect(() => configGetCommand(['totally-not-a-key'])).toThrow(/unknown config key/)
-    expect(() => configSetCommand(['theme'])).toThrow(/usage:/)
-    expect(() => configSetCommand(['maxConcurrentNodes', '-5'])).toThrow()
+  test('standalone commands read and write the bootstrap-composed file through the same handler', async () => {
+    const file = composeConfigCommandPersistence()
+    expect(await configGetCommand(['maxConcurrentNodes'], file)).toEqual({ output: '23\n' })
+    expect(await configSetCommand(['maxConcurrentNodes', '9'], file)).toEqual({
+      output: 'maxConcurrentNodes = 9\n',
+    })
+    expect(
+      await configGetCommand(['maxConcurrentNodes'], composeConfigCommandPersistence()),
+    ).toEqual({
+      output: '9\n',
+    })
+    expect(JSON.parse(readFileSync(join(directory, 'config.json'), 'utf8'))).toMatchObject({
+      maxConcurrentNodes: 9,
+      theme: 'dark',
+    })
+    await expect(configGetCommand(['totally-not-a-key'], file)).rejects.toThrow(
+      /unknown config key/,
+    )
+    await expect(configSetCommand(['theme'], file)).rejects.toThrow(/usage:/)
+    await expect(configSetCommand(['maxConcurrentNodes', '-5'], file)).rejects.toThrow()
   })
 })
