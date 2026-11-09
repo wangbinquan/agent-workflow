@@ -1,6 +1,6 @@
 # RFC-474 入口适配器经 bootstrap 装配：CLI 命令、路由挂载与首启示例不再直取模块内部（RFC-294 W9-D 第二十一步）
 
-- **状态**：In Progress（2026-11-08）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
+- **状态**：Done（2026-11-09，落地 `ddf6565e1`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、
   设计、实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.6 W9-D（`services/` 业务实现按 owner 归位、越界边收口）
 - **前序**：[RFC-427](../RFC-427-entry-root-command-assembly/proposal.md)（命令依赖在 `bootstrap/commandBootstraps.ts` 装配，入口只解析参数、

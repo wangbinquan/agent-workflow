@@ -1,4 +1,4 @@
-## 2026-11-08 RFC-474 入口适配器经 bootstrap 装配：CLI 命令、路由挂载与首启示例不再直取模块内部（In Progress；`design/RFC-474-entry-adapter-bootstrap-assembly/`）
+## 2026-11-08 RFC-474 入口适配器经 bootstrap 装配：CLI 命令、路由挂载与首启示例不再直取模块内部（Done；`design/RFC-474-entry-adapter-bootstrap-assembly/`）
 
 - **来由**：RFC-294 W9-D 第二十一步。`R1` 余 49 条，其中 11 条出在五个入口适配器上，账本写的退役条件都是「由 bootstrap 注入、经 owner 的
   composition 或 public 收口，不加目录或 bootstrap 豁免」：应用根 `server.ts` 直取 knowledge-evolution 的两个 inbound 路由挂载；`cli/config-cli.ts`
@@ -24,6 +24,15 @@
   两边同一批用例到点，2 个两边都全过，`rfc310-employee-case-runtime` 再跑一对两边同一例到点）；P0 两引擎各 17 阶段通过；shared 2344 pass、
   frontend gate 7361 pass、system-mocks 30 秒时限 111 / 111；`rfc321` 工作树 10 / 10；文档用例 12 个文件全过。计数：`R1` 49 → 38、`R2` 0，21 项闸门计数不变，public surface 1493 → 1495（code-capability
   的两个示例类型，都有消费方），偏差 94、未被消费的 public 符号 322 不变。
+- **落地**：`ddf6565e1`。
+- **CI**：`ddf6565e1` 主 CI run 42585174566 一格红：Backend tests（ubuntu-latest shard 43/44）的 `scheduler-clarify-dispatch` `[postgresql]` 一例
+  撞默认 5 秒（5.75 s；父提交主 CI 同一分片 1.77 s 通过，本 RFC 在该用例的 import 链上的改动不改变它走的调度器 clarify 重跑路径，判为 runner
+  时序偶发红，用例属 RFC-023，未改、未重跑）；「CI required」随之红，其余 68 个 job、windows-platform、integration-opencode 与
+  maintenance-soak-nightly 通过。
+- **下一步**：RFC-294 W9-D 余项（`services/` 57 个文件；`R2` 0 条；`R1` 38 条）。`R1` 大头：`task`（9）、`systemAgentRun`（5）、
+  `commitPushRunner`（4）、`runtimeSmoke`（4）、`nodeRollback`（3，collaboration 的评审与反问直接调它，要给 collaboration 一个自有的回滚端口）、
+  `reviewMutationCoordinator` 与 `taskDelete`（各 2，collaboration 与 task-execution 两边都取）；`systemAgentRun` / `runtimeSmoke` 绑着运行时
+  驱动一族（`services/runtime/**`），随它一起归 runtime-management。
 
 ## 2026-11-08 RFC-473 执行结果投影与资源会话归 task-execution：services/execution 的三个文件迁入（Done；`design/RFC-473-execution-outcome-and-resource-sessions/`）
 

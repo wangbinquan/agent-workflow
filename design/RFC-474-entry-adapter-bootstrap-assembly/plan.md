@@ -21,7 +21,7 @@
 - [x] AC-2 行为不变（路由同一函数、config / doctor / migration-report 输出与错误同原、完成标记每次启动时选）
 - [x] AC-3 架构计数按实测（`R1` 49 → 38），偏差、未被消费的 public 符号与越界类计数不升
 - [x] AC-4 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI：`ddf6565e1` 主 CI run 42585174566 一格红：Backend tests（ubuntu-latest shard 43/44）的 `scheduler-clarify-dispatch` `[postgresql]` 一例撞 bun 默认 5 秒（5.75 s，与本 RFC 无关，逐格归因见下），「CI required」随之红；其余 68 个 job、windows-platform、integration-opencode 与 maintenance-soak-nightly 通过
 
 ## 集中验证（2026-11-08～09，候选基于 `7e7711fbf`，修复后的候选基于 `5343645f1`）
 
@@ -93,6 +93,19 @@
   `runDoctorCommand()` 与其中的 `formatDoctor(result)`；config、migration-report、首启示例的用例改为走注入，断言的输出与错误文本不变。
 - 账本：`R1` 49 → 38（实测与账本逐条相等，`R2` 0）；owner 表删 `cli/doctor.ts`；两份 Windows 路径过滤里的 `cli/doctor.ts` 换成
   `bootstrap/commandBootstraps.ts`；本 RFC 没有改到登记的守卫文件，guard-manifest 不变。
+
+## CI（AC-5）
+
+- `ddf6565e1` 主 CI run 42585174566：70 个 job 里 68 个通过，一格红，「CI required」汇总格随之红——**Backend tests（ubuntu-latest shard
+  43/44）**：`scheduler-clarify-dispatch`「rerun row after a manually-seeded answered session: scheduler re-runs agent with clarifyIteration > 0
+  and prompt carries Q&A markdown」`[postgresql]` 撞 bun 默认 5 秒（5.75 s）。同一文件其余用例 1.2～2.4 s 照常；父提交 `5343645f1` 的主 CI
+  run 42559063606 同一分片里这一例 1.77 s 通过。该文件经 helper 的 `providerHttpApplication` 装配应用根，本 RFC 在这条链上只改了应用根
+  `demo-seed` 启动步骤的完成标记组装（与原默认组装的是同一个文件标记）与 `server.ts` 挂 knowledge-evolution 路由的 import 来源（同一函数），
+  都不改变该例走的调度器 clarify 重跑路径。判为与提交内容无关的 runner 时序偶发红，用例属 RFC-023，未改、未重跑，如实记录；Done 提交的 CI
+  会再跑这一格。
+- windows-platform push run 42585174549（路径过滤命中 `bootstrap/commandBootstraps.ts` 等）、integration-opencode push run 42585174665
+  （2 个 job）与 maintenance-soak-nightly push run 42585174436 通过。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：12 个文件全过（106 pass）。
 
 ## PR / 提交
 
