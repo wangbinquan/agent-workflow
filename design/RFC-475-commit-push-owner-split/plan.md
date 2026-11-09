@@ -21,7 +21,7 @@
 - [x] AC-2 行为不变（git 命令序列与锁区间、消息、推送结果与 `pushError`、行状态与 effect、会话 id、子仓结果；唯一的次序差见 proposal §6.3）
 - [x] AC-3 架构计数按实测（`R1` 38 → 34），偏差、未被消费的 public 符号与越界类计数不升
 - [x] AC-4 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿：`16d1f5dad` 主 CI run 42690375951 的 70 个 job 与 windows-platform run 42690376320 全部通过
 
 ## 集中验证（2026-11-09，候选基于 `7d4e6853f`）
 
@@ -105,6 +105,13 @@
 - 账本：`R1` 38 → 34（实测与账本逐条相等，`R2` 0）；发布调用点账本的三处调用点与 fetch / ls-remote 清单改指 source-control 用例；
   `rfc328-architecture-guards` 的 effect 边界改指 `commitPushAttempt.ts`（act 名 `publish`），补一例删掉 observer 或 act 即报红；RFC-412 退役
   清单加入两个 `services/` 文件；guard-manifest 的行数随登记守卫刷新。
+
+## CI（AC-5）
+
+- `16d1f5dad` 主 CI run 42690375951：70 个 job 全部通过（「CI required」绿）。
+- windows-platform push run 42690376320（路径过滤命中 `application/ports/commitPush.ts` 与 `composition/commitPushBinding.ts`）通过；本次
+  提交没有触发其他 push workflow。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上重跑上述文档用例：11 个文件全过（87 pass）。
 
 ## PR / 提交
 

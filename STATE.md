@@ -1,4 +1,4 @@
-## 2026-11-09 RFC-475 自动提交推送按 owner 拆开：git 发布归 source-control、提交行记账归 task-execution（In Progress；`design/RFC-475-commit-push-owner-split/`）
+## 2026-11-09 RFC-475 自动提交推送按 owner 拆开：git 发布归 source-control、提交行记账归 task-execution（Done；`design/RFC-475-commit-push-owner-split/`）
 
 - **来由**：RFC-294 W9-D 第二十二步。`R1` 余 38 条，其中 4 条出在 `services/commitPushRunner.ts`：它一半是 task-execution 的记账（mint
   commit-push 容器行、登记 repository effect、收尾写结果与状态、落 commit agent 会话 id），一半是 source-control 的 git 发布（子仓递归、暂存与
@@ -30,6 +30,12 @@
   2344 pass、frontend gate 7361 pass、system-mocks 111 / 111；`rfc321` 工作树 10 / 10。计数：`R1` 38 → 34、`R2` 0，`legacy-horizontal-files`
   177 → 175、`legacy-service-implementations` 58 → 56，其余 19 项闸门计数不变，public surface 1495 → 1505（新增 12、撤出 2），偏差 94、
   未被消费的 public 符号 322 不变，task-owned effect 10 条（commit&push 一条只换路径）。
+- **落地**：`16d1f5dad`。
+- **CI**：`16d1f5dad` 主 CI run 42690375951 的 70 个 job 全绿，windows-platform push run 42690376320 通过；没有触发其他 push workflow。
+- **下一步**：RFC-294 W9-D 余项（`services/` 55 个文件；`R2` 0 条；`R1` 34 条）。`R1` 大头：`task`（9）、`systemAgentRun`（5）、
+  `runtime/index` 与 `runtimeSmoke`（各 4）、`nodeRollback`（3，collaboration 的评审与反问直接调它，要给 collaboration 一个自有的回滚端口）、
+  `reviewMutationCoordinator`、`taskDelete` 与两个运行时驱动（各 2）、`runtime/opencode/subagentLiveCapture`（1）；`systemAgentRun` /
+  `runtimeSmoke` 绑着运行时驱动一族（`services/runtime/**`），随它一起归 runtime-management。
 
 ## 2026-11-08 RFC-474 入口适配器经 bootstrap 装配：CLI 命令、路由挂载与首启示例不再直取模块内部（Done；`design/RFC-474-entry-adapter-bootstrap-assembly/`）
 
