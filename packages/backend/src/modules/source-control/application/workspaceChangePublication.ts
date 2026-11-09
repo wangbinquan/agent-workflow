@@ -1,84 +1,73 @@
-// RFC-075 — auto commit&push executor (T9/T10).
+// RFC-075 / RFC-210 / RFC-321 — publish one task workspace's changes: stage
+// (respects .gitignore and the RFC-308 exclusion slice), commit with a
+// generated message (deterministic fallback), and push inside ONE transport
+// session, handling a rejected push (auth → commit-local + warn; non-fast-
+// forward → fetch + merge then re-push; everything else → bounded message
+// repair). Submodules are committed and published first, deepest first.
 //
-// The framework OWNS git here: stage (`add -A`), commit (with the task
-// identity), push. opencode is only consulted for the commit MESSAGE and to
-// REPAIR a rejected push — both injected as callbacks (`generateMessage` /
-// `generateRepair`) so this orchestration is unit-testable against real git
-// without spawning opencode. Production wires those callbacks to the runner
-// (which captures the opencode session under THIS commit node_run id, so the
-// detail-page "view session" button works).
-//
-// One node_run row per commit attempt; the internal repair loop records its
-// count in `commit_push_json.repairAttempts` (surfaced as "retried N times" on
-// the commit row). git is never asked to force-push. A push that can't be
-// honored never loses the agent's work — the local commit always lands first.
-
-import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
-import { repositoryPublicationOrdinal } from '@/modules/task-execution/public/queries'
+// RFC-475: the git half of the former `services/commitPushRunner.ts`, moved
+// verbatim. Source Control owns every git step; the caller (task-execution)
+// owns the commit node run, its effect record and the commit agent sessions,
+// and receives the resulting `CommitPushMeta`. git is never asked to
+// force-push, and a push that can't be honored never loses the agent's work —
+// the local commit always lands first.
 import type {
   CommitPushMeta,
   CommitPushOutcome,
   RepositoryPublicationReceipt,
   SubrepoPushResult,
 } from '@agent-workflow/shared'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/public/participants'
-import type { TaskExecutionEffectPersistence } from '@/modules/task-execution/application/ports/taskExecutionEffectStore'
-import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
-import type { NodeExecutionPersistence } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
-import { createLogger, type Logger } from '@/util/log'
-import { AW_INTERNAL_GIT_IDENTITY, type runGit as realRunGit } from '@/util/git'
-// RFC-210: recursive submodule commit&push.
-import { bottomUp, usableSubmodules } from '@/services/gitSubmodule'
+import { AW_INTERNAL_GIT_IDENTITY, bottomUp, usableSubmodules } from '@/util/git'
 import {
-  buildFallbackMessage,
   classifyPushFailure,
-  commitPushNodeId,
-  parseNumstat,
-  redactPushError,
-  truncateDiff,
-} from '@/services/commitPush'
-import {
-  bindRepositoryCommitParticipant,
   classifyRepositoryPushFailure,
-} from '@/modules/source-control/composition'
+  redactPushError,
+} from '../domain/repositoryPushFailure'
+import { buildFallbackMessage, parseNumstat, truncateDiff } from '../domain/stagedChangeSummary'
+import type {
+  RepositoryCommitCandidateParticipant,
+  RepositoryCommitPublicationParticipant,
+} from '../public/participants'
 import type {
   RepositoryPublicationSubject,
   RepositoryPublicationTransport,
-  RepositoryGitWorkspaceFactory,
-  RepositoryGitWorkspaceScope,
-} from '@/modules/source-control/public/types'
-import { sha256Hex } from '@/util/hash'
-import {
-  selectRepositoryGitWorkspaceFactory,
-  bindRepositoryGitWorkspace,
-  bindRepositoryGitSubworkspace,
-} from '@/modules/source-control/public/participants'
+  RepositoryPublishResult,
+} from '../public/types'
+import type { RepositoryGitWorkspaceScope } from './ports/repositoryGitWorkspace'
+import type {
+  RepositoryPublicationLogger,
+  WorkspaceChangePublicationRequest,
+  WorkspaceChangePublicationResult,
+  WorkspaceWriteLock,
+} from './ports/workspaceChangePublication'
+import type { RepositoryGit } from './repositoryCommit'
 
-type RunGit = typeof realRunGit
+/** `bindRepositoryCommitParticipant`'s shape: one repository's bound commit + publication surface. */
+export type RepositoryCommitBinder = (input: {
+  repoPath: string
+  configuredPatterns?: readonly string[]
+  runGit?: RepositoryGit
+  gitWorkspace?: RepositoryGitWorkspaceScope
+  runNetworkGit?: RepositoryGit
+}) => RepositoryCommitCandidateParticipant & RepositoryCommitPublicationParticipant
 
-export interface GenerateMessageCtx {
-  nodeRunId: string
-  repoName: string
-  branch: string
-  baseRef: string
-  stat: string
-  diffTruncated: string
-}
-export interface GenerateRepairCtx {
-  nodeRunId: string
-  branch: string
-  stat: string
-  pushStderr: string
-  currentMessage: string
-  priorAttempts: number
-}
-export interface GeneratedMessage {
-  /** null → caller falls back to the deterministic template message. */
-  message: string | null
-  /** opencode session id to stamp on the node_run, when the generator spawned one. */
-  sessionId?: string | null
-  /** The generator child may still be alive; no git mutation or replacement is safe. */
-  processUnreaped?: true
+/** `bindRepositoryGitSubworkspace`'s shape. */
+export type RepositoryGitSubworkspaceBinder = (
+  parent: RepositoryGitWorkspaceScope,
+  relativePath: string,
+) => RepositoryGitWorkspaceScope
+
+export interface WorkspaceChangePublicationDeps {
+  readonly workspace: RepositoryGitWorkspaceScope
+  readonly transport: RepositoryPublicationTransport
+  /**
+   * RFC-370: submodule commit policies run on the selected sub-workspace only
+   * when the caller selected a workspace factory; otherwise they bind by path.
+   */
+  readonly bindPoliciesToWorkspace: boolean
+  readonly log: RepositoryPublicationLogger
+  readonly commits: RepositoryCommitBinder
+  readonly subworkspace: RepositoryGitSubworkspaceBinder
 }
 
 class CommitAgentUnreapedError extends Error {
@@ -88,95 +77,24 @@ class CommitAgentUnreapedError extends Error {
   }
 }
 
-export interface CommitPushParams {
-  taskId: string
-  /** The workflow node whose completion triggered this commit. */
-  agentNodeId: string
-  /** Human-readable agent name for the fallback commit message. */
-  agentName: string
-  /** node_run id of the triggering agent (becomes parentNodeRunId). */
-  parentNodeRunId: string | null
-  worktreePath: string
-  /** Stable source-repository identity for cross-worktree publication fencing. */
-  repositoryIdentity?: string
-  /** Local branch to commit on + push (working branch or isolation branch). */
-  repoBranch: string
-  /** Base ref the worktree was branched from (for prompt context). */
-  baseRef: string
-  /** Multi-repo disambiguator for the synthetic node id; omit for single-repo. */
-  repoSlug?: string
-  /** Push remote. Default 'origin'. */
-  pushRemote?: string
-  /** Persisted work owner; null/system tasks deliberately skip the personal layer. */
-  ownerUserId?: string | null
-  gitUserName: string | null
-  gitUserEmail: string | null
-  maxRepairRetries: number
-  diffMaxBytes: number
-  /** RFC-308: one immutable config slice for this whole publication attempt. */
-  excludePatterns?: readonly string[]
-  generateMessage: (ctx: GenerateMessageCtx) => Promise<GeneratedMessage>
-  generateRepair: (ctx: GenerateRepairCtx) => Promise<GeneratedMessage>
-  /**
-   * RFC-076 C4 — optional write-lock acquirer (the scheduler passes its
-   * per-task `writeSem.acquire`). Acquired once around `git add -A` + the
-   * `git diff --cached` capture and again around the eventual local `git commit`.
-   * The first section freezes a consistent index snapshot; the second prevents
-   * a sibling writer's Git lifecycle from contending for `.git/index.lock` while
-   * that snapshot becomes a commit. The lock remains RELEASED during slow LLM
-   * message generation and network push, so independent node work is not held
-   * behind either. Omit → no lock (single-writer / test callers take the same
-   * unlocked path).
-   */
-  acquireWrite?: () => Promise<() => void>
-}
-
-export interface CommitPushDeps {
-  /** Provider-selected task-execution persistence. */
-  nodeRuns: NodeRunLifecyclePersistence
-  nodeExecution: NodeExecutionPersistence
-  effects: TaskExecutionEffectPersistence
-  /** Injectable for tests; defaults to the real git CLI. */
-  runGit?: RunGit
-  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
-  log?: Logger
-  /** RFC-321 exact publication transport selected by bootstrap. */
-  publicationTransport: RepositoryPublicationTransport
-}
-
 /**
- * Stage all changes, commit with an LLM-generated message, and push — handling
- * a rejected push per RFC-075 (auth → commit-local + warn; everything else →
- * bounded repair / non-FF merge then re-push). Always returns the resulting
- * `CommitPushMeta` AND persists it (+ the node_run row) so the caller doesn't
- * have to. Never throws for an expected git outcome; only truly unexpected
- * errors (e.g. the worktree vanished) propagate.
+ * Stage, commit and push one workspace. Never throws for an expected git
+ * outcome — every one is reported in the returned `CommitPushMeta`; only truly
+ * unexpected errors (e.g. the worktree vanished) propagate.
  */
-export async function runCommitPush(
-  params: CommitPushParams,
-  deps: CommitPushDeps,
-): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> {
-  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(
-    deps.repositoryGitWorkspaces,
-    deps.runGit,
-  )
-  const workspace = bindRepositoryGitWorkspace(repositoryGitWorkspaces, {
-    taskId: params.taskId,
-    workspaceRef: params.worktreePath,
-    repositoryRef: params.repositoryIdentity ?? params.worktreePath,
-  })
-  const runGit: RunGit = (_repoPath, args, options) => workspace.run(args, options)
-  const log = deps.log ?? createLogger('commit-push')
+export async function publishWorkspaceChanges(
+  request: WorkspaceChangePublicationRequest,
+  deps: WorkspaceChangePublicationDeps,
+): Promise<WorkspaceChangePublicationResult> {
+  const workspace = deps.workspace
+  const runGit: RepositoryGit = (_repoPath, args, options) => workspace.run(args, options)
+  const log = deps.log
   const W = workspace.workspaceRef
-  const remote = params.pushRemote ?? 'origin'
-  const publicationTransport = deps.publicationTransport
-  const publicationSubject: RepositoryPublicationSubject =
-    params.ownerUserId === undefined ||
-    params.ownerUserId === null ||
-    params.ownerUserId === '__system__'
-      ? { kind: 'system' }
-      : { kind: 'user', userId: params.ownerUserId }
-  const idEnv = identityEnv(params.gitUserName, params.gitUserEmail)
+  const remote = request.remote
+  const publicationTransport = deps.transport
+  const publicationSubject: RepositoryPublicationSubject = request.subject
+  const nodeRunId = request.nodeRunId
+  const idEnv = identityEnv(request.authorName, request.authorEmail)
   const g = (args: string[]) => runGit(W, args)
   // Commit-class operations (commit / amend / merge) carry the identity as
   // GIT_AUTHOR_*/GIT_COMMITTER_* env — git gives those precedence over any
@@ -184,62 +102,7 @@ export async function runCommitPush(
   // can never leak into, or break, framework commits.
   const gc = (args: string[]) => runGit(W, args, { env: idEnv })
 
-  const nodeId = commitPushNodeId(params.agentNodeId, params.repoSlug)
-  const startedAt = Date.now()
-  // Born 'running' (NOT through the RFC-053 state machine — it governs
-  // updates, not inserts): this container row is always a CHILD of the
-  // triggering agent run, so it never enters deriveFrontier's in-flight set.
-  // The provider-selected lifecycle adapter enforces that invariant.
-  const nodeRunId = await deps.nodeRuns.mint({
-    ...nodeRunMintIdentityForSlot(
-      {
-        kind: 'synthetic',
-        syntheticKind: 'commit-push',
-        owner:
-          params.parentNodeRunId === null
-            ? { kind: 'task', id: params.taskId }
-            : { kind: 'attempt', id: params.parentNodeRunId },
-        discriminator: nodeId,
-      },
-      { kind: 'current' },
-    ),
-    taskId: params.taskId,
-    nodeId,
-    status: 'running',
-    cause: 'commit-push',
-    overrides: {
-      identity: {
-        parentNodeRunId: params.parentNodeRunId,
-        startedAt,
-      },
-    },
-  })
-  const repositoryEffect = createLocalEffectAttemptObserver({
-    persistence: deps.effects,
-    taskId: params.taskId,
-    nodeRunId,
-    kind: 'repository',
-    stableActionOrdinal: repositoryPublicationOrdinal(params.agentNodeId, params.repoSlug ?? ''),
-    candidateId: 'commit-and-push',
-    request: {
-      v: 1,
-      branch: params.repoBranch,
-      baseRef: params.baseRef,
-      remote,
-      repoSlug: params.repoSlug ?? '',
-    },
-    resourceKeys: [
-      `repository:${sha256Hex(`${params.repositoryIdentity ?? W}\u0000${remote}\u0000${params.repoBranch}`)}`,
-    ],
-  })
-  // Repository publication owns the remote branch turn. The existing short
-  // write semaphore owns only index capture; keeping a workspace fence for the
-  // whole LLM + network transaction would deadlock the nested message agent
-  // and serialize unrelated isolated writers long after the snapshot froze.
-  await repositoryEffect?.beforeAct()
-
-  const pushTarget = `${remote}/${params.repoBranch}`
-  let sessionId: string | null = null
+  const pushTarget = `${remote}/${request.branch}`
   let processUnreaped = false
   // RFC-210: filled by the submodule stage below and attached by EVERY finalize
   // path — threading it through each call site individually is how the happy
@@ -250,7 +113,9 @@ export async function runCommitPush(
   let exclusionHistoryBlocked = false
   let publicationReceipt: RepositoryPublicationReceipt | null = null
 
-  const finalize = async (
+  // Assembles the attempt's `CommitPushMeta`; the caller records it (RFC-475:
+  // the node-run and effect writes stay with task-execution).
+  const finalize = (
     outcome: CommitPushOutcome,
     extra: {
       commitSha?: string | null
@@ -261,12 +126,12 @@ export async function runCommitPush(
       repairAttempts?: number
       pushError?: string | null
     },
-  ): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> => {
+  ): WorkspaceChangePublicationResult => {
     const meta: CommitPushMeta = {
       repoPath: W,
-      repoBranch: params.repoBranch,
+      repoBranch: request.branch,
       pushTarget,
-      baseRef: params.baseRef,
+      baseRef: request.baseRef,
       commitSha: extra.commitSha ?? null,
       filesChanged: extra.filesChanged ?? 0,
       insertions: extra.insertions ?? 0,
@@ -289,50 +154,7 @@ export async function runCommitPush(
       ...(subrepos.length > 0 ? { subrepos } : {}),
       ...(publicationReceipt === null ? {} : { publicationReceipt }),
     }
-    // `commit-local-failed` is the only failed status; everything else
-    // (pushed / commit-local-auth degraded / skipped-empty) is a done row so a
-    // push problem the framework can't fix never aborts the task.
-    // RFC-210: a withheld parent (because a submodule could not be pushed) is a
-    // FAILED row too — the node produced work that never reached the remote, and
-    // showing it as done would hide that.
-    const status =
-      outcome === 'commit-local-failed' ||
-      outcome === 'commit-local-subrepo-failed' ||
-      outcome === 'commit-local-excluded-history'
-        ? 'failed'
-        : 'done'
-    const finishedAt = Date.now()
-    const patched = await deps.nodeExecution.patch({
-      nodeRunId,
-      values: {
-        result: {
-          commitPushJson: JSON.stringify(meta),
-        },
-      },
-      now: finishedAt,
-    })
-    if (!patched) throw new Error(`commit-push node run '${nodeRunId}' disappeared`)
-    await deps.nodeRuns.set({
-      nodeRunId,
-      to: status,
-      allowedFrom: ['running'],
-      extra: {
-        identity: {
-          finishedAt,
-        },
-        runtime: {
-          ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
-        },
-      },
-      reason: 'commit-push-finished',
-    })
-    await repositoryEffect?.succeed({
-      outcome,
-      commitSha: meta.commitSha,
-      repairAttempts: meta.repairAttempts,
-      publicationReceipt: meta.publicationReceipt ?? null,
-    })
-    return { nodeRunId, meta, ...(processUnreaped ? { processUnreaped: true as const } : {}) }
+    return { meta, ...(processUnreaped ? { processUnreaped: true as const } : {}) }
   }
 
   // 0. RFC-210 — recurse into submodules FIRST.
@@ -345,27 +167,29 @@ export async function runCommitPush(
   // this worktree, leaving the remote with an unresolvable submodule.
   subrepos = await commitPushSubmodules({
     worktreePath: W,
-    branch: params.repoBranch,
+    branch: request.branch,
     remote,
     idEnv,
-    excludePatterns: params.excludePatterns ?? [],
+    excludePatterns: request.excludePatterns,
     recordExclusion: (receipt) => {
       exclusionPolicyDigest = receipt.policyDigest
       for (const path of receipt.excludedPaths) excludedPaths.add(path)
       if (receipt.historyBlocked === true) exclusionHistoryBlocked = true
     },
-    acquireWrite: params.acquireWrite,
+    writeLock: request.writeLock,
     workspace,
-    bindPoliciesToWorkspace: deps.repositoryGitWorkspaces !== undefined,
+    bindPoliciesToWorkspace: deps.bindPoliciesToWorkspace,
     publicationTransport,
     publicationSubject,
+    commits: deps.commits,
+    subworkspace: deps.subworkspace,
   })
   const failedSub = subrepos.find((r) => r.error !== null)
   if (failedSub !== undefined) {
     // Atomicity (per-repo, matching RFC-066's per-repo commit-push loop): the
     // parent's gitlink bump is withheld so the remote never sees a gitlink whose
     // target was never published.
-    return await finalize('commit-local-subrepo-failed', {
+    return finalize('commit-local-subrepo-failed', {
       pushError: `submodule '${failedSub.path}': ${failedSub.error ?? 'unknown error'}`,
     })
   }
@@ -380,20 +204,22 @@ export async function runCommitPush(
   // to HEAD (RFC-130 materialize), which is why the commit restores the tree
   // captured here instead of trusting the index (RFC-370 hosted acceptance,
   // 2026-10-17). No acquirer (single-writer / tests) → unlocked, byte-identical.
-  const releaseWrite = params.acquireWrite ? await params.acquireWrite() : null
+  const writeLease = request.writeLock ? await request.writeLock.acquire() : null
   let numstat: string
   let stat: string
   let diffRaw: string
   let preparedTree: string | undefined
   try {
-    const prepared = await bindRepositoryCommitParticipant({
-      repoPath: W,
-      gitWorkspace: workspace,
-      configuredPatterns: params.excludePatterns ?? [],
-      runGit,
-    }).prepare()
+    const prepared = await deps
+      .commits({
+        repoPath: W,
+        gitWorkspace: workspace,
+        configuredPatterns: request.excludePatterns,
+        runGit,
+      })
+      .prepare()
     if (!prepared.ok) {
-      return await finalize('commit-local-failed', {
+      return finalize('commit-local-failed', {
         pushError: redactPushError(prepared.error),
       })
     }
@@ -402,27 +228,27 @@ export async function runCommitPush(
     preparedTree = prepared.preparedTree
     const numstatResult = await g(['diff', '--cached', '--numstat'])
     if (numstatResult.exitCode !== 0) {
-      return await finalize('commit-local-failed', {
+      return finalize('commit-local-failed', {
         pushError: `git diff --numstat failed: ${redactPushError(numstatResult.stderr)}`,
       })
     }
     numstat = numstatResult.stdout
     const statResult = await g(['diff', '--cached', '--stat'])
     if (statResult.exitCode !== 0) {
-      return await finalize('commit-local-failed', {
+      return finalize('commit-local-failed', {
         pushError: `git diff --stat failed: ${redactPushError(statResult.stderr)}`,
       })
     }
     stat = statResult.stdout
     const diffResult = await g(['diff', '--cached'])
     if (diffResult.exitCode !== 0) {
-      return await finalize('commit-local-failed', {
+      return finalize('commit-local-failed', {
         pushError: `git diff failed: ${redactPushError(diffResult.stderr)}`,
       })
     }
     diffRaw = diffResult.stdout
   } finally {
-    releaseWrite?.()
+    writeLease?.release()
   }
   // Nothing staged → skip (no commit).
   const { filesChanged, insertions, deletions } = parseNumstat(numstat)
@@ -434,23 +260,22 @@ export async function runCommitPush(
       filesChanged: 0,
     })
   }
-  const diffTruncated = truncateDiff(diffRaw, params.diffMaxBytes)
+  const diffTruncated = truncateDiff(diffRaw, request.diffMaxBytes)
 
   // 3. Generate the commit message (LLM), falling back to a template.
   let messageSource: CommitPushMeta['messageSource'] = 'fallback'
   let message = buildFallbackMessage({
-    agentName: params.agentName,
+    agentName: request.agentName,
     filesChanged,
     insertions,
     deletions,
-    taskId: params.taskId,
+    taskId: request.taskId,
   })
   try {
-    const gen = await params.generateMessage({
-      nodeRunId,
+    const gen = await request.author.compose({
       repoName: basenameOf(W),
-      branch: params.repoBranch,
-      baseRef: params.baseRef,
+      branch: request.branch,
+      baseRef: request.baseRef,
       stat,
       diffTruncated,
     })
@@ -458,14 +283,13 @@ export async function runCommitPush(
       processUnreaped = true
       throw new CommitAgentUnreapedError()
     }
-    if (gen.sessionId != null) sessionId = gen.sessionId
     if (gen.message != null && gen.message.trim() !== '') {
       message = gen.message.trim()
       messageSource = 'llm'
     }
   } catch (err) {
     if (err instanceof CommitAgentUnreapedError) {
-      return await finalize('commit-local-failed', {
+      return finalize('commit-local-failed', {
         filesChanged,
         insertions,
         deletions,
@@ -483,22 +307,24 @@ export async function runCommitPush(
   // lock used for index capture: message generation deliberately ran unlocked,
   // but the actual Git mutation must not race a sibling writer's Git lifecycle.
   const commit = await (async () => {
-    const releaseCommit = params.acquireWrite ? await params.acquireWrite() : null
+    const commitLease = request.writeLock ? await request.writeLock.acquire() : null
     try {
-      return await bindRepositoryCommitParticipant({
-        repoPath: W,
-        gitWorkspace: workspace,
-        configuredPatterns: params.excludePatterns ?? [],
-        runGit,
-      }).commitPrepared({
-        message,
-        verification: 'normal',
-        authorName: params.gitUserName,
-        authorEmail: params.gitUserEmail,
-        ...(preparedTree === undefined ? {} : { preparedTree }),
-      })
+      return await deps
+        .commits({
+          repoPath: W,
+          gitWorkspace: workspace,
+          configuredPatterns: request.excludePatterns,
+          runGit,
+        })
+        .commitPrepared({
+          message,
+          verification: 'normal',
+          authorName: request.authorName,
+          authorEmail: request.authorEmail,
+          ...(preparedTree === undefined ? {} : { preparedTree }),
+        })
     } finally {
-      releaseCommit?.()
+      commitLease?.release()
     }
   })()
   if (!commit.ok) {
@@ -547,7 +373,7 @@ export async function runCommitPush(
   }
   const session = opened.session
   publicationReceipt = session.receipt
-  const sessionRunGit: RunGit = (repoPath, args, options) =>
+  const sessionRunGit: RepositoryGit = (repoPath, args, options) =>
     session.runNetwork(repoPath, args, options)
   const remoteOverride = ['-c', `remote.${remote}.url=${session.endpointUrl}`]
   let attempts = 0
@@ -558,16 +384,16 @@ export async function runCommitPush(
       while (true) {
         const tipResult = await g(['rev-parse', '--verify', 'HEAD^{commit}'])
         const tipSha = tipResult.stdout.trim()
-        const publisher = bindRepositoryCommitParticipant({
+        const publisher = deps.commits({
           repoPath: W,
           gitWorkspace: workspace,
-          configuredPatterns: params.excludePatterns ?? [],
+          configuredPatterns: request.excludePatterns,
           runGit,
         })
         const pushBase = await publisher.resolvePushBase({
           remote,
-          branch: params.repoBranch,
-          fallbackRef: params.baseRef,
+          branch: request.branch,
+          fallbackRef: request.baseRef,
         })
         if (tipResult.exitCode !== 0 || tipSha === '' || pushBase === null) {
           return collectFinalization('commit-local-failed', {
@@ -580,21 +406,23 @@ export async function runCommitPush(
             pushError: 'cannot resolve outgoing history range; push refused',
           })
         }
-        const publication = await bindRepositoryCommitParticipant({
-          repoPath: W,
-          gitWorkspace: workspace,
-          configuredPatterns: params.excludePatterns ?? [],
-          runNetworkGit: sessionRunGit,
-        }).publish({
-          baseSha: pushBase,
-          tipSha,
-          mode: {
-            kind: 'normal',
-            remote,
-            branch: params.repoBranch,
-            leadingArgs: remoteOverride,
-          },
-        })
+        const publication = await deps
+          .commits({
+            repoPath: W,
+            gitWorkspace: workspace,
+            configuredPatterns: request.excludePatterns,
+            runNetworkGit: sessionRunGit,
+          })
+          .publish({
+            baseSha: pushBase,
+            tipSha,
+            mode: {
+              kind: 'normal',
+              remote,
+              branch: request.branch,
+              leadingArgs: remoteOverride,
+            },
+          })
         if (publication.ok) {
           exclusionPolicyDigest = publication.policyDigest
           const verified = await session.runNetwork(W, [
@@ -602,7 +430,7 @@ export async function runCommitPush(
             'ls-remote',
             '--heads',
             remote,
-            params.repoBranch,
+            request.branch,
           ])
           const remoteSha = verified.stdout
             .split('\n')
@@ -663,7 +491,7 @@ export async function runCommitPush(
         if (managedFailure !== null || cls === 'auth') {
           log.warn('push rejected (auth); committed locally only', {
             nodeRunId,
-            branch: params.repoBranch,
+            branch: request.branch,
             credentialSource: session.receipt.credentialSource,
           })
           return collectFinalization('commit-local-auth', {
@@ -676,7 +504,7 @@ export async function runCommitPush(
             pushError: managedFailure ?? 'repository-push-authentication-failed',
           })
         }
-        if (attempts >= params.maxRepairRetries) {
+        if (attempts >= request.maxRepairRetries) {
           return collectFinalization('commit-local-failed', {
             commitSha,
             filesChanged,
@@ -694,7 +522,7 @@ export async function runCommitPush(
             ...remoteOverride,
             'fetch',
             remote,
-            params.repoBranch,
+            request.branch,
           ])
           if (fetch.exitCode !== 0) {
             const managedFailure = classifyRepositoryPushFailure(`${fetch.stderr}\n${fetch.stdout}`)
@@ -728,9 +556,8 @@ export async function runCommitPush(
         }
 
         try {
-          const rep = await params.generateRepair({
-            nodeRunId,
-            branch: params.repoBranch,
+          const rep = await request.author.repair({
+            branch: request.branch,
             stat,
             pushStderr: redactPushError(stderr),
             currentMessage: message,
@@ -740,7 +567,6 @@ export async function runCommitPush(
             processUnreaped = true
             throw new CommitAgentUnreapedError()
           }
-          if (rep.sessionId != null) sessionId = rep.sessionId
           if (rep.message != null && rep.message.trim() !== '') {
             message = rep.message.trim()
             messageSource = 'llm-repair'
@@ -847,12 +673,14 @@ async function commitPushSubmodules(args: {
     excludedPaths: readonly string[]
     historyBlocked?: true
   }) => void
-  acquireWrite?: (() => Promise<() => void>) | undefined
+  writeLock?: WorkspaceWriteLock | undefined
   workspace: RepositoryGitWorkspaceScope
   bindPoliciesToWorkspace: boolean
   publicationTransport: RepositoryPublicationTransport
   publicationSubject: RepositoryPublicationSubject
-  log?: Logger
+  commits: RepositoryCommitBinder
+  subworkspace: RepositoryGitSubworkspaceBinder
+  log?: RepositoryPublicationLogger
 }): Promise<SubrepoPushResult[]> {
   const { branch, remote, idEnv } = args
   if (!(await args.workspace.hasSubmodules())) return []
@@ -865,7 +693,7 @@ async function commitPushSubmodules(args: {
 
   const out: SubrepoPushResult[] = []
   for (const s of subs) {
-    const workspace = bindRepositoryGitSubworkspace(args.workspace, s.path)
+    const workspace = args.subworkspace(args.workspace, s.path)
     const dir = workspace.workspaceRef
     const sg = (a: string[]) => workspace.run(a)
     const entry: SubrepoPushResult = {
@@ -901,10 +729,10 @@ async function commitPushSubmodules(args: {
     // on record anywhere, i.e. it must be pushed, not skipped.
     const parent = directParentOf(s.path, subs)
     const parentWorkspace =
-      parent === null ? args.workspace : bindRepositoryGitSubworkspace(args.workspace, parent.path)
+      parent === null ? args.workspace : args.subworkspace(args.workspace, parent.path)
     const parentDir = parentWorkspace.workspaceRef
     const relInParent = parent === null ? s.path : s.path.slice(parent.path.length + 1)
-    const parentPolicy = bindRepositoryCommitParticipant({
+    const parentPolicy = args.commits({
       repoPath: parentDir,
       ...(args.bindPoliciesToWorkspace ? { gitWorkspace: parentWorkspace } : {}),
       configuredPatterns: args.excludePatterns,
@@ -927,7 +755,7 @@ async function commitPushSubmodules(args: {
     if (!isDirty && !movedAhead) continue
 
     // --- local writes, under the lock ---
-    const release = args.acquireWrite ? await args.acquireWrite() : null
+    const lease = args.writeLock ? await args.writeLock.acquire() : null
     try {
       if (isDirty) {
         // Detached HEAD is the norm here; give the commit a branch to land on.
@@ -937,11 +765,13 @@ async function commitPushSubmodules(args: {
           out.push(entry)
           break
         }
-        const prepared = await bindRepositoryCommitParticipant({
-          repoPath: dir,
-          ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
-          configuredPatterns: args.excludePatterns,
-        }).prepare()
+        const prepared = await args
+          .commits({
+            repoPath: dir,
+            ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
+            configuredPatterns: args.excludePatterns,
+          })
+          .prepare()
         if (!prepared.ok) {
           entry.error = redactPushError(prepared.error)
           out.push(entry)
@@ -953,16 +783,18 @@ async function commitPushSubmodules(args: {
         })
         const stagedDirty = await sg(['diff', '--cached', '--quiet', '--exit-code'])
         if (stagedDirty.exitCode === 0) continue
-        const committed = await bindRepositoryCommitParticipant({
-          repoPath: dir,
-          ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
-          configuredPatterns: args.excludePatterns,
-        }).commitPrepared({
-          message: `aw: submodule changes (${branch})`,
-          verification: 'normal',
-          authorName: idEnv.GIT_AUTHOR_NAME,
-          authorEmail: idEnv.GIT_AUTHOR_EMAIL,
-        })
+        const committed = await args
+          .commits({
+            repoPath: dir,
+            ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
+            configuredPatterns: args.excludePatterns,
+          })
+          .commitPrepared({
+            message: `aw: submodule changes (${branch})`,
+            verification: 'normal',
+            authorName: idEnv.GIT_AUTHOR_NAME,
+            authorEmail: idEnv.GIT_AUTHOR_EMAIL,
+          })
         if (!committed.ok) {
           entry.error =
             committed.reason === 'no-changes'
@@ -987,7 +819,7 @@ async function commitPushSubmodules(args: {
       const head = await sg(['rev-parse', 'HEAD'])
       if (head.exitCode === 0) entry.toSha = head.stdout.trim()
     } finally {
-      release?.()
+      lease?.release()
     }
 
     // --- network push, outside the lock ---
@@ -1018,23 +850,25 @@ async function commitPushSubmodules(args: {
     }
     const session = opened.session
     entry.publicationReceipt = session.receipt
-    const sessionRunGit: RunGit = (repoPath, gitArgs, options) =>
+    const sessionRunGit: RepositoryGit = (repoPath, gitArgs, options) =>
       session.runNetwork(repoPath, gitArgs, options)
     const remoteOverride = ['-c', `remote.${remote}.url=${session.endpointUrl}`]
-    let publication: Awaited<
-      ReturnType<ReturnType<typeof bindRepositoryCommitParticipant>['publish']>
-    >
+    let publication: RepositoryPublishResult
     try {
-      publication = await bindRepositoryCommitParticipant({
-        repoPath: dir,
-        ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : { runGit: sessionRunGit }),
-        configuredPatterns: args.excludePatterns,
-        runNetworkGit: sessionRunGit,
-      }).publish({
-        baseSha: historyBase,
-        tipSha: entry.toSha,
-        mode: { kind: 'normal', remote, branch, leadingArgs: remoteOverride },
-      })
+      publication = await args
+        .commits({
+          repoPath: dir,
+          ...(args.bindPoliciesToWorkspace
+            ? { gitWorkspace: workspace }
+            : { runGit: sessionRunGit }),
+          configuredPatterns: args.excludePatterns,
+          runNetworkGit: sessionRunGit,
+        })
+        .publish({
+          baseSha: historyBase,
+          tipSha: entry.toSha,
+          mode: { kind: 'normal', remote, branch, leadingArgs: remoteOverride },
+        })
     } finally {
       await session.close()
     }

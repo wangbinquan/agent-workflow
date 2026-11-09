@@ -28,6 +28,7 @@ import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import {
   alignWorktreeGitlinks,
   AW_INTERNAL_GIT_IDENTITY,
+  bottomUp,
   buildSalvageTree,
   commitTree,
   createIsolatedWorktree,
@@ -40,6 +41,7 @@ import {
   reclaimWorktreePath,
   runGit,
   snapshotFullState,
+  usableSubmodules,
 } from '@/util/git'
 import {
   buildMergeResolvePrompt,
@@ -55,7 +57,6 @@ import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 // Pass the cache service's settings/capability resolver at every entry point.
 import { resolveSubmoduleParams } from './submoduleParams'
 import {
-  bottomUp,
   detectSubmodules,
   ensureSubmoduleAlternates,
   ensureSubmodulePool,
@@ -67,7 +68,6 @@ import {
   subSlug,
   rewriteGitlinkInCommit,
   submoduleGitDir,
-  usableSubmodules,
   worktreeRefName,
 } from '@/services/gitSubmodule'
 import type { Logger } from '@/util/log'

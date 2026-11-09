@@ -13,9 +13,10 @@
 // 只断言 `pushOutcome` 是不够的——力推同样能让它显示 `pushed`。
 //
 // 判据取自源码单一事实源：
-//   services/commitPush.ts:115-132              stderr → auth / non-fast-forward 分类
-//   services/commitPushRunner.ts:563-579        auth ⇒ commit-local-auth，不重试
-//   services/commitPushRunner.ts:592-625        非快进 ⇒ fetch + merge 后重推
+//   （RFC-475 起 git 发布在 source-control；此前在 services/commitPush.ts 与 services/commitPushRunner.ts）
+//   modules/source-control/domain/repositoryPushFailure.ts:48-65                 stderr → auth / non-fast-forward 分类
+//   modules/source-control/application/workspaceChangePublication.ts:491-506     auth ⇒ commit-local-auth，不重试
+//   modules/source-control/application/workspaceChangePublication.ts:520-556     非快进 ⇒ fetch + merge 后重推
 
 import { expect, test } from '@playwright/test'
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

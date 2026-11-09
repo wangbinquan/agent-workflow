@@ -321,7 +321,16 @@ describe('source locks — the mirror never re-disks the credential', () => {
 
   test('push uses one exact-target transport session instead of the old global resolver', () => {
     const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'commitPushRunner.ts'),
+      // RFC-475: the push lives in source-control's workspace change publication.
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'application',
+        'workspaceChangePublication.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('publicationTransport.open({')

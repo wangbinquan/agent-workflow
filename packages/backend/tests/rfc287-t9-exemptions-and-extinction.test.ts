@@ -110,12 +110,13 @@ describe('RFC-287 T9 ① — 四条刻意豁免各带理由锁', () => {
   test('L2 commit-push：无池、无 iso（在 canonical 工作树直跑）', () => {
     // 本线走 commitPushRunner，scheduler 侧只有调用点；它既不取池位也不物化 iso
     // ——降级回退（{message:null} 容错）是它自己的语义，现有 commit-push 套件已锁。
-    // RFC-412: the commit tail runs on ports; the source-control runner enters through the binding.
+    // RFC-412: the commit tail runs on ports; the commit attempt enters through the binding
+    // (RFC-475: task-execution infrastructure, publishing through source-control's public participant).
     const binding = readFileSync(
       resolve(SRC, '../modules/task-execution/composition/commitPushBinding.ts'),
       'utf8',
     )
-    expect(binding).toContain("import { runCommitPush } from '@/services/commitPushRunner'")
+    expect(binding).toContain("import { runCommitPush } from '../infrastructure/commitPushAttempt'")
     expect(SCHEDULER.indexOf('await ports.effects.runCommitPush(')).toBeGreaterThan(0)
     const callSite = SCHEDULER.slice(
       SCHEDULER.indexOf('await ports.effects.runCommitPush('),

@@ -83,11 +83,6 @@ export async function listSubmodules(
   return out
 }
 
-/** Submodules that are actually usable — '-' (uninitialized) has no working dir. */
-export function usableSubmodules(entries: SubmoduleEntry[]): SubmoduleEntry[] {
-  return entries.filter((e) => e.flag !== '-')
-}
-
 /**
  * RFC-210 impl-gate A-fix — `listSubmodules` PLUS submodules that are declared
  * in `.gitmodules` and attached (have a `.git`) but are NOT in the index yet.
@@ -168,11 +163,6 @@ export async function listEffectiveSubmodules(
   }
   await walk(worktreePath, '')
   return out
-}
-
-/** Bottom-up order: deepest paths first, so a child's gitlink bump is visible to its parent. */
-export function bottomUp(entries: SubmoduleEntry[]): SubmoduleEntry[] {
-  return [...entries].sort((a, b) => b.pathDepth - a.pathDepth || b.path.localeCompare(a.path))
 }
 
 /** Node-scoped anchor: lives and dies with one node's iso worktree. */

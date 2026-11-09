@@ -683,6 +683,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   反过来，架构报告的可达性认这种空导入：删掉它，只经它可达的 `legacySqliteTaskAuthorization.ts` 就成了不可达生产文件（18 → 19），删前先查
   被导入文件还有没有别的生产入口。同一轮另一处：把一行函数并回唯一调用方后，读调用方源码的 `not.toContain('freezeCallClosure(')` 锁
   （`rfc345-resource-catalog-contracts` T4a）正好撞上被并入的函数体——并入前先搜读调用方源码的否定锁，按原意改成「除那一份函数体外」。
+- **带 effect observer 的 act site 别放进 task-execution 的 `application/`（RFC-475，2026-11-09）**：RFC-328 的 task-owned effect 清单
+  （`tests/architecture/rfc328TaskExecutionLedger.ts` 的 `buildTaskOwnedEffectEntries`）把 task-execution `application/` 当协调器内部整个跳过
+  （只留 `taskAgentRun.ts`），在那里调 `createLocalEffectAttemptObserver` 括住外部副作用的 act site 会**静默掉出** effect 清单——`rfc328`
+  只要求条目数 > 8，少一条照样绿。拆 `services/commitPushRunner.ts` 时提交记账半边是 engine 端口 `effects.runCommitPush` 的实现，放
+  `infrastructure/`（与 `nodeRollbackPersistence`、`local/agentInvocation` 同层）；挪 act site 前后比对架构报告的 `taskOwnedEffects.entries`
+  （应只换路径），并同步 `rfc328-architecture-guards` 的 `TASK_EFFECT_BOUNDARIES`（act 名随之变成新的调用名）。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

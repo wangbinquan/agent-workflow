@@ -20,6 +20,11 @@ const STATE = TE + 'composition/taskMechanicsState.ts'
 const DELETED = [
   PREFIX + 'services/scheduler.ts',
   PREFIX + 'services/execution/taskMechanicsState.ts',
+  // RFC-475: the commit tail's legacy helpers left services/ by owner — the commit attempt is
+  // task-execution infrastructure, the built-in commit agent task-execution domain, the git half
+  // source-control's workspace change publication.
+  PREFIX + 'services/commitPush.ts',
+  PREFIX + 'services/commitPushRunner.ts',
 ]
 /** Every moved symbol and its one owner. */
 const OWNERS = new Map([
@@ -33,8 +38,6 @@ const OWNERS = new Map([
   ['readCommitExcludePatterns', BINDING],
   ['TaskMechanicsState', STATE],
 ])
-/** The source-control legacy helpers the commit tail uses; only the binding may import them. */
-const LEGACY_HELPERS = ['@/services/commitPush', '@/services/commitPushRunner']
 const UNITS = backendUnits(ROOT)
 
 const scans = new WeakMap<SourceUnit, ReadonlyMap<string, number>>()
@@ -92,7 +95,7 @@ function shapeViolations(units: readonly SourceUnit[]): string[] {
   return found.sort()
 }
 
-/** The two engine files import only module layers and shared; the legacy helpers only reach the binding. */
+/** The two engine files import only module layers and shared; nothing imports a deleted file. */
 function importViolations(units: readonly SourceUnit[]): string[] {
   const found: string[] = []
   const shared = (target: string) =>
@@ -109,12 +112,6 @@ function importViolations(units: readonly SourceUnit[]): string[] {
       if (!inner && !shared(target) && !target.startsWith('node:'))
         found.push('layer-import:' + from + ' -> ' + target)
     }
-    if (
-      from.startsWith(TE) &&
-      from !== BINDING &&
-      LEGACY_HELPERS.some((helper) => edge.specifier === helper)
-    )
-      found.push('legacy-helper:' + from)
   }
   return found.sort()
 }
@@ -162,13 +159,12 @@ test('negative fixtures: fabricated sources alone are judged by the same checks'
       ),
       from,
     ).toBe(true)
-  const other = TE + 'composition/revivedCommit.ts'
-  expect(
-    importViolations([
-      sourceUnit(other, "import { runCommitPush } from '@/services/commitPushRunner'"),
-    ]),
-  ).toContain('legacy-helper:' + other)
-  for (const target of ['@/services/scheduler', '@/services/execution/taskMechanicsState']) {
+  for (const target of [
+    '@/services/scheduler',
+    '@/services/execution/taskMechanicsState',
+    '@/services/commitPush',
+    '@/services/commitPushRunner',
+  ]) {
     const file = TE + 'composition/revived.ts'
     expect(importViolations([sourceUnit(file, `import { x } from '${target}'`)])).toContain(
       'deleted-reference:' + file,

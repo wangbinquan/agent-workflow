@@ -177,10 +177,11 @@ export {
   requireWorkspaceUploadContent,
 } from '../composition/workspaceUploads'
 
+// RFC-475: `bindRepositoryGitSubworkspace` left public with its only outside consumer (the submodule stage
+// of the former commit&push runner); the workspace change publication binds sub-workspaces inside the module.
 export {
   selectRepositoryGitWorkspaceFactory,
   bindRepositoryGitWorkspace,
-  bindRepositoryGitSubworkspace,
 } from '../composition/repositoryGitWorkspaces'
 
 export {
@@ -247,3 +248,12 @@ export type {
   FusionWorkspacePreparation,
   FusionWorkspaceResult,
 } from '../application/ports/fusionWorkspaceEffects'
+
+/**
+ * RFC-475 — the automatic commit&push's git half (RFC-075 / RFC-210 / RFC-321):
+ * bound to one selected workspace scope and the publication transport,
+ * `publish` stages, commits and pushes and returns the attempt's
+ * `CommitPushMeta`. task-execution keeps the commit node run and its effect.
+ */
+export type { WorkspaceChangePublicationParticipant } from '../application/ports/workspaceChangePublication'
+export { bindWorkspaceChangePublication } from '../composition/workspaceChangePublication'

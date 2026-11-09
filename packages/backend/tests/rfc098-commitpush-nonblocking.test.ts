@@ -42,7 +42,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { commitPushNodeId, COMMIT_AGENT_NAME } from '../src/services/commitPush'
+import {
+  commitPushNodeId,
+  COMMIT_AGENT_NAME,
+} from '../src/modules/task-execution/domain/commitAgent'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 

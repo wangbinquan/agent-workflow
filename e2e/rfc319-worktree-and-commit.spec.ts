@@ -13,7 +13,8 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/services/nodeRollback.ts:99-190     pre_snapshot 回滚
 //   packages/backend/src/util/git.ts:2434-2456               rollbackToSnapshot
 //   packages/backend/src/services/scheduler.ts:2201-2203     `status --porcelain` 空 ⇒ 不生成 commit&push 行
-//   packages/backend/src/services/commitPushRunner.ts:346-353 排除后为空 ⇒ skipped-excluded
+//   packages/backend/src/modules/source-control/application/workspaceChangePublication.ts:253-262
+//                                                           排除后为空 ⇒ skipped-excluded（RFC-475 前在 services/commitPushRunner.ts）
 //   packages/backend/src/modules/source-control/application/repositoryCommit.ts:105-133
 //                                                           被排除的路径从 index 里 reset 掉
 //   packages/backend/src/routes/worktree-files.ts:60-160     成员 ACL / 越界 / MIME

@@ -127,16 +127,18 @@ describe('RFC-200 source wiring locks', () => {
   })
 
   test('internal commit and distiller agents have no bare-envelope bypass', () => {
-    const commit = read('packages/backend/src/services/commitPush.ts')
+    // RFC-475: the commit agent's prompts moved to task-execution domain; the never-called envelope
+    // parse helper was deleted — the message is the nonce-fenced agent run's port output (below).
+    const commit = read('packages/backend/src/modules/task-execution/domain/commitAgent.ts')
     expect(commit).toContain('fenceUntrusted(name, value, envelopeNonce)')
     expect(commit).toContain("data('commit-diff', opts.diffTruncated)")
-    expect(commit).toContain('extractLastEnvelope(stdout, envelopeNonce)')
 
     // RFC-412: the commit&push tail moved into task-execution engine/node/commit-push/.
     const scheduler = read(
       'packages/backend/src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
     )
     expect(scheduler).toContain('promptTemplate: buildPrompt(envelopeNonce)')
+    expect(scheduler).toContain('const msg = result.outputs[ports.commitAgent.messagePort]')
 
     const distiller = read(
       'packages/backend/src/modules/memory/application/distill/memoryDistiller.ts',

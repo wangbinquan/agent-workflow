@@ -27,7 +27,7 @@ import {
   buildCommitMessagePrompt,
   buildRepairPrompt,
   COMMIT_PUSH_OUTPUT_LANG_DIRECTIVE,
-} from '../src/services/commitPush'
+} from '../src/modules/task-execution/domain/commitAgent'
 import { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
 
 const MSG_OPTS = {

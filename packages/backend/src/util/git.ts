@@ -88,7 +88,7 @@ export function nonInteractiveGitEnv(): Record<string, string | undefined> {
  * unknown", which surfaced as `iso-setup-failed` on ubuntu-only. Injecting this env
  * makes those internal commits succeed regardless of the host/worktree git config.
  * (RFC auto commit&push prefers the task's own identity when the launch
- * supplied one; commitPushRunner falls back to THIS identity otherwise —
+ * supplied one; the workspace change publication falls back to THIS identity otherwise —
  * a URL/scratch worktree's cache-clone parent carries no local user.*, so
  * "inherit the ambient config" meant guaranteed failure on such hosts.)
  */
@@ -3571,6 +3571,23 @@ export interface SubmoduleSyncResult {
   /** Already-redacted; safe to log / persist / send to clients. */
   error: string | null
   hasGitmodules: boolean
+}
+
+/**
+ * Submodules that are actually usable — '-' (uninitialized) has no working dir.
+ * RFC-475: moved from `services/gitSubmodule.ts` so platform isolation and the
+ * source-control publication use case share one implementation; structural so
+ * this leaf never imports a module's entry type.
+ */
+export function usableSubmodules<T extends { readonly flag: string }>(entries: readonly T[]): T[] {
+  return entries.filter((e) => e.flag !== '-')
+}
+
+/** Bottom-up order: deepest paths first, so a child's gitlink bump is visible to its parent. */
+export function bottomUp<T extends { readonly path: string; readonly pathDepth: number }>(
+  entries: readonly T[],
+): T[] {
+  return [...entries].sort((a, b) => b.pathDepth - a.pathDepth || b.path.localeCompare(a.path))
 }
 
 /** Probe-only: does the working tree have a `.gitmodules` at its root? */

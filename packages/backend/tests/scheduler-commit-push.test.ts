@@ -30,7 +30,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { runGit } from '../src/util/git'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { commitPushNodeId, isCommitPushNodeId } from '../src/services/commitPush'
+import { commitPushNodeId } from '../src/modules/task-execution/domain/commitAgent'
+import { isCommitPushNodeId } from './helpers/commitPush'
 import type { CommitPushMeta } from '@agent-workflow/shared'
 import {
   createTaskExecutionTestTopology,

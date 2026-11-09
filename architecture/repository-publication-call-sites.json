@@ -5,21 +5,21 @@
   "callSites": [
     {
       "id": "task-auto-push",
-      "file": "packages/backend/src/services/commitPushRunner.ts",
+      "file": "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "operations": ["push"],
       "subject": "tasks.owner_user_id",
       "target": "repository-publication-participant"
     },
     {
       "id": "task-non-fast-forward-repair",
-      "file": "packages/backend/src/services/commitPushRunner.ts",
+      "file": "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "operations": ["fetch", "push", "post-verify"],
       "subject": "tasks.owner_user_id",
       "target": "repository-publication-participant"
     },
     {
       "id": "task-submodule-publication",
-      "file": "packages/backend/src/services/commitPushRunner.ts",
+      "file": "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "operations": ["push"],
       "subject": "tasks.owner_user_id",
       "target": "per-remote-repository-publication-participant"
@@ -54,17 +54,17 @@
     "fetch": [
       "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
       "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
+      "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts",
-      "packages/backend/src/services/commitPushRunner.ts",
       "packages/backend/src/services/gitSubmodule.ts",
       "packages/backend/src/util/git.ts"
     ],
     "ls-remote": [
       "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
+      "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume.ts",
-      "packages/backend/src/services/commitPushRunner.ts",
       "packages/backend/src/util/git.ts"
     ]
   },

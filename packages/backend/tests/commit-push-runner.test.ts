@@ -17,7 +17,10 @@ import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { runGit } from '../src/util/git'
-import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
+import {
+  runCommitPush,
+  type CommitPushParams,
+} from '../src/modules/task-execution/infrastructure/commitPushAttempt'
 import type { CommitPushMeta } from '@agent-workflow/shared'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'

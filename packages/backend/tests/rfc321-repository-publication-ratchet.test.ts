@@ -247,7 +247,10 @@ describe('RFC-321 repository publication architecture ratchet', () => {
   }, 20_000)
 
   test('task, candidate, and employee-case publication reuse one fixed transport session', () => {
-    const commitPush = read('packages/backend/src/services/commitPushRunner.ts')
+    // RFC-475: the task publication is source-control's workspace change publication.
+    const commitPush = read(
+      'packages/backend/src/modules/source-control/application/workspaceChangePublication.ts',
+    )
     const candidate = read(
       'packages/backend/src/modules/source-control/application/deliverCandidate.ts',
     )
@@ -452,7 +455,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
 
   test('legacy resolver and token-bearing URL bypasses remain extinct', () => {
     const publicationSources = [
-      'packages/backend/src/services/commitPushRunner.ts',
+      // RFC-475: the former commit&push runner, split by owner.
+      'packages/backend/src/modules/source-control/application/workspaceChangePublication.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/commitPushAttempt.ts',
       'packages/backend/src/modules/source-control/application/deliverCandidate.ts',
       'packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts',
       'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',

@@ -14,7 +14,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 describe('RFC-349 execution-peripheral provider boundary', () => {
   test('keeps database mechanisms out of peripheral orchestration services', () => {
-    const services = ['agentLaunch.ts', 'commitPushRunner.ts']
+    const services = ['agentLaunch.ts']
 
     // RFC-353 T5：`fusion.ts` 已迁出 `services/`，成为
     // `modules/knowledge-evolution/application/fusionOrchestration.ts`。它不再是
@@ -25,6 +25,9 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
     const modules = [
       '../src/modules/knowledge-evolution/application/fusionOrchestration.ts',
       '../src/modules/task-execution/engine/task/dynamicWorkflowGenerate.ts',
+      // RFC-475：自动提交推送按 owner 拆开，同理保留断言、只换落点（两半都不碰数据库机制）。
+      '../src/modules/source-control/application/workspaceChangePublication.ts',
+      '../src/modules/task-execution/infrastructure/commitPushAttempt.ts',
     ]
 
     for (const service of [...services.map((s) => `../src/services/${s}`), ...modules]) {

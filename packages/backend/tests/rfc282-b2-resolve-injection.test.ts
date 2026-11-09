@@ -29,7 +29,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { resolveInjection } from './helpers/legacyTaskExecutionInjectionResolver'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
-import { buildCommitAgent } from '../src/services/commitPush'
+import { buildCommitAgent } from '../src/modules/task-execution/domain/commitAgent'
 import { buildMergeAgent } from '../src/services/mergeAgent'
 import {
   activateBootReverifyForTest,

@@ -178,7 +178,6 @@ export {
   taskSubjectWorkflowVersion,
 } from '../domain/taskSubject'
 
-export { repositoryPublicationOrdinal } from '../domain/repositoryExecutionIdentity'
 export { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
 
 export { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'

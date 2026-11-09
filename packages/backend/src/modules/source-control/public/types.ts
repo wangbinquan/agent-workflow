@@ -271,6 +271,20 @@ export type {
   SubmoduleEntry,
 } from '../application/ports/repositoryGitWorkspace'
 
+/** RFC-475 — the workspace change publication's closed contract (the caller supplies the message author, write lock and logger). */
+export type {
+  RepositoryPublicationLogFields,
+  RepositoryPublicationLogger,
+  WorkspaceChangeMessage,
+  WorkspaceChangeMessageAuthor,
+  WorkspaceChangeMessageContext,
+  WorkspaceChangePublicationRequest,
+  WorkspaceChangePublicationResult,
+  WorkspaceChangeRepairContext,
+  WorkspaceWriteLease,
+  WorkspaceWriteLock,
+} from '../application/ports/workspaceChangePublication'
+
 export type {
   MergeConflictType,
   MergeConflictEntry,

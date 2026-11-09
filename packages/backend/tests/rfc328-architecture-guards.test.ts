@@ -31,7 +31,6 @@ const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
     'packages/backend/src/modules/task-execution/engine/kernel/merge.ts',
     new Set(['persistPendingSubResolves']),
   ],
-  ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
   ['packages/backend/src/services/review.ts', new Set(['dispatchReviewNodeUnlocked'])],
   [
     'packages/backend/src/modules/task-execution/application/runtimeSessionLease.ts',
@@ -74,11 +73,13 @@ interface TaskEffectBoundaryContract {
 
 const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContract[]>([
   [
-    'packages/backend/src/services/commitPushRunner.ts',
+    // RFC-475: the commit attempt's act is Source Control's workspace change
+    // publication; the repository effect still brackets it at the call site.
+    'packages/backend/src/modules/task-execution/infrastructure/commitPushAttempt.ts',
     [
       {
         callable: 'runCommitPush',
-        actCallees: new Set(['runGit']),
+        actCallees: new Set(['publish']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],
@@ -201,7 +202,6 @@ const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
       'writeTaskStatusTx',
     ]),
   ],
-  ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
   [
     'packages/backend/src/modules/task-execution/infrastructure/taskPreparationParticipant.ts',
     new Set(['writeWorkspace']),
@@ -815,6 +815,29 @@ describe('RFC-328 architecture guards', () => {
         }
       }
     }
+  })
+
+  test('RFC-475 the split commit attempt still rejects a removed observer or act', () => {
+    const path = 'packages/backend/src/modules/task-execution/infrastructure/commitPushAttempt.ts'
+    const unit = corpus.find((candidate) => candidate.path === path)
+    expect(unit, path).toBeDefined()
+    if (unit === undefined) throw new Error(`missing commit attempt corpus: ${path}`)
+    expect(taskEffectBoundaryViolations(unit)).toEqual([])
+    const mutate = (text: string): GuardUnit => ({
+      path,
+      text,
+      source: ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true),
+    })
+    expect(
+      taskEffectBoundaryViolations(
+        mutate(unit.text.replaceAll('createLocalEffectAttemptObserver', 'missingObserver')),
+      ).some((message) => message.startsWith('unregistered task effect boundary:')),
+    ).toBe(true)
+    expect(
+      taskEffectBoundaryViolations(mutate(unit.text.replaceAll('publish(', 'missingAct('))).some(
+        (message) => message.startsWith('missing task effect act boundary publish:'),
+      ),
+    ).toBe(true)
   })
 
   test('negative fixtures prove every RFC-328 source guard can bite', () => {

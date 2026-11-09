@@ -1,23 +1,24 @@
 // RFC-412 — the composition bindings of the automatic commit&push tail and the read-only member inspection
 // (engine/node/commit-push/runCommitPush.ts, engine/task/readonlyInspection.ts). Every value is read from the
-// execution state when the engine asks for it; the source-control commit runner and commit-agent helpers and the
-// synthetic agent injection resolver enter task-execution only here.
+// execution state when the engine asks for it; the commit attempt (infrastructure/commitPushAttempt.ts — RFC-475: it
+// publishes through Source Control's public workspace change publication), the built-in commit agent
+// (domain/commitAgent.ts) and the synthetic agent injection resolver reach the engine only here.
 import {
   bindRepositoryGitWorkspace,
   selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
+import { runCommitPush } from '../infrastructure/commitPushAttempt'
+import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecutionResources'
+import { readTaskCommitExcludePatterns } from '../application/operationConfiguration'
+import type { AutoCommitPushPorts } from '../application/ports/commitPush'
+import type { ReadonlyInspectionPorts } from '../application/ports/readonlyInspection'
 import {
   buildCommitAgent,
   buildCommitMessagePrompt,
   buildRepairPrompt,
   COMMIT_MESSAGE_PORT,
   commitPushNodeId,
-} from '@/services/commitPush'
-import { runCommitPush } from '@/services/commitPushRunner'
-import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecutionResources'
-import { readTaskCommitExcludePatterns } from '../application/operationConfiguration'
-import type { AutoCommitPushPorts } from '../application/ports/commitPush'
-import type { ReadonlyInspectionPorts } from '../application/ports/readonlyInspection'
+} from '../domain/commitAgent'
 import type { TaskRepositoryMount } from '../domain/taskRepository'
 import { createFileTaskOperationConfiguration } from '../infrastructure/local/fileTaskOperationConfiguration'
 import { runTaskAgentWithFamily } from './taskAgentRunFamily'

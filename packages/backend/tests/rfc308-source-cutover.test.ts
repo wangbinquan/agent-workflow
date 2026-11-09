@@ -43,15 +43,32 @@ describe('RFC-308 hard-cut source inventory', () => {
     // 「双消费者」收缩为一个（普通任务 commit/push）。code-capability 只剩读
     // 面，因此对它的断言从「经 public/participants 委托」变为**零 source-
     // control / task-execution 依赖**——比原断言更强的收缩证明。
-    const ordinary = readFileSync(join(BACKEND_SRC, 'services', 'commitPushRunner.ts'), 'utf8')
-    expect(ordinary).toContain('bindRepositoryCommitParticipant')
+    // RFC-475：普通任务 commit/push 的 git 一半是 source-control 自己的 workspace change publication
+    // （提交 binder 仍是这个 RFC-308 participant），task-execution 的提交记账只经 public/participants 取它。
+    const sourceControl = join(BACKEND_SRC, 'modules', 'source-control')
+    const ordinary = readFileSync(
+      join(sourceControl, 'application', 'workspaceChangePublication.ts'),
+      'utf8',
+    )
+    const binder = readFileSync(
+      join(sourceControl, 'composition', 'workspaceChangePublication.ts'),
+      'utf8',
+    )
+    const consumer = readFileSync(
+      join(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'commitPushAttempt.ts'),
+      'utf8',
+    )
+    expect(binder).toContain('commits: bindRepositoryCommitParticipant')
     expect(ordinary).toContain('.prepare()')
     expect(ordinary).toContain('.publish(')
+    expect(consumer).toContain('bindWorkspaceChangePublication')
     const codeCapability = sourceFiles(join(BACKEND_SRC, 'modules', 'code-capability'))
       .map((path) => readFileSync(path, 'utf8'))
       .join('\n')
     expect(codeCapability).not.toMatch(/modules\/(?:source-control|task-execution)\//)
-    expect(ordinary).not.toMatch(/modules\/source-control\/(?:application|domain|infrastructure)/)
+    expect(consumer).not.toMatch(
+      /modules\/source-control\/(?:application|domain|infrastructure|composition)/,
+    )
     // 原断言逐条禁止 code-capability 自己跑 git 动词（add/commit/push/
     // update-ref）；T105 后该模块整体无 git 调用，一条正则覆盖全部。
     expect(codeCapability).not.toMatch(/runGit|\[\s*'(?:add|commit|push|update-ref)'/)

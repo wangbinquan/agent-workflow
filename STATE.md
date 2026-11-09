@@ -1,3 +1,36 @@
+## 2026-11-09 RFC-475 自动提交推送按 owner 拆开：git 发布归 source-control、提交行记账归 task-execution（In Progress；`design/RFC-475-commit-push-owner-split/`）
+
+- **来由**：RFC-294 W9-D 第二十二步。`R1` 余 38 条，其中 4 条出在 `services/commitPushRunner.ts`：它一半是 task-execution 的记账（mint
+  commit-push 容器行、登记 repository effect、收尾写结果与状态、落 commit agent 会话 id），一半是 source-control 的 git 发布（子仓递归、暂存与
+  排除策略、diff 采集、本地提交、RFC-321 发布会话内的推送 / 非快进修复 / LLM 修复重推 / 推后校验）。整体迁哪边都越界：迁进 task-execution，
+  git 机制就出了 source-control（违背 RFC-308）；迁进 source-control，就要取 task-execution（DAG 上没有这条 offered 边）。`services/commitPush.ts`
+  同样两半。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）：本会话调研、设计、
+  实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：source-control 新增 application 用例 `publishWorkspaceChanges`（runner 的 git 一半原样迁入，返回 `CommitPushMeta`），经 public
+  `bindWorkspaceChangePublication` 交出（闭合接口合同：消息作者、写锁、日志），提交 binder 移到 `composition/repositoryCommit.ts`，推送判定与
+  numstat / diff 截断 / 兜底消息进 domain；task-execution 新增 `infrastructure/commitPushAttempt.ts` 的 `runCommitPush`（签名不变，记账）与
+  `domain/commitAgent.ts`（内置 commit agent 与提示词）；子仓列表的两个纯函数进 `util/git.ts`；两个 `services/` 文件删除，只剩用例调用的
+  `shouldConsiderCommit` / `parseCommitMessageFromEnvelope` 删除、`isCommitPushNodeId` 进用例 helper。
+- **取舍**：四个本地采集失败出口的收尾写改在释放写锁之后（写锁约定只括索引采集与本地提交，收尾只写库）；source-control 合同不用函数类型
+  属性与守护进程 Logger（public surface 偏差规则）；`composition.ts` 删掉只剩用例在用的 `classifyRepositoryPushFailure` 转出。
+- **不做**：`services/gitSubmodule.ts`、`services/mergeAgent.ts`（platform 的隔离工作区在用）；其余 34 条 `R1`。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-474 的 Done 文档提交 `7d4e6853f`（5 个文档文件）：exact SHA 主 CI run 42590794356 的 70 个 job 全绿（含实现提交那次偶发红的
+  shard 43/44）。
+- **集中验证**：都在候选导出仓库里跑，查出本 RFC 的两处问题，已修复并复验：source-control `public/participants` 转出的
+  `bindRepositoryGitSubworkspace` 拆开后在模块外没人取了（计数复核报未被消费的 public 符号 322 → 323），撤出 public 并补锁；RFC-475 用例的
+  public surface 偏差一例把整份源码交给判据、撞用例自带的 120 秒，改为只交 source-control 加 shared（对新合同的根至少一样严，带正负对照）。
+  backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片全部跑完（修复前的候选，分片时限 3 小时），合计 23564 pass，101 条 fail 里
+  95 条是超时，其余是导出所致的 `rfc321` 与超时之后的连带失败；复跑 209 个文件（修复后），204 个全过，余导出所致的 `rfc321` 与四个文件各一例
+  到点（同一时刻在与 HEAD 逐字相同的导出仓库里对照：`rfc400`、`rfc300` 两边都全过，RFC-167 `approve` 与 `rfc363` 目录分页两边同一例到点）；
+  PostgreSQL 30 秒时限复跑 248 个能到引擎选择的文件，230 个全过，余 18 个文件 34 例都是撞时限与连带失败（同一时刻逐个对照：15 个文件两边逐例
+  相同，`s17` 对照一侧多一例；`scheduler-boundary-fanout-concurrency` 与 `scheduler-clarify-inline` 本 RFC 一侧各多一例到点，两个文件都不走
+  commit&push，再跑一对：前者两边全过，后者到点的那例在第一对里两边都到点、这次两边耗时 19.0 s 与 18.3 s）；P0 SQLite 17 阶段通过，PostgreSQL 第一次变异后的正向运行两例撞默认 5 秒（RFC-359 T2a / T2b，不走 commit&push；同一时刻
+  两边各跑一次同一条正向命令都是 26 / 26），第二次 17 阶段通过；shared
+  2344 pass、frontend gate 7361 pass、system-mocks 111 / 111；`rfc321` 工作树 10 / 10。计数：`R1` 38 → 34、`R2` 0，`legacy-horizontal-files`
+  177 → 175、`legacy-service-implementations` 58 → 56，其余 19 项闸门计数不变，public surface 1495 → 1505（新增 12、撤出 2），偏差 94、
+  未被消费的 public 符号 322 不变，task-owned effect 10 条（commit&push 一条只换路径）。
+
 ## 2026-11-08 RFC-474 入口适配器经 bootstrap 装配：CLI 命令、路由挂载与首启示例不再直取模块内部（Done；`design/RFC-474-entry-adapter-bootstrap-assembly/`）
 
 - **来由**：RFC-294 W9-D 第二十一步。`R1` 余 49 条，其中 11 条出在五个入口适配器上，账本写的退役条件都是「由 bootstrap 注入、经 owner 的

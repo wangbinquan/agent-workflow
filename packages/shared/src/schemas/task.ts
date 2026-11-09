@@ -1113,7 +1113,7 @@ export const RERUN_CAUSES = [
   'fanout-aggregator',
   /** Wrapper (loop / fanout / git) container fresh-mint. */
   'wrapper-init',
-  /** RFC-075 commit&push container row (commitPushRunner). */
+  /** RFC-075 commit&push container row (task-execution commitPushAttempt). */
   'commit-push',
   /** Commit&push per-session child row (scheduler genViaOpencode). */
   'commit-push-session',

@@ -32,10 +32,11 @@ import {
 import {
   composeRepositoryTransportCredentials,
   bindEmployeeCaseWorkspaceParticipant,
-  classifyRepositoryPushFailure,
   createRepositoryPublicationTransport,
   type RepositoryPublicationSession,
 } from '../src/modules/source-control/composition'
+// RFC-475: the composition re-export only served the retired runner; the classifier lives in domain.
+import { classifyRepositoryPushFailure } from '../src/modules/source-control/domain/repositoryPushFailure'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
 import { runGit as executeGit } from '../src/util/git'

@@ -2,7 +2,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleNodeExecutionPersistence } from '../../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { DrizzleTaskExecutionEffectPersistence } from '../../src/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
-import type { CommitPushDeps } from '../../src/services/commitPushRunner'
+import { COMMIT_PUSH_NODE_PREFIX } from '@agent-workflow/shared'
+import type { CommitPushDeps } from '../../src/modules/task-execution/infrastructure/commitPushAttempt'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
 
 type CommitPushTestOverrides = Partial<
@@ -30,4 +31,13 @@ export function composeSqliteCommitPushDeps(
     ...(overrides.runGit === undefined ? {} : { runGit: overrides.runGit }),
     ...(overrides.log === undefined ? {} : { log: overrides.log }),
   }
+}
+
+/**
+ * True iff `nodeId` is a framework-synthesized commit&push node. RFC-475: only
+ * test oracles asked this question, so the predicate left production with
+ * `services/commitPush.ts`.
+ */
+export function isCommitPushNodeId(nodeId: string): boolean {
+  return nodeId === COMMIT_PUSH_NODE_PREFIX || nodeId.startsWith(`${COMMIT_PUSH_NODE_PREFIX}:`)
 }
