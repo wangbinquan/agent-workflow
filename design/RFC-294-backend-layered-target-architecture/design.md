@@ -6,6 +6,11 @@
 > 刷新理由与源码证据见 [2026-10-16 全面审视](./review-2026-10-16.md)；刷新前全文（含旧 §3.5 的 exact 接口草图、
 > 旧 §5～§14 的领域细则与历次 SHA 证据）见 `archive-20261016-design.md`。当前指标见最近一次 dated review 或按需报告；[status.md](./status.md) 为生成说明。
 >
+> **2026-11-09 第二次校正**（证据见 [2026-11-09 独立对账](./review-2026-11-09.md)）：§2 写明 infrastructure 的含义，§3 增常驻规则
+> 10～12，§3.1 的现状偏差段补记余债的 owner，§3.2 写明不属于合同的构件与 `public/operations` 的范围，§4.2 按 2026-08-26 硬规则
+> 对齐，增 §5.6，§9.3、§10.2 记现状偏差，§13.2、§13.3 各补一句并增 13.4 / 13.5，§14 改两行、增五行，§15 增六行。§3.1 的 DAG、
+> IA 矩阵行与 §3.4 表首列未改动。
+>
 > 机器解析约定：`tests/architecture/rfc294-design-parity.test.ts` 读取本文 §3.1 的第一个
 > `flowchart LR` mermaid（context DAG）、以 `| IA \`public/types\` type-only`开头的矩阵行，以及 §3.4 表的首列，
 与`rfc294Target.ts`的`TARGET_CONTEXT_EDGES`/`TARGET_PUBLIC_CONTEXTS` 对拍。三处内容的增删必须与目标常量同批修改；
@@ -86,6 +91,11 @@ packages/backend/src/
 - **composition 的含义**：`composition.ts` 与 `composition/required-ports.ts` 是仅有的装配文件。`composition/` 下其余文件
   一律视为待归位的实现，按内容迁往 engine / application / domain / infrastructure；新代码不得再放进去（proposal C1）。
   `public/*` 不得 re-export composition 内部实现；infrastructure 不得 import 本模块或他模块的 composition。
+- **infrastructure 的含义**（2026-11-09 增补）：infrastructure 文件实现 application / engine 声明的端口——持久化仓储与查询
+  projection、持久化写入协议（CAS、转移表、同事务事件，例如 §12 所说的任务生命周期写入序列）、部署 profile 适配器、外部 effect。
+  “能不能做这件事”的准入判定与用例编排不在这一层：一个文件若导出的是“校验输入 → 判定状态 → 读写多张表 → 触发后续动作”的完整
+  用例，它属于 application（其中的规则属于 domain），与它 import 了什么无关。`infrastructure/legacy/` 一类目录只是迁移途中的
+  停放处，其中不做 IO 的部分按 proposal D14 优先迁出。
 - **legacy 目录的去向**：`services/` 按 owner 迁入模块后删除，只允许一跳无状态 facade；`routes/` 逐步成为各模块
   `inbound/` 或 `adapters/inbound` 的薄绑定；`util/` 中的通用原语归 `platform/`，`util/git` 归 source-control 的 infrastructure
   并恢复为叶子；`auth/` 归 identity-access；`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts` 中的装配收进
@@ -121,7 +131,13 @@ packages/backend/src/
 7. `platform/**` 禁 import `modules/**`；
 8. `composition/**`（除 `composition.ts` 与 `required-ports.ts`）只允许构造与注入；
 9. 既有 `no-routes-to-db`、`no-transport-to-db`、`no-services-to-routes`、`no-util-to-upper`、`no-auth-to-services`、
-   `no-circular` 保留，只能递减。
+   `no-circular` 保留，只能递减；
+10. `infrastructure/**` 不承载用例入口：被 composition 绑定为入站操作或 public command 的编排函数位于 application；
+    infrastructure 导出的是端口实现及其工厂，读侧的查询 projection 与持久化写入协议属于此列（2026-11-09 增补；新代码与搬迁
+    适用 proposal C10，存量按 D14 归位，本条不设全仓门）；
+11. `public/*` 不导出 SQL 片段 / 条件构造器、行形状的通用查询工厂与状态写原子；`public/operations.ts` 只含 OperationCatalog 的
+    操作描述及其句柄合同（定义见 §3.2；2026-11-09 增补，proposal C11 / D15）；
+12. 没有模块外生产消费方的符号不留在 `public/*`（proposal C7 / D15）。
 
 `domain` 与 port 是兄弟边界：port 由需要外部能力的 application / engine 拥有，domain 保持纯净。
 
@@ -241,6 +257,8 @@ DAG 中。所有含 command / query 的 context 还对 `identity-access/public/t
 RFC-400 进一步把 collaboration → task-execution 的 17 个内部文件对改为 TE 自有参与者，删除人工门装配桥，
 并将 public 合同中的 legacy Actor / ActorSource 改为 Identity Access 的 AuthenticatedAuthoritySnapshot。
 其余 type-only 越 DAG offered 边与跨 context 内部文件对仍作为 S5/S6 待清偿债；本表与生成器常量是唯一的目标边集。
+2026-11-09：S5 / S6 已关闭，余下 43 个内部文件对与 55 对 type-only 越 DAG 边重新指定 owner——task-execution → runtime-management
+的 18 对随运行时驱动一族（plan §4.7），指向 source-control 的 5 对随 W5，其余与全部越 DAG 边归 plan S9。
 
 ### 3.2 受控 public entrypoints
 
@@ -248,6 +266,23 @@ RFC-400 进一步把 collaboration → task-execution 的 17 个内部文件对�
 与 `public/operations.ts`（OperationCatalog 的操作描述，只供入站绑定使用）。值级 facade 与 type-only surface 分开；
 只允许导出 application facade、跨域 DTO / value、tx-bound participant、版本化领域事件与操作描述。禁止导出 Drizzle
 table / row、repository 实现、内部 aggregate、Hono 类型、模块单例与 composition 内部实现；禁止 `export *`。
+
+2026-11-09 增补（proposal D15，证据见 [review-2026-11-09](./review-2026-11-09.md) F12）：
+
+- 经 provider 的 public 读取对方数据的形式只有两种：owner 提供的、完成一个业务目的的查询（一个 projection 一个 DTO），或
+  owner 在调用方事务内构造的 tx-bound participant。consumer 自有的 required 端口（§3.1 的虚线）不在此列，它本身就是按业务目的
+  定义的窄合同。
+- 下列三类构件不属于合同，它们让两个模块在表结构上耦合：
+  - **SQL 片段 / 条件构造器**：返回 drizzle `SQL` / 列条件、供调用方拼进自己查询的函数；
+  - **行形状的通用查询工厂**：收 db / tx 句柄、返回一组按表行形状取数的方法、由调用方自行组合的工厂；
+  - **状态写原子**：让调用方逐步推进 owner 状态机的单行写函数。
+
+  前两类的机器判据是类型污染检测器对持久化句柄与 drizzle 类型的命中。
+- `public/operations.ts` 只含操作描述及其句柄合同：**操作描述**指 OperationCatalog 的 descriptor 及其工厂，**句柄合同**指
+  入站绑定取用的操作接口类型（含 descriptor 工厂的入参接口）与输入输出 schema。类型检查对这个入口的豁免只为操作描述工厂而设（RFC-344）；仓储实现、
+  生命周期函数、写原子与策略注册不得借它导出。
+- public 面有三项质量不变量：类型污染清单（`rfc294-architecture-preflight` 的 `PUBLIC_SURFACE_DEBT`）为空、`public/operations`
+  只含操作描述及其句柄合同、未消费符号为 0（§14）。清单里确属合同的形态，先改检测规则并经用户确认，不以例外清单长期保留。
 
 ### 3.3 边界接口最小化规则
 
@@ -320,7 +355,8 @@ symbol / field 不公开；“无 commands / events”是合法且更好的 publ
 ### 4.2 Command / Query / Operation
 
 - 每个 operation 只有一个 `execute`；HTTP 与 MCP 表达同一用例时调用同一 handler（RFC-344 OperationCatalog 已落）。
-- RouteMeta 做 transport 粗粒度 admission，资源 / 行级授权、OCC、状态机、事务与 audit / event 在 command 内完成。
+- RouteMeta 做 transport 粗粒度 admission；OCC、状态机、事务与 audit / event 在 command 内完成。访问控制按 CLAUDE.md
+  2026-08-26 硬规则处理（路由层单门、复用既有 ACL kernel，不在命令内叠加二次重验；2026-11-09 修订，review R12）。
 - query 返回 actor-filtered projection，分页、过滤与排序下推到查询端口。
 
 ### 4.3 事务
@@ -404,6 +440,23 @@ assembly 只拥有装配顺序与双模式窗口（每次尝试 / 跨尝试）�
 5. 退出：`nodeMechanics.ts` 删除、`legacyArgs` 消失、`TaskMechanicsState` 只出现在装配、协调器只在 bootstrap 构造。
 
 `services/task.ts` 的旧启动路径只剩一个生产调用方（fusion），在其改走根启动内核后退役；它不在热路径上，排在上述步骤之后。
+
+### 5.6 现状与余项（2026-11-09）
+
+S6 关闭后，§5.2 的四层在 `engine/` 内成立，`composition/` 只装配并有收口锁（[review-2026-11-09](./review-2026-11-09.md) §4）。
+与本节目标仍有距离的地方：
+
+- `infrastructure/` 的三个“路由操作”文件（`taskRouteOperations.ts`、`taskRouteRepairOperations.ts`、`taskRouteLaunchOperations.ts`，
+  合计约 5.9k 行）把准入规则与查询写在一起。它们是用例，按 §3 常驻规则 10 属于 application：`taskRouteLaunchOperations.ts` 随
+  W4-E1，其余按 proposal D14 随功能 RFC 触及时归位，不设单独的退出门。`taskLifecycle.ts` 是 §12 所定的生命周期写入序列，留在
+  infrastructure；它构造带 HTTP 状态的错误这一点归 W9-C。
+- `application/taskAgentRun.ts` 的 `runNode` 是单个约 2.2k 行的函数，是 agent 运行的主体。按 §5.2 的口径，其中的装配顺序应归
+  机制库、kind 专属判定应归执行器；后继触及时拆分，不单设波次。
+- `TaskMechanicsState` 只出现在 `composition/`（S6 退出门成立），但仍是 22 个字段的对象，运行选项袋 61 个成员。§5.2 “拆成按层
+  注入的窄端口”按 RFC-420 的裁决不整体实施，随剩余机制迁移逐字段删除。
+- `public/operations.ts` 是遗留的生命周期兼容出口，导出状态写原子；按 §3 常驻规则 11 随 plan S9 与 W4-E1 退役。
+- `composition.ts` 在 import 期构造 `taskExecutionModule`，被 infrastructure 与 `services/task.ts` 当作全局取用；按 §10.2 改为由
+  工厂图构造（plan S12）。
 
 ## 6. NodeRun 身份与 provenance
 
@@ -510,6 +563,12 @@ RFC-310 的 development effect journal 是领域恢复，不计作 AtomicApply �
   `selected ?? createLocal…()`”的形状；`cli/` 与 `bootstrap/` 不得互相依赖；
 - SPA 部署标记等展示信息来自 profile 描述，不读端口上的模式字面量。
 
+**现状偏差（2026-11-09）**：选择只在 bootstrap 发生一次已成立（plan S2）。未成立的是模块一侧：模块 composition 里仍有 50 处
+`x ?? create… / compose…(…)`（含换行写法），其中 31 处在未注入时回落到名字带 File / Local / Native 的工厂，另有
+`x === undefined ? create…(` 一类等价写法 15 处，`select*` 助手也还在；profile 的可空选择项在装配处被转回 `undefined` 后走的正是
+这些回退。选择合同是 62 个键的扁平清单，部分槽位的类型取自本地工厂的签名（`typeof compose… / create…`），尚不是“每个模块
+一份类型化的适配器集合”。两项都由 plan S12 清偿（第 1、6 项）。
+
 ### 9.4 进程内不变量
 
 flock 单实例锁、进程内活跃集合、进程内锁、内存缓存等，在设计中必须标明适用 profile：只在单机成立的，声明为
@@ -540,6 +599,11 @@ RFC-370 v2 的原则（同一业务路径、端口按语义、崩溃即退出的
 - 现有 `server.ts` 的 provider 无关挂载表是可复用的起点，`composeSqliteApplicationDeps` 一类 provider 专属装配与
   `deps.x ?? composeX(...)` 形态的测试回退构造退役；
 - 测试通过工厂图注入实例 port，不在生产装配里保留测试回退。
+
+**现状偏差（2026-11-09）**：daemon 会话的应用图与会话图唯一、provider 中立（plan S2）。CLI 命令根
+（`bootstrap/commandBootstraps.ts`）与 daemon 的 HTTP 装配各自手写资源包 provider / catalog 的构造；task-execution 模块在 import 期
+构造（§5.6）。二者由 plan S12 清偿。`bootstrap/daemonApplication.ts` 的 `testSeams` 是“通过工厂图注入实例 port”的落实形态，
+不属于测试回退。
 
 ### 10.3 唯一生命周期程序
 
@@ -598,14 +662,42 @@ RFC-370 v2 的原则（同一业务路径、端口按语义、崩溃即退出的
 **按需**生成，用于排期与审视；默认不提交，不要求 provenance pin，不作为任何波次的退出条件。计数口径必须测其名所指：
 模块级可变单例不含路由 / 操作注册；后台作业不含常量与 schema。
 
+2026-11-09 增补：上面说的是逐条库存不作退出条件，这一点不变。两个**计数**例外地进入退出门——未消费 public 符号数
+（proposal D15，plan S9 / S11）与 §14 的模块级可变单例数（plan S12）；它们按计数进减速带或由后继按 §14 的口径核对，
+不恢复逐 symbol 的账本。
+
 ### 13.3 过渡
 
 RFC-376 阶段 B 将治理切换为硬结构门、文件内双向精确例外与 `architecture/counts.json` 减速带。
 普通生产改动不再需要 census、provenance pin、增长许可或投影伴随提交。报告命令为
 `bun run architecture:report --source-ref HEAD`，默认输出到忽略的 `.architecture-report/`；加 `--gates` 可重算清单与计数。
 `architecture:write` 暂留为非零退出墓碑；旧库存与生成器已删除，保留的主题清单仅在主题变化时手维护。
-生命周期清单一致门 G12 留给 S2a；C7 零 consumer public 符号只进报告。新增例外须在后继 RFC 中列明、经用户确认，
+生命周期清单一致门 G12 留给 S2a；C7 零 consumer public 符号只进报告（2026-11-09：proposal D15 改为进入减速带并清零，由 plan S11 /
+S9 实施，落地前现状仍是只进报告）。新增例外须在后继 RFC 中列明、经用户确认，
 同一提交提高对应 max 并写含 `max=<N>` 的 reason；下降自动通过，无历史比较。
+
+### 13.4 覆盖范围与减速带（2026-11-09 增补）
+
+- 每条结构锁都有明确的覆盖范围（全仓或指定模块）。后继用锁证明退出门时写明范围；§14 的全仓判据只能由覆盖全仓的门或减速带
+  证明（proposal C12、D16）。现状：`composition/` 只装配的收口锁（RFC-414 / RFC-423）只覆盖 task-execution，推广到全部模块是
+  plan S10 的退出门。
+- 减速带的 `max` 等于实测值：后继收口时收紧所触及的计数，dated review 统一核对（proposal C13）。没有精确清单兜底的计数
+  （legacy 横向文件、`services/` 业务实现、legacy 薄 facade、未消费 public 符号）尤其如此。减速带仍按“实测不高于上限即过”
+  执行，不改成逐次相等——并发 session 各自下降同一计数时，相等判据会互相打红。
+- 新进入减速带的计数（plan S11）：未消费 public 符号、public 类型污染条数；各模块 `composition/` 的控制流计数在 S10 的收口锁
+  落地前临时纳入。
+
+### 13.5 独立对账（2026-11-09 增补）
+
+距上一次 dated review 满 14 天或其后已关闭 20 个后继（以先到者为准），由没有实施被抽查后继的会话做一次 dated review
+（proposal D17）：
+
+- 按源码抽查已关闭后继的退出门，而不是复述其验收记录；
+- 核对每条“Done”所依据的锁的覆盖范围；
+- 重新生成架构报告，把 §14 的当前值与减速带上限对一遍；
+- 证据分级：实测、直读、抽样；抽样结论不作为基线或退出门。
+
+对账只改文档；发现的生产问题由后继 RFC 承接。
 
 ## 14. 架构不变量与终局判据
 
@@ -619,10 +711,10 @@ RFC-376 阶段 B 将治理切换为硬结构门、文件内双向精确例外与
 | context 级值依赖                                                     | 无环，且 ⊆ §3.1 DAG                             |
 | 跨 context 内部 import（infrastructure / application / composition） | 0                                               |
 | `platform/` → `modules/`                                             | 0                                               |
-| composition 内实现（除装配）                                         | 0                                               |
+| composition 内实现（除装配）                                         | 0（全部模块，由覆盖全部模块的锁证明）           |
 | 业务层部署模式分支                                                   | 0                                               |
 | 装配                                                                 | 唯一模块工厂图；每模块每进程构造一次            |
-| 后台作业                                                             | 全部经唯一生命周期程序，均有 stop；无私设 timer |
+| 后台作业                                                             | 全部经唯一生命周期程序，均有 stop；直接定时器只出现在平台定时原语与有 owner / stop 的执行局部计时 |
 | 模块级可变单例（生产态，bootstrap 外）                               | 0                                               |
 | NodeRun 先后判据                                                     | 只用 `seq`；生产路径无 id 顺序比较              |
 | `node_runs INSERT` 站点                                              | 1                                               |
@@ -630,6 +722,14 @@ RFC-376 阶段 B 将治理切换为硬结构门、文件内双向精确例外与
 | task ownership authority                                             | 1（持久 epoch / lease）                         |
 | 事务内外发事件                                                       | 0                                               |
 | services/ 下的业务实现                                               | 0（只允许到期删除的一跳 facade）                |
+| public 类型污染清单（2026-11-09 增）                                 | 空                                              |
+| `public/operations` 的导出（2026-11-09 增）                          | 只含操作描述及其句柄合同                        |
+| 未消费 public 符号（2026-11-09 增）                                  | 0                                               |
+| 模块 composition 的适配器回退（2026-11-09 增）                       | 0（单机默认值只在 standalone profile）          |
+| 减速带上限（2026-11-09 增）                                          | 每项等于实测值                                  |
+
+“用例入口与规则判定在 application / domain”（§3 常驻规则 10）是目标而不是本表的清零判据：存量按 proposal D14 分路归位，
+dated review 用“规则拒绝所在层”的分布跟踪，不设全仓门。
 
 ## 15. 现有能力到目标 owner 的映射
 
@@ -656,8 +756,15 @@ RFC-376 阶段 B 将治理切换为硬结构门、文件内双向精确例外与
 | 全量账本与 provenance 协议                                          | 硬结构门 + 按需报告                                                 | S4                                                   |
 | HTTP 耦合错误、散点 log / audit                                     | platform/errors、platform 观测                                      | W9-C                                                 |
 | 物理恢复 generation                                                 | platform/persistence + system-operations 编排                       | W9-E                                                 |
+| public 里的 SQL 片段、通用查询工厂与状态写原子；未消费的 public 符号 | owner 模块的业务查询 / tx-bound participant；其余撤回模块内部       | S9                                                   |
+| 各模块 `composition/` 里的用例、schema / codec 与 effect 实现       | 各模块 domain / application / infrastructure                        | S10                                                  |
+| 减速带上限、结构锁的覆盖范围记录                                    | 架构门与 dated review                                               | S11                                                  |
+| 模块 composition 的本地适配器回退、入口根并行手写的工厂、导入期单例与模块级可变单例、业务模块内的定时器、以本地工厂定型的选择槽位 | bootstrap 工厂图与 profile、platform 定时原语 | S12 |
+| 跨 context 内部文件对与 type-only 越 DAG 边（S5 / S6 关闭后的余债）  | 各 owner 的 public 合同或经确认并入目标 DAG                          | 运行时驱动一族、W5、S9                               |
+| infrastructure 中不做 IO 的规则 / 校验 / 策略                       | 各模块 domain / application                                         | S13                                                  |
 
-新增能力如果无法落到某一行的 owner，必须先补设计；不得暂存到 `services/` 或 `composition/`。
+新增能力如果无法落到某一行的 owner，必须先补设计；不得暂存到 `services/`、`composition/`，也不得把用例整体停放在
+`infrastructure/`（2026-11-09 增补）。
 
 ## 16. 兼容与回滚模型
 

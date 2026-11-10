@@ -1,3 +1,52 @@
+## 2026-11-09 RFC-294：独立对账与总纲第二次校正（纯文档；`design/RFC-294-backend-layered-target-architecture/review-2026-11-09.md`）
+
+- **来由**：用户要求独立调研 RFC-294 的架构是否合理、实现到了哪一步，并在证据充分的前提下按发现修订总纲。基线 `361945023`
+  （= `origin/main`，主 CI run 42696377550 绿）：`architecture:report --gates`、grep 与逐文件读源码；三路并行只读审读的结论凡写进
+  文档的均由本会话复核；写成后另做一次独立的只读设计门复核（只审功能与事实一致性），其指出的 3 处数字错误与十余处不一致已更正。
+  未运行产品测试；不做安全检视。
+- **结论**：目标架构合理，结构骨架属实（值级环 0、context 值级依赖无环、`platform` → `modules` 0、入站适配器不碰 DB / `services/` /
+  模块内部、task-execution 的 engine 四层是真实主体、生命周期程序 28 / 4 / 16 / 6）。design §14 原有 17 条判据：9 条达标、3 条接近、
+  4 条未达、1 条无可靠度量。实质缺口：
+  1. 分层只规定了禁止 import，没有规定 infrastructure 不许承载什么——由 `services/` 迁入的文件整体停在 infrastructure（模块代码
+     45% 在该层；collaboration 93%、task-execution 90% 的规则拒绝在该层）；
+  2. public 面有类型污染门，但 94 条存量没有清偿后继，`public/operations` 的整体豁免被 4 个模块用来导出操作描述以外的值，
+     322 个符号无消费方；
+  3. 全仓判据“composition 内实现 = 0”只在 task-execution 有锁（development-automation 的 `composition/` 1.5 万行）；43 个跨
+     context 内部文件对在 S5 / S6 关闭后没有 owner；`architecture/counts.json` 三项上限远高于实测且无精确清单兜底。
+- **总纲修订**（只改 `design/RFC-294-…/` 下四个文件）：新增 review-2026-11-09；proposal 增 §2.1、§5.1（R9～R13）、约束 C10～C13、
+  决策 D14～D17、AC-13 / AC-14，G1 增两条、G4 按 2026-08-26 硬规则对齐；design 写明 infrastructure 的含义、增常驻规则 10～12、
+  §5.6、§13.4 / §13.5，§14 增五条判据、§15 增行；plan 增 §1.3 阶段划分、后继 S9～S13、§4.7。§3.1 DAG 与 §3.4 表未动
+  （`rfc294-design-parity` 4 条用例通过）。
+- **接手必读**：
+  - 结构阶段（P0、W2、W3 与 S1～S8）记为完成；此后进度以 design §14 的不变量与 S9～S13 的退出门为主口径，不再以 `services/`
+    文件数、`R1` 条数为主口径；
+  - W9-D 余项按 owner 族成批（plan §4.7：运行时驱动一族 38 个文件、E1 9 个、git 一族 3 个随 W5、其余 5 个），迁入时按内容分层
+    落位、不再把用例文件原样停放到 infrastructure；在制的 RFC-476 按原方式收口；
+  - 新代码与此后的搬迁立即适用 C10（用例入口归 application）、C11（public 不新增内部构件，`public/operations.ts` 只放操作描述
+    及其句柄合同）；后继收口适用 C12（结构锁写明覆盖范围）、C13（收紧减速带上限）；
+  - 下一批后继：S11 治理补洞、S9 public 合同收敛、S10 `composition/` 全模块只装配、S12 装配余项、S13 纯逻辑归位；各自仍须按
+    CLAUDE.md 立三件套并获批；
+  - 距上一次 dated review 满 14 天或其后已关闭 20 个后继（先到者为准）须做独立对账；下一次不晚于 2026-11-23。
+- **待用户决定**（review §9）：存量模块的用例是否排成波次整体归位；是否为测试设边界目标（2,918 个测试文件里 1,753 个深引模块
+  内部）；`architecture/counts.json` 六项上限是否立刻单独收紧。
+- **未改动 / 遗留**：生产代码、测试、`architecture/*`、`status.md` 未动。RFC 索引 `design/plan.md` 的 RFC-294 行尚未记本次对账：
+  该文件有并发在制改动（含指向未跟踪目录的链接，本批提交它会打红 `design/` 链接检查），待该文件无并发在制改动时补上。
+
+## 2026-11-09 RFC-476 任务删除与评审变更队列归 task-execution（In Progress；`design/RFC-476-task-delete-and-review-mutation-queue-owners/`）
+
+- **来由**：RFC-294 W9-D 第二十三步。`R1` 余 34 条，其中 4 条出在两个 `services/` 文件上：`services/taskDelete.ts`（`tasks:delete` 硬删除，取
+  task-execution `infrastructure/taskDeleteRecovery`，账本的退役条件就是并入 task-execution）与 `services/reviewMutationCoordinator.ts`（评审写入
+  与任务取消共用的进程内每任务 FIFO，取 collaboration 的评审作用域解析）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行
+  判断不用提交给我审批」（2026-11-09 再次下达）：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：删除实现迁为 task-execution `infrastructure/taskDelete.ts`（改取定义处，启动恢复经 `composition/bootRecovery.ts` 交给 bootstrap）；
+  队列迁为 task-execution `infrastructure/reviewMutationQueue.ts`，`public/participants` 交出闭合接口参与方 `taskReviewMutationQueue`
+  （`serialize` / `serializeAfterLookup`，工作单元是带方法的对象），collaboration 的 `infrastructure/reviewMutationLock.ts` 经它进队列、保留评审
+  作用域解析与 `review-not-found`；删除事务里 collaboration 的一半改经 task-execution 自有端口 `TaskDeletionCollaborationPort` 由 bootstrap
+  注入；task-execution public 上失去模块外消费方的九个符号当场收回。
+- **不做**：其余 30 条 `R1`（`task` 9、`systemAgentRun` 5、运行时驱动一族与 `runtimeSmoke` 13、`nodeRollback` 3）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **附带**：RFC-475 的 Done 文档提交 `361945023`（5 个文档文件）：exact SHA 主 CI run 42696377550 的 70 个 job 全绿。
+
 ## 2026-11-09 RFC-475 自动提交推送按 owner 拆开：git 发布归 source-control、提交行记账归 task-execution（Done；`design/RFC-475-commit-push-owner-split/`）
 
 - **来由**：RFC-294 W9-D 第二十二步。`R1` 余 38 条，其中 4 条出在 `services/commitPushRunner.ts`：它一半是 task-execution 的记账（mint

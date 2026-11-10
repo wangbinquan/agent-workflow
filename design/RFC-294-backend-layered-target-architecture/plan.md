@@ -10,10 +10,14 @@
 > **2026-11-03 S2 Done**：[RFC-433](../RFC-433-explicit-presence-selections/proposal.md)（Done）完成 S2c 余项第 1 项第四步——部署选择项 62 项全部由两个 profile 显式给出（51 必填 + 11 必填可空、无可选），装配层不再按「有没有给」分叉；S2 退出门核对见 §3 S2，§1.1、§1.2、§4.6、§8 已更新。
 >
 > **2026-11-02 S7 Done**：[RFC-401](../RFC-401-single-resource-write-stack/proposal.md)（Done）完成 S7——六类资源各一个写入参与者、三入口错误收敛、AtomicApply 持久 claim / lease、技能 / fusion / restore 接入、旧技能 operation 生命周期与零调用 legacy 写函数删除；退出门核对见 §3 S7，§1.1、§1.2、§8 已更新。
+>
+> **2026-11-09 独立对账**：按用户要求独立调研并修订总纲，证据见 [review-2026-11-09](./review-2026-11-09.md)。结构阶段（S1～S8）完成；
+> 新增实质阶段后继 S9～S13（§3）、阶段划分（§1.3）、W9-D 余项的成批方式（§4.7）与三条纪律（§0 第 8～10 条）；§5、§6、§8 相应更新。
 
-- 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增，见 proposal §9）。本文刷新不授权任何未立项的后继。
-- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S2c（RFC-393 / 394 与余项 RFC-425～433）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭（S2 于 2026-11-03 Done）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型；W7 余项 2026-10-31 核销；S5 由 RFC-399 / RFC-400 两步完成（2026-10-31 Done）；S6 由 RFC-402～424 完成（2026-11-02 Done）；S7 由 RFC-401 完成（2026-11-02 Done）。其余见 §1.1（2026-10-30 对账）。
-- 规划单位：已关闭波次（保留结论）+ 立即整改后继 S1～S8 + 余下波次（W4 余项、W5、W7 余项、W9-C/D/E，W8 可选）。
+- 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增；2026-11-09 新增 D14～D17，见 proposal §9）。本文刷新不授权任何未立项的后继。
+- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S2c（RFC-393 / 394 与余项 RFC-425～433）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭（S2 于 2026-11-03 Done）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型；W7 余项 2026-10-31 核销；S5 由 RFC-399 / RFC-400 两步完成（2026-10-31 Done）；S6 由 RFC-402～424 完成（2026-11-02 Done）；S7 由 RFC-401 完成（2026-11-02 Done）。其余见 §1.1（2026-10-30 对账）与 §1.3（2026-11-09 对账）。
+- 规划单位：已关闭波次（保留结论）+ 立即整改后继 S1～S8（已全部关闭）+ 实质阶段后继 S9～S13（2026-11-09 新增）+ 余下波次
+  （W4 余项、W5、W9-C/D/E，W8 可选）。
 
 ## 0. 批准边界与实施纪律
 
@@ -23,8 +27,14 @@
 4. 同一冲突面同时只允许一个在制高冲突批（装配根、`nodeRunMint` / freshness、迁移目录、架构生成器）；共享 `main` 上按路径精确
    暂存与提交，不建分支、不用 stash / worktree。
 5. 目录迁移逐域进行：旧路径只留一跳无状态 facade，consumer 归零后删除。
-6. proposal §6 的立即生效约束 C1～C9 对所有新代码生效；在制 RFC 收口前对账，偏离项逐条呈用户确认。
+6. proposal §6 的立即生效约束 C1～C13 对所有新代码生效（C10～C13 自 2026-11-09 起）；在制 RFC 收口前对账，偏离项逐条呈用户确认。
 7. 开发、测试与验证纪律服从 CLAUDE.md 文首硬规则：先完成后继的全部实现与用例，再集中验证；CI 以 GitHub Actions 为准。
+8. （2026-11-09）搬迁类余项按 owner 族成批立 RFC，一个 RFC 可以含多步；不再一文件一 RFC（proposal D17，§4.7）。进度以结构规则
+   与 design §14 的不变量报告，不以文件数或 `R1` 条数为主口径。
+9. （2026-11-09）后继以结构锁证明退出门时，在其 plan 与本文的记录里写明锁覆盖的是全仓还是指定模块；收口时把所触及的减速带
+   上限收紧到实测值（proposal C12、C13）。
+10. （2026-11-09）距上一次 dated review 满 14 天或其后已关闭 20 个后继（以先到者为准），做一次独立对账（design §13.5），由没有
+    实施被抽查后继的会话执行。任何会话开工新的后继前先看这两个条件，到期则在当前会话向用户说明。下一次不晚于 2026-11-23。
 
 ## 1. 当前基线与量化口径
 
@@ -98,6 +108,22 @@
 | S7（W6）                         | [RFC-401](../RFC-401-single-resource-write-stack/proposal.md)                                                 | 唯一资源写入栈与三入口错误收敛、AtomicApply 持久 claim / lease、技能 / fusion / restore 接入、旧技能 operation 生命周期与零调用 legacy 写函数删除 |
 
 各后继的 exact-SHA 与 hosted 证据以其自身三件套为准；本总纲的历史汇总见 `archive-20261016-plan.md` §1、§3.2。
+
+### 1.3 阶段划分（2026-11-09）
+
+按 [review-2026-11-09](./review-2026-11-09.md) 的对账与 proposal D17，迁移分两段记账：
+
+| 阶段     | 内容                                                                                                                         | 状态            | 进度口径                                                                   |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------- |
+| 结构阶段 | 依赖方向、装配根、执行链、NodeRun 身份、apply 生命周期（P0、W2、W3、S1～S8）                                                 | 2026-11-03 完成 | 各后继的结构规则退出门                                                     |
+| 实质阶段 | public 合同、`composition/` 全模块只装配、治理补洞、装配余项、纯逻辑归位（S9～S13），以及 W4 / W5 / W9-C / W9-D / W9-E 余项 | 进行中          | design §14 的不变量与各后继退出门；搬迁计数只是 W9-D 的退出门之一          |
+
+design §14 的当前值：原有 17 条判据中 9 条达标、3 条接近、4 条未达、1 条没有可靠度量；2026-11-09 新增的 5 条均未达
+（review §3 的两张表）。结构阶段“完成”指上表所列后继各自的退出门成立，不等于相关的全仓判据都已成立，读者留意三处：
+
+- S6 的退出门本就限定 task-execution；design §14 的全仓判据“composition 内实现 = 0”由 S10 承接。
+- S2 的“装配层无隐式缺省”在 profile 合同层成立；模块 composition 的本地适配器回退由 S12 承接。
+- S5 留给“S6 及后继各域 RFC”的 43 个跨 context 内部文件对与 55 对 type-only 越 DAG 边，分给运行时驱动一族（§4.7）、W5 与 S9。
 
 ## 2. 每个后继的统一切换协议
 
@@ -370,6 +396,104 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   `outputKinds` 注册改为注入、frontend 递归渲染改 children / render callback，可作为同批或独立小批。
 - **退出门**：后端值级 SCC = 0；`KNOWN_VIOLATIONS` 中上述条目删除。**能力影响**：无。
 
+**实质阶段后继（2026-11-09 新增）。** 排序与证据见 [review-2026-11-09](./review-2026-11-09.md) §5～§7。每项都是独立 RFC，
+开工前须用户批准。文中的数字取自 HEAD `361945023`，开工前按当时的 HEAD 复核。
+
+### S9 public 合同收敛
+
+- **目标**：让“跨模块只走 public”在内容上成立（proposal D15，review R10 / F12 / F19）。先做 task-execution ↔ collaboration：
+  类型污染清单的 94 条里 47 条属于这一对，它也是最宽的一条边界（collaboration 取 task-execution 65 个符号）。
+- **范围**：
+  1. `public/operations` 收口：task-execution 的兼容写原子（`setTaskStatus`、`setNodeRunStatus`、`transitionNodeRunStatusTx`、
+     `mintNodeRun` 等；模块外 5 个使用文件）改走 task 拥有的决定 participant 或端口；identity-access 的
+     `DrizzleOidcProviderRepository`、source-control 的 `invalidateRepositoryWorkspaceFacetCaches` 与仓储记录类型撤出或改为端口；
+     knowledge-evolution 的 5 个运维函数移到 commands / participants。架构检测器对 `public/operations` 的整体豁免收窄为
+     操作描述及其句柄合同（design §3.2 的定义）。
+  2. 清偿类型污染清单（`PUBLIC_SURFACE_DEBT`，94 条）：持久化句柄与 drizzle 类型 43 条（SQL 条件片段 `nodeRunStatusCondition`、
+     `taskGateOpenCondition`、`taskGateVisibleCondition`、`workflowNameExpression`，与收裸 db 句柄的查询工厂）换成 owner 提供的
+     业务查询，tx-bound participant 的构造方式由后继 design 给出；开放类型 39 条收成闭合接口；日志器类型 6 条与其余 6 条逐条
+     处理。确属合同的形态先改检测规则并经用户确认（proposal D15），不留例外清单。
+  3. 未消费 public 符号清零（322 个，其中 task-execution 181 个）：没有消费方的撤回；只被本模块使用的移回内部。
+  4. collaboration 不再把 task-execution 的 SQL 片段拼进自己的查询，评审 / 澄清读取 task 事实改经业务查询；由此牵动的用例按
+     proposal D14 迁入 application。
+  5. 认领 S5 / S6 留下的余债：43 个跨 context 内部文件对中，除 task-execution → runtime-management 的 18 对（随运行时驱动一族，
+     §4.7）与指向 source-control 的 5 对（随 W5）外的 20 对；55 对 type-only 越 DAG offered 边逐对清偿，或经用户确认并入
+     design §3.1 的目标 DAG。
+- **退出门**（都可从源码判定）：`PUBLIC_SURFACE_DEBT` 为空；检测器不再整体豁免 `public/operations`，且该入口在全部模块只含
+  操作描述及其句柄合同；未消费 public 符号 = 0，减速带上限为 0；`nodeRunStatusCondition`、`taskGateOpenCondition`、
+  `taskGateVisibleCondition`、`workflowNameExpression` 不再从任何 `public/*` 导出；第 5 项认领的 20 个内部文件对从精确清单中
+  销账，越 DAG offered 边的精确清单为空或与修订后的目标 DAG 一致。
+- **前置 / 冲突**：未消费符号的减速带计数由 S11 提供（S9 的第一个 RFC 也可自带）；与 W4-E1 共享
+  `task-execution/public/operations.ts`，二者串行（E1 先做可直接去掉 `services/task.ts` 这一个使用方）；与 S13 共享
+  `collaboration/infrastructure/review.ts`，串行。可按 context 对拆为多个 RFC（task-execution ↔ collaboration、resource-catalog ↔
+  task-execution、其余），每个 RFC 的退出门是上述各项在它所认领的那一对上成立。
+- **能力影响**：无；查询结果、分页与错误码不变，以现有 review / clarify / 启动用例对拍。
+
+### S10 `composition/` 只装配：全模块收口
+
+- **目标**：把 S6 在 task-execution 上达成的状态推广到全部模块，使 design §14 “composition 内实现 = 0”有覆盖全仓的门
+  （proposal D16，review R11 / F13）。
+- **范围**：
+  - development-automation（32 个文件 / 1.53 万行）：`employeeTypePackage.ts` 的合同 schema 与 codec 归 domain（10-16 review F1 已
+    点名）；`digitalEmployeePlatformWorkItems.ts` 的工作项用例归 application；`digitalEmployeeWorkspace.ts` 的工作区策略与
+    `missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位；
+  - source-control（31 个文件 / 0.32 万行）：`taskImage*` 的分派与 effect 实现归 `infrastructure/crewstation/`，跨进程操作按
+    design §9.5 类型化；`repositoryPublicationTransport.ts`、`repositoryPreparation.ts` 的 effect 实现归 infrastructure；
+  - integration、resource-catalog、system-operations、intent、runtime-management、digital-employee 的余项；
+  - `composition-forbidden-import-files` 14 → 0；
+  - 把 RFC-414 / RFC-423 的收口锁改写为一条覆盖全部模块的门：无循环与 switch，`try` 与 `throw` 只出现在登记清单内，不做
+    DB / FS / 进程 / git 工作。
+- **退出门**：上述门对全部模块为绿、例外清单为空；`composition-forbidden-import-files` = 0；上面点名的文件不再位于
+  `composition/`；各模块 `composition/` 的分支计数（review F13 的口径）不高于后继 design 给出并经用户确认的上限，该上限写入
+  减速带。
+- **前置 / 冲突**：与 S12 共享模块 composition 文件（同一文件同批只允许一个）；与 RFC-370 余项涉及的 `taskImage*` /
+  `crewstation*` 文件逐个避让；development-automation 一块规模最大，可单独立 RFC 先做。
+- **能力影响**：无；以数字员工 / 开发自动化的现有用例与托管 E2E 对拍。
+
+### S11 治理补洞
+
+- **范围**：`architecture/counts.json` 六项高于实测的 `max` 收紧到实测值；未消费 public 符号与 public 类型污染条数进入减速带；
+  S10 的门落地前临时纳入各模块 `composition/` 的控制流计数（review F13 的口径：行首 `if / for / while / switch / try` 与 `throw`
+  的行数）；§1.2 的表增一列“结构锁 / 覆盖范围”并逐行填写；`docs/dev-gotchas.md` 补“收口时收紧上限”一条。
+- **退出门**：减速带每项 `max` = 实测值；新计数各有会红的变异测试；§1.2 的新列没有空格。
+- **前置 / 冲突**：只改测试、`architecture/counts.json` 与文档，可与任何后继并行。**能力影响**：无。
+
+### S12 装配余项
+
+- **范围**（design §9.3、§10.2 的现状偏差，review F14）：
+  1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在 `bootstrap/standalone.ts`；装配处把可空
+     选择项转回 `undefined` 的写法随之删除。基线：`x ?? create… / compose…(…)` 50 处（31 处回落到名字带 File / Local / Native
+     的工厂），`x === undefined ? create…(` 14 处，`?? new X(` 1 处；日志器一类中性默认不在清理之列，由后继 design 列明；
+  2. CLI 命令根与 daemon HTTP 装配并行手写的工厂改为共用同一模块工厂：已核实的一处是资源包 provider / catalog
+     （`bootstrap/commandBootstraps.ts` 与 `bootstrap/daemonHttpComposition.ts`），其余由后继 design 列出精确清单；
+  3. `taskExecutionModule` 不在 import 期构造，由工厂图构造并注入（依赖 `services/task.ts` 退役）；
+  4. 模块级可变单例（报告口径 79 处）按 design §3 常驻规则 5 逐项核对：生产态的 setter / 侧表清除；确属进程级缓存、需要保留的，
+     由后继 design 提出并经用户确认后修订 design §14 该行的口径；
+  5. 业务模块内 4 处直接 `setInterval`（integration 的 MR 终止控制 worker、resource-catalog 两处 MCP 诊断 effect、task-execution
+     的子任务预算告警）改用平台定时原语，或登记为有 owner / stop 的执行局部计时；
+  6. 部署选择合同里以本地工厂签名定型的槽位（`typeof compose… / create…`）改为语义端口类型；是否按模块分组为适配器集合由后继
+     design 判断。
+- **退出门**：模块 `composition/` 与 `composition.ts` 里没有回落到适配器工厂的 `??` / `=== undefined ?` 写法（结构锁，覆盖全部
+  模块，中性默认以清单登记）；`bootstrap/commandBootstraps.ts` 不再自行构造资源包 provider / catalog，后继 design 所列的其余
+  并行接线同样消除；`taskExecutionModule` 不在 import 期构造；直接 `setInterval` 只出现在平台定时原语与登记的执行局部计时；
+  模块级可变单例按 design §14 该行（或经确认修订后）的口径为 0；选择合同里没有 `typeof <本地工厂>` 定型的槽位。
+- **前置 / 冲突**：第 3 项在 W4-E1 之后；与 S10 共享模块 composition 文件，串行。**能力影响**：无；以启动 / 关停 / 恢复行为对拍。
+
+### S13 纯逻辑归位
+
+- **目标**：模块内分层里便宜的一段——不做 IO 的规则 / 校验 / 策略从 infrastructure 整块迁到 domain 或 application
+  （proposal D14，review R9 / F11）。
+- **范围**：后继 design 按“函数体内没有 `await`、不取 db / fs / 进程”的判据给出精确清单，清单必含 resource-catalog
+  `infrastructure/legacy/workflow.validator.ts` 的 `validateWorkflowDef`（约 2.5k 行同步纯函数）与 collaboration
+  `infrastructure/review.ts` 的决策策略表、锚点规范化。
+- **退出门**：清单内条目迁出，原位置不留转出。清单即退出门；“规则拒绝所在层”的分布只在 dated review 里跟踪，不是本后继的
+  退出条件。
+- **前置 / 冲突**：与 S9 共享 `collaboration/infrastructure/review.ts`，串行；其余逐文件避让在制改动。**能力影响**：无；纯函数
+  搬迁，以现有用例对拍。
+
+存量模块的其余用例（collaboration 的评审 / 提问、task-execution 的路由操作等）不设整体归位的波次：随 S9 与功能 RFC 归位
+（proposal D14）。是否另立波次整体归位由用户决定（review §9）。
+
 ## 4. 余下波次与退出门
 
 ### 4.1 W4 余项
@@ -536,7 +660,7 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
 - **W9-E 物理恢复 generation**（独立 RFC）：按 provider 能力分别实现 checkpoint / stage / replace / verify，补齐两种 provider 的
   恢复与失败矩阵；托管 profile 的恢复路径由 RFC-370 承接的部分与之对齐。
 - **W9-D facade 清仓**：所有 facade 的生产与测试 consumer 归零后删除；`services/` 只剩到期删除的一跳 facade；更新 code map 与
-  onboarding。前置：S2、W9-C、W9-E。
+  onboarding。前置：S2、W9-C、W9-E（2026-11-09 说明：这是最终收口的前置；逐族搬迁已先行推进，不受其约束，见 §5 的补充）。
 - **2026-10-30**：W9-A / W9-B 已由 S2a / S2b 关闭；W9-C（domain / application 仍带 HTTP 状态、无 `OperationContext`）、
   W9-E（`services/backup.ts` / `restore.ts` / `pendingRestore.ts` 仍在）、W9-D（facade 45、`services/` 业务实现 219）开放。
 - **2026-11-05 W9-D 第一步**（[RFC-454](../RFC-454-services-one-hop-facade-sweep/proposal.md)）：删除 30 个 `services/` 一跳转出
@@ -680,6 +804,23 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
   1495 → 1505（新增 12、撤出 2），偏差 94、未被消费的 public 符号 322 不变。下一步：`R1` 大头（`task`、`systemAgentRun`、`runtime/index`、
   `runtimeSmoke`、`nodeRollback`），运行时驱动一族归 runtime-management。
 
+### 4.7 W9-D 余项的成批方式（2026-11-09）
+
+`services/` 在 HEAD `361945023` 余 55 个文件 / 1.22 万行。按 proposal D17 与 §0 第 8 条，余项按 owner 族成批，每族一个 RFC
+（可含多步）：
+
+| 族                                                                                                   | 文件数 | 归属                              | 备注                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------- | ------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 运行时驱动一族：`services/runtime/**`（35）、`execution/agentInjection.ts`、`driverLease.ts`、`runtimeSmoke.ts` | 38     | runtime-management infrastructure | 先把经 `services/` 取驱动的其他 context 换成 runtime-management 的端口或装配，再整族迁入                                                 |
+| 任务启动与执行残余：`task.ts`、`agentLaunch.ts`、`systemAgentRun.ts`、`nodeRollback.ts`、`limits.ts` 与 `execution/` 下四个文件 | 9      | task-execution（W4-E1）           | 与 S9 共享 `task-execution/public/operations.ts`，串行                                                                                   |
+| git 一族：`gitSubmodule.ts`、`mergeAgent.ts`、`repoCredentials.ts`                                   | 3      | source-control（W5）              | 与 `util/git.ts` 迁入 source-control infrastructure 一并设计                                                                             |
+| 其余                                                                                                 | 5      | 各自 owner                        | `taskDelete.ts` 与 `reviewMutationCoordinator.ts`（RFC-476 在制）、`codeRoundContract.ts`（W4-E8）、`digitalEmployeeAgentTemplates.ts`（W4-E9）、`demoSeed.ts`（bootstrap） |
+
+迁入时按内容分层落位（proposal C10）：用例编排与规则判定进 application / domain，持久化与外部 effect 进 infrastructure；不再把
+用例文件原样停放到 infrastructure，确需原样迁入的在该 RFC 的 design 里列明理由并呈用户确认。在制的 RFC-476（第二十三步）
+按原方式收口。此后逐步记录写进各后继自己的三件套与 `STATE.md`；本文 §1.1 的 W9 行与 §4.6 只在一族关闭时记一行，不再逐步
+追加。
+
 ## 5. 依赖顺序
 
 ```mermaid
@@ -703,9 +844,24 @@ flowchart TB
   W7R --> W9D
   W9C["W9-C 错误与观测"] --> W9D
   W9E --> W9D
+  S9["S9 public 合同收敛"]
+  S10["S10 composition 全模块只装配"]
+  S11["S11 治理补洞"]
+  S12["S12 装配余项"]
+  S13["S13 纯逻辑归位"]
+  W4R -. "E1 与 S9 共享 public/operations，串行" .- S9
+  W4R --> S12
+  S11 --> S9
+  S9 -. "共享 review.ts，串行" .- S13
+  S10 -. "共享模块 composition 文件，串行" .- S12
 ```
 
 S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被改动的文件。S1 与 S2 都受 RFC-370 在制品的文件面约束（§6）。
+
+2026-11-09 补充：图中指向 W9-D 的边表示它最终收口（`services/` 清零、code map 更新）的前置；逐族搬迁已先于 W9-C / W9-E
+推进，不受这些边约束。S9～S13 之间与对外的顺序约束：S11 先提供未消费符号的计数（或由 S9 的第一个 RFC 自带）；W4-E1 与 S9
+共享 `task-execution/public/operations.ts`，串行；S9 与 S13 共享 `collaboration/infrastructure/review.ts`，串行；S10 与 S12
+共享模块 composition 文件，串行；S12 的导入期单例一项在 W4-E1 之后。其余可并行。
 
 ## 6. 并发与冲突矩阵
 
@@ -719,6 +875,10 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 | intent apply / 资源包 apply / 资源 participant                                                       | S7 独占                                        | —                                              |
 | `util/git` / `services/git*`                                                                         | S8 独占                                        | —                                              |
 | `design/plan.md` 索引与 `STATE.md`                                                                   | 每次收尾单 owner                               | 只追加本批条目，保留他人内容                   |
+| `modules/task-execution/public/*` 与 collaboration 的人工门读写                                      | W4-E1 ↔ S9                                     | `public/operations.ts` 同批只允许一个          |
+| `modules/collaboration/infrastructure/review.ts`                                                     | S9 ↔ S13（及在制的 RFC-476）                   | 同批只允许一个                                 |
+| 各模块 `composition/`（development-automation、source-control、integration 等）                      | S10 ↔ S12；S10 内部逐模块串行                  | 与 RFC-370 余项的 `taskImage*` 文件逐个避让    |
+| `architecture/counts.json`                                                                           | S11 与同批改数的后继                           | 多个后继下降同一计数时会改同一行，以较小值为准 |
 
 发现同文件并发在制改动时停止该切片，在当前会话说明，不 stash / reset / checkout 他人改动，也不向其他 session 发消息。
 
@@ -739,12 +899,13 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 ## 8. 全计划完成判据
 
-- [ ] proposal AC-1～AC-11 全部兑现；
+- [ ] proposal AC-1～AC-11 与 AC-13、AC-14 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
 - [x] S1～S8 Done（2026-11-03：全部 Done——S6 由 RFC-402～424 落地，退出门核对见 §3 S6；S7 由 RFC-401 落地；S2 由 S2a / S2b / S2c 落地，
       S2c 余项为 RFC-425～433，退出门核对见 §3 S2）；
+- [ ] S9～S13 Done（2026-11-09 新增，见 §3）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
-- [ ] design §14 的终局判据全部成立；
+- [ ] design §14 的终局判据全部成立（含 2026-11-09 新增的 5 条）；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；
 - [ ] `STATE.md`、RFC 索引、code map 与终态源码一致。
 
