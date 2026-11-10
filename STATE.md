@@ -1,3 +1,18 @@
+## 2026-11-10 RFC-480 task-execution 与 collaboration 的 public 收口：未消费符号清零与 `public/operations` 退役（In Progress；`design/RFC-480-te-collaboration-public-unconsumed-sweep/`）
+
+- **来由**：RFC-294 plan §3 S9（public 合同收敛），按 context 对拆、先做 task-execution ↔ collaboration；这一对拆两步，本 RFC 做未消费符号清零
+  （第 3 项）与 task-execution `public/operations` 收口（第 1 项在 task-execution 上的部分），类型污染、SQL 片段与反向越 DAG 类型边由 RFC-481 做。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计
+  已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：两个模块的 205 个未消费 public 符号（task-execution 181、collaboration 24）：136 个转出撤掉，直接声明在 public 的 31 个无使用方的
+  删除、38 个按内容挪进模块内部（collaboration 的 17 个内部用例函数离开 public）；task-execution `public/operations` 的 31 个导出里 25 个零消费
+  与 3 个只被签名引用的撤掉，三处模块外使用改取平台定义处 / required port / composition，文件删除；未消费符号按 context 分项入减速带。
+- **不做**：仍有消费方的类型污染、collaboration 拼 task-execution 的 SQL 片段、反向越 DAG 类型边（RFC-481）；其他模块（S9 后续）；终态回收策略
+  注册表改装配期注入（S12）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 4 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-479 的 Done 文档提交 `673b1b53b`（5 个文档文件）：exact SHA 主 CI run 42906783728 的 70 个 job 全绿。
+
 ## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（Done；`design/RFC-479-governance-gap-fill/`）
 
 - **来由**：RFC-294 plan §3 S11（review-2026-11-09 R10、F12、F13 与 §9 第 3 条：上限收紧归 S11）。按 2026-11-09 刷新后的总纲（review §7、
