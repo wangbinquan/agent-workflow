@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/public/participants'
+import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/infrastructure/taskDeletionParticipant'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, nodeRunFixture } from './helpers/model'
 

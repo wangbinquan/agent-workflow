@@ -46,7 +46,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { TaskContinuationDependencies } from '@/services/task'
 import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { deleteTask } from '../src/services/taskDelete'
+import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import { enforceLimits } from './helpers/resourceLimits'
 import { parseCallHumanWait } from '../src/services/limits'
 
@@ -250,6 +251,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     await expect(
       deleteTask(db, parent, {
         executionPermits: testExecutionPermits,
+        collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       }),
     ).rejects.toMatchObject({
@@ -265,6 +267,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     await expect(
       deleteTask(db, child, {
         executionPermits: testExecutionPermits,
+        collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       }),
     ).rejects.toMatchObject({ code: 'task-parent-active' })
@@ -284,6 +287,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     })
     const result = await deleteTask(db, child, {
       executionPermits: testExecutionPermits,
+      collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     expect(result.taskId).toBe(child)

@@ -61,7 +61,7 @@ import {
   type CanonicalContinuationRequest,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
-import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
+import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
 import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'

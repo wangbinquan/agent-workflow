@@ -25,6 +25,9 @@ export type {
   TaskExecutionBootRecoveryReport,
 } from '../application/ports/bootExecutionRecovery'
 import { createExclusiveDaemonLockProof, type ExclusiveDaemonLockProof } from '../domain/ownership'
+// RFC-476: the terminal task deletes' crash recovery (one provider-neutral implementation) reaches the
+// `task-delete-recovery` boot step from here, next to the execution recovery it follows.
+export { recoverInterruptedTaskDeletes } from '../infrastructure/taskDeleteRecovery'
 
 /** 单实例锁 + 本代 daemon 世代铸成的独占证明——successor 恢复的唯一权威来源。 */
 export function createDaemonLockProof(input: {

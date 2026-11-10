@@ -53,7 +53,7 @@ import {
 import { ConflictError } from '../src/util/errors'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { acquireWriterLease } from '../src/platform/persistence/writerLease'
-import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
+import { __hasTaskReviewMutationQueueForTesting } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 
 import { describeEachProvider } from './helpers/eachProvider'
 

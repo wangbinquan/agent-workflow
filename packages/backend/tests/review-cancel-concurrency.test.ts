@@ -66,7 +66,7 @@ import {
 import {
   __hasTaskReviewMutationQueueForTesting,
   withTaskReviewMutationLock,
-} from '../src/services/reviewMutationCoordinator'
+} from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'

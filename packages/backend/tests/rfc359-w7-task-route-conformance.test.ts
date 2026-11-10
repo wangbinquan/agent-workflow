@@ -64,6 +64,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 
 const ulid = monotonicFactory()
 
@@ -187,6 +188,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
     withO2Closure({
       executionPermits: testExecutionPermits,
       taskMembership: o2Ports(db).taskMembership,
+      taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,
       memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,

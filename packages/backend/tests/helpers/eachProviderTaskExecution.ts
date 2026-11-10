@@ -64,7 +64,10 @@ import { actorOfDirectAuthority } from '@/modules/identity-access/composition/au
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import {
+  createTaskDeletionCollaborationParticipantInTx,
+  createWorkgroupClarifyAskGate,
+} from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/task-execution/composition/workgroupTurns'
@@ -385,6 +388,7 @@ export async function createEachProviderTaskExecution(
             unusedCapability('collaboration route'),
           ),
           taskMembership: o2Ports(db).taskMembership,
+          taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,
           memorySnapshots: composeTaskMemorySnapshotPort(),
           multipart: unusedCapability('multipart upload'),
           resourceAuthorityFor: () => launchResources,
@@ -555,6 +559,7 @@ export async function createEachProviderTaskExecution(
           unusedCapability('collaboration route'),
         ),
         taskMembership: o2Ports(db).taskMembership,
+        taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,
         memorySnapshots: composeTaskMemorySnapshotPort(),
         users: unusedCapability('task user directory'),
         owners: unusedCapability('task owner directory'),

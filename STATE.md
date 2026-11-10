@@ -46,6 +46,22 @@
 - **不做**：其余 30 条 `R1`（`task` 9、`systemAgentRun` 5、运行时驱动一族与 `runtimeSmoke` 13、`nodeRollback` 3）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
 - **附带**：RFC-475 的 Done 文档提交 `361945023`（5 个文档文件）：exact SHA 主 CI run 42696377550 的 70 个 job 全绿。
+- **收口对账**（RFC-294 2026-11-09 第二次校正，design §7）：总纲 plan §4.7 写明本 RFC 按原方式收口——`deleteTask` 整份迁入 infrastructure、
+  没有按内容分层（C10 此后不再允许；拆分随 task-execution 存量按 D14 归位）；public 新增的只有闭合接口参与方，不是 C11 所列构件；结构锁的
+  覆盖范围写在 plan（C12）；触及的两项减速带收紧到实测（C13：`architecture/counts.json` 的 `legacy-horizontal-files` 381 → 173、
+  `legacy-service-implementations` 213 → 54）。
+- **集中验证**（候选基于 `361945023`，详见 plan；验证期间 HEAD 前进到 `e6ab732f5`，他人的纯文档提交，代码与用例结果沿用、文档在它之上复验）：
+  计数复核查出本 RFC 的三处落位问题，均已修复并复验——队列初放 collaboration，造成上下文值环与 off-DAG 值对（改为队列归 task-execution）；
+  删除实现迁入后仍取 collaboration public 的值（改为必填注入）与类型（改为 task-execution 自有端口），各让 off-DAG offered 文件对 55 → 56。
+  backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片跑完，23574 pass，109 条 fail 里 106 条是超时，其余是导出所致的 `rfc321`
+  与超时后的连带失败；复跑 55 个文件，49 个全过，余 6 个文件各一例（同一时刻对照 HEAD，两边逐文件相同）；PostgreSQL 30 秒时限跑 432 个能到
+  引擎选择的文件，395 个全过，余 37 个文件 78 例是撞时限、钩子到点与 helper 期限等（同一时刻对照 HEAD：36 个文件两边失败的用例逐一相同；
+  `scheduler.test` 一例 60 秒到点只在本 RFC 一侧，两边耗时 69.7 s 与 71.8 s，再跑一对两边都 43 / 43）；P0 SQLite 17 阶段通过，PostgreSQL
+  三次都停在变异前的正向运行（几例撞默认 5 秒后整条命令撞脚本的 300 秒看门狗；同一时刻不设看门狗对照，两边同样的 9 例失败、耗时 784.8 s 与
+  783.8 s），这一半以 CI 的同一条 lane 为准；shared 2344 pass、frontend gate 7361 pass、
+  system-mocks 111 / 111；`rfc321` 工作树 10 / 10。计数：`R1` 34 → 30、`R2` 0，`legacy-horizontal-files` 175 → 173、
+  `legacy-service-implementations` 56 → 54，其余 19 项闸门计数不变；public surface 1505 → 1497（撤出 9、新增 1），偏差 94 → 91，未被消费的
+  public 符号 322 不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-09 RFC-475 自动提交推送按 owner 拆开：git 发布归 source-control、提交行记账归 task-execution（Done；`design/RFC-475-commit-push-owner-split/`）
 

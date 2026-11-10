@@ -416,8 +416,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/runSelection/selectionWrite.ts#reselectRunInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/task-execution/infrastructure/runSelection/table/reader.ts#createRunSelectionReader: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskClarifyDirectivePersistence.ts#createTaskClarifyDirectivePersistence: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskDeletionParticipant.ts#createTaskDeletionParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/task-execution/infrastructure/taskDeletionQueries.ts#createTaskDeletionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskDetailQueries.ts#createTaskDetailQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#createTaskGateQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
@@ -435,7 +433,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/public/commands.ts#WorkgroupHostLedgerRun: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomHostRunSnapshot: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomTaskParticipantInTx: forbidden type import @/platform/events/committed/types#CommittedEventRef',
-  'modules/task-execution/public/participants.ts#createTerminalMaintenanceStore: unsafe/open type TypeQuery',
   'modules/task-execution/public/queries.ts#createNodeRunQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.
   'packages/shared/src/schemas/workflow.ts#parseLoopExitCondition: unsafe/open type UnknownKeyword',

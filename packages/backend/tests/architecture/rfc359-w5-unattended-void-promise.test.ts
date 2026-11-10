@@ -152,6 +152,8 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'modules/intent/inbound/intentSessionRoutes.ts: 10',
   // RFC-451: moved unchanged from services/repoBatchImport.ts.
   'modules/source-control/infrastructure/local/repositoryBatchImport.ts: 2',
+  // RFC-476: moved unchanged from services/reviewMutationCoordinator.ts (the in-flight lookup registration).
+  'modules/task-execution/infrastructure/reviewMutationQueue.ts: 1',
   // RFC-453: moved unchanged from services/structuralDiff/service.ts.
   'modules/workspace-insight/application/structuralDiff/taskStructuralDiff.ts: 2',
   'platform/background/maintenanceService.ts: 1',
@@ -162,7 +164,6 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'platform/execution/local/managedProcess.ts: 4',
   // RFC-392 removes the unused SQLite test initialization fallback.
   'server.ts: 1',
-  'services/reviewMutationCoordinator.ts: 1',
 ]
 
 /** 内存源码变异：不改共享工作树，验证判据确实咬住「没人接的 fire-and-forget」。 */

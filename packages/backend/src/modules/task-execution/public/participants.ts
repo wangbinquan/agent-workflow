@@ -59,10 +59,7 @@ import type {
 import { createGateContinuationDriver as createGateContinuationDriverInternal } from '../application/drive/gateContinuationDriver'
 import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
-import type {
-  RecoverableTerminalMaintenanceClaim,
-  TerminalMaintenanceStore as TerminalMaintenanceStoreInternal,
-} from '../application/ports/terminalMaintenanceStore'
+import type { RecoverableTerminalMaintenanceClaim } from '../application/ports/terminalMaintenanceStore'
 import { currentTaskExecutionContext as currentTaskExecutionContextInternal } from '../application/taskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
 import {
@@ -112,11 +109,6 @@ import {
   workflowSyncGateReason as workflowSyncGateReasonInternal,
 } from '../domain/workflowSyncPreview'
 import { humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal } from '../infrastructure/humanGateProjection'
-import {
-  assertTerminalMaintenanceClaimTx as assertTerminalMaintenanceClaimTxInternal,
-  transitionTerminalMaintenanceClaimTx as transitionTerminalMaintenanceClaimTxInternal,
-} from '../infrastructure/terminalMaintenanceClaim'
-import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
 // RFC-359：bun:sqlite 专属的三个**同步**参与者（`appendTask{Created,LifecycleTransition,
 // NodeStatuses}CommittedEventTx`）随最后一个同步调用方退役，`taskLifecycleEventParticipant.ts`
 // 整文件删除。事件形状本来就只有一份，在 `taskLifecycleCommittedEvents.ts`；两个引擎共用的中立
@@ -297,18 +289,8 @@ export type CodeHostSendAttemptObserver = DurableCodeHostEffectObserver
 export { DEFAULT_OWNERSHIP_HEARTBEAT_MS, DEFAULT_OWNERSHIP_LEASE_MS }
 export const taskExecutionModule = taskExecutionModuleInternal
 
-// RFC-359 W7 —— 终态维护认领的**中立**面。合一前 legacy 调用方拿的是 `taskExecutionModule
-// .terminalMaintenance`（bun:sqlite 同步 store，`assertClaimTx` / `transitionTx` 只吃 `DbTxSync`），
-// 于是删除 / 归档 / workspace-GC 三条路径天生只能在 SQLite 上跑。现在它们与两个 provider 的
-// 组合根共用同一份 `DrizzleTerminalMaintenancePersistence` + 同一个事务内参与者。
-export type TerminalMaintenanceStore = TerminalMaintenanceStoreInternal
-export function createTerminalMaintenanceStore(
-  db: ConstructorParameters<typeof DrizzleTerminalMaintenancePersistence>[0],
-): TerminalMaintenanceStore {
-  return new DrizzleTerminalMaintenancePersistence(db)
-}
-export const assertTerminalMaintenanceClaimTx = assertTerminalMaintenanceClaimTxInternal
-export const transitionTerminalMaintenanceClaimTx = transitionTerminalMaintenanceClaimTxInternal
+// RFC-359 W7 的终态维护认领中立面（store 工厂与两个事务内参与者）此前经这里交给 legacy 的
+// `services/taskDelete.ts`；RFC-476 把删除实现迁进 task-execution，它改取定义处，这几个符号随之撤出 public。
 export const createCodeHostEffectAttemptObserver = createCodeHostEffectAttemptObserverInternal
 export const createLocalEffectAttemptObserver = createLocalEffectAttemptObserverInternal
 export const createProcessEffectAttemptObserver = createProcessEffectAttemptObserverInternal
@@ -419,14 +401,8 @@ export interface TaskWorkspaceCommitParticipant {
   release(input: { ref: string }): Promise<{ ok: true } | { ok: false; error: string }>
 }
 
-/**
- * RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：进程内活跃度参与者的**公共合同**。
- *
- * `services/taskDelete.ts`（两个引擎共用的删除实现）的 `task-active` 门读它而不是模块级全局
- * `isTaskActive`。legacy 层不得 import 模块内部（`rfc317-t22` 的 inbound 越界账本盯这条），
- * 所以那个端口类型从这里出去。实现仍由组合根装配后注入。
- */
-export type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
+// RFC-359 AC-1 的进程内活跃度参与者端口（`ActiveTaskExecutionParticipant`）此前从这里出去，只因 legacy 的
+// `services/taskDelete.ts` 不得 import 模块内部；RFC-476 后删除实现在 task-execution 内，直接取定义处。
 
 export type { TaskExecutionPermits } from '../application/ports/taskExecutionPermits'
 
@@ -466,10 +442,11 @@ export { createHumanGatePersistenceParticipantInTx } from '../infrastructure/hum
 export type { TaskClarifyDirectivePersistence } from '../application/ports/taskClarifyDirectivePersistence'
 export { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
 
-export type { TaskDeletionParticipant } from '../application/ports/taskDeletion'
-export { createTaskDeletionParticipantInTx } from '../infrastructure/taskDeletionParticipant'
-
 export type { TaskPreparationParticipant } from '../application/ports/taskPreparation'
 export { createTaskPreparationParticipantInTx } from '../infrastructure/taskPreparationParticipant'
 
 export { TaskAggregateCasMiss } from '../infrastructure/taskDefinitionWriteParticipant'
+
+// RFC-476 —— 评审写入与任务取消共用的进程内每任务 FIFO（原 `services/reviewMutationCoordinator.ts`）归 task-execution；
+// collaboration 的评审与协作者写入经这个闭合接口参与方进同一个队列（评审作用域解析与找不到的错误留在 collaboration）。
+export { taskReviewMutationQueue } from '../infrastructure/reviewMutationQueue'

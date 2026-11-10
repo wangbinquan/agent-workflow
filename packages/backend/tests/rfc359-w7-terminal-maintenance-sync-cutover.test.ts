@@ -50,7 +50,8 @@ import type { DbClient } from '@/db/client'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { deleteTask } from '@/services/taskDelete'
+import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 
@@ -169,7 +170,7 @@ async function settle(ticks = 5): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// T1 / T2 —— services/taskDelete.ts
+// T1 / T2 —— task-execution infrastructure/taskDelete.ts（RFC-476 前在 services/taskDelete.ts）
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) => {
@@ -197,6 +198,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
 
     const result = await deleteTask(legacy(db), childId, {
       executionPermits: testExecutionPermits,
+      collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     expect(result).toEqual({ taskId: childId, cleanup: 'done' })
@@ -243,6 +245,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     const release = await getTaskWriteSem(taskId).acquire()
     const pending = deleteTask(legacy(db), taskId, {
       executionPermits: testExecutionPermits,
+      collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     // 认领推进到 io-complete 之后，紧接着就是 acquire()——等到这一步再动任务行。

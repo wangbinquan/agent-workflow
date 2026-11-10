@@ -208,10 +208,7 @@ import {
   humanGateNodeProjectionFence,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/public/participants'
-import {
-  withReviewNodeMutationLock,
-  withTaskReviewMutationLock,
-} from '@/services/reviewMutationCoordinator'
+import { withReviewNodeMutationLock, withTaskReviewMutationLock } from './reviewMutationLock'
 import {
   ConflictError,
   DomainError,

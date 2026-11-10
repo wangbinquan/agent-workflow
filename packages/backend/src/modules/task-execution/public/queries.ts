@@ -228,9 +228,6 @@ export type {
   TaskTriggerQueries,
 } from '../application/ports/taskTriggerQueries'
 
-export type { TaskDeletionQueries } from '../application/ports/taskDeletion'
-export { createTaskDeletionQueries } from '../infrastructure/taskDeletionQueries'
-
 export type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
 export type { TaskPreparationQueries } from '../application/ports/taskPreparation'
 export { createTaskDetailQueries } from '../infrastructure/taskDetailQueries'

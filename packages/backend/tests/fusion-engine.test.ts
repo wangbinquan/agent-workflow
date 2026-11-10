@@ -52,7 +52,7 @@ import {
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { getTask } from '../src/services/task'
-import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'

@@ -34,7 +34,8 @@ import { launchTestTask } from './helpers/productionTaskLaunch'
 import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
-import { deleteTask } from '../src/services/taskDelete'
+import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
@@ -180,6 +181,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       clearTaskDriverLifecycleForTesting()
       await deleteTask(db, childId, {
         executionPermits: testExecutionPermits,
+        collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       })
       expect(await branchStartedAt(db, parentId)).toBe(parentStartedAt)

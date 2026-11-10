@@ -8,7 +8,7 @@
 //   任何 `v:1` 计划都在校验处就被判死，v1 分支是**不可达死代码**。
 //
 // 为什么只在 PostgreSQL 上炸：两侧写入方的计划形状不同。
-//   - SQLite   `services/taskDelete.ts` 写 `{ v: 2, …, directories: [...] }`         → 恒通过；
+//   - SQLite   `infrastructure/taskDelete.ts`（RFC-476 前在 `services/`）写 `{ v: 2, …, directories: [...] }`         → 恒通过；
 //   - PostgreSQL `infrastructure/taskRouteOperations.ts` 写
 //     `JSON.stringify({ v: 1, taskId, taskIds, worktrees })` —— **无 directories** → 恒 null。
 //
@@ -48,7 +48,7 @@ function member(taskId: string): MaintenanceMemberSnapshot {
   }
 }
 
-/** 与 `services/taskDelete.ts` 的 v2 写入方逐字同形：每个成员的本地内容根
+/** 与 task-execution `infrastructure/taskDelete.ts` 的 v2 写入方逐字同形：每个成员的本地内容根
  *  （RFC-370 §10 V16 起含代码评审产物目录 `structural-diffs/<id>`）。 */
 function expectedDirs(taskIds: readonly string[]): string[] {
   return taskIds.flatMap((id) => [

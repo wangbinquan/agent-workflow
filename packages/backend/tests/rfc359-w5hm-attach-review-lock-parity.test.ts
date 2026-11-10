@@ -4,7 +4,7 @@ import { o2Ports } from './helpers/o2Closure'
 // RFC-359 AC-1（plan §5hm）—— attach 与评审变更必须在**两个引擎上**走同一个临界区。
 //
 // 为什么这条测试存在：`withTaskReviewMutationLock` 是按 task 排队的进程内 FIFO，
-// 用途见 `services/reviewMutationCoordinator.ts:1-7`——评审决策会改动兄弟评审行，
+// 用途见 `modules/task-execution/infrastructure/reviewMutationQueue.ts:1-7`——评审决策会改动兄弟评审行，
 // 任务取消会经生命周期终态钩子封掉所有未决评审行，两者共用一个临界区。
 // SQLite 的 `attachTaskDriver` 整个包在这个锁里（`taskDriverLifecycle.ts`），
 // 而 `postgresqlTaskDriverLifecycle.ts` **一句都没有**：PG 上 attach 可以与
@@ -30,7 +30,7 @@ import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
 } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const silentLog: TaskExecutionTopologyLogger = {

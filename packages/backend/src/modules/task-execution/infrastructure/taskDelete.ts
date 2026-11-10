@@ -1,4 +1,7 @@
 // RFC-222/RFC-305 (B 线) — `tasks:delete` hard delete of a terminal task.
+// RFC-476: moved from `services/taskDelete.ts` — the deletion is task-execution's own, so its symbols are
+// imported from their definitions; the crash recovery (`recoverInterruptedTaskDeletes`) stays in
+// `./taskDeleteRecovery` and reaches bootstrap through `composition/bootRecovery.ts`.
 //
 // Route gate is the `tasks:delete` point declared on the route.
 // This service owns the rest of the contract:
@@ -45,30 +48,28 @@
 
 import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { projectStoredTaskRepositorySurface } from '@/platform/persistence/taskRepositorySurface'
-import { createTaskDeletionQueries } from '@/modules/task-execution/public/queries'
-import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/public/participants'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
-import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
-import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/public/participants'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import {
-  assertTerminalMaintenanceClaimTx,
-  createTerminalMaintenanceStore,
-  transitionTerminalMaintenanceClaimTx,
-} from '@/modules/task-execution/public/participants'
+import type { TaskDeletionCollaborationInTx } from '../application/ports/taskDeletionCollaboration'
+import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
+import type { TaskExecutionPermits } from '../application/ports/taskExecutionPermits'
+import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
+import { createTaskDeletionParticipantInTx } from './taskDeletionParticipant'
+import { createTaskDeletionQueries } from './taskDeletionQueries'
 import {
   cleanupDeletedTaskResources,
-  recoverInterruptedTaskDeletes,
   selectedTaskDeletionEffects,
   type DeleteCleanupPlanV2,
-  type DeleteRecoveryResult,
   type DeleteWorktreeTarget as WorktreeTarget,
-} from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
+} from './taskDeleteRecovery'
+import {
+  assertTerminalMaintenanceClaimTx,
+  transitionTerminalMaintenanceClaimTx,
+} from './terminalMaintenanceClaim'
+import { DrizzleTerminalMaintenancePersistence } from './terminalMaintenancePersistence'
 
 export interface DeleteTaskResult {
   taskId: string
@@ -95,6 +96,7 @@ export async function deleteTask(
     executionPermits: TaskExecutionPermits
     activity: ActiveTaskExecutionParticipant
     effects?: TaskDeletionEffects
+    collaboration: TaskDeletionCollaborationInTx
   }>,
 ): Promise<DeleteTaskResult> {
   const effects = selectedTaskDeletionEffects(options.effects)
@@ -157,7 +159,7 @@ export async function deleteTask(
 
   // Freeze the complete member set before collecting its cleanup resources.
   // The claim revalidates this same snapshot before it becomes authoritative.
-  const terminalMaintenance = createTerminalMaintenanceStore(db)
+  const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(db)
   const maintenanceMembers = await terminalMaintenance.snapshotTree(taskId)
   for (const member of maintenanceMembers) {
     if (options.activity.isActive(member.taskId)) {
@@ -238,7 +240,7 @@ export async function deleteTask(
         expectedState: 'io-complete',
       })
       const participant = createTaskDeletionParticipantInTx(tx)
-      const collaboration = createTaskDeletionCollaborationParticipantInTx(tx)
+      const collaboration = options.collaboration(tx)
       const cascadeRows = await participant.cascade(taskId)
       const fresh = await participant.status(taskId)
       if (fresh === undefined) {
@@ -310,7 +312,3 @@ export async function deleteTask(
   })
   return { taskId, cleanup }
 }
-
-// RFC-359 T7c：删除认领的崩溃恢复是 provider 中立的一份实现（task-execution infrastructure），
-// 这里只保留 cli/start.ts 与既有测试用的 import 路径。
-export { recoverInterruptedTaskDeletes, type DeleteRecoveryResult }

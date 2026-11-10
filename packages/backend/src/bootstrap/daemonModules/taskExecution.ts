@@ -42,7 +42,10 @@ import {
   createReviewDecisionCommand,
   createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition/decisionCommands'
-import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import {
+  createTaskDeletionCollaborationParticipantInTx,
+  createWorkgroupClarifyAskGate,
+} from '@/modules/collaboration/public/participants'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -386,6 +389,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       clarifyDirective: composeTaskClarifyDirectiveRouteOperations(collaboration),
       reviewers: composeTaskReviewersPort(collaboration),
       taskMembership: closure.taskMembership,
+      // RFC-476: the deletion's collaboration half (audience snapshot, feedback rows), per transaction.
+      taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,
       memorySnapshots: memory.memorySnapshots,
       owners: input.resources.owners,
       appHome,

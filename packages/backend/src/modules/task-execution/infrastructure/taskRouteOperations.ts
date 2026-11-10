@@ -73,6 +73,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import type { TaskDeletionCollaborationInTx } from '../application/ports/taskDeletionCollaboration'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
@@ -176,7 +177,7 @@ import {
   selectSyncRollbackTargets,
 } from '@/services/task'
 
-import { deleteTask } from '@/services/taskDelete'
+import { deleteTask } from './taskDelete'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { createLogger } from '@/util/log'
@@ -260,6 +261,8 @@ export interface TaskRouteOperationsDependencies {
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
   readonly effects?: TaskDeletionEffects
+  /** RFC-476: collaboration's in-transaction deletion participant, injected by the composition root. */
+  readonly taskDeletionCollaboration: TaskDeletionCollaborationInTx
   readonly topology: SchedulerRuntimeTopology
   readonly resumeRuntimeFor: (
     actor: Actor,
@@ -2558,6 +2561,7 @@ export function createTaskRouteOperations(
         executionPermits: dependencies.executionPermits,
         activity: dependencies.activity,
         effects: dependencies.effects,
+        collaboration: dependencies.taskDeletionCollaboration,
       }),
     async resume({ actor, taskId }) {
       await resumeTaskAs(actor, taskId)

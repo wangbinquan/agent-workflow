@@ -41,7 +41,7 @@ import {
   rollbackNodeRunWorktrees,
   snapshotMissingDetail,
 } from '@/services/nodeRollback'
-import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
+import { reserveTaskReviewMutationSlot } from './reviewMutationQueue'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree, type StaleRunKillOutcome } from '@/util/process'

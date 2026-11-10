@@ -78,9 +78,9 @@ import {
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DigitalEmployeeModuleWithRuntime } from '@/modules/digital-employee/composition'
-import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import {
   createDaemonRecoveryAuthorityProof,
+  recoverInterruptedTaskDeletes,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
 import { codeHostNodeRequests } from '@/modules/integration/composition'

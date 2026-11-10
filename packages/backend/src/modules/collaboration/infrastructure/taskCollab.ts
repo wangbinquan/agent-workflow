@@ -27,7 +27,7 @@ import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from './reviewMutationLock'
 
 /** Row-shape that visibility checks accept. The full `tasks` row is supersets of this. */
 export type TaskRowForVisibility = Pick<TaskGateContext, 'id' | 'ownerUserId'>

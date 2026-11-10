@@ -16,7 +16,7 @@ import { o2Ports } from './helpers/o2Closure'
 
 import { expect, test } from 'bun:test'
 import { and, eq, isNull } from 'drizzle-orm'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
@@ -216,7 +216,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
   })
 })
 
-test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认领；services/taskDelete 只再导出', () => {
+test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认领；删除实现只取恢复、不自己定义', () => {
   const src = resolve(import.meta.dir, '..', 'src')
   const daemon = readFileSync(resolve(src, 'bootstrap', 'daemonApplication.ts'), 'utf8')
   expectBootOrder(['skill-availability-gate', 'task-execution-recovery', 'task-delete-recovery'])
@@ -227,7 +227,23 @@ test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认
   expect(bootImplementation(daemon, 'task-delete-recovery')).toMatch(
     /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*taskExecutionProvider\.executionPermits,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
   )
-  const service = readFileSync(resolve(src, 'services', 'taskDelete.ts'), 'utf8')
-  expect(service).toContain("from '@/modules/task-execution/infrastructure/taskDeleteRecovery'")
+  // RFC-476: the deletion moved into task-execution (`infrastructure/taskDelete.ts`); the boot step takes the
+  // recovery from task-execution's boot recovery composition, which re-exports the one implementation.
+  expect(daemon).toMatch(
+    /import \{[^}]*\brecoverInterruptedTaskDeletes\b[^}]*\} from '@\/modules\/task-execution\/composition\/bootRecovery'/,
+  )
+  const bootRecovery = readFileSync(
+    resolve(src, 'modules', 'task-execution', 'composition', 'bootRecovery.ts'),
+    'utf8',
+  )
+  expect(bootRecovery).toContain(
+    "export { recoverInterruptedTaskDeletes } from '../infrastructure/taskDeleteRecovery'",
+  )
+  const service = readFileSync(
+    resolve(src, 'modules', 'task-execution', 'infrastructure', 'taskDelete.ts'),
+    'utf8',
+  )
+  expect(service).toContain("from './taskDeleteRecovery'")
   expect(service).not.toContain('export async function recoverInterruptedTaskDeletes(')
+  expect(existsSync(resolve(src, 'services', 'taskDelete.ts'))).toBe(false)
 })

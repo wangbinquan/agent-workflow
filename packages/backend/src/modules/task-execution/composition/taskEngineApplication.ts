@@ -26,7 +26,7 @@ import {
   createTaskAgentResourceSession,
   type TaskAgentResourceSession,
 } from '../infrastructure/taskExecutionResources'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from '../infrastructure/reviewMutationQueue'
 
 /**
  * RFC-408 — the task control plane's ports (`engine/task/runTask.ts`). Every value is read when the

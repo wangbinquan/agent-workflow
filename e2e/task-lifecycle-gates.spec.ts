@@ -10,7 +10,7 @@
 // 判据取自源码单一事实源：
 //   `assertWorkflowLaunchable`（services/taskLaunchGate.ts:26）——不可见与不存在
 //     **同形 404**；内置工作流 403；静态校验不过 422。
-//   `deleteTask`（services/taskDelete.ts:76）—— 非终态 409 `task-not-terminal`。
+//   `deleteTask`（modules/task-execution/infrastructure/taskDelete.ts:109）—— 非终态 409 `task-not-terminal`。
 //   `assertDeleteConfirm`（platform/http/deleteConfirm.ts:44）—— 逐字回显任务名。
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

@@ -38,7 +38,9 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import * as reviewMutationCoordinator from '../src/services/reviewMutationCoordinator'
+// RFC-476: the queue is task-execution's; collaboration's scoped entry (spied below) is its review-lock adapter.
+import * as reviewMutationLock from '../src/modules/collaboration/infrastructure/reviewMutationLock'
+import { __hasTaskReviewMutationQueueForTesting } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { acquireWriterLease } from '../src/platform/persistence/writerLease'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -109,7 +111,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
     try {
       await new Promise<void>((resolve, reject) => {
         const inspect = (): void => {
-          if (reviewMutationCoordinator.__hasTaskReviewMutationQueueForTesting(taskId)) {
+          if (__hasTaskReviewMutationQueueForTesting(taskId)) {
             void callbackEntered.then(resolve, reject)
           } else immediate = setImmediate(inspect)
         }
@@ -137,7 +139,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
   ) {
     const started: Promise<unknown>[] = []
     try {
-      expect(reviewMutationCoordinator.__hasTaskReviewMutationQueueForTesting(h.taskId)).toBe(false)
+      expect(__hasTaskReviewMutationQueueForTesting(h.taskId)).toBe(false)
       let winnerSettled = false
       const first = winner()
       started.push(first)
@@ -153,7 +155,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const second = contender()
       started.push(second)
       const results = Promise.allSettled([first, second])
-      expect(reviewMutationCoordinator.__hasTaskReviewMutationQueueForTesting(h.taskId)).toBe(true)
+      expect(__hasTaskReviewMutationQueueForTesting(h.taskId)).toBe(true)
       expect(winnerSettled).toBe(false)
       await release()
       return await results
@@ -183,7 +185,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
     // callback inside the real queue, then execute the unchanged callback.
     const entered = gate()
     const release = gate()
-    const original = reviewMutationCoordinator.withReviewNodeMutationLock
+    const original = reviewMutationLock.withReviewNodeMutationLock
     let firstCallback = true
     function delayedFirstCallback<T>(
       source: Parameters<typeof original>[0],
@@ -199,7 +201,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         return await callback()
       })
     }
-    const spy = spyOn(reviewMutationCoordinator, 'withReviewNodeMutationLock').mockImplementation(
+    const spy = spyOn(reviewMutationLock, 'withReviewNodeMutationLock').mockImplementation(
       delayedFirstCallback,
     )
     try {

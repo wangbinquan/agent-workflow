@@ -689,6 +689,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   只要求条目数 > 8，少一条照样绿。拆 `services/commitPushRunner.ts` 时提交记账半边是 engine 端口 `effects.runCommitPush` 的实现，放
   `infrastructure/`（与 `nodeRollbackPersistence`、`local/agentInvocation` 同层）；挪 act site 前后比对架构报告的 `taskOwnedEffects.entries`
   （应只换路径），并同步 `rfc328-architecture-guards` 的 `TASK_EFFECT_BOUNDARIES`（act 名随之变成新的调用名）。
+- **把 legacy 消费方迁进模块后，查一遍它曾经取的那些 public 符号（RFC-476，2026-11-09）**：模块的 `public/` 上常有只为某个 legacy
+  文件开的口子（注释里写着「legacy 层不得 import 模块内部，所以从这里出去」）。消费方迁进模块、改取定义处之后，这些符号就成了零消费者的
+  public 符号（计数复核的「未被消费的 public 符号」会升），按 RFC-294 design §3.3 当场撤出；被撤符号的返回类型 / 参数类型若只被它们引用，
+  一并撤出。撤出后 `rfc294-architecture-preflight` 的 `PUBLIC_SURFACE_DEBT` 是**精确**白名单，原来挂在这些根上的偏差条目会变成 stale、必须
+  同一提交删掉（偏差只降）。另：迁进来的文件对本模块自己的符号取定义处，不要绕道自己的 `public/`——`public` 本就 import 内部文件，绕一圈
+  容易成值环（`backend-value-scc` 上限 0）。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

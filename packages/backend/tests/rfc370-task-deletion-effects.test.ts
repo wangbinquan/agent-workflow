@@ -27,7 +27,8 @@ import {
   type DeleteCleanupPlanV2,
 } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { deleteTask } from '@/services/taskDelete'
+import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import { Paths } from '@/util/paths'
 import { snapshotRefPrefix } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -317,6 +318,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     })
     const pending = deleteTask(db, taskId, {
       executionPermits: testExecutionPermits,
+      collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity,
       effects: chosen,
     })
@@ -424,6 +426,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     expect(
       await deleteTask(db, taskId, {
         executionPermits: testExecutionPermits,
+        collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity,
         effects: effects(firstTrace, undefined, (name) => {
           if (name.startsWith('git:')) throw new Error('worktree unavailable')

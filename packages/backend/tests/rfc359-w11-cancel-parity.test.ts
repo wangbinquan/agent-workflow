@@ -48,7 +48,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
 
 const USER_ID = 'u_rfc359_w11'
 

@@ -21,7 +21,7 @@ import { o2Ports } from './helpers/o2Closure'
 //       200**；库里只留下后写的那个，另一个人以为自己的裁决生效了。
 //   L5  task-execution `recordAutoRecoveryAttempt` —— 自动恢复次数少记，用户配的
 //       `maxAutoRecoveriesPerWindow` 闸门永不跳，任务被无限自动重跑。
-//   L6  `services/taskDelete` —— 同一个父任务下的两个子任务同时删掉后，父行的物化列
+//   L6  task-execution `infrastructure/taskDelete`（RFC-476 前在 `services/`）—— 同一个父任务下的两个子任务同时删掉后，父行的物化列
 //       `branch_started_at` **永久**停在某个已删子树的时间戳上：默认任务列表（按物化列排序）
 //       与任何过滤视图（现算）从此行序不同且永不收敛。
 //
@@ -76,7 +76,8 @@ import {
   type TaskRecoveryMutationOperations,
 } from '@/modules/task-execution/infrastructure/taskRecoveryOperations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { deleteTask } from '@/services/taskDelete'
+import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
@@ -626,7 +627,7 @@ describeEachProvider('RFC-359 W6-T28 L5 —— 自动恢复的滑动窗口必须
 })
 
 // ---------------------------------------------------------------------------
-// L6 —— services/taskDelete.ts
+// L6 —— task-execution infrastructure/taskDelete.ts（RFC-476 前在 services/taskDelete.ts）
 // ---------------------------------------------------------------------------
 
 const CHILD_MAX_READ = /coalesce\(max\(/i
@@ -656,10 +657,12 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     const releaseSecond = await getTaskWriteSem(secondChild).acquire()
     const deletingFirst = deleteTask(legacy(db), firstChild, {
       executionPermits: testExecutionPermits,
+      collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     const deletingSecond = deleteTask(legacy(db), secondChild, {
       executionPermits: testExecutionPermits,
+      collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     // 两笔删除各自走完认领链之后会停在自己的每任务写锁上——等**那件事**发生，

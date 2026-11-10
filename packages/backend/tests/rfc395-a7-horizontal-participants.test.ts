@@ -3,12 +3,13 @@ import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
-  createTaskDeletionParticipantInTx,
   createTaskPreparationParticipantInTx,
   type TaskPreparationParticipant,
 } from '@/modules/task-execution/public/participants'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
-import { createTaskDeletionQueries } from '@/modules/task-execution/public/queries'
+// RFC-476: task deletion's participant and queries left task-execution public with their only outside consumer.
+import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/infrastructure/taskDeletionParticipant'
+import { createTaskDeletionQueries } from '@/modules/task-execution/infrastructure/taskDeletionQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   taskFixture,

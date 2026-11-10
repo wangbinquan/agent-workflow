@@ -3,7 +3,7 @@ import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestric
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from './reviewMutationQueue'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type {

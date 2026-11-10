@@ -112,6 +112,7 @@ import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')
@@ -240,6 +241,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
     withO2Closure({
       executionPermits: testExecutionPermits,
       taskMembership: o2Ports(db).taskMembership,
+      taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,
       memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,

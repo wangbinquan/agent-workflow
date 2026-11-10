@@ -16,7 +16,7 @@
 //     （`nudgeWorkspacePrune`）作为兜底，同步收尾让回执（`no-active-owner`）在返回时就是真的。
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from './reviewMutationQueue'
 import { ConflictError } from '@/util/errors'
 import type {
   SourceTerminationEffectCapability,

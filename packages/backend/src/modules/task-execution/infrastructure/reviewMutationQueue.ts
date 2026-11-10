@@ -5,10 +5,18 @@
 // share one FIFO critical section per task.  This is intentionally narrower
 // than the general task lifecycle writer: wrapping every setTaskStatus call
 // would make review paths re-enter their own lock when they resume a task.
+//
+// RFC-476: moved from `services/reviewMutationCoordinator.ts` into task-execution — the queue is per-task
+// write serialization. task-execution's cancellation, driver attach, source termination and engine call the
+// functions below directly; collaboration (review writes, collaborator changes) enters through the
+// closed-interface participant `taskReviewMutationQueue` (`public/participants`) and keeps its own
+// review-scope resolution (node run → task) and not-found error.
 
-import type { ReviewMutationScopeResolver } from '@/modules/collaboration/application/ports/reviewMutationScope'
-import { DatabaseReviewMutationScopeResolver } from '@/modules/collaboration/infrastructure/reviewMutationScope'
-import { NotFoundError } from '@/util/errors'
+import type {
+  TaskReviewMutation,
+  TaskReviewMutationQueue,
+  TaskReviewScopedMutation,
+} from '../application/ports/taskReviewMutationQueue'
 
 const taskTails = new Map<string, Promise<void>>()
 /** 在途的 node_run → task 作用域解析（见 withTaskReviewMutationLock 的排队规则）。 */
@@ -31,7 +39,7 @@ export function __hasTaskReviewMutationQueueForTesting(taskId: string): boolean 
  *
  * 「先发出者先入队」的判据是：**我被发出时，有哪些评审作用域解析已经在途**。
  * 那是一个**同步可知**的事实——评审侧本来就是同步登记的
- *（`withReviewNodeMutationLock` 在 `lookup` 之前就 `inflightScopeLookups.add(tracked)`）。
+ *（collaboration 的 `withReviewNodeMutationLock` 经 `serializeAfterTaskLookup` 在发出 lookup 的同一刻就 `inflightScopeLookups.add(tracked)`）。
  * 这里把它快照下来，于是 task 键入口（取消 / 成员变更）可以先取号、再 await 自己的前置读，
  * 排队结果与「取号后立刻入队」完全一致。
  *
@@ -98,28 +106,32 @@ async function enterTaskQueue<T>(taskId: string, fn: () => Promise<T>): Promise<
  *
  * RFC-359：两个 provider 都在 async 作用域查询之后进入同一个 per-task FIFO（此前 SQLite 有一条
  * 同步 `findTaskIdSync` 入队捷径，PostgreSQL 从来没有）。「先发出者先入队」由
- * withTaskReviewMutationLock 等待在途解析来保证，两个引擎同一份规则。 */
-export function withReviewNodeMutationLock<T>(
-  source:
-    | ReviewMutationScopeResolver
-    | ConstructorParameters<typeof DatabaseReviewMutationScopeResolver>[0],
-  nodeRunId: string,
-  fn: () => Promise<T>,
+ * withTaskReviewMutationLock 等待在途解析来保证，两个引擎同一份规则。
+ *
+ * RFC-476：作用域解析（node run → task）与找不到时的错误归 collaboration（它的
+ * `withReviewNodeMutationLock` 发出 lookup 后立刻交给这里）；这里只登记在途解析并在解析出任务后入队。 */
+export function serializeAfterTaskLookup<T>(
+  lookup: Promise<string | null>,
+  mutation: TaskReviewScopedMutation<T>,
 ): Promise<T> {
-  const enter = (taskId: string | null): Promise<T> => {
-    if (taskId === null) {
-      throw new NotFoundError('review-not-found', `review run ${nodeRunId} not found`)
-    }
-    return enterTaskQueue(taskId, fn)
-  }
-  const resolver = 'findTaskId' in source ? source : new DatabaseReviewMutationScopeResolver(source)
-  const lookup = resolver.findTaskId(nodeRunId)
-  // 登记在途解析：`enter` 挂在 lookup 之前，先于任何等它的 task 键入口继续。
+  // 登记在途解析：入队挂在 lookup 之后，先于任何等它的 task 键入口继续。
   const tracked: Promise<void> = lookup.then(
     () => undefined,
     () => undefined,
   )
   inflightScopeLookups.add(tracked)
   void tracked.finally(() => inflightScopeLookups.delete(tracked))
-  return lookup.then(enter)
+  return lookup.then((taskId) =>
+    taskId === null ? mutation.missing() : enterTaskQueue(taskId, () => mutation.run()),
+  )
 }
+
+/** RFC-476 — the queue above as a closed-interface participant for collaboration. */
+export const taskReviewMutationQueue: TaskReviewMutationQueue = Object.freeze({
+  serialize: <T>(taskId: string, mutation: TaskReviewMutation<T>): Promise<T> =>
+    withTaskReviewMutationLock(taskId, () => mutation.run()),
+  serializeAfterLookup: <T>(
+    lookup: Promise<string | null>,
+    mutation: TaskReviewScopedMutation<T>,
+  ): Promise<T> => serializeAfterTaskLookup(lookup, mutation),
+})

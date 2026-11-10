@@ -4,13 +4,14 @@ import { eq } from 'drizzle-orm'
 import { beforeEach, expect, test } from 'bun:test'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
-  createTaskDeletionQueries,
   createTaskDetailQueries,
   createTaskPreparationQueries,
   createNodeRunQueries,
   createNodeOutputQueries,
   createTaskTriggerQueries,
 } from '@/modules/task-execution/public/queries'
+// RFC-476: task deletion's queries left task-execution public with their only outside consumer.
+import { createTaskDeletionQueries } from '@/modules/task-execution/infrastructure/taskDeletionQueries'
 import { getTask, loadTaskFailureCodes } from '@/services/task'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

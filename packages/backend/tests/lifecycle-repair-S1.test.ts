@@ -13,7 +13,7 @@ import { createRepairEngine } from './helpers/repairEngine'
 import { isoWorktreePathFor } from '@/platform/workspace/local/isolation'
 import { runGit } from '../src/util/git'
 
-import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
+import { withTaskReviewMutationLock } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import {
   buildHarness,

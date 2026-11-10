@@ -42,7 +42,7 @@ export class TaskExecutionModule {
   readonly claimGate: TaskClaimGate
   readonly runtimeRegistry: InMemoryTaskRuntimeRegistry
   // RFC-359 W7：终态维护认领不再挂在这里。删除 / 归档 / workspace-GC 三条路径与两个 provider
-  // 的组合根共用 `DrizzleTerminalMaintenancePersistence`（`createTerminalMaintenanceStore(db)`），
+  // 的组合根共用 `DrizzleTerminalMaintenancePersistence`（各处直接 `new`；RFC-476 撤出 public 工厂），
   // 因此这个进程级单例不再需要一个 bun:sqlite 专属的同步 store 成员。
 
   /**
