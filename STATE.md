@@ -1,3 +1,22 @@
+## 2026-11-10 RFC-478 `services/task.ts` 按内容分层归 task-execution（In Progress；`design/RFC-478-task-service-retirement/`）
+
+- **来由**：RFC-294 plan §4.7 task-execution 一族（W4-E1）的最后一个文件（RFC-477 做了另外五个；依赖运行时驱动的三个随运行时驱动一族）。
+  按 2026-11-09 刷新后的总纲（review §7、plan §5），E1 须先于 S9——`services/task.ts` 是 `public/operations.ts` 写原子在模块外的使用方之一——
+  S12 的「`taskExecutionModule` 不在 import 期构造」也排在它之后。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用
+  提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与
+  集中验证，按授权记为已批准，不派 Codex。
+- **范围**：按内容分层（C10）——内置工作流快照布局与同步预览的纯函数进 `domain/`；同步预览作为 application 查询、经 task-execution 自有
+  读端口 `WorkflowSyncPreviewReads` 取数，同步回滚目标选择器并入 `application/resumeRollbackTargets.ts`；延后仓库准备（读取、执行、重试前
+  残骸回收）与任务详情读投影进 `infrastructure/`，对 source-control 只经 consumer 自有的 `TaskRepositoryPreparationBinding`（改为必填，加与
+  `groupName` 同源的 `groupCachedRepoIds`；无调用方的「无绑定」回落删除），不新增跨 context 内部文件对；运行时选项漏斗与准备步骤的装配进
+  `composition/`；`isTaskActive` / `abortAllActiveTasks` 与依赖袋进 `tests/helpers/`，零调用方的 `shutdownActiveTaskExecutions` 删除；失去
+  模块外生产消费方的 public 符号当场撤出（预计含 `public/operations` 的 `mintNodeRun`、`setTaskStatus`）。
+- **不做**：`infrastructure/taskRouteLaunchOperations.ts` 归 application（design §5.6 记在 W4-E1 名下；要先把它的 9 个同层依赖切成端口，
+  另立）；`public/operations` 其余写原子（S9）；`taskExecutionModule` 的工厂图构造（S12）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（目录入库，RFC 索引的链接不断），实现与验证后再提交。
+  独立对账（plan §0 第 10 条）未到期：上次 2026-11-09，其后关闭 2 个后继。
+- **附带**：RFC-477 的 Done 文档提交 `a4c377ba8`（5 个文档文件）：exact SHA 主 CI run 42832506603 的 70 个 job 全绿。
+
 ## 2026-11-09 RFC-477 节点回滚、资源限额、agent 启动快照与触发预检按 owner 归位（Done；`design/RFC-477-rollback-limits-launch-preflight-owners/`）
 
 - **来由**：RFC-294 W9-D 第二十四步，plan §4.7 的 task-execution 一族（W4-E1，9 个文件）。按源码、消费方与目标 DAG 逐个核对后拆成三处
