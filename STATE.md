@@ -1,3 +1,18 @@
+## 2026-11-09 RFC-477 节点回滚、资源限额、agent 启动快照与触发预检按 owner 归位（In Progress；`design/RFC-477-rollback-limits-launch-preflight-owners/`）
+
+- **来由**：RFC-294 W9-D 第二十四步，plan §4.7 的 task-execution 一族（W4-E1，9 个文件）。按源码、消费方与目标 DAG 逐个核对后拆成三处
+  落地：本 RFC 做 `nodeRollback`（`R1` 3）、`limits`、`agentLaunch` 与 `execution/` 下的 `triggerPreflight`、`resourcePolicy`；`task.ts`
+  （1793 行、63 个用例文件取它、约 45 个源码守卫读它，延后仓库准备要先与 source-control 的 provider 中立回收收敛）另立 RFC-478；
+  `systemAgentRun`、`execution/taskExecutionResourceDependencies`（取 `services/runtime`）与 `execution/workspaceBoundary`（消费方多在
+  runtime-management）随运行时驱动一族。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09 再次下达）：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：节点回滚按内容拆进 task-execution（结果说明进 `domain/`，目标装载与带 effect 记账的回滚进 `infrastructure/`），collaboration 的
+  评审与反问自动派发经自有端口 `NodeRunWorkspaceRollbackPort`（`TaskExecutionParticipantBindings` 多一格，bootstrap 交 task-execution 的
+  实现）；限额策略进 task-execution `application/`，审计端口由 task-execution 声明（不取 system-operations）；agent 宿主快照进
+  task-execution `domain/`；触发预检与停用资源策略按 DAG 归 resource-catalog `domain/`。失去模块外消费方的 public 符号当场撤出。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（目录入库，RFC 索引的链接不断），实现与验证后再提交。
+- **附带**：RFC-476 的 Done 文档提交 `b562e9338`（5 个文档文件）：exact SHA 主 CI run 42763477487 的 70 个 job 全绿。
+
 ## 2026-11-09 RFC-294：独立对账与总纲第二次校正（纯文档；`design/RFC-294-backend-layered-target-architecture/review-2026-11-09.md`）
 
 - **来由**：用户要求独立调研 RFC-294 的架构是否合理、实现到了哪一步，并在证据充分的前提下按发现修订总纲。基线 `361945023`
