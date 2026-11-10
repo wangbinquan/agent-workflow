@@ -21,7 +21,7 @@
 - [x] AC-2 行为不变（回滚、限额、启动快照、触发预检、停用资源处置；collaboration 经端口走同一份实现）
 - [x] AC-3 架构计数按实测（`R1` 30 → 27），偏差、未被消费的 public 符号与越界类计数不升；触及的减速带收紧到实测
 - [x] AC-4 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿：`802a4033b` 主 CI run 42826124457 的 70 个 job 与同一 SHA 的其余 5 个 push workflow 全部通过
 
 ## 集中验证（2026-11-09～10，候选基于 `55f21c641`）
 
@@ -153,6 +153,15 @@
   `loadRollbackTarget(db, taskId)` 装载，规划与回滚都对着它；负对照：不带 `db` 的 `loadRollbackTargetFrom` 存在、作用域不用它），与两个引擎上
   「这个装载给出的目标带 `db`」的既有断言合起来锁住这条链；§8 改写为实际情形，`nodeRollback.ts` 作用域工厂的注释同步，guard-manifest
   里该用例的行数刷新。复验见集中验证的「定稿后的复验」。
+
+## CI（AC-5）
+
+- `802a4033b` 主 CI run 42826124457：70 个 job 全部通过（「CI required」绿），其中 `Backend tests (real PostgreSQL)` 的 RFC-359 P0
+  变异 lane 两个数据库都通过。
+- 同一 SHA 的其余 push workflow（路径过滤命中本提交）全部通过：windows-platform run 42826124636、maintenance-soak-nightly
+  run 42826124435、integration-opencode run 42826124521、git-protocols-e2e run 42826124688、visual-regression-nightly
+  run 42826124469。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上接库重跑文档用例：11 个文件 91 / 91。
 
 ## PR / 提交
 

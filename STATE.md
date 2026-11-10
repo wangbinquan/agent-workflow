@@ -1,4 +1,4 @@
-## 2026-11-09 RFC-477 节点回滚、资源限额、agent 启动快照与触发预检按 owner 归位（In Progress；`design/RFC-477-rollback-limits-launch-preflight-owners/`）
+## 2026-11-09 RFC-477 节点回滚、资源限额、agent 启动快照与触发预检按 owner 归位（Done；`design/RFC-477-rollback-limits-launch-preflight-owners/`）
 
 - **来由**：RFC-294 W9-D 第二十四步，plan §4.7 的 task-execution 一族（W4-E1，9 个文件）。按源码、消费方与目标 DAG 逐个核对后拆成三处
   落地：本 RFC 做 `nodeRollback`（`R1` 3）、`limits`、`agentLaunch` 与 `execution/` 下的 `triggerPreflight`、`resourcePolicy`；`task.ts`
@@ -32,6 +32,22 @@
   public 符号 322 都不变。实现门 PASS（本会话按路径限定自审，只审功能；查出 design §8 写的「effect 断言」在用例里没有，补一条回滚作用域
   装载带 `db` 目标的源码锁并把 §8 改写为实际情形，定稿后复验：`tsc` 0 错，受影响的 14 个用例与 11 个文档用例接库通过——`s02` 一例撞时限，
   同一时刻对照两边都过）。
+- **落地**：`802a4033b`。
+- **CI**：`802a4033b` 主 CI run 42826124457 的 70 个 job 全绿（含 `Backend tests (real PostgreSQL)` 的 RFC-359 P0 变异 lane 两个数据库）；
+  同一 SHA 的 windows-platform run 42826124636、maintenance-soak-nightly run 42826124435、integration-opencode run 42826124521、
+  git-protocols-e2e run 42826124688、visual-regression-nightly run 42826124469（路径过滤命中）全部通过。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径，搬迁计数只是
+  W9-D 的退出门之一）：
+  1. task-execution 一族（W4-E1）收尾：`services/task.ts` 按内容分层迁入 task-execution（RFC-478）。它是 `public/operations.ts` 在模块外的
+     生产使用方之一，E1 须先于 S9；S12 的「`taskExecutionModule` 不在 import 期构造」也等它。design §5.6 记在 W4-E1 名下的
+     `infrastructure/taskRouteLaunchOperations.ts` 归 application，由 RFC-478 的 design 定做法（同批或下一步）。
+  2. S11 治理补洞：减速带每项上限 = 实测；未消费 public 符号与 public 类型污染条数入减速带；各模块 `composition/` 控制流计数临时入带；
+     plan §1.2 增「结构锁 / 覆盖范围」列。
+  3. S9 public 合同收敛（先 task-execution ↔ collaboration）；运行时驱动一族（含随它迁的 `systemAgentRun`、
+     `execution/taskExecutionResourceDependencies`、`execution/workspaceBoundary`）随后；再 S13、S10、S12。
+  - design §14 收口实测：上下文值环 0、off-DAG 值对 0、后端值级 SCC 0；跨 context 内部文件对 43；public 类型污染 91、未消费 public 符号
+    322；`services/` 业务实现 49；模块级可变状态（报告口径）79。独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 2 个后继，
+    下一次不晚于 2026-11-23。
 
 ## 2026-11-09 RFC-294：独立对账与总纲第二次校正（纯文档；`design/RFC-294-backend-layered-target-architecture/review-2026-11-09.md`）
 
