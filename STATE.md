@@ -1,3 +1,18 @@
+## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（In Progress；`design/RFC-479-governance-gap-fill/`）
+
+- **来由**：RFC-294 plan §3 S11（review-2026-11-09 R10、F12、F13 与 §9 第 3 条：上限收紧归 S11）。按 2026-11-09 刷新后的总纲（review §7、
+  plan §5），W4-E1 收尾（RFC-478）之后先做 S11，S9 的退出门要用它的未消费 public 符号计数。用户 2026-11-02「好，你继续推进RFC294，过程中你
+  以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：
+  本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`checkCounts` 低于上限与高于上限同样判红（C13 由约定变成门），4 项上限收紧到实测（`cross-context-internal-file-pairs` 48 → 43、
+  `export-star-barrels` 21 → 1、`legacy-thin-facades` 42 → 0、`unreachable-production-files` 27 → 18）；未消费 public 符号（322）与 public
+  类型偏差（88）作为两项减速带，与架构报告章节同一函数算出；19 个有 `composition/` 的模块各一项控制流计数（F13 口径、语法树计数，
+  合计 1,197 行），临时到 S10；RFC-294 plan §1.2 增「结构锁 / 覆盖范围」列逐行填写；`docs/dev-gotchas.md` 补「收口时收紧上限」。
+- **不做**：生产代码；public 合同本身的收敛（S9）与 composition 的内容（S10）；review §9 第 1、2 条（待用户决定）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 3 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-478 的 Done 文档提交 `27a42a3aa`（6 个文档文件）：exact SHA 主 CI run 42885814501 的 70 个 job 全绿。
+
 ## 2026-11-10 RFC-478 `services/task.ts` 按内容分层归 task-execution（Done；`design/RFC-478-task-service-retirement/`）
 
 - **来由**：RFC-294 plan §4.7 task-execution 一族（W4-E1）的最后一个文件（RFC-477 做了另外五个；依赖运行时驱动的三个随运行时驱动一族）。
