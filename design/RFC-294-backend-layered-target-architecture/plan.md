@@ -814,11 +814,11 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
 | 运行时驱动一族：`services/runtime/**`（35）、`execution/agentInjection.ts`、`driverLease.ts`、`runtimeSmoke.ts` | 38     | runtime-management infrastructure | 先把经 `services/` 取驱动的其他 context 换成 runtime-management 的端口或装配，再整族迁入                                                 |
 | 任务启动与执行残余：`task.ts`、`agentLaunch.ts`、`systemAgentRun.ts`、`nodeRollback.ts`、`limits.ts` 与 `execution/` 下四个文件 | 9      | task-execution（W4-E1）           | 与 S9 共享 `task-execution/public/operations.ts`，串行                                                                                   |
 | git 一族：`gitSubmodule.ts`、`mergeAgent.ts`、`repoCredentials.ts`                                   | 3      | source-control（W5）              | 与 `util/git.ts` 迁入 source-control infrastructure 一并设计                                                                             |
-| 其余                                                                                                 | 5      | 各自 owner                        | `taskDelete.ts` 与 `reviewMutationCoordinator.ts`（RFC-476 在制）、`codeRoundContract.ts`（W4-E8）、`digitalEmployeeAgentTemplates.ts`（W4-E9）、`demoSeed.ts`（bootstrap） |
+| 其余                                                                                                 | 5      | 各自 owner                        | `taskDelete.ts` 与 `reviewMutationCoordinator.ts`（RFC-476 Done，`9184e1e5a`，已迁入 task-execution）、`codeRoundContract.ts`（W4-E8）、`digitalEmployeeAgentTemplates.ts`（W4-E9）、`demoSeed.ts`（bootstrap） |
 
 迁入时按内容分层落位（proposal C10）：用例编排与规则判定进 application / domain，持久化与外部 effect 进 infrastructure；不再把
-用例文件原样停放到 infrastructure，确需原样迁入的在该 RFC 的 design 里列明理由并呈用户确认。在制的 RFC-476（第二十三步）
-按原方式收口。此后逐步记录写进各后继自己的三件套与 `STATE.md`；本文 §1.1 的 W9 行与 §4.6 只在一族关闭时记一行，不再逐步
+用例文件原样停放到 infrastructure，确需原样迁入的在该 RFC 的 design 里列明理由并呈用户确认。RFC-476（第二十三步）
+按原方式收口（2026-11-09 Done，`9184e1e5a`；收口前对 C10～C13 的对账见其 design §7）。此后逐步记录写进各后继自己的三件套与 `STATE.md`；本文 §1.1 的 W9 行与 §4.6 只在一族关闭时记一行，不再逐步
 追加。
 
 ## 5. 依赖顺序
@@ -876,7 +876,7 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 | `util/git` / `services/git*`                                                                         | S8 独占                                        | —                                              |
 | `design/plan.md` 索引与 `STATE.md`                                                                   | 每次收尾单 owner                               | 只追加本批条目，保留他人内容                   |
 | `modules/task-execution/public/*` 与 collaboration 的人工门读写                                      | W4-E1 ↔ S9                                     | `public/operations.ts` 同批只允许一个          |
-| `modules/collaboration/infrastructure/review.ts`                                                     | S9 ↔ S13（及在制的 RFC-476）                   | 同批只允许一个                                 |
+| `modules/collaboration/infrastructure/review.ts`                                                     | S9 ↔ S13                                       | 同批只允许一个                                 |
 | 各模块 `composition/`（development-automation、source-control、integration 等）                      | S10 ↔ S12；S10 内部逐模块串行                  | 与 RFC-370 余项的 `taskImage*` 文件逐个避让    |
 | `architecture/counts.json`                                                                           | S11 与同批改数的后继                           | 多个后继下降同一计数时会改同一行，以较小值为准 |
 

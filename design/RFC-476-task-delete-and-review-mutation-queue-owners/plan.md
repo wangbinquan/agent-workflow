@@ -20,7 +20,8 @@
 - [x] AC-2 行为不变（删除的门、事务、清理与恢复；评审 / 取消的排队次序）
 - [x] AC-3 架构计数按实测（`R1` 34 → 30），偏差、未被消费的 public 符号与越界类计数不升；触及的两项减速带收紧到实测
 - [x] AC-4 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿：`9184e1e5a` 主 CI run 42758970934 的 70 个 job、windows-platform run 42758970932 与
+      maintenance-soak-nightly run 42758971031 全部通过
 
 ## 集中验证（2026-11-09，候选基于 `361945023`）
 
@@ -128,6 +129,16 @@
   `RecoverableTerminalMaintenanceClaim` 仍有消费方，保留。
 - 用例与账本：e2e 注释里的行号改指 `deleteTask` 的 409 抛出处（原 `:76` 已过期）；`guard-manifest` 改动的三个登记守卫行数与文件一致；
   `scheduler-audit-s14` 的历史注释保留原路径（叙述来由）。
+
+## CI（AC-5）
+
+- `9184e1e5a` 主 CI run 42758970934：70 个 job 全部通过（「CI required」绿），其中 RFC-359 P0 变异 lane 两引擎都通过（本机 PostgreSQL 一半
+  三次撞看门狗，见集中验证）。
+- windows-platform push run 42758970932（路径过滤命中 `bootstrap/daemonApplication.ts`、collaboration `review.ts` 与 task-execution 的
+  `composition.ts`、`composition/bootRecovery.ts`、`composition/taskEngineApplication.ts`、`childTaskLifecycleParticipant.ts`、
+  `taskDriverLifecycle.ts`、`public/participants.ts`）通过；maintenance-soak-nightly push run 42758971031（路径过滤命中
+  `bootstrap/daemonApplication.ts`）通过；本次提交没有触发其他 push workflow。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 5 个 Done 文档文件）的导出仓库上接库重跑上述文档用例：11 个文件 92 / 92。
 
 ## PR / 提交
 

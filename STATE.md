@@ -32,7 +32,7 @@
 - **未改动 / 遗留**：生产代码、测试、`architecture/*`、`status.md` 未动。RFC 索引 `design/plan.md` 的 RFC-294 行尚未记本次对账：
   该文件有并发在制改动（含指向未跟踪目录的链接，本批提交它会打红 `design/` 链接检查），待该文件无并发在制改动时补上。
 
-## 2026-11-09 RFC-476 任务删除与评审变更队列归 task-execution（In Progress；`design/RFC-476-task-delete-and-review-mutation-queue-owners/`）
+## 2026-11-09 RFC-476 任务删除与评审变更队列归 task-execution（Done；`design/RFC-476-task-delete-and-review-mutation-queue-owners/`）
 
 - **来由**：RFC-294 W9-D 第二十三步。`R1` 余 34 条，其中 4 条出在两个 `services/` 文件上：`services/taskDelete.ts`（`tasks:delete` 硬删除，取
   task-execution `infrastructure/taskDeleteRecovery`，账本的退役条件就是并入 task-execution）与 `services/reviewMutationCoordinator.ts`（评审写入
@@ -62,6 +62,15 @@
   system-mocks 111 / 111；`rfc321` 工作树 10 / 10。计数：`R1` 34 → 30、`R2` 0，`legacy-horizontal-files` 175 → 173、
   `legacy-service-implementations` 56 → 54，其余 19 项闸门计数不变；public surface 1505 → 1497（撤出 9、新增 1），偏差 94 → 91，未被消费的
   public 符号 322 不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`9184e1e5a`。
+- **CI**：`9184e1e5a` 主 CI run 42758970934 的 70 个 job 全绿（含 RFC-359 P0 变异 lane 两引擎），windows-platform push run 42758970932 与
+  maintenance-soak-nightly push run 42758971031（路径过滤命中）通过；没有触发其他 push workflow。
+- **下一步**：按 RFC-294 plan §4.7 与 review-2026-11-09 §7，W9-D 余项按 owner 族成批（`services/` 53 个文件；`R1` 30 条；`R2` 0）。
+  task-execution 一族（W4-E1）：`task`（`R1` 9）、`agentLaunch`、`nodeRollback`（`R1` 3；collaboration 的评审与反问改经 collaboration
+  自有的回滚端口，由 bootstrap 交 task-execution 的实现）、`limits`，`execution/` 下的 `triggerPreflight` 与 `resourcePolicy` 按内容归
+  resource-catalog；`systemAgentRun`（`R1` 5）、`execution/taskExecutionResourceDependencies` 依赖 `services/runtime`，`execution/workspaceBoundary`
+  的消费方多在 runtime-management，三者随运行时驱动一族（`services/runtime/**`、`agentInjection`、`driverLease`、`runtimeSmoke`）一起。
+  迁入按内容分层落位（C10）。之后 S11、S9、S10、S12、S13。
 
 ## 2026-11-09 RFC-475 自动提交推送按 owner 拆开：git 发布归 source-control、提交行记账归 task-execution（Done；`design/RFC-475-commit-push-owner-split/`）
 
