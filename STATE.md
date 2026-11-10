@@ -1,4 +1,4 @@
-## 2026-11-10 RFC-478 `services/task.ts` 按内容分层归 task-execution（In Progress；`design/RFC-478-task-service-retirement/`）
+## 2026-11-10 RFC-478 `services/task.ts` 按内容分层归 task-execution（Done；`design/RFC-478-task-service-retirement/`）
 
 - **来由**：RFC-294 plan §4.7 task-execution 一族（W4-E1）的最后一个文件（RFC-477 做了另外五个；依赖运行时驱动的三个随运行时驱动一族）。
   按 2026-11-09 刷新后的总纲（review §7、plan §5），E1 须先于 S9——`services/task.ts` 是 `public/operations.ts` 写原子在模块外的使用方之一——
@@ -32,11 +32,26 @@
   撞时限的 27 个文件与 `rfc370-execution-effect` 同一时刻对照 HEAD：23 个两边逐例相同，5 个只差哪几例撞时限，再跑一对后 4 个逐例相同
   （`rfc370-execution-effect` 候选一侧 13 / 13 全过）；PostgreSQL 跑 233 个能到引擎选择的文件，223 个全过，3 个是上面的同一批断言（修后与
   迁到双引擎的 `rfc300-workspace-prune` 一起补跑全过），7 个同一时刻对照 HEAD 两边逐例相同；P0 变异 lane SQLite 17 阶段通过、
-  PostgreSQL 一半本机负载约 50 时未变异基线撞 lane 的 300 s 阶段时限（22 例通过、0 例失败，不构成结论，以 exact SHA CI 的
-  P0 lane 为准）；shared / frontend / system-mocks 沿用 RFC-477 在同一内容上的结果；`rfc321` 工作树 10 / 10；最终文档上 12 个文档用例接库
-  107 pass。计数：`R1` 27 → 18、
+  PostgreSQL 一半本机负载约 50 时未变异基线撞 lane 的 300 s 阶段时限（22 例通过、0 例失败；负载约 27 时重跑同样到时限，
+  不构成结论，以 exact SHA CI 的 P0 lane 为准）；shared / frontend / system-mocks 沿用 RFC-477 在同一内容上的结果；`rfc321`
+  工作树 10 / 10；最终文档上 12 个文档用例接库 107 pass。计数：`R1` 27 → 18、
   `R2` 0，`legacy-horizontal-files` 168 → 167、`legacy-service-implementations` 49 → 48，其余 20 项闸门计数不变；public surface
   1495 → 1477（撤出 18 个、不新增），偏差 91 → 88，未被消费的 public 符号 322 不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`0133385a8`。
+- **CI**：`0133385a8` 主 CI run 42878654323 的 70 个 job 全绿（含 `Backend tests (real PostgreSQL)` 的 RFC-359 P0 变异 lane 两个数据库）；
+  同一 SHA 的 windows-platform run 42878654384、git-protocols-e2e run 42878654476（路径过滤命中，两份过滤本 RFC 都改过）全部通过。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径，搬迁计数只是
+  W9-D 的退出门之一）：
+  1. S11 治理补洞（RFC-479）：减速带每项上限 = 实测；未消费 public 符号与 public 类型污染条数入减速带；各模块 `composition/` 控制流计数
+     临时入带；plan §1.2 增「结构锁 / 覆盖范围」列。
+  2. S9 public 合同收敛（先 task-execution ↔ collaboration）：W4-E1 与它共享的 `public/operations.ts` 已无 legacy 使用方（本 RFC 撤出
+     `mintNodeRun`、`setNodeRunStatus`、`setTaskStatus`），串行前置解除。
+  3. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application（RFC-294 design §5.6；先把它的 9 个同层依赖切成端口），另立、
+     避让 S9 在制文件；运行时驱动一族（含随它迁的 `systemAgentRun`、`execution/taskExecutionResourceDependencies`、
+     `execution/workspaceBoundary`）随后；再 S13、S10、S12（S12 的「`taskExecutionModule` 不在 import 期构造」前置已解除）。
+  - design §14 收口实测：上下文值环 0、off-DAG 值对 0、后端值级 SCC 0；跨 context 内部文件对 43；public 类型污染 88、未消费 public 符号
+    322；`services/` 业务实现 48；模块级可变状态（报告口径）79。独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 3 个后继，
+    下一次不晚于 2026-11-23。
 
 ## 2026-11-09 RFC-477 节点回滚、资源限额、agent 启动快照与触发预检按 owner 归位（Done；`design/RFC-477-rollback-limits-launch-preflight-owners/`）
 

@@ -22,7 +22,7 @@
 - [x] AC-2 行为不变（延后仓库准备、同步预览、任务详情与失败码、运行时选项）
 - [x] AC-3 架构计数按实测（`R1` 27 → 18），越界、偏差与未消费 public 符号不升，新文件按内容分层；触及的减速带收紧到实测
 - [x] AC-4 受影响用例与新增用例全部通过（四个包）
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿：`0133385a8` 主 CI run 42878654323 的 70 个 job 与同一 SHA 的其余 2 个 push workflow 全部通过
 
 ## 集中验证（2026-11-10，候选基于 `aa36819e6`）
 
@@ -83,8 +83,9 @@
   RFC-477 / RFC-478 用例等 12 个文件 107 pass。
 - **P0 变异 lane**（`scripts/rfc359-p0-mutations.ts`，候选导出，这份导出不同时跑别的用例）：SQLite 17 个阶段全部符合预期（0 failures），114 s，
   前后 127 个受保护源文件的哈希一致、工作树干净。PostgreSQL：本机 1 分钟负载约 50（外部的 kind 集群一家占 5～6 核）时，
-  第一阶段（未变异基线）跑到 lane 自带的 300 s 阶段时限被终止——22 例通过、0 例失败，单例 18～21 s——不构成结论；PostgreSQL 一半以 exact SHA
-  CI 的 P0 lane（`Backend tests (real PostgreSQL)` 的两个数据库）为准
+  第一阶段（未变异基线）跑到 lane 自带的 300 s 阶段时限被终止——22 例通过、0 例失败，单例 18～21 s——不构成结论（提交后 1 分钟负载降到约 27 时再跑
+  一次，同样在第一阶段到 300 s 时限：19 例通过、1 例 5 秒撞时限，单例最长 15 s）；PostgreSQL 一半以 exact SHA CI 的 P0 lane
+  （`Backend tests (real PostgreSQL)` 的两个数据库）为准，见下面的 CI 一节
 - **结构锁的覆盖范围**（RFC-294 C12）：RFC-478 用例里文件不在与零 import 覆盖 backend 的 src / 用例 / 脚本（`preProcessFile` 取全部模块引用），
   零路径覆盖四个包的 src / tests / scripts、e2e 与仓根脚本——路径字面量与按段传给同一调用的 `'services', 'task.ts'` 两种写法（注释不算；两份
   有意拼写旧路径的 fixture——读历史语料的架构报告与 RFC-331 的匹配器自测——登记豁免，且断言它们仍在拼写），workflow 按完整路径扫，
@@ -126,6 +127,14 @@
   模块内部与用例改取定义处；`taskDriveLegacy.ts` 里只为 `services/task.ts` 留的转出一并删除。
 - 用例侧：改指的守卫判据方向不变（负向锁读并集、正向锁读具体继任文件），唯一改了射程的是 `scheduler-audit-s15` 那条已经落空的锁（改锁真正
   的两处生产现场）；`rfc300-workspace-prune` 迁双引擎只换建库方式（`harness.db`），用例体不变。
+
+## CI（AC-5）
+
+- `0133385a8` 主 CI run 42878654323：70 个 job 全部通过（「CI required」绿），其中 `Backend tests (real PostgreSQL)` 的 RFC-359 P0
+  变异 lane 两个数据库都通过——本机 PostgreSQL 一半撞阶段时限、不构成结论的那一半由它给出。
+- 同一 SHA 的其余 push workflow（路径过滤命中本提交，两份过滤本 RFC 都改过）全部通过：windows-platform run 42878654384、
+  git-protocols-e2e run 42878654476。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 6 个 Done 文档文件）的导出仓库上接库重跑文档用例：12 个文件 107 / 107。
 
 ## PR / 提交
 
