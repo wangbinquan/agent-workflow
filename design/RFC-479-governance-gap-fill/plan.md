@@ -21,7 +21,7 @@
 - [x] AC-2 `unconsumed-public-symbols`、`public-surface-deviations` 入带，与报告章节逐条相同，各有会红的变异用例
 - [x] AC-3 19 项 `composition-control-flow-<module>` 入带，与 F13 口径的差异逐条说明，有会红的变异用例
 - [x] AC-4 RFC-294 plan §1.2 新列没有空格、逐行可复核
-- [ ] AC-5 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-5 受影响用例全部通过；exact SHA CI 全绿：`0d591604b` 主 CI run 42901079116 的 70 个 job 全部通过
 
 ## 集中验证（2026-11-10，候选基于 `9334dc15f`）
 
@@ -68,6 +68,11 @@
   （`corpusScanner`、`minCorpusFiles` 2000、`assertsAbsence`、`negativeFixture`），改到的两条只刷新行数。
 - 开发中自查出并在测试前改掉一处：真实语料对账原来用「development-automation 那 7 行」作正对照，会随无关改动失效；改为在 fixture 上自测
   对账判据，真实语料只断言没有错配。
+
+## CI（AC-5）
+
+- `0d591604b` 主 CI run 42901079116：70 个 job 全部通过（「CI required」绿）。本提交只改用例、账本与文档，没有命中其余 push workflow 的路径过滤，同一 SHA 只有主 CI 一个 run。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 Done 文档文件）的导出仓库上接库重跑文档用例：12 个文件 98 / 98。
 
 ## PR / 提交
 

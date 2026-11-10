@@ -1,4 +1,4 @@
-## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（In Progress；`design/RFC-479-governance-gap-fill/`）
+## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（Done；`design/RFC-479-governance-gap-fill/`）
 
 - **来由**：RFC-294 plan §3 S11（review-2026-11-09 R10、F12、F13 与 §9 第 3 条：上限收紧归 S11）。按 2026-11-09 刷新后的总纲（review §7、
   plan §5），W4-E1 收尾（RFC-478）之后先做 S11，S9 的退出门要用它的未消费 public 符号计数。用户 2026-11-02「好，你继续推进RFC294，过程中你
@@ -21,6 +21,16 @@
   复跑全过；架构报告对照 RFC-478 收口时的报告只多出 21 个门与计数，原有 21 项门、指标与全部章节逐项相同，42 项实测与 `max` 逐项相等；
   F13 对账：18 个模块逐行相同，development-automation 多出的 7 行都落在字符串 / 模板 / 注释里；§1.2 新列 37 行按各锁源码与
   guard-manifest 写成并抽查一致。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`0d591604b`。
+- **CI**：`0d591604b` 主 CI run 42901079116 的 70 个 job 全绿。本提交只改用例、账本与文档，没有命中其余 push workflow 的路径过滤，同一 SHA 只有主 CI 一个 run。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. S9 public 合同收敛（先 task-execution ↔ collaboration）：退出门直接引用减速带里的 `unconsumed-public-symbols`（322）与
+     `public-surface-deviations`（88）；W4-E1 与它共享的 `public/operations.ts` 已无 legacy 使用方（RFC-478），串行前置解除。
+  2. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application（先把 9 个同层依赖切成端口），另立、避让 S9 在制文件；运行时
+     驱动一族随后；再 S13、S10（经用户确认的上限直接改 19 项 `composition-control-flow-<module>`，新门落地后取代）、S12。
+  - design §14 收口实测：上下文值环 0、off-DAG 值对 0、后端值级 SCC 0；跨 context 内部文件对 43；public 类型污染 88、未消费 public 符号
+    322；`services/` 业务实现 48；模块级可变状态（报告口径）79；composition 控制流 1,197 行（19 个模块）。减速带 42 项，每项 `max` = 实测。
+    独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 4 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-10 RFC-478 `services/task.ts` 按内容分层归 task-execution（Done；`design/RFC-478-task-service-retirement/`）
 

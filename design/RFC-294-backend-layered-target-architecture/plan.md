@@ -106,6 +106,7 @@
 | S5 第一步                        | [RFC-399](../RFC-399-context-dag-platform-one-way/proposal.md)                                                | context 值级 DAG（SCC 2 → 0、越界值级对 9 → 0）、`platform` → `modules` 19 → 0、删除 drizzle 再导出桶                                                  | `rfc399-context-dag-platform`（无 context 值级 SCC、无越 DAG 值对、无 platform → modules 边，8 个迁移路径无转出）+ 全仓门 `context-value-sccs` / `context-value-pairs-off-dag` / `platform-to-modules-file-pairs`（max=0）与 `export-star-barrels`：全 src（≥2000，只看直接边；经 `services/` 的绕行只在合成负对照里），负对照 ✓ |
 | S5 第二步                        | [RFC-400](../RFC-400-collaboration-task-participants-actor/proposal.md)                                       | collaboration → task-execution 内部文件对 17 → 0（改经 TE 自有 tx 参与者）、删除 `services/humanGateComposition.ts`、模块 public 合同去 legacy `Actor` | `rfc400-collaboration-task-participants`（collaboration → task-execution 内部文件对 = 0、public 导出签名不带 `Actor`、11 个 owner 工厂不经 TE public 漏出）+ `rfc400-top-level-await-guard`：全 src（≥2000）与全部模块 public 文件（≥500 个导出），负对照 ✓；另有全仓门 `cross-context-internal-file-pairs` 的精确基线 |
 | S7（W6）                         | [RFC-401](../RFC-401-single-resource-write-stack/proposal.md)                                                 | 唯一资源写入栈与三入口错误收敛、AtomicApply 持久 claim / lease、技能 / fusion / restore 接入、旧技能 operation 生命周期与零调用 legacy 写函数删除 | `rfc401-resource-write-participants`（六类资源各一个写入参与者，只有它与 5 个技能恢复文件取写入程序或直写行，7 个退役码不在）：全 src（≥2000，只认顶层具名 import）+ 20 个场景函数，负对照 ✓；另有 `rfc395-a6-atomic-apply`（指定文件）与 `rfc317-table-ownership`（`atomicApplyClaims` 唯一 owner）；lease 与错误收敛只有行为用例 |
+| S11 | [RFC-479](../RFC-479-governance-gap-fill/proposal.md) | 减速带上限 = 实测且低于即红、public 合同两项计数、composition 控制流临时入带、本表增覆盖范围列 | `rfc376-structural-guards`（`counts.json` 42 项实测 = `max`，低于与高于上限都红；全 src TS + JS ≥1500 + shared / frontend / system-mocks src）+ `rfc479-governance-gap-fill`（composition 控制流的 fixture 变异与 F13 逐行对账、public 合同两项的 fixture 变异；全 src ≥2000）+ `rfc376-report`（两项 public 合同计数与报告章节逐条相同，提交的源码）；负对照 ✓ |
 
 「结构锁 / 覆盖范围」列（2026-11-10，RFC-479 / S11）：G1～G14 指 RFC-376 的硬结构门（`tests/architecture/rfc376-structural-guards.test.ts`，G2 context 值级 DAG、G3 / G4 public 边界、G6 application 直接 effect、G7 模块分层、G9 部署分支、G14 入口可达）；「全 src」= `packages/backend/src` 的全部源文件，括号里是用例断言的语料下限；「指定 N 个文件」= 只读点名的文件；负对照指合成 fixture 或对真实文件的变异；「未登记 guard-manifest」的锁不受 RFC-317 的语料下限与负对照普查约束。逐行依据是各锁的源码与 `architecture/guard-manifest.json`。
 
@@ -456,6 +457,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **能力影响**：无；以数字员工 / 开发自动化的现有用例与托管 E2E 对拍。
 
 ### S11 治理补洞
+
+> 后继：[RFC-479](../RFC-479-governance-gap-fill/proposal.md)（Done，2026-11-10，`0d591604b`）：减速带 42 项每项 `max` = 实测且低于上限即红（4 项收紧）；未消费 public 符号 322、public 类型偏差 88 与 19 个模块的 composition 控制流（F13 口径、按语法树计数，合计 1,197 行，临时至 S10）入带；§1.2 增「结构锁 / 覆盖范围」列。
 
 - **范围**：`architecture/counts.json` 六项高于实测的 `max` 收紧到实测值；未消费 public 符号与 public 类型污染条数进入减速带；
   S10 的门落地前临时纳入各模块 `composition/` 的控制流计数（review F13 的口径：行首 `if / for / while / switch / try` 与 `throw`
