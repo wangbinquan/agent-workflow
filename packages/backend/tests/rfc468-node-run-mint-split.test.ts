@@ -4,8 +4,8 @@
 // ① `services/nodeRunMint.ts` 不在；src / 用例 / 脚本零 import 它（census AST，静态、动态 import 与相对路径都认，带负对照）。
 // ② 冻结运行时在 runtime-management：任务运行时绑定与冻结算法零取 task-execution、取 runtime-management 自己的窄端口；编译期锁
 //    task-execution 的 `NodeRunRuntimePersistence` 可交给这个窄端口（组合层的交接不会漂移），两边的行记录类型双向相等。
-// ③ 铸行入口：task-execution `public/operations` 转出的 `mintNodeRun` 就是 infrastructure 那一个；`services/task.ts` 经两个 public 入口取
-//    `mintNodeRun` / `nextRetryIndex`。
+// ③ 铸行入口：唯一定义在 task-execution `infrastructure/legacyNodeRunMint.ts`。RFC-478：模块外唯一的读者 `services/task.ts`（延后仓库
+//    准备）迁进 task-execution 后改取定义处的 `mintNodeRun` / `nextRetryIndex`，`mintNodeRun` 随之撤出 `public/operations`。
 // ④ `continuesClarifyLineage` 在 task-execution `domain/clarifyRules.ts`，agent 节点执行从那里取。
 // ⑤ `schedulerMintCause` 全仓只有一个定义（task-execution `application/resolveSchedulerRunRow.ts`）。
 import { describe, expect, test } from 'bun:test'
@@ -79,7 +79,7 @@ describe('RFC-468 —— nodeRunMint 不在、零引用', () => {
   test('负对照：判据认得出别名、相对路径与动态 import', () => {
     const probe = join(TESTS, 'probe.test.ts')
     expect(targetOf(probe, '../src/services/nodeRunMint')).toBe(RETIRED)
-    expect(targetOf(join(SRC, 'services', 'task.ts'), './nodeRunMint')).toBe(RETIRED)
+    expect(targetOf(join(SRC, 'services', 'probe.ts'), './nodeRunMint')).toBe(RETIRED)
     expect(targetOf(probe, '@/services/nodeRunMint')).toBe(RETIRED)
     expect(targetOf(probe, '@/services/nodeRunMintExtra')).not.toBe(RETIRED)
     const unit = sourceUnit(
@@ -123,19 +123,19 @@ describe('RFC-468 —— 冻结运行时归 runtime-management', () => {
 })
 
 describe('RFC-468 —— 铸行入口归 task-execution', () => {
-  test('public/operations 转出的 mintNodeRun 就是 infrastructure 那一个', () => {
-    expect(taskExecutionOperations.mintNodeRun).toBe(mintNodeRun)
+  test('mintNodeRun 只有 infrastructure 那一个，已撤出 public/operations（RFC-478）', () => {
+    expect(typeof mintNodeRun).toBe('function')
+    expect('mintNodeRun' in taskExecutionOperations).toBe(false)
   })
 
-  test('services/task.ts 经两个 public 入口取 mintNodeRun / nextRetryIndex', () => {
-    const task = read('services/task.ts')
-    expect(task).toMatch(
-      /import \{\s*mintNodeRun,\s*setNodeRunStatus,\s*setTaskStatus,?\s*\} from '@\/modules\/task-execution\/public\/operations'/,
+  test('延后仓库准备取定义处的 mintNodeRun / nextRetryIndex（RFC-478：原 services/task.ts 经两个 public 入口取）', () => {
+    const preparation = read(
+      'modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
     )
-    expect(task).toMatch(
-      /\bnextRetryIndex,?\s*\} from '@\/modules\/task-execution\/public\/queries'/,
-    )
-    expect(task).not.toContain('@/services/nodeRunMint')
+    expect(preparation).toContain("import { mintNodeRun } from './legacyNodeRunMint'")
+    expect(preparation).toContain("import { nextRetryIndex } from '../application/nextRetryIndex'")
+    expect(preparation).not.toContain('@/modules/task-execution/public/')
+    expect(preparation).not.toContain('@/services/nodeRunMint')
   })
 })
 

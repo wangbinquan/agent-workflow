@@ -67,6 +67,8 @@ const CORPUS_FILES: readonly string[] = enumerateTestSources()
 // 所以此前靠 `sqlite-execution-engine` 那条机械理由挂账（它们确实 import `services/task`）。
 // 两份合一之后那条理由消失了，判据当场把它们推到「既无理由、也不在 open 名单」这一格——
 // 这正是本守卫该做的事：**实现合一了，测试面不跟上就立刻现形**。
+// RFC-478 销账 1 行：`rfc300-workspace-prune` 已迁到 `describeEachProvider`。它挂在 `sqlite-execution-engine` 名下只因
+// import 了 `services/task` 的 `getTask`（一个读投影，不驱动执行引擎）；那条拼法随文件退役从判据里删除。
 // RFC-395 II-b T18: generated with callSiteRows and the unchanged sanctionOf classifier.
 // Sanction definitions and their evidence remain below; unapproved additions are not admitted.
 export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
@@ -265,7 +267,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc291-unavailable-mount.test.ts: 1', // sync-client-fault-injection
   'rfc294-task-execution-compat-oracles.test.ts: 1', // sqlite-execution-engine
   'rfc300-webhook-workspace-cleanup-e2e.test.ts: 2', // sqlite-execution-engine
-  'rfc300-workspace-prune.test.ts: 1', // sqlite-execution-engine
   'rfc301-task-launch-origin-inheritance.test.ts: 1', // sqlite-execution-engine
   'rfc303-verified-ingress.test.ts: 1', // real-file-database
   'rfc305-architecture-lock.test.ts: 1', // provider-independent-route-registry
@@ -535,7 +536,8 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
       code.includes('createTaskExecutionTestTopology') ||
       code.includes('composeTaskExecutionTestRuntime') ||
       /createSqlite[A-Za-z]*TaskExecution[A-Za-z]*Participant/.test(code) ||
-      /from\s*'(@\/|(\.\.\/)+src\/)services\/task'/.test(code) ||
+      // RFC-478：`from 'services/task'` 那条拼法随文件退役删除（全仓零 import，RFC-478 用例锁定）。
+      // 它最后认领的 `rfc300-workspace-prune` 只取了任务详情读投影、并不驱动执行引擎，已迁到 `describeEachProvider`。
       // RFC-424：`services/task.ts` 的测试专用续跑入口（人工门 wake、协调器工厂装配）原样迁入
       // `tests/helpers/legacyTaskDrive.ts`——同一个概念换了拼法，不是新写的单引擎判据。
       /from\s*'(\.\.?\/)+helpers\/legacyTaskDrive'/.test(code),

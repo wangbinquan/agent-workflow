@@ -31,12 +31,7 @@ import type {
   DurableCodeHostEffectObserver,
 } from '../application/codeHostEffectObserver'
 import { createCodeHostEffectAttemptObserver as createCodeHostEffectAttemptObserverInternal } from '../application/codeHostEffectObserver'
-import { createLocalEffectAttemptObserver as createLocalEffectAttemptObserverInternal } from '../application/localEffectObserver'
-import {
-  DEFAULT_OWNERSHIP_HEARTBEAT_MS,
-  DEFAULT_OWNERSHIP_LEASE_MS,
-  taskExecutionModule as taskExecutionModuleInternal,
-} from '../composition'
+import { DEFAULT_OWNERSHIP_HEARTBEAT_MS, DEFAULT_OWNERSHIP_LEASE_MS } from '../composition'
 import {
   fenceTaskWrite as fenceTaskWriteInternal,
   withTaskExecutionWrite as withTaskExecutionWriteInternal,
@@ -104,16 +99,11 @@ import type {
   MaintenanceMemberSnapshot,
   TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
-import {
-  builtinWorkflowSyncPreview as builtinWorkflowSyncPreviewInternal,
-  workflowSyncGateReason as workflowSyncGateReasonInternal,
-} from '../domain/workflowSyncPreview'
 import { humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal } from '../infrastructure/humanGateProjection'
 // RFC-359：bun:sqlite 专属的三个**同步**参与者（`appendTask{Created,LifecycleTransition,
 // NodeStatuses}CommittedEventTx`）随最后一个同步调用方退役，`taskLifecycleEventParticipant.ts`
 // 整文件删除。事件形状本来就只有一份，在 `taskLifecycleCommittedEvents.ts`；两个引擎共用的中立
 // 异步形态从这里出去。
-import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
 import {
   appendTaskCreatedCommittedEvent as appendTaskCreatedCommittedEventInternal,
   type TaskCommittedEventIdentity,
@@ -287,12 +277,13 @@ export type CodeHostSendAttemptObserver = DurableCodeHostEffectObserver
 // context; production calls remain constrained by RFC-328's exact source
 // allowlists.
 export { DEFAULT_OWNERSHIP_HEARTBEAT_MS, DEFAULT_OWNERSHIP_LEASE_MS }
-export const taskExecutionModule = taskExecutionModuleInternal
+// RFC-478：`taskExecutionModule`、`createLocalEffectAttemptObserver`、`builtinWorkflowSyncPreview`、`workflowSyncGateReason`、
+// `setNodeRunStatusInTransaction` 与 `createTaskPreparationParticipantInTx` 模块外唯一的生产读者是 `services/task.ts`，它退役后撤出
+// （`taskExecutionModule` 改由工厂图构造是 RFC-294 S12 第 3 项）。
 
 // RFC-359 W7 的终态维护认领中立面（store 工厂与两个事务内参与者）此前经这里交给 legacy 的
 // `services/taskDelete.ts`；RFC-476 把删除实现迁进 task-execution，它改取定义处，这几个符号随之撤出 public。
 export const createCodeHostEffectAttemptObserver = createCodeHostEffectAttemptObserverInternal
-export const createLocalEffectAttemptObserver = createLocalEffectAttemptObserverInternal
 export const createProcessEffectAttemptObserver = createProcessEffectAttemptObserverInternal
 export const assertTaskExecutionContext = assertTaskExecutionContextInternal
 export const createTaskExecutionContext = createTaskExecutionContextInternal
@@ -315,9 +306,6 @@ export const taskExecutionRequestHash = taskExecutionRequestHashInternal
 export const canonicalTaskExecutionJson = canonicalTaskExecutionJsonInternal
 export const decodeLineageSlotPath = decodeLineageSlotPathInternal
 export const encodeLineageSlotPath = encodeLineageSlotPathInternal
-/** RFC-359 —— 工作流同步预览的两条判据（纯投影），legacy `services/task.ts` 经此取用。 */
-export const builtinWorkflowSyncPreview = builtinWorkflowSyncPreviewInternal
-export const workflowSyncGateReason = workflowSyncGateReasonInternal
 /**
  * RFC-359 —— 「工作树还在不在、这个任务还能不能被继续」的唯一判据，两个 provider 共用。
  * legacy `services/task.ts` 与 PostgreSQL 部署都经此取用（后者此前注入的是空操作）。
@@ -327,7 +315,6 @@ export const composeWorktreeResumePreflight = composeWorktreeResumePreflightInte
 /** RFC-370 — the daemon worker's entry into an admitted human-gate continuation. */
 export const createGateContinuationDriver = createGateContinuationDriverInternal
 export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
-export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
 export const revokeExactOwnerInTransaction = revokeExactOwnerInTransactionInternal
 export const terminalizeTaskExecutionIntentsInTransaction =
   terminalizeTaskExecutionIntentsInTransactionInternal
@@ -442,8 +429,7 @@ export { createHumanGatePersistenceParticipantInTx } from '../infrastructure/hum
 export type { TaskClarifyDirectivePersistence } from '../application/ports/taskClarifyDirectivePersistence'
 export { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
 
-export type { TaskPreparationParticipant } from '../application/ports/taskPreparation'
-export { createTaskPreparationParticipantInTx } from '../infrastructure/taskPreparationParticipant'
+// RFC-478：`createTaskPreparationParticipantInTx` 撤出后，它的返回类型 `TaskPreparationParticipant` 也一并撤出。
 
 export { TaskAggregateCasMiss } from '../infrastructure/taskDefinitionWriteParticipant'
 

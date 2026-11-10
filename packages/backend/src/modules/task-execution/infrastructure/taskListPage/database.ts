@@ -4,7 +4,7 @@
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
-import { loadTaskFailureCodes } from '@/services/task'
+import { loadTaskFailureCodes } from '../taskDetailRead'
 
 import { createTaskListPage, type TaskListPage } from './page'
 

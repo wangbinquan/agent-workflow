@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 
 describe('RFC-310 digital employee task source link', () => {
   describeEachProvider('database behavior', (harness) => {

@@ -33,6 +33,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 // RFC-413: the wrapper workspace (per-repository changed files) and the wrapper iso create moved from
 // composition/wrapperMechanics.ts into engine/wrapper/wrapperWorkspace.ts and engine/kernel/wrapperIsolation.ts;
@@ -52,7 +53,8 @@ const WRAPPER_MECHANICS_SRC = [
 // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
 const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const RUNNER_SRC = readTaskAgentSources()
-const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
+// RFC-478：`services/task.ts` 已退役，负向锁改读它的继任文件并集（判据不变）。
+const TASK_SRC = readTaskServiceSuccessors()
 const RESUME_SRC = readFileSync(
   resolve(
     import.meta.dir,

@@ -41,7 +41,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
-import type { TaskContinuationDependencies } from '../src/services/task'
+import type { TaskContinuationDependencies } from './helpers/taskContinuationDependencies'
 import { freezeCallClosure } from './helpers/legacyCallClosure'
 import { buildActor } from '../src/auth/actor'
 
@@ -704,7 +704,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     writeFileSync(h.planFile, JSON.stringify({ worker: { hangMs: 120000 } }))
     const { parentTaskId } = await seedParentTask(h, workerId)
     const { DAEMON_SHUTDOWN_ABORT_REASON } = await import('@agent-workflow/shared')
-    const { abortAllActiveTasks, isTaskActive } = await import('../src/services/task')
+    const { abortAllActiveTasks, isTaskActive } = await import('./helpers/taskDriverRegistry')
     // 父任务在生产里由 startTask 注册 activeTasks 并持 signal；直连 runTask 的
     // 测试必须自带 controller，否则「关停」只打到子任务，父侧判据无从谈起。
     const parentCtrl = new AbortController()

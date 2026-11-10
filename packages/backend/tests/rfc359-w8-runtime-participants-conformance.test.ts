@@ -102,6 +102,7 @@ import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/inf
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { describeEachProvider } from './helpers/eachProvider'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 
 import {
@@ -590,9 +591,8 @@ test('第 12 刀 · 参与者已合一：仓里只剩一份实现，两个组合
   expect(merged).toContain('await resumeTaskProjection(')
 
   // `services/task.ts` 不得再长出任何一份取消实现——`cancelTask` 整个导出已删除。
-  const legacyTaskService = codeOnly(
-    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8'),
-  )
+  // RFC-478：`services/task.ts` 本身也已退役，这条负向锁改读它的继任文件并集。
+  const legacyTaskService = codeOnly(readTaskServiceSuccessors())
   expect(legacyTaskService, 'legacy Task service 不得再导出 cancelTask').not.toContain(
     'export async function cancelTask(',
   )

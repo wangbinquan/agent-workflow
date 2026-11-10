@@ -80,7 +80,8 @@ describe('RFC-359 W58 —— 预览只有一份，且它从共用判据取（源
   const read = (relative: string): string =>
     readFileSync(resolve(import.meta.dir, '..', 'src', relative), 'utf8')
   const routes = read('modules/task-execution/infrastructure/taskRouteOperations.ts')
-  const sqlite = read('services/task.ts')
+  // RFC-478: the one shared preview implementation left services/task.ts for task-execution application.
+  const sqlite = read('modules/task-execution/application/workflowSyncPreviewQuery.ts')
 
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：**这条锁的形状被合并超越了**。
   // 它原来锁「两侧各自都接上那两条共用判据、谁都别再内联一份」；预览合成一份之后，

@@ -32,7 +32,7 @@ import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 

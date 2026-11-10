@@ -24,7 +24,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

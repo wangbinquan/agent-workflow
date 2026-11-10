@@ -27,7 +27,7 @@ import { agentFixture, taskFixture, workflowFixture } from './helpers/model'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { runGit } from '../src/util/git'
 
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'

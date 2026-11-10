@@ -47,7 +47,11 @@ const SCHEDULER_SRC = readFileSync(
 )
 // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
 const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
-const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
+// RFC-478：`services/task.ts` 退役，延后仓库准备（G6 锁的那处准备行重试序读取）原样迁入 task-execution。
+const DEFERRED_PREPARATION_SRC = readFileSync(
+  join(SRC_ROOT, 'modules/task-execution/infrastructure/deferredRepositoryPreparation.ts'),
+  'utf-8',
+)
 // RFC-359 AC-1（第 9 刀）：`retry` 合并后**唯一**的那一份实现（两个 provider 共用）。
 const RETRY_SRC = readFileSync(
   join(SRC_ROOT, 'modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts'),
@@ -226,7 +230,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
       join(SRC_ROOT, 'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts'),
       'utf8',
     )
-    for (const site of [TASK_SRC, retry]) {
+    for (const site of [DEFERRED_PREPARATION_SRC, retry]) {
       expect(site).toMatch(/nodeId: REPO_PREP_NODE_ID,\s*order: 'retry-desc',\s*limit: 1/)
       expect(site).not.toContain(FORK_MARKER)
     }

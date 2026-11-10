@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import type { TaskLaunchConfigurationQueries } from '@/modules/task-execution/public/queries'
+import type { TaskLaunchConfigurationQueries } from '@/modules/task-execution/application/ports/taskLaunchConfiguration'
 import {
   resolveTaskLaunchRuntimeConfiguration,
   resolveTaskLaunchRuntimeFromReader,

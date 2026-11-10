@@ -41,7 +41,7 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { abortAllActiveTasks } from '@/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import {

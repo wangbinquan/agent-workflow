@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'

@@ -41,11 +41,9 @@ import {
   isTaskDriverActive,
 } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import {
-  resolveTaskLaunchRuntimeConfiguration,
-  resolveTaskSubagentLiveCapture,
-  type TaskLaunchConfigurationQueries,
-} from '@/modules/task-execution/public/queries'
+import { resolveTaskSubagentLiveCapture } from '@/modules/task-execution/public/queries'
+import { resolveTaskLaunchRuntimeConfiguration } from '@/modules/task-execution/application/launchConfiguration'
+import type { TaskLaunchConfigurationQueries } from '@/modules/task-execution/application/ports/taskLaunchConfiguration'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import {
   composeWorkspaceMaintenanceCommand,
@@ -54,7 +52,9 @@ import {
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { getTask, runtimeConfigOpts, type TaskContinuationDependencies } from '@/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
+import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 

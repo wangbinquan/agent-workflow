@@ -12,6 +12,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 // RFC-363: the same physical ID allocation now belongs to Source Control.
 const SRC = readFileSync(
@@ -46,11 +47,8 @@ describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', ()
     //     `workspace.prepare(...)` 做，`services/multipartTaskStart.ts` 整份删除；
     //   · agent 启动同理——`startAgentTask` 整份删除，单代理臂走的也是那台内核。
     // RFC-395 II-pre：最后一条测试专用包装器删除，生产工作区适配器保留同一预置 ID 合同。
-    const taskService = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
-      'utf8',
-    )
-    expect(taskService).not.toContain('materializeSpace(')
+    // RFC-478：`services/task.ts` 已退役，这条负向锁改读它的继任文件并集。
+    expect(readTaskServiceSuccessors()).not.toContain('materializeSpace(')
     expect(SRC).toContain('export async function materializeSpaceWithProvider(')
     // 内核那条路的等价物：一次 `workspace.prepare(...)`，成功与 earlyError 两支共用它。
     const kernel = readFileSync(

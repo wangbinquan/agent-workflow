@@ -42,7 +42,7 @@ import {
   createRepoGroup,
   updateRepoGroup,
 } from '../src/modules/source-control/application/repositoryGroups'
-import { getTask } from '@/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { materializeSpace } from './helpers/legacyTaskWorkspace'
 

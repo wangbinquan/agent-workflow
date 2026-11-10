@@ -33,7 +33,7 @@ import {
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { abortAllActiveTasks } from '../src/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import { buildActor } from '../src/auth/actor'
 import { runGit } from '../src/util/git'

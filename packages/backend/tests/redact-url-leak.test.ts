@@ -10,7 +10,8 @@ import { resolve } from 'node:path'
 
 const FILES_THAT_TOUCH_URLS = [
   'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
-  'src/services/task.ts',
+  // RFC-478: services/task.ts's URL-bearing code (task_repos projection, backfill) moved here.
+  'src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
   'src/routes/cached-repos.ts',
 ]
 

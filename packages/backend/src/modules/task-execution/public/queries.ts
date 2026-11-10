@@ -59,7 +59,7 @@ export function createNodeRunQueries(db: PersistenceDb): NodeRunQueries {
   return createNodeRunQueriesInternal(db)
 }
 export { resolveHandlerRun } from '../application/resolveHandlerRun'
-export { createRunHistorySnapshot, createRunHistoryBatchSnapshot } from '../application/runHistory'
+export { createRunHistorySnapshot } from '../application/runHistory'
 export type { RunHistoryFacts } from '../application/runHistory'
 export { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
@@ -149,14 +149,14 @@ export function isValidLoopExitCondition(value: LoopExitConditionCandidate): boo
 
 export {
   resolveTaskCommitPushFromReader,
-  resolveTaskLaunchRuntimeConfiguration,
   resolveTaskLaunchRuntimeFromReader,
   resolveTaskStartLaunchConfiguration,
   resolveTaskSubagentLiveCapture,
   resolveTaskSubagentLiveCaptureFromReader,
   resolveTaskUploadLimitsFromReader,
 } from '../application/launchConfiguration'
-export type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
+// RFC-478：`createRunHistoryBatchSnapshot`、`resolveTaskLaunchRuntimeConfiguration`、`TaskLaunchConfigurationQueries`、
+// `createTaskDetailQueries` 与 `createTaskPreparationQueries` 模块外唯一的生产读者是 `services/task.ts`，它退役后撤出（本模块改取定义处）。
 
 export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'
 export {
@@ -230,10 +230,7 @@ export type {
   TaskTriggerQueries,
 } from '../application/ports/taskTriggerQueries'
 
-export type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
-export type { TaskPreparationQueries } from '../application/ports/taskPreparation'
-export { createTaskDetailQueries } from '../infrastructure/taskDetailQueries'
-export { createTaskPreparationQueries } from '../infrastructure/taskPreparationQueries'
+// RFC-478：两个查询工厂撤出后，它们的返回类型 `TaskDetailQueries` / `TaskPreparationQueries` 也没有模块外读者，一并撤出。
 
 export type {
   TaskWorktreeLocation,

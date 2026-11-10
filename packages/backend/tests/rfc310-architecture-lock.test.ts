@@ -19,6 +19,7 @@ import { isSchemaDeclarationFile } from './architecture/schemaRoles'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
@@ -231,9 +232,8 @@ describe('rfc310 development-automation architecture lock', () => {
     // RFC-349 已将 capability-template 与 demo-seed 的合法 provider writer 放回
     // code-capability context，因此不能再把整个 context 的 insert/update/delete
     // 当成已退役 round-writer 的同义词。
-    expect(readFileSync(join(BACKEND_SRC, 'services/task.ts'), 'utf8')).not.toContain(
-      'codeRoundLaunch',
-    )
+    // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
+    expect(readTaskServiceSuccessors()).not.toContain('codeRoundLaunch')
     const retiredFiles = [
       'src/services/codeRoundLaunch.ts',
       'src/services/codeCapabilityWake.ts',

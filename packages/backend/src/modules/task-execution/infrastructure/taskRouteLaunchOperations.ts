@@ -65,7 +65,7 @@ import {
 } from '../application/launchUploads'
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
-import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
+import { layoutBuiltinWorkflowSnapshot } from '../domain/builtinWorkflowLayout'
 import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/public/queries'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'

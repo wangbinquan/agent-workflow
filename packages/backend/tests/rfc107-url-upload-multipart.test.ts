@@ -60,7 +60,7 @@ import {
   getWorkflow,
   workflowDraftSnapshotOf,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
-import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 

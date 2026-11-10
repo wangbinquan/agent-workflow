@@ -42,7 +42,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // RFC-359 AC-6：`TaskContinuationDependencies.db` 放宽到中立句柄（被测的 `buildStartTaskDeps` 只把它原样
   // 透传，用例自己就断言 `expect(withCmd.db).toBe(db)`），类型来源随之换成同目录的
   // RFC-399 B6 已删除旧 transport 桶；原查询经 RepositoryPreparationLookup 注入。
-  'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
+  // RFC-478：`services/task.ts` 退役，延后准备的组解析改经 task 自有的准备绑定，这条债随之销账。
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：纯读三件 + 列表三件合一，
   // `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents` / `listTasks` / `listTaskItems`
   // 连同它们独占的 `gt` / `nodeRunEvents` / `SQL` / `count` / `isNull` / `lifecycleAlerts`

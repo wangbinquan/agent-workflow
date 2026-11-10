@@ -224,7 +224,8 @@ describe('RFC-477 —— 五个 services/ 文件不在、零引用', () => {
         [
           '[rollback](../../packages/backend/src/services/nodeRollback.ts#L101)',
           '[policy](../../packages/backend/src/services/execution/resourcePolicy.ts)',
-          '[task](../../packages/backend/src/services/task.ts)',
+          // RFC-478 retired services/task.ts; another existing services/ sibling is the non-retired control.
+          '[agent](../../packages/backend/src/services/systemAgentRun.ts)',
           '`packages/backend/src/services/limits.ts`',
         ].join('\n'),
       ),

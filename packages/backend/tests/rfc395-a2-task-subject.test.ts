@@ -30,7 +30,8 @@ import {
   taskWorkflowSyncPreviewProjection,
 } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createDatabaseTaskLifecycleWsProjection } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
-import { getTask, layoutBuiltinWorkflowSnapshot } from '@/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { layoutBuiltinWorkflowSnapshot } from '@/modules/task-execution/domain/builtinWorkflowLayout'
 import {
   getWorkflow,
   listWorkflows,

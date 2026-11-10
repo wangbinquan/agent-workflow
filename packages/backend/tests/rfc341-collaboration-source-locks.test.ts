@@ -2,6 +2,7 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 function source(path: string): string {
   return path === 'bootstrap/daemonStart.ts'
@@ -210,7 +211,8 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('continuation drive composition does not create a task service initialization cycle', () => {
-    const taskService = source('services/task.ts')
+    // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
+    const taskService = readTaskServiceSuccessors()
     const taskExecutionComposition = source('modules/task-execution/composition/humanGate.ts')
     expect(taskService).not.toContain('export function composeHumanGateContinuationDriver')
     expect(source('bootstrap/daemonModules/taskExecution.ts')).toContain(

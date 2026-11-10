@@ -43,12 +43,12 @@
       "reason": "max=21: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 23 -> 21."
     },
     "legacy-horizontal-files": {
-      "max": 168,
-      "reason": "max=168: RFC-477 closes with the measured census per RFC-294 C13 (173 -> 168: services/nodeRollback.ts, limits.ts, agentLaunch.ts, execution/triggerPreflight.ts and execution/resourcePolicy.ts moved into task-execution and resource-catalog); no growth authorized."
+      "max": 167,
+      "reason": "max=167: RFC-478 closes with the measured census per RFC-294 C13 (168 -> 167: services/task.ts moved into task-execution by layer); no growth authorized."
     },
     "legacy-service-implementations": {
-      "max": 49,
-      "reason": "max=49: RFC-477 closes with the measured census per RFC-294 C13 (54 -> 49: services/nodeRollback.ts, limits.ts, agentLaunch.ts, execution/triggerPreflight.ts and execution/resourcePolicy.ts moved into task-execution and resource-catalog); no growth authorized."
+      "max": 48,
+      "reason": "max=48: RFC-478 closes with the measured census per RFC-294 C13 (49 -> 48: services/task.ts moved into task-execution by layer); no growth authorized."
     },
     "legacy-thin-facades": {
       "max": 42,

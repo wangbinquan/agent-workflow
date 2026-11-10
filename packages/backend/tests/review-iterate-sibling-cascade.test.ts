@@ -47,7 +47,7 @@ import {
   buildSiblingOutputsBlock,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { abortAllActiveTasks } from '@/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

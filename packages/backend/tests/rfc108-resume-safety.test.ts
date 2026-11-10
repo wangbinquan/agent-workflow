@@ -26,7 +26,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { runGit, snapshotRefName } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'

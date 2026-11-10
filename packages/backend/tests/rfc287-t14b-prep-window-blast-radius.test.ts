@@ -25,7 +25,7 @@ describe('AC-10 读洞①②：空根不得锚到 daemon 的 cwd（openContained
   //
   // 用**真实存在于 cwd 下**的文件当探针：修复前它们 `exists=true` 并能读到内容。
   test('空根 + cwd 下真实存在的文件 → 不得命中', () => {
-    for (const rel of ['package.json', 'tsconfig.json', 'src/services/task.ts']) {
+    for (const rel of ['package.json', 'tsconfig.json', 'src/main.ts']) {
       const r = openContainedFile('', rel)
       expect(r.kind, `root='' rel='${rel}'`).not.toBe('ok')
     }

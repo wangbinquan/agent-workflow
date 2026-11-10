@@ -373,7 +373,13 @@ function failureSnapshotBeforeLoop(source: string): boolean {
 
 test('failure-code batching builds one snapshot outside the task loop, with a negative control', () => {
   expect(
-    failureSnapshotBeforeLoop(readFileSync(resolve(backend, 'src/services/task.ts'), 'utf8')),
+    failureSnapshotBeforeLoop(
+      // RFC-478: `loadTaskFailureCodes` moved out of services/task.ts with the task detail read projection.
+      readFileSync(
+        resolve(backend, 'src/modules/task-execution/infrastructure/taskDetailRead.ts'),
+        'utf8',
+      ),
+    ),
   ).toBe(true)
   expect(
     failureSnapshotBeforeLoop(

@@ -857,9 +857,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/task-execution/infrastructure/taskExecutionResources.ts'),
       'utf8',
     )
-    // RFC-469: the one-line closure freeze moved into its only caller, `services/task.ts`; its body
-    // is the one direct `freezeCallClosure(` call that file may make (`CLOSURE_FREEZE_BODY` below).
-    const task = readFileSync(resolve(sourceRoot, 'services/task.ts'), 'utf8')
+    // RFC-469: the one-line closure freeze moved into its only caller, `services/task.ts`; RFC-478: with that caller (the
+    // workflow sync preview) into task-execution `application/workflowSyncPreviewQuery.ts`. Its body is the one direct
+    // `freezeCallClosure(` call that file may make (`CLOSURE_FREEZE_BODY` below).
+    const task = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/application/workflowSyncPreviewQuery.ts'),
+      'utf8',
+    )
     const CLOSURE_FREEZE_BODY =
       'resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)'
     const taskRoute = readFileSync(resolve(sourceRoot, 'routes/tasks.ts'), 'utf8')

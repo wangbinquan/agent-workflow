@@ -19,14 +19,16 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 import {
   RETIRED_START_TASK_KEYS,
   StartTaskSchema,
   rejectRetiredStartTaskKeys,
 } from '@agent-workflow/shared'
 
+// RFC-478：`services/task.ts` 已退役，原先读它的位置改读它的继任文件并集（判据不变）。
 const TASK_SRC =
-  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8') +
+  readTaskServiceSuccessors() +
   '\n' +
   readFileSync(
     resolve(

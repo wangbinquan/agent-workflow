@@ -42,7 +42,7 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { ownershipTokenKey } from '@/modules/task-execution/domain/ownership'
-import { layoutBuiltinWorkflowSnapshotJson } from '@/services/task'
+import { layoutBuiltinWorkflowSnapshotJson } from '@/modules/task-execution/domain/builtinWorkflowLayout'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { seedBundleTask, taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'

@@ -28,7 +28,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 
 async function seedWorkflow(db: PersistenceDb, id: string, name: string): Promise<void> {
   const now = Date.now()

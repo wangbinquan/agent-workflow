@@ -23,7 +23,7 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { abortAllActiveTasks } from '../src/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { createRepairEngine, type RepairEngine } from './helpers/repairEngine'
 
 export const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

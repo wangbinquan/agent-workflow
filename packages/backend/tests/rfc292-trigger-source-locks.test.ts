@@ -172,7 +172,11 @@ describe('RFC-292 trigger namespace source locks', () => {
       expect(end, `结束锚点不见了：${to}`).toBeGreaterThan(start)
       return source.slice(start, end)
     }
-    const task = readFileSync(resolve(BACKEND_SRC, 'services/task.ts'), 'utf8')
+    // RFC-478: the task detail read projection left services/task.ts.
+    const task = readFileSync(
+      resolve(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'taskDetailRead.ts'),
+      'utf8',
+    )
     const shared = readFileSync(
       resolve(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts'),
       'utf8',

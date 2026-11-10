@@ -30,7 +30,7 @@ import {
   type WorkflowsWsMessage,
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

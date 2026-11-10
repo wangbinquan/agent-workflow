@@ -10,7 +10,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { runtimeConfigOpts } from '../src/services/task'
+import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
   test('commitPush 全字段 + maxConcurrentNodes 摊成 flat RunTaskOptions 键', () => {
@@ -141,7 +142,9 @@ describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
 
 describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   const routesSrc = readFileSync(join(import.meta.dir, '../src/routes/tasks.ts'), 'utf8')
-  const taskSrc = readFileSync(join(import.meta.dir, '../src/services/task.ts'), 'utf8')
+  // RFC-478: services/task.ts is gone; its content (the runtime-options funnel and its field declarations included) is
+  // read from the files that inherited it.
+  const taskSrc = readTaskServiceSuccessors()
 
   test('provider-neutral task routes delegate launch config to the SQLite operation adapter', () => {
     expect(routesSrc).not.toContain('resolveLaunchRuntimeConfig(')

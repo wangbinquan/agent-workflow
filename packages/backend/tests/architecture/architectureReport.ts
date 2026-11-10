@@ -382,7 +382,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/runtime/types.ts': 'runtime-management',
   'packages/backend/src/services/runtimeSmoke.ts': 'runtime-management',
   'packages/backend/src/services/systemAgentRun.ts': 'task-execution',
-  'packages/backend/src/services/task.ts': 'task-execution',
   'packages/backend/src/services/taskArchive.ts': 'task-execution',
   'packages/backend/src/services/terminalSweep.ts': 'task-execution',
   'packages/backend/src/services/workgroup/state.ts': 'resource-catalog',
@@ -908,23 +907,19 @@ function observedContextEdges(
       let removeAfterWave: string | null = null
       if (fromLocation === null) {
         role = 'legacy-inbound'
-        removeAfterWave =
-          unit.path === 'packages/backend/src/services/task.ts' &&
-          item.toFile ===
-            'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts'
-            ? 'W4'
-            : // 用户 2026-09-02 给 RFC-345 T9 定的归属规则（「修法落在谁的代码里就归谁的波」）在此机器化：
-              // legacy 调用者消费模块**已发布的 public 面**是目标形态本身，剩下的活是把**调用者**搬进
-              // 它自己的 context，因此这条边归消费者所属的波；深入模块内部（composition / infrastructure /
-              // application）的 legacy-inbound 才是被调模块自己的债，仍记在被调模块的波上。
-              // 不这么记，已经 Done 的波（W4-C / W4-E0 / W4-E7）桶里会永远挂着别人的活。
-              isPublishedSurface(item.toFile)
-              ? targetRemoveAfterWaveFor(unit.path, '$file')
-              : targetRemoveAfterWaveFor(
-                  item.toFile,
-                  item.importedName,
-                  toLocation!.context as TargetContext,
-                )
+        // 用户 2026-09-02 给 RFC-345 T9 定的归属规则（「修法落在谁的代码里就归谁的波」）在此机器化：
+        // legacy 调用者消费模块**已发布的 public 面**是目标形态本身，剩下的活是把**调用者**搬进
+        // 它自己的 context，因此这条边归消费者所属的波；深入模块内部（composition / infrastructure /
+        // application）的 legacy-inbound 才是被调模块自己的债，仍记在被调模块的波上。
+        // 不这么记，已经 Done 的波（W4-C / W4-E0 / W4-E7）桶里会永远挂着别人的活。
+        // RFC-478：`services/task.ts` → `composition/taskDriveLegacy.ts` 那条记在 W4 的特例随文件删除。
+        removeAfterWave = isPublishedSurface(item.toFile)
+          ? targetRemoveAfterWaveFor(unit.path, '$file')
+          : targetRemoveAfterWaveFor(
+              item.toFile,
+              item.importedName,
+              toLocation!.context as TargetContext,
+            )
       } else if (toLocation === null) {
         role = 'legacy-outbound'
         removeAfterWave = targetRemoveAfterWaveFor(item.toFile, item.importedName)

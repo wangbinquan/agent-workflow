@@ -31,7 +31,7 @@ import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { abortAllActiveTasks } from '@/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { listTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { reenterScheduler } from './reenter-scheduler'

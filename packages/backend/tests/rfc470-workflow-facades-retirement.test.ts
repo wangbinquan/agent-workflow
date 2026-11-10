@@ -184,16 +184,18 @@ describe('RFC-470 —— 同步预览与同步门经端口读、经注入的校�
     const routes = read('modules/task-execution/infrastructure/taskRouteOperations.ts')
     expect(routes).not.toMatch(/\bgetWorkflow\(/)
     expect(routes.split('await dependencies.readWorkflow(task.workflowId)').length - 1).toBe(2)
+    // RFC-478: the query takes its four reads through task-execution's own port instead of the db handle.
     expect(routes).toMatch(
-      /computeWorkflowSyncPreview\(\s*dependencies\.db,\s*task,\s*workflow,\s*dependencies\.resourceAuthorityFor\(actor\),\s*dependencies\.validateHostWorkflow,\s*\)/,
+      /computeWorkflowSyncPreview\(\s*createWorkflowSyncPreviewReads\(dependencies\.db\),\s*task,\s*workflow,\s*dependencies\.resourceAuthorityFor\(actor\),\s*dependencies\.validateHostWorkflow,\s*\)/,
     )
     expect(read('modules/task-execution/composition/providerRuntime.ts')).toMatch(
       /readWorkflow: \(workflowId\) =>\s+taskRouteLaunchDependencies\.agent\.resources\.readWorkflow\(workflowId\),/,
     )
   })
 
-  test('services/task.ts 的同步预览经注入的 validateHostWorkflow 校验并透传冻结闭包', () => {
-    const task = read('services/task.ts')
+  // RFC-478: the sync preview left services/task.ts for task-execution `application/workflowSyncPreviewQuery.ts`.
+  test('同步预览经注入的 validateHostWorkflow 校验并透传冻结闭包', () => {
+    const task = read('modules/task-execution/application/workflowSyncPreviewQuery.ts')
     expect(task).not.toMatch(/\b(?:validateWorkflowDef|buildWorkflowValidationContext)\(/)
     expect(task).toContain('  validateHostWorkflow: WorkflowSyncPreviewValidation,\n')
     expect(task).toContain(

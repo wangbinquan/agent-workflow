@@ -11,7 +11,7 @@ import { taskListSummariesProjection } from '../src/modules/task-execution/infra
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 
 async function seedTask(db: PersistenceDb, name: string) {
   const wfId = ulid()

@@ -50,9 +50,7 @@ export {
   assertNodeRunSourceTerminationAdmission,
   cancelOpenNodeRuns,
   isTerminalTaskStatus,
-  setNodeRunStatus,
   setNodeRunStatusTx,
-  setTaskStatus,
   transitionNodeRunStatus,
   transitionNodeRunStatusTx,
   transitionTaskStatusByEvent,
@@ -62,9 +60,9 @@ export {
   type TaskStatusUpdateExtra,
   type WorkspacePruneCause,
 } from '../infrastructure/taskLifecycle'
-// RFC-468: the single-row mint the same legacy callers use (`services/task.ts`'s deferred repository preparation),
-// moved here from `services/nodeRunMint.ts`.
-export { mintNodeRun } from '../infrastructure/legacyNodeRunMint'
+// RFC-478: `setNodeRunStatus`, `setTaskStatus` and the single-row `mintNodeRun` (RFC-468) left this surface — their last
+// outside production caller was `services/task.ts`'s deferred repository preparation, which now lives in
+// `infrastructure/deferredRepositoryPreparation.ts` and imports the definition sites.
 export {
   registerTerminalWorkspacePrunePolicy,
   resolveTerminalWorkspacePruneDecision,

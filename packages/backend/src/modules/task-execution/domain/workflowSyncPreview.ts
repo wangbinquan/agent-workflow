@@ -8,12 +8,19 @@
 // 落在 `domain/` 而不是 `infrastructure/`：它的入参与返回值全部来自 `@agent-workflow/shared`
 // 的执行合同，没有任何持久化面。
 import {
+  WorkflowDefinitionSchema,
   allowedFromForTaskEvent,
   emptyWorkflowSyncDiff,
+  isTerminalNodeRunStatus,
+  migrateWorkflowDefinitionToLatest,
+  type NodeRunStatus,
+  type NodeRunSyncSummary,
   type Task,
   type TaskStatus,
+  type WorkflowDefinition,
   type WorkflowSyncPreview,
 } from '@agent-workflow/shared'
+import type { NodeRunFactSnapshot } from '../application/ports/nodeRunQueries'
 
 /** 一个不可同步的任务的完整预览：理由是唯一变量，其余字段是这个形态的常量。 */
 export function notSyncableWorkflowPreview(
@@ -62,4 +69,80 @@ export function workflowSyncGateReason(
   return allowedFromForTaskEvent({ kind: 'sync-workflow' }).includes(input.status)
     ? 'ok'
     : 'task-active'
+}
+
+// RFC-478 —— 以下三件原在 `services/task.ts`，与同步预览的既有判据同处（纯函数）。
+
+/**
+ * RFC-109 — parse a task's frozen `workflow_snapshot` (already JSON-decoded into
+ * an object by rowToTask, so `unknown` here) into a structured definition, the
+ * same schema the scheduler parses at runTask entry. Throws on a corrupt
+ * snapshot (an exceptional state for a task that launched successfully).
+ */
+export function parseSnapshotDefinition(snapshot: unknown): WorkflowDefinition {
+  return migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(snapshot))
+}
+
+/**
+ * RFC-109 (Codex impl-gate re-review P2) — the wrapper top-level statuses after
+ * which `wrapper_progress_json` is a pure debug breadcrumb the runtime never
+ * re-reads. Mirrors `wrapperRunLifecycle.findResumableWrapperRun` exactly, which
+ * returns null (→ fresh wrapper row, no progress decode) for these and resumes
+ * from progress for everything else (RFC-095 keeps canceled/interrupted live).
+ */
+const WRAPPER_BREADCRUMB_TERMINAL: ReadonlySet<string> = new Set(['done', 'failed', 'exhausted'])
+
+/**
+ * RFC-109 — assemble the per-node `NodeRunSyncSummary` the sync diff consumes,
+ * from a task's node_runs. `hasCompletedRun` / `hasLiveWrapperState` come from
+ * the rows alone; `producedPorts` (the preserved run's actual output ports, used
+ * only by the preview's data-loss warnings) is supplied by the caller when it
+ * has queried node_run_outputs — the sync SERVICE leaves it empty because it
+ * only acts on `differs` + `blockers`, neither of which reads producedPorts.
+ */
+export function buildSyncRunSummary(
+  runs: readonly Pick<
+    NodeRunFactSnapshot,
+    'id' | 'nodeId' | 'parentNodeRunId' | 'status' | 'wrapperProgressJson'
+  >[],
+  producedPortsByNode?: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, NodeRunSyncSummary> {
+  const runIdToNode = new Map(runs.map((r) => [r.id, r.nodeId]))
+  const completed = new Set<string>()
+  const liveWrapper = new Set<string>()
+  for (const r of runs) {
+    if (r.parentNodeRunId === null && r.status === 'done') completed.add(r.nodeId)
+    // Live wrapper state = state WrapperRuntime would actually RE-READ on resume.
+    // Codex impl-gate re-review P2: `wrapper_progress_json` is left in place after
+    // a TERMINAL wrapper transition as a debug breadcrumb and is never read again
+    // (wrapperRunLifecycle.ts). Mirror findResumableWrapperRun's gate exactly — it
+    // resumes (and decodes progress for) every status EXCEPT done/failed/exhausted
+    // (RFC-095 keeps canceled/interrupted resumable). So a done/failed/exhausted
+    // wrapper with a leftover breadcrumb must NOT count as live (else a completed
+    // task false-blocks). A non-terminal child row is an in-progress shard.
+    if (
+      r.parentNodeRunId === null &&
+      r.wrapperProgressJson != null &&
+      !WRAPPER_BREADCRUMB_TERMINAL.has(r.status)
+    ) {
+      liveWrapper.add(r.nodeId) // parked / resumable wrapper holding real progress
+    }
+    if (r.parentNodeRunId !== null && !isTerminalNodeRunStatus(r.status as NodeRunStatus)) {
+      const parentNode = runIdToNode.get(r.parentNodeRunId)
+      if (parentNode !== undefined) liveWrapper.add(parentNode) // wrapper has an in-progress shard/iteration child
+    }
+  }
+  const nodeIds = new Set<string>([
+    ...runs.map((r) => r.nodeId),
+    ...(producedPortsByNode?.keys() ?? []),
+  ])
+  const out = new Map<string, NodeRunSyncSummary>()
+  for (const nodeId of nodeIds) {
+    out.set(nodeId, {
+      hasCompletedRun: completed.has(nodeId),
+      producedPorts: producedPortsByNode?.get(nodeId) ?? new Set<string>(),
+      hasLiveWrapperState: liveWrapper.has(nodeId),
+    })
+  }
+  return out
 }

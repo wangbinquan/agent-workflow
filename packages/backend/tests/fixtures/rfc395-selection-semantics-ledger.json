@@ -384,8 +384,8 @@
       "whyFrameless": "旧 T3 以节点聚合而非 frame 聚合。"
     },
     {
-      "site": "src/services/task.ts#selectSyncRollbackTargets:1",
-      "path": "src/services/task.ts",
+      "site": "src/modules/task-execution/application/resumeRollbackTargets.ts#selectSyncRollbackTargets:1",
+      "path": "src/modules/task-execution/application/resumeRollbackTargets.ts",
       "symbol": "selectSyncRollbackTargets",
       "ordinal": 1,
       "source": "selection.familyHistory('', { nodeId }, { topLevelOnly: true })",
@@ -394,18 +394,18 @@
       "whyFrameless": "旧 sync 回滚按节点，不增加 frame 条件。"
     },
     {
-      "site": "src/services/task.ts#computeWorkflowSyncPreview:1",
-      "path": "src/services/task.ts",
-      "symbol": "computeWorkflowSyncPreview",
+      "site": "src/modules/task-execution/infrastructure/workflowSyncPreviewReads.ts#freshestDoneTopLevelRunId:1",
+      "path": "src/modules/task-execution/infrastructure/workflowSyncPreviewReads.ts",
+      "symbol": "freshestDoneTopLevelRunId",
       "ordinal": 1,
-      "source": "selection.familyHistory(task.id, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })",
+      "source": "selection.familyHistory( taskId, { nodeId }, { topLevelOnly: true, statusIn: ['done'] }, )",
       "reference": "sites-a",
       "today": "每节点顶层最新 done 用于同步预览。",
       "whyFrameless": "旧预览跨 iteration/container 统计。"
     },
     {
-      "site": "src/services/task.ts#loadTaskFailureCodes:1",
-      "path": "src/services/task.ts",
+      "site": "src/modules/task-execution/infrastructure/taskDetailRead.ts#loadTaskFailureCodes:1",
+      "path": "src/modules/task-execution/infrastructure/taskDetailRead.ts",
       "symbol": "loadTaskFailureCodes",
       "ordinal": 1,
       "source": "snapshot.familyHistory(t.id, { nodeId: t.failedNodeId! }, { topLevelOnly: true })",

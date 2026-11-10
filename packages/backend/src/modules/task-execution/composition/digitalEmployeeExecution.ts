@@ -7,7 +7,7 @@ import {
 } from '../infrastructure/digitalEmployeeExecutionReads'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { projectExecutionOutcome } from '../infrastructure/executionOutcome'
-import { getTask } from '@/services/task'
+import { getTask } from '../infrastructure/taskDetailRead'
 import { NotFoundError } from '@/util/errors'
 
 import { composeReactionExecutionAdmissionParticipantInTx } from '../application/adapters/reaction-admission-adapter'

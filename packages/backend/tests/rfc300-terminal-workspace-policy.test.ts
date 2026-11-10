@@ -17,8 +17,8 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   ConcurrentTaskTransition,
   registerTerminalWorkspacePrunePolicy,
-  setTaskStatus,
 } from '../src/modules/task-execution/public/operations'
+import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'

@@ -102,9 +102,18 @@ function thrownBy(fn: () => unknown) {
   }
 }
 
+// RFC-478: the deferred repository preparation (task launch and repository retry share it) left services/task.ts.
 for (const [label, relative, localName] of [
-  ['task', '../src/services/task.ts', 'diagnosticTextOf'],
-  ['repository retry', '../src/services/task.ts', 'diagnosticTextOf'],
+  [
+    'task',
+    '../src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
+    'diagnosticTextOf',
+  ],
+  [
+    'repository retry',
+    '../src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
+    'diagnosticTextOf',
+  ],
 ]) {
   const diagnostic = actual(relative!, localName!)
   describe(`RFC-359 repository diagnostic ${label}`, () => {

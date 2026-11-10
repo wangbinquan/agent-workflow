@@ -236,7 +236,8 @@ describe('RFC-476 —— 两个 services/ 文件不在、零引用', () => {
         [
           '[delete](../../packages/backend/src/services/taskDelete.ts#L91)',
           '[queue](../../packages/backend/src/services/reviewMutationCoordinator.ts)',
-          '[task](../../packages/backend/src/services/task.ts)',
+          // RFC-478 retired services/task.ts; another existing services/ sibling is the non-retired control.
+          '[agent](../../packages/backend/src/services/systemAgentRun.ts)',
           '`packages/backend/src/services/taskDelete.ts`',
         ].join('\n'),
       ),
@@ -415,7 +416,8 @@ describe('RFC-476 —— 合同与 public 收口', () => {
       expect([name, name in taskExecutionQueries]).toEqual([name, false])
     }
     // Positive control: the export reader sees what the entry still offers.
-    expect(exported).toContain('createTaskPreparationParticipantInTx')
+    // RFC-478 withdrew `createTaskPreparationParticipantInTx`; its sibling factory stays.
+    expect(exported).toContain('createConsumedInputsParticipantInTx')
     expect(exported).toContain('TaskExecutionPermits')
   })
 

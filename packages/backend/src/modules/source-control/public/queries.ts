@@ -4,8 +4,8 @@ import type { OwnRepositoryCredentialSubject } from './types'
 export type { WorkspacePresenceQueries } from '../application/ports/workspacePresence'
 export type { RepositoryWorkspaceReadQueries } from '../application/ports/repositoryWorkspaceReadQueries'
 export { selectRepositoryWorkspaceReadQueries } from '../composition/repositoryWorkspaceReadQueries'
-/** RFC-447: a repository group's flattened layout (legacy launch path). */
-export { resolveRepoGroupLayout } from '../application/repositoryGroups'
+// RFC-478：`resolveRepoGroupLayout` 模块外唯一的读者是 `services/task.ts`（延后准备的重试回收），那段迁进 task-execution 后改经
+// task 自有的准备绑定（source-control 在 `composition/repositoryPreparation.ts` 实现 `groupCachedRepoIds`），这一出口撤出。
 
 export interface OwnRepositoryTransportCredentialQueries {
   list(subject: OwnRepositoryCredentialSubject): Promise<OwnCodeHostPushCredentialList>

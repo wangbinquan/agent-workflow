@@ -37,7 +37,8 @@ describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
     // `{ agents: …, skills: … }` literal next to validateWorkflowDef( is
     // exactly the regression this pins down.
     const productionCallers = [
-      'src/services/task.ts',
+      // RFC-478: services/task.ts's sync preview (its only validator call) moved here; the validation is injected.
+      'src/modules/task-execution/application/workflowSyncPreviewQuery.ts',
       'src/routes/tasks.ts',
       'src/routes/workflows.ts',
       // RFC-470: the `services/workflow.validator.ts` re-export is gone; the launch-resource seam and the scheduled-task

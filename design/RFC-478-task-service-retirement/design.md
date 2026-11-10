@@ -103,11 +103,17 @@ resourceAuthority, validateHostWorkflow)` 的其余步骤（内置工作流短�
   `docs/` 的 Markdown 相对链接不指它（带负对照）；census 的 `R1` 里没有它（带负对照）；新文件按内容分层（定义处导出清单；domain
   不取 `node:` / `@/db` / `drizzle-orm`；application 不取 infrastructure 与 legacy）；新 infrastructure 文件不取 source-control 的
   `composition` 或内部（带负对照）；准备依赖的绑定必填（类型字面量）；撤出的 public 符号不在；测试专用出口只在 `tests/helpers/`；
-  行为：预览读端口与原四处读取同值、`groupCachedRepoIds` 与原组解析同值、空清理账本与 source-control 构造的逐字段相等（双引擎）。
-- **受影响用例**：45 个 import 方改取新位置（`getTask` 14、`abortAllActiveTasks` 17、`isTaskActive` 9 等）；41 个以路径字面量读它的
-  源码守卫改指新文件、判据不变（不再成立的「`services/task.ts` 不得包含 X」改锁新文件，或随文件消失删除并在头注说明）；造绑定的
-  用例与 helper 补 `groupCachedRepoIds`（`tsc` 兜底）；`rfc476` / `rfc477` 用例里把 `services/task.ts` 当「同前缀但不在退役清单」负对照的
-  Markdown 链接 fixture 改用仍在的文件。
+  `groupCachedRepoIds` 与绑定的 `groupName` 是同一段组解析（源码锁）；空清理账本与 source-control 构造的逐字段相等；行为：预览读端口
+  的四个读与直接查询同值（双引擎）。
+- **受影响用例**（实测；落档时估的「45 个 import 方、41 个路径字面量」漏了动态 / 类型 import 与按段拼的路径）：63 个用例与 helper
+  import 它（静态、类型与动态 import），改取新位置；43 个以路径读它的文件——路径字面量，或按段传给 `resolve` / `join` 的
+  `'services', 'task.ts'`——逐条处理：源码守卫改指新文件、判据不变（负向锁读继任文件并集，正向锁改指具体继任文件；不再成立的
+  「`services/task.ts` 不得包含 X」改锁新文件，或随文件消失删除并在头注说明），只把它当路径用的匹配器 fixture 换成合成路径，两份有意
+  拼写它的 fixture 登记豁免；造绑定的用例与 helper 补 `groupCachedRepoIds`（`tsc` 兜底）；`rfc476` / `rfc477` 用例里把
+  `services/task.ts` 当「同前缀但不在退役清单」负对照的 Markdown 链接 fixture 改用仍在的文件。两个 workflow（`git-protocols-e2e`、
+  `windows-platform`）的路径过滤里登记着它：前者改登记接走那两处 `redactGitUrl` 的延后准备文件，后者删去（延后准备已被同一份过滤里的
+  `infrastructure/*Preparation*.ts` 覆盖）。`rfc300-workspace-prune` 只因 import 它的 `getTask` 才算「驱动 SQLite 执行引擎」的单引擎用例，
+  随之迁到 `describeEachProvider`（RFC-359 W5-T19f 的 open 名单不涨）。
 - **账本**：`architecture/commons-debt.json` 删 9 条；`commons-manifest` 若有指它的条目改指新位置；`tests/architecture/architectureReport.ts`
   的 owner 表删条目；`architecture/counts.json` 按 C13 收紧触及的减速带（预计 `legacy-horizontal-files` 167、
   `legacy-service-implementations` 48，以实测为准）。

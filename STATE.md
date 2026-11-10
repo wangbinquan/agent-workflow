@@ -16,6 +16,27 @@
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（目录入库，RFC 索引的链接不断），实现与验证后再提交。
   独立对账（plan §0 第 10 条）未到期：上次 2026-11-09，其后关闭 2 个后继。
 - **附带**：RFC-477 的 Done 文档提交 `a4c377ba8`（5 个文档文件）：exact SHA 主 CI run 42832506603 的 70 个 job 全绿。
+- **收口对账**（RFC-294 C10～C13，design §8）：按内容分层落位（C10：布局与同步预览的纯函数进 domain，同步预览查询进 application、经
+  自有读端口取数，延后准备、任务详情读投影与读端口实现进 infrastructure，运行时选项漏斗与准备步骤的装配进 composition）；public 只撤不增
+  （C11：撤出 18 个，含 `public/operations` 的 `mintNodeRun`、`setNodeRunStatus`、`setTaskStatus` 与 source-control 的 `resolveRepoGroupLayout`）；
+  结构锁的覆盖范围写在 plan（C12）；触及的两项减速带收紧到实测（C13：`architecture/counts.json` 的 `legacy-horizontal-files` 168 → 167、
+  `legacy-service-implementations` 49 → 48）。
+- **集中验证**（候选基于 `aa36819e6`，验证期间 HEAD 未前进，详见 plan）：查出本 RFC 的七处问题，均已修复并复验——运行时选项漏斗为
+  `memoryDistillEnqueuer` 取了 memory 的 public 类型（多一条 off-DAG offered 文件对；改取观察者的参数类型）；撤出工厂的返回类型与
+  source-control 的 `resolveRepoGroupLayout` 随之失去模块外读者（一并撤出）；偏差白名单里挂在撤出工厂上的三条；九个老守卫按段拼路径读
+  `services/task.ts`（落档时只按字面量清点；改指继任文件，`scheduler-audit-s15` 那条只靠依赖袋字段凑数的锁改锁两处生产现场，RFC-478 用例的
+  路径锁补上按段拼写）；两份 workflow 的路径过滤；`familyHistory` 站点账本与 RFC-359 W5-T19f 的机械理由（`rfc300-workspace-prune` 迁到
+  双引擎）；拿撤出或改了形状的东西作锚的断言（`rfc476`、`rfc447`、`rfc470` 与 RFC-478 用例自己）。backend `tsc` 0 错、eslint 无告警、
+  `depcheck` 通过；全量 SQLite 四片跑完（首版候选），23596 pass，85 条 fail 里 53 条撞时限、25 条与另外五个文件的加载失败是上面的问题，
+  余下是导出所致的 `rfc321` 与 `rfc370-execution-effect` 一例；修复所及与改动过的 22 个文件加 RFC-317 全部 22 个守卫在最终候选上全过；
+  撞时限的 27 个文件与 `rfc370-execution-effect` 同一时刻对照 HEAD：23 个两边逐例相同，5 个只差哪几例撞时限，再跑一对后 4 个逐例相同
+  （`rfc370-execution-effect` 候选一侧 13 / 13 全过）；PostgreSQL 跑 233 个能到引擎选择的文件，223 个全过，3 个是上面的同一批断言（修后与
+  迁到双引擎的 `rfc300-workspace-prune` 一起补跑全过），7 个同一时刻对照 HEAD 两边逐例相同；P0 变异 lane SQLite 17 阶段通过、
+  PostgreSQL 一半本机负载约 50 时未变异基线撞 lane 的 300 s 阶段时限（22 例通过、0 例失败，不构成结论，以 exact SHA CI 的
+  P0 lane 为准）；shared / frontend / system-mocks 沿用 RFC-477 在同一内容上的结果；`rfc321` 工作树 10 / 10；最终文档上 12 个文档用例接库
+  107 pass。计数：`R1` 27 → 18、
+  `R2` 0，`legacy-horizontal-files` 168 → 167、`legacy-service-implementations` 49 → 48，其余 20 项闸门计数不变；public surface
+  1495 → 1477（撤出 18 个、不新增），偏差 91 → 88，未被消费的 public 符号 322 不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-09 RFC-477 节点回滚、资源限额、agent 启动快照与触发预检按 owner 归位（Done；`design/RFC-477-rollback-limits-launch-preflight-owners/`）
 

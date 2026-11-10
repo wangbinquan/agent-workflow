@@ -65,7 +65,8 @@ import {
   restoreSkillVersion,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildFrontierMintPlan } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
-import { abortAllActiveTasks, getTask } from '../src/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

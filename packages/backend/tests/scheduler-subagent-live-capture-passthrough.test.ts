@@ -12,6 +12,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const REPO = resolve(import.meta.dir, '..', '..', '..')
 
@@ -96,7 +97,9 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
   })
 
   test('TaskContinuationDependencies declares the field and the coordinator freezes it once for every drive path', () => {
-    const src = read('packages/backend/src/services/task.ts')
+    // RFC-478: the continuation dependency bag moved verbatim from services/task.ts into the test helpers, and the
+    // rest of the file into task-execution; both stand in for it.
+    const src = `${read('packages/backend/tests/helpers/taskContinuationDependencies.ts')}\n${readTaskServiceSuccessors()}`
     expect(src).toContain(
       'subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }',
     )

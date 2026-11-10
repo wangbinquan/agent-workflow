@@ -21,6 +21,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const RUNNER_SRC = readTaskAgentSources()
 // RFC-111 PR-A: the opencode spawn env (incl. the RFC-067 GIT_* injection) moved
@@ -30,8 +31,9 @@ const SPAWN_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
   'utf-8',
 )
+// RFC-478：`services/task.ts` 已退役，原先读它的位置改读它的继任文件并集（判据不变）。
 const TASK_SRC =
-  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8') +
+  readTaskServiceSuccessors() +
   '\n' +
   readFileSync(
     resolve(

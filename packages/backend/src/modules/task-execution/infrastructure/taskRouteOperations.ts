@@ -167,12 +167,11 @@ import {
   deriveReviewRoundTiming,
 } from '../application/reviewRoundTiming'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
-import {
-  computeWorkflowSyncPreview,
-  loadTaskFailureCodes,
-  projectWorkflowSnapshotForRead,
-  selectSyncRollbackTargets,
-} from '@/services/task'
+import { computeWorkflowSyncPreview } from '../application/workflowSyncPreviewQuery'
+import { selectSyncRollbackTargets } from '../application/resumeRollbackTargets'
+import { projectWorkflowSnapshotForRead } from '../domain/builtinWorkflowLayout'
+import { loadTaskFailureCodes } from './taskDetailRead'
+import { createWorkflowSyncPreviewReads } from './workflowSyncPreviewReads'
 
 import { deleteTask } from './taskDelete'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -1530,7 +1529,7 @@ export async function taskWorkflowSyncPreviewProjection(
     return notSyncableWorkflowPreview(task, 'workflow-not-visible')
   }
   return await computeWorkflowSyncPreview(
-    dependencies.db,
+    createWorkflowSyncPreviewReads(dependencies.db),
     task,
     workflow,
     dependencies.resourceAuthorityFor(actor),

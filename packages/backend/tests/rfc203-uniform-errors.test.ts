@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 

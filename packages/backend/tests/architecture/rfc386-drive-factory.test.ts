@@ -183,24 +183,25 @@ describe('RFC-386 coordinator construction inventory', () => {
     }
   })
 
-  test('RFC-424: services/task.ts may neither re-assemble the factory nor re-declare a retired entry', () => {
+  // RFC-478: services/task.ts is gone; the matcher is path-agnostic, so a synthetic legacy file stands in for it.
+  test('RFC-424: a legacy services/ file may neither re-assemble the factory nor re-declare a retired entry', () => {
     expect(
       driveFactoryViolations([
         ...valid(),
         unit(
-          'services/task.ts',
+          'services/legacyProbe.ts',
           'function composeTestTaskDriveFactory() { return createTaskDriveCoordinatorFactory({}); }',
         ),
       ]),
     ).toEqual([
-      'services/task.ts: retired test-only entry composeTestTaskDriveFactory declared',
+      'services/legacyProbe.ts: retired test-only entry composeTestTaskDriveFactory declared',
       expect.stringContaining('session factory assemblies differ'),
     ])
     for (const name of RETIRED)
       for (const text of [`export function ${name}() {}`, `export const ${name} = () => {}`])
-        expect(driveFactoryViolations([...valid(), unit('services/task.ts', text)])).toEqual([
-          `services/task.ts: retired test-only entry ${name} declared`,
-        ])
+        expect(driveFactoryViolations([...valid(), unit('services/legacyProbe.ts', text)])).toEqual(
+          [`services/legacyProbe.ts: retired test-only entry ${name} declared`],
+        )
   })
 
   test('both child entry points must consume a profile exactly once', () => {

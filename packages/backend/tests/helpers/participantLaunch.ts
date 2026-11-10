@@ -31,7 +31,7 @@ import type { TaskExecutionResourceAuthority } from '../../src/modules/task-exec
 import { createTaskExecutionResourceBinding } from '../../src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
 import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
-import { type TaskContinuationDependencies } from '../../src/services/task'
+import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 

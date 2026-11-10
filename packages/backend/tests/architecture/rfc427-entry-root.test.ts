@@ -131,8 +131,8 @@ test('negative fixtures over the corpus: each way back is reported', () => {
 test('negative fixtures over fabricated units alone: every matcher still bites', () => {
   const only = (path: string, text: string) => entryRootViolations([sourceUnit(path, text)])
   expect(
-    only(MAIN, "const { x } = await import('../services/task')\nasync function main() {}"),
-  ).toContain('main-import:../services/task')
+    only(MAIN, "const { x } = await import('../services/legacyProbe')\nasync function main() {}"),
+  ).toContain('main-import:../services/legacyProbe')
   expect(only(MAIN, 'function compose() {}')).toContain('main-functions:compose')
   expect(
     only(DEPLOYMENT, 'export function migrateFor(env: object) { return readDeploymentMode(env) }'),

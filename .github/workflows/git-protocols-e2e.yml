@@ -41,7 +41,8 @@ on:
       # `task.repoUrl` 为空而红，修复落在 task.ts、不匹配这份清单，于是后续两轮
       # 推送都没再触发——一条已知的红就这样静默躺了两轮，只能靠人工 dispatch 才
       # 验得上。凡是本套 spec 直接断言的模块都必须在这里登记。
-      - 'packages/backend/src/services/task.ts'
+      # RFC-478：services/task.ts 已退役，那两处 redactGitUrl（task_repos 投影与准备后的回填）随延后仓库准备迁到这里。
+      - 'packages/backend/src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts'
       - 'packages/shared/src/git-url.ts'
       - 'scripts/git-protocols/**'
       # Every test in this workflow starts the daemon through the shared
@@ -63,7 +64,8 @@ on:
       # `task.repoUrl` 为空而红，修复落在 task.ts、不匹配这份清单，于是后续两轮
       # 推送都没再触发——一条已知的红就这样静默躺了两轮，只能靠人工 dispatch 才
       # 验得上。凡是本套 spec 直接断言的模块都必须在这里登记。
-      - 'packages/backend/src/services/task.ts'
+      # RFC-478：services/task.ts 已退役，那两处 redactGitUrl（task_repos 投影与准备后的回填）随延后仓库准备迁到这里。
+      - 'packages/backend/src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts'
       - 'packages/shared/src/git-url.ts'
       - 'scripts/git-protocols/**'
       - 'e2e/harness.ts'

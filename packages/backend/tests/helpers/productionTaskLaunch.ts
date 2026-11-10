@@ -44,12 +44,10 @@ import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import {
-  getTask,
-  composeDeferredRepositoryPreparationStep,
-  runtimeConfigOpts,
-  type TaskContinuationDependencies,
-} from '@/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { composeDeferredRepositoryPreparationStep } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
+import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
+import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import type { TaskLaunchProvenance } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import type { TaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'

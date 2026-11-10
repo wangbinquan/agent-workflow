@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { expect, test } from 'bun:test'
 import { launchTask } from '@/modules/task-execution/application/launch/launchTask'
 import { ValidationError } from '@/util/errors'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 function fixture(failAt?: string, failedWorkspace = false) {
   const trace: string[] = []
@@ -115,7 +116,8 @@ test('a mismatched preparation is compensated before uploads or admission', asyn
 
 // Prevent production callers from regaining a second physical preparation route.
 test('the legacy Task service no longer exports physical workspace preparation', () => {
-  const service = readFileSync(resolve(import.meta.dir, '../src/services/task.ts'), 'utf8')
+  // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
+  const service = readTaskServiceSuccessors()
   for (const name of ['materializeSpace', 'resolveRepoSourceSingle']) {
     expect(service).not.toContain(`export async function ${name}(`)
   }

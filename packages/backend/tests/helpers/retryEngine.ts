@@ -25,7 +25,7 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { retryNodeProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import type { TaskContinuationDependencies } from '@/services/task'
+import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
 import {
   awaitTaskDriverReleasedSettled,

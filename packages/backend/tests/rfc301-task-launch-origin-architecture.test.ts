@@ -12,6 +12,7 @@ import { relative, resolve } from 'node:path'
 import { schemaFixtureDb } from './helpers/schemaFixture'
 
 import ts from 'typescript'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
 const SHARED_TASK_SCHEMA = resolve(REPO_ROOT, 'packages', 'shared', 'src', 'schemas', 'task.ts')
@@ -134,7 +135,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
   })
 
   test('the persisted fact has one application INSERT owner and no response/request schema seam', () => {
-    const taskService = readFileSync(resolve(BACKEND_SRC, 'services', 'task.ts'), 'utf8')
+    // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
+    const taskService = readTaskServiceSuccessors()
     const operations = readFileSync(
       resolve(
         BACKEND_SRC,

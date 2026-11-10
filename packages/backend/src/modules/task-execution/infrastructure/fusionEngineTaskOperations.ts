@@ -14,7 +14,7 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { layoutBuiltinWorkflowSnapshotJson } from '@/services/task'
+import { layoutBuiltinWorkflowSnapshotJson } from '../domain/builtinWorkflowLayout'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'

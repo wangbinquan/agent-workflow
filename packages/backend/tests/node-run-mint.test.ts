@@ -385,7 +385,8 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
 
   test('结构锁：五文件全部经 nextRetryIndex，手写 max-over-retryIndex 归零', () => {
     const files = [
-      'services/task.ts',
+      // RFC-478: the deferred repository preparation left services/task.ts.
+      'modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
       'modules/collaboration/infrastructure/review.ts',
       'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
       // RFC-405: the agent-single run row moved out of nodeMechanics.ts with its body.

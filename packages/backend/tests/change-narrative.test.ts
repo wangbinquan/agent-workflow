@@ -54,7 +54,7 @@ import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunResult,
 } from '../src/services/systemAgentRun'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { requireTaskMember } from '@/modules/collaboration/infrastructure/taskCollab'
 import { parseNumstatZ, runGit } from '../src/util/git'
 import {

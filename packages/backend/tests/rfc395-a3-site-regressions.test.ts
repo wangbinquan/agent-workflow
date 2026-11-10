@@ -13,10 +13,14 @@ import {
   createNodeRunQueries,
   createRunSelectionReader,
   createRunHistorySnapshot,
-  createTaskPreparationQueries,
 } from '@/modules/task-execution/public/queries'
+import { createTaskPreparationQueries } from '@/modules/task-execution/infrastructure/taskPreparationQueries'
 import { prepareConsumedInputs } from '@/modules/task-execution/public/participants'
-import { PersistedRepositoryPreparationStep } from '@/modules/task-execution/application/drive/repositoryPreparationStep'
+import {
+  PersistedRepositoryPreparationStep,
+  type RepositoryPreparationDescriptorReader,
+  type RepositoryPreparationMechanicsPort,
+} from '@/modules/task-execution/application/drive/repositoryPreparationStep'
 import type { TaskDriveContext } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -26,7 +30,9 @@ import { rfc395SourceFunction } from './helpers/rfc395SourceFunction'
 import { parseConsumedJson as headParseConsumedJson } from './helpers/rfc395HeadConsumed'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-const taskPath = 'services/task.ts'
+// RFC-478: the deferred repository preparation left services/task.ts; its one step factory became a reader and a
+// mechanics port implementation (composition assembles the step), so the site below evaluates both.
+const taskPath = 'modules/task-execution/infrastructure/deferredRepositoryPreparation.ts'
 const retryPath = 'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts'
 const siteBindings = {
   tablesOf,
@@ -64,20 +70,12 @@ describeEachProvider('RFC-395 A3 migrated synthetic sites', (harness) => {
     })
   }
   function prepStep(effects: string[]) {
-    const create = rfc395SourceFunction<
-      (input: {
-        deps: { db: PersistenceDb }
-        appHome: string
-      }) => PersistedRepositoryPreparationStep
-    >(taskPath, 'createPersistedRepositoryPreparationStep', {
+    const bindings = {
       ...siteBindings,
-      PersistedRepositoryPreparationStep,
       getTask: async () => ({ id: 'site-task' }),
-      taskDriveComposition: {
-        hasDurableRepositoryPreparation: async () => {
-          effects.push('prior-check')
-          return false
-        },
+      hasDurableRepositoryPreparation: async () => {
+        effects.push('prior-check')
+        return false
       },
       withTaskExecutionWrite: async (_db: unknown, body: (tx: unknown) => Promise<void>) => {
         effects.push('owner-write')
@@ -89,13 +87,25 @@ describeEachProvider('RFC-395 A3 migrated synthetic sites', (harness) => {
       reclaimStalePrepArtifacts: async () => {
         effects.push('cleanup')
       },
-      createMaterializedSpaceCleanup: () => ({}),
       runDeferredRepoPreparation: async () => {
         effects.push('prepare')
         return { ok: true }
       },
-    })
-    return create({ deps: { db: harness.db }, appHome: '/unused/site-test' })
+    }
+    const reader = rfc395SourceFunction<
+      (input: { deps: { db: PersistenceDb } }) => RepositoryPreparationDescriptorReader
+    >(taskPath, 'createDeferredRepositoryPreparationReader', bindings)
+    const mechanics = rfc395SourceFunction<
+      (input: {
+        deps: { db: PersistenceDb }
+        appHome: string
+      }) => RepositoryPreparationMechanicsPort
+    >(taskPath, 'createDeferredRepositoryPreparationMechanics', bindings)
+    const deps = { db: harness.db }
+    return new PersistedRepositoryPreparationStep(
+      reader({ deps }),
+      mechanics({ deps, appHome: '/unused/site-test' }),
+    )
   }
   test('B1 first preparation reaches prepare without retry-only work; a prior attempt takes that path', async () => {
     await seed()

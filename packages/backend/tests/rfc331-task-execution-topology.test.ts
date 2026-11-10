@@ -42,18 +42,16 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   // multipart 路由改走与 PostgreSQL 共用的启动参与者，这个 legacy 消费者随之出账。
   // RFC-412: services/scheduler.ts deleted (its last mechanics moved into task-execution engine files).
   // RFC-453: services/structuralDiff/callGraph/expandService.ts moved into workspace-insight (no longer a legacy consumer).
-  'packages/backend/src/services/task.ts',
+  // RFC-478: services/task.ts deleted (its content moved into task-execution by layer; no longer a legacy consumer).
 ])
 
-const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
+const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set<string>([
   // RFC-434: `routes/tasks.ts` takes task recovery from the task-execution public participants now.
   // RFC-452: the two `services/autoRepair.ts` edges left with the file (now task-execution application/recovery).
   // RFC-424：`services/task.ts` → `application/resumeRollbackTargets` 与 →
   // `infrastructure/frozenTaskTriggerPreflight` 两条边随测试专用的 `resumeKick` 一起删除（销账）。
-  'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
-  'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
-  // RFC-399 B6: repository preparation lookup is a required Task port.
-  'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/repositoryPreparationLookup',
+  // RFC-478：`services/task.ts` 删除，它余下的三条边（`runtimeSessionLeaseOperations`、`taskRecoveryOperations`、
+  // `repositoryPreparationLookup` 三个端口类型）一并销账。
 ])
 
 function legacyDeepImports(units: readonly SourceUnit[]): string[] {
@@ -193,7 +191,8 @@ describe('RFC-331 scheduler topology contract', () => {
       )
       expect(keys.has('db')).toBe(false)
     }
-    const task = source('packages/backend/src/services/task.ts')
+    // RFC-478: the continuation dependency bag moved verbatim from services/task.ts into the test helpers.
+    const task = source('packages/backend/tests/helpers/taskContinuationDependencies.ts')
     expect(task).toContain("schedulerDriver: Pick<SchedulerDriverPort, 'drive'>")
     expect(task).not.toContain('schedulerDriver?:')
   })
@@ -300,7 +299,8 @@ describe('RFC-331 architecture cuts', () => {
         "import type { Task } from '@/services/task'\n",
       ),
       sourceUnit(
-        'packages/backend/src/services/task.ts',
+        // RFC-478: services/task.ts left the legacy consumer set; another registered consumer carries the fixture.
+        'packages/backend/src/routes/tasks.ts',
         "import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'\n",
       ),
       sourceUnit(
@@ -313,7 +313,7 @@ describe('RFC-331 architecture cuts', () => {
       ['scheduler-to-task:dynamic-import'],
       ['callgraph-to-task:static-import'],
       [
-        'legacy-deep-import:packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
+        'legacy-deep-import:packages/backend/src/routes/tasks.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
       ],
       ['production-test-topology:packages/backend/src/services/task.ts'],
     ])

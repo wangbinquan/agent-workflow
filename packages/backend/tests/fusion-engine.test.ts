@@ -51,7 +51,7 @@ import {
   rejectFusion,
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { withTaskReviewMutationLock } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { createRuntime } from './helpers/runtimeRegistryApplication'

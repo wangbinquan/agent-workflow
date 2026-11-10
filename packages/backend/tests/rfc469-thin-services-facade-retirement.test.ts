@@ -137,8 +137,10 @@ describe('RFC-469 —— 生产不可达的旧 SQLite 任务授权迁入用例�
 })
 
 describe('RFC-469 —— 一行函数并回唯一调用方', () => {
-  test('services/task.ts 自己定义 freezeTaskExecutionCallClosure，函数体就是原来那一行', () => {
-    const task = read('services/task.ts')
+  // RFC-478: the only caller (the workflow sync preview) left services/task.ts for task-execution application, and the
+  // one-line freeze went with it.
+  test('同步预览查询自己定义 freezeTaskExecutionCallClosure，函数体就是原来那一行', () => {
+    const task = read('modules/task-execution/application/workflowSyncPreviewQuery.ts')
     expect(task).toContain('async function freezeTaskExecutionCallClosure(')
     expect(task).toContain(
       '  return await resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)\n',

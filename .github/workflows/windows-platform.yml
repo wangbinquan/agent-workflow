@@ -41,7 +41,8 @@ on:
       - 'packages/backend/src/modules/source-control/**'
       - 'packages/backend/src/modules/task-execution/infrastructure/*Preparation*.ts'
       - 'packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts'
-      - 'packages/backend/src/services/task.ts'
+      # RFC-478: services/task.ts is deleted; its deferred repository preparation (the fs / git part) is
+      # infrastructure/deferredRepositoryPreparation.ts, matched by the *Preparation* glob above.
       - 'packages/backend/src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads.ts'
       - 'packages/backend/tests/rfc363-*.test.ts'
       - 'packages/backend/tests/fixtures/rfc363-*.ts'
@@ -500,7 +501,8 @@ on:
       - 'packages/backend/src/modules/source-control/**'
       - 'packages/backend/src/modules/task-execution/infrastructure/*Preparation*.ts'
       - 'packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts'
-      - 'packages/backend/src/services/task.ts'
+      # RFC-478: services/task.ts is deleted; its deferred repository preparation (the fs / git part) is
+      # infrastructure/deferredRepositoryPreparation.ts, matched by the *Preparation* glob above.
       - 'packages/backend/src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads.ts'
       - 'packages/backend/tests/rfc363-*.test.ts'
       - 'packages/backend/tests/fixtures/rfc363-*.ts'

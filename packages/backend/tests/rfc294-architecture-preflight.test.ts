@@ -416,7 +416,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/runSelection/selectionWrite.ts#reselectRunInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/task-execution/infrastructure/runSelection/table/reader.ts#createRunSelectionReader: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskClarifyDirectivePersistence.ts#createTaskClarifyDirectivePersistence: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskDetailQueries.ts#createTaskDetailQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#createTaskGateQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import drizzle-orm#AnyColumn',
@@ -425,8 +424,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateVisibleCondition: forbidden type import drizzle-orm#AnyColumn',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateVisibleCondition: forbidden type import drizzle-orm#SQL',
   'modules/task-execution/infrastructure/taskKnowledgeQueries.ts#createTaskKnowledgeQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskPreparationParticipant.ts#createTaskPreparationParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/task-execution/infrastructure/taskPreparationQueries.ts#createTaskPreparationQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskTriggerQueries.ts#createTaskTriggerQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).
   'modules/task-execution/public/commands.ts#TaskRouteOperations: unsafe/open type FunctionType',

@@ -20,7 +20,7 @@ import {
   buildFreshestSettledPerNode,
   type NodeRunRow,
 } from '@/modules/task-execution/application/runProvenance'
-import { selectSyncRollbackTargets } from '@/services/task'
+import { selectSyncRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
 import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
 
 import { compareNodeRunsForTimeline } from '@/modules/task-execution/application/reviewRoundTiming'

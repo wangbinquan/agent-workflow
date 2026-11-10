@@ -111,6 +111,15 @@ export function composeRepositoryPreparation(
         )
       ).groupName
     },
+    // RFC-478：task-execution 延后准备的重试回收原先自己解析组布局（取 source-control composition）；改经绑定，同一份解析。
+    async groupCachedRepoIds(groupId: string): Promise<readonly string[]> {
+      return (
+        await resolveRepoGroupLayout(
+          composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+          groupId,
+        )
+      ).repos.map((repository) => repository.cachedRepoId)
+    },
     legacy: {
       reclaim(
         task: { id: string; cachedRepoId: string | null; repoGroupId: string | null },

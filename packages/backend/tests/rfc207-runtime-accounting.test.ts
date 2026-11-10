@@ -32,7 +32,7 @@ import {
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { setTaskStatus } from '../src/modules/task-execution/public/operations'
+import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { enforceLimits } from './helpers/resourceLimits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 

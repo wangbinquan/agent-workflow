@@ -24,6 +24,7 @@ import {
   createPoisonTaskDriveCoordinator,
   createRecordingTaskDriveCoordinator,
 } from './helpers/taskDriveTestApplication'
+import { TASK_SERVICE_SUCCESSORS, readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -31,8 +32,17 @@ function source(path: string): string {
   return readFileSync(resolve(REPO_ROOT, path), 'utf8')
 }
 
+// RFC-478: services/task.ts is gone; the files that inherited its content are scanned instead.
 function taskDriveRequests(method: 'drive' | 'kick'): readonly ts.ObjectLiteralExpression[] {
-  const path = 'packages/backend/src/services/task.ts'
+  return TASK_SERVICE_SUCCESSORS.flatMap((rel) =>
+    driveRequestsIn(`packages/backend/src/${rel}`, method),
+  )
+}
+
+function driveRequestsIn(
+  path: string,
+  method: 'drive' | 'kick',
+): readonly ts.ObjectLiteralExpression[] {
   const file = ts.createSourceFile(path, source(path), ts.ScriptTarget.Latest, true)
   const requests: ts.ObjectLiteralExpression[] = []
   const visit = (node: ts.Node): void => {
@@ -170,13 +180,13 @@ describe('RFC-332 T3-T4 — additive drive and engine contracts', () => {
 
 describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
   test('the production drive converges on one TaskEngine adapter assembled in bootstrap', () => {
-    const task = source('packages/backend/src/services/task.ts')
+    const task = readTaskServiceSuccessors()
     expect(taskDriveRequests('kick')).toHaveLength(0)
     expect(taskDriveRequests('drive')).toHaveLength(0)
     // RFC-332 converged the command admissions and RFC-333's post-commit wake on one coordinator
     // factory; RFC-359 AC-1 and RFC-395 II-pre retired the old admissions. RFC-424 moved the remaining
     // test-only continuations and the wake to tests/helpers: production assembles the factory once, in
-    // bootstrap, and services/task.ts assembles none.
+    // bootstrap, and services/task.ts assembled none (RFC-478: nor do the files that inherited its content).
     expect(task).not.toContain('createTaskDriveCoordinatorFactory')
     expect(task).not.toContain('wakeHumanGateContinuation')
     const bundle = source('packages/backend/src/bootstrap/daemonModules/taskExecution.ts')

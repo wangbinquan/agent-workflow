@@ -701,6 +701,17 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   bootstrap 经已有的装配束交进去（collaboration 用的是 `TaskExecutionParticipantBindings`，同束的 `createHumanGateNodeRunMintOperations(db)`
   即先例）；把工厂登记进 `architecture/rfc400-collaboration-task-participants` 的 `OWNER_FACTORIES`，让它同样不能经 public 漏出。日志参数按
   实际用到的方法收窄（`Pick<Logger, 'warn'>`），端口里就能按结构声明、不必取 `Logger`。
+- **退役一个被大量源码守卫按路径读的大文件：逐条按判据方向改指，别删断言（RFC-478，2026-11-10）**：`services/task.ts` 退役时有 43 个文件以
+  路径读它、63 个 import 它。「不得包含 X」类负向锁改读继任文件的并集（`tests/helpers/taskServiceSuccessors.ts`），判据不变；「X 在场」类正向锁改指
+  X 真正落到的那个文件（effect 现场、运行时选项漏斗、闭包冻结各在一处），锚点里带着旧的转出命名空间（`taskDriveComposition.foo(`）的同步改成
+  定义处的名字；只把它当 fixture 路径的匹配器自测换成合成路径（`@/services/legacyProbe`），确属读历史语料或匹配器规则本身绑定在旧路径上的，在新
+  用例里显式登记豁免。**找读它的用例时别只搜 `services/task.ts` 这个字面量**：九个老守卫按段拼路径
+  （`resolve(dir, '..', 'src', 'services', 'task.ts')`），字面量扫描与「零路径字面量」锁都看不见，直到全量里 `ENOENT` 才现形——
+  `test-suite-policy` 的「读的源码路径都在」兜不住用例体里经别名读的那些，要靠退役用例自己按「相邻的 `'services', 'task.ts'` 实参」扫。同理，workflow 的路径过滤（`ci-workflow-path-filters`
+  与 `test-suite-policy` 会报）、按 import 拼法认机械理由的账本（RFC-359 W5-T19f 的 `sqlite-execution-engine` 认 `from 'services/task'`：失去它
+  的用例要么真迁双引擎、要么进 open 名单）、`familyHistory` 站点账本与各用例里拿被撤符号作正对照的断言都要一起改。用 `rfc395SourceFunction` 按
+  函数名抽函数体求值的站点测试，拆函数时要跟着拆（分别抽出、在测试里组装），绑定表里的自由标识符同步改名。迁出后模块外零消费的 public 符号
+  （含 `public/operations` 的写原子）当场撤出，模块内部的同名取用改指定义处（`tsc` 会逐个报出）。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

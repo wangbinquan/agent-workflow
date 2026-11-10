@@ -1,6 +1,6 @@
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
-import { loadTaskFailureCodes } from '@/services/task'
+import { loadTaskFailureCodes } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { compareRunSequence } from '@/modules/task-execution/domain/runSelection/ordering'
 import { requireRunSequence } from '@/modules/task-execution/domain/runSequence'

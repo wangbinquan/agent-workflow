@@ -17,7 +17,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger } from '@/util/log'
 
 import { cancelTaskProjection } from '../infrastructure/childTaskLifecycleParticipant'
-import { taskExecutionModule } from '../public/participants'
+import { taskExecutionModule } from '../composition'
 import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 
 const log = createLogger('task')

@@ -1,5 +1,6 @@
-// RFC-468 — the single-row mint entry for the remaining legacy caller (`services/task.ts`'s deferred repository
-// preparation mints its synthetic `__repo_prep__` row here), moved from `services/nodeRunMint.ts`. The body is
+// RFC-468 — the single-row mint entry for the deferred repository preparation (it mints its synthetic `__repo_prep__`
+// row here; RFC-478 moved that caller from `services/task.ts` into `./deferredRepositoryPreparation.ts`), moved from
+// `services/nodeRunMint.ts`. The body is
 // unchanged: it hands the request to the lifecycle port of the legacy node-run operations, which resolve the record
 // through the one `buildNodeRunMintRecord` and insert it through the shared mint program (no INSERT here; RFC-098
 // grep guard). Callers that mint inside their own transaction use `createNodeRunMintParticipantInTx(tx)`.

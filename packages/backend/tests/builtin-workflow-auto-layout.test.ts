@@ -24,7 +24,10 @@ import { buildAgentHostSnapshot } from '@/modules/task-execution/domain/agentHos
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
-import { layoutBuiltinWorkflowSnapshotJson, projectWorkflowSnapshotForRead } from '@/services/task'
+import {
+  layoutBuiltinWorkflowSnapshotJson,
+  projectWorkflowSnapshotForRead,
+} from '@/modules/task-execution/domain/builtinWorkflowLayout'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'

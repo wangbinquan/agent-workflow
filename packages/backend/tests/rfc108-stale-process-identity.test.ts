@@ -23,6 +23,7 @@ import {
   pidCommandContainsBinary,
   STALE_RUN_PID_MAX_AGE_MS,
 } from '../src/util/process'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const spawned: Bun.Subprocess[] = []
 
@@ -147,7 +148,8 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
 })
 
 describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
-  const taskSrc = readFileSync(join(import.meta.dir, '../src/services/task.ts'), 'utf8')
+  // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
+  const taskSrc = readTaskServiceSuccessors()
   const resumeSrc = readFileSync(
     join(
       import.meta.dir,

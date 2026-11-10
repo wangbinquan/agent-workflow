@@ -154,13 +154,13 @@ describe('RFC-447 —— 位置与引用', () => {
       }
     }
     expect(offenders).toEqual([])
-    // 非空对照：判据认得出新文件的全部引用方（装配、展平的三个模块内消费者与 public/queries 的转出）。
+    // 非空对照：判据认得出新文件的全部引用方（装配与展平的三个模块内消费者）。RFC-478 撤掉了
+    // public/queries 的转出——它模块外唯一的读者 services/task.ts 已退役。
     expect(importers.sort()).toEqual([
       `${SC}/composition/repositoryGroups.ts`,
       `${SC}/composition/repositoryPreparation.ts`,
       `${SC}/infrastructure/legacyWorkspaceRecovery.ts`,
       `${SC}/infrastructure/workspaceMaterializer.ts`,
-      `${SC}/public/queries.ts`,
     ])
   }, 60_000)
 
@@ -180,7 +180,7 @@ describe('RFC-447 —— 位置与引用', () => {
     expect(mountRepoGroupRoutes.length).toBe(2)
   })
 
-  test('用例文件只依赖共享合同与同模块端口；services/task.ts 经 public/queries 取展平函数', () => {
+  test('用例文件只依赖共享合同与同模块端口；task-execution 的延后准备不直接取 source-control', () => {
     const targets = targetsOf(`${APPLICATION}.ts`)
     expect(targets.length).toBeGreaterThan(1)
     for (const target of targets)
@@ -189,7 +189,13 @@ describe('RFC-447 —— 位置与引用', () => {
         `${SC}/application/ports/repositoryGroups`,
         'util/errors',
       ]).toContain(target)
-    expect(targetsOf('services/task.ts')).toContain(`${SC}/public/queries`)
+    // RFC-478: services/task.ts (which took the flatten function through `public/queries`) is gone; the deferred
+    // repository preparation that inherited the call resolves group members through task's own preparation binding.
+    expect(
+      targetsOf('modules/task-execution/infrastructure/deferredRepositoryPreparation.ts').filter(
+        (target) => target.startsWith(`${SC}/`),
+      ),
+    ).toEqual([])
   })
 })
 

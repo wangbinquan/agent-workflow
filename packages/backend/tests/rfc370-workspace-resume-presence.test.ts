@@ -13,7 +13,7 @@ import {
   assertWorktreePresentForResume,
   composeWorktreeResumePreflight,
 } from '@/modules/task-execution/public/participants'
-import { getTask } from '@/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'

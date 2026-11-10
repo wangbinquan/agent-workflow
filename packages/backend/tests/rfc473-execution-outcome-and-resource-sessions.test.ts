@@ -353,14 +353,17 @@ describe('RFC-473 —— 依赖方向', () => {
         'TaskExecutionResourceBinding',
         '../application/ports/taskExecutionResourceSnapshots',
       ],
+      // RFC-478: the sync preview (services/task.ts's last use of the authority type) moved inside the module.
+      [
+        'application/workflowSyncPreviewQuery.ts',
+        'TaskExecutionResourceAuthority',
+        './ports/taskExecutionResourceSnapshots',
+      ],
     ] as const)
       expect([file, sourceOfName(TE + file, read(TE + file), name)]).toEqual([file, from])
     expect(sourceOfName('server.ts', read('server.ts'), 'TaskExecutionResourceBinding')).toBe(
       '@/modules/task-execution/public/commands',
     )
-    expect(
-      sourceOfName('services/task.ts', read('services/task.ts'), 'TaskExecutionResourceAuthority'),
-    ).toBe('@/modules/task-execution/public/commands')
   })
 
   test('负对照：本模块 public 的值导入与混合导入认得出，纯类型导入不算', () => {

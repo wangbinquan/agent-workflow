@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as ts from 'typescript'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -320,7 +321,8 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
 
 describe('RFC-333 T2 canonical continuation authority lock', () => {
   test('the canonical continuation authority stays the RFC-328 public participant', () => {
-    const task = read('packages/backend/src/services/task.ts')
+    // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
+    const task = readTaskServiceSuccessors()
     const participants = read('packages/backend/src/modules/task-execution/public/participants.ts')
     const submit = read(
       'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',

@@ -36,7 +36,7 @@ import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,

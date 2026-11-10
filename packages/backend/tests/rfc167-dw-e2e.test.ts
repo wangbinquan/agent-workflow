@@ -46,7 +46,8 @@ import {
   DW_GENERATE_CAUSE,
 } from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
 import { DW_ORCHESTRATOR_NODE_ID } from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
-import { abortAllActiveTasks, getTask } from '../src/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
 import { createFileWorkspacePresenceQueries } from '../src/modules/source-control/composition'
 import { composeWorktreeResumePreflight } from '../src/modules/task-execution/public/participants'

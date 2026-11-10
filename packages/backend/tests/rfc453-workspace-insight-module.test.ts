@@ -145,7 +145,7 @@ describe('RFC-453 —— 引用', () => {
     expect(isRemoved(targetOf(probe, '@/services/structuralDiff/service') ?? '')).toBe(true)
     expect(isRemoved(targetOf(probe, '../services/codeIntel/snapshot.ts') ?? '')).toBe(true)
     expect(isRemoved(targetOf(probe, '@/services/structuralDiff/serviceExtra') ?? '')).toBe(false)
-    expect(isLegacy(targetOf(probe, '../services/task') ?? '')).toBe(true)
+    expect(isLegacy(targetOf(probe, '../services/legacyProbe') ?? '')).toBe(true)
     expect(isLegacy(targetOf(probe, '@/modules/task-execution/public/queries') ?? '')).toBe(false)
     const scProbe = join(SRC, 'modules', 'source-control', 'infrastructure', 'probe.ts')
     expect(

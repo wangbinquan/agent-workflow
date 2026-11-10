@@ -66,7 +66,8 @@ import {
   dwPoolTokenMap,
   ORCHESTRATOR_WORKFLOW_PORT,
 } from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
-import { abortAllActiveTasks, getTask } from '../src/services/task'
+import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { buildActor } from '../src/auth/actor'
 import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
 import { createFileWorkspacePresenceQueries } from '../src/modules/source-control/composition'

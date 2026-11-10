@@ -29,6 +29,8 @@ import type {
 /** Provider-private binding assembled by the root. Task retains its transaction and owner. */
 export interface TaskRepositoryPreparationBinding {
   groupName(groupId: string): Promise<string>
+  /** RFC-478：仓库组成员的缓存仓 id（与 `groupName` 同源），延后准备的重试回收按它找要清理的镜像。 */
+  groupCachedRepoIds(groupId: string): Promise<readonly string[]>
   /** Explicit compatibility for persisted Tasks created before RFC-363. */
   legacy: {
     reclaim(

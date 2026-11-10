@@ -38,7 +38,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 

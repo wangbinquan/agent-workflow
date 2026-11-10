@@ -299,7 +299,13 @@ describe('RFC-317 T26 —— R1 正反 fixture', () => {
 
 describe('RFC-317 T26 —— R2 正反 fixture', () => {
   test('模块内部反向 import legacy 层 ⇒ 报', () => {
-    for (const specifier of ['@/services/task', '@/routes/tasks', '@/ws/hub', '@/mcp/server']) {
+    // RFC-478：`services/task.ts` 已退役，legacy 目标改用一个合成路径（判据只看 `@/services/` 前缀）。
+    for (const specifier of [
+      '@/services/legacyProbe',
+      '@/routes/tasks',
+      '@/ws/hub',
+      '@/mcp/server',
+    ]) {
       const unit = fixtureUnit(
         'packages/backend/src/modules/task-execution/application/probe.ts',
         `import { x } from '${specifier}'\n`,
@@ -325,7 +331,7 @@ describe('RFC-317 T26 —— R2 正反 fixture', () => {
   test('composition 层指向 legacy 不算 R2（composition 就是装配胶水，允许两边都碰）', () => {
     const unit = fixtureUnit(
       'packages/backend/src/modules/task-execution/composition/wire.ts',
-      "import { getTask } from '@/services/task'\n",
+      "import { x } from '@/services/legacyProbe'\n",
     )
     expect(outboundBoundaryEdges([unit]).length).toBe(0)
   })

@@ -1,4 +1,4 @@
-import type { RunHistoryReader } from './runHistory'
+import { createRunHistorySnapshot, type RunHistoryReader } from './runHistory'
 /**
  * RFC-359 AC-1（第 10 刀）—— resume 的回滚目标选择器，**全仓唯一一份**。
  *
@@ -50,4 +50,54 @@ export async function selectResumeRollbackTargets<
       (run.status === 'failed' || run.status === 'interrupted') &&
       (run.childTaskId ?? null) === null,
   )
+}
+
+/**
+ * RFC-109 (Codex design-gate F4) — generalized rollback-target selector for the
+ * resume/sync core. Same freshest-top-level-per-node selection as
+ * `selectResumeRollbackTargets`, but the allowed status set is a parameter:
+ *
+ *   - resume passes ['failed','interrupted'] → byte-identical to the original.
+ *   - syncTaskWorkflow passes ['failed','interrupted','canceled'] so a canceled
+ *     WRITE node's partial worktree writes are rolled back to its pre_snapshot
+ *     BEFORE the scheduler revives it (RFC-095 makes canceled rows dispatchable;
+ *     the whole-task sync path — unlike retryNode — had no rollback for them).
+ *
+ * `isWrapperNode` carves out wrapper rows from the canceled case: a canceled
+ * wrapper row is an RFC-095 revival signal that resumes IN-PLACE (loop keeps its
+ * iteration, git keeps its baseline) — rolling it back would undo completed inner
+ * work. resume never hits this branch (no canceled in its status set).
+ *
+ * RFC-478：原在 `services/task.ts`，迁来与兄弟选择器同处。
+ */
+export async function selectSyncRollbackTargets<
+  R extends {
+    id: string
+    seq: number
+    nodeId: string
+    parentNodeRunId: string | null
+    status: string
+  },
+>(
+  runs: readonly R[],
+  statuses: readonly string[],
+  isWrapperNode: (nodeId: string) => boolean,
+): Promise<R[]> {
+  const latestPerNode = new Map<string, R>()
+  const selection = createRunHistorySnapshot(
+    '',
+    runs.map((row) => ({ ...row, taskId: '' })),
+  )
+  for (const nodeId of new Set(
+    runs.filter((run) => run.parentNodeRunId === null).map((run) => run.nodeId),
+  )) {
+    const selected = (await selection.familyHistory('', { nodeId }, { topLevelOnly: true })).at(-1)
+    const run = runs.find((row) => row.id === selected?.id)
+    if (run !== undefined) latestPerNode.set(nodeId, run)
+  }
+  return [...latestPerNode.values()].filter((r) => {
+    if (!statuses.includes(r.status)) return false
+    if (r.status === 'canceled' && isWrapperNode(r.nodeId)) return false
+    return true
+  })
 }

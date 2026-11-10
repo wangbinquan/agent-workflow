@@ -10,7 +10,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test } from 'bun:test'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import { getTask } from '../src/services/task'
+import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 
 function seedWorkflowWrite(db: PersistenceDb) {
   const id = ulid()

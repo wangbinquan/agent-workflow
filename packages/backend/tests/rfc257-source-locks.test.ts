@@ -31,10 +31,8 @@ describe('RFC-257 · source locks', () => {
     )
     expect(text).toContain('createWebhookExecutionRuntime')
     expect(text).toContain('taskExecutions: input.taskExecutions')
-    // RFC-477: `services/agentLaunch.ts` is gone (task-execution `domain/agentHostWorkflow.ts`); importing it cannot compile.
-    for (const banned of ["from '@/services/task'"]) {
-      expect(text.includes(banned)).toBe(false)
-    }
+    // RFC-477: `services/agentLaunch.ts` is gone (task-execution `domain/agentHostWorkflow.ts`); RFC-478: so is
+    // `services/task.ts` — importing either cannot compile, so no banned legacy import is left to check here.
     expect(text).not.toContain("from '@/services/execution/executor'")
   })
 

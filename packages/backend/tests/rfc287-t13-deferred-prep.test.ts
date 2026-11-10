@@ -118,6 +118,16 @@ async function settle(db: DbClient, taskId: string, budgetMs = 60_000): Promise<
  * 三轮门测试有效性自查实测：真实 home 里已攒了 13 个残留目录。
  * `setup.ts` 的泄漏守卫盯的是 cwd，看不到这里。
  */
+// RFC-478：`services/task.ts` 退役，下面这些接线锁读的延后仓库准备原样迁入 task-execution 的 infrastructure。
+const DEFERRED_PREPARATION = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'deferredRepositoryPreparation.ts',
+)
 const TEST_HOME = mkdtempSync(join(tmpdir(), 'aw-rfc287-t13-home-'))
 
 // 最小合法定义——本用例测的是「准备阶段」，节点跑不跑无关紧要（准备失败时压根
@@ -600,7 +610,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
 // 删掉它 = 所有失败都进窗口，鉴权失败要白等满 60 秒才报「你没权限」。
 describe('RFC-287 G6 — 只有网络类占窗口（接线锁）', () => {
   test('重试判据是 isRetryableGitFailure，且在窗口检查之前', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readSrc(DEFERRED_PREPARATION, 'utf8')
     // T14 改锚：准备段已从 startTaskImpl 的函数体提成模块级
     // `runDeferredRepoPreparation`——AC-11 的「重试准备」要走**同一份**实现，抄第二套
     // 的话这段里的窗口重试、两种失败形态、回填同事务、租约换真会各自走散。锁的语义
@@ -976,8 +986,13 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
   })
 
   test('准备段确实把 details.stderr 折进了 earlyError（否则上一条锁的是空气）', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    const taskSource = ts.createSourceFile('task.ts', src, ts.ScriptTarget.Latest, true)
+    const src = readSrc(DEFERRED_PREPARATION, 'utf8')
+    const taskSource = ts.createSourceFile(
+      'deferredRepositoryPreparation.ts',
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+    )
     const importedDiagnostics = taskSource.statements
       .filter(ts.isImportDeclaration)
       .filter(
@@ -1483,7 +1498,7 @@ describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', (
     expect(before?.workspacePrunedAt ?? null, '准备失败不得打墓碑').toBeNull()
 
     // 复活闸门：能从 failed CAS 回 pending，就说明墓碑没挡路（AC-11 的前提）。
-    const { setTaskStatus } = await import('@/modules/task-execution/public/operations')
+    const { setTaskStatus } = await import('@/modules/task-execution/infrastructure/taskLifecycle')
     await setTaskStatus({
       db,
       taskId: id,
@@ -1653,9 +1668,9 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     const db = createInMemoryDb()
     const s = await seed(db)
     const { DAEMON_SHUTDOWN_ABORT_REASON } = await import('@agent-workflow/shared')
-    // 用生产入口 `abortAllActiveTasks`——`gracefulShutdown` 走的正是这一条
-    // （shutdown.ts 里 `abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)`）。
-    const { abortAllActiveTasks } = await import('@/services/task')
+    // 用 `abortAllActiveTasks`（RFC-478 起在 `tests/helpers/taskDriverRegistry.ts`）——它与生产停机
+    // （`taskExecutionModule.dispose(reason)`）调同一个 `runtimeRegistry.abortAll(reason)`。
+    const { abortAllActiveTasks } = await import('./helpers/taskDriverRegistry')
 
     const task = await launchTestTask(
       {
@@ -1708,7 +1723,7 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     // 漏掉之后 `isTaskActive` 恒真 ⇒ retryNode/resume 409 task-still-running、
     // deleteTask 409 task-active、gc 与 orphanReconcile 永久跳过、
     // awaitTaskDriverStopped 永不 resolve。
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readSrc(DEFERRED_PREPARATION, 'utf8')
     // 判据已扩成「状态离开 pending **或**信号已 abort」——取消是「先 abort、5 秒后
     // 才写状态」，只看状态会漏掉「物化恰好在这段窗口里成功」的那一支。
     const i = src.indexOf("if (stillPending !== 'pending' || signal.aborted) {")
@@ -2095,7 +2110,7 @@ describe('RFC-287 五轮门 —— 对抗输入', () => {
 // 共同点:全部是**修复自身的收尾**没做干净,不是原始需求没做。
 describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
   const reclaim = (): string => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readSrc(DEFERRED_PREPARATION, 'utf8')
     const i = src.indexOf('async function reclaimStalePrepArtifacts(')
     expect(i, '应有 reclaimStalePrepArtifacts').toBeGreaterThan(-1)
     return src.slice(i, src.indexOf('\n}\n', i))
@@ -2209,7 +2224,7 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
 // 那里 ⇒ 任务能跑完全部业务节点而审计历史永久停在「准备被中断」，且违反 AC-10。
 describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => {
   test('回填与 setNodeRunStatusTx 共用一个事务回调（不是事务后的下一次 await）', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readSrc(DEFERRED_PREPARATION, 'utf8')
     // 无 effect 上下文时由中立写事务消费该回调；有上下文时走 closed
     // workspace-preparation settlement DTO，由 provider infrastructure 把 effect 与
     // 同一份投影写进一个事务，不能把事务句柄暴露到 application port。
@@ -2299,7 +2314,7 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
   // 失败被判为可重试且窗口还有余量，循环就必须再跑一轮 —— 删掉 `isRetryableGitFailure`
   // 那道判据或把循环改成单次，下面的断言立刻红（已变异实证）。
   test('可重试 + 窗口有余 ⇒ 必须再跑一轮（重试循环的存续判据）', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readSrc(DEFERRED_PREPARATION, 'utf8')
     const at = src.indexOf('let backoffMs = 1_000')
     expect(at, '应有窗口重试循环').toBeGreaterThan(-1)
     const loop = src.slice(at, src.indexOf('\n  if (prepared.earlyError !== null', at))
@@ -2311,7 +2326,9 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
     expect(loop).toMatch(/for \(;;\) \{/)
     // RFC-363: each iteration enters the durable participant; pre-journal Tasks
     // retain the original materializer. Both calls must remain inside this loop.
-    expect(loop).toContain('await taskDriveComposition.prepareDurableRepositoryWorkspace(')
+    // RFC-478: the moved loop calls the same function from its definition site
+    // (`infrastructure/durableRepositoryPreparation.ts`) instead of the `taskDriveLegacy` re-export.
+    expect(loop).toContain('await prepareDurableRepositoryWorkspace(')
     expect(loop).toMatch(/prepared\s*=\s*durable\s*\?\?\s*\(await prepareLegacyDeferredWorkspace\(/)
     expect(src).toContain('deps.repositoryPreparation.legacy.prepare')
     // ②成功即出（earlyError 为 null 就 break）——否则会白转满窗口。

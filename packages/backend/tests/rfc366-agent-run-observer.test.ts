@@ -16,7 +16,7 @@ import type { EnqueueMemoryDistillJobInput } from '../src/modules/memory/public/
 import type { MemoryDistillEnqueuer } from '../src/modules/memory/public/participants'
 import { composeAgentRunDistillObserver } from '../src/modules/task-execution/composition/agentRunDistillObserver'
 import { NOOP_AGENT_RUN_SETTLED_OBSERVER } from '../src/modules/task-execution/application/ports/agentRunSettledObserver'
-import { runtimeConfigOpts } from '../src/services/task'
+import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
 import { AGENT_NODE_SOURCE } from './helpers/executionMechanismSources'
 
 // RFC-405: the agent-run settle hook lives in the agent-single body, which left nodeMechanics.ts.

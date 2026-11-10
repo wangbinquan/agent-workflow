@@ -60,7 +60,21 @@ const RECOVERY = resolve(
   'infrastructure',
   'taskRecoveryOperations.ts',
 )
-const TASK = resolve(BACKEND_SRC, 'services', 'task.ts')
+// RFC-478：`services/task.ts` 退役。恢复与重试的「先杀后回滚」现场是下面两个生产文件。
+const RESUME_PARTICIPANT = resolve(
+  BACKEND_SRC,
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'childTaskLifecycleParticipant.ts',
+)
+const RETRY_OPERATIONS = resolve(
+  BACKEND_SRC,
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'taskRouteOperations.ts',
+)
 const PROCESS_UTIL = resolve(BACKEND_SRC, 'util', 'process.ts')
 const LOCK_UTIL = resolve(BACKEND_SRC, 'util', 'lock.ts')
 
@@ -189,10 +203,30 @@ describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
     expect(countNonCommentMatches(orphansSrc, /\bpid\b/g)).toBeGreaterThan(0)
   })
 
-  test('resumeTask + retryNode kill-then-proceed before the worktree rollback', () => {
-    const taskSrc = readFileSync(TASK, 'utf8')
-    // ≥ 2 call sites (resume loop + retry target) + the import line.
-    expect(countNonCommentMatches(taskSrc, /killStaleRunProcessTree/g)).toBeGreaterThanOrEqual(3)
+  test('resume + retry kill-then-proceed before the worktree rollback', () => {
+    // RFC-478: `services/task.ts` is gone. Its last three matches were only the test-only
+    // continuation bag's injected field and type import (resumeTask / retryNode had already moved),
+    // so the lock now reads the two production sites. Resume reaps each run before the real
+    // rollback; retry / sync kills each run's tree before resetting the worktree.
+    const resume = readFileSync(RESUME_PARTICIPANT, 'utf8')
+    expect(countNonCommentMatches(resume, /await killStaleRunProcessTree\(input\.run\)/g)).toBe(1)
+    const resumeStart = resume.indexOf('async function rollbackForResume(')
+    const resumeRollback = resume.indexOf(
+      'await rollbackNodeRunWorktrees(rollbackTarget, run.rollback, {}, log)',
+      resumeStart,
+    )
+    expect(resumeStart).toBeGreaterThan(-1)
+    expect(resumeRollback).toBeGreaterThan(resumeStart)
+    expect(resume.lastIndexOf('await reapRun(dependencies, {', resumeRollback)).toBeGreaterThan(
+      resumeStart,
+    )
+
+    const retry = readFileSync(RETRY_OPERATIONS, 'utf8')
+    expect(countNonCommentMatches(retry, /await killStaleRunProcessTree\(run\)/g)).toBe(1)
+    const retryKill = retry.indexOf('await killStaleRunProcessTree(run)')
+    expect(
+      retry.indexOf('await rollbackNodeRunWorktrees(target, run.rollback, {}, log)', retryKill),
+    ).toBeGreaterThan(retryKill)
   })
 
   test('stuck detector grew the S5 rule and surfaces pid in its detail', () => {

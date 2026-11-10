@@ -54,7 +54,7 @@ import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
 } from './helpers/integrationTriggerResourceBinding'
-import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { createUser } from './helpers/userFixture'
 import {
   buildWorkflowValidationContext,

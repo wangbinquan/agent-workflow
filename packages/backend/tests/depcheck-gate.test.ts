@@ -61,7 +61,7 @@ function cruise(
 const CYCLE = {
   rule: { name: 'no-circular' },
   from: 'packages/backend/src/services/scheduler.ts',
-  to: 'packages/backend/src/services/task.ts',
+  to: 'packages/backend/src/services/legacyProbe.ts',
 }
 
 const KNOWN_CYCLE: KnownViolation = {
@@ -75,14 +75,14 @@ const KNOWN_CYCLE: KnownViolation = {
 describe('depcheck — 违规身份', () => {
   test('身份是 (规则, 起点, 终点) 三元组', () => {
     expect(violationKey(CYCLE)).toBe(
-      'no-circular|packages/backend/src/services/scheduler.ts|packages/backend/src/services/task.ts',
+      'no-circular|packages/backend/src/services/scheduler.ts|packages/backend/src/services/legacyProbe.ts',
     )
   })
 
   test('同一起点、不同环下一跳算两条违规', () => {
     // execution/executor.ts 同时参与两个环族，靠 `to` 区分——身份少了 `to`
     // 就会把其中一条静默吞掉。
-    const a = violationKey({ ...CYCLE, to: 'packages/backend/src/services/task.ts' })
+    const a = violationKey({ ...CYCLE, to: 'packages/backend/src/services/legacyProbe.ts' })
     const b = violationKey({ ...CYCLE, to: 'packages/backend/src/services/workgroup/launch.ts' })
     expect(a).not.toBe(b)
   })
@@ -92,7 +92,7 @@ describe('depcheck — 第一方判定（棘轮的判据面）', () => {
   test.each([
     ['./runner', true],
     ['../util/git', true],
-    ['@/services/task', true],
+    ['@/services/legacyProbe', true],
     ['@agent-workflow/shared', true],
     ['bun', false],
     ['vite/client', false],
@@ -141,7 +141,7 @@ describe('depcheck — 判定逻辑', () => {
           modules: [
             {
               source: 'packages/backend/src/services/scheduler.ts',
-              dependencies: [{ module: '@/services/task', couldNotResolve: true }],
+              dependencies: [{ module: '@/services/legacyProbe', couldNotResolve: true }],
             },
           ],
         }),
@@ -149,7 +149,7 @@ describe('depcheck — 判定逻辑', () => {
       [],
     )
     expect(v.unresolvedFirstParty).toEqual([
-      { from: 'packages/backend/src/services/scheduler.ts', specifier: '@/services/task' },
+      { from: 'packages/backend/src/services/scheduler.ts', specifier: '@/services/legacyProbe' },
     ])
     expect(isBlocking(v)).toBe(true)
   })

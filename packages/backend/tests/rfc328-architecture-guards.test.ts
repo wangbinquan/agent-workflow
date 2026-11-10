@@ -167,7 +167,8 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/services/task.ts',
+    // RFC-478: the deferred repository preparation (and this act site) left services/task.ts.
+    'packages/backend/src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
     [
       {
         callable: 'runDeferredRepoPreparation',
@@ -922,7 +923,8 @@ describe('RFC-328 architecture guards', () => {
       'unregistered task effect boundary: packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts#execute',
     )
     const preparationActs = ['prepareDurableRepositoryWorkspace', 'prepareLegacyDeferredWorkspace']
-    const preparationPath = 'packages/backend/src/services/task.ts'
+    const preparationPath =
+      'packages/backend/src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts'
     expect(
       taskEffectBoundaryViolations(
         fixture(

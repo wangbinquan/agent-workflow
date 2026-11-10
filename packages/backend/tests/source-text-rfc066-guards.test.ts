@@ -18,9 +18,11 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
+// RFC-478：`services/task.ts` 已退役，原先读它的位置改读它的继任文件并集（判据不变）。
 const TASK_SRC =
-  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8') +
+  readTaskServiceSuccessors() +
   '\n' +
   readFileSync(
     resolve(
