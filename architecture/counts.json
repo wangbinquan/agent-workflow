@@ -10,6 +10,82 @@
       "max": 0,
       "reason": "max=0: RFC-377 清零"
     },
+    "composition-control-flow-code-capability": {
+      "max": 2,
+      "reason": "max=2: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/code-capability/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-collaboration": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/collaboration/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-development-automation": {
+      "max": 660,
+      "reason": "max=660: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/development-automation/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-digital-employee": {
+      "max": 19,
+      "reason": "max=19: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/digital-employee/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-event-center": {
+      "max": 5,
+      "reason": "max=5: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/event-center/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-execution-contract": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/execution-contract/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-identity-access": {
+      "max": 2,
+      "reason": "max=2: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/identity-access/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-integration": {
+      "max": 101,
+      "reason": "max=101: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/integration/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-intent": {
+      "max": 23,
+      "reason": "max=23: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/intent/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-knowledge-evolution": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/knowledge-evolution/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-memory": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/memory/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-resource-catalog": {
+      "max": 93,
+      "reason": "max=93: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/resource-catalog/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-run-observability": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/run-observability/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-runtime-management": {
+      "max": 23,
+      "reason": "max=23: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/runtime-management/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-source-control": {
+      "max": 198,
+      "reason": "max=198: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/source-control/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-system-operations": {
+      "max": 28,
+      "reason": "max=28: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/system-operations/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-task-catalog": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/task-catalog/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-task-execution": {
+      "max": 43,
+      "reason": "max=43: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/task-execution/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
+    "composition-control-flow-workspace-insight": {
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/workspace-insight/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+    },
     "composition-forbidden-import-files": {
       "max": 14,
       "reason": "max=14: RFC-414 把 task-execution composition 七个文件的持久化 / 文件系统实现迁入 infrastructure（21 -> 14）；新增例外由对应后继 RFC 明列并经用户确认"
@@ -23,8 +99,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 48,
-      "reason": "max=48: RFC-434 folds the three non-exact public entrypoints into exact ones; the 8 internal pairs that pointed at them disappear (56 -> 48); no growth authorized."
+      "max": 43,
+      "reason": "max=43: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,
@@ -39,8 +115,8 @@
       "reason": "max=14: RFC-395 II-b T18 source census decreases 15 -> 14; no growth authorized."
     },
     "export-star-barrels": {
-      "max": 21,
-      "reason": "max=21: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 23 -> 21."
+      "max": 1,
+      "reason": "max=1: RFC-479 (RFC-294 S11) tightens every max to the measured census (21 -> 1); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "legacy-horizontal-files": {
       "max": 167,
@@ -51,8 +127,8 @@
       "reason": "max=48: RFC-478 closes with the measured census per RFC-294 C13 (49 -> 48: services/task.ts moved into task-execution by layer); no growth authorized."
     },
     "legacy-thin-facades": {
-      "max": 42,
-      "reason": "max=42: RFC-402 complete-candidate structural census 44 -> 42; kernel extraction and obsolete service removal; no growth authorized."
+      "max": 0,
+      "reason": "max=0: RFC-479 (RFC-294 S11) tightens every max to the measured census (42 -> 0); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "module-layer-violations": {
       "max": 1,
@@ -70,6 +146,10 @@
       "max": 0,
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 19 -> 0."
     },
+    "public-surface-deviations": {
+      "max": 88,
+      "reason": "max=88: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); no growth authorized."
+    },
     "repo-value-scc": {
       "max": 0,
       "reason": "max=0: RFC-377 清零"
@@ -82,9 +162,13 @@
       "max": 0,
       "reason": "max=0: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
+    "unconsumed-public-symbols": {
+      "max": 322,
+      "reason": "max=322: RFC-479 (RFC-294 S11) — public symbols that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols, built from the same public surfaces); S9 drives it down; no growth authorized."
+    },
     "unreachable-production-files": {
-      "max": 27,
-      "reason": "max=27: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 18,
+      "reason": "max=18: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; no growth authorized."
     }
   }
 }

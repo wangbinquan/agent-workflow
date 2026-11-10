@@ -36,6 +36,7 @@ import {
 } from './rfc328TaskExecutionLedger'
 import {
   BACKEND_PREFIX,
+  compositionControlFlowSets,
   createGateCorpus,
   gateViolationSets,
   publicSurfaceViolations,
@@ -2882,11 +2883,43 @@ export function backgroundDefinitions(units: readonly SourceUnit[]): DefinitionS
   }
   return entries.sort((a, b) => a.id.localeCompare(b.id))
 }
+/** The report's production inventory: backend / shared / frontend src (system-mock sources only resolve workspace edges). */
+function inventoryOf(units: Iterable<SourceUnit>): SourceUnit[] {
+  return [...units].filter((unit) =>
+    /^packages\/(?:backend|shared|frontend)\/src\//.test(unit.path),
+  )
+}
+export interface PublicContractInputs {
+  readonly publicSurfaces: readonly PublicSurfaceEntry[]
+  readonly publicSurfaceDeviations: readonly string[]
+}
+/** The public surfaces and type deviations the report's sections and the two public-contract counts are both built from. */
+export function corpusPublicContract(corpus: GateCorpus): PublicContractInputs {
+  const inventory = inventoryOf(corpus.byPath.values())
+  const edges = observedContextEdges(corpus.backend, inventory, buildOwnerEntries(inventory))
+  return {
+    publicSurfaces: buildPublicSurfaces(corpus.backend, inventory, edges),
+    publicSurfaceDeviations: publicSurfaceViolations(inventory),
+  }
+}
+/**
+ * RFC-479 (RFC-294 S11): the two public-contract totals enter the counts speed bump — public symbols no other module consumes
+ * (the report's `unconsumedPublicSymbols`, by entry id) and public type deviations (`publicSurfaceDeviations`).
+ */
+export function publicContractGateSets(inputs: PublicContractInputs): Record<string, string[]> {
+  return {
+    'unconsumed-public-symbols': unconsumedPublicSymbols(inputs.publicSurfaces)
+      .map((entry) => entry.id)
+      .sort(),
+    'public-surface-deviations': [...inputs.publicSurfaceDeviations].sort(),
+  }
+}
 export function reportGateSets(
   corpus: GateCorpus,
   architectureFiles: readonly string[],
   entries: readonly string[],
   known: readonly KnownViolationRecord[],
+  publicContract: PublicContractInputs = corpusPublicContract(corpus),
 ): Record<string, string[]> {
   const pairs = corpus.edges
     .filter(
@@ -2939,6 +2972,8 @@ export function reportGateSets(
       )
       .map((unit) => unit.path)
       .sort(),
+    ...publicContractGateSets(publicContract),
+    ...compositionControlFlowSets(corpus),
   }
 }
 /** C7 remains report-only; type and ordinary production consumers both count. */
@@ -2968,14 +3003,17 @@ export function buildArchitectureReport(source: ArchitectureSource) {
   )
   const known = parseKnownViolations(read('scripts/depcheck.ts'))
   const entries = binaryEntries(read('scripts/build-binary.ts'))
-  const gates = reportGateSets(corpus, source.architectureFiles, entries, known)
   // System-mock sources are resolution inputs for workspace edges, not production inventory.
-  const inventoryUnits = source.units.filter((unit) =>
-    /^packages\/(?:backend|shared|frontend)\/src\//.test(unit.path),
-  )
+  const inventoryUnits = inventoryOf(source.units)
   const owners = buildOwnerEntries(inventoryUnits)
   const edges = observedContextEdges(corpus.backend, inventoryUnits, owners)
   const publicSurfaces = buildPublicSurfaces(corpus.backend, inventoryUnits, edges)
+  const publicSurfaceDeviations = publicSurfaceViolations(inventoryUnits)
+  // RFC-479: the two public-contract counts come from the same surfaces as the two report sections below.
+  const gates = reportGateSets(corpus, source.architectureFiles, entries, known, {
+    publicSurfaces,
+    publicSurfaceDeviations,
+  })
   const requiredPorts = buildRequiredPorts(corpus.backend, inventoryUnits, edges)
   return {
     schemaVersion: 1,
@@ -3001,7 +3039,7 @@ export function buildArchitectureReport(source: ArchitectureSource) {
     publicSurfaces,
     requiredPorts,
     unconsumedPublicSymbols: unconsumedPublicSymbols(publicSurfaces),
-    publicSurfaceDeviations: publicSurfaceViolations(inventoryUnits),
+    publicSurfaceDeviations,
     governedFieldSurfaces: buildGovernedFieldSurfaces(inventoryUnits),
     mutationEntrypoints: buildMutationEntries(corpus.backend),
     taskExecutionAuthority: buildTaskExecutionAuthorityEntries(corpus.backend),
@@ -3026,8 +3064,9 @@ export function renderReportStatus(report: ArchitectureReport): string {
   )
 }
 export function renderGateBaselines(
-  report: Pick<ArchitectureReport, 'sourceSha' | 'gates' | 'counts' | 'publicSurfaceDeviations'>,
+  report: Pick<ArchitectureReport, 'sourceSha' | 'gates' | 'counts'>,
 ): string {
+  // RFC-479: `KNOWN_PUBLIC_SURFACE_DEVIATIONS` now comes from the `public-surface-deviations` gate like every other baseline.
   return (
     `// RFC-376 committed baseline at ${report.sourceSha}.\n` +
     Object.entries(report.gates)
@@ -3037,7 +3076,6 @@ export function renderGateBaselines(
           `export const KNOWN_${id.replaceAll('-', '_').toUpperCase()} = ${JSON.stringify(values, null, 2)} as const\n`,
       )
       .join('\n') +
-    `\nexport const KNOWN_PUBLIC_SURFACE_DEVIATIONS = ${JSON.stringify(report.publicSurfaceDeviations, null, 2)} as const\n` +
     `\nexport const INITIAL_COUNTS = ${JSON.stringify(report.counts, null, 2)} as const\n`
   )
 }

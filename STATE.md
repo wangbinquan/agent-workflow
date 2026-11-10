@@ -12,6 +12,15 @@
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
   上次 2026-11-09，其后关闭 3 个后继，下一次不晚于 2026-11-23。
 - **附带**：RFC-478 的 Done 文档提交 `27a42a3aa`（6 个文档文件）：exact SHA 主 CI run 42885814501 的 70 个 job 全绿。
+- **收口对账**（RFC-294 C10～C13，design §7）：只改用例、账本与文档，C10 / C11 不适用；新计数各自写明覆盖范围（C12：两项 public 合同计数
+  覆盖 backend / shared / frontend 的 src，composition 控制流覆盖 `modules/*/composition/**`）；C13 由约定变成门（低于上限即红）。
+- **集中验证**（候选基于 `9334dc15f`，验证期间 HEAD 未前进，详见 plan）：查出本 RFC 的两处问题，均已修复并复验——新用例的下标结果可能是
+  `undefined`（`tsc` 报 TS18048）；public surfaces 放在减速带用例体里时负载 66 下超过 120 s 预算（改为文件加载时构造一次，预算回到 20 s）。
+  backend `tsc` 0 错、eslint 无告警；不改生产代码，按受影响范围跑：`tests/architecture/` 全部 140 个与取这两个守卫模块或两本账的另外 26 个
+  用例（去重 172 个）165 个全过，7 个在负载 66～69 时撞时限、负载 31～56 时复跑全过，修复后减速带与读 guard-manifest 的用例在最终候选上
+  复跑全过；架构报告对照 RFC-478 收口时的报告只多出 21 个门与计数，原有 21 项门、指标与全部章节逐项相同，42 项实测与 `max` 逐项相等；
+  F13 对账：18 个模块逐行相同，development-automation 多出的 7 行都落在字符串 / 模板 / 注释里；§1.2 新列 37 行按各锁源码与
+  guard-manifest 写成并抽查一致。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-10 RFC-478 `services/task.ts` 按内容分层归 task-execution（Done；`design/RFC-478-task-service-retirement/`）
 

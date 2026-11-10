@@ -713,6 +713,17 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   函数名抽函数体求值的站点测试，拆函数时要跟着拆（分别抽出、在测试里组装），绑定表里的自由标识符同步改名。迁出后模块外零消费的 public 符号
   （含 `public/operations` 的写原子）当场撤出，模块内部的同名取用改指定义处（`tsc` 会逐个报出）。
 
+## 减少了某项计数，就在同一提交里收紧 `architecture/counts.json`：低于上限与高于上限一样红（RFC-479，2026-11-10）
+
+- 减速带（`architecture/counts.json`，由 `rfc376-structural-guards` 的 counts 用例按全仓语料实测）每项 `max` 必须等于实测。RFC-479 之前低于
+  上限只打一行日志，余量于是攒了下来（4 项合计 76 个文件或文件对的回长空间，CI 不会红）；现在报
+  `below max: <id>: <实测> < <max> (set max=<实测> in architecture/counts.json)`。
+- 做法：把该项的 `max` 改成实测，`reason` 里写同一个 `max=N`（判据按 `\bmax=N` 校验）并写明这次减少的来由。别为了过门把计数「补回去」。
+- 会随日常改动变化的几项：`unconsumed-public-symbols` / `public-surface-deviations`（撤出或新增 public 符号、改 public 签名），
+  `composition-control-flow-<module>`（在模块 `composition/` 里增删行首的 `if` / `for` / `while` / `switch` / `try` / `throw`）。新增一个带
+  `composition/` 的模块会报 `missing count`，删掉会报 `unknown count`，都要登记。
+- 两个会话各自减少了同一项：后推的那个合并后，按合并结果的实测再改一次。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

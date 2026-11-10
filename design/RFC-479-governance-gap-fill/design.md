@@ -59,13 +59,15 @@ bounded context；RFC-294 C10 / C11 不适用，C12 / C13 见 §7。数字取 HE
 目录的模块一项 `composition-control-flow-<module>`（id 里不能有 `/`：`renderGateBaselines` 把 id 转成常量名）。
 
 - 口径与 review F13 的正则对账（HEAD `27a42a3aa`）：18 个模块逐个相同；development-automation 语法树 535 + 125 = 660，正则 541 + 126
-  = 667，差的 7 行在模板字符串或注释里（实施时逐条列出）。`} else if` 不计（同正则），`do … while` 不计（F13 不含 `do`）。
+  = 667，差的 7 行都落在模板字符串或注释里（RFC-479 用例逐行对账：正则多出的行只能落在字符串 / 模板 / 注释里，语法树计数的行必须
+  被正则认出）。`} else if` 不计（同正则），`do … while` 不计（F13 不含 `do`）。
 - 实测：development-automation 660、source-control 198、integration 101、resource-catalog 93、task-execution 43、system-operations 28、
   intent 23、runtime-management 23、digital-employee 19、event-center 5、code-capability 2、identity-access 2，其余 7 个模块
   （collaboration、execution-contract、knowledge-evolution、memory、run-observability、task-catalog、workspace-insight）0；合计 1,197。
 - 新增一个带 `composition/` 的模块会多出一个 id，减速带用例报 `missing count`，必须登记；删掉一个模块的 `composition/` 会报
   `unknown count`。
-- 这 19 项是 S10 落地前的临时减速带：S10 给全模块立「composition 只装配」的门时删掉它们（plan §3 S10 记一句）。
+- 这 19 项是 S10 落地前的临时减速带：S10 的退出门本就要求各模块的分支计数写入减速带，它经用户确认的上限直接改这些项，「composition
+  只装配」的新门落地后由它取代（plan §3 S10 记一句「减速带接口」）。
 
 ## 5. 文档
 
@@ -79,12 +81,15 @@ bounded context；RFC-294 C10 / C11 不适用，C12 / C13 见 §7。数字取 HE
 
 - `checkCounts`：等于上限通过；低于上限报 `below max`（带应改成的值）；高于上限、未知 / 缺失 id、`reason` 不符照旧报错。
 - `publicContractGateSets`（新用例，fixture 语料）：一个模块的 public 导出没有任何模块外读者 → 计入；另一模块的生产文件 import 它 →
-  不计入（负对照）；public 文件取了禁止的类型 → 偏差多一条。另对真实语料断言两组与 `buildArchitectureReport` 的两个章节逐条相同。
+  不计入（负对照）；public 文件取了禁止的类型 → 偏差多一条。两组与 `buildArchitectureReport` 两个章节的逐条相同由 `rfc376-report`
+  在提交的源码上断言。
 - `compositionControlFlowSets`（新用例，fixture 语料）：行首 `if` / `for` / `while` / `switch` / `try` / `throw` 各计一行；`} else if`、
-  模板字符串与注释里以这些词开头的行不计；非 `composition/` 目录不计；新模块目录产生新 id；真实语料上 development-automation 与
-  正则口径的差异恰是 §4 列出的那几行。
-- 减速带用例（`rfc376-structural-guards`）：实测覆盖 `counts.json` 的每一项且相等；预算按新增计算重定（实测后写进注释）。
-- `rfc376-report`：`counts` 的项数 21 → 42；基线渲染不再有重复常量。
+  模板字符串与注释里以这些词开头的行不计；非 `composition/` 目录不计；新模块目录产生新 id；对账判据自测（正则多算的模板行被认出、
+  错配被报出）；真实语料上与正则口径逐行对账、没有错配。
+- 减速带用例（`rfc376-structural-guards`）：实测覆盖 `counts.json` 的每一项且相等；public surfaces 在文件加载时构造一次，用例预算
+  保持 20 s。
+- `rfc376-report`：`counts` 是 21 + 2 项加上「源码里每个有 `composition/` 的模块一项」（按结构断言，不写死 42）；两项 public 合同计数与
+  报告章节逐条相同；基线渲染不再有重复常量。
 - 新增用例文件按命名进 guard-manifest（`tests/architecture/**` 都是守卫），字段如实填写。
 
 ## 7. 对 RFC-294 刷新后规则的对账
@@ -98,8 +103,8 @@ bounded context；RFC-294 C10 / C11 不适用，C12 / C13 见 §7。数字取 HE
 
 ## 8. 失败模式
 
-- **减速带用例变慢**：public surfaces 的构造在语料上要多花数秒（实施时实测并重定预算）；若超出 CI 可接受的范围，把两项 public 合同计数
-  放进同文件的独立用例、各自给预算。
+- **减速带用例变慢**：public surfaces 的构造是减速带用例最重的输入（本机 1 分钟负载 26 时 36.5 s，负载 66 时在 120 s 预算里
+  超时）。它与 `OBSERVED` 一样在用例文件加载时构造一次，减速带用例只做计数比对，预算保持 20 s；报告本身照旧只构造一次。
 - **并发会话的减少未同步 `max`**：CI 报 `below max`，责任在做了减少的那个提交（消息里给出应改成的值）；本 RFC 的 dev-gotchas 一条与
   RFC-294 C13 写明做法。
 - **计数口径漂移**：语法树计数与 F13 正则的差异固定在 §4 列出的行；口径改动只能经新 RFC。

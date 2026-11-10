@@ -851,7 +851,7 @@
       "minCorpusFiles": null,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 426
+      "lines": 451
     },
     {
       "id": "rfc376-structural-guards",
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1094
+      "lines": 1102
     },
     {
       "assertsAbsence": true,
@@ -3478,6 +3478,18 @@
       "lines": 538,
       "mechanism": "ast",
       "minCorpusFiles": 501,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc479-governance-gap-fill.test.ts",
+      "id": "rfc479-governance-gap-fill",
+      "lines": 271,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
       "negativeFixture": true,
       "runner": "bun"
     }

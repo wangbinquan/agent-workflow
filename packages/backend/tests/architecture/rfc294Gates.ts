@@ -927,12 +927,16 @@ export interface CountLimit {
   readonly max: number
   readonly reason: string
 }
+/**
+ * RFC-479 (RFC-294 S11 / C13): every max equals the measurement. A count below its max fails exactly like one above it, so a
+ * commit that reduces a count must lower the max (and the `max=N` in its reason) in the same change; slack is never left for
+ * silent regrowth.
+ */
 export function checkCounts(
   measured: Readonly<Record<string, number>>,
   limits: Readonly<Record<string, CountLimit>>,
-): { errors: string[]; decreases: string[] } {
-  const errors: string[] = [],
-    decreases: string[] = []
+): { errors: string[] } {
+  const errors: string[] = []
   for (const id of Object.keys(limits)) if (!(id in measured)) errors.push(`unknown count: ${id}`)
   for (const [id, value] of Object.entries(measured)) {
     const limit = limits[id]
@@ -945,9 +949,59 @@ export function checkCounts(
     if (!new RegExp(`\\bmax=${limit.max}(?![\\d.])`).test(limit.reason))
       errors.push(`missing max=${limit.max} reason: ${id}`)
     if (value > limit.max) errors.push(`over max: ${id}: ${value} > ${limit.max}`)
-    if (value < limit.max) decreases.push(`${id}: ${value} < ${limit.max}`)
+    if (value < limit.max)
+      errors.push(
+        `below max: ${id}: ${value} < ${limit.max} (set max=${value} in architecture/counts.json)`,
+      )
   }
-  return { errors: errors.sort(), decreases: decreases.sort() }
+  return { errors: errors.sort() }
+}
+
+const COMPOSITION_UNIT = /^packages\/backend\/src\/modules\/([a-z0-9-]+)\/composition\//
+const COMPOSITION_BRANCH = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.IfStatement,
+  ts.SyntaxKind.ForStatement,
+  ts.SyntaxKind.ForInStatement,
+  ts.SyntaxKind.ForOfStatement,
+  ts.SyntaxKind.WhileStatement,
+  ts.SyntaxKind.SwitchStatement,
+  ts.SyntaxKind.TryStatement,
+])
+
+/**
+ * RFC-479 (RFC-294 S11; review-2026-11-09 F13): per module, the `composition/` statements that start a line — branch, loop and
+ * `try` (`if`, `for`, `for … in`, `for … of`, `while`, `switch`, `try`) and `throw` — as `<path>:<line>:<branch|throw>`.
+ * Counted on the syntax tree, so strings and comments that begin with these words never count; `} else if` and `do … while`
+ * do not start a line with the keyword and are not counted (F13's line-start rule). Every module with a `composition/`
+ * directory gets an id, also when it has no such line. A temporary speed bump until S10's "composition only assembles"
+ * gate replaces it.
+ */
+export function compositionControlFlowSets(corpus: GateCorpus): Record<string, string[]> {
+  const sites = new Map<string, string[]>()
+  for (const unit of corpus.backend) {
+    const module = COMPOSITION_UNIT.exec(unit.path)?.[1]
+    if (module === undefined) continue
+    const found = sites.get(module) ?? []
+    sites.set(module, found)
+    const text = unit.source.text
+    walk(unit.source, (node) => {
+      const kind = COMPOSITION_BRANCH.has(node.kind)
+        ? 'branch'
+        : node.kind === ts.SyntaxKind.ThrowStatement
+          ? 'throw'
+          : null
+      if (kind === null) return
+      const start = node.getStart(unit.source)
+      const line = unit.source.getLineAndCharacterOfPosition(start).line
+      const lineStart = unit.source.getPositionOfLineAndCharacter(line, 0)
+      if (text.slice(lineStart, start).trim() === '') found.push(`${unit.path}:${line + 1}:${kind}`)
+    })
+  }
+  return Object.fromEntries(
+    [...sites]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([module, found]) => [`composition-control-flow-${module}`, found.sort()]),
+  )
 }
 export function gateViolationSets(
   corpus: GateCorpus,

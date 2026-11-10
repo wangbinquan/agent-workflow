@@ -321,7 +321,32 @@ describe('RFC-376 committed report contract', () => {
       first.moduleSymbolOwners.some((entry) => entry.file.startsWith('packages/system-mocks/')),
     ).toBe(false)
     expect(first.counts['node-runs-insert-sites']).toBe(1)
-    expect(Object.keys(first.counts)).toHaveLength(21)
+    // RFC-479: 21 RFC-376 counts + the two public-contract counts + one composition control-flow count
+    // per module that has a `composition/` directory in the source.
+    const compositionIds = Object.keys(first.counts).filter((id) =>
+      id.startsWith('composition-control-flow-'),
+    )
+    expect(Object.keys(first.counts).length - compositionIds.length).toBe(23)
+    const compositionModules = new Set(
+      SOURCE.units.flatMap((unit) => {
+        const module = /^packages\/backend\/src\/modules\/([a-z0-9-]+)\/composition\//.exec(
+          unit.path,
+        )?.[1]
+        return module === undefined ? [] : [module]
+      }),
+    )
+    expect(compositionModules.size).toBeGreaterThanOrEqual(19)
+    expect(compositionIds.sort()).toEqual(
+      [...compositionModules].map((module) => `composition-control-flow-${module}`).sort(),
+    )
+    // The two public-contract counts are the two report sections, entry for entry.
+    expect(first.gates['unconsumed-public-symbols']).toEqual(
+      first.unconsumedPublicSymbols.map((entry) => entry.id).sort(),
+    )
+    expect(first.gates['public-surface-deviations']).toEqual(
+      [...first.publicSurfaceDeviations].sort(),
+    )
+    expect(first.counts['unconsumed-public-symbols']).toBeGreaterThan(0)
     const selected = spawnSync('git', ['show', `${SOURCE.sourceSha}:scripts/depcheck.ts`], {
       cwd: ROOT,
       encoding: 'utf8',
