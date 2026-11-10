@@ -7,7 +7,7 @@
 
 import { agentSkillReferences, agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, Skill } from '@agent-workflow/shared'
-import { PLUGIN_DISABLED_ERROR_CODE } from '../../public/types'
+import { PLUGIN_DISABLED_ERROR_CODE } from '../../domain/disabledResourcePolicy'
 import type {
   AgentResourceInventory,
   AgentResourceInventoryMcp as InventoryMcp,

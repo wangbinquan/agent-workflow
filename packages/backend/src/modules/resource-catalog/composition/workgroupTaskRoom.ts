@@ -3,7 +3,7 @@ import {
   validateDynamicWorkflowDef,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
+import { assertTriggerPreflight } from '../domain/triggerPreflight'
 import { ConflictError } from '@/util/errors'
 import { createWorkgroupTaskRoomApplication } from '../application/workgroups/workgroupTaskRoom'
 import {

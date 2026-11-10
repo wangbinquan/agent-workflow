@@ -1285,7 +1285,8 @@ describeEachProvider('RFC-128 P5-D lock-B non-reentry', (harness) => {
       'const rolledBack = await permits.getTaskQuestionWriteSem(round.taskId).run',
     )
     const preflightIdx = fn.indexOf('selfHomeHasOpenLedger(db, round.taskId') // preflight under B
-    const rollbackIdx = fn.indexOf('rollbackNodeRunWorktrees(') // rollback under B
+    // RFC-477: the self rollback goes through collaboration's own port (task-execution performs it behind that port).
+    const rollbackIdx = fn.indexOf('target.rollback(selfRun.rollback') // rollback under B
     const releaseCheckIdx = fn.indexOf('if (!rolledBack)') // checked AFTER B returned (B released)
     const dispatchCallIdx = fn.indexOf('return tryDispatch()') // dispatch's OWN B re-taken AFTER, no nest
     expect(aIdx).toBeGreaterThan(0)

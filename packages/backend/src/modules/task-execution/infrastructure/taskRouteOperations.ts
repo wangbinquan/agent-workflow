@@ -159,12 +159,9 @@ import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
 } from '@/modules/source-control/public/queries'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import {
-  loadRollbackTargetFrom,
-  rollbackNodeRunWorktrees,
-  snapshotMissingDetail,
-} from '@/services/nodeRollback'
+import { assertTriggerPreflight } from '@/modules/resource-catalog/public/queries'
+import { loadRollbackTargetFrom, rollbackNodeRunWorktrees } from './nodeRollback'
+import { snapshotMissingDetail } from '../domain/nodeRunRollbackOutcome'
 import {
   compareNodeRunsForTimeline,
   deriveReviewRoundTiming,
@@ -1544,7 +1541,7 @@ export async function taskWorkflowSyncPreviewProjection(
 // ─────────────────────────────────────────────────────────────────────────────
 // RFC-359 W8 —— retry / syncWorkflow 共用的三件事：冻结溯源预检、快照基线判据、
 // 被取消写节点的工作树回滚。其中**冻结溯源预检已经合一**：两个 provider 都调
-// `services/execution/triggerPreflight.ts` 的 `assertFrozenTaskTriggerPreflight`
+// 触发预检（RFC-477 起在 resource-catalog `domain/triggerPreflight.ts`）之上的 `assertFrozenTaskTriggerPreflight`
 // （RFC-359 W8 收掉了那对逐字相同的私有副本）。另外两件里，`selectSyncRollbackTargets` 仍在
 // `services/task.ts`；快照基线丢失与存活子进程的升级，`services/task.ts` 那份随测试专用的 resume
 // 入口在 RFC-424 删除，下面这份是 retry / sync 唯一的实现（resume 的在

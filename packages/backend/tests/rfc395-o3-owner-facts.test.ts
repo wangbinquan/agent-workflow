@@ -10,7 +10,8 @@ import {
   createTaskStatusCounts,
   composeSystemOperationsTaskPorts,
 } from '@/modules/task-execution/composition'
-import { readTaskResourceUsage } from '@/modules/task-execution/public/queries'
+// RFC-477: the usage reader left task-execution public with the policy that was its only outside consumer.
+import { readTaskResourceUsage } from '@/modules/task-execution/application/taskResourceUsage'
 import { taskCheckpointMountPaths } from '@/modules/task-execution/infrastructure/taskCheckpointPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, taskRepoFixture, nodeRunFixture, patchTaskFixture } from './helpers/model'

@@ -4,7 +4,7 @@ import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeResourceLimitOperations } from '@/bootstrap/resourceLimits'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
-import { enforceLimits as enforceLimitsWithPorts } from '@/services/limits'
+import { enforceLimits as enforceLimitsWithPorts } from '@/modules/task-execution/application/resourceLimitEnforcement'
 
 export function enforceLimits(db: PersistenceDb, now?: number) {
   return enforceLimitsWithPorts(

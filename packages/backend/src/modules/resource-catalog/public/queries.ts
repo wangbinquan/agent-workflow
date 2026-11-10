@@ -284,14 +284,22 @@ export type {
 // RFC-454 — the stored call-closure codec and the launch-input check (pure; task-execution and integration read them).
 // RFC-466: `callEdgeKey` left this list with its only outside reader (task-execution's legacy call-closure oracle,
 // now a test helper); resource-catalog's own validator reads it from the domain.
+// RFC-477: `parseCallClosure` left too — its only outside reader was the trigger preflight, now this module's
+// `domain/triggerPreflight.ts` (it reads the codec from the domain).
 export {
   childClosureSubset,
   frozenWorkflowFromClosure,
   frozenWorkgroupFromClosure,
-  parseCallClosure,
   parseFrozenWorkgroupGroup,
 } from '../domain/callClosure'
 export { assertWorkflowLaunchInputs } from '../domain/workflowLaunchInputs'
+// RFC-477 — trigger dependency preflight over a workflow definition and its frozen call closure (pure). Task-execution
+// and integration take it here; it lived in services/execution/triggerPreflight.ts before.
+export {
+  assertTriggerPreflight,
+  triggerPreflightIssue,
+  triggerSourceFromContext,
+} from '../domain/triggerPreflight'
 // RFC-455 — the MCP / plugin operation revision digests (pure; intent's manifest reads them).
 export { mcpOperationConfigHashOf } from '../domain/mcpOperationRevision'
 export { pluginOperationConfigHashOf } from '../domain/pluginOperationRevision'

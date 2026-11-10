@@ -20,7 +20,7 @@ import {
   assertWorkflowSnapshotLaunchable,
   composeAgentLaunchResourceOperations,
 } from '@/modules/resource-catalog/composition/agentLaunchResources'
-import { PLUGIN_DISABLED_SITES } from '@/services/execution/resourcePolicy'
+import { PLUGIN_DISABLED_SITES } from '@/modules/resource-catalog/domain/disabledResourcePolicy'
 import { DomainError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createWorkflow } from './helpers/model/resourceWrites'

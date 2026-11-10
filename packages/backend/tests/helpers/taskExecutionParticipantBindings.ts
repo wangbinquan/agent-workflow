@@ -9,6 +9,7 @@ import {
   createHumanGateNodeRunMintOperations,
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
+  createNodeRunWorkspaceRollback,
 } from '@/modules/task-execution/composition'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
@@ -21,4 +22,5 @@ export const taskExecutionParticipants: TaskExecutionParticipantBindings = Objec
   createHumanGateNodeRunMintOperations,
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
+  createNodeRunWorkspaceRollback,
 })

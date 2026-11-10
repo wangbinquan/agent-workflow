@@ -102,7 +102,8 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
     )
     // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 整份删除
     //（统一执行门面退役），这条负锁只剩 `agentLaunch.ts` 一个消费者。
-    for (const consumer of ['services/agentLaunch.ts']) {
+    // RFC-477：`agentLaunch.ts` 迁入 task-execution `domain/agentHostWorkflow.ts`，同理保留断言、只换落点。
+    for (const consumer of ['modules/task-execution/domain/agentHostWorkflow.ts']) {
       expect(source(consumer), consumer).not.toContain(
         '@/modules/resource-catalog/application/agents/ports',
       )

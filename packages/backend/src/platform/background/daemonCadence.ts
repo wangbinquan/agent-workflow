@@ -60,7 +60,7 @@ export const DAEMON_CADENCE = {
   worktreeGc: HOUR_MS,
   /** fusion 对账（services/fusion.ts）。 */
   fusionReconcile: MINUTE_MS,
-  /** 资源上限检查 1Hz（services/limits.ts）。 */
+  /** 资源上限检查 1Hz（task-execution `application/resourceLimitEnforcement.ts`）。 */
   resourceLimits: 1_000,
   /** intent 协议失败 scratch 保留 GC（cli/start.ts；RFC-273）。 */
   intentScratchGc: HOUR_MS,

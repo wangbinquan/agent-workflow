@@ -114,7 +114,7 @@ import { createPluginRepository } from '@/modules/resource-catalog/infrastructur
 import { listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { NotFoundError } from '@/util/errors'
-import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
+import { PLUGIN_DISABLED_ERROR_CODE } from '../../domain/disabledResourcePolicy'
 import { sha256Hex } from '@/util/hash'
 
 // RFC-103 T5 (04-WFM-06/07): the built-in prompt-var set is now the single

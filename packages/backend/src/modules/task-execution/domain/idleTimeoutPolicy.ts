@@ -97,7 +97,7 @@ export function judgeIdleTree(input: {
 export const IDLE_TIMEOUT_SUMMARY = 'task-idle-timeout'
 
 /**
- * 覆盖进任务行的原因文案。与 `services/limits.ts` 的资源上限先例同款：cancelTask
+ * 覆盖进任务行的原因文案。与资源上限策略（`application/resourceLimitEnforcement.ts`，RFC-477 前在 `services/limits.ts`）的先例同款：cancelTask
  * 写的是通用的 'canceled by user'，随后由收割方覆盖成本次真正的原因，否则用户在详情页
  * 只能看到「被人取消了」。
  */

@@ -181,6 +181,8 @@ describe('RFC-466 —— 失去模块外消费方的两个 public 符号收回',
 
   test('callEdgeKey 退出 resource-catalog public/queries（同一个 codec 的其余出口照旧）', () => {
     expect(Object.keys(publicQueries)).not.toContain('callEdgeKey')
-    expect(Object.keys(publicQueries)).toContain('parseCallClosure')
+    // RFC-477: `parseCallClosure` left with its last outside reader (the trigger preflight moved into resource-catalog).
+    expect(Object.keys(publicQueries)).not.toContain('parseCallClosure')
+    expect(Object.keys(publicQueries)).toContain('childClosureSubset')
   })
 })

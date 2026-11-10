@@ -44,7 +44,7 @@ import {
   AGENT_HOST_AGENT_NODE_ID,
   buildAgentHostSnapshot,
   validateAgentLaunchShape,
-} from '../src/services/agentLaunch'
+} from '../src/modules/task-execution/domain/agentHostWorkflow'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchAgentTaskViaParticipant,

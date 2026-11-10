@@ -120,7 +120,8 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/services/nodeRollback.ts',
+    // RFC-477: the node-run rollback moved from services/nodeRollback.ts into task-execution infrastructure.
+    'packages/backend/src/modules/task-execution/infrastructure/nodeRollback.ts',
     [
       {
         callable: 'rollbackNodeRunWorktrees',

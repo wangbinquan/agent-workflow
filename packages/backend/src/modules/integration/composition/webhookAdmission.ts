@@ -1,7 +1,7 @@
 import type { Actor } from '@/auth/actor'
 import type { WebhookConfigurationQuery } from '../application/ports/webhookConfiguration'
 import type { FrozenIntegrationTriggerResourceSnapshot } from '@/modules/resource-catalog/public/types'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
+import { assertTriggerPreflight } from '@/modules/resource-catalog/public/queries'
 import {
   assertIntegrationTriggerSnapshotUsable,
   assertScheduledTargetUsable,

@@ -88,7 +88,7 @@ import {
   createHumanGateContinuationRecoveryQueries,
   createHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
-import { enforceLimits } from '@/services/limits'
+import { enforceLimits } from '@/modules/task-execution/composition'
 import { composeScheduledTaskRunner } from '@/modules/integration/composition/scheduledTasks'
 
 interface DaemonProviderHttpAdmission {

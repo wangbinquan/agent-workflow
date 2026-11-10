@@ -47,7 +47,7 @@ import {
   type ManagedInjectionIdentity,
 } from '@/services/runtime/injectionIdentity'
 import { isSkillInjectableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
-import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
+import { PLUGIN_DISABLED_ERROR_CODE } from '@/modules/resource-catalog/domain/disabledResourcePolicy'
 import { mcpFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { pluginFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { skillFilesRel } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'

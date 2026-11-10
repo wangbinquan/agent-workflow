@@ -17,12 +17,8 @@
 // names are display data the launcher may not be entitled to echo).
 
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { callEdgeKey } from '@/modules/resource-catalog/domain/callClosure'
-import type {
-  FrozenWorkflowRef,
-  FrozenWorkgroupRef,
-  FrozenCallClosure,
-} from '@/modules/resource-catalog/public/types'
+import { callEdgeKey, type FrozenCallClosure } from '@/modules/resource-catalog/domain/callClosure'
+import type { FrozenWorkflowRef, FrozenWorkgroupRef } from '@/modules/resource-catalog/public/types'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'

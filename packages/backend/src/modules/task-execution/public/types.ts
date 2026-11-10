@@ -383,7 +383,7 @@ export type {
   CodeWorkspaceTask,
   TaskCodeWorkspaceQueries,
 } from '../application/ports/taskCodeWorkspaceQueries'
-export type { TaskResourceLimitFacts } from '../application/ports/taskResourceLimitFacts'
+// RFC-477: `TaskResourceLimitFacts` left public with the resource-limit policy it served (now task-execution application).
 export type { TaskStatusCountQueries } from '../application/ports/taskStatusCounts'
 
 export type {

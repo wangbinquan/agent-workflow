@@ -4,8 +4,10 @@
 // ① RFC-349 的注入解析行为预言与只有它在用的 `services/agentDeps` / `mcpClosure` / `pluginClosure` 不在 src、在 `tests/helpers/`，两个
 //    技能转出（`services/skillBootVerify`、`services/skillIdentityPaths`）不在；src / 用例 / 脚本零 import 这六个原路径（census AST，别名与
 //    相对路径都认，带负对照）；预言改取同目录 helper 与 resource-catalog 定义处。
-// ② bootstrap 注入的策略束只剩 4 个外部策略字段（对象键逐个相等），不再取任何模块文件。
-// ③ resource-catalog 的端口同样只剩这 4 个字段，适配器直接取 resource-catalog 自己的 `assertNotBuiltin` 与 `isSkillInjectableThisBoot`。
+// ② bootstrap 注入的策略束只剩 3 个外部策略字段（对象键逐个相等），不再取任何模块文件（RFC-477：插件禁用错误码随停用策略归
+//    resource-catalog，退出策略束，原为 4 个）。
+// ③ resource-catalog 的端口同样只剩这 3 个字段，适配器直接取 resource-catalog 自己的 `assertNotBuiltin`、`isSkillInjectableThisBoot` 与
+//    插件禁用错误码。
 // ④ 唯一的模块外读者随预言迁走的 `validateAgentDependencies` 退出 resource-catalog `public/queries`（RFC-294 design §3.3）。
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -31,7 +33,7 @@ const EXTERNAL_POLICY = [
   'findManagedInjectionNameConflict',
   'formatManagedInjectionNameConflict',
   'pickCallTarget',
-  'pluginDisabledErrorCode',
+  // RFC-477: `pluginDisabledErrorCode` left the bundle (resource-catalog's snapshot adapter reads its own code).
 ]
 const slash = (path: string) => path.split('\\').join('/')
 const read = (path: string) => readFileSync(join(SRC, path), 'utf8')
@@ -110,14 +112,14 @@ describe('RFC-467 —— 预言一族离开生产树', () => {
 })
 
 describe('RFC-467 —— 策略束只留外部策略', () => {
-  test('bootstrap 注入的策略束只剩 4 个外部策略字段，不取任何模块文件', () => {
+  test('bootstrap 注入的策略束只剩 3 个外部策略字段，不取任何模块文件', () => {
     expect(Object.keys(taskExecutionResourceDependencies).sort()).toEqual(EXTERNAL_POLICY)
     expect(read('services/execution/taskExecutionResourceDependencies.ts')).not.toContain(
       '@/modules/',
     )
   })
 
-  test('resource-catalog 端口只剩这 4 个字段，适配器直接取自己的两个判定', () => {
+  test('resource-catalog 端口只剩这 3 个字段，适配器直接取自己的两个判定与插件禁用错误码', () => {
     const adapter = read(
       'modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts',
     )
@@ -135,8 +137,12 @@ describe('RFC-467 —— 策略束只留外部策略', () => {
     expect(adapter).toContain(
       "if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {",
     )
+    // RFC-477: the plugin-disabled code is resource-catalog's own; the adapter reads its declaration site.
+    expect(adapter).toContain(
+      "import { PLUGIN_DISABLED_ERROR_CODE } from '../../domain/disabledResourcePolicy'",
+    )
     expect(adapter).not.toMatch(
-      /dependencies\.(?:assertNotBuiltin|isSkillInjectableThisBoot|skillFilesRel)\b/,
+      /dependencies\.(?:assertNotBuiltin|isSkillInjectableThisBoot|skillFilesRel|pluginDisabledErrorCode)\b/,
     )
   })
 })

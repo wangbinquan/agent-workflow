@@ -145,7 +145,7 @@ describe('RFC-066 PR-B — source guards', () => {
   test('PB-G4 resume + retry rollback funnels through the shared rollback authority', () => {
     // RFC-424: the legacy `rollbackNodeRunForResume` shell in services/task.ts went with the test-only
     // resume entry. Production resume (the resume participant's `rollbackForResume`) and retry / sync
-    // (taskRouteOperations) both call the shared `rollbackNodeRunWorktrees` (services/nodeRollback.ts).
+    // (taskRouteOperations) both call the shared `rollbackNodeRunWorktrees` (task-execution infrastructure/nodeRollback.ts; services/ before RFC-477).
     expect(RESUME_SRC.includes('async function rollbackForResume(')).toBe(true)
     const calls = RESUME_SRC.match(/await rollbackNodeRunWorktrees\(/g) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2)

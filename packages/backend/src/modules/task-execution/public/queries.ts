@@ -181,8 +181,10 @@ export {
 export { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
 
 export { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
-/** RFC-395 II-a：节点回滚计划（逐仓目标 + 持久化请求），legacy `services/nodeRollback.ts` 经此取用。 */
-export { taskRollbackPlan } from '../infrastructure/taskRollbackCodec'
+/** RFC-477: single-agent launch payload validation (integration's scheduled tasks validate the same shape). */
+export { validateAgentLaunchShape } from '../domain/agentHostWorkflow'
+// RFC-395 II-a 的节点回滚计划（`taskRollbackPlan`）此前从这里出去，只因 legacy 的 `services/nodeRollback.ts` 不得
+// import 模块内部；RFC-477 把回滚迁进 task-execution（`infrastructure/nodeRollback.ts`），它改取定义处，这一项撤出 public。
 
 export { taskRepositoryNodePaths } from '../domain/taskRepository'
 export { projectStoredTaskRepositorySummary } from '../infrastructure/taskRepositorySurface'
@@ -238,8 +240,8 @@ export type {
   TaskWorktreeLocator,
 } from '../application/ports/taskWorktreeLocator'
 
-export { callRowHumanWait, readTaskResourceUsage } from '../application/taskResourceUsage'
-export { parseCallHumanWait } from '../domain/resourceLimitUsage'
+// RFC-477: `callRowHumanWait` / `readTaskResourceUsage` / `parseCallHumanWait` left public with their only outside
+// consumer — the resource-limit policy, now task-execution's `application/resourceLimitEnforcement.ts`.
 export { nonTerminalTaskExists } from '../infrastructure/nonTerminalTaskExists'
 
 export { requireRunSequence } from '../application/runHistory'

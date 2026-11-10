@@ -8,8 +8,8 @@ import { taskReadColumns } from './taskRepositorySql'
 // 两份副本存在的唯一后果就是「改一份、漂另一份」——而漂了之后两条路径各自的用例都还绿着，
 // 没有任何测试会因此变红。这正是 RFC-359 要消灭的形状。
 //
-// 落在 infrastructure 而不是 `services/execution/triggerPreflight.ts`（`assertTriggerPreflight`
-// 本体所在处）是被守卫按住的：`rfc349-provider-cutover` 的
+// 落在 infrastructure 而不是触发预检本体所在处（`assertTriggerPreflight`，RFC-477 起在 resource-catalog
+// `domain/triggerPreflight.ts`，此前在 `services/execution/`）是被守卫按住的：`rfc349-provider-cutover` 的
 // `databaseMechanismDependencies` 判据禁止 `services/` 面直接拥有 `@/db/*` / drizzle。
 // 纯判据留在那边，带读点的这一层归 task-execution 的 infrastructure。
 import {
@@ -20,7 +20,7 @@ import {
 import { eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
+import { assertTriggerPreflight } from '@/modules/resource-catalog/public/queries'
 import { ValidationError } from '@/util/errors'
 
 /** 只读一行 `tasks` 就够——两个 provider 的任何 db / tx 句柄都满足这个面。 */

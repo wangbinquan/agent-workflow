@@ -41,7 +41,7 @@ import { liveSqlitePath } from './storage'
 //     与 `platform/persistence/sqlite/rawDbSnapshot.ts:95-190`（字节拷贝，不是逻辑导出）。
 //   * boot auto-resume → `packages/backend/src/cli/start.ts:1488-1526`
 //     与 `modules/task-execution/application/recovery/autoResume.ts`。
-//   * 1Hz 限额 → `packages/backend/src/services/limits.ts:31-143`。
+//   * 1Hz 限额 → `packages/backend/src/modules/task-execution/application/resourceLimitEnforcement.ts`（`enforceLimits`）。
 //   * 事件归档 + 读回 → `platform/persistence/sqlite/systemEventsArchive.ts`
 //     与 `services/task.ts:6380-6420`（归档段在前、库内段在后拼成一条流）。
 //   * worktree GC → `services/gc.ts:329-441`。

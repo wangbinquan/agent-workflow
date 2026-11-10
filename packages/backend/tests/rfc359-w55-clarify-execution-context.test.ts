@@ -23,6 +23,7 @@ const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   createHumanGateNodeRunMintOperations: unusedParticipant,
   createTaskAuthorizationQueries: unusedParticipant,
   createTaskAuthorizationParticipantInTx: unusedParticipant,
+  createNodeRunWorkspaceRollback: unusedParticipant,
 }
 
 // Execute the complete production entry functions with explicit fake ports.

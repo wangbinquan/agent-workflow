@@ -3,7 +3,7 @@ import { runGit } from '@/util/git'
 //
 // 当前缺陷行为（已对照源码核实）：
 //   - `enforceLimits` 以 `now - tasks.startedAt` 判 maxDurationMs
-//     （src/services/limits.ts:63-70）。
+//     （task-execution `application/resourceLimitEnforcement.ts` 的 `checkOne`；RFC-477 前在 src/services/limits.ts）。
 //   - `tasks.startedAt` 只在 startTask 落行时写一次（src/services/task.ts:697）。
 //   - `resumeTask` 翻 pending 时只清 status/finishedAt/error 字段，不重置
 //     startedAt（src/services/task.ts:1010-1018）。

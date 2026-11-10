@@ -67,7 +67,7 @@ import {
   loadRollbackTarget,
   planNodeRunRollbackTargets,
   rollbackNodeRunWorktrees,
-} from '@/services/nodeRollback'
+} from '@/modules/task-execution/infrastructure/nodeRollback'
 import { getTaskStructuralDiff } from '@/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
 import {
   getCallTargets,

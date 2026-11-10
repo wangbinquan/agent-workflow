@@ -37,7 +37,7 @@ import {
 } from '../domain/agentExecutionContractPorts'
 import { uniqueAgentReferences } from '../domain/agentReferenceKey'
 import { isVisibleRow } from '../domain/resourceAccess'
-import { PLUGIN_DISABLED_ERROR_CODE } from '../public/types'
+import { PLUGIN_DISABLED_ERROR_CODE } from '../domain/disabledResourcePolicy'
 import {
   assertAgentRuntime,
   assertBranchPortsDeclared,

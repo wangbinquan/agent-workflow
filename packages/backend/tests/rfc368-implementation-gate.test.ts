@@ -327,14 +327,14 @@ describe('RFC-368 实现门 findings', () => {
       /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
         ? readDaemonGraphSource()
         : readFileSync(resolve(ROOT, 'packages/backend', path), 'utf8')
-    expect(read('src/services/limits.ts')).toContain('await operations.cancelTask(t.id, reason)')
+    // RFC-477: the resource-limit policy moved from services/limits.ts into task-execution application.
+    const limitsPolicy = 'src/modules/task-execution/application/resourceLimitEnforcement.ts'
+    expect(read(limitsPolicy)).toContain('await operations.cancelTask(t.id, reason)')
     expect(read('src/modules/task-execution/application/taskIdleTimeoutReaper.ts')).toContain(
       'await operations.cancelTask(taskId, reason)',
     )
     expect(read('src/bootstrap/resourceLimits.ts')).toContain('cancelTask: input.cancelTask')
-    expect(read('src/services/limits.ts')).not.toContain(
-      'composeLegacySqliteResourceLimitOperations',
-    )
+    expect(read(limitsPolicy)).not.toContain('composeLegacySqliteResourceLimitOperations')
     expect(read('src/bootstrap/daemonStart.ts')).toContain("kind: 'resource-reaped'")
     expect(
       read('src/bootstrap/daemonApplication.ts').match(/kind: 'resource-reaped'/g),

@@ -5,7 +5,7 @@
 // RFC-395 II-a A2: historical stash fixtures exercise surviving rollback and diff behavior.
 
 import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
-import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { rollbackNodeRunWorktrees } from '@/modules/task-execution/infrastructure/nodeRollback'
 import { createLogger } from '@/util/log'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

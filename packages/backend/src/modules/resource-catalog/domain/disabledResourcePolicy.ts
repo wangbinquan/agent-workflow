@@ -1,6 +1,10 @@
 // RFC-282 A3 (§2.4) — the ONE readable answer to "what happens when a node
 // references a DISABLED resource".
 //
+// RFC-477: moved from services/execution/resourcePolicy.ts into resource-catalog's domain (the disabled-resource
+// policy and its error code are resource-catalog's); the runtime self-check takes the table through
+// resource-catalog `public/types`.
+//
 // v2 stance (决策 4/20 撤回后): this table CHANGES NO VALUES. Today's rules
 // stay exactly as they are — plugin hard-fails, MCP is skipped-and-declared,
 // agent.enabled is not consulted at all. What the table adds is:
@@ -49,10 +53,11 @@ export interface DisabledPolicyEntry {
   readonly declaredField?: 'skippedDisabledMcps'
 }
 
-/** The one spelling of the fail-closed plugin error code. All five emitters
- *  import THIS (B3): the wire bytes are unchanged, but "where does this code
- *  come from" now has exactly one grep-able answer — this table. */
-export { PLUGIN_DISABLED_ERROR_CODE } from '@/modules/resource-catalog/public/types'
+/** The one spelling of the fail-closed plugin error code (B3): every emitter imports THIS, so "where does this code
+ *  come from" has exactly one grep-able answer. RFC-477 moved the declaration here from this module's `public/types.ts`
+ *  — once the disabled-resource policy left `services/`, no other context imports the code itself (the public issue
+ *  union still names it by type). */
+export const PLUGIN_DISABLED_ERROR_CODE = 'plugin-disabled' as const
 
 /** The real `plugin-disabled` emitters (all preserved verbatim — v2 has zero
  *  product behavior change; four upstream launch gates consume them). */

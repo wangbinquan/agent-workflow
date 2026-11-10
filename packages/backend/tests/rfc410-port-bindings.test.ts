@@ -205,7 +205,8 @@ test('the trigger rule and the workgroup host lane are the composition implement
     'rules: { triggerPreflightIssue },',
     'host: buildNodeExecutionWorkgroupHooks(state, runtimeComponents.wrapperRuntimeFactory),',
     "import { runDynamicWorkflowGenerate } from '../engine/task/dynamicWorkflowGenerate'",
-    "import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'",
+    // RFC-477: trigger preflight moved from services/execution/ into resource-catalog (taken through its public queries).
+    "import { triggerPreflightIssue } from '@/modules/resource-catalog/public/queries'",
   ])
     expect(binding).toContain(line)
 })

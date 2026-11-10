@@ -80,7 +80,7 @@ import {
   AGENT_HOST_CLARIFY_NODE_ID,
   AGENT_HOST_INPUT_KEY,
   buildAgentHostSnapshot,
-} from '../src/services/agentLaunch'
+} from '../src/modules/task-execution/domain/agentHostWorkflow'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchAgentTaskViaParticipant,

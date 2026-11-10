@@ -356,8 +356,9 @@ describe('RFC-282 A2 — inline-duplicate ledger (counts pinned, both directions
 // ---------------------------------------------------------------------------
 
 describe('RFC-282 B3 — plugin-disabled code is single-sourced', () => {
-  test("the 'plugin-disabled' literal exists only at the public Resource Catalog contract", () => {
-    const allowed = new Map([['modules/resource-catalog/public/types.ts', 1]])
+  // RFC-477: the declaration moved with the disabled-resource policy into resource-catalog's domain.
+  test("the 'plugin-disabled' literal exists only at the Resource Catalog declaration site", () => {
+    const allowed = new Map([['modules/resource-catalog/domain/disabledResourcePolicy.ts', 1]])
     for (const f of FILES) {
       const hits = stripComments(f.text).split("'plugin-disabled'").length - 1
       expect(

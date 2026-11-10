@@ -105,7 +105,11 @@ describe('RFC-349 SQLite daemon periodic writers are provider-session handles', 
   })
 
   test('the bare limits ticker entry point is gone', () => {
-    const limits = readFileSync(resolve(backendRoot, 'src/services/limits.ts'), 'utf8')
+    // RFC-477: the policy moved from services/limits.ts into task-execution application.
+    const limits = readFileSync(
+      resolve(backendRoot, 'src/modules/task-execution/application/resourceLimitEnforcement.ts'),
+      'utf8',
+    )
     expect(
       limits,
       'startLimitsTicker 又回来了 ⇒ 下一个调用方会绕开 provider session 起一条 1Hz 写手',

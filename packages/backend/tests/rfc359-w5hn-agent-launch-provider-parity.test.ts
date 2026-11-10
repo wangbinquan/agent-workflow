@@ -4,7 +4,7 @@
 // **两份各约 200 行的编排**——SQLite 走 `services/agentLaunch.ts#startAgentTask`（末端 `startTask`），
 // PostgreSQL 走 `taskRouteLaunchOperations.ts#launchAgent`（末端启动内核）。
 // plan §5hn 的先行对账把十二步前置链逐项点过：十一步对得上，连宿主快照都用**同一个**
-// `buildAgentHostSnapshot`（PG 从 `services/agentLaunch` import 它），唯一差别是最后怎么落库。
+// `buildAgentHostSnapshot`（PG 从 `services/agentLaunch` import 它；RFC-477 起在 task-execution `domain/agentHostWorkflow.ts`），唯一差别是最后怎么落库。
 //
 // 但那份对账是按**函数名出现与否**点的——它证明不了「两侧传给同一个函数的实参也一样」。
 // 这条用例补的正是那一格：同一份 launch 请求打到同一条路由，**两个引擎落出的 task 行逐字相同**。
@@ -20,7 +20,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
-import { AGENT_HOST_INPUT_KEY } from '@/services/agentLaunch'
+import { AGENT_HOST_INPUT_KEY } from '@/modules/task-execution/domain/agentHostWorkflow'
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'

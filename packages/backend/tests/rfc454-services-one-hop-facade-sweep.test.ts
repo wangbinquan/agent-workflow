@@ -239,7 +239,8 @@ describe('RFC-454 —— 调用闭包编解码与启动输入校验（resource-c
   test('resource-catalog public 导出的就是 domain 里的那一份', () => {
     // RFC-466: callEdgeKey 唯一的模块外读者（task-execution 的调用闭包预言）已迁入用例树，它退出 public。
     expect('callEdgeKey' in rcQueries).toBe(false)
-    expect(rcQueries.parseCallClosure).toBe(callClosure.parseCallClosure)
+    // RFC-477: `parseCallClosure` left public with its last outside reader (the trigger preflight, now resource-catalog domain).
+    expect('parseCallClosure' in rcQueries).toBe(false)
     expect(rcQueries.childClosureSubset).toBe(callClosure.childClosureSubset)
     expect(rcQueries.frozenWorkflowFromClosure).toBe(callClosure.frozenWorkflowFromClosure)
     expect(rcQueries.frozenWorkgroupFromClosure).toBe(callClosure.frozenWorkgroupFromClosure)

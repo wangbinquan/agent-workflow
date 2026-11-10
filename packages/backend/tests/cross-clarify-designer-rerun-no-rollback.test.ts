@@ -275,6 +275,8 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
     )
     expect(crossSrc).not.toContain('rollbackNodeRunWorktrees')
     expect(crossSrc).not.toContain('loadRollbackTarget')
+    // RFC-477: collaboration reaches the rollback through its own port now; that entry is just as forbidden here.
+    expect(crossSrc).not.toContain('createNodeRunWorkspaceRollback')
     // … and so must the LIVE designer-rerun mint path (dispatchTaskQuestions). The only
     // rollback in the answer flow is autoDispatchClarifyRound's SELF-clarify branch
     // (gated kind==='self'), never the cross/designer dispatch.
@@ -292,5 +294,6 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
     )
     expect(dispatchSrc).not.toContain('rollbackNodeRunWorktrees')
     expect(dispatchSrc).not.toContain('loadRollbackTarget')
+    expect(dispatchSrc).not.toContain('createNodeRunWorkspaceRollback')
   })
 })

@@ -49,7 +49,7 @@ import { cancelViaEngine } from './helpers/cancelEngine'
 import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import { enforceLimits } from './helpers/resourceLimits'
-import { parseCallHumanWait } from '../src/services/limits'
+import { parseCallHumanWait } from '../src/modules/task-execution/domain/resourceLimitUsage'
 
 import { reconcileDeadRunningRuns } from '../src/modules/task-execution/infrastructure/local/deadRunReconcile'
 import { resolveRunLiveness } from '../src/modules/task-execution/application/recovery/runLiveness'
@@ -480,7 +480,8 @@ describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1�
     const child2 = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
     await seedRun(db, parent, 'call1', { childTaskId: child2, retryIndex: 1 })
     // 台账合计只应来自真实存在的账，不因换代翻倍：70s（旧代）+0（新代）。
-    const { parseCallHumanWait } = await import('../src/services/limits')
+    const { parseCallHumanWait } =
+      await import('../src/modules/task-execution/domain/resourceLimitUsage')
     expect(parseCallHumanWait(JSON.stringify({ callHumanWaitMs: 70_000 }), Date.now())).toBe(70_000)
     expect(parseCallHumanWait(null, Date.now())).toBe(0)
     // 源码锁：新 mint 的行不得继承被取代行的台账（否则同段等待计两次）。

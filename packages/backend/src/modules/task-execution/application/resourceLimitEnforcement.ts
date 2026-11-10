@@ -11,11 +11,15 @@
 // scheduler's AbortController if one exists. If the daemon was restarted
 // orphan logic (P-4-07) has already flipped the row to `interrupted`, this
 // tick is a no-op for that task.
+//
+// RFC-477: moved from services/limits.ts. The policy is task-execution application code over its own ports: task facts
+// (`TaskResourceLimitFacts`) and the cancel audit (`TaskResourceLimitAudit`, implemented by system-operations and
+// handed in by bootstrap). The re-exports of `readTaskResourceUsage` / `parseCallHumanWait` the legacy file carried
+// are gone (callers take task-execution `public/queries`).
 
-import type { TaskResourceLimitFacts } from '@/modules/task-execution/public/types'
-import { callRowHumanWait } from '@/modules/task-execution/public/queries'
-import type { ResourceLimitAudit } from '@/modules/system-operations/public/operations'
-export { readTaskResourceUsage, parseCallHumanWait } from '@/modules/task-execution/public/queries'
+import type { TaskResourceLimitFacts } from './ports/taskResourceLimitFacts'
+import type { TaskResourceLimitAudit } from './ports/taskResourceLimitAudit'
+import { callRowHumanWait } from './taskResourceUsage'
 import { createLogger, type Logger } from '@/util/log'
 
 const log: Logger = createLogger('limits')
@@ -27,7 +31,7 @@ export interface EnforceLimitsResult {
 }
 
 export interface ResourceLimitOperations {
-  readonly persistence: TaskResourceLimitFacts & ResourceLimitAudit
+  readonly persistence: TaskResourceLimitFacts & TaskResourceLimitAudit
   readonly cancelTask: (
     taskId: string,
     reason: { readonly summary: string; readonly message: string },

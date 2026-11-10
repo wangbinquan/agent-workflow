@@ -1,4 +1,9 @@
 // RFC-292 — one backend orchestration point for trigger dependency preflight.
+//
+// RFC-477: moved unchanged from services/execution/triggerPreflight.ts into resource-catalog's domain. It evaluates a
+// workflow definition (and its frozen call closure, this module's `parseCallClosure`) against the trigger context;
+// task-execution and integration take it through resource-catalog `public/queries` (offered edges), and this
+// module's own workgroup task room takes it here.
 
 import {
   TriggerContextSchema,
@@ -10,7 +15,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
-import { parseCallClosure } from '@/modules/resource-catalog/public/queries'
+import { parseCallClosure } from './callClosure'
 
 export function triggerSourceFromContext(
   context: TriggerContext | null | undefined,

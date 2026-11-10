@@ -12,6 +12,26 @@
   task-execution `domain/`；触发预检与停用资源策略按 DAG 归 resource-catalog `domain/`。失去模块外消费方的 public 符号当场撤出。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（目录入库，RFC 索引的链接不断），实现与验证后再提交。
 - **附带**：RFC-476 的 Done 文档提交 `b562e9338`（5 个文档文件）：exact SHA 主 CI run 42763477487 的 70 个 job 全绿。
+- **收口对账**（RFC-294 C10～C13，design §7）：按内容分层落位（C10：启动快照、触发预检、停用策略与回滚结果说明进 domain，限额策略进
+  application，目标装载、git 回滚与 effect 记账进 infrastructure）；public 新增的是纯函数、常量与闭合类型，`public/operations` 只撤不增（C11）；
+  结构锁的覆盖范围写在 plan（C12）；触及的两项减速带收紧到实测（C13：`architecture/counts.json` 的 `legacy-horizontal-files` 173 → 168、
+  `legacy-service-implementations` 54 → 49）。
+- **集中验证**（候选基于 `55f21c641`，验证期间 HEAD 未前进，详见 plan）：查出本 RFC 的五处问题，均已修复并复验——定时任务校验对整份
+  task-execution `public/queries` 的动态 import 让计数器把 61 个无人用的查询符号记成已消费（改为具名静态 import）；`parseCallClosure`、
+  `FrozenCallClosure` 与 `PLUGIN_DISABLED_ERROR_CODE` 随迁移失去模块外读者（撤出；错误码的声明搬进 resource-catalog domain）；新增用例的
+  文件名命中守卫判据却没登记 guard-manifest；注入的策略束被锁不取 resource-catalog（插件禁用错误码改由快照适配器直接取）；反问自回滚的源码锁
+  标记随端口调用改指。backend tsc 0 错、eslint 无告警、`depcheck` 通过；全量 SQLite 四片跑完（首版候选），23599 pass，87 条 fail 里 71 条是
+  超时、8 条是上面的问题，其余是导出所致的 `rfc321`、`rfc220` 五条与两条期限到点；复跑 308 个文件 304 个全过（余 RFC-167 `approve`、导出里
+  恒红的 `rfc321`、`rfc363` 分页撞 30 秒——同一时刻对照 HEAD 两边相同——与 RFC-477 用例一例期望没跟上，修后 72 / 72），修复所及的 387 个
+  用例在最终候选上都有 SQLite 结果（另补跑 193 个文件，1555 pass / 0 fail）；PostgreSQL 30 秒时限跑 586 个能到引擎选择的文件，567 个全过，
+  余 19 个文件 51 例是撞时限、钩子到点、helper 期限与同步前的旧源码锁标记（同一时刻对照 HEAD：除 `rfc128-p5-d` 外的 18 个文件里 14 个两边
+  相同，4 个只差哪几例撞时限，再跑一对后 `rfc311` 两边都 25 / 25、其余到点的用例在两边之间轮换）；同步前跑、取到后两处修复文件的 50 个文件
+  与 lane 外的 2 个文件在最终候选上补跑全过（除对照里的 RFC-167）；P0 变异 lane 两引擎各 17 阶段通过（PostgreSQL 一半 461 s）；
+  shared 2344 pass、frontend gate 7361 pass、system-mocks 111 / 111；`rfc321` 工作树 10 / 10。计数：`R1` 30 → 27、`R2` 0，`legacy-horizontal-files` 173 → 168、
+  `legacy-service-implementations` 54 → 49，其余 20 项闸门计数不变；public surface 1497 → 1495（新增 7、撤出 9），偏差 91、未被消费的
+  public 符号 322 都不变。实现门 PASS（本会话按路径限定自审，只审功能；查出 design §8 写的「effect 断言」在用例里没有，补一条回滚作用域
+  装载带 `db` 目标的源码锁并把 §8 改写为实际情形，定稿后复验：`tsc` 0 错，受影响的 14 个用例与 11 个文档用例接库通过——`s02` 一例撞时限，
+  同一时刻对照两边都过）。
 
 ## 2026-11-09 RFC-294：独立对账与总纲第二次校正（纯文档；`design/RFC-294-backend-layered-target-architecture/review-2026-11-09.md`）
 

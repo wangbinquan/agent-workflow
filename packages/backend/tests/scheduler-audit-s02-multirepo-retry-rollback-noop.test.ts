@@ -12,7 +12,7 @@ import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // 机制（RFC-092 实现）：
 //   - 快照写入仍是双轨的：单仓写 `preSnapshot` 列，多仓写 `preSnapshotReposJson`、
 //     `preSnapshot` 保持 NULL（写入侧未动——本文件的双轨写入证据断言原样保留）。
-//   - 回滚收敛进共享 `rollbackNodeRunWorktrees`（services/nodeRollback.ts）：
+//   - 回滚收敛进共享 `rollbackNodeRunWorktrees`（task-execution `infrastructure/nodeRollback.ts`，RFC-477 前在 services/）：
 //     scheduler 重试路径携带进程内 `lastFreshSnapshot`（最后一次 fresh-session
 //     尝试写入的快照）调它，`resetOnEmptySnapshot: true`。多仓硬闸保证容器目录
 //     （plain-mkdir，task.ts 多仓布局）绝不挨任何 git 命令，每个子仓独立
@@ -363,7 +363,7 @@ function registerNativeCases2() {
   })
   afterEach(() => h.cleanup())
 
-  test('contrast oracle: retry path and resume path now share ONE rollback authority (services/nodeRollback.ts)', () => {
+  test('contrast oracle: retry path and resume path now share ONE rollback authority (task-execution infrastructure/nodeRollback.ts)', () => {
     // Source-text companion tying the rollback call sites together (the
     // behavioral nets are this file + resume-multi-repo-rollback.test.ts +
     // rfc092-node-rollback.test.ts; the fork-deletion source guards live in
@@ -380,7 +380,16 @@ function registerNativeCases2() {
     // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
     const mechanicsSrc = AGENT_MECHANICS_SOURCE
     const rollbackSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeRollback.ts'),
+      // RFC-477: the shared authority moved from services/nodeRollback.ts into task-execution.
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'nodeRollback.ts',
+      ),
       'utf-8',
     )
     // The resume rollback (PB-G4 of source-text-rfc066-pr-b-guards.test.ts)

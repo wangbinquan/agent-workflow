@@ -10,7 +10,7 @@ import { liveSqlitePath } from './storage'
 //   packages/shared/src/git-url.ts:redactGitUrl              userinfo → `***@`
 //   packages/backend/src/services/task.ts:6700               rowToTask 投影脱敏
 //   packages/frontend/src/routes/tasks.detail.tsx:1121       详情页再脱敏一次
-//   packages/backend/src/services/nodeRollback.ts:99-190     pre_snapshot 回滚
+//   packages/backend/src/modules/task-execution/infrastructure/nodeRollback.ts:rollbackNodeRunWorktrees  pre_snapshot 回滚
 //   packages/backend/src/util/git.ts:2434-2456               rollbackToSnapshot
 //   packages/backend/src/services/scheduler.ts:2201-2203     `status --porcelain` 空 ⇒ 不生成 commit&push 行
 //   packages/backend/src/modules/source-control/application/workspaceChangePublication.ts:253-262
@@ -506,7 +506,7 @@ test('RFC-319 REPO-38c: 恢复失败任务时，重试节点的工作树被 pre_
 
   // 3) 把快照种到那条失败行的 pre_snapshot 上。
   //    RFC-130 之后调度器不再写这一列（`gitStashSnapshot` 零生产调用方），
-  //    但 resume 仍然会读它并回滚（services/nodeRollback.ts:170-190）——
+  //    但 resume 仍然会读它并回滚（task-execution `infrastructure/nodeRollback.ts` 的 `rollbackNodeRunWorktrees`）——
   //    这条用例守的就是那段被保留下来的纵深防御。
   const runs = await nodeRuns(failDaemon, taskId)
   const failedRun = runs

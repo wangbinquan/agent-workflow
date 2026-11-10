@@ -101,7 +101,7 @@ import {
   workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
 import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/public/commands'
-import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
+import { triggerPreflightIssue } from '@/modules/resource-catalog/public/queries'
 import { resolveRepoGroupLayout } from '@/modules/source-control/public/queries'
 import { ConflictError, DomainError, ValidationError, diagnosticTextOf } from '@/util/errors'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'

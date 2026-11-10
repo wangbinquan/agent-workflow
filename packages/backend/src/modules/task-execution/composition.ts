@@ -328,6 +328,16 @@ export {
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
 } from './infrastructure/taskAuthorization'
+// RFC-477: collaboration's review rollback planning and clarify self-rollback enter through its own
+// `NodeRunWorkspaceRollbackPort`; bootstrap hands this factory to collaboration's participant bindings.
+export { createNodeRunWorkspaceRollback } from './infrastructure/nodeRollback'
+// RFC-477: the daemon's resource-limit tick runs task-execution's policy; bootstrap composes its operations (task facts
+// plus system-operations' cancel audit) and schedules it.
+export {
+  enforceLimits,
+  type EnforceLimitsResult,
+  type ResourceLimitOperations,
+} from './application/resourceLimitEnforcement'
 
 // RFC-456: the process-level child-budget and terminal-watch hooks the daemon root calls at startup and from
 // committed-event callbacks (the root reaches them here, not in infrastructure/).

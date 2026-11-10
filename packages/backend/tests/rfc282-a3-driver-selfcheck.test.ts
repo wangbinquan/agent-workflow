@@ -16,7 +16,7 @@ import { getRuntimeDriver, RUNTIME_KINDS } from '../src/services/runtime'
 import {
   DISABLED_RESOURCE_POLICY,
   notModeledDisabledKinds,
-} from '../src/services/execution/resourcePolicy'
+} from '../src/modules/resource-catalog/domain/disabledResourcePolicy'
 import type { RuntimeDriver } from '../src/services/runtime/types'
 
 const REAL_DRIVERS = RUNTIME_KINDS.map(getRuntimeDriver)

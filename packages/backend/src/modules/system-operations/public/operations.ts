@@ -71,7 +71,8 @@ export interface MaintenanceDiskOperations {
   cleanupRetiredStores(): Promise<{ readonly removedBytes: number }>
 }
 
-export type { ResourceLimitAudit } from '../application/ports/resourceLimitAudit'
+// RFC-477: `ResourceLimitAudit` left public — the resource-limit policy moved into task-execution, which declares its own
+// audit port; bootstrap still spreads this module's `createResourceLimitAudit` into the policy's persistence.
 
 const emptyInputSchema = z.object({}).strict()
 const PUBLIC_ERRORS = Object.freeze(['validation-failed', 'internal-error'] as const)

@@ -113,7 +113,8 @@ describe('RFC-066 PR-A — source guards', () => {
     expect(TASK_SRC.includes("'multi-repo-upload-unsupported'")).toBe(false)
     for (const rel of [
       'src/routes/tasks.ts',
-      'src/services/agentLaunch.ts',
+      // RFC-477: agentLaunch.ts moved into task-execution's domain.
+      'src/modules/task-execution/domain/agentHostWorkflow.ts',
       'src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
       'src/modules/task-execution/composition/commitPushBinding.ts',
       'src/modules/task-execution/composition/wrapperMechanics.ts',

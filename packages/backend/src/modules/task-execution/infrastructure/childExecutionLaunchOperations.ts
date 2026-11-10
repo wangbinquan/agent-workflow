@@ -37,7 +37,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   assertTriggerPreflight,
   triggerSourceFromContext,
-} from '@/services/execution/triggerPreflight'
+} from '@/modules/resource-catalog/public/queries'
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {

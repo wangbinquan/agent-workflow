@@ -1,5 +1,5 @@
 // RFC-092 T1 — direct unit coverage for the shared node-run worktree rollback
-// (services/nodeRollback.ts `rollbackNodeRunWorktrees`).
+// (task-execution infrastructure/nodeRollback.ts `rollbackNodeRunWorktrees`; services/nodeRollback.ts before RFC-477).
 //
 // Locks the post-fix semantics of audit S-2 / S-2b / S-13 (WP-1), per
 // design/RFC-092-scheduler-p0-stopgap/design.md §2.1 and 测试策略 §5-6:
@@ -34,8 +34,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { rollbackNodeRunWorktrees } from '../src/services/nodeRollback'
-import type { RollbackTarget } from '../src/services/nodeRollback'
+import { rollbackNodeRunWorktrees } from '../src/modules/task-execution/infrastructure/nodeRollback'
+import type { RollbackTarget } from '../src/modules/task-execution/infrastructure/nodeRollback'
 import { runGit } from '../src/util/git'
 import { createLogger } from '../src/util/log'
 

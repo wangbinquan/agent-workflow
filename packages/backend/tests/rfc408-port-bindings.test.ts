@@ -10,7 +10,7 @@ import type { TaskExecutionRuntimeComponents } from '@/modules/task-execution/co
 import { createExecutionScopeIndex } from '@/modules/task-execution/domain/executionScope'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
 import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
-import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
+import { triggerPreflightIssue } from '@/modules/resource-catalog/domain/triggerPreflight'
 
 type Calls = Record<string, unknown[]>
 

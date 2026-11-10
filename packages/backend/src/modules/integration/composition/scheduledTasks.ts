@@ -1,9 +1,11 @@
 import type { Config } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import type { validateAgentLaunchShape as AgentLaunchShapeCheck } from '@/services/agentLaunch'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/public/queries'
+import { validateAgentLaunchShape } from '@/modules/task-execution/public/queries'
+import {
+  assertTriggerPreflight,
+  assertWorkflowLaunchInputs,
+} from '@/modules/resource-catalog/public/queries'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IntegrationTriggerSnapshotFactory } from '../application/ports/integrationTriggerSnapshots'
@@ -47,9 +49,10 @@ export function composeScheduledTaskRuntime(input: {
           defs: Parameters<typeof assertWorkflowLaunchInputs>[0],
           inputs: Parameters<typeof assertWorkflowLaunchInputs>[1],
         ) => assertWorkflowLaunchInputs(defs, inputs),
-        async validateAgentLaunchShape(...args: Parameters<typeof AgentLaunchShapeCheck>) {
-          // 原服务在这里惰性加载 agent 启动校验（动态 import）；保持同样的加载时机。
-          const { validateAgentLaunchShape } = await import('@/services/agentLaunch')
+        async validateAgentLaunchShape(...args: Parameters<typeof validateAgentLaunchShape>) {
+          // RFC-477：校验迁进 task-execution domain、经它的 public 取。原来惰性加载的是整个 legacy 服务文件；现在是一个
+          // 纯函数、所在模块启动时就已加载，改为具名静态 import（对整份 public 入口的动态 import 会被计成用到了它的
+          // 全部符号）。接口仍是 async，调用方不变。
           validateAgentLaunchShape(...args)
         },
       }),

@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { composeResourceLimitOperations } from '@/bootstrap/resourceLimits'
-import type { ResourceLimitOperations } from '@/services/limits'
+import type { ResourceLimitOperations } from '@/modules/task-execution/application/resourceLimitEnforcement'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -17,7 +17,9 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { enforceLimits, readTaskResourceUsage } from '@/services/limits'
+// RFC-477: the policy moved from services/limits.ts into task-execution application; the usage reader is its own file.
+import { enforceLimits } from '@/modules/task-execution/application/resourceLimitEnforcement'
+import { readTaskResourceUsage } from '@/modules/task-execution/application/taskResourceUsage'
 
 function source(relativePath: string): string {
   return readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
@@ -199,7 +201,8 @@ describe('RFC-349 resource-limit provider seam', () => {
   })
 
   test('service and the shared adapter prohibit direct DB facade casts and SQLite fallback', () => {
-    const service = source('src/services/limits.ts')
+    // RFC-477: the policy is task-execution application code now (services/limits.ts before).
+    const service = source('src/modules/task-execution/application/resourceLimitEnforcement.ts')
     // RFC-359 W7：两个 provider 共用同一份实现，所以这里读的就是那一份中立文件。
     const adapter = source('src/modules/task-execution/infrastructure/taskResourceLimitFacts.ts')
     for (const forbidden of ["from '@/db/", "from 'drizzle-orm'", '.select(', '.update(']) {

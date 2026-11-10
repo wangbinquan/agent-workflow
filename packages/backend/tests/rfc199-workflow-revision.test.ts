@@ -4,7 +4,7 @@ import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // two edits from one base cannot share a successor revision, retries reconcile
 // by canonical bytes, and legacy physical storage heals exactly once.
 
-import { buildAgentHostSnapshot } from '@/services/agentLaunch'
+import { buildAgentHostSnapshot } from '@/modules/task-execution/domain/agentHostWorkflow'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'

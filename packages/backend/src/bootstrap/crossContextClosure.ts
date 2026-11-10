@@ -8,6 +8,7 @@ import {
   createHumanGateNodeRunMintOperations,
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
+  createNodeRunWorkspaceRollback,
 } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -50,5 +51,6 @@ export function composeTaskExecutionParticipantBindings(executionPermits: TaskEx
     createHumanGateNodeRunMintOperations,
     createTaskAuthorizationQueries,
     createTaskAuthorizationParticipantInTx,
+    createNodeRunWorkspaceRollback,
   })
 }

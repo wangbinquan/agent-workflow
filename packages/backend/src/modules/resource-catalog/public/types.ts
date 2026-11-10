@@ -357,8 +357,15 @@ export interface ValidateAgentDependenciesInput {
 }
 
 type AgentResourceRefKind = 'skill' | 'mcp' | 'plugin' | 'agent'
-/** Exact wire code shared by every disabled-plugin integrity emitter. */
-export const PLUGIN_DISABLED_ERROR_CODE = 'plugin-disabled' as const
+// RFC-477: the exact wire code shared by every disabled-plugin integrity emitter is declared with the disabled-resource
+// policy (`domain/disabledResourcePolicy.ts`); the issue union below names it by type.
+import type { PLUGIN_DISABLED_ERROR_CODE } from '../domain/disabledResourcePolicy'
+/** RFC-477 — the disabled MCP / plugin disposition table (the runtime self-check reports it); was services/execution/resourcePolicy.ts. */
+export {
+  DISABLED_RESOURCE_POLICY,
+  notModeledDisabledKinds,
+  type DisableableResourceKind,
+} from '../domain/disabledResourcePolicy'
 type AgentResourceIssueCode =
   | 'agent-dependency-not-found'
   | 'agent-dependency-cycle'
@@ -1153,8 +1160,8 @@ export {
   assertNotBuiltin,
 } from '../domain/systemResources'
 // RFC-454 — the stored call-closure shapes (`domain/callClosure.ts`).
+// RFC-477: `FrozenCallClosure` left with `parseCallClosure` (it was public only as that function's result type).
 export type {
-  FrozenCallClosure,
   FrozenWorkflowRef,
   FrozenWorkgroupGroup,
   FrozenWorkgroupRef,

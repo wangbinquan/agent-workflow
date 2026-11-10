@@ -8,7 +8,7 @@ import {
 import { eventResponseTargetSchema } from '@/modules/event-center/domain/responseRule'
 import { materializeEventAutomationTarget } from '@/modules/event-center/application/eventAutomationTarget'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
-import { validateAgentLaunchShape } from '@/services/agentLaunch'
+import { validateAgentLaunchShape } from '@/modules/task-execution/domain/agentHostWorkflow'
 import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/domain/workflowLaunchInputs'
 const context = (value = 'event text') =>
   TriggerContextSchema.parse({

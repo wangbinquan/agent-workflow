@@ -74,7 +74,7 @@ import {
 import { runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithPorts } from '../src/modules/task-execution/engine/task/dynamicWorkflowGenerate'
 import type { DynamicWorkflowGenerateArgs } from '../src/modules/task-execution/application/ports/dynamicWorkflowGenerate'
 import { composeDynamicWorkflowLayerOneValidation } from '../src/modules/resource-catalog/composition/workflowOperations'
-import { triggerPreflightIssue } from '../src/services/execution/triggerPreflight'
+import { triggerPreflightIssue } from '../src/modules/resource-catalog/domain/triggerPreflight'
 import { composeDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import {

@@ -35,12 +35,9 @@ import { shouldRebuildWorkspaceProfiles } from '../domain/executionIntent'
 import { resolveTerminalWorkspacePruneDecision } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import {
-  loadRollbackTargetFrom,
-  rollbackNodeRunWorktrees,
-  snapshotMissingDetail,
-} from '@/services/nodeRollback'
+import { assertTriggerPreflight } from '@/modules/resource-catalog/public/queries'
+import { loadRollbackTargetFrom, rollbackNodeRunWorktrees } from './nodeRollback'
+import { snapshotMissingDetail } from '../domain/nodeRunRollbackOutcome'
 import { reserveTaskReviewMutationSlot } from './reviewMutationQueue'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'

@@ -229,14 +229,14 @@
       "claimAudit": "Holds, and is the model of the repo's approved pattern: an exhaustive Record keyed by kind, backed by a schema-reflection guard (tests/rfc284-resource-policy-schema-guard.test.ts) that verifies each keyed kind's `enabled` column actually exists rather than trusting the comment. This is the shape the other per-type tables in this family should be converted to.",
       "core": false,
       "files": [
-        "packages/backend/src/services/execution/resourcePolicy.ts"
+        "packages/backend/src/modules/resource-catalog/domain/disabledResourcePolicy.ts"
       ],
       "guards": [],
       "id": "execution-resourcepolicy-ts",
-      "layer": "application",
+      "layer": "domain",
       "owner": "resource-catalog",
       "singleSourceOf": "DISABLED_RESOURCE_POLICY: Readonly<Record<DisableableResourceKind, DisabledPolicyEntry>> — the one readable answer to 'what happens when a node references a disabled resource'.",
-      "title": "execution/resourcePolicy.ts — the disabled-resource disposition table"
+      "title": "resource-catalog domain/disabledResourcePolicy.ts (services/execution/resourcePolicy.ts before RFC-477) — the disabled-resource disposition table"
     },
     {
       "auditedBy": "execution-kernel",
@@ -315,11 +315,11 @@
       "claimAudit": "Holds. The only mode switches are `resetOnEmptySnapshot` (resume vs in-process retry) and `checkOnly` (dry run) — both stated semantics with explicit rationale, not caller identity. No table/service reach-in beyond tasks/taskRepos which it legitimately owns.",
       "core": true,
       "files": [
-        "packages/backend/src/services/nodeRollback.ts"
+        "packages/backend/src/modules/task-execution/infrastructure/nodeRollback.ts"
       ],
       "guards": [],
       "id": "rollbacknoderunworktrees",
-      "layer": "engine",
+      "layer": "infrastructure",
       "owner": "task-execution",
       "singleSourceOf": "Single authority for rolling a node_run's worktree(s) back to its pre-snapshot; two-phase all-or-nothing multi-repo check.",
       "title": "rollbackNodeRunWorktrees"

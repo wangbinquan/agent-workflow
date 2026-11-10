@@ -143,7 +143,11 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // The shared rollback authority is RETAINED for the RESUME path (D10
     // defense-in-depth) — it consumes the checkpoint-list plan, skips empty snapshots,
     // and never picks rows by retryIndex.
-    const rollbackSrc = readFileSync(join(SRC_ROOT, 'services', 'nodeRollback.ts'), 'utf-8')
+    // RFC-477: the shared rollback authority moved from services/nodeRollback.ts into task-execution.
+    const rollbackSrc = readFileSync(
+      join(SRC_ROOT, 'modules/task-execution/infrastructure/nodeRollback.ts'),
+      'utf-8',
+    )
     expect(rollbackSrc.includes('run.preSnapshotReposJson')).toBe(false)
     expect(rollbackSrc.includes('resetOnEmptySnapshot')).toBe(false)
     expect(rollbackSrc.includes('taskRollbackPlan(target, run)')).toBe(true)

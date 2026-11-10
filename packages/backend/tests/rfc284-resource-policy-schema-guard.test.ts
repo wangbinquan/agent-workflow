@@ -19,7 +19,7 @@ import { getTableColumns, type Table } from 'drizzle-orm'
 import {
   DISABLED_RESOURCE_POLICY,
   type DisableableResourceKind,
-} from '../src/services/execution/resourcePolicy'
+} from '../src/modules/resource-catalog/domain/disabledResourcePolicy'
 
 // 编译期穷尽：新增 DisableableResourceKind 必须同时在这里给出它的表映射，
 // 否则 satisfies 直接编译失败——「新增类型必须表态」的 D 批目标在本表延续。

@@ -20,7 +20,7 @@ import {
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
-import { buildAgentHostSnapshot } from '@/services/agentLaunch'
+import { buildAgentHostSnapshot } from '@/modules/task-execution/domain/agentHostWorkflow'
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'

@@ -1,5 +1,6 @@
 import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { NodeRunWorkspaceRollbackPort } from '../application/ports/nodeRunWorkspaceRollback'
 import type {
   AsyncTaskAuthorizationParticipantInTx,
   TaskAuthorizationQueries,
@@ -34,4 +35,6 @@ export interface TaskExecutionParticipantBindings {
   readonly createTaskAuthorizationParticipantInTx: (
     tx: PersistenceTx,
   ) => AsyncTaskAuthorizationParticipantInTx
+  /** RFC-477: node-run workspace rollback (review rerun planning, clarify self-rollback). */
+  readonly createNodeRunWorkspaceRollback: (db: PersistenceDb) => NodeRunWorkspaceRollbackPort
 }

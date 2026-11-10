@@ -15,7 +15,7 @@ import {
   DISABLED_RESOURCE_POLICY,
   notModeledDisabledKinds,
   type DisableableResourceKind,
-} from '@/services/execution/resourcePolicy'
+} from '@/modules/resource-catalog/public/types'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import type { DeclarationFace, RuntimeDriver } from './types'
 

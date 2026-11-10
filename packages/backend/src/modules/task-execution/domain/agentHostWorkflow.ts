@@ -6,6 +6,8 @@
 //
 // RFC-395: each launch freezes its synthesized definition. The host namespace
 // is projected only for compatibility and has no workflow catalog row.
+//
+// RFC-477: moved unchanged from services/agentLaunch.ts into task-execution's domain (pure: shared + util/errors only).
 
 import {
   buildClarifyEdges,

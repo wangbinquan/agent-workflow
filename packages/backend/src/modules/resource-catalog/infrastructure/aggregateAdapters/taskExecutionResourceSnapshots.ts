@@ -48,6 +48,9 @@ import type {
   TaskExecutionWorkflowSnapshot,
   TaskExecutionWorkgroupSnapshot,
 } from '../../public/types'
+// RFC-477: the fail-closed plugin code is this module's own (the disabled-resource policy moved into resource-catalog),
+// so the adapter reads it at its declaration site instead of receiving it back through the injected policy bundle.
+import { PLUGIN_DISABLED_ERROR_CODE } from '../../domain/disabledResourcePolicy'
 
 type TaskExecutionSkillSnapshot = Extract<
   FrozenTaskExecutionResourceSnapshot,
@@ -78,7 +81,6 @@ export interface TaskExecutionResourceDependencies {
     }>[]
   }) => ManagedInjectionNameConflict | null
   readonly formatManagedInjectionNameConflict: (conflict: ManagedInjectionNameConflict) => string
-  readonly pluginDisabledErrorCode: string
   readonly pickCallTarget: <T extends Readonly<{ readonly id: string; readonly name: string }>>(
     selector: Readonly<{ readonly authoritativeName: string; readonly idHint?: string }>,
     candidates: readonly T[],
@@ -382,7 +384,7 @@ export function createTaskExecutionResourceSnapshotPorts(
     })
     if (resolvedPlugins.some((plugin) => !plugin.enabled)) {
       return requestFailure(
-        dependencies.pluginDisabledErrorCode,
+        PLUGIN_DISABLED_ERROR_CODE,
         `agent '${root.name}' references a disabled Plugin`,
       )
     }

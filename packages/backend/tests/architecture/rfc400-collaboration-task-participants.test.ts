@@ -59,6 +59,8 @@ const OWNER_FACTORIES = new Map<string, ReadonlySet<string>>([
     new Set(['createTaskAuthorizationQueries', 'createTaskAuthorizationParticipantInTx']),
   ],
   [TE + 'infrastructure/nodeRunMintParticipant.ts', new Set(['createNodeRunMintParticipantInTx'])],
+  // RFC-477: the node-run workspace rollback factory is another assembly input (collaboration's own port).
+  [TE + 'infrastructure/nodeRollback.ts', new Set(['createNodeRunWorkspaceRollback'])],
   [
     TE + 'infrastructure/nodeRunLifecyclePersistence.ts',
     new Set(['DrizzleNodeRunLifecyclePersistence']),

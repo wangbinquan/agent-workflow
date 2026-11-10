@@ -50,7 +50,7 @@ import {
   AGENT_HOST_INPUT_KEY,
   buildAgentHostSnapshot,
   validateAgentLaunchShape,
-} from '@/services/agentLaunch'
+} from '../domain/agentHostWorkflow'
 import {
   acquireAgentLaunch,
   releaseAgentLaunch,
@@ -58,7 +58,7 @@ import {
 import {
   assertTriggerPreflight,
   triggerSourceFromContext,
-} from '@/services/execution/triggerPreflight'
+} from '@/modules/resource-catalog/public/queries'
 import {
   attachWorkspaceCleanupToMultipartError,
   bufferUploadParts,

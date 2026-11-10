@@ -48,7 +48,7 @@ import {
   type SourceUnit,
 } from './census'
 import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
-import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
+import { DISABLED_RESOURCE_POLICY } from '@/modules/resource-catalog/domain/disabledResourcePolicy'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { OPTION_DEFINITIONS } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
@@ -116,7 +116,8 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
   // nodePorts.ts），不再是一张独立可反查的表——它的键就是各 kind 声明的系统口。
   {
     symbol: 'DISABLED_RESOURCE_POLICY',
-    declaringFile: 'packages/backend/src/services/execution/resourcePolicy.ts',
+    // RFC-477: the policy table moved from services/execution/ into resource-catalog's domain.
+    declaringFile: 'packages/backend/src/modules/resource-catalog/domain/disabledResourcePolicy.ts',
     keys: Object.keys(DISABLED_RESOURCE_POLICY),
     consumption: 'direct',
     why: '被禁用资源在启动路径上的处置策略。',

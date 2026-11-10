@@ -82,7 +82,6 @@ import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '../humanGateDecisionE2eBarrier'
-import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
   dispatchDeferredTaskQuestions,
   dispatchTaskQuestions,
@@ -1176,10 +1175,13 @@ export async function autoDispatchClarifyRound(
         ) {
           return false // an open same-home ledger owns the home → defer WITHOUT rolling back
         }
-        const target = await loadRollbackTarget(db, round.taskId)
+        // RFC-477: task-execution performs the rollback (and its effect journal) behind collaboration's own port.
+        const target = await args.taskExecutionParticipants
+          .createNodeRunWorkspaceRollback(db)
+          .load(round.taskId)
         if (target !== null) {
           try {
-            await rollbackNodeRunWorktrees(target, selfRun.rollback, {}, log)
+            await target.rollback(selfRun.rollback, log)
           } catch (err) {
             log.warn('autodispatch self rollback failed', {
               nodeRunId: selfRun.id,

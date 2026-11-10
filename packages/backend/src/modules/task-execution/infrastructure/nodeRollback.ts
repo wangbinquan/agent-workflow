@@ -1,9 +1,12 @@
-import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/public/queries'
 // RFC-395 II-a A2: one checkpoint-list planner drives both resume and durable review rollback.
 // Empty/missing historical pre-snapshots remain a no-op; current isolated runs carry no pre-snapshot.
+// RFC-477: moved from services/nodeRollback.ts (task-execution owns target loading, checkpoint planning, the git
+// rollback and its RFC-328 effect journal); the outcome type and its user-visible summary are domain/nodeRunRollbackOutcome.ts.
 
-import type { TaskRollbackCheckpointRun } from '@/modules/task-execution/public/types'
-import { taskRollbackPlan } from '@/modules/task-execution/public/queries'
+import type { TaskRollbackCheckpointRun } from '../domain/taskCheckpointRollback'
+import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
+import type { RollbackOutcome } from '../domain/nodeRunRollbackOutcome'
+import { taskRollbackPlan } from './taskRollbackCodec'
 import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
@@ -11,8 +14,8 @@ import {
   createNodeRollbackEffectObserver,
   loadNodeRollbackTarget,
   type NodeRollbackDatabase,
-} from '@/modules/task-execution/infrastructure/nodeRollbackPersistence'
-import type { TaskRollbackQueries } from '@/modules/task-execution/application/ports/taskRollbackQueries'
+} from './nodeRollbackPersistence'
+import type { TaskRollbackQueries } from '../application/ports/taskRollbackQueries'
 
 export interface RollbackTarget {
   taskId?: string
@@ -24,36 +27,8 @@ export interface RollbackTarget {
 
 export type RollbackRunRow = TaskRollbackCheckpointRun
 
-/** RFC-098 B1: per-repo rollback outcome. `attempted` = at least one worktree
- *  was actually rolled back; `failures` = per-repo errors (warn-and-continue
- *  semantics preserved — callers decide whether a failure escalates). */
-export interface RollbackOutcome {
-  attempted: boolean
-  failures: Array<{ worktreeDirName?: string; code: string; message: string }>
-}
-
-/**
- * `snapshot-missing` 那一类失败的合并说明；没有这类失败时返回 null。
- *
- * RFC-359 W57：此前 `postgresqlTaskRouteOperations.ts`（叫 `snapshotLostDetail`）与
- * `childTaskLifecycleParticipant.ts`（叫 `snapshotLost`）各存一份**逐字相同**的
- * 实现——两个名字、一段代码。它格式化的是本文件的 `RollbackOutcome`，落在类型旁边是它本来
- * 该在的地方；两个调用点原本就从这里 import 那个类型，共享它不新增任何一条 import 边。
- *
- * 为什么值得收：这条说明是**用户可见文案**——快照丢失时任务详情页显示的就是它。两份实现
- * 意味着两条路径上的同一种失败可能给出不同措辞。
- */
-export function snapshotMissingDetail(outcome: RollbackOutcome): string | null {
-  const failures = outcome.failures.filter((failure) => failure.code === 'snapshot-missing')
-  if (failures.length === 0) return null
-  return failures
-    .map((failure) =>
-      failure.worktreeDirName === undefined
-        ? failure.message
-        : `${failure.worktreeDirName}: ${failure.message}`,
-    )
-    .join('; ')
-}
+/** The rollback only warns (per-repo failures, an unparsable per-repo map). */
+export type NodeRunRollbackLog = Pick<Logger, 'warn'>
 
 export interface PlannedNodeRunRollbackTarget {
   worktreePath: string
@@ -102,7 +77,7 @@ export async function rollbackNodeRunWorktrees(
   target: RollbackTarget,
   run: RollbackRunRow,
   opts: { checkOnly?: boolean },
-  log: Logger,
+  log: NodeRunRollbackLog,
 ): Promise<RollbackOutcome> {
   const outcome: RollbackOutcome = { attempted: false, failures: [] }
   const plan = taskRollbackPlan(target, run)
@@ -169,4 +144,25 @@ export async function rollbackNodeRunWorktrees(
       result,
     )
   return outcome
+}
+
+/**
+ * RFC-477 —— collaboration 的评审回滚规划与反问自动派发的自回滚经 collaboration 自有端口
+ * `NodeRunWorkspaceRollbackPort` 进来：bootstrap 把这个工厂交给 collaboration 的 `TaskExecutionParticipantBindings`，
+ * collaboration 不取本模块内部。按任务给一个作用域——目标装载一次（带 `db`：在任务执行上下文里回滚照旧写 RFC-328 effect），
+ * 规划与执行都对着它；与原来 collaboration 直接调 `loadRollbackTarget(db, taskId)` 再调
+ * `planNodeRunRollbackTargets(target, run)` / `rollbackNodeRunWorktrees(target, run, {}, log)` 是同一条路径。
+ */
+export function createNodeRunWorkspaceRollback(db: NodeRollbackDatabase) {
+  return Object.freeze({
+    async load(taskId: string) {
+      const target = await loadRollbackTarget(db, taskId)
+      if (target === null) return null
+      return Object.freeze({
+        plan: (run: RollbackRunRow) => planNodeRunRollbackTargets(target, run),
+        rollback: (run: RollbackRunRow, log: NodeRunRollbackLog) =>
+          rollbackNodeRunWorktrees(target, run, {}, log),
+      })
+    },
+  })
 }

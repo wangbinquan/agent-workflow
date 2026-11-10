@@ -201,7 +201,7 @@ import { assertNodeRunSourceTerminationAdmission } from '@/modules/task-executio
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
 // （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
-import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
+import type { NodeRunWorkspaceRollbackScope } from '../application/ports/nodeRunWorkspaceRollback'
 import {
   currentTaskExecutionContext,
   fenceTaskWrite,
@@ -3229,7 +3229,7 @@ interface PreparedSibling {
 interface PreparedRerun {
   rerunPolicy: ReviewRerunPolicy
   rollbackFlag: boolean
-  rollbackTarget: Awaited<ReturnType<typeof loadRollbackTarget>>
+  rollbackTarget: NodeRunWorkspaceRollbackScope | null
   upstreams: PreparedRerunUpstream[]
   cascadeReason: 'rejected' | 'iterated' | null
   siblings: PreparedSibling[]
@@ -3683,7 +3683,7 @@ async function submitReviewDecisionUnlocked(
   if (rerun !== null && rerun.rollbackFlag && rerun.rollbackTarget !== null) {
     const candidates = rerun.upstreams.map((up) => ({
       sourceNodeRunId: up.latest.id,
-      targets: planNodeRunRollbackTargets(rerun!.rollbackTarget!, up.latest.rollback),
+      targets: rerun!.rollbackTarget!.plan(up.latest.rollback),
     }))
     if (candidates.some((candidate) => candidate.targets.length > 0)) {
       workspaceRollbackPlan = await prepareWorkspaceRollbackPlan({
@@ -4474,7 +4474,10 @@ async function planRerun(
   }
   const needsRollback =
     rollbackFlag && upstreams.some((u) => hasTaskRollbackCheckpoint(u.latest.rollback))
-  const rollbackTarget = needsRollback ? await loadRollbackTarget(db, taskRow.id) : null
+  // RFC-477: the rollback target comes from task-execution through collaboration's own port.
+  const rollbackTarget = needsRollback
+    ? await args.taskExecutionParticipants.createNodeRunWorkspaceRollback(db).load(taskRow.id)
+    : null
 
   let cascadeReason: 'rejected' | 'iterated' | null = null
   if (rerunPolicy.cascade === 'always') {

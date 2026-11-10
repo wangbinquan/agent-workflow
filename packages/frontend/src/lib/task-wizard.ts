@@ -403,7 +403,7 @@ export function payloadToWizardSeed(
 /**
  * RFC-175 (§3): 3-state clarify inference for an agent task's relaunch. The
  * agent host snapshot wires a `kind:'clarify'` node IFF the launch set
- * allowClarify=true (backend services/agentLaunch.ts). Presence ⟺ `true`;
+ * allowClarify=true (backend task-execution domain/agentHostWorkflow.ts). Presence ⟺ `true`;
  * a structurally-valid snapshot with no clarify node ⟺ `false`; anything
  * unparseable ⟺ `'unknown'`. Callers send `allowClarify:false` ONLY on `false`
  * — `true`/`'unknown'` omit the field so `payloadToWizardSeed` defaults it true

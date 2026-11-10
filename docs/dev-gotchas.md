@@ -695,6 +695,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   一并撤出。撤出后 `rfc294-architecture-preflight` 的 `PUBLIC_SURFACE_DEBT` 是**精确**白名单，原来挂在这些根上的偏差条目会变成 stale、必须
   同一提交删掉（偏差只降）。另：迁进来的文件对本模块自己的符号取定义处，不要绕道自己的 `public/`——`public` 本就 import 内部文件，绕一圈
   容易成值环（`backend-value-scc` 上限 0）。
+- **另一个 context 要用一项需要数据库句柄的能力时，不要在 provider 的 `public/` 上导出收 `db` 的工厂（RFC-477，2026-11-09）**：签名里的
+  `PersistenceDb` / `PersistenceTx` / `Logger` 都会进 `rfc294-architecture-preflight` 的 public surface 偏差（只降不增）。做法是 consumer 在自己
+  的 `application/ports/` 按业务目的声明端口（按需给出作用域对象，句柄与 effect 记账留在 provider），provider 在 `composition.ts` 转出工厂，
+  bootstrap 经已有的装配束交进去（collaboration 用的是 `TaskExecutionParticipantBindings`，同束的 `createHumanGateNodeRunMintOperations(db)`
+  即先例）；把工厂登记进 `architecture/rfc400-collaboration-task-participants` 的 `OWNER_FACTORIES`，让它同样不能经 public 漏出。日志参数按
+  实际用到的方法收窄（`Pick<Logger, 'warn'>`），端口里就能按结构声明、不必取 `Logger`。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
