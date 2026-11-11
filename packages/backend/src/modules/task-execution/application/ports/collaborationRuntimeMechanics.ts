@@ -1,3 +1,6 @@
+// RFC-481 — Task Execution's required port for the collaboration mechanics a running DAG node uses (review dispatch,
+// clarify, borrowing, prompt context). Declared here, moved from collaboration `application/ports/`: Task Execution owns
+// the contract and collaboration implements it (RFC-294 design §3.1 — task-execution does not import collaboration).
 import type {
   ClarifyDirective,
   ClarifyQuestion,
@@ -7,8 +10,8 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 
-import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
-import type { PreparedHumanGateRef } from '../../domain/humanGateOperation'
+import type { PreparedHumanGateRef } from '../../domain/humanGateContinuation'
+import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
 export interface CollaborationReviewDispatchInput {
   readonly taskId: string

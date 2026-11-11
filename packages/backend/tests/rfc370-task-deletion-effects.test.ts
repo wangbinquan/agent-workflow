@@ -28,7 +28,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { Paths } from '@/util/paths'
 import { snapshotRefPrefix } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'

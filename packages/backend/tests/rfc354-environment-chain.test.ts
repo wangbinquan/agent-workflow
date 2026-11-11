@@ -52,7 +52,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'worker',
       parents,
       frame: workerFrame,
-      containerRowById: byId,
+      containerRows: { get: byId },
     })
     expect(res).toEqual({ ok: true, frame: workerFrame, hops: 0 })
   })
@@ -65,7 +65,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'worker',
       parents,
       frame: workerFrame,
-      containerRowById: byId,
+      containerRows: { get: byId },
     })
     expect(res).toEqual({ ok: true, frame: TOP_FRAME, hops: 3 })
   })
@@ -79,7 +79,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'worker',
       parents,
       frame: workerFrame,
-      containerRowById: byId,
+      containerRows: { get: byId },
     })
     expect(res).toEqual({ ok: true, frame: { containerRunId: 'R_git', iteration: 0 }, hops: 1 })
   })
@@ -90,7 +90,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'worker',
       parents,
       frame: workerFrame,
-      containerRowById: byId,
+      containerRows: { get: byId },
     })
     expect(res).toEqual({ ok: false, reason: 'scope-not-enclosing', scopeId: 'sibling_loop' })
   })
@@ -101,7 +101,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'worker',
       parents,
       frame: { containerRunId: 'R_gone', iteration: 0 },
-      containerRowById: byId,
+      containerRows: { get: byId },
     })
     expect(res).toEqual({ ok: false, reason: 'container-row-missing', scopeId: 'inner' })
   })
@@ -113,7 +113,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'worker',
       parents,
       frame: { containerRunId: 'R_git', iteration: 0 },
-      containerRowById: byId,
+      containerRows: { get: byId },
     })
     expect(res).toEqual({ ok: false, reason: 'container-row-missing', scopeId: 'inner' })
   })
@@ -133,7 +133,7 @@ describe('resolveSourceFrame — lexical environment walk', () => {
       targetNodeId: 'leaf',
       parents: cyclic,
       frame: { containerRunId: 'R_a', iteration: 0 },
-      containerRowById: (id) => cycRows.find((r) => r.id === id),
+      containerRows: { get: (id) => cycRows.find((r) => r.id === id) },
     })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.reason).toBe('containment-cycle')
@@ -375,7 +375,7 @@ describe('resolveSourceFrameInScope — a wrapper reading on behalf of its body'
         targetNodeId: 'worker',
         parents,
         frame: bodyFrame,
-        containerRowById: lookup,
+        containerRows: { get: lookup },
       }),
     ).toEqual({ ok: true, frame: { containerRunId: null, iteration: 0 }, hops: 2 })
   })

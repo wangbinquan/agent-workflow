@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskPreparationParticipant } from '@/modules/task-execution/application/ports/taskPreparation'
 import { createTaskPreparationParticipantInTx } from '@/modules/task-execution/infrastructure/taskPreparationParticipant'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 // RFC-476: task deletion's participant and queries left task-execution public with their only outside consumer.
 import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/infrastructure/taskDeletionParticipant'
 import { createTaskDeletionQueries } from '@/modules/task-execution/infrastructure/taskDeletionQueries'

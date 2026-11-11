@@ -22,7 +22,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
+import type { CollaborationRuntimeMechanics } from '@/modules/task-execution/public/types'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,

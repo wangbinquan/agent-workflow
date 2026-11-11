@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 768,
+      "lines": 722,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1102
+      "lines": 1094
     },
     {
       "assertsAbsence": true,
@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 553,
+      "lines": 552,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -3502,6 +3502,18 @@
       "lines": 438,
       "mechanism": "ast",
       "minCorpusFiles": 1500,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc481-te-human-gate-port-boundary.test.ts",
+      "id": "rfc481-te-human-gate-port-boundary",
+      "lines": 320,
+      "mechanism": "ast",
+      "minCorpusFiles": 500,
       "negativeFixture": true,
       "runner": "bun"
     }

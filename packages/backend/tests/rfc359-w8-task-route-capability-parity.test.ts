@@ -112,7 +112,7 @@ import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')

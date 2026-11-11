@@ -46,7 +46,7 @@ export async function resolveUpstreamInputs(
   const consumed: Record<string, string> = {}
   // The generation rows between this frame and the top, loaded once; the
   // pure frame walk below looks them up synchronously.
-  const chain = await loadFrameChain((id) => persistence.read(id), frame)
+  const chain = await loadFrameChain({ read: (id) => persistence.read(id) }, frame)
 
   for (const edge of incoming) {
     const resolved =
@@ -74,7 +74,7 @@ export async function resolveUpstreamInputs(
             targetNodeId: nodeId,
             parents,
             frame,
-            containerRowById: chain.lookup,
+            containerRows: chain.rows,
           })
     if (!('containerRunId' in sourceFrame) && !sourceFrame.ok) {
       throw new Error(
@@ -214,14 +214,14 @@ export async function readPortInScope(
   portName: string,
   frame: FrameCoordinate,
 ): ReturnType<typeof readPortRowAtFrame> {
-  const chain = await loadFrameChain((id: string) => input.persistence.read(id), frame)
-  const scopeRow = frame.containerRunId === null ? undefined : chain.lookup(frame.containerRunId)
+  const chain = await loadFrameChain({ read: (id: string) => input.persistence.read(id) }, frame)
+  const scopeRow = frame.containerRunId === null ? undefined : chain.rows.get(frame.containerRunId)
   const resolved = resolveSourceFrameInScope({
     sourceNodeId: nodeId,
     scope: scopeRow?.nodeId ?? null,
     parents: input.parents,
     frame,
-    containerRowById: chain.lookup,
+    containerRowById: (id) => chain.rows.get(id),
   })
   if (!resolved.ok) {
     throw new Error(

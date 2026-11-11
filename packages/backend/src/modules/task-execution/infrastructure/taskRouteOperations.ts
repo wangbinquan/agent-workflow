@@ -106,13 +106,12 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { TaskMembershipOperationsPort } from '../application/ports/taskMembershipOperations'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
+import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
 import type {
   TaskClarifyRepairPort,
   TaskReviewRepairPort,
 } from '../application/ports/collaborationRepair'
 
-import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import type {
   FrozenTaskExecutionResourceSnapshot,
@@ -230,7 +229,6 @@ export interface TaskRouteOperationsDependencies {
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly nodeRunPrompts?: NodeRunPromptOperations
   readonly db: PersistenceDb
-  readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
    * 两条启动路由（JSON / multipart）都走它：路由只解析表单 + 跑路由级门，

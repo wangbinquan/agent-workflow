@@ -11,17 +11,21 @@ import type { ContainerRunRow, FrameCoordinate } from '../domain/environmentChai
 
 export interface FrameChain {
   readonly rows: ReadonlyMap<string, ContainerRunRow>
-  readonly lookup: (id: string) => ContainerRunRow | undefined
+}
+
+/** RFC-481: the generation-row reader a frame walk takes (a closed interface, not a bare callback). */
+export interface ContainerRunReader {
+  read(nodeRunId: string): Promise<ContainerRunRow | null | undefined>
 }
 
 export async function loadFrameChain(
-  read: (nodeRunId: string) => Promise<ContainerRunRow | null | undefined>,
+  reader: ContainerRunReader,
   frame: FrameCoordinate,
 ): Promise<FrameChain> {
   const rows = new Map<string, ContainerRunRow>()
   let current = frame.containerRunId
   while (current !== null && !rows.has(current)) {
-    const row = await read(current)
+    const row = await reader.read(current)
     if (row === null || row === undefined) break
     rows.set(current, {
       id: row.id,
@@ -31,5 +35,5 @@ export async function loadFrameChain(
     })
     current = row.containerRunId ?? null
   }
-  return { rows, lookup: (id) => rows.get(id) }
+  return { rows }
 }

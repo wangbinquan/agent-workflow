@@ -23,7 +23,7 @@ import type { PortArtifactReader } from '@/modules/task-execution/public/queries
 // 保留惰性 import：评审 / 澄清实现仍在原运行期调用点才载入。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
+import type { CollaborationRuntimeMechanics } from '@/modules/task-execution/public/types'
 import {
   dismissOpenClarifyParksForAutonomous,
   isTaskClarifySuppressed,

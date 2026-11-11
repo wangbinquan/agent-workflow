@@ -3,27 +3,8 @@
 // consumer-owned human-gate SPI remains module-internal.
 
 import { createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal } from '../infrastructure/workgroupClarifyAskGate'
-export type {
-  TaskDagCollaborationOperations,
-  TaskDagOpenClarifyEvidence,
-} from '../application/ports/taskDagCollaborationOperations'
-export type {
-  CollaborationAgentClarifyOpenInput,
-  CollaborationAgentClarifyOpenReceipt,
-  CollaborationAutonomousDismissalInput,
-  CollaborationAutonomousDismissalResult,
-  CollaborationBorrowResolutionInput,
-  CollaborationClarifyDirectiveInput,
-  CollaborationClarifyQueueContext,
-  CollaborationClarifyQueueInput,
-  CollaborationClarifySuppressionInput,
-  CollaborationCrossClarifyInspectInput,
-  CollaborationCrossClarifyInspectResult,
-  CollaborationReviewDispatchInput,
-  CollaborationReviewDispatchResult,
-  CollaborationReviewPromptInput,
-  CollaborationRuntimeMechanics,
-} from '../application/ports/collaborationRuntimeMechanics'
+// RFC-481: the DAG projection and runtime mechanics ports are Task Execution's required ports (task-execution
+// `public/types`); collaboration implements them and no longer hands them out.
 export type {
   AddReviewCommentInput,
   AddedReviewComment,
@@ -49,5 +30,5 @@ export const createWorkgroupClarifyAskGate = createWorkgroupClarifyAskGateIntern
 // RFC-359 W4-D19c-tail：`countWorkgroupClarifyAsks` 的唯一生产消费者是 legacy 工作组引擎的转发层，
 // 随该岛一并退役；计数本身仍在 gate 内部使用，不再对外开口（删除优于留一个零消费者的公共符号）。
 
-export { createTaskDeletionCollaborationParticipantInTx } from '../infrastructure/taskDeletionParticipant'
-export type { TaskDeletionCollaborationParticipant } from '../application/ports/taskDeletionParticipant'
+// RFC-481: the task-deletion participant factory (it takes a persistence transaction) reaches bootstrap through
+// `composition.ts`; neither it nor its result type is part of the public contract.

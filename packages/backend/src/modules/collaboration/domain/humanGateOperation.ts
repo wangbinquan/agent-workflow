@@ -3,6 +3,7 @@
 // This is deliberately not a generic saga abstraction. The closed kinds below
 // describe only review / clarify / question open and decision recovery.
 
+import type { PreparedHumanGateRef } from '@/modules/task-execution/public/types'
 import { sha256Hex as humanGateSha256Hex } from '@/util/hash'
 
 export { humanGateSha256Hex }
@@ -118,14 +119,7 @@ export interface HumanGateOperationIdentity {
   readonly gateRef: string
 }
 
-export interface PreparedHumanGateRef {
-  readonly operationId: string
-  readonly taskId: string
-  readonly gateKind: HumanGateKind
-  readonly expectedTaskRevision: number
-  readonly manifestDigest: string
-}
-
+// RFC-481: the prepared-gate value is Task Execution's (it parks on it); collaboration builds it here.
 export function preparedHumanGateRef(operation: HumanGateOperationSnapshot): PreparedHumanGateRef {
   if (operation.state !== 'prepared') {
     throw new HumanGateOperationError(

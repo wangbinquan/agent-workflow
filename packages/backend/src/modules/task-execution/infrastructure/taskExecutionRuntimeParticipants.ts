@@ -13,10 +13,8 @@ import {
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { CallObservations } from '@/modules/run-observability/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type {
-  CollaborationRuntimeMechanics,
-  TaskDagCollaborationOperations,
-} from '@/modules/collaboration/public/participants'
+import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
+import type { TaskDagCollaborationOperations } from '../application/ports/taskDagCollaborationOperations'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'

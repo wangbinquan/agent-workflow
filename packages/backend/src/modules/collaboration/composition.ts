@@ -148,6 +148,8 @@ export function composeGateContinuationSupport(
 }
 
 export { composeTaskReviewersPort } from './application/adapters/task-execution-adapter'
+// RFC-481: bootstrap composes Task Execution's deletion with collaboration's in-transaction half (was public/participants).
+export { createTaskDeletionCollaborationParticipantInTx } from './infrastructure/taskDeletionParticipant'
 
 export function composeHumanGateOpenParticipantFactory() {
   return bindHumanGateOpenParticipantFactory(createHumanGateOpenParticipantScope)

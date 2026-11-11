@@ -513,7 +513,10 @@ describe('RFC-349 collaboration runtime mechanics', () => {
   test('运行期机制只有一个工厂，契约仍不含任何 provider 类型', () => {
     const reservedTransactionFactory: TaskExecutionClarifyParticipantFactory =
       composeWorkgroupTaskRoomClarifyParticipantFactory()
-    const contract = SRC('modules/collaboration/application/ports/collaborationRuntimeMechanics.ts')
+    // RFC-481: the contract is Task Execution's required port now; collaboration's factory implements it.
+    const contract = SRC(
+      'modules/task-execution/application/ports/collaborationRuntimeMechanics.ts',
+    )
     const factory = SRC('modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts')
     // RFC-359 W9：已提交事件投影也合一了。正典搬到中立的 WS 投影文件里，
     // `postgresqlCollaborationCommittedEventProjection.ts` 随之退役（对拍见

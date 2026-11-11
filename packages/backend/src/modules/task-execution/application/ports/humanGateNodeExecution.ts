@@ -1,5 +1,5 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
+import type { CollaborationRuntimeMechanics } from './collaborationRuntimeMechanics'
 import type { NodeRunLedger, NodeRunIdentityFactory, Logger } from './executionKernel'
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
 import type { RunSelectionReader } from './runSelection'

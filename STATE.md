@@ -13,7 +13,20 @@
 - **不做**：RFC-482、RFC-483 的范围；其他 context 对；端口改名或改成员；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
   上次 2026-11-09，其后关闭 5 个后继，下一次不晚于 2026-11-23。
-- **附带**：RFC-480 的 Done 文档提交 `c28b1a8d8`（5 个文档文件）：exact SHA 主 CI run 42970673097 的 70 个 job 全绿。
+- **附带**：RFC-480 的 Done 文档提交 `c28b1a8d8`（5 个文档文件）：exact SHA 主 CI run 42970673097 的 70 个 job 全绿；本 RFC 的落档提交
+  `ae835a25d`：exact SHA 主 CI run 42974983814 的 70 个 job 全绿。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 端口与值按内容落在 task-execution 的 `application/ports` 与 `domain`；C11 task-execution 的
+  public 新增的只是要求 collaboration 实现的端口类型与一个值（7 个名字，collaboration 都按名字取用），collaboration 的 public 只撤不增；C12
+  RFC-481 用例覆盖 task-execution 的全部生产文件与两个模块的 public 文件；C13 触及的两项减速带收紧到实测（`counts.json` 60 项）。
+- **§14 不变量 / S9 退出门**（task-execution ↔ collaboration 这一对的第二步）：越 DAG 的 offered 文件对 55 → 47（task-execution → collaboration
+  为 0）；public 类型偏差 77 → 74（这一对 31 → 28，collaboration 为 0）；未消费 public 符号 91 不变（两个模块为 0）；跨 context 内部文件对 43
+  不变；减速带 60 项每项等于实测。
+- **集中验证**（候选基于 `ae835a25d`，验证期间 HEAD 未前进，详见 plan）：查出本 RFC 的一处问题，已修复并复验——`rfc376-structural-guards`
+  的 committed baselines 里同样的 8 条越 DAG 边没删（删后 221 / 221）。backend `tsc` 0 错、eslint 无告警；全量 SQLite 逐文件跑 2,931 个、
+  2,913 个通过，其余 17 个失败里，发布账本一条是导出仓库没有真实历史（对照同样失败，判据在真实仓库上通过），16 个撞用例自带的时限或内部
+  等待：单独重跑或在只放宽时限常量的副本上全部跑完通过，preflight 的两条在同一份语料上直接调判据（74 = 74、18 = 18）；PostgreSQL 以 CI
+  双引擎分片为证据，另把文档对账、改动用例与用到改动 helper 的 48 个文件接库跑：1,010 条通过、0 失败（三个文件撞时限，单独或放宽预算后
+  跑完）；架构报告 60 项实测 = `max`，门里只有上述两项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-10 RFC-480 task-execution 与 collaboration 的 public 收口：未消费符号清零与 `public/operations` 退役（Done；`design/RFC-480-te-collaboration-public-unconsumed-sweep/`）
 

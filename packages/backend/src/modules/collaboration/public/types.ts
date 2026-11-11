@@ -7,7 +7,7 @@ export type { ReviewAnchorRequest } from '../domain/reviewAnchor'
 
 export type { ReviewGateDecision } from '../domain/canonicalGateRequest'
 export type { GateDecisionReceipt, HumanGateIdentity } from '../domain/gateReceipt'
-export type { HumanGateKind, PreparedHumanGateRef } from '../domain/humanGateOperation'
+// RFC-481: `PreparedHumanGateRef` is Task Execution's now (task-execution `public/types`); `HumanGateKind` left with it.
 export type { ReviewAccessDecision } from '../domain/reviewAccess'
 export type {
   SubmitReviewDecisionCommandInput,

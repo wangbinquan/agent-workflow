@@ -30,7 +30,7 @@ export async function runOutputNode(
   // RFC-354 — an output node is a consumer like any other: each bound source is
   // read in the frame the environment chain resolves it to.
   const frame: FrameCoordinate = { containerRunId: args.containerRunId, iteration }
-  const chain = await loadFrameChain((id) => ports.input.read(id), frame)
+  const chain = await loadFrameChain({ read: (id) => ports.input.read(id) }, frame)
   for (const b of bindings) {
     const resolved = resolveWorkflowSourceRef(definition, b.bind, node.id, ports.containerOf)
     if (!resolved.ok) {
@@ -45,7 +45,7 @@ export async function runOutputNode(
       targetNodeId: node.id,
       parents: ports.containerOf,
       frame,
-      containerRowById: chain.lookup,
+      containerRows: chain.rows,
     })
     if (!sourceFrame.ok) {
       return {

@@ -304,6 +304,20 @@ export type {
 // RFC-477: `TaskResourceLimitFacts` left public with the resource-limit policy it served (now task-execution application).
 export type { TaskStatusCountQueries } from '../application/ports/taskStatusCounts'
 
+// RFC-481 — the human-gate ports Task Execution requires and collaboration implements (moved here from collaboration, which
+// now takes them from this entry: task-execution does not import collaboration).
+export type { PreparedHumanGateRef } from '../domain/humanGateContinuation'
+export type {
+  CollaborationAutonomousDismissalInput,
+  CollaborationAutonomousDismissalResult,
+  CollaborationClarifySuppressionInput,
+  CollaborationRuntimeMechanics,
+} from '../application/ports/collaborationRuntimeMechanics'
+export type {
+  TaskDagCollaborationOperations,
+  TaskDagOpenClarifyEvidence,
+} from '../application/ports/taskDagCollaborationOperations'
+
 export { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 export type { NodeRunMintGeneration } from '../application/nodeRunMintIdentity'
 

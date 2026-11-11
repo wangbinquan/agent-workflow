@@ -5,6 +5,18 @@ import { canonicalJson } from './executionIntent'
 
 export type TaskExecutionHumanGateKind = 'review' | 'clarify' | 'questions'
 
+/**
+ * RFC-481 — the prepared human-gate operation Task Execution parks a task on. Declared here (moved from collaboration
+ * `domain/humanGateOperation.ts`); collaboration builds the value when it prepares a gate.
+ */
+export interface PreparedHumanGateRef {
+  readonly operationId: string
+  readonly taskId: string
+  readonly gateKind: TaskExecutionHumanGateKind
+  readonly expectedTaskRevision: number
+  readonly manifestDigest: string
+}
+
 export interface HumanGateNodeProjectionMember {
   readonly id: string
   readonly taskId: string

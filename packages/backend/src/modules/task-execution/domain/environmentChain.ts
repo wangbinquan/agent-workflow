@@ -94,15 +94,20 @@ export function resolveSourceFrame(args: {
   readonly targetNodeId: string
   readonly parents: ReadonlyMap<string, string>
   readonly frame: FrameCoordinate
-  readonly containerRowById: (id: string) => ContainerRunRow | undefined
+  readonly containerRows: ContainerRunLookup
 }): SourceFrameResolution {
   return resolveSourceFrameInScope({
     sourceNodeId: args.sourceNodeId,
     scope: workflowScopeOf(args.targetNodeId, args.parents),
     parents: args.parents,
     frame: args.frame,
-    containerRowById: args.containerRowById,
+    containerRowById: (id) => args.containerRows.get(id),
   })
+}
+
+/** RFC-481: the synchronous generation-row lookup a source-frame walk takes (a `ReadonlyMap` satisfies it). */
+export interface ContainerRunLookup {
+  get(id: string): ContainerRunRow | undefined
 }
 
 /**

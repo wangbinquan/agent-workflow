@@ -139,7 +139,7 @@ export function createWrapperRunLedger(ports: WrapperRunLedgerPorts): WrapperRun
       if (kind !== 'wrapper-fanout') {
         const frame = { containerRunId: request.containerRunId, iteration: request.iteration }
         const chain = await loadFrameChain(
-          (id: string) => ports.persistence.nodeExecution.read(id),
+          { read: (id: string) => ports.persistence.nodeExecution.read(id) },
           frame,
         )
         const sources: Array<{ nodeId: string; nodeKind?: string; frame: typeof frame }> = []
@@ -151,7 +151,7 @@ export function createWrapperRunLedger(ports: WrapperRunLedgerPorts): WrapperRun
             targetNodeId: request.node.id,
             parents: ports.containerOf,
             frame,
-            containerRowById: chain.lookup,
+            containerRows: chain.rows,
           })
           if (resolved.ok)
             sources.push({

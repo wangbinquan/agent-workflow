@@ -724,6 +724,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `composition-control-flow-<module>`（在模块 `composition/` 里增删行首的 `if` / `for` / `while` / `switch` / `try` / `throw`）。新增一个带
   `composition/` 的模块会报 `missing count`，删掉会报 `unknown count`，都要登记。
 - 两个会话各自减少了同一项：后推的那个合并后，按合并结果的实测再改一次。
+- **逐条清单另有一份**：计数背后的条目还逐条登记在 `rfc376-structural-guards.test.ts` 的 `// BEGIN COMMITTED BASELINES` 块（`KNOWN`，
+  按 gate id：`cross-context-internal-file-pairs`、`off-dag-offered-file-context-pairs`、`module-layer-violations`、
+  `unreachable-production-files` 等 12 项），判据双向。所以减少一项要改的不只 `counts.json` 与专项账本（如越 DAG 边的
+  `OFF_DAG_OFFERED_EDGE_DEBT`），还要删掉 `KNOWN` 里对应的行（`BASELINE_SOURCE` 不必动）。RFC-481 实撞：销了 8 条越 DAG 边，只改了前两处，
+  `KNOWN` 留下 8 条 stale，全量里那条用例 6 毫秒就红。
 
 ## 撤 public 符号：迭代到零、先修判据的盲区，留意豁免入口藏起来的旧债（RFC-480，2026-11-10）
 
@@ -742,9 +747,15 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   （`tests/architecture/` 全部，加上 `tests/` 里读 `src/` 文件的用例）跑一遍，它们快、不怕负载，再上全量。按路径或栈帧断言源码的门不止在
   `tests/`：`scripts/rfc359-p0-mutations.ts` 的 p0-8 证据要求栈帧落在命令入口所在的文件，只在 real-PostgreSQL 那个 job 里跑，挪文件时把
   `scripts/` 一起搜。
+- **按整行文本批量改 import，会把用例里作负对照的同一行字符串一起改掉**（RFC-481 实撞）：`rfc476` 的负对照把一行
+  `import { … } from '@/modules/collaboration/public/participants'` 当输入、期望判据报出这个来源；改指脚本把这行字符串也换成了新路径，期望
+  值没变，用例转红。改 import 时按语法树只动 import 声明，或者替换后逐处核对 diff，确认每一处都是真的 import。
 - **成对复跑里两边都超时，等于这条用例没跑**：「候选与对照失败形态相同」只说明两边负载相同，不说明候选在这条用例上是绿的。RFC-480 的
   preflight capability 账本（预算 180 秒）在本地全量与成对复跑里两边都超时，被归给负载；CI 上它 96 秒跑完，候选真红（账本多 4 条）。两边都
   超时的用例要换能跑完的条件拿到候选的真结果：单独跑并给够时间，或者在同一份语料上直接调同一个判据函数（本例几十秒）。
+- **「给够时间」不能只靠 `bun test --timeout`**：它只改默认值；用例的第三个参数、文件里的 `setDefaultTimeout` 和用例内部的等待（检查点、
+  收敛轮询、流程时限、子进程的 SIGKILL 定时器）都不受它影响。负载下要拿真结果，就在导出仓库另存一份只放宽这些常量的副本跑完，跑完删掉。
+  要把同一条路径上的定时器一起放宽：RFC-481 只放宽了 30 秒的检查点等待，worker 仍在 45 秒被 `launch` 里的 SIGKILL 定时器杀掉（退出码 137）。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

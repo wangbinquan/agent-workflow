@@ -96,14 +96,9 @@ export type TaskExecutionBackgroundControl = TaskExecutionProviderBackgroundCont
 export type TaskExecutionBackgroundStartDependencies =
   TaskExecutionProviderBackgroundStartDependencies
 
-type RouteCollaborationContext = TaskRouteOperationsDependencies['collaboration']
-
-export interface SelectedTaskExecutionProviderRuntime<
-  C extends RouteCollaborationContext = RouteCollaborationContext,
-> {
+export interface SelectedTaskExecutionProviderRuntime {
   readonly driverLifecycle: TaskDriverLifecyclePort
   readonly launches: ReturnType<typeof createTaskExecutionLaunchParticipant>
-  readonly collaboration: C
   readonly workgroupTaskRoom: WorkgroupTaskRoomTaskParticipantFactory
   readonly participants: TaskExecutionRuntimeParticipants
   readonly persistence: TaskExecutionPersistence
@@ -180,9 +175,7 @@ function cancellationCommand(
 }
 
 /** RFC-388: one passive graph; callers select deployment bindings and shared participants. */
-export interface TaskExecutionProviderRuntimeDependencies<
-  C extends RouteCollaborationContext = RouteCollaborationContext,
-> {
+export interface TaskExecutionProviderRuntimeDependencies {
   readonly db: PersistenceDb
   readonly historyRestrictions: HistoryRestrictionPort
   readonly persistence: TaskExecutionPersistence
@@ -220,7 +213,6 @@ export interface TaskExecutionProviderRuntimeDependencies<
     TaskRouteOperationsDependencies,
     ProviderRouteOperationsAssembled
   > & {
-    readonly collaboration: C
     readonly clarifyDirective: TaskClarifyDirectiveRouteOperations
   }
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
@@ -233,9 +225,9 @@ export interface TaskExecutionProviderRuntimeDependencies<
   }>
 }
 
-export function composeTaskExecutionProviderRuntime<C extends RouteCollaborationContext>(
-  dependencies: TaskExecutionProviderRuntimeDependencies<C>,
-): SelectedTaskExecutionProviderRuntime<C> {
+export function composeTaskExecutionProviderRuntime(
+  dependencies: TaskExecutionProviderRuntimeDependencies,
+): SelectedTaskExecutionProviderRuntime {
   const { db, persistence, execution, finalizeWorkspace, log } = dependencies
   const workspaceReads = dependencies.workspaceReads
   const executionModule = execution.module
@@ -392,7 +384,6 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
   return Object.freeze({
     driverLifecycle,
     launches,
-    collaboration: routeDependencies.collaboration,
     participants,
     persistence,
     runtime,

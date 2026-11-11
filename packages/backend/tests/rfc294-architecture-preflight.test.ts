@@ -365,7 +365,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
-  'modules/collaboration/infrastructure/taskDeletionParticipant.ts#createTaskDeletionCollaborationParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
+  // RFC-481: collaboration's task-deletion participant factory reaches bootstrap through composition (left public),
+  // and the two frame functions take closed reader / lookup interfaces instead of callbacks — three entries settled.
   // RFC-471: composeSelectedDevelopmentPipelineEvidence is no longer public (its only consumer moved into the module); the
   // same open `object` field of the evidence staging namespace is now first reached through assertEvidenceStagingFactory.
   'modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingFactory: unsafe/open type ObjectKeyword',
@@ -421,12 +422,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/system-operations/infrastructure/crewstation/objectPublicationContract.ts#HostedObjectPublications: unsafe/open type FunctionType',
   'modules/system-operations/infrastructure/crewstation/restoreNormalizationContract.ts#HostedRestoreNormalizationParticipant: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/system-operations/public/commands.ts#ApplicationConfigurationCommands: unsafe/open type UnknownKeyword',
-  'modules/task-execution/application/frameChain.ts#loadFrameChain: unsafe/open type FunctionType',
   'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/util/log#Logger',
   // RFC-399 A8: the clarify directive route port moved from TE public/types into TE application/ports
   // (public/types re-exports it); same Actor debt, new declaration site.
   'modules/task-execution/composition/taskSubjectQueries.ts#createTaskSubjectQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/domain/environmentChain.ts#resolveSourceFrame: unsafe/open type FunctionType',
   // RFC-480: public/operations (exempt from this scan as an RFC-344 operation entrypoint) was retired; the consumer-owned prune
   // policy integration implements is the same contract on public/types, so its function type is visible here (S12 replaces the
   // process-level registration that takes it).

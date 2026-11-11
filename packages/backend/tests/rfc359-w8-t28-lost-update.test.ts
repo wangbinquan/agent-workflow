@@ -77,7 +77,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRecoveryOperations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { memoryCatalogOf } from './helpers/memoryCatalog'

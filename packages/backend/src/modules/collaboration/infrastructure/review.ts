@@ -729,13 +729,16 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // must be checked for done-ness below — filtering would silently fall back
   // to an OLDER done row instead of failing loudly with review-upstream-not-done.
   const reviewFrame = { containerRunId, iteration }
-  const frameChain = await loadFrameChain((id) => createNodeRunQueries(db).read(id), reviewFrame)
+  const frameChain = await loadFrameChain(
+    { read: (id) => createNodeRunQueries(db).read(id) },
+    reviewFrame,
+  )
   const sourceFrame = resolveSourceFrame({
     sourceNodeId,
     targetNodeId: node.id,
     parents: buildWorkflowScopeParentMap(definition),
     frame: reviewFrame,
-    containerRowById: frameChain.lookup,
+    containerRows: frameChain.rows,
   })
   const sourceRun = await databaseSessionFor(db).snapshotRead(async (tx) => {
     const selectedSource = sourceFrame.ok

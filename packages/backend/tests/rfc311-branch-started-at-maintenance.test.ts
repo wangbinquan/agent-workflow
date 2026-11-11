@@ -35,7 +35,7 @@ import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/inf
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })

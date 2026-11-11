@@ -8,7 +8,7 @@
 // 同样提交后发事件），只是两个引擎共用同一份。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
+import type { PreparedHumanGateRef } from '../domain/humanGateContinuation'
 import {
   parkTaskAtHumanGate,
   type ParkTaskAtHumanGateResult,

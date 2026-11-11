@@ -64,10 +64,8 @@ import { actorOfDirectAuthority } from '@/modules/identity-access/composition/au
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import {
-  createTaskDeletionCollaborationParticipantInTx,
-  createWorkgroupClarifyAskGate,
-} from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/task-execution/composition/workgroupTurns'
@@ -382,7 +380,6 @@ export async function createEachProviderTaskExecution(
         // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
         // 最后一个要 legacy `TaskContinuationDependencies` 的路由动词，合一之后路由层不再持有它。
         routes: () => ({
-          collaboration: unusedCapability('collaboration route'),
           reviewers: composeTaskReviewersPort(unusedCapability('collaboration route')),
           clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
             unusedCapability('collaboration route'),
@@ -553,7 +550,6 @@ export async function createEachProviderTaskExecution(
         ),
       },
       routes: () => ({
-        collaboration: unusedCapability('collaboration route'),
         reviewers: composeTaskReviewersPort(unusedCapability('collaboration route')),
         clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
           unusedCapability('collaboration route'),

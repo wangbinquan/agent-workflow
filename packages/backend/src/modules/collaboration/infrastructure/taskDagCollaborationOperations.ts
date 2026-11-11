@@ -18,7 +18,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskDagCollaborationOperations,
   TaskDagOpenClarifyEvidence,
-} from '../application/ports/taskDagCollaborationOperations'
+} from '@/modules/task-execution/public/types'
 import { partitionTaskDagParkTargets, type TaskDagParkEntry } from './taskDagCollaborationReads'
 
 async function loadOpenClarifyEvidence(

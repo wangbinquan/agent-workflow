@@ -1,4 +1,4 @@
-import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
+import type { PreparedHumanGateRef } from '../../domain/humanGateContinuation'
 import type { TaskExecutionPostCommitEventRef } from '../../domain/postCommitEventRef'
 import type { OwnershipToken } from '../../domain/ownership'
 import type { TaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'

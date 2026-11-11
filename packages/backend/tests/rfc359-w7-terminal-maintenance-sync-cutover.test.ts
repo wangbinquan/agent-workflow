@@ -51,7 +51,7 @@ import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execu
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 

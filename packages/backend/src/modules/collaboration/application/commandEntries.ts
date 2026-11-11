@@ -1,7 +1,7 @@
 // RFC-480 —— collaboration 命令的入口函数（原直接声明在 `public/commands.ts`：评审 / 反问人工门的准备与提交后收尾、手动提问、
 // 评审 / 反问决定、问题派发、反问指令写入）。它们模块外零消费，只被本模块的 composition / infrastructure / application 适配器调用，
 // 按 RFC-294 常驻规则 12 撤出 public；函数体只取命令上下文与 application 用例类，按内容（C10）归 application。函数体原样迁来。
-import type { PreparedHumanGateRef } from '../domain/humanGateOperation'
+import type { PreparedHumanGateRef } from '@/modules/task-execution/public/types'
 import type { CollaborationCommandContext } from '../public/types'
 import { type PrepareReviewGateOpenInput, ReviewGateOpenPreparation } from './prepareReviewGateOpen'
 import {

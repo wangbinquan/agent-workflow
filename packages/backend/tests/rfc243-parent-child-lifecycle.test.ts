@@ -47,7 +47,7 @@ import type { TaskContinuationDependencies } from './helpers/taskContinuationDep
 import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
-import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { enforceLimits } from './helpers/resourceLimits'
 import { parseCallHumanWait } from '../src/modules/task-execution/domain/resourceLimitUsage'
 

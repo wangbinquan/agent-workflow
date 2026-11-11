@@ -11,8 +11,8 @@ import type { AgentRunSettledObserver } from '@/modules/task-execution/applicati
 // RFC-349 provider-neutral task drive options. Provider clients are captured
 // by infrastructure participants and never cross the scheduler/runtime seam.
 import type { Language, ScriptLanguage } from '@agent-workflow/shared'
-import type { TaskDagCollaborationOperations } from '@/modules/collaboration/public/participants'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
+import type { TaskDagCollaborationOperations } from '../application/ports/taskDagCollaborationOperations'
+import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type {
   CodeHostConnectionResolver,

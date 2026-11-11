@@ -35,7 +35,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
+import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
 import type {
   TaskClarifyRepairPort,
   TaskReviewRepairPort,

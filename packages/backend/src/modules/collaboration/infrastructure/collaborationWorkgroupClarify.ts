@@ -25,7 +25,7 @@ import type {
   CollaborationAutonomousDismissalInput,
   CollaborationAutonomousDismissalResult,
   CollaborationClarifySuppressionInput,
-} from '../application/ports/collaborationRuntimeMechanics'
+} from '@/modules/task-execution/public/types'
 import { createClarifyDirectiveStore } from './clarifyDirectiveStore'
 
 function canRequeueAssignment(

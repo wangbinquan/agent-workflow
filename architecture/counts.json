@@ -139,16 +139,16 @@
       "reason": "max=1: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "off-dag-offered-file-context-pairs": {
-      "max": 55,
-      "reason": "max=55: RFC-434 reclassifies two pre-existing dependencies (system-operations overview -> memory, task-execution launch operations -> integration) that reached non-exact public files and were counted as internal pairs; with exact entrypoints they are off-DAG offered pairs (54 -> 55 while internal pairs drop 56 -> 48); no new coupling."
+      "max": 47,
+      "reason": "max=47: RFC-434 reclassifies two pre-existing dependencies (system-operations overview -> memory, task-execution launch operations -> integration) that reached non-exact public files and were counted as internal pairs; with exact entrypoints they are off-DAG offered pairs (54 -> 55 while internal pairs drop 56 -> 48); RFC-481 settles the 8 task-execution -> collaboration pairs (55 -> 47: the human-gate ports are declared by task-execution and implemented by collaboration); no new coupling."
     },
     "platform-to-modules-file-pairs": {
       "max": 0,
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 19 -> 0."
     },
     "public-surface-deviations": {
-      "max": 77,
-      "reason": "max=77: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; no growth authorized."
+      "max": 74,
+      "reason": "max=74: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); no growth authorized."
     },
     "repo-value-scc": {
       "max": 0,

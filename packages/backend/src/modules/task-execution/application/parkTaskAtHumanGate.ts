@@ -1,6 +1,6 @@
 // RFC-349 — provider-neutral human-gate park command.
 
-import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
+import type { PreparedHumanGateRef } from '../domain/humanGateContinuation'
 import type { OwnershipToken } from '../domain/ownership'
 import type {
   HumanGateTaskLifecycle,

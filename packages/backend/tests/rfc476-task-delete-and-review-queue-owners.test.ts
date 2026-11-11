@@ -375,7 +375,8 @@ describe('RFC-476 —— R1 销账与方向', () => {
         root,
         'createTaskDeletionCollaborationParticipantInTx',
       ),
-    ).toBe('@/modules/collaboration/public/participants')
+      // RFC-481: bootstrap takes the factory from collaboration's composition (it left public/participants).
+    ).toBe('@/modules/collaboration/composition')
   })
 })
 

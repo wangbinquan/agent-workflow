@@ -18,8 +18,8 @@ import {
   HumanGateOperationError,
   preparedHumanGateRef,
   type HumanGateOperationSnapshot,
-  type PreparedHumanGateRef,
 } from '../domain/humanGateOperation'
+import type { PreparedHumanGateRef } from '@/modules/task-execution/public/types'
 
 export interface ClarifyGateOpenQuestionDraft {
   readonly id: string

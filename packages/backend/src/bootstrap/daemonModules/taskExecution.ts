@@ -35,6 +35,7 @@ import {
 import {
   createCollaborationCommandContext,
   createCollaborationRuntimeMechanics,
+  createTaskDeletionCollaborationParticipantInTx,
 } from '@/modules/collaboration/composition'
 import {
   createClarifyDecisionCommand,
@@ -42,10 +43,7 @@ import {
   createReviewDecisionCommand,
   createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition/decisionCommands'
-import {
-  createTaskDeletionCollaborationParticipantInTx,
-  createWorkgroupClarifyAskGate,
-} from '@/modules/collaboration/public/participants'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -82,7 +80,7 @@ import type { DaemonResourceCatalogModules } from './resourceCatalog'
 import type { DaemonRepositoryCredentials } from './repositoryCredentials'
 import type { DaemonMemoryModules } from './memory'
 
-type ProviderDependencies = TaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>
+type ProviderDependencies = TaskExecutionProviderRuntimeDependencies
 import type { DeploymentSelections } from '../deploymentProfile'
 type RouteInputs = ReturnType<ProviderDependencies['routes']>
 type ReviewInputs = Parameters<typeof createReviewDecisionCommand>[0]
@@ -385,7 +383,6 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       archivedEvents: selection.archivedEvents,
       effects: selection.effects,
       nodeRunPrompts: selection.nodeRunPrompts,
-      collaboration,
       clarifyDirective: composeTaskClarifyDirectiveRouteOperations(collaboration),
       reviewers: composeTaskReviewersPort(collaboration),
       taskMembership: closure.taskMembership,

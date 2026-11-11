@@ -57,11 +57,9 @@ import type {
 } from '@/modules/collaboration/public/types'
 import { composeMemoryOperationsFor } from '@/modules/memory/composition'
 import type {
-  composeTaskExecutionProviderRuntime,
   SelectedTaskExecutionProviderRuntime,
   TaskExecutionProviderRuntimeDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import type { TaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
@@ -108,11 +106,6 @@ type ReadModelsContext = Parameters<typeof getReviewNodeReviewerConfig>[0]
 type SqliteRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
 type PostgresqlRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
 type AppRouteContext = DaemonTaskExecutionModules['collaboration']
-type ProviderRouteContext = ReturnType<
-  TaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>['routes']
->['collaboration']
-type SelectedRouteContext =
-  SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>['collaboration']
 
 // Checked by backend tsc, never invoked: no fabricated result or driver is needed
 // to prove that the production factories and their consumers reject missing ports.
@@ -164,12 +157,9 @@ function constructionTypeContracts(
     clarify,
     reads,
   ]
-  // RFC-359 AC-1（第 13 刀收尾）：两个路由绑定合成一个中立工厂，于是这里也只剩**一个**
-  // 路由依赖面要喂——`{Sqlite,Postgresql}TaskRouteOperationsDependencies` 两条已退役。
-  const narrowConsumers: [
-    Parameters<typeof replaceReviewNodeReviewers>[0],
-    TaskRouteOperationsDependencies['collaboration'],
-  ] = [reads, reads]
+  // RFC-481: Task Execution's route dependencies no longer carry collaboration's context (they never read it), so the
+  // reviewer-config entry is the one narrow consumer left.
+  const narrowConsumers: [Parameters<typeof replaceReviewNodeReviewers>[0]] = [reads]
   const baseConsumers: [
     Parameters<typeof createManualQuestionOpen>[0],
     Parameters<typeof prepareReviewGateOpen>[0],
@@ -189,9 +179,7 @@ function constructionTypeContracts(
     SqliteRouteContext,
     PostgresqlRouteContext,
     AppRouteContext,
-    ProviderRouteContext,
-    SelectedRouteContext,
-  ] = [full, full, full, full, full, full, full, full, full, full]
+  ] = [full, full, full, full, full, full, full, full]
   void completeConsumers
   const widened: CollaborationCommandContext = full
   // @ts-expect-error An explicitly erased capability cannot be recovered by a consumer.
@@ -236,17 +224,7 @@ function constructionTypeContracts(
   const missingReviewForPostgresql: PostgresqlRouteContext = missingReview
   // @ts-expect-error The App entry must reject the missing Review capability.
   const missingReviewForApp: AppRouteContext = missingReview
-  // @ts-expect-error The Provider entry must reject the missing Review capability.
-  const missingReviewForProvider: ProviderRouteContext = missingReview
-  // @ts-expect-error The Selected entry must reject the missing Review capability.
-  const missingReviewForSelected: SelectedRouteContext = missingReview
-  void [
-    missingReviewForSqlite,
-    missingReviewForPostgresql,
-    missingReviewForApp,
-    missingReviewForProvider,
-    missingReviewForSelected,
-  ]
+  void [missingReviewForSqlite, missingReviewForPostgresql, missingReviewForApp]
 
   // @ts-expect-error The Sqlite entry must reject the missing Question capability.
   const missingQuestionForSqlite: SqliteRouteContext = missingQuestion
@@ -254,17 +232,7 @@ function constructionTypeContracts(
   const missingQuestionForPostgresql: PostgresqlRouteContext = missingQuestion
   // @ts-expect-error The App entry must reject the missing Question capability.
   const missingQuestionForApp: AppRouteContext = missingQuestion
-  // @ts-expect-error The Provider entry must reject the missing Question capability.
-  const missingQuestionForProvider: ProviderRouteContext = missingQuestion
-  // @ts-expect-error The Selected entry must reject the missing Question capability.
-  const missingQuestionForSelected: SelectedRouteContext = missingQuestion
-  void [
-    missingQuestionForSqlite,
-    missingQuestionForPostgresql,
-    missingQuestionForApp,
-    missingQuestionForProvider,
-    missingQuestionForSelected,
-  ]
+  void [missingQuestionForSqlite, missingQuestionForPostgresql, missingQuestionForApp]
 
   // @ts-expect-error The Sqlite entry must reject the missing Clarify capability.
   const missingClarifyForSqlite: SqliteRouteContext = missingClarify
@@ -272,17 +240,7 @@ function constructionTypeContracts(
   const missingClarifyForPostgresql: PostgresqlRouteContext = missingClarify
   // @ts-expect-error The App entry must reject the missing Clarify capability.
   const missingClarifyForApp: AppRouteContext = missingClarify
-  // @ts-expect-error The Provider entry must reject the missing Clarify capability.
-  const missingClarifyForProvider: ProviderRouteContext = missingClarify
-  // @ts-expect-error The Selected entry must reject the missing Clarify capability.
-  const missingClarifyForSelected: SelectedRouteContext = missingClarify
-  void [
-    missingClarifyForSqlite,
-    missingClarifyForPostgresql,
-    missingClarifyForApp,
-    missingClarifyForProvider,
-    missingClarifyForSelected,
-  ]
+  void [missingClarifyForSqlite, missingClarifyForPostgresql, missingClarifyForApp]
 
   // @ts-expect-error The Sqlite entry must reject the missing Reads capability.
   const missingReadsForSqlite: SqliteRouteContext = missingReads
@@ -290,17 +248,7 @@ function constructionTypeContracts(
   const missingReadsForPostgresql: PostgresqlRouteContext = missingReads
   // @ts-expect-error The App entry must reject the missing Reads capability.
   const missingReadsForApp: AppRouteContext = missingReads
-  // @ts-expect-error The Provider entry must reject the missing Reads capability.
-  const missingReadsForProvider: ProviderRouteContext = missingReads
-  // @ts-expect-error The Selected entry must reject the missing Reads capability.
-  const missingReadsForSelected: SelectedRouteContext = missingReads
-  void [
-    missingReadsForSqlite,
-    missingReadsForPostgresql,
-    missingReadsForApp,
-    missingReadsForProvider,
-    missingReadsForSelected,
-  ]
+  void [missingReadsForSqlite, missingReadsForPostgresql, missingReadsForApp]
 
   const optionalInput: CollaborationCommandContextInput = withO2Closure({ db, ...capabilities })
   const optional = createCollaborationCommandContext(withO2Closure(optionalInput))
@@ -382,75 +330,18 @@ function constructionTypeContracts(
 }
 void constructionTypeContracts
 
-// The provider uses only the read-model capability and returns the exact context
-// supplied by its caller. Complete roots keep their stronger explicit contract.
-function providerRuntimeTypeContracts(
-  composeProvider: typeof composeTaskExecutionProviderRuntime,
-  db: TaskExecutionProviderRuntimeDependencies['db'],
-  dependencies: Omit<TaskExecutionProviderRuntimeDependencies, 'routes'>,
-  routeDependencies: Omit<
-    ReturnType<TaskExecutionProviderRuntimeDependencies['routes']>,
-    'collaboration'
-  >,
-  full: CollaborationRouteContext,
-  reads: ReadModelsContext,
-  optional: CollaborationRouteContext | undefined,
-  condition: boolean,
-) {
-  const fullRuntime = composeProvider({
-    ...dependencies,
-    db,
-    routes: () => ({ ...routeDependencies, collaboration: full }),
-  })
-  const completeConsumers: [
-    SqliteRouteContext,
-    PostgresqlRouteContext,
-    AppRouteContext,
-    ProviderRouteContext,
-    SelectedRouteContext,
-  ] = [
-    fullRuntime.collaboration,
-    fullRuntime.collaboration,
-    fullRuntime.collaboration,
-    fullRuntime.collaboration,
-    fullRuntime.collaboration,
-  ]
-
-  const readRuntime = composeProvider({
-    ...dependencies,
-    db,
-    routes: () => ({ ...routeDependencies, collaboration: reads }),
-  })
-  const readConsumer: ReadModelsContext = readRuntime.collaboration
-  // @ts-expect-error A read-only provider context cannot satisfy a complete route.
-  const readFull: CollaborationRouteContext = readRuntime.collaboration
-
-  const unionRuntime = composeProvider({
-    ...dependencies,
-    db,
-    routes: () => ({ ...routeDependencies, collaboration: condition ? full : reads }),
-  })
-  const unionReadConsumer: ReadModelsContext = unionRuntime.collaboration
-  // @ts-expect-error Both branches must supply every capability required by a complete route.
-  const unionFull: CollaborationRouteContext = unionRuntime.collaboration
-
-  const optionalRoutes: ReturnType<TaskExecutionProviderRuntimeDependencies['routes']> = {
-    ...routeDependencies,
-    // @ts-expect-error An optional context does not guarantee the provider's required read models.
-    collaboration: optional,
-  }
-  const optionalPropertyRoutes: Omit<typeof optionalRoutes, 'collaboration'> & {
-    collaboration?: CollaborationRouteContext
-  } = { ...routeDependencies }
-  composeProvider({
-    ...dependencies,
-    db,
-    // @ts-expect-error An optional context property cannot become a required provider capability.
-    routes: () => optionalPropertyRoutes,
-  })
-  void [completeConsumers, readConsumer, readFull, unionReadConsumer, unionFull, optionalRoutes]
-}
-void providerRuntimeTypeContracts
+// RFC-481: the provider runtime neither takes nor hands back collaboration's command context — Task Execution's routes
+// never read it (task-execution does not import collaboration). Bootstrap keeps the context it builds, and that complete
+// root (`AppRouteContext` above) keeps its explicit contract.
+const providerRoutesCarryNoCollaboration: 'collaboration' extends keyof ReturnType<
+  TaskExecutionProviderRuntimeDependencies['routes']
+>
+  ? never
+  : true = true
+const selectedRuntimeCarriesNoCollaboration: 'collaboration' extends keyof SelectedTaskExecutionProviderRuntime
+  ? never
+  : true = true
+void [providerRoutesCarryNoCollaboration, selectedRuntimeCarriesNoCollaboration]
 
 function legacyBridgeTypeContracts(
   review: ReturnType<typeof createReviewDecisionCommandContext>,

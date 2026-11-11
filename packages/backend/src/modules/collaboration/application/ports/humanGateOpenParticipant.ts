@@ -2,7 +2,7 @@
 
 import type { NodeRunRole, NodeRunSyntheticKind } from '@/modules/task-execution/public/types'
 import type { HumanGateIdentity } from '../../domain/gateReceipt'
-import type { PreparedHumanGateRef } from '../../domain/humanGateOperation'
+import type { PreparedHumanGateRef } from '@/modules/task-execution/public/types'
 import type { CollaborationPostCommitEventRef } from '../../domain/postCommitEventRef'
 import type { RerunCause } from '@agent-workflow/shared'
 

@@ -60,7 +60,7 @@ export async function resolveNodeActivationForDispatch(args: {
   // RFC-354 — the judgment reads each source in the frame the environment
   // chain resolves it to, exactly like resolveUpstreamInputs will a moment
   // later (requirement 1 above).
-  const chain = await loadFrameChain((id) => reader.findRun(id), frame)
+  const chain = await loadFrameChain({ read: (id) => reader.findRun(id) }, frame)
   // RFC-354 (schema v6): every dependency is an edge — a review's reviewed
   // source is its `__review_input__` edge and an output node's ports are its
   // inbound edges — so the dataflow edges ARE the complete set (design gate
@@ -97,7 +97,7 @@ export async function resolveNodeActivationForDispatch(args: {
               targetNodeId: node.id,
               parents: args.parents,
               frame,
-              containerRowById: chain.lookup,
+              containerRows: chain.rows,
             })
       const picked = sourceFrame.ok
         ? (

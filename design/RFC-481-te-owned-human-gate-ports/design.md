@@ -52,14 +52,15 @@ task-execution → collaboration 的 8 个文件，全部 type-only，经 collab
   直接持有并交给需要它的装配。
 - 两个帧函数：`loadFrameChain(reader: ContainerRunReader, frame)`，`ContainerRunReader { read(nodeRunId): Promise<ContainerRunRow | null | undefined> }`；
   `resolveSourceFrame({ …, containerRows: ContainerRunLookup })`，`ContainerRunLookup { get(id): ContainerRunRow | undefined }`。模块内的
-  `resolveSourceFrameInScope` 不在 public，保持函数参数，由 `resolveSourceFrame` 适配。两个接口从 `public/queries` 一起交出。
+  `resolveSourceFrameInScope` 不在 public，保持函数参数，由 `resolveSourceFrame` 适配。两个接口只经这两个函数的签名进入公开合同，不单独
+  交出名字（§6）。
 - `createTaskDeletionCollaborationParticipantInTx` 改由 collaboration 的 `composition.ts` 转出，bootstrap 改取 composition；撤出
   `public/participants`。
 
 ## 3. 账本与计数
 
-- `OFF_DAG_OFFERED_EDGE_DEBT`（`rfc294-review-offered-edge-dag`）销 task-execution → collaboration 的 8 条；
-  `off-dag-offered-file-context-pairs` 55 → 47。
+- `OFF_DAG_OFFERED_EDGE_DEBT`（`rfc294-review-offered-edge-dag`）销 task-execution → collaboration 的 8 条，`rfc376-structural-guards`
+  的 committed baselines（`KNOWN`）删去同样的 8 行；`off-dag-offered-file-context-pairs` 55 → 47。
 - `PUBLIC_SURFACE_DEBT`（`rfc294-architecture-preflight`）销 3 条；`public-surface-deviations` 77 → 74。
 - 两个模块的未消费 public 符号保持 0：task-execution 新交出的类型都由 collaboration 取用（端口的输入输出类型经端口签名算作被消费）；
   collaboration 撤出的转出原本只有 task-execution 在取。
@@ -82,10 +83,26 @@ task-execution → collaboration 的 8 个文件，全部 type-only，经 collab
 
 - **结构同构的两份类型**：不保留 collaboration 那份，collaboration 的 `HumanGateKind` 与 task-execution 的 `TaskExecutionHumanGateKind`
   取值相同，`PreparedHumanGateRef` 只有一份定义。
-- **转手字段删掉后 bootstrap 取不到协作上下文**：bootstrap 两处取的是 task-execution 交回的那一份，改为取它自己造的那一份（同一个对象）。
+- **转手字段删掉后 bootstrap 取不到协作上下文**：bootstrap 的两处取用方读的是 bootstrap 模块自己返回的 `collaboration`——它在
+  `{ ...provider, …, collaboration }` 里本来就覆盖了 provider 转手的那一份（同一个对象），删掉转手不影响它们。
 - **账本漏改**：按 RFC-480 的教训，集中验证先跑 `tests/architecture/` 与读源码文本的用例，再上全量；两边都超时的用例单独拿到真结果。
 
-## 6. 对 RFC-294 刷新后规则的对账
+## 6. 实施中的细化
+
+- `FrameChain` 的函数型字段 `lookup` 删去：调用方改用 `rows`（`ReadonlyMap` 满足 `ContainerRunLookup`）；`resolveSourceFrameInScope` 不在
+  public，保留函数参数，由 `resolveSourceFrame` 适配。
+- 撤出的连锁：collaboration `public/types` 的 `HumanGateKind` 只因被 `PreparedHumanGateRef` 引用才算被消费，`public/participants` 的
+  `TaskDeletionCollaborationParticipant` 只是删除工厂的返回类型，两者随之撤出（否则成为未消费符号）。
+- 两个帧接口不单独从 `public/queries` 交出：collaboration 传的是对象字面量、不按名字取用；与下一条里端口其余的输入输出类型同一做法，public
+  只加对方按名字取用的（C11），其余只经签名进入公开合同。
+- task-execution `public/types` 只交出 collaboration 按名字取用的 7 个类型；`CollaborationRuntimeMechanics` 其余的输入输出类型只经端口签名
+  引用，留在 task-execution 内部。
+- 用例改动：`rfc359-w12-collaboration-context-contracts` 里「provider 只用读模型能力并原样交回调用方的协作上下文」那一段前提不在，改为类型层的
+  缺席断言（provider 的路由依赖与运行时都没有 `collaboration` 键）；`rfc476` 断言 bootstrap 取删除工厂的来源改为 composition；
+  `rfc349-collaboration-runtime-mechanics` 读端口契约的路径改为 task-execution；`rfc354-environment-chain` 的 `resolveSourceFrame` 调用改传
+  `containerRows`；9 个用例与一个 helper 改取删除工厂的定义处；provider 用例 helper 的路由依赖删去占位的 `collaboration`。
+
+## 7. 对 RFC-294 刷新后规则的对账
 
 - **C10**：端口与值按内容落在 task-execution 的 application/ports 与 domain。
 - **C11**：task-execution 的 public 新增的只是要求对方实现的端口类型与一个值，不是内部构件；collaboration 的 public 只撤不增。

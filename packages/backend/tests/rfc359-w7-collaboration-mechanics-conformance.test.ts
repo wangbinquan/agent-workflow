@@ -12,7 +12,7 @@ import { o2Ports } from './helpers/o2Closure'
 // ——它唯一的用例（`rfc349-collaboration-runtime-mechanics.test.ts`）喂的是一个记录 SQL 文本的
 // 假客户端。本文件把端口契约写成**同一段断言**，`describeEachProvider` 在两个引擎上各跑一遍。
 //
-// 判据来源：`application/ports/collaborationRuntimeMechanics.ts` 的端口契约，语义注释在
+// 判据来源：task-execution `application/ports/collaborationRuntimeMechanics.ts` 的端口契约（RFC-481 起由 task-execution 声明），语义注释在
 // `clarify/service.ts`（RFC-056 cross-clarify 短路 / 澄清轮开启）、
 // `collaborationWorkgroupClarify.ts`（RFC-172/181 反问许可与自治遣散）、
 // `clarify/queue.ts`（澄清队列上下文）与 `review.ts`（评审提示上下文）。
