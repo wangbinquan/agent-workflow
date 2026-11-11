@@ -57,7 +57,7 @@ import {
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
-} from '../src/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 import {
   runWorkgroupTurns as runWorkgroupEngine,
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,

@@ -32,7 +32,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'

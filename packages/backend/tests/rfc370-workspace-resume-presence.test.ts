@@ -9,10 +9,8 @@ import { tmpdir } from 'node:os'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
-import {
-  assertWorktreePresentForResume,
-  composeWorktreeResumePreflight,
-} from '@/modules/task-execution/public/participants'
+import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
+import { assertWorktreePresentForResume } from '@/modules/task-execution/application/worktreeResumePreflight'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

@@ -26,7 +26,8 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlPreflight :: preflightPostgresqlTarget',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlRuntime :: PostgresqlDatabaseRuntime',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/sqliteLogicalSource :: SqliteLogicalSource,SqliteLogicalSourceSnapshot',
-  'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTaskExecutionContext :: assertTaskExecutionContext,createTaskExecutionContext,runWithTaskExecutionContext',
+  // RFC-480：task-execution `public/participants.ts` 撤出 `assertTaskExecutionContext` / `createTaskExecutionContext` /
+  // `runWithTaskExecutionContext` 三个转出（模块外零消费），public 不再取 composition 的 SQLite 上下文，这条债销账。
   // RFC-457：备份 VACUUM / quick_check 的 worker 入口迁入 `platform/persistence/sqlite`，与它包着的 provider 机制同目录，
   // 不再是业务层取 provider 机制，这条债销账。
   // RFC-468：`services/nodeRunMint.ts` 删除，铸行入口迁入 task-execution infrastructure（机制边界），这条债销账。

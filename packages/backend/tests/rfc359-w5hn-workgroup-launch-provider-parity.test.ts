@@ -11,7 +11,7 @@
 // 先有基线，换终端时才知道「行为没动」不是自我说服。
 // 判据形状照抄那条：相等面 + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { readTaskFixtures, readWorkflowFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'

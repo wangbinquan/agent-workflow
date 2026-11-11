@@ -15,11 +15,11 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import { replaceReviewNodeReviewers } from '../src/modules/collaboration/public/commands'
 import {
+  replaceReviewNodeReviewers,
   getReviewNodeReviewerConfig,
   resolveReviewAccess,
-} from '../src/modules/collaboration/public/queries'
+} from '@/modules/collaboration/application/reviewNodeReviewerEntries'
 import { deriveReviewAccess } from '../src/modules/collaboration/domain/reviewAccess'
 import {
   describeEachProviderHttpApplication,

@@ -22,14 +22,14 @@ import { ulid } from 'ulid'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
 import {
   type WorkgroupTurnHostRequest,
   type WorkgroupTurnHostResult,
   type WorkgroupTurnLogger,
   type WorkgroupTurnsOutcome,
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
+import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { runWorkgroupTurns } from './helpers/workgroupTurns'

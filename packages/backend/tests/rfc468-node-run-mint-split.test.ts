@@ -19,7 +19,6 @@ import type {
   FrozenTaskRuntimeRecord,
   TaskRuntimeFreezePersistence,
 } from '@/modules/runtime-management/application/ports/taskRuntimeFreezePersistence'
-import * as taskExecutionOperations from '@/modules/task-execution/public/operations'
 import { mintNodeRun } from '@/modules/task-execution/infrastructure/legacyNodeRunMint'
 import { importEdges, sourceUnit } from './architecture/census'
 
@@ -123,9 +122,15 @@ describe('RFC-468 —— 冻结运行时归 runtime-management', () => {
 })
 
 describe('RFC-468 —— 铸行入口归 task-execution', () => {
-  test('mintNodeRun 只有 infrastructure 那一个，已撤出 public/operations（RFC-478）', () => {
+  test('mintNodeRun 只有 infrastructure 那一个，已撤出 public/operations（RFC-478；RFC-480 整个入口退役）', () => {
     expect(typeof mintNodeRun).toBe('function')
-    expect('mintNodeRun' in taskExecutionOperations).toBe(false)
+    expect(existsSync(join(SRC, 'modules/task-execution/public/operations.ts'))).toBe(false)
+    for (const entry of ['commands', 'queries', 'participants', 'types', 'events']) {
+      const path = `modules/task-execution/public/${entry}.ts`
+      expect([path, /\bmintNodeRun\b/.test(read(path))]).toEqual([path, false])
+    }
+    // Positive control: the same reader sees a name a surviving entry still offers.
+    expect(read('modules/task-execution/public/queries.ts')).toMatch(/\bnodeOutputSlot\b/)
   })
 
   test('延后仓库准备取定义处的 mintNodeRun / nextRetryIndex（RFC-478：原 services/task.ts 经两个 public 入口取）', () => {

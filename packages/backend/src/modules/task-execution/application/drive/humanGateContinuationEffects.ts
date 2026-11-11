@@ -4,7 +4,8 @@
 
 import { GateContinuationEffectStep } from './gateContinuationEffectStep'
 import type { TaskExecutionPersistence } from '../ports/taskExecutionPersistence'
-import { TaskExecutionError, type GateWorkspaceRollbackExecutor } from '../../public/participants'
+import { type GateWorkspaceRollbackExecutor } from '../../public/participants'
+import { TaskExecutionError } from '../taskExecutionError'
 import type { TaskClarifyContinuationPort } from '../ports/gateContinuationSupport'
 
 type GatePreDriveContext = Parameters<InstanceType<typeof GateContinuationEffectStep>['run']>[0]

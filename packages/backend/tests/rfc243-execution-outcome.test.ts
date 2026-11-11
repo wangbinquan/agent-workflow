@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm'
 //   4. Cross-output-node port collisions are deterministic (node-id order,
 //      later wins) and surfaced as warnings.
 
-import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
 import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'

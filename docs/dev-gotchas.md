@@ -719,10 +719,27 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   上限只打一行日志，余量于是攒了下来（4 项合计 76 个文件或文件对的回长空间，CI 不会红）；现在报
   `below max: <id>: <实测> < <max> (set max=<实测> in architecture/counts.json)`。
 - 做法：把该项的 `max` 改成实测，`reason` 里写同一个 `max=N`（判据按 `\bmax=N` 校验）并写明这次减少的来由。别为了过门把计数「补回去」。
-- 会随日常改动变化的几项：`unconsumed-public-symbols` / `public-surface-deviations`（撤出或新增 public 符号、改 public 签名），
+- 会随日常改动变化的几项：`unconsumed-public-symbols-<context>`（RFC-480 起按 context 分项）/ `public-surface-deviations`（撤出或新增 public
+  符号、改 public 签名），
   `composition-control-flow-<module>`（在模块 `composition/` 里增删行首的 `if` / `for` / `while` / `switch` / `try` / `throw`）。新增一个带
   `composition/` 的模块会报 `missing count`，删掉会报 `unknown count`，都要登记。
 - 两个会话各自减少了同一项：后推的那个合并后，按合并结果的实测再改一次。
+
+## 撤 public 符号：迭代到零、先修判据的盲区，留意豁免入口藏起来的旧债（RFC-480，2026-11-10）
+
+- **撤出会连锁**：只被同一 public 文件里另一个导出的签名引用的符号，在那个导出撤掉后变成未消费。按「撤出 → 复采 → 再撤」迭代，直到
+  `unconsumed-public-symbols-<context>` 为 0；别凭一次采数的清单一次删完。
+- **判据的盲区会让你删掉还在用的类型**：架构报告的类型形状遍历（`architectureReport.ts` 的 `collectTypeShape`）原先不进
+  `readonly X[]`、元组与泛型实参（`Omit<X, 'k'>[]`），被这些形式引用的 public 类型被误报为未消费；照单挪走后 `tsc` 报保留下来的 public
+  签名里 `Cannot find name`。遇到「报告说未消费、删掉却编译不过」先查判据，修完重采（RFC-480 修正后其他 context 少了一批误报）。
+- **豁免入口里的债挪出来才可见**：`publicSurfaceViolations` 按 RFC-344 整体豁免 `public/operations`（操作描述入口）。把一个函数类型
+  从那里换到 `public/types`，偏差会多一条——同一合同、旧债可见。登记进 `PUBLIC_SURFACE_DEBT` 并写明出处，不要为了偏差数不涨把它塞回豁免
+  入口。
+- **`tsc` 只看 import，断言源码文本的用例要跑到才红**：别的 RFC 用例里对 public 文件的文本断言（`toContain('export interface X')`、拿某个
+  转出当正对照）、孪生体的消费方白名单、provider 债清单、开放 Record 账本、按文件记的依赖清单（RFC-310 的 `os-architecture-manifest.json`
+  在 `design/` 下）这类精确账本，撤出或挪声明后都会失效，`tsc` 与 eslint 都看不出来。RFC-480 的全量里这样红了 7 条，都在 1 秒内失败、与
+  负载无关；按撤出名单在 `tests/` 的字符串里粗搜，命中的多是用例标题与注释，筛不出来。集中验证时先挑出读源码文本的用例
+  （`tests/architecture/` 全部，加上 `tests/` 里读 `src/` 文件的用例）跑一遍，它们快、不怕负载，再上全量。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

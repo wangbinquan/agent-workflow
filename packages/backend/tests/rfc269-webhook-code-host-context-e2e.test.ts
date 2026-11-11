@@ -22,7 +22,7 @@ import {
   parseIntentChangeset,
   type CodeHostEvent,
 } from '@agent-workflow/shared'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { buildActor } from '../src/auth/actor'
 import { createSecretBox } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'

@@ -5,7 +5,7 @@
 // merge, exp-backoff retry math, max-attempts flip to `failed`, recovery
 // of leftover `running` rows.
 
-import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
 import {
   agentFixture,
   clarifyRoundFixture,

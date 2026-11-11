@@ -27,7 +27,6 @@ import { createNodeOutputQueries } from '@/modules/task-execution/infrastructure
 import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
 import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/runSelection/table/reader'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
-import * as taskExecutionOperations from '@/modules/task-execution/public/operations'
 import * as taskExecutionParticipants from '@/modules/task-execution/public/participants'
 import * as taskExecutionQueries from '@/modules/task-execution/public/queries'
 import * as sourceControlQueries from '@/modules/source-control/public/queries'
@@ -471,11 +470,6 @@ describe('RFC-478 —— public 收口与测试专用出口', () => {
             'workflowSyncGateReason',
           ],
         ],
-        [
-          TE + 'public/operations.ts',
-          taskExecutionOperations,
-          ['mintNodeRun', 'setNodeRunStatus', 'setTaskStatus'],
-        ],
         // The retry reclaim was source-control's last outside reader; it now resolves group members through the binding.
         [
           'modules/source-control/public/queries.ts',
@@ -495,9 +489,18 @@ describe('RFC-478 —— public 收口与测试专用出口', () => {
       'createRunHistorySnapshot',
     )
     expect('currentTaskExecutionContext' in taskExecutionParticipants).toBe(true)
-    expect(exportedNames(TE + 'public/operations.ts', read(TE + 'public/operations.ts'))).toContain(
-      'setNodeRunStatusTx',
-    )
+    // RFC-480 retired `public/operations` as a whole: the three names RFC-478 withdrew from it are in no surviving
+    // entry either (the namespace import of that file went with it).
+    expect(existsSync(join(SRC, TE + 'public/operations.ts'))).toBe(false)
+    for (const entry of ['commands', 'queries', 'participants', 'types', 'events']) {
+      const path = TE + `public/${entry}.ts`
+      const exported = exportedNames(path, read(path))
+      for (const name of ['mintNodeRun', 'setNodeRunStatus', 'setTaskStatus'])
+        expect([path, name, exported.includes(name)]).toEqual([path, name, false])
+    }
+    expect(
+      exportedNames(TE + 'public/participants.ts', read(TE + 'public/participants.ts')),
+    ).toContain('currentTaskExecutionContext')
   })
 
   test('测试专用出口只在 tests/helpers/，零调用方的停机函数不在 src', () => {

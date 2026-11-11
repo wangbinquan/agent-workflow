@@ -32,7 +32,7 @@
 - **G1 两个模块的未消费 public 符号清零**：转出直接撤；直接声明在 public 的按内容（RFC-294 C10）挪进模块内部对应的层，或在没有任何
   使用方时删除；经 public 取用这些符号的本模块文件与用例改取定义处。
 - **G2 task-execution `public/operations` 退役**：25 个零消费导出撤出；`assertNodeRunSourceTerminationAdmission` 由 collaboration 直接取平台
-  定义处；`TerminalWorkspacePrunePolicy` 作为 task-execution 的 required port 声明在 `composition/required-ports.ts`（integration 实现它）；
+  定义处；`TerminalWorkspacePrunePolicy`（integration 实现的 consumer-owned 合同）换到 `public/types`；
   `registerTerminalWorkspacePrunePolicy` 由 task-execution 的 `composition.ts` 交给 bootstrap；文件删除。
 - **G3 未消费符号按 context 分项入带**：`unconsumed-public-symbols` 一项拆成每个有 public 面的 context 一项
   `unconsumed-public-symbols-<context>`，task-execution 与 collaboration 两项上限为 0。

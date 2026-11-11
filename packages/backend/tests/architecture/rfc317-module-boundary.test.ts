@@ -408,10 +408,8 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
     site: 'modules/source-control/public/types.ts: Record<string, string | undefined>',
     why: 'Git 子进程环境由运行器、凭据租约与调用方共同扩展，变量名属于开放的进程协议，无法伪装成仓内穷尽键联合。',
   },
-  {
-    site: 'modules/task-execution/public/commands.ts: Record<string, string>',
-    why: 'Workgroup turn outputs 由 workflow 节点声明命名，Task Execution 只传递已验证的结果映射，无法预先穷尽所有输出键。',
-  },
+  // RFC-480：task-execution `public/commands.ts` 的那处（工作组轮次结果的 `outputs`）随轮次合同挪进模块自己的 application 端口
+  // （`application/ports/workgroupTurnsOperations.ts`，模块外零消费），不再是 public 面，销账。
 ]
 
 function publicEntrypointUnits(): ReturnType<typeof backendUnits> {

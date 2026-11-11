@@ -30,7 +30,7 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { transitionNodeRunStatus } from '../src/modules/task-execution/public/operations'
+import { transitionNodeRunStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

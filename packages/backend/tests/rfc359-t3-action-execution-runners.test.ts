@@ -7,7 +7,7 @@
 // 这里用一个可观测的假环境把执行器在两个引擎上各跑一遍（宿主工作流播种、脚本定义读取走真库），
 // 再用源码锁钉住 PG daemon 的接线与两个 composer 的「薄」形态。
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   readTaskFixtures,
   readWorkflowFixtures,

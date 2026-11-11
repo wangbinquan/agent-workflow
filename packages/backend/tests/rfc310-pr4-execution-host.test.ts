@@ -16,7 +16,7 @@ import { o2Ports } from './helpers/o2Closure'
 //   5. 终态 onTerminal 回调（DA 侧 wake hint 的注入缝）。
 // 真子进程面 = mock-opencode（bun 子进程、真 spawn/env/cwd/stdout 链）。
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'

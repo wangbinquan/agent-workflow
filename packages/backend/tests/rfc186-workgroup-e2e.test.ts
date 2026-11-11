@@ -8,7 +8,7 @@
 // 10 tasks 0 done). This drives it for real via `scenario-opencode` (per-agent,
 // per-turn scripted opencode) so the first green is regression-locked.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { readTaskFixtures, taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'

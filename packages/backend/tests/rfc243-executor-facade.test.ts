@@ -21,7 +21,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 //      for done|canceled); missing-row resolve; poll fallback catches a row
 //      deleted after registration; abort resolves 'aborted'.
 
-import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -37,7 +36,8 @@ import {
   resetTaskTerminalWatchersForTests,
   watchTaskTerminal,
 } from '../src/modules/task-execution/infrastructure/executionWatch'
-import { trySetTaskStatus } from '../src/modules/task-execution/public/operations'
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
+import { trySetTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture } from './helpers/model'

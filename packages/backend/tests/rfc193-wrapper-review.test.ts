@@ -329,7 +329,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
     })
 
     const { nodeRuns } = tablesOf(h.db)
-    const { parseArchiveJson } = await import('@/modules/task-execution/public/queries')
+    const { parseArchiveJson } = await import('@/modules/task-execution/domain/portArtifacts')
     async function projectedRow(nodeId: string, port: string) {
       const runs = await h.db
         .select(nodeRunFixtureColumns(h.db))

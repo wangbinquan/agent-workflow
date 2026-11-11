@@ -41,7 +41,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   transitionNodeRunStatus,
   transitionNodeRunStatusTx,
-} from '../src/modules/task-execution/public/operations'
+} from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 import type { NodeRunMintInput } from '../src/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'

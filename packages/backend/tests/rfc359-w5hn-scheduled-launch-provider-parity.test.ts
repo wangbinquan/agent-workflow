@@ -16,7 +16,7 @@
 // 判据形状照抄前两条：**拒绝清单**（把逐次必然不同的那几格摘掉、其余整行都比）
 // + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { readTaskFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'

@@ -14,7 +14,7 @@ import { createFileTaskLaunchConfigurationQueries } from '@/modules/task-executi
 import {
   resolveTaskCommitPushFromReader,
   resolveTaskLaunchRuntimeFromReader,
-} from '@/modules/task-execution/public/queries'
+} from '@/modules/task-execution/application/launchConfiguration'
 
 export function resolveCommitPushConfig(configPath: string) {
   return resolveTaskCommitPushFromReader(createFileTaskLaunchConfigurationQueries(configPath).read)

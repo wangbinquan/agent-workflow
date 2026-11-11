@@ -21,7 +21,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { createReviewDecisionCommand } from '@/modules/collaboration/infrastructure/reviewDecisionCommand'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
-import { submitReviewDecision } from '@/modules/collaboration/public/commands'
+import { submitReviewDecision } from '@/modules/collaboration/application/commandEntries'
 import type { ReviewDecisionCommandPort } from '@/modules/collaboration/application/ports/reviewDecisionCommand'
 import { ConflictError } from '@/util/errors'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'

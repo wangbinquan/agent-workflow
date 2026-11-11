@@ -4,10 +4,8 @@ import {
   createConsumedInputsParticipantInTx,
   prepareConsumedInputs,
 } from '@/modules/task-execution/public/participants'
-import {
-  createRunSelectionReader,
-  encodeConsumedEdges,
-} from '@/modules/task-execution/public/queries'
+import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
+import { encodeConsumedEdges } from '@/modules/task-execution/infrastructure/runSelection/consumedCodec'
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'

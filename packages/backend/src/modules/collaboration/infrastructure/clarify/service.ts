@@ -85,7 +85,7 @@ import {
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
+import { prepareClarifyGateOpen } from '../../application/commandEntries'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import {
   currentTaskExecutionContext,

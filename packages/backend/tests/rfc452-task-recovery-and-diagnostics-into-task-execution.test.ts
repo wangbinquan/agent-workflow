@@ -21,7 +21,7 @@ import type {
   TaskLifecycleAlertNotices,
   TaskRuntimeInventoryContent,
 } from '@/modules/task-execution/public/types'
-import type { TaskRecoveryOperations } from '@/modules/task-execution/public/participants'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

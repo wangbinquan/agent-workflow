@@ -16,7 +16,7 @@ import { and, eq } from 'drizzle-orm'
 
 import { createClarifyDecisionCommand } from '@/modules/collaboration/infrastructure/clarifyDecisionCommand'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
-import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
+import { submitClarifyDecision } from '@/modules/collaboration/application/commandEntries'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'

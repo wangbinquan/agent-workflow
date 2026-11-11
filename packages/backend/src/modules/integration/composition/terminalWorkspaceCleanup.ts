@@ -1,5 +1,5 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
 import { createWebhookTerminalWorkspacePrunePolicy } from '../application/terminalWorkspaceCleanup'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '../infrastructure/terminalWorkspaceAttribution'
 

@@ -5,7 +5,10 @@ import {
   createActiveHistoryRestrictionProvider,
 } from '@/modules/system-operations/composition/epochInstallation'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  registerTerminalWorkspacePrunePolicy,
+} from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
 import type { DeploymentKind, DeploymentSessionSelections } from './deploymentProfile'
 import {
@@ -109,7 +112,6 @@ import type { composeDevelopmentAutomation } from '@/modules/development-automat
 import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/modules/integration/composition/webhookDelivery'

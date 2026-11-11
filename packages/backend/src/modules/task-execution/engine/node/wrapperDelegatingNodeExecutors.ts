@@ -6,7 +6,8 @@ import type { NodeStepOutcome, NodeStepRequest } from '../../domain/nodeExecutio
 import type { WrapperScopeDescriptor } from '../../domain/executionScope'
 import type { NodeExecutor } from './nodeExecutor'
 
-interface WrapperScopeReadModel {
+/** The wrapper scopes the delegating executors read (RFC-480: the execution state names this consumer-owned type). */
+export interface WrapperScopeReadModel {
   find(wrapperId: string, kind: WrapperNodeKind): WrapperScopeDescriptor
 }
 

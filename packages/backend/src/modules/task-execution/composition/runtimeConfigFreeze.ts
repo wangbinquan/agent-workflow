@@ -1,7 +1,5 @@
-import {
-  freezeRuntimeBinaryConfiguration,
-  type TaskOperationConfigurationQueries,
-} from '../public/queries'
+import { type TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
+import { freezeRuntimeBinaryConfiguration } from '../application/operationConfiguration'
 import { createFileTaskOperationConfiguration } from '../composition'
 
 /**

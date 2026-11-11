@@ -5,12 +5,12 @@ import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 
 import { composeEventCenter } from './helpers/eventCenter'
+import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
   TASK_STATUS_CHANGED_EVENT_REF,
-  taskLifecycleEventCatalogJson,
   taskLifecycleObservation,
-} from '@/modules/task-execution/public/events'
+} from '@/modules/task-execution/application/taskLifecycleEvents'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const subject = { typeId: 'platform.task', subjectRef: 'composition-task' }

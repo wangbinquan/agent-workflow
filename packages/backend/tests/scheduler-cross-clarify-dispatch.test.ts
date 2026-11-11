@@ -39,7 +39,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {

@@ -13,7 +13,7 @@ import { eq } from 'drizzle-orm'
 
 import { createQuestionDispatchCommand } from '@/modules/collaboration/infrastructure/questionDispatchCommand'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
-import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
+import { dispatchTaskQuestions } from '@/modules/collaboration/application/commandEntries'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

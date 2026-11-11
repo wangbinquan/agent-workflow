@@ -29,13 +29,13 @@ import {
   renderWgProtocolBlock,
   wgHostRolePorts,
 } from '@/modules/task-execution/domain/workgroup/protocol'
+import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
 import {
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
   type WorkgroupTurnHostRequest,
   type WorkgroupTurnHostResult,
   type WorkgroupTurnLogger,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
+import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   CL,

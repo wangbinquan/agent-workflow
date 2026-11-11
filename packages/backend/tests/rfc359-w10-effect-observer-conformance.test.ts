@@ -40,7 +40,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import type { TaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
-import { createProcessEffectAttemptObserver } from '@/modules/task-execution/composition/processEffectObserver'
+import { createProcessEffectAttemptObserver } from './helpers/localProcessEffectObserver'
 import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
 import type { TaskExecutionEffectPersistence } from '@/modules/task-execution/application/ports/taskExecutionEffectStore'
 import { sha256Hex } from '@/modules/task-execution/domain/digest'

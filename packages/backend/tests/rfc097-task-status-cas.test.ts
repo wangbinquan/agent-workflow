@@ -44,7 +44,7 @@ import {
   isTerminalTaskStatus,
   TERMINAL_TASK_STATUSES,
   trySetTaskStatus,
-} from '../src/modules/task-execution/public/operations'
+} from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

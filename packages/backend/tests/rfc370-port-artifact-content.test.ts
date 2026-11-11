@@ -16,15 +16,14 @@ import type {
   PortArtifactReadRequest,
   PortArtifactReader,
 } from '@/modules/task-execution/application/ports/portArtifactContent'
-import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
-import {
-  readPortArtifact,
-  truncationNotice,
-  parseArchiveJson,
-} from '@/modules/task-execution/public/queries'
 import { readInsideRoot } from '@/platform/content/local/rootFileQueries'
-import { archivePortArtifacts as publicArchive } from '@/modules/task-execution/public/commands'
-import { readPortArtifact as publicRead } from '@/modules/task-execution/public/queries'
+import {
+  archivePortArtifacts,
+  readPortArtifact,
+  archivePortArtifacts as publicArchive,
+  readPortArtifact as publicRead,
+} from '@/modules/task-execution/composition/portArtifacts'
+import { truncationNotice, parseArchiveJson } from '@/modules/task-execution/domain/portArtifacts'
 import { readInsideRoot as nativeReadInsideRoot } from '@/platform/content/local/rootFileQueries'
 import { held, callablePromise, MemoryPortArtifactContent } from './helpers/portArtifactContent'
 

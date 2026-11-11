@@ -2,7 +2,7 @@
 // persisted output -> original terminal observer -> attempt settlement.
 // A no-change action settles here; this is not a completed mission delivery.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   agentFixture,
   readNodeRunOutputFixtures,

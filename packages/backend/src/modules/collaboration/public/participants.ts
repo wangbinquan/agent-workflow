@@ -24,11 +24,6 @@ export type {
   CollaborationReviewPromptInput,
   CollaborationRuntimeMechanics,
 } from '../application/ports/collaborationRuntimeMechanics'
-export type { ClarifyRepairParticipant } from '../application/ports/clarifyRepairParticipant'
-export type {
-  ReviewRepairInspection,
-  ReviewRepairParticipant,
-} from '../application/ports/reviewRepairParticipant'
 export type {
   AddReviewCommentInput,
   AddedReviewComment,

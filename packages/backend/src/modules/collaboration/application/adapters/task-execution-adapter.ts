@@ -42,11 +42,7 @@ export function composeTaskMembershipOperationsPort(
   }
 }
 
-import {
-  listCollaborationClarifyDirectives,
-  resolveCollaborationTaskAccess,
-} from '@/modules/collaboration/public/queries'
-import { setCollaborationClarifyDirective } from '@/modules/collaboration/public/commands'
+import { resolveCollaborationTaskAccess } from '@/modules/collaboration/public/queries'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { TaskClarifyDirectiveRouteOperations } from '@/modules/task-execution/composition/required-ports'
 
@@ -84,8 +80,12 @@ import type {
 import type { ClarifyRepairParticipant } from '../ports/clarifyRepairParticipant'
 import type { ReviewRepairParticipant } from '../ports/reviewRepairParticipant'
 import type { ClarifyContinuationConvergence } from '../ports/clarifyContinuationConvergence'
-import { getReviewNodeReviewerConfig } from '../../public/queries'
-import { replaceReviewNodeReviewers } from '../../public/commands'
+import { listCollaborationClarifyDirectives } from '../queryEntries'
+import { setCollaborationClarifyDirective } from '../commandEntries'
+import {
+  getReviewNodeReviewerConfig,
+  replaceReviewNodeReviewers,
+} from '../reviewNodeReviewerEntries'
 
 export function composeCollaborationRepairPorts(
   clarify: ClarifyRepairParticipant,

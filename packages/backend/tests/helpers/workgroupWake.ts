@@ -22,11 +22,9 @@ import type {
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import {
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
-  type WorkgroupHostLedgerRun,
-} from '@/modules/task-execution/public/commands'
+import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
+import { type WorkgroupHostLedgerRun } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
+import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import type { InflightTurns } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import type {
   WorkgroupTurnMemberAgent,

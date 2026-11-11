@@ -3,7 +3,7 @@
 // write transactions' SSI dependency graph. Exercise the actual persistence
 // factory and DatabaseSession; keep the original RFC-185 fan-out tests intact.
 
-import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
 import { describe, expect, test } from 'bun:test'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {

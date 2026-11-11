@@ -16,7 +16,7 @@ import { ulid } from 'ulid'
 import {
   ConcurrentNodeRunTransition,
   transitionNodeRunStatus,
-} from '../src/modules/task-execution/public/operations'
+} from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { setNodeRunStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { IllegalNodeRunTransition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

@@ -1,7 +1,7 @@
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
-import type { SchedulerRuntimeTopology } from '../public/participants'
+import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutionTopology'
 import type { TaskExecutionReadModels } from '../public/types'
 import { composeExecutionMergeRecovery } from './isolationMechanicsBinding'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'

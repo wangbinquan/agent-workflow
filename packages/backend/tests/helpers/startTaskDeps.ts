@@ -9,7 +9,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // edit (design.md finding 4). `db` is a required dep (not derivable from configPath),
 // so it is an explicit parameter (design.md R2-e).
 import { createFileTaskLaunchConfigurationQueries } from '@/modules/task-execution/composition/launchConfiguration'
-import { resolveTaskSubagentLiveCaptureFromReader } from '@/modules/task-execution/public/queries'
+import { resolveTaskSubagentLiveCaptureFromReader } from '@/modules/task-execution/application/launchConfiguration'
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'

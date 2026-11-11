@@ -57,7 +57,7 @@ import type {
   TaskRouteOperations,
   WorkgroupRouteTaskLaunchOperations,
 } from '@/modules/task-execution/public/commands'
-import { DEFAULT_UPLOAD_LIMITS } from '@/modules/task-execution/public/queries'
+import { DEFAULT_UPLOAD_LIMITS } from '@/modules/task-execution/domain/uploads'
 import {
   REPO_PREP_NODE_ID,
   type WorkflowDefinition,

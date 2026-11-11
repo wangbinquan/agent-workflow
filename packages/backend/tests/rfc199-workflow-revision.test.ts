@@ -7,7 +7,7 @@ import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 import { buildAgentHostSnapshot } from '@/modules/task-execution/domain/agentHostWorkflow'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   agentFixture,
   patchTaskFixture,

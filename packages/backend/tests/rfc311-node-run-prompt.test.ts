@@ -25,8 +25,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 
-import { nodeRunPromptRelPath, storeNodeRunPrompt } from '@/modules/task-execution/public/commands'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import {
+  nodeRunPromptRelPath,
+  storeNodeRunPrompt,
+  readNodeRunPrompt,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 describe('RFC-311 T21 — node_run prompt spill', () => {
   test('a large prompt spills to a file and reads back through the dual read', () => {

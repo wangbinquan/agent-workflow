@@ -481,11 +481,18 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const taskMechanicsState = read(
       'packages/backend/src/modules/task-execution/composition/taskMechanicsState.ts',
     )
-    expect(publicTypes).toContain('export interface WrapperExecutionScopeReadModel')
+    // RFC-480: no other context named the wrapper-scope projection, so it left public/types; the execution state names
+    // the read model its consumer (the wrapper-delegating node executors) owns. Neither carries the scope index or maps.
+    expect(publicTypes).not.toContain('WrapperExecutionScopeReadModel')
     expect(publicTypes).not.toContain('ExecutionScopeIndex')
     expect(publicTypes).not.toContain('ReadonlyMap')
     expect(publicTypes).not.toContain('ReadonlySet')
-    expect(taskMechanicsState).toContain('readonly wrapperScopes: WrapperExecutionScopeReadModel')
+    const wrapperExecutors = read(
+      'packages/backend/src/modules/task-execution/engine/node/wrapperDelegatingNodeExecutors.ts',
+    )
+    expect(wrapperExecutors).toContain('export interface WrapperScopeReadModel {')
+    expect(wrapperExecutors).not.toContain('ExecutionScopeIndex')
+    expect(taskMechanicsState).toContain('readonly wrapperScopes: WrapperScopeReadModel')
     expect(taskMechanicsState).not.toContain('readonly scopeIndex:')
 
     const productionSources = tsFilesUnder('packages/backend/src')

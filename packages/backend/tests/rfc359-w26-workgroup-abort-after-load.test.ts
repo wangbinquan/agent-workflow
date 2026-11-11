@@ -15,7 +15,7 @@ import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-exe
 import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/application/ports/workgroupTurns'
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'

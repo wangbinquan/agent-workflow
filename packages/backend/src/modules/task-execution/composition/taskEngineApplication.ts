@@ -21,7 +21,7 @@ import type { DynamicWorkflowGeneratePorts } from '../application/ports/dynamicW
 import { triggerPreflightIssue } from '@/modules/resource-catalog/public/queries'
 import { runWithTaskExecutionContext } from '../application/taskExecutionContext'
 import { createLogger, type Logger } from '@/util/log'
-import type { SchedulerRuntimeTopology } from '../public/participants'
+import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutionTopology'
 import {
   createTaskAgentResourceSession,
   type TaskAgentResourceSession,

@@ -186,3 +186,8 @@ export interface SchedulerDriverPort {
   }): Promise<void>
   isTaskActive(taskId: string): boolean
 }
+
+/** Required runtime participants; production construction has no fallback (RFC-480: moved here from public/participants). */
+export interface SchedulerRuntimeTopology {
+  readonly schedulerDriver: SchedulerDriverPort
+}

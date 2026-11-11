@@ -387,21 +387,15 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/system-operations/infrastructure/crewstation/restoreNormalizationContract.ts#HostedRestoreNormalizationParticipant: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/system-operations/public/commands.ts#ApplicationConfigurationCommands: unsafe/open type UnknownKeyword',
   'modules/task-execution/application/frameChain.ts#loadFrameChain: unsafe/open type FunctionType',
-  'modules/task-execution/application/launchConfiguration.ts#resolveTaskCommitPushFromReader: unsafe/open type FunctionType',
-  'modules/task-execution/application/launchConfiguration.ts#resolveTaskLaunchRuntimeFromReader: unsafe/open type FunctionType',
-  'modules/task-execution/application/launchConfiguration.ts#resolveTaskSubagentLiveCaptureFromReader: unsafe/open type FunctionType',
-  'modules/task-execution/application/launchConfiguration.ts#resolveTaskUploadLimitsFromReader: unsafe/open type FunctionType',
-  'modules/task-execution/application/ports/agentInvocation.ts#AgentInvocationBinding: forbidden type import @/util/log#Logger',
-  'modules/task-execution/application/ports/agentInvocation.ts#AgentInvocationBinding: unsafe/open type FunctionType',
-  'modules/task-execution/application/ports/agentInvocation.ts#AgentInvocationBinding: unsafe/open type UnknownKeyword',
-  'modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeInvocationFamily: forbidden type import @/util/log#Logger',
   'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/util/log#Logger',
   // RFC-399 A8: the clarify directive route port moved from TE public/types into TE application/ports
   // (public/types re-exports it); same Actor debt, new declaration site.
-  'modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskBootOrphanOperations: unsafe/open type UnknownKeyword',
-  'modules/task-execution/application/workspaceUploads.ts#resolveUniqueUploadNameSync: unsafe/open type FunctionType',
   'modules/task-execution/composition/taskSubjectQueries.ts#createTaskSubjectQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/domain/environmentChain.ts#resolveSourceFrame: unsafe/open type FunctionType',
+  // RFC-480: public/operations (exempt from this scan as an RFC-344 operation entrypoint) was retired; the consumer-owned prune
+  // policy integration implements is the same contract on public/types, so its function type is visible here (S12 replaces the
+  // process-level registration that takes it).
+  'modules/task-execution/domain/terminalWorkspacePrune.ts#TerminalWorkspacePrunePolicy: unsafe/open type FunctionType',
   'modules/task-execution/infrastructure/consumedInputsParticipant.ts#createConsumedInputsParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts#createHumanGatePersistenceParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   // RFC-395 II-a transitional owner contracts bound to the caller's session / transaction / statement.
@@ -427,12 +421,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/taskTriggerQueries.ts#createTaskTriggerQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).
   'modules/task-execution/public/commands.ts#TaskRouteOperations: unsafe/open type FunctionType',
-  'modules/task-execution/public/commands.ts#WorkgroupHostLedgerRun: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomHostRunSnapshot: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomTaskParticipantInTx: forbidden type import @/platform/events/committed/types#CommittedEventRef',
   'modules/task-execution/public/queries.ts#createNodeRunQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.
-  'packages/shared/src/schemas/workflow.ts#parseLoopExitCondition: unsafe/open type UnknownKeyword',
 ]
 // END COMMITTED G3 BASELINES
 const G3_SUCCESSORS = {

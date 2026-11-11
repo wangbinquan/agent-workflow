@@ -1,13 +1,13 @@
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-332 — TaskEngine contracts, single-consumer cutover and architecture locks.
 
-import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { ulid } from 'ulid'
-import { taskDriveSubmission } from '../src/modules/task-execution/public/commands'
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
+import { taskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import {
   TASK_ENGINE_KINDS,

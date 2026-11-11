@@ -75,7 +75,8 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '人工门节点投影的 18 字段裁剪：决定 / 评审 / 反问三条链路取同一份节点行投影',
     fn: 'humanGateNodeProjectionMember',
     definedIn: `${B}modules/task-execution/infrastructure/humanGateProjection.ts`,
-    consumers: [`${B}modules/task-execution/public/participants.ts`],
+    // RFC-480：`public/participants.ts` 的转出撤掉（模块外零消费）；定义文件之外不再有生产读者。
+    consumers: [],
     forkedFrom: [
       `${B}modules/task-execution/infrastructure/taskDecisionParticipant.ts`,
       `${B}modules/collaboration/infrastructure/review.ts`,
@@ -257,9 +258,10 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
  * 正是要人来账本里回答的那个问题。
  *
  * **唯一的例外是纯别名**：`const A = B` / `const A = ns.B`（初始化器就是一个标识符或属性访问）
- * 绑定的是**同一个值**，不可能是第二份实现。`public/participants.ts` 里
+ * 绑定的是**同一个值**，不可能是第二份实现。`public/participants.ts` 里曾有的
  * `export const humanGateNodeProjectionMember = humanGateNodeProjectionMemberInternal` 就是这个
- * 形状——公共面把 domain 的实现原样转出去。把它算成定义点等于禁止一切再导出。
+ * 形状——公共面把 domain 的实现原样转出去（这一处转出已由 RFC-480 撤掉，形状本身仍由下面的负对照锁着）。
+ * 把它算成定义点等于禁止一切再导出。
  */
 function declaredFunctionNames(unit: SourceUnit): ReadonlySet<string> {
   const names = new Set<string>()

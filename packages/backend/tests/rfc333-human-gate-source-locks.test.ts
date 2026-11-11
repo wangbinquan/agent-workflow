@@ -320,22 +320,25 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
 })
 
 describe('RFC-333 T2 canonical continuation authority lock', () => {
-  test('the canonical continuation authority stays the RFC-328 public participant', () => {
+  test('the canonical continuation authority stays the one RFC-328 admission', () => {
     // RFC-478: services/task.ts is gone; the files that inherited its content stand in for it.
     const task = readTaskServiceSuccessors()
     const participants = read('packages/backend/src/modules/task-execution/public/participants.ts')
+    const admission = read(
+      'packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts',
+    )
     const submit = read(
       'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     )
     // RFC-359 moved the legacy resume helper's admission onto the neutral twin
     // (`submitTaskContinuationInTransaction`); RFC-387 left dynamic resume as its sole test-only caller.
-    // RFC-424 deleted that test-only resume admission: services/task.ts submits no continuation at all,
-    // and the public participant remains the one admission authority.
+    // RFC-424 deleted that test-only resume admission: services/task.ts submits no continuation at all.
+    // RFC-480: no other module named the public alias, so it left public/participants; the module's own
+    // participants take the one admission from its definition.
     expect(task).not.toContain('submitTaskContinuationInTransaction')
     expect(task).not.toContain("intentKind: 'gate-continuation'")
-    expect(participants).toContain(
-      'export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal',
-    )
+    expect(participants).not.toMatch(/\bsubmitTaskContinuation(?:InTransaction)?\b/)
+    expect(admission).toContain('export async function submitTaskContinuation(')
     expect(submit).toContain('return await persistence.submitContinuation(input)')
   })
 })

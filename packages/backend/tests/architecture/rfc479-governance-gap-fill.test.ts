@@ -160,11 +160,12 @@ describe('RFC-479 —— public 合同两项计数', () => {
         "import { readMemoryCount } from '@/modules/memory/public/queries'\n" +
         'export const count = readMemoryCount()\n',
     })
-    expect(consumed['unconsumed-public-symbols']).toEqual([
+    // RFC-480 split the count per context; the fixture's public file is memory's.
+    expect(consumed['unconsumed-public-symbols-memory']).toEqual([
       'public:memory:queries:unreadMemoryCount',
     ])
     // Mutation: drop the consumer and both exports are unconsumed.
-    expect(contract({ [PUBLIC]: SOURCE })['unconsumed-public-symbols']).toEqual([
+    expect(contract({ [PUBLIC]: SOURCE })['unconsumed-public-symbols-memory']).toEqual([
       'public:memory:queries:readMemoryCount',
       'public:memory:queries:unreadMemoryCount',
     ])
@@ -188,7 +189,13 @@ describe('RFC-479 —— 登记', () => {
         counts: Record<string, { max: number; reason: string }>
       }
     ).counts
-    expect(counts['unconsumed-public-symbols']?.reason).toContain('unconsumedPublicSymbols')
+    // RFC-480: the unconsumed count is one entry per context with a public surface, each with the same wording.
+    const unconsumed = Object.keys(counts).filter((id) =>
+      id.startsWith('unconsumed-public-symbols-'),
+    )
+    expect(unconsumed.length).toBeGreaterThanOrEqual(19)
+    for (const id of unconsumed)
+      expect([id, counts[id]!.reason.includes('unconsumedPublicSymbols')]).toEqual([id, true])
     expect(counts['public-surface-deviations']?.reason).toContain('publicSurfaceDeviations')
     const ids = Object.keys(counts).filter((id) => id.startsWith('composition-control-flow-'))
     expect(ids.length).toBeGreaterThanOrEqual(19)

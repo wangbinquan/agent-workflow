@@ -9,7 +9,7 @@ import { join } from 'node:path'
 
 import * as native from '@/platform/workspace/local/isolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
-import { repoRelForcedPaths as taskPaths } from '@/modules/task-execution/public/queries'
+import { repoRelForcedPaths as taskPaths } from '@/modules/task-execution/domain/portArtifacts'
 import { repoRelForcedPaths as sourcePaths } from '@/modules/source-control/public/queries'
 import { runGit } from '@/util/git'
 import { removeTempDirSync } from './fixtures/tempDir'

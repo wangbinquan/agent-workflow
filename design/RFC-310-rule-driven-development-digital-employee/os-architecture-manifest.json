@@ -89,7 +89,7 @@
         "modules/integration/public/events.ts -> public/types",
         "modules/task-execution/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",
-        "modules/task-execution/public/events.ts -> public/types",
+        "modules/task-execution/application/taskLifecycleEvents.ts -> public/types",
         "server.ts -> composition"
       ]
     },

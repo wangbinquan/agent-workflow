@@ -40,7 +40,7 @@ import {
   dispatchReviewNode,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { transitionTaskStatusByEvent } from '../src/modules/task-execution/public/operations'
+import { transitionTaskStatusByEvent } from '@/modules/task-execution/infrastructure/taskLifecycle'
 
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

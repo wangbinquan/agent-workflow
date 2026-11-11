@@ -23,7 +23,7 @@
 //   B7  scheduled save gate (design P2-2): ported agent + description payload
 //       / upload-port agent → 422 at save; text-port payload saves.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'

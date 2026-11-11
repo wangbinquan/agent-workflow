@@ -6,12 +6,28 @@
   已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
 - **范围**：两个模块的 205 个未消费 public 符号（task-execution 181、collaboration 24）：136 个转出撤掉，直接声明在 public 的 31 个无使用方的
   删除、38 个按内容挪进模块内部（collaboration 的 17 个内部用例函数离开 public）；task-execution `public/operations` 的 31 个导出里 25 个零消费
-  与 3 个只被签名引用的撤掉，三处模块外使用改取平台定义处 / required port / composition，文件删除；未消费符号按 context 分项入减速带。
+  与 3 个只被签名引用的撤掉，三处模块外使用改取平台定义处 / `public/types` / composition，文件删除；未消费符号按 context 分项入减速带。
+  实测（design §1 / §2）：三轮复采后九个 public 文件共撤出 218 个名字（task-execution 189、collaboration 29，含连锁带出的），挪走 49 个声明。
 - **不做**：仍有消费方的类型污染、collaboration 拼 task-execution 的 SQL 片段、反向越 DAG 类型边（RFC-481）；其他模块（S9 后续）；终态回收策略
   注册表改装配期注入（S12）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
   上次 2026-11-09，其后关闭 4 个后继，下一次不晚于 2026-11-23。
-- **附带**：RFC-479 的 Done 文档提交 `673b1b53b`（5 个文档文件）：exact SHA 主 CI run 42906783728 的 70 个 job 全绿。
+- **附带**：RFC-479 的 Done 文档提交 `673b1b53b`（5 个文档文件）：exact SHA 主 CI run 42906783728 的 70 个 job 全绿；本 RFC 的落档提交
+  `71202c92a`：exact SHA 主 CI run 42914084443 的 70 个 job 全绿。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 落位按内容——挪走的 49 个声明全部进 application（含 `application/ports`）与 domain，没有
+  原样进 infrastructure 的；C11 public 只撤不增（终态回收策略类型从 `public/operations` 换到 `public/types`，同一合同、同一消费方）；C12 RFC-480
+  用例覆盖 backend 的 src / 用例 / 脚本与两个模块的全部 public 文件，未消费分项覆盖全部 context，类型遍历的回归只在 fixture 上判定；C13 触及的
+  减速带收紧到实测（`counts.json` 60 项）。
+- **§14 不变量 / S9 退出门**（task-execution ↔ collaboration 这一对的第一步）：未消费 public 符号 322 → 91（task-execution 181 → 0、
+  collaboration 24 → 0，两项上限 0；其他 context 117 → 91 来自判据修正，不逐项归因）；public 类型偏差 88 → 77（终局为空，余下的归 RFC-481
+  与 S9 后续）；有 `public/operations` 的模块 8 → 7（task-execution 退役）；跨 context 内部文件对 43 不变；减速带 60 项每项等于实测。
+- **集中验证**（候选基于 `71202c92a`，验证期间 HEAD 未前进，详见 plan）：查出本 RFC 的五处问题，均已修复并复验——偏差账本按少了 shared 的
+  语料误删一条（恢复，上限 77）；`composition/processEffectObserver.ts` 变得不可达（挪到 `tests/helpers/`，Windows workflow 的路径过滤随之
+  改指，不可达文件保持 18）；别的 RFC 用例里 7 处断言源码文本的账本随撤出失效（`tsc` 看不到，全量里都在 1 秒内失败）；报告类型遍历的修正
+  补 fixture 回归（对修正前的代码红）；fixture 说明里的文件名。backend `tsc` 0 错、eslint 无告警；全量 SQLite 两片跑完、两片在负载 37～47
+  下被时限杀掉，按 bun 的分片规则重建清单补跑 1,430 个文件，全量里有失败或输出的 69 个文件与对照成对复跑：除上述 7 处外的失败两边逐条相同
+  （负载下的超时与内部等待）；架构报告 60 项实测 = `max`，其他 context 的 937 个 public 条目逐个相同；PostgreSQL 以 CI 双引擎分片为证据。
+  实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（Done；`design/RFC-479-governance-gap-fill/`）
 

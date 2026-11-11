@@ -42,7 +42,7 @@ import {
   requireReviewTaskAccess,
   resolveCollaborationCommandContext,
 } from '@/modules/collaboration/application/commandContext'
-import { reviewNodeReviewerDependencies } from '@/modules/collaboration/composition/reviewNodeReviewerDependencies'
+import { reviewNodeReviewerDependencies } from '@/modules/collaboration/application/reviewNodeReviewerEntries'
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import { describeEachProvider } from './helpers/eachProvider'
 

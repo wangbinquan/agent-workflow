@@ -18,7 +18,7 @@ import {
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
+import { pickInheritableRunConfig } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { gracefulShutdown } from '@/modules/task-execution/application/recovery/gracefulShutdown'
 import { describeEachProvider } from './helpers/eachProvider'

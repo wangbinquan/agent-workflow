@@ -9,10 +9,8 @@ import type { RunNodeOptions } from './nativeTaskAgentRunOptions'
 import { bindLocalAgentExecutionParticipants } from './agentExecutionEffect'
 import { broadcastNodeStatus } from '../nodeStatusEvents'
 import { detectPluginLoadFailure } from './nativeTaskAgentPluginLoadDiagnostics'
-import {
-  selectNodeRunPromptOperations,
-  selectPortArtifactOperations,
-} from '../../public/participants'
+import { selectNodeRunPromptOperations } from '../../composition/nodeRunPrompts'
+import { selectPortArtifactOperations } from '../../composition/portArtifacts'
 import { resolveNativePortContentDetailed } from './filePortOutputValidation'
 import { bindNativeAgentInvocation } from './agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'

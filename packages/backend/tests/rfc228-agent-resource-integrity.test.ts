@@ -4,7 +4,7 @@
 // reject the complete dependsOn closure, while actor-safe status distinguishes
 // a visible name, a hidden existing row, and a genuinely missing row.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { patchAgentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'

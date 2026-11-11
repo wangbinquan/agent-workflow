@@ -1,9 +1,11 @@
 // RFC-412: moved from services/execution/taskMechanicsState.ts — the execution state is an assembly type and lives
 // only in composition (RFC-294 S6 exit gate).
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
-import type { TaskEngineTaskSnapshot, TaskRepositoryMount } from '../public/types'
-import type { SchedulerRuntimeTopology } from '../public/participants'
-import type { TaskScopeOutcome, WrapperExecutionScopeReadModel } from '../public/types'
+import type { TaskRepositoryMount } from '../domain/taskRepository'
+import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutionTopology'
+import type { WrapperScopeReadModel } from '../engine/node/wrapperDelegatingNodeExecutors'
+import type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
+import type { TaskScopeOutcome } from '../domain/taskEngine'
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
@@ -41,7 +43,7 @@ export interface TaskMechanicsState {
   readonly subprocessSem: Semaphore
   readonly containerOf: Map<string, string>
   readonly topLevelIds: Set<string>
-  readonly wrapperScopes: WrapperExecutionScopeReadModel
+  readonly wrapperScopes: WrapperScopeReadModel
   readonly driveScope: (state: TaskMechanicsState, args: TaskScopeArgs) => Promise<TaskScopeOutcome>
   readonly repos: TaskRepositoryMount[]
   readonly scopeRoot: string

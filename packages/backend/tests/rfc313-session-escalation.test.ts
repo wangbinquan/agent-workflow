@@ -35,7 +35,7 @@ import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/i
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/modules/task-execution/engine/kernel/assembly'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const RESTART_NOTICE_MARK = 'Note on an earlier attempt'

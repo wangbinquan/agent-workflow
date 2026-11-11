@@ -33,10 +33,10 @@ import type {
 } from '../application/ports/taskExecutionTopology'
 import type {
   AgentRouteTaskLaunchOperations,
-  TaskCancellationCommand,
   TaskRouteOperations,
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
+import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
 import type { TaskOverviewQuery } from '../public/queries'
 import type { TaskClarifyDirectiveRouteOperations, TaskExecutionReadModels } from '../public/types'
 import {

@@ -4,12 +4,6 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  nodeRunPromptRelPath as publicNodeRunPromptRelPath,
-  storeNodeRunPrompt as publicStoreNodeRunPrompt,
-} from '../src/modules/task-execution/public/commands'
-import { readNodeRunPrompt as publicReadNodeRunPrompt } from '../src/modules/task-execution/public/queries'
-import { selectNodeRunPromptOperations as publicSelectNodeRunPromptOperations } from '../src/modules/task-execution/public/participants'
 import type { PromptStorage } from '../src/modules/task-execution/public/types'
 import {
   composeNodeRunPromptOperations,
@@ -20,8 +14,15 @@ import type {
   NodeRunPromptOperations,
   NodeRunPromptRow,
 } from '../src/modules/task-execution/application/ports/nodeRunPromptContent'
-import { nodeRunPromptRelPath, storeNodeRunPrompt } from '@/modules/task-execution/public/commands'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import {
+  nodeRunPromptRelPath as publicNodeRunPromptRelPath,
+  storeNodeRunPrompt as publicStoreNodeRunPrompt,
+  readNodeRunPrompt as publicReadNodeRunPrompt,
+  selectNodeRunPromptOperations as publicSelectNodeRunPromptOperations,
+  nodeRunPromptRelPath,
+  storeNodeRunPrompt,
+  readNodeRunPrompt,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 function held<T>() {
   let resolve!: (value: T) => void

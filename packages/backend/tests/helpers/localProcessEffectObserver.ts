@@ -1,19 +1,20 @@
+// RFC-480 — moved from task-execution `composition/processEffectObserver.ts`. Production reached it only through a
+// `public/participants` alias that no other module consumed; once the alias was withdrawn only tests composed the local
+// default projection (the production runners hand their own projection to `application/processEffectObserver`).
 import {
   createProcessEffectAttemptObserver as createObserver,
   type ProcessEffectAttemptObserver,
-} from '../application/processEffectObserver'
-import type { TaskExecutionContext } from '../application/taskExecutionContext'
-import type { TaskExecutionEffectPersistence } from '../application/ports/taskExecutionEffectStore'
+} from '@/modules/task-execution/application/processEffectObserver'
+import type { TaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import type { TaskExecutionEffectPersistence } from '@/modules/task-execution/application/ports/taskExecutionEffectStore'
 import {
   createLocalProcessEffectProjection,
   type LocalProcessSpawnReceipt,
   type LocalProcessSettlement,
   type LocalProcessResources,
-} from '../infrastructure/local/processEffectProjection'
+} from '@/modules/task-execution/infrastructure/local/processEffectProjection'
 
-/** Compatibility composition for the existing local Agent/script runners.
- * Selected execution bindings supply their own projection to the application
- * coordinator instead of obtaining this local default. */
+/** The local default projection composed onto the application coordinator, for tests that exercise local processes. */
 export function createProcessEffectAttemptObserver(input: {
   persistence: TaskExecutionEffectPersistence
   taskId: string

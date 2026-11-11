@@ -33,7 +33,7 @@ import {
   validateCodeHostRecoveryBindingManifest,
 } from '@/modules/task-execution/domain/codeHostRecovery'
 import { createVerifiedOutcomeUnknownClosure } from '@/modules/task-execution/domain/ownership'
-import { submitTaskContinuationInTransaction } from '@/modules/task-execution/public/participants'
+import { submitTaskContinuation as submitTaskContinuationInTransaction } from '@/modules/task-execution/infrastructure/taskContinuationAdmission'
 // RFC-359 W10：同步 store 上的 `closeOutcomeUnknownAndRelease` 生产零调用方、已删除；
 // 这里改指两个引擎共用的那一份。
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'

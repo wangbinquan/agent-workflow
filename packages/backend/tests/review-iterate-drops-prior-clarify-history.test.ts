@@ -48,7 +48,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'

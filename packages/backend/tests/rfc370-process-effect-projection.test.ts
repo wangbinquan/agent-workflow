@@ -15,7 +15,7 @@ import type {
   TaskEffectAttemptSettlement,
 } from '@/modules/task-execution/application/ports/taskExecutionEffectStore'
 import type { TaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
-import { createProcessEffectAttemptObserver as createLocalObserver } from '@/modules/task-execution/composition/processEffectObserver'
+import { createProcessEffectAttemptObserver as createLocalObserver } from './helpers/localProcessEffectObserver'
 import { requestHash } from '@/modules/task-execution/domain/executionEffect'
 import { sha256Hex } from '@/modules/task-execution/domain/digest'
 import {

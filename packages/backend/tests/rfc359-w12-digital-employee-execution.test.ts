@@ -6,7 +6,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 // through the complete selected TaskEngine and a real mock-opencode child.
 // Task, node, output, owner and usage rows are produced by the runtime itself.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   agentFixture,
   readNodeRunOutputFixtures,

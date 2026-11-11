@@ -17,7 +17,7 @@ import type {
   WorkgroupTurnHostResult,
   WorkgroupTurnLogger,
   WorkgroupTurnsOutcome,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 
 export interface WorkgroupTurnsTestHooks {
   runHostNode: (request: WorkgroupTurnHostRequest) => Promise<WorkgroupTurnHostResult>

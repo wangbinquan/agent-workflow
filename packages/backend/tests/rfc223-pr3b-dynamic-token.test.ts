@@ -80,7 +80,7 @@ import type {
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,
-} from '../src/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 
 import { createLogger } from '../src/util/log'
 import { runTestGit } from './helpers/testCommand'

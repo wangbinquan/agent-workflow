@@ -1,8 +1,8 @@
 import type {
-  TaskDriveCoordinator,
   TaskDriveReceipt,
   TaskDriveSubmission,
-} from '../../src/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/drive/taskDriveTypes'
+import type { TaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveTypes'
 
 export interface RecordingTaskDriveCoordinator {
   readonly coordinator: TaskDriveCoordinator

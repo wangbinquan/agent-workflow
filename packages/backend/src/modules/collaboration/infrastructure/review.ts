@@ -179,10 +179,7 @@ import type { Actor } from '@/auth/actor'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
-import {
-  finalizeCommittedHumanGate,
-  prepareReviewGateOpen,
-} from '@/modules/collaboration/public/commands'
+import { finalizeCommittedHumanGate, prepareReviewGateOpen } from '../application/commandEntries'
 import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
@@ -197,7 +194,9 @@ import type { ReviewGateOpenDocumentDraft } from '@/modules/collaboration/applic
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { chunkedAll } from '@/util/sqlChunk'
 
-import { assertNodeRunSourceTerminationAdmission } from '@/modules/task-execution/public/operations'
+// RFC-480: the source-termination admission rule is a platform persistence predicate; take it from its definition site
+// (task-execution's retired `public/operations` only re-exported it).
+import { assertNodeRunSourceTerminationAdmission } from '@/platform/persistence/nodeRunLifecycleCore'
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
 // （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'

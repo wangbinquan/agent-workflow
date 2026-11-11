@@ -41,7 +41,8 @@
 import { isTerminalNodeRunStatus, type NodeKind, type NodeRunStatus } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import { containerMemberRuns, wrapperInnerDescendantIds } from '../../public/queries'
+import { wrapperInnerDescendants } from '../../domain/wrapperGraph'
+import { containerMemberRuns } from '../../domain/containerMembership'
 
 /**
  * 判定所需的最小行投影。刻意不用 `typeof nodeRuns.$inferSelect` —— 回收器
@@ -178,7 +179,7 @@ export function classifyRunLiveness(
   if (isWrapperNode || hasChildRows) {
     return {
       kind: 'delegated',
-      innerNodeIds: isWrapperNode ? wrapperInnerDescendantIds(row.nodeId, definition) : new Set(),
+      innerNodeIds: isWrapperNode ? wrapperInnerDescendants(row.nodeId, definition) : new Set(),
     }
   }
   // 声明由子进程承载活性、但还没 spawn（pre-spawn 窗口 / io 类瞬时行），

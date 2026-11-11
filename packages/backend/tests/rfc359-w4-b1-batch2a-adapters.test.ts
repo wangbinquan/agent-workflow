@@ -5,7 +5,7 @@ import { o2Ports } from './helpers/o2Closure'
 // 节点激活快照读取、任务工件路径查询、动态工作流状态持久化、RFC-354 frame 回填存储、
 // 人工门 continuation 的 effect 检视（ready / 无 claimed intent 两条路径）。
 
-import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
 import {
   type TaskFixtureSpec,
   agentFixture,

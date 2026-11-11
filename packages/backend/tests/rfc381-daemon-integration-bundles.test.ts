@@ -19,7 +19,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/operations'
+import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

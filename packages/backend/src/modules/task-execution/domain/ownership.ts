@@ -7,20 +7,34 @@
 // capability and is rejected before it can reach a persistence gateway.
 
 import type {
-  OwnedTaskTx,
   OwnershipToken,
   TerminalMaintenanceClaim,
   TerminalMaintenanceOperation,
-  WorkerIdentity,
 } from '../public/participants'
 
 export type {
-  OwnedTaskTx,
   OwnershipToken,
   TerminalMaintenanceClaim,
   TerminalMaintenanceOperation,
-  WorkerIdentity,
 } from '../public/participants'
+
+declare const workerIdentityBrand: unique symbol
+declare const ownedTaskTxBrand: unique symbol
+
+// RFC-480: the worker identity and owned-transaction capabilities have no consumer outside task-execution, so they left
+// `public/participants` for the file that already owned their constructors and runtime brand checks.
+export interface WorkerIdentity {
+  readonly ownerId: string
+  readonly daemonGeneration: string
+  readonly [workerIdentityBrand]: true
+}
+
+export interface OwnedTaskTx {
+  readonly taskId: string
+  readonly epoch: number
+  readonly revision: number
+  readonly [ownedTaskTxBrand]: true
+}
 
 const daemonLockProofBrand: unique symbol = Symbol('rfc328.daemon-lock-proof')
 const claimAttachPermitBrand: unique symbol = Symbol('rfc328.claim-attach-permit')

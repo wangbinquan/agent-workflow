@@ -34,7 +34,7 @@ import {
   countPendingReviews,
   getReviewDetail,
 } from '@/modules/collaboration/infrastructure/review'
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { taskFixture, nodeRunFixture, readWorkflowFixtures } from './helpers/model'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'

@@ -32,7 +32,7 @@ import {
 import {
   ORCHESTRATOR_AGENT_ID,
   ORCHESTRATOR_AGENT_NAME,
-} from '../src/modules/task-execution/public/queries'
+} from '@/modules/task-execution/domain/orchestratorAgentIdentity'
 
 function mkAgent(
   name: string,

@@ -3,7 +3,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { sha256Hex } from '@/util/hash'
 import { and, eq } from 'drizzle-orm'
-import type { EmployeeExecutionArtifactQueries } from '../public/types'
+import type { EmployeeExecutionArtifactQueries } from '../application/ports/employeeExecutionArtifactQueries'
 import { taskReadColumns } from './taskRepositorySql'
 
 export function createEmployeeExecutionArtifactQueries(

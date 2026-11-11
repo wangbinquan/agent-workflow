@@ -18,7 +18,7 @@ import {
   appendHumanGateOpenedCommittedEvent,
   appendReviewSelectionChangedCommittedEvent,
 } from '@/modules/collaboration/infrastructure/collaborationCommittedEvents'
-import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
+import { createManualQuestionOpen } from '@/modules/collaboration/application/commandEntries'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import {

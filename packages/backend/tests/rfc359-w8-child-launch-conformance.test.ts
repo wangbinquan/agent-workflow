@@ -75,7 +75,7 @@ import {
   createChildExecutionLaunchOperations,
   type ChildWorkgroupLaunchResources,
 } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,

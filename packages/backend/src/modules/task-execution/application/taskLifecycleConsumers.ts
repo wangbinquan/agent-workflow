@@ -2,7 +2,7 @@ import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 
 import type { EventObservationParticipant } from '@/modules/event-center/public/participants'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
-import { taskLifecycleObservation } from '../public/events'
+import { taskLifecycleObservation } from './taskLifecycleEvents'
 import {
   decodeTaskLifecycleCommittedEvent,
   TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,

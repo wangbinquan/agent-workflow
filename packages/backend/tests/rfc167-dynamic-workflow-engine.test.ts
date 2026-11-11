@@ -84,7 +84,7 @@ import {
 import {
   ORCHESTRATOR_AGENT_ID,
   ORCHESTRATOR_AGENT_NAME,
-} from '../src/modules/task-execution/public/queries'
+} from '@/modules/task-execution/domain/orchestratorAgentIdentity'
 import { createUser } from './helpers/userFixture'
 import {
   createTestTaskExecutionLaunchParticipant,
@@ -94,7 +94,7 @@ import type {
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,
-} from '../src/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 
 import { createLogger } from '../src/util/log'
 import {

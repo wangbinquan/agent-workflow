@@ -42,15 +42,19 @@ import {
 } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
+import {
+  archivePortArtifacts,
+  readPortArtifact,
+} from '@/modules/task-execution/composition/portArtifacts'
 import {
   encodePortSegment,
   parseArchiveJson,
-  portArchiveRootRel,
-  readPortArtifact,
-  toContainerRelative,
   truncationNotice,
-} from '@/modules/task-execution/public/queries'
+} from '@/modules/task-execution/domain/portArtifacts'
+import {
+  portArchiveRootRel,
+  toContainerRelative,
+} from '@/modules/task-execution/application/portArtifacts'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'

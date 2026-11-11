@@ -7,7 +7,7 @@ import { z } from 'zod'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
-import type { CollaborationHumanInputQueries } from '../public/types'
+import type { CollaborationHumanInputQueries } from '../application/ports/humanInputQueries'
 import type { ContentStore } from '@/platform/content/contentStore'
 import { readCommittedReviewDocumentContent } from './humanGateOperationJournal'
 

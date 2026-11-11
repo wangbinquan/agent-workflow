@@ -11,7 +11,7 @@ import { initialDwState, WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { createTaskRunPorts } from '@/modules/task-execution/composition/taskEngineApplication'
 import type { TaskExecutionRuntimeComponents } from '@/modules/task-execution/composition/taskExecutionComponents'
 import { createExecutionScopeIndex } from '@/modules/task-execution/domain/executionScope'
-import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
+import type { SchedulerRuntimeTopology } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { composeDynamicWorkflowLayerOneValidation } from '@/modules/resource-catalog/composition/workflowOperations'
 import {

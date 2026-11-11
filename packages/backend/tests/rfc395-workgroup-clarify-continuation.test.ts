@@ -27,7 +27,7 @@ import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastruct
 import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { createLogger } from '@/util/log'

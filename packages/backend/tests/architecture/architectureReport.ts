@@ -1364,6 +1364,28 @@ function collectTypeShape(
     }
     return
   }
+  // RFC-480: `readonly T[]` / `keyof T` (type operators) and tuples wrap the types they reference. Walk through them so
+  // the element types of a public contract count as referenced — before this, a type that a consumed public contract
+  // only used inside `readonly X[]` was misreported as an unconsumed public symbol.
+  if (ts.isTypeOperatorNode(type)) {
+    collectTypeShape(type.type, source, shape, resolver, prefix, visited, depth + 1, typeParameters)
+    return
+  }
+  if (ts.isTupleTypeNode(type)) {
+    type.elements.forEach((element, index) =>
+      collectTypeShape(
+        ts.isNamedTupleMember(element) ? element.type : element,
+        source,
+        shape,
+        resolver,
+        `${prefix}[${index}]`,
+        visited,
+        depth + 1,
+        typeParameters,
+      ),
+    )
+    return
+  }
   if (ts.isUnionTypeNode(type)) {
     shape.unionVariants += type.types.length
     type.types.forEach((variant, index) =>
@@ -1446,6 +1468,9 @@ function collectTypeShape(
       )
       return
     }
+    // RFC-480: the type arguments of other generics (`Record<K, V>`, `Map<K, V>`, user generics) name referenced types too.
+    for (const typeArgument of type.typeArguments ?? [])
+      recordTypeReferences(typeArgument, source, shape, resolver, typeParameters)
     const resolved = resolver(source, name)
     if (resolved !== null) shape.resolvedRefs.push(resolved.key)
     if (resolved !== null && !visited.has(resolved.key)) {
@@ -1465,6 +1490,28 @@ function collectTypeShape(
     return
   }
   shape.fields.push({ fieldPath: prefix === '' ? '$value' : prefix, type: type.getText(source) })
+  // RFC-480: indexed access, conditional, mapped and other type forms are kept as one opaque field, but the types they
+  // name are still references of this contract (see the type-operator note above).
+  ts.forEachChild(type, (child) =>
+    recordTypeReferences(child, source, shape, resolver, typeParameters),
+  )
+}
+
+/** Record every resolvable type reference under `node` as a dependency of the shape (no shape fields are added). */
+function recordTypeReferences(
+  node: ts.Node,
+  source: ts.SourceFile,
+  shape: MutableShape,
+  resolver: ShapeResolver,
+  typeParameters: ReadonlySet<string>,
+): void {
+  if (ts.isTypeReferenceNode(node) && !typeParameters.has(node.typeName.getText(source))) {
+    const resolved = resolver(source, node.typeName.getText(source))
+    if (resolved !== null) shape.resolvedRefs.push(resolved.key)
+  }
+  ts.forEachChild(node, (child) =>
+    recordTypeReferences(child, source, shape, resolver, typeParameters),
+  )
 }
 
 function nodeShape(
@@ -2903,16 +2950,20 @@ export function corpusPublicContract(corpus: GateCorpus): PublicContractInputs {
   }
 }
 /**
- * RFC-479 (RFC-294 S11): the two public-contract totals enter the counts speed bump — public symbols no other module consumes
- * (the report's `unconsumedPublicSymbols`, by entry id) and public type deviations (`publicSurfaceDeviations`).
+ * RFC-479 (RFC-294 S11): the public contract enters the counts speed bump — public symbols no other module consumes (the
+ * report's `unconsumedPublicSymbols`, by entry id) and public type deviations (`publicSurfaceDeviations`).
+ * RFC-480: the unconsumed symbols count per context (`unconsumed-public-symbols-<context>`, every context that has a public
+ * surface, also at zero), so one context's regrowth cannot hide behind another's sweep; the deviations stay one total.
  */
 export function publicContractGateSets(inputs: PublicContractInputs): Record<string, string[]> {
-  return {
-    'unconsumed-public-symbols': unconsumedPublicSymbols(inputs.publicSurfaces)
-      .map((entry) => entry.id)
-      .sort(),
-    'public-surface-deviations': [...inputs.publicSurfaceDeviations].sort(),
-  }
+  const sets: Record<string, string[]> = {}
+  for (const entry of inputs.publicSurfaces)
+    sets[`unconsumed-public-symbols-${entry.context}`] ??= []
+  for (const entry of unconsumedPublicSymbols(inputs.publicSurfaces))
+    sets[`unconsumed-public-symbols-${entry.context}`]!.push(entry.id)
+  for (const ids of Object.values(sets)) ids.sort()
+  sets['public-surface-deviations'] = [...inputs.publicSurfaceDeviations].sort()
+  return sets
 }
 export function reportGateSets(
   corpus: GateCorpus,

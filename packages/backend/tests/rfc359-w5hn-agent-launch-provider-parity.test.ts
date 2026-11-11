@@ -14,7 +14,7 @@
 //
 // 合并两份编排（§5hn 批次一）之前，这条必须是绿的——它是「合并没有改变用户可见行为」的基线。
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { readTaskFixtures, readWorkflowFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'

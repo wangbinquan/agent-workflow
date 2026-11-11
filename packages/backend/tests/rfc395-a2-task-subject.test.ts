@@ -16,11 +16,11 @@ import {
 import { buildActor } from '@/auth/actor'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { createTaskSubjectQueries } from '@/modules/task-execution/public/queries'
 import {
-  createTaskSubjectQueries,
   definitionAnchorId,
   TASK_DEFINITION_HOSTS,
-} from '@/modules/task-execution/public/queries'
+} from '@/modules/task-execution/domain/taskSubject'
 import type { TaskSubject } from '@/modules/task-execution/public/types'
 import {
   loadTaskProjection,

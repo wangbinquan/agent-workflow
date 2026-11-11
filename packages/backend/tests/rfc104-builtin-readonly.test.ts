@@ -14,7 +14,7 @@
 // the drift-proof column discriminator, deterministic seed self-heal, and the
 // DB-level "≤1 built-in per name" guarantee that de-ambiguates fusionWorkflowId.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   agentFixture,
   patchAgentFixture,

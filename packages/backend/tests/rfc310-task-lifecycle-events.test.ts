@@ -13,11 +13,11 @@ import {
   createTaskLifecycleDurableConsumerDefinitions,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/application/taskLifecycleConsumers'
+import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
   TASK_STATUS_CHANGED_EVENT_REF,
-  taskLifecycleEventCatalogJson,
-} from '@/modules/task-execution/public/events'
+} from '@/modules/task-execution/application/taskLifecycleEvents'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 async function setTaskStatus({

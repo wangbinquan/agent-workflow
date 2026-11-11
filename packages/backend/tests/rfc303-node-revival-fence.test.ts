@@ -14,7 +14,7 @@ import { lockNodeRunTaskRootInTx } from '@/modules/task-execution/infrastructure
 import {
   setNodeRunStatusTx,
   transitionNodeRunStatus,
-} from '@/modules/task-execution/public/operations'
+} from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { setNodeRunStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 
 async function fixture(db: PersistenceDb, status: 'pending' | 'done') {

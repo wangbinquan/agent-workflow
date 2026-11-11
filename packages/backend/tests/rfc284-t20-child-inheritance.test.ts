@@ -28,7 +28,7 @@ import { resolve } from 'node:path'
 import {
   INHERITABLE_RUN_CONFIG_KEYS,
   pickInheritableRunConfig,
-} from '../src/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { RunTaskOptions } from '../src/modules/task-execution/composition/taskEngineRuntimeOptions'
 
 type Disposition = 'per-task' | 'inherit' | 'session-live' | 'intent-kind' | 'dropped-registered'

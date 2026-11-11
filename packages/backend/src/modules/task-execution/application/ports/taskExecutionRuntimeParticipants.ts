@@ -1,5 +1,8 @@
-import type { SchedulerRuntimeTopology } from '../../public/participants'
-import type { ChildResumeRuntime, TaskDriveRequest } from './taskExecutionTopology'
+import type {
+  ChildResumeRuntime,
+  SchedulerRuntimeTopology,
+  TaskDriveRequest,
+} from './taskExecutionTopology'
 
 /** Provider-selected engine participant captured by bootstrap. */
 export interface TaskExecutionDriveParticipant {

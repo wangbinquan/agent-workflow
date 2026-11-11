@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { type DbClient } from '../src/db/client'
-import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
+import { archivePortArtifacts } from '@/modules/task-execution/composition/portArtifacts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

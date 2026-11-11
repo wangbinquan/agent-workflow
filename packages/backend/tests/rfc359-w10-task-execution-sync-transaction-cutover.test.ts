@@ -62,7 +62,7 @@ import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/
 import type { TaskSourceTerminationEffectInput } from '@/modules/task-execution/application/applySourceTerminationEffect'
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import { revokeExactOwnerInTx } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
-import { appendTaskCreatedCommittedEvent } from '@/modules/task-execution/public/participants'
+import { appendTaskCreatedCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { setNodeRunStatusTx as setNodeRunStatusInTransaction } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

@@ -32,14 +32,14 @@ import type {
 } from '@/modules/task-execution/application/ports/workgroupTurns'
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
+import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
 import {
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
   type WorkgroupTurnHostRequest,
   type WorkgroupTurnHostResult,
   type WorkgroupTurnLogger,
   type WorkgroupTurnsOutcome,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
+import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent } from './helpers/model/resourceWrites'

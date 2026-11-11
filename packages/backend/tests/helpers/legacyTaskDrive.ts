@@ -31,7 +31,6 @@ import { composeGateContinuationPreDrive } from '@/modules/task-execution/compos
 import type { HumanGateOpenParticipantFactory } from '@/modules/task-execution/composition/required-ports'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
-  TaskExecutionError,
   createGateContinuationDriver,
   composeWorktreeResumePreflight,
 } from '@/modules/task-execution/public/participants'
@@ -41,7 +40,8 @@ import {
   isTaskDriverActive,
 } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { resolveTaskSubagentLiveCapture } from '@/modules/task-execution/public/queries'
+import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
+import { resolveTaskSubagentLiveCapture } from '@/modules/task-execution/application/launchConfiguration'
 import { resolveTaskLaunchRuntimeConfiguration } from '@/modules/task-execution/application/launchConfiguration'
 import type { TaskLaunchConfigurationQueries } from '@/modules/task-execution/application/ports/taskLaunchConfiguration'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'

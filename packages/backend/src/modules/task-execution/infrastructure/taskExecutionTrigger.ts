@@ -8,7 +8,8 @@ import {
 import type { WebhookTaskExecutionParticipant } from '@/modules/integration/application/ports/webhookExecution'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
-import type { ExecutionInvoker, TaskCancellationCommand } from '../public/commands'
+import type { ExecutionInvoker } from '../public/commands'
+import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
 import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 
 export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<

@@ -14,10 +14,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  ConcurrentTaskTransition,
-  registerTerminalWorkspacePrunePolicy,
-} from '../src/modules/task-execution/public/operations'
+import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
+import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'

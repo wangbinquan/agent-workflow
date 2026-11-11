@@ -8,11 +8,9 @@ import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/col
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import type { TaskExecutionTransaction } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import type { WorkgroupTaskRoomTaskSnapshot } from '@/modules/task-execution/public/commands'
-import { taskWorkgroupConfigSelection } from '@/modules/task-execution/public/operations'
-import {
-  taskSubjectFromDefinition,
-  TASK_DEFINITION_HOSTS,
-} from '@/modules/task-execution/public/queries'
+import { taskSubjectFromDefinition } from '@/modules/task-execution/public/queries'
+import { taskWorkgroupConfigSelection } from '@/modules/task-execution/infrastructure/taskWorkgroupConfig'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import type { TaskDefinitionSubject } from '@/modules/task-execution/public/types'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'

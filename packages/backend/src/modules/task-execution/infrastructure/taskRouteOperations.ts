@@ -130,7 +130,7 @@ import type {
 } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
 import { sourceTerminationRevivalError } from '../domain/sourceTermination'
-import type { SchedulerRuntimeTopology } from '../public/participants'
+import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutionTopology'
 import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'

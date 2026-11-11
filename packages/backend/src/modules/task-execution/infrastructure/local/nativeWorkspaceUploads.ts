@@ -1,14 +1,13 @@
 // RFC-370: preserve the full mutable native API; one Task-owned upload policy.
 import { resolve } from 'node:path'
-import { applyWorkspaceUploads } from '@/modules/task-execution/public/commands'
-import { resolveUniqueUploadNameSync } from '@/modules/task-execution/public/queries'
+import type { UploadLimits } from '../../domain/uploads'
 import type {
-  UploadInputDef,
-  UploadFile,
-  UploadLimits,
   WorkspaceUploadPlan,
   WorkspaceUploadResult,
-} from '@/modules/task-execution/public/types'
+} from '../../application/ports/workspaceUploads'
+import { applyWorkspaceUploads } from '../../composition/workspaceUploads'
+import { resolveUniqueUploadNameSync } from '../../application/workspaceUploads'
+import type { UploadInputDef, UploadFile } from '../../domain/uploads'
 import { entryExists } from '@/platform/content/local/uploadPaths'
 
 export interface UploadPlan {

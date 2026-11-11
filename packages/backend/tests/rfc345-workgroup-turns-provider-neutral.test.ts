@@ -22,14 +22,17 @@ describe('RFC-345/349 provider-neutral workgroup turn ledger', () => {
   )
   const composition = source('src/modules/task-execution/composition/workgroupTurns.ts')
 
-  test('both providers implement the one authoritative TaskExecution public contract', () => {
-    expect(publicCommands).toContain('export interface WorkgroupTurnsOperations')
-    expect(publicCommands).toContain('export interface WorkgroupHostLedgerParticipantInTx')
+  test('both providers implement the one authoritative TaskExecution contract', () => {
+    // RFC-480: no other module consumed the contract, so it left public/commands and is declared once
+    // in the task-execution application port the driver and the persistence adapter both import.
+    expect(spiPorts).toContain('export interface WorkgroupTurnsOperations')
+    expect(spiPorts).toContain('export interface WorkgroupHostLedgerParticipantInTx')
+    expect(publicCommands).not.toMatch(/\bWorkgroupTurnsOperations\b/)
+    expect(publicCommands).not.toMatch(/\bWorkgroupHostLedgerParticipantInTx\b/)
+    expect(spiPorts).not.toMatch(/from '[^']*\/public\//)
     expect(driver).toContain('): WorkgroupTurnsOperations')
-    // Inside task-execution the contract arrives through the application port that re-exports the public one.
     expect(driver).toContain("from '../../../application/ports/workgroupTurnsOperations'")
     expect(persistence).toContain("from '../application/ports/workgroupTurnsOperations'")
-    expect(spiPorts).toContain("} from '../../public/commands'")
     expect(composition).toContain('export function createWorkgroupTurnsPersistenceOperations(')
     expect(composition).toContain('): WorkgroupTurnsOperations')
     // legacy 的 SQLite 薄壳（套在 legacy engine 上的那份）已删除。

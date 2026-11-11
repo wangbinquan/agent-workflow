@@ -33,7 +33,7 @@ import { deleteAgent } from './helpers/resourceCatalogDeletion'
 //   A9  F15 permission carve-out: tasks:launch WITHOUT agents:write may
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import {
   type TaskFixtureSpec,
   agentFixture,

@@ -29,7 +29,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
-import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
+import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'

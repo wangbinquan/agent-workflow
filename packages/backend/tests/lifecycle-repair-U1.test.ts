@@ -103,7 +103,7 @@ describeEachProvider('RFC-057 — U1.cancel-older-keep-newest', (provider) => {
     h = setup.h
     // Drift: cancel one of them manually before the operator clicks apply.
     const { transitionNodeRunStatus } =
-      await import('../src/modules/task-execution/public/operations')
+      await import('../src/modules/task-execution/infrastructure/taskLifecycle')
     await transitionNodeRunStatus({
       db: h.db,
       nodeRunId: setup.runIds[0]!,

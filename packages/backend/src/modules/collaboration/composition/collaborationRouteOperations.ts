@@ -17,20 +17,22 @@ import {
   createCollaborationClarifyDraftEventPublisher,
 } from '../infrastructure/collaborationClarifyDraftEventPublisher'
 import { createCollaborationRouteOperations } from '../infrastructure/collaborationRouteOperations'
+import { resolveCollaborationTaskAccess } from '../public/queries'
 import {
   dispatchTaskQuestions,
   submitClarifyDecision,
   submitReviewDecision,
-} from '../public/commands'
+} from '../application/commandEntries'
 import {
   collaborationQuestionTaskId,
-  filterReviewSummariesForActor,
   resolveCollaborationClarifyTaskAccess,
   resolveCollaborationNodeRunTaskAccess,
-  resolveCollaborationTaskAccess,
-  resolveReviewAccess,
   visibleCollaborationTaskIds,
-} from '../public/queries'
+} from '../application/queryEntries'
+import {
+  filterReviewSummariesForActor,
+  resolveReviewAccess,
+} from '../application/reviewNodeReviewerEntries'
 import type { CollaborationRouteContext } from '../public/types'
 
 function bindCollaborationRouteContext(

@@ -35,7 +35,7 @@ import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
+import { createManualQuestionOpen } from '@/modules/collaboration/application/commandEntries'
 // RFC-359 W10：此前这里 import 的是 `infrastructure/sqliteGateContinuationEffectStep`——一份
 // **零生产调用方**的同步孪生（生产路径注入的是下面这个中立 step + `DrizzleGateContinuationEffect
 // Persistence`，见 `application/drive/humanGateContinuationEffects.ts` 与 `public/participants.ts`）。

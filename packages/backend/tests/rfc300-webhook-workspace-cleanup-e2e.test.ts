@@ -40,7 +40,7 @@ import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopo
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
-import { registerTerminalWorkspacePrunePolicy } from '../src/modules/task-execution/public/operations'
+import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { isTaskActive } from './helpers/taskDriverRegistry'

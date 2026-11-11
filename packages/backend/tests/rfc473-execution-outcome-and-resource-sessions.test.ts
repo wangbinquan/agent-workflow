@@ -386,8 +386,10 @@ describe('RFC-473 —— 依赖方向', () => {
   test('public 收回：public/queries 不再转出 workgroupLaunchMode', () => {
     const queries = read(`${TE}public/queries.ts`)
     expect(queries).not.toMatch(/\bworkgroupLaunchMode\b/)
+    // 正对照：读到的是真文件。RFC-480 把同处的 `decodeTaskWorkgroupConfig` 转出也撤了（模块外零消费），
+    // 改取仍留在 public 的一项。
     expect(queries).toContain(
-      "export { decodeTaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'",
+      "export { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'",
     )
   })
 })

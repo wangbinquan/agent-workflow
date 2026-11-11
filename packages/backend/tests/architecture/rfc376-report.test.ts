@@ -321,12 +321,20 @@ describe('RFC-376 committed report contract', () => {
       first.moduleSymbolOwners.some((entry) => entry.file.startsWith('packages/system-mocks/')),
     ).toBe(false)
     expect(first.counts['node-runs-insert-sites']).toBe(1)
-    // RFC-479: 21 RFC-376 counts + the two public-contract counts + one composition control-flow count
-    // per module that has a `composition/` directory in the source.
+    // RFC-479: 21 RFC-376 counts + the public type deviations + one composition control-flow count per module that has a
+    // `composition/` directory in the source; RFC-480: + one unconsumed-symbol count per context that has a public surface.
     const compositionIds = Object.keys(first.counts).filter((id) =>
       id.startsWith('composition-control-flow-'),
     )
-    expect(Object.keys(first.counts).length - compositionIds.length).toBe(23)
+    const unconsumedIds = Object.keys(first.counts).filter((id) =>
+      id.startsWith('unconsumed-public-symbols-'),
+    )
+    expect(Object.keys(first.counts).length - compositionIds.length - unconsumedIds.length).toBe(22)
+    const publicContexts = new Set(first.publicSurfaces.map((entry) => entry.context))
+    expect(publicContexts.size).toBeGreaterThanOrEqual(19)
+    expect(unconsumedIds.sort()).toEqual(
+      [...publicContexts].map((context) => `unconsumed-public-symbols-${context}`).sort(),
+    )
     const compositionModules = new Set(
       SOURCE.units.flatMap((unit) => {
         const module = /^packages\/backend\/src\/modules\/([a-z0-9-]+)\/composition\//.exec(
@@ -339,14 +347,24 @@ describe('RFC-376 committed report contract', () => {
     expect(compositionIds.sort()).toEqual(
       [...compositionModules].map((module) => `composition-control-flow-${module}`).sort(),
     )
-    // The two public-contract counts are the two report sections, entry for entry.
-    expect(first.gates['unconsumed-public-symbols']).toEqual(
-      first.unconsumedPublicSymbols.map((entry) => entry.id).sort(),
+    // The public-contract counts are the two report sections, entry for entry (the unconsumed ones split by context).
+    for (const id of unconsumedIds) {
+      const context = id.slice('unconsumed-public-symbols-'.length)
+      expect([id, first.gates[id]]).toEqual([
+        id,
+        first.unconsumedPublicSymbols
+          .filter((entry) => entry.context === context)
+          .map((entry) => entry.id)
+          .sort(),
+      ])
+    }
+    expect(unconsumedIds.reduce((total, id) => total + first.counts[id]!, 0)).toBe(
+      first.unconsumedPublicSymbols.length,
     )
     expect(first.gates['public-surface-deviations']).toEqual(
       [...first.publicSurfaceDeviations].sort(),
     )
-    expect(first.counts['unconsumed-public-symbols']).toBeGreaterThan(0)
+    expect(first.unconsumedPublicSymbols.length).toBeGreaterThan(0)
     const selected = spawnSync('git', ['show', `${SOURCE.sourceSha}:scripts/depcheck.ts`], {
       cwd: ROOT,
       encoding: 'utf8',

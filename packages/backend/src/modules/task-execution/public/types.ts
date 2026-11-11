@@ -6,18 +6,20 @@ import type {
 } from '@agent-workflow/shared'
 import type { TaskReadSubject } from '../domain/taskSubject'
 import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
+// RFC-480: the terminal workspace prune policy is a consumer-owned contract that integration implements; it moved here
+// from the retired `public/operations` (the registration itself is wired by bootstrap through `composition.ts`).
 export type {
-  NodeRunPromptContentEffects,
+  TerminalWorkspacePruneDecision,
+  TerminalWorkspacePrunePolicy,
+} from '../domain/terminalWorkspacePrune'
+export type {
   NodeRunPromptOperations,
   PromptStorage,
 } from '../application/ports/nodeRunPromptContent'
 export type {
   ArchivePortArtifactsResult,
-  PortArchive,
-  PortArchiveItem,
   PortArtifactArchiveNamespace,
   PortArtifactArchiveRequest,
-  PortArtifactContentEffects,
   PortArtifactOperations,
   PortArtifactReadItem,
   PortArtifactReadRequest,
@@ -35,22 +37,15 @@ export type { TaskArchiveContentBinding } from '../composition/taskArchiveMainte
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these
 // types, never on task rows, activeTasks, scheduler, GC, or process internals.
 
-export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
-
 /**
  * RFC-359：human-gate 的四条跃迁边。此前有**两份逐字相同的定义**——`humanGateTaskLifecycleTransaction.ts`
  * （连同一个零实现、零消费者的 `HumanGateTaskLifecycle` 接口，随同步人工门链退役）与 legacy
  * 生命周期层自己那份。现在只有一份，在模块内，legacy 层按 exact public 合同消费它。
  */
-export type { HumanGateTaskTransition } from '../infrastructure/humanGateTaskTransition'
 
-export { taskStopProjection } from '@/modules/task-execution/domain/sourceTermination'
 export type {
   SourceTerminationFence,
   SourceTerminationSnapshot,
-  TaskStopCause,
-  TaskStopProjection,
-  WebhookTerminalCause,
 } from '@/modules/task-execution/domain/sourceTermination'
 
 /**
@@ -58,32 +53,8 @@ export type {
  * 于是同一次子启动在两侧同码同判（判定顺序也定死在 domain 那一份里）。
  * legacy 的通用启动引擎（`services/task.ts`）按 exact public 合同消费它，不穿模块内部。
  */
-export { childLaunchAdmissionIssue } from '@/modules/task-execution/domain/childLaunchAdmission'
-
-/** Safe cross-context failure codes; durable owner identities never cross here. */
-export type TaskExecutionCommandErrorCode =
-  | 'task-continuation-conflict'
-  | 'task-continuation-stale'
-  | 'task-terminal-maintenance-conflict'
-  | 'task-execution-owner-conflict'
-  | 'task-execution-resource-conflict'
-  | 'task-execution-stale-owner'
-  | 'task-execution-recovery-required'
-  | 'task-execution-outcome-unknown'
-  | 'task-execution-shutting-down'
-
-export type TaskExecutionCommandResult =
-  | Readonly<{ ok: true; intentRef: string; idempotent: boolean }>
-  | Readonly<{
-      ok: false
-      code: TaskExecutionCommandErrorCode
-      message: string
-      winnerIntentRef?: string
-    }>
 
 export type { TaskClarifyDirectiveRouteOperations } from '../application/ports/taskClarifyDirectiveRoutes'
-
-export type { TaskScopeOutcome } from '../domain/taskEngine'
 
 export interface TaskStatusProjectionSnapshot {
   readonly taskId: string
@@ -299,77 +270,25 @@ export interface TaskExecutionReadModels {
   readonly sessions: TaskSessionReadModel
 }
 
-/** Closed wrapper vocabulary exposed to the remaining legacy mechanics. */
-export type WrapperExecutionKind = 'wrapper-git' | 'wrapper-loop' | 'wrapper-fanout'
-
-export interface WrapperExecutionScopeSegment {
-  readonly wrapperId: string
-  readonly kind: WrapperExecutionKind
-}
-
-/** Purpose-specific projection: no scope maps or generic domain types cross the public seam. */
-export interface WrapperExecutionScope {
-  readonly wrapperId: string
-  readonly kind: WrapperExecutionKind
-  readonly parentScopeId: string | null
-  readonly directNodeIds: readonly string[]
-  readonly path: readonly WrapperExecutionScopeSegment[]
-}
-
-export interface WrapperExecutionScopeReadModel {
-  find(wrapperId: string, kind: WrapperExecutionKind): WrapperExecutionScope
-}
-
-export type {
-  WorkspaceUploadPlan,
-  WorkspaceUploadResult,
-} from '../application/ports/workspaceUploads'
-export type { UploadFile, UploadInputDef, UploadLimits } from '../domain/uploads'
-
 export type { ArchivedEventsReader as TaskArchivedEventsReader } from '@/platform/background/eventsArchiveContent'
-/** Committed artifacts of a Case-bound Task; unfinished runs are never exposed. */
-export interface EmployeeExecutionArtifactQueries {
-  read(input: { readonly caseId: string; readonly executionRef: string }): Promise<{
-    readonly taskId: string
-    readonly roundRef: string
-    readonly status: string
-    readonly artifacts: readonly {
-      readonly nodeRunId: string
-      readonly portName: string
-      readonly content: string
-      readonly digest: string
-    }[]
-    readonly reviewRunIds: readonly string[]
-  } | null>
-}
 
 export type {
   TaskSubjectProjection,
   TaskSubjectQueries,
 } from '../application/ports/taskSubjectQueries'
-export type {
-  TaskDefinitionOrigin,
-  TaskDefinitionSubject,
-  TaskSubject,
-  TaskReadSubject,
-} from '../domain/taskSubject'
+export type { TaskDefinitionSubject, TaskSubject, TaskReadSubject } from '../domain/taskSubject'
 
 export type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
 export type { TaskRollbackCheckpointRun } from '../domain/taskCheckpointRollback'
-export type { TaskRepositoryMount } from '../domain/taskRepository'
 
-export type { RequestedSource } from '../domain/taskRepository'
 export type {
   TaskWorkgroupConfig,
   TaskWorkgroupLaunchConfig,
   TaskWorkgroupRuntimeConfig,
 } from '../domain/taskWorkgroupConfig'
 
-export { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
-export { deriveNodeRunRole } from '../domain/nodeRunRole'
 export type { DerivedNodeRunRole, NodeRunRole, NodeRunSyntheticKind } from '../domain/nodeRunRole'
 export type {
-  NodeRunCheckpointView,
   NodeRunConfigView,
   NodeRunIdentitySnapshot,
   NodeRunInputView,
@@ -379,20 +298,13 @@ export type {
 
 export type {
   CodeNodeRunSnapshot,
-  CodeWorkspaceRepository,
   CodeWorkspaceTask,
   TaskCodeWorkspaceQueries,
 } from '../application/ports/taskCodeWorkspaceQueries'
 // RFC-477: `TaskResourceLimitFacts` left public with the resource-limit policy it served (now task-execution application).
 export type { TaskStatusCountQueries } from '../application/ports/taskStatusCounts'
 
-export type {
-  OpenTaskExecutionGeneration,
-  TaskExecutionGeneration,
-} from '../application/ports/taskExecutionGenerations'
-export type { TaskMountKey } from '../application/ports/taskMountKeys'
-
-export { nodeRunMintIdentity, nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
+export { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 export type { NodeRunMintGeneration } from '../application/nodeRunMintIdentity'
 
 // RFC-434: the `/api/tasks` route face, folded in from the former non-exact `public/taskRoutes`.

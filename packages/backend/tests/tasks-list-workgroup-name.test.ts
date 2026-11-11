@@ -18,7 +18,7 @@
 // "live-name" divergence assertions below fail if anyone reintroduces it.
 // Frontend wiring is locked by tasks-workgroup-badge.test.ts.
 
-import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'

@@ -46,11 +46,11 @@ import {
   type dispatchTaskQuestions,
   type prepareClarifyGateOpen,
   type prepareReviewGateOpen,
-  type replaceReviewNodeReviewers,
   type submitClarifyDecision,
   type submitReviewDecision,
-} from '@/modules/collaboration/public/commands'
-import type { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
+} from '@/modules/collaboration/application/commandEntries'
+import { type replaceReviewNodeReviewers } from '@/modules/collaboration/application/reviewNodeReviewerEntries'
+import type { getReviewNodeReviewerConfig } from '@/modules/collaboration/application/reviewNodeReviewerEntries'
 import type {
   CollaborationCommandContext,
   CollaborationRouteContext,

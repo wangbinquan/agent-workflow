@@ -37,7 +37,7 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { queryWrite, affectedRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
+import { createManualQuestionOpen } from '../application/commandEntries'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'

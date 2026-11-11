@@ -8,15 +8,17 @@ import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import {
+  type WorkgroupTaskRoomClarifyParticipantInTx,
+  WORKGROUP_TURN_LEADER_NODE_ID,
+} from '../public/commands'
+import {
   type WorkgroupHostLedgerFailRunOperation,
   type WorkgroupHostLedgerMintReceipt,
   type WorkgroupHostLedgerOperation,
   type WorkgroupHostLedgerParticipantInTx,
   type WorkgroupHostLedgerSnapshot,
-  type WorkgroupTaskRoomClarifyParticipantInTx,
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
-} from '../public/commands'
+} from '../application/ports/workgroupTurnsOperations'
+import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@agent-workflow/shared'
 
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'

@@ -19,7 +19,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   ConcurrentNodeRunTransition,
   transitionNodeRunStatus,
-} from '../src/modules/task-execution/public/operations'
+} from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { errorHandler } from '../src/util/errors'
 
 async function seedNodeRun(

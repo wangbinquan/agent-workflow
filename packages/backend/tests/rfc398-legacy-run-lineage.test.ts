@@ -51,7 +51,7 @@ import {
 } from '@/modules/task-execution/application/buildNodeRunMintRecord'
 import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/application/nodeRunMintIdentity'
 import type { RunSlot } from '@/modules/task-execution/application/ports/runSelection'
-import { operationFamilyKey } from '@/modules/task-execution/public/participants'
+import { operationFamilyKey } from '@/modules/task-execution/domain/executionEffect'
 import { decodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import { TASK_FACTS } from '@/platform/persistence/migration/conversion/lookups/keys'
 import type { LookupResolver } from '@/platform/persistence/migration/conversion/lookups'

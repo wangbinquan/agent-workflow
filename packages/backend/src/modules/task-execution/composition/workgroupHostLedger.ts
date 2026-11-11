@@ -1,5 +1,5 @@
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import type { WorkgroupHostLedgerParticipantInTx } from '../public/commands'
+import type { WorkgroupHostLedgerParticipantInTx } from '../application/ports/workgroupTurnsOperations'
 import { createWorkgroupHostLedgerParticipantInTx } from '../infrastructure/workgroupHostLedgerParticipant'
 import type { WorkgroupTaskRoomClarifyParticipantFactory } from './workgroupTaskRoomTask'
 
