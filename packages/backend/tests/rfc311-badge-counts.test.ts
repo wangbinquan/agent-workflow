@@ -139,7 +139,7 @@ async function legacyReviewBadge(db: Db, who: Actor): Promise<number> {
 
 /** The exact pipeline the clarify badge used before RFC-311. */
 async function legacyClarifyBadge(db: Db, who: Actor): Promise<number> {
-  const pending = await listClarifyRoundSummaries(db, {
+  const pending = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
     status: 'awaiting_human',
     limit: Number.MAX_SAFE_INTEGER,
   })

@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { encodeCanonicalRunSlot } from '@/modules/task-execution/domain/runSelection/slotKey'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-395 A3 fix round: cost is statements/projections/rows, compared with frozen HEAD queries.
@@ -153,11 +155,16 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
   test('memory injection and distillation preserve HEAD statement counts, narrow projections and batching', async () => {
     await seed()
     const oldInjection = new FrozenMemoryInjectionQueries(harness.db)
-    const injection = new DrizzleMemoryInjectionReadStore(harness.db)
+    const injection = new DrizzleMemoryInjectionReadStore(
+      harness.db,
+      createNodeRunQueries(harness.db),
+    )
     const oldDistill = new FrozenMemoryDistillQueries(harness.db)
     const distill = new DrizzleMemoryDistillWorkStore(
       harness.db,
-      createClarifyAnswerQueries(harness.db),
+      createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
+      createNodeRunQueries(harness.db),
+      createNodeOutputQueries(harness.db),
     )
     const input = {
       taskId: 'query-a',

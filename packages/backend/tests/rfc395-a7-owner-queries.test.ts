@@ -1,13 +1,15 @@
 // RFC-395 II-a A7：跨域读取保持投影、空值、排序和同事务可见性；双 provider 共用 A1 builders。
+import {
+  createTaskGateQueries,
+  createNodeOutputQueries,
+} from '@/modules/task-execution/composition'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { TASK_DEFINITION_HOSTS, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
-  createTaskGateQueries,
   taskGateOpenCondition,
   taskGateVisibleCondition,
-  createNodeOutputQueries,
   createTaskKnowledgeQueries,
   createTaskTriggerQueries,
   listNodeEventContents,

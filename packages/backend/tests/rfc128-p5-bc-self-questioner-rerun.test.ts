@@ -301,7 +301,11 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         defaultTargetNodeId: Q,
         sealed: true,
       })
-      const parked = await loadUndispatchedSelfQuestionerTargets(db, taskId)
+      const parked = await loadUndispatchedSelfQuestionerTargets(
+        db,
+        taskExecutionParticipants,
+        taskId,
+      )
       expect(parked.has(P)).toBe(true)
       expect(parked.has(Q)).toBe(true)
     })
@@ -322,7 +326,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         defaultTargetNodeId: P,
         sealed: false,
       })
-      expect((await loadUndispatchedSelfQuestionerTargets(db, taskId)).has(P)).toBe(false)
+      expect(
+        (await loadUndispatchedSelfQuestionerTargets(db, taskExecutionParticipants, taskId)).has(P),
+      ).toBe(false)
     })
 
     test('dispatched + unconsumed (in-flight) → NOT parked; dispatched + done+output → NOT parked', async () => {
@@ -350,7 +356,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         triggerRunId: rerun,
       })
       // A node with ONLY an in-flight dispatched entry is NOT parked (it RUNS for q1).
-      expect((await loadUndispatchedSelfQuestionerTargets(db, taskId)).has(P)).toBe(false)
+      expect(
+        (await loadUndispatchedSelfQuestionerTargets(db, taskExecutionParticipants, taskId)).has(P),
+      ).toBe(false)
     })
 
     test('RFC-132 步骤1: (旧)non-deferred task 现在也 park（flag 停读，golden-lock 作废）', async () => {
@@ -371,7 +379,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       // RFC-132 步骤1 (T8 flag 停读): non-deferred 概念消失——sealed+undispatched entry 现在也
       // park（与 deferred 一致），旧「non-deferred → empty」golden-lock 作废。
-      expect((await loadUndispatchedSelfQuestionerTargets(db, taskId)).has(P)).toBe(true)
+      expect(
+        (await loadUndispatchedSelfQuestionerTargets(db, taskExecutionParticipants, taskId)).has(P),
+      ).toBe(true)
     })
   })
 
@@ -746,7 +756,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       let caught: unknown
       try {
-        await resolveBorrowForNode(db, taskId, X, 0, liveDef())
+        await resolveBorrowForNode(db, taskExecutionParticipants, taskId, X, 0, liveDef())
       } catch (e) {
         caught = e
       }
@@ -774,7 +784,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       // RFC-131 T4 去借壳: the reassigned self entry's rerun is minted ON the target X, which runs its
       // OWN agent — resolveBorrowForNode(X) is null (no borrow), NOT 'borrow-x' on the origin P.
-      expect(await resolveBorrowForNode(db, taskId, X, 0, liveDef())).toBeNull()
+      expect(
+        await resolveBorrowForNode(db, taskExecutionParticipants, taskId, X, 0, liveDef()),
+      ).toBeNull()
     })
 
     test('deferred-selfQ RUN-SELF (no override) + same-target designer RUN-SELF → reject (run-self counts, Codex impl-gate)', async () => {
@@ -819,7 +831,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       let caught: unknown
       try {
-        await resolveBorrowForNode(db, taskId, D, 0, liveDef())
+        await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef())
       } catch (e) {
         caught = e
       }
@@ -859,7 +871,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       // Resolves WITHOUT throwing — control-channel round excluded from the immediate ledger → only
       // the deferred ledger is open (run-self → null), no false conflict.
-      expect(await resolveBorrowForNode(db, taskId, P, 0, liveDef())).toBeNull()
+      expect(
+        await resolveBorrowForNode(db, taskExecutionParticipants, taskId, P, 0, liveDef()),
+      ).toBeNull()
     })
   })
 
@@ -885,8 +899,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -897,7 +911,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
           iteration: 0,
           questions: [mkQ('q1', 't'), mkQ('q2', 't')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       // Virgin: no listTaskQuestions / no seal before the quick finalize.
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
@@ -952,8 +967,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -964,7 +979,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
           iteration: 0,
           questions: [mkQ('q1', 't')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const res = await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,
@@ -1012,8 +1028,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -1024,7 +1040,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
           iteration: 0,
           questions: [mkQ('q1', 't')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const results = await Promise.allSettled([
         autoDispatchClarifyRound({
           taskExecutionParticipants,
@@ -1072,8 +1089,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -1084,7 +1101,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
           iteration: 0,
           questions: [mkQ('q1', 't'), mkQ('q2', 't')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       // q1 control-sealed-undispatched → dispatchable; the round is still awaiting (quick-finalizable).
       await sealRoundQuestions({
         taskExecutionParticipants,
@@ -1140,8 +1158,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const dRun = await seedRun(db, taskId, D, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -1152,7 +1170,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
           iteration: 0,
           questions: [mkQ('q1', 't'), mkQ('q2', 't')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       // control-seal q1 = option A.
       await sealRoundQuestions({
         taskExecutionParticipants,

@@ -82,7 +82,10 @@ import {
 import { composeGraphBuiltinResources } from '@/modules/development-automation/composition/graphBuiltinResources'
 import { composeBuiltinWorkflowCatalog } from '@/modules/resource-catalog/composition/builtinWorkflowCatalog'
 import { createCommittedHumanInputQueries } from '@/modules/collaboration/composition'
-import { createEmployeeExecutionArtifactQueries } from '@/modules/task-execution/composition'
+import {
+  createEmployeeExecutionArtifactQueries,
+  createNodeOutputQueries,
+} from '@/modules/task-execution/composition'
 import { composeDesignAssistGeneration } from '@/modules/task-execution/composition/designAssistGeneration'
 import { graphDevelopmentRequestArtifacts } from '@/modules/development-automation/composition/graphDevelopmentBindings'
 import { composeBuiltinEmployeeJobs } from '@/modules/digital-employee/composition/builtinJobTemplates'
@@ -230,6 +233,8 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const humanInputs = createCommittedHumanInputQueries({
     db,
     content: input.content,
+    // RFC-485: task-execution's node-output reads, the one factory these queries use.
+    taskExecutionParticipants: { createNodeOutputQueries },
   })
   const graphArtifacts = input.graphDevelopmentArtifacts
   const graphCases = createGraphCaseIntake({

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -250,12 +251,14 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     const runId = r0[0]!.reviewNodeRunId
     // a=accepted, b=not_accepted, c left unselected (iterate allows partial).
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: runId,
       docVersionId: r0[0]!.id,
       selection: 'accepted',
     })
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: runId,
       docVersionId: r0[1]!.id,
@@ -302,6 +305,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     const r0 = await docsFor(ctx.taskId)
     const runId = r0[0]!.reviewNodeRunId
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: runId,
       docVersionId: r0[0]!.id,
@@ -335,6 +339,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     const r0 = await docsFor(ctx.taskId)
     const runId = r0[0]!.reviewNodeRunId
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: runId,
       docVersionId: r0[0]!.id,
@@ -358,6 +363,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     const aDoc = round1[0]!
     expect(aDoc.selectionStale).toBe(true)
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: aDoc.reviewNodeRunId,
       docVersionId: aDoc.id,
@@ -399,6 +405,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     await dispatch(ctx, 0)
     const r0 = await docsFor(ctx.taskId)
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: r0[0]!.reviewNodeRunId,
       docVersionId: r0[0]!.id,

@@ -1,3 +1,4 @@
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
@@ -541,7 +542,9 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
       (
         await new DrizzleMemoryDistillWorkStore(
           harness.db,
-          createClarifyAnswerQueries(harness.db),
+          createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
+          createNodeRunQueries(harness.db),
+          createNodeOutputQueries(harness.db),
         ).findTaskScope(taskId)
       )?.workgroupConfig,
     ).toBeNull()
@@ -568,7 +571,9 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
       (
         await new DrizzleMemoryDistillWorkStore(
           harness.db,
-          createClarifyAnswerQueries(harness.db),
+          createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
+          createNodeRunQueries(harness.db),
+          createNodeOutputQueries(harness.db),
         ).findTaskScope(taskId)
       )?.workgroupConfig,
     ).toEqual(expected)

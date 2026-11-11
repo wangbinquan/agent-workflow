@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 // RFC-359 W4-B4 批 c —— identity-access / memory 两对合一，两个引擎各跑一遍：OIDC provider 仓库（写路径走统一原语的
 // serializable，slug 撞库经引擎能力矩阵归类）与记忆蒸馏工作存储（含会话捕获 sink 合一）。
 
@@ -201,14 +203,20 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     // RFC-367: the store's auxiliary-record seam is now a SINK FACTORY (live
     // event writer) instead of a post-run capture callback.
     const captured: string[] = []
-    const store = new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db), (input) => {
-      captured.push(input.distillJobId)
-      return {
-        append: async () => {},
-        setRootSessionId: async () => {},
-        markTerminal: async () => {},
-      }
-    })
+    const store = new DrizzleMemoryDistillWorkStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+      createNodeRunQueries(db),
+      createNodeOutputQueries(db),
+      (input) => {
+        captured.push(input.distillJobId)
+        return {
+          append: async () => {},
+          setRootSessionId: async () => {},
+          markTerminal: async () => {},
+        }
+      },
+    )
     const debounceKey = `k_${ulid()}`
     const scope = { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
     const job1 = `job_${ulid()}`

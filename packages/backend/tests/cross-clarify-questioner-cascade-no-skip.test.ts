@@ -90,12 +90,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   intermediaryNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === intermediaryNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${intermediaryNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === intermediaryNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${intermediaryNodeRunId}`)
@@ -375,8 +375,8 @@ describeEachProvider(
 
       // New session HWDACF-equivalent (iteration=1, awaiting_human, from
       // questioner_v1 emitting clarify).
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -387,7 +387,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('hwdacf')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       expect(sess.round.iteration).toBe(1)
 
       // User continues.
@@ -455,8 +456,8 @@ describeEachProvider(
         checkpoints: [{ mountPath: '', preSnapshot: 'snap-x-v1' }],
       })
 
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -468,7 +469,8 @@ describeEachProvider(
           questions: [makeQ('cx1')],
           truncationWarnings: [],
         }),
-      )
+        taskExecutionParticipants,
+      })
 
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
@@ -525,8 +527,8 @@ describeEachProvider(
         // Clarify-only — empty outputs.
       })
 
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -537,7 +539,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1')],
         }),
-      )
+        taskExecutionParticipants,
+      })
 
       await autoDispatchClarifyRound({
         taskExecutionParticipants,

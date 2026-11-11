@@ -49,9 +49,6 @@ import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestric
 // through the ONE dispatchTaskQuestions mechanism — a single delivery path, two triggers.
 
 import {
-  createNodeOutputQueries,
-  createTaskGateQueries,
-  createNodeRunQueries,
   type NodeRunCheckpointSnapshot,
   hasTaskRollbackCheckpoint,
 } from '@/modules/task-execution/public/queries'
@@ -139,12 +136,15 @@ function parseQuestionIds(questionsJson: string): string[] {
  *  pre_snapshot exists), else null. Caller has already gated kind==='self' + a non-empty worktree. */
 async function resolveSelfRollbackRun(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   askingNodeRunId: string,
   intermediaryNodeId: string,
   workflowSnapshot: string,
 ): Promise<NodeRunCheckpointSnapshot | null> {
   const askingRun =
-    (await createNodeRunQueries(db).readWithCheckpoints(askingNodeRunId)) ?? undefined
+    (await taskExecutionParticipants
+      .createNodeRunQueries(db)
+      .readWithCheckpoints(askingNodeRunId)) ?? undefined
   if (askingRun === undefined) return null
   const clarifyNode = resolveClarifyNodeFromTaskSnapshot(workflowSnapshot, intermediaryNodeId)
   const sessionMode = clarifyNode ? resolveClarifySessionMode(clarifyNode) : 'isolated'
@@ -189,6 +189,7 @@ async function buildDispatchedEntryShardResolver(
  */
 async function selfHomeHasOpenLedger(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   homeNodeId: string,
   /** RFC-172b (T6, S4): the shard of the self run being rolled back (workgroup member = assignment
@@ -197,12 +198,13 @@ async function selfHomeHasOpenLedger(
   selfShardKey: string | null,
 ): Promise<boolean> {
   const { taskQuestions } = tablesOf(db)
-  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
+  const runs = await taskExecutionParticipants.createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = new Set(
     runs.length === 0
       ? []
       : (
-          await createNodeOutputQueries(db)
+          await taskExecutionParticipants
+            .createNodeOutputQueries(db)
             .runsWithOutput(runs.map((r) => r.id))
             .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
             .then((rows) => rows.map((row) => ({ id: row.nodeRunId })))
@@ -818,7 +820,8 @@ export async function autoDispatchClarifyRoundWithDecision(
     )
   }
   const task = (
-    await createTaskGateQueries(args.db)
+    await args.taskExecutionParticipants
+      .createTaskGateQueries(args.db)
       .listContexts([round.taskId])
       .then((rows) => rows.map((row) => ({ lifecycleEventRevision: row.lifecycleEventRevision })))
   )[0]
@@ -989,7 +992,8 @@ export async function autoDispatchClarifyRound(
   //    flag is no longer read; only the worktree + snapshot (for the self-clarify rollback below)
   //    are loaded, plus a not-found guard.
   const taskRow = (
-    await createTaskGateQueries(db)
+    await args.taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listDefinitionContexts([round.taskId])
       .then((rows) =>
         rows.map((row) => ({
@@ -1079,6 +1083,7 @@ export async function autoDispatchClarifyRound(
     round.kind === 'self' && entryIds.length > 0 && !isTaskWorkspaceUnbound(taskRow.worktreePath)
       ? await resolveSelfRollbackRun(
           db,
+          args.taskExecutionParticipants,
           round.askingNodeRunId,
           round.intermediaryNodeId,
           taskRow.workflowSnapshot,
@@ -1171,7 +1176,13 @@ export async function autoDispatchClarifyRound(
         if (
           claimed.length > 0 ||
           // RFC-172b (T6): scope the open-ledger preflight to this member's shard.
-          (await selfHomeHasOpenLedger(db, round.taskId, selfRun.nodeId, selfRun.shardKey ?? null))
+          (await selfHomeHasOpenLedger(
+            db,
+            args.taskExecutionParticipants,
+            round.taskId,
+            selfRun.nodeId,
+            selfRun.shardKey ?? null,
+          ))
         ) {
           return false // an open same-home ledger owns the home → defer WITHOUT rolling back
         }

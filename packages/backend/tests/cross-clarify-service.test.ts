@@ -110,12 +110,12 @@ async function reassignThenDispatchDesigner(
   crossClarifyNodeRunId: string,
 ) {
   const helperActor = { userId: 'u1', role: 'owner' as const }
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', helperActor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', helperActor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
@@ -249,8 +249,8 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
     const { round: session, intermediaryNodeRunId: crossClarifyNodeRunId } =
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -261,7 +261,8 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
           loopIter: 0,
           questions: [makeQ('q1', 'Why Redis?'), makeQ('q2', 'Sharding?')],
         }),
-      )
+        taskExecutionParticipants,
+      })
 
     expect(session.status).toBe('awaiting_human')
     expect(session.iteration).toBe(0)
@@ -316,8 +317,8 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     const qRunId1 = await seedQuestionerRun(db, taskId)
     const qRunId2 = await seedQuestionerRun(db, taskId)
 
-    const r1 = await createClarifyRound(
-      withO2Closure({
+    const r1 = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -328,11 +329,12 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
         loopIter: 0,
         questions: [makeQ('q1', 't')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     expect(r1.round.iteration).toBe(0)
 
-    const r2 = await createClarifyRound(
-      withO2Closure({
+    const r2 = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -343,7 +345,8 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
         loopIter: 0,
         questions: [makeQ('q1', 't')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     expect(r2.round.iteration).toBe(1)
   })
 })
@@ -362,8 +365,8 @@ describeEachProvider(
       const { taskId } = await seedTask(db, { definition: def })
       const qRunId = await seedQuestionerRun(db, taskId)
       await seedDesignerRun(db, taskId)
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -374,7 +377,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 't')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,
@@ -388,8 +392,8 @@ describeEachProvider(
       // Insert a SECOND awaiting session to verify the readiness scan
       // correctly handles the "fresh source after a prior consumed batch" case.
       const qRunId2 = await seedQuestionerRun(db, taskId)
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -400,7 +404,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 't2')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const readiness = await evaluateDesignerRerunReadiness({
         db,
         taskId,
@@ -473,8 +478,8 @@ describeEachProvider(
       const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
       const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
       await seedDesignerRun(db, taskId)
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -485,9 +490,10 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 'sec')],
         }),
-      )
-      const ux = await createClarifyRound(
-        withO2Closure({
+        taskExecutionParticipants,
+      })
+      const ux = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -498,7 +504,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 'ux')],
         }),
-      )
+        taskExecutionParticipants,
+      })
 
       // Answer only crossUx; crossSec still awaiting → the designer dispatch parks
       // (no designer rerun) and the readiness scan lists crossSec pending.
@@ -562,8 +569,8 @@ describeEachProvider(
       const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
       const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
       await seedDesignerRun(db, taskId)
-      const sec = await createClarifyRound(
-        withO2Closure({
+      const sec = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -574,9 +581,10 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 'sec')],
         }),
-      )
-      const ux = await createClarifyRound(
-        withO2Closure({
+        taskExecutionParticipants,
+      })
+      const ux = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -587,7 +595,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 'ux')],
         }),
-      )
+        taskExecutionParticipants,
+      })
 
       // Reject sec first (does NOT trigger designer; a stop round produces no
       // designer entries at all).
@@ -685,8 +694,8 @@ describeEachProvider(
       const { taskId } = await seedTask(db, { definition: def })
       const qRunId = await seedQuestionerRun(db, taskId)
       await seedDesignerRun(db, taskId)
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -697,7 +706,8 @@ describeEachProvider(
           loopIter: 0,
           questions: [makeQ('q1', 'Why Redis?')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       // Human answers; directive=continue dispatches the designer rerun, but it never
       // completes-with-output (the task fails) → the round stays answered+UNCONSUMED.
       await autoDispatchClarifyRound({
@@ -755,8 +765,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-      withO2Closure({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -767,7 +777,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
         loopIter: 0,
         questions: [makeQ('q1', 't'), makeQ('q2', 't')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     // RFC-162: cross rounds unify with self — the questioner continuation is the default (scope
     // deleted); its entries are materialized, sealed and consumed by the unified dispatch.
     await autoDispatchClarifyRound({
@@ -791,7 +802,11 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     expect(qEntries.every((e) => e.sealedAt !== null)).toBe(true)
     expect(qEntries.every((e) => e.dispatchedAt !== null)).toBe(true)
     // The questioner home is NOT parked (the consumed entries dropped out of the park source).
-    expect((await loadUndispatchedSelfQuestionerTargets(db, taskId)).has('questioner')).toBe(false)
+    expect(
+      (await loadUndispatchedSelfQuestionerTargets(db, taskExecutionParticipants, taskId)).has(
+        'questioner',
+      ),
+    ).toBe(false)
     // Not re-dispatchable (dispatch skips already-dispatched entries) → no duplicate.
     const redispatch = await dispatchTaskQuestions(
       db,
@@ -815,8 +830,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-      withO2Closure({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -827,7 +842,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
         loopIter: 0,
         questions: [makeQ('q1', 't')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     const results = await Promise.allSettled([
       autoDispatchClarifyRound({
         taskExecutionParticipants,
@@ -871,8 +887,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-      withO2Closure({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -883,7 +899,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
         loopIter: 0,
         questions: [makeQ('q1', 't')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     // The concurrent dispatch that won: a pending cross-clarify-questioner-rerun on the questioner
     // home + a DISPATCHED questioner task_question whose home (default) is 'questioner', bound to it
     // (in-flight / unconsumed).

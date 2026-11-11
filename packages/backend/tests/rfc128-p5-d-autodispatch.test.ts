@@ -543,8 +543,8 @@ async function seedSealableSelfRound(
   questions: ClarifyQuestion[],
 ): Promise<{ intermediaryNodeRunId: string; askingRunId: string }> {
   const askingRunId = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'self',
       db,
       taskId,
@@ -555,7 +555,8 @@ async function seedSealableSelfRound(
       iteration: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { intermediaryNodeRunId: clarifyNodeRunId, askingRunId }
 }
 
@@ -1284,7 +1285,8 @@ describeEachProvider('RFC-128 P5-D lock-B non-reentry', (harness) => {
     const bIdx = fn.indexOf(
       'const rolledBack = await permits.getTaskQuestionWriteSem(round.taskId).run',
     )
-    const preflightIdx = fn.indexOf('selfHomeHasOpenLedger(db, round.taskId') // preflight under B
+    // RFC-485: the preflight reads through the participant bindings (an added argument), still under B.
+    const preflightIdx = fn.indexOf('await selfHomeHasOpenLedger(') // preflight under B
     // RFC-477: the self rollback goes through collaboration's own port (task-execution performs it behind that port).
     const rollbackIdx = fn.indexOf('target.rollback(selfRun.rollback') // rollback under B
     const releaseCheckIdx = fn.indexOf('if (!rolledBack)') // checked AFTER B returned (B released)
@@ -1354,14 +1356,22 @@ describeEachProvider('RFC-128 P5-D all-role deferred park (same-home deadlock fi
     // the SELF/Q source does NOT park D (it sees the in-flight self). Their UNION = {D} → the old
     // deadlock (D parked → the in-flight self rerun stalls; the in-flight gate blocks the designer
     // dispatch).
-    const designerParked = await loadUndispatchedDesignerTargets(db, taskId)
-    const selfQParked = await loadUndispatchedSelfQuestionerTargets(db, taskId)
+    const designerParked = await loadUndispatchedDesignerTargets(
+      db,
+      taskExecutionParticipants,
+      taskId,
+    )
+    const selfQParked = await loadUndispatchedSelfQuestionerTargets(
+      db,
+      taskExecutionParticipants,
+      taskId,
+    )
     expect(designerParked.has(D)).toBe(true) // per-role designer source still parks (unchanged)
     expect(selfQParked.has(D)).toBe(false) // self/q source releases an in-flight home (unchanged)
 
     // The ALL-ROLE park (what the scheduler now uses) classifies both roles TOGETHER → D has an
     // in-flight entry → NOT parked → the pending self rerun can run (deadlock broken).
-    const allRoleParked = await loadUndispatchedParkTargets(db, taskId)
+    const allRoleParked = await loadUndispatchedParkTargets(db, taskExecutionParticipants, taskId)
     expect(allRoleParked.has(D)).toBe(false)
   })
 
@@ -1377,8 +1387,12 @@ describeEachProvider('RFC-128 P5-D all-role deferred park (same-home deadlock fi
       sourceKind: 'manual',
       defaultTargetNodeId: D, // undispatched designer, no in-flight on D
     })
-    const designerParked = await loadUndispatchedDesignerTargets(db, taskId)
-    const allRoleParked = await loadUndispatchedParkTargets(db, taskId)
+    const designerParked = await loadUndispatchedDesignerTargets(
+      db,
+      taskExecutionParticipants,
+      taskId,
+    )
+    const allRoleParked = await loadUndispatchedParkTargets(db, taskExecutionParticipants, taskId)
     expect(designerParked.has(D)).toBe(true)
     expect(allRoleParked.has(D)).toBe(true) // same as the union (no same-home in-flight)
   })

@@ -2,7 +2,7 @@
 
 import { createTaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
 import { existingRepositoryIds } from '@/modules/source-control/public/queries'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import type { TaskNodeRunReads } from '@/modules/task-execution/public/types'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 
@@ -50,7 +50,11 @@ function recordOf(row: MemoryInjectionRecord): MemoryInjectionRecord {
 }
 
 export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore {
-  constructor(private readonly db: PersistenceDb) {}
+  constructor(
+    private readonly db: PersistenceDb,
+    /** RFC-485: Task Execution's node-run reads, built by bootstrap on the root db. */
+    private readonly taskNodeRuns: TaskNodeRunReads,
+  ) {}
 
   async findTaskContext(taskId: string) {
     return createTaskKnowledgeQueries(this.db).injectionContext(taskId)
@@ -84,7 +88,7 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
   }
 
   async listRunRecords(input: Parameters<MemoryInjectionReadStore['listRunRecords']>[0]) {
-    return createNodeRunQueries(this.db).listFields(
+    return this.taskNodeRuns.listFields(
       {
         taskId: input.taskId,
         nodeId: input.nodeId,

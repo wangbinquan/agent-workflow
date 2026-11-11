@@ -441,6 +441,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     // iterate v1
     await addReviewComment({
+      taskExecutionParticipants,
       reviewReader: epoch2ReviewReader(c.db, c.appHome),
 
       db: c.db,
@@ -597,6 +598,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     // iterate → designer reruns and (per plan) emits clarify
     await addReviewComment({
+      taskExecutionParticipants,
       reviewReader: epoch2ReviewReader(c.db, c.appHome),
 
       db: c.db,
@@ -2123,6 +2125,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const rev1a = await awaitingReviewRun(c.db, task.id, 'rev1')
     expect(rev1a).toBeDefined()
     await addReviewComment({
+      taskExecutionParticipants,
       reviewReader: epoch2ReviewReader(c.db, c.appHome),
 
       db: c.db,

@@ -81,7 +81,7 @@ describeEachProvider('RFC-359 W4-B3a —— 任务反馈与评审人存储', (ha
     const owner = await seedUser(db)
     const reviewer = await seedUser(db)
     const taskId = await seedTask(db, owner)
-    const feedback = new DrizzleTaskFeedbackStore(db)
+    const feedback = new DrizzleTaskFeedbackStore(db, taskExecutionParticipants)
     expect(await feedback.loadTaskIdentity(taskId)).toEqual({ id: taskId, ownerUserId: owner })
     expect(await feedback.loadTaskIdentity('missing')).toBeNull()
     const fid = `fb_${ulid()}`
@@ -136,7 +136,11 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
       retryIndex: 0,
       iteration: 0,
     })
-    const access = createCollaborationTaskAccessPort(db, composeCollaborationTaskRolePolicy())
+    const access = createCollaborationTaskAccessPort(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+    )
     expect((await access.resolveTask(actorFor(owner), taskId)).visible).toBe(true)
     expect((await access.resolveTask(actorFor(collaborator), taskId)).visible).toBe(true)
     expect((await access.resolveTask(actorFor(stranger), taskId)).visible).toBe(false)
@@ -156,7 +160,11 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
     expect(await access.visibleTaskIds(actorFor(collaborator), [taskId])).toEqual(new Set([taskId]))
     expect(await access.questionTaskId('missing')).toBeNull()
 
-    const review = createReviewTaskAccessPort(db, composeCollaborationTaskRolePolicy())
+    const review = createReviewTaskAccessPort(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+    )
     expect(review.canManageReviewers(actorFor(owner), owner)).toBe(true)
     expect(review.canManageReviewers(actorFor(stranger), owner)).toBe(false)
     expect(await review.resolveRelationship(actorFor(collaborator), taskId, owner)).toMatchObject({

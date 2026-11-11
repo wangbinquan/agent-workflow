@@ -365,6 +365,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
+  // RFC-485: the node-run, node-output and task-gate query factories reach collaboration through its participant bindings
+  // and memory through its assembly input (task-execution's public offers the closed reads) — three entries settled.
   // RFC-482: five task-execution factories reach collaboration through its participant bindings (factory references
   // handed over by bootstrap) and left the public entries; the no-op `reselectRunInTx` is gone — six entries settled.
   // RFC-481: collaboration's task-deletion participant factory reaches bootstrap through composition (left public),
@@ -434,13 +436,11 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-395 II-a transitional owner contracts bound to the caller's session / transaction / statement.
   // Successor RFC-294 S5/S6: binding in composition; shared platform DTOs avoid new context edges.
   'modules/task-execution/infrastructure/nodeEventQueries.ts#listNodeEventContents: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/nodeOutputQueries.ts#createNodeOutputQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/nodeRunQueries.ts#nodeRunStatusCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/nodeRunQueries.ts#nodeRunStatusCondition: forbidden type import drizzle-orm#AnyColumn',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#AnyColumn',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#SQL',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#createTaskGateQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import drizzle-orm#AnyColumn',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import drizzle-orm#SQL',
@@ -453,7 +453,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/public/commands.ts#TaskRouteOperations: unsafe/open type FunctionType',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomHostRunSnapshot: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomTaskParticipantInTx: forbidden type import @/platform/events/committed/types#CommittedEventRef',
-  'modules/task-execution/public/queries.ts#createNodeRunQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.
 ]
 // END COMMITTED G3 BASELINES

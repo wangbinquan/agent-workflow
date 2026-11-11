@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from '../infrastructure/taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
@@ -34,6 +35,8 @@ export type CollaborationCommandContextInput = Omit<
   readonly content?: ContentStore
   readonly appHome?: string
   readonly reviewArtifacts?: ReviewArtifactSelection
+  /** RFC-482 / RFC-485: task-execution's factory references (assembled by bootstrap). */
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
 }
 
 export type PostgresqlCollaborationCommandContextInput = Omit<
@@ -67,8 +70,16 @@ export function createCollaborationCommandContext(
         }))
   return createCollaborationCommandContextFromPersistence({
     ...input,
-    taskAccess: createCollaborationTaskAccessPort(input.db, input.taskRolePolicy),
-    reviewTaskAccess: createReviewTaskAccessPort(input.db, input.taskRolePolicy),
+    taskAccess: createCollaborationTaskAccessPort(
+      input.db,
+      input.taskExecutionParticipants,
+      input.taskRolePolicy,
+    ),
+    reviewTaskAccess: createReviewTaskAccessPort(
+      input.db,
+      input.taskExecutionParticipants,
+      input.taskRolePolicy,
+    ),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(
         databaseSessionFor(input.db),
@@ -78,9 +89,10 @@ export function createCollaborationCommandContext(
       manualQuestions: new DatabaseManualQuestionOpenWriter(
         input.db,
         new DatabaseHumanGateOperationJournal(input.taskLock, input.historyRestrictions),
+        input.taskExecutionParticipants,
       ),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
-      feedback: new DrizzleTaskFeedbackStore(input.db),
+      feedback: new DrizzleTaskFeedbackStore(input.db, input.taskExecutionParticipants),
       ...(reviewArtifacts === undefined
         ? {}
         : {

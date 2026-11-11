@@ -34,7 +34,8 @@ memory 的 `composition` 与 `infrastructure`（装配输入与两个存储）�
     `NodeOutputQueries extends TaskNodeOutputReads`，再声明 `listProducedPorts`；
   - `TaskGateQueries` 四个方法都被用到，原样作为闭合接口。
 - **交出面**：`public/types` 交出 `TaskNodeRunReads`、`TaskNodeOutputReads`、`TaskGateQueries`；`public/queries` 撤出三个工厂与
-  `NodeRunQueries`、`NodeOutputQueries`、`NodeOutputContent`、`TaskGateQueries` 的类型转出（留注释说明去处）；行形状类型照旧交出。
+  `NodeRunQueries`、`NodeOutputQueries`、`NodeOutputContent` 的类型转出，`TaskGateQueries` 的转出移到 `public/types`（留注释说明去处）；行形状
+  类型照旧交出。
   `composition.ts` 转出三个工厂（RFC-482 的做法），供 bootstrap 与用例取用。
 - **collaboration**：`TaskExecutionParticipantBindings` 增 `createNodeRunQueries(db): TaskNodeRunReads`、`createTaskGateQueries(db): TaskGateQueries`、
   `createNodeOutputQueries(db): TaskNodeOutputReads`；bootstrap 的 `composeTaskExecutionParticipantBindings` 补上。调用点改成
@@ -75,12 +76,35 @@ memory 的 `composition` 与 `infrastructure`（装配输入与两个存储）�
 
 ## 6. 实施中的细化
 
-（实施后补：确切的接线清单、`tsc` 报出的调用点数、codemod 改动的用例数、随改动改写的文本断言。）
+- **开门参与者的事务内读取不经绑定**：collaboration 的开门参与者（`DatabaseHumanGateOpenParticipantInTx`）的事务内依赖，本来就由
+  task-execution 在调 `HumanGateOpenParticipantScope.inTransaction(tx, …)` 时按事务交入（RFC-395 的注入方式）。`taskParticipants` 增
+  `nodeRuns: TaskNodeRunReads`，task-execution 的生命周期持久化用同一个 `tx` 建好交入；两个开门投影函数改收它，不再自己构造读取。
+- **装配时拿不到完整绑定的两处，参数收窄到用到的工厂**：memory 模块在 task-execution 模块之前装配（`executionPermits` 还没有创建），
+  数字员工模块的装配也没有它；它们用到的两个 collaboration 入口改收绑定的子集——clarify 历史投影与答案查询收
+  `TaskNodeRunQueryBinding`（`createNodeRunQueries`、`createTaskGateQueries`），已提交人工输入查询收 `createNodeOutputQueries`。完整的绑定照样
+  满足这两个子集；bootstrap 从 task-execution 的 composition 直接交这几个工厂。
+- **以类实现的存储与评审互斥锁**：`DatabaseReviewMutationScopeResolver`、`DrizzleTaskFeedbackStore`、`DatabaseManualQuestionOpenWriter` 的
+  构造参数增绑定；命令上下文的输入增绑定，内部构造的任务访问端口、评审任务访问端口、手动提问写入器与反馈存储都取它。评审互斥锁
+  `withReviewNodeMutationLock` 的来源参数从「解析器或 db」改为「解析器或 `{ db, taskExecutionParticipants }`」，带 db 与绑定的参数对象直接传。
+- **bootstrap 的绑定各算一次**：`daemonHttpComposition`（任务访问端口与协作路由操作）与 `daemonSession`（已提交事件投影与人工门终态清扫）
+  各自只调一次 `composeTaskExecutionParticipantBindings`，两处共用同一个对象。
+- **接线**：src 的调用点按 `tsc` 报错逐层补齐，五轮收敛（首轮 432 个报错，其中 src 约 80 处）；已有绑定的 16 个函数里 33 处调用改写，
+  其余函数加绑定参数或在参数对象里加字段。用例侧：从 public 取这三个工厂的 5 个文件改取 composition；调用新加了参数的函数的用例由语法树
+  codemod 补传 helper 的绑定、给 memory 存储补传读取端口（70 个文件、681 处）；6 个用例手改（`@ts-expect-error` 的位置、互斥锁来源的比较、
+  memory 装配合同的选项、伪造绑定的新成员与带查询计数的 task-gate 读取）。
+- **tsc 看不到的文本断言**：字面量扫描（对照 HEAD `4c416ad75`）找出 3 处并改写——`rfc395-clarify-answer-boundary`（memory 模块构造 clarify
+  答案查询的写法，改为容忍换行的正则）、`rfc395-task-definition-boundary`（开门参与者构造参数的正则加 `participants.nodeRuns`，并断言生命周期
+  持久化交入 `nodeRuns`）、`rfc128-p5-d-autodispatch`（预检调用的定位文本）；`rfc395-a3-site-regressions` 的 B5 从源码抽出执行的两个函数多了
+  绑定参数，调用随之加参，原先以自由变量注入的假读取改由绑定参数交入。
+- **集中验证查出的两处**：`rfc395-serialized-insert-source-locks.json` 钉着 `seal.ts` 的 sha256，随 seal 事务里的 node-run 读取改经绑定构造而
+  更新，`why` 补一句评审说明（句柄仍是 seal 事务的 `tx`）；`rfc461` 用假 db 装配整个 memory 模块，node-output 工厂构造时就调 `tablesOf(db)`，
+  改成装配期建一次后在装配处抛错，用例改交占位读取（它不走这两条读取）。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 
 - **C10**：闭合读取接口按内容落在 task-execution 的 `application/ports`；collaboration 的绑定与 memory 的装配输入都是消费侧的装配形状。
-- **C11**：task-execution 的 public 撤 3 个工厂与 4 个类型名、增 2 个闭合接口（`TaskGateQueries` 从 `public/queries` 移到 `public/types`）；
+- **C11**：task-execution 的 public 撤 3 个工厂与 3 个类型名（`NodeRunQueries`、`NodeOutputQueries`、`NodeOutputContent`）、增 2 个闭合接口，
+  `TaskGateQueries` 从 `public/queries` 移到 `public/types`；
   collaboration 与 memory 的 public 不变。
 - **C12**：RFC-485 用例覆盖 task-execution 的全部 public 文件、collaboration 与 memory 的全部生产文件、bootstrap 的绑定与 memory 模块装配。
 - **C13**：触及的减速带收紧到实测。

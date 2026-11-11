@@ -1,6 +1,9 @@
 // RFC-395 II-a A3 sites fix round: B1/B5/B10/SA7 must observe migrated sites and exact bytes,
 // not merely repeat reader calls. Private site bodies are evaluated with external effects bound.
-import { createRunSelectionReader } from '@/modules/task-execution/composition'
+import {
+  createRunSelectionReader,
+  createNodeRunQueries,
+} from '@/modules/task-execution/composition'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
@@ -10,10 +13,7 @@ import {
   taskRequestedSourceColumns,
 } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
-import {
-  createNodeRunQueries,
-  createRunHistorySnapshot,
-} from '@/modules/task-execution/public/queries'
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import { createTaskPreparationQueries } from '@/modules/task-execution/infrastructure/taskPreparationQueries'
 import { prepareConsumedInputs } from '@/modules/task-execution/public/participants'
 import {
@@ -272,6 +272,7 @@ describe('RFC-395 A3 source lookup and designer anchors', () => {
     const resolveDesigner = rfc395SourceFunction<
       (
         db: unknown,
+        taskExecutionParticipants: unknown,
         task: string,
         node: string,
         iteration: number,
@@ -287,17 +288,19 @@ describe('RFC-395 A3 source lookup and designer anchors', () => {
         isNotNull: () => undefined,
         CLOSED_LEDGER: { open: false, borrowAgentName: null, anchorRunIds: new Set() },
         effectiveTarget: () => 'designer',
-        createNodeRunQueries: () => ({ listDispatchFacts: async () => [] }),
         runIdsWithOutput: async () => new Set(),
         isDispatchedEntryConsumed: async (entry: { id: string }) => entry.id === 'a',
         isBorrowHomeFor: () => false,
       },
     )
-    const designer = await resolveDesigner(db, 'task', 'designer', 0, {})
+    // RFC-485: the node-run reads arrive through the participant bindings (the new second parameter).
+    const bindings = { createNodeRunQueries: () => ({ listDispatchFacts: async () => [] }) }
+    const designer = await resolveDesigner(db, bindings, 'task', 'designer', 0, {})
     expect([...designer.anchorRunIds]).toEqual(['open-anchor'])
     const resolveBorrow = rfc395SourceFunction<
       (
         db: unknown,
+        taskExecutionParticipants: unknown,
         task: string,
         node: string,
         iteration: number,
@@ -321,7 +324,9 @@ describe('RFC-395 A3 source lookup and designer anchors', () => {
     const dispatchedDb = {
       select: () => ({ from: () => ({ where: () => ({ limit: () => [{ id: 'dispatched' }] }) }) }),
     }
-    await expect(resolveBorrow(dispatchedDb, 'task', 'designer', 0, {})).rejects.toMatchObject({
+    await expect(
+      resolveBorrow(dispatchedDb, bindings, 'task', 'designer', 0, {}),
+    ).rejects.toMatchObject({
       code: 'borrow-ledger-conflict',
     })
   })

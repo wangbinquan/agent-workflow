@@ -1,3 +1,4 @@
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -129,7 +130,7 @@ export function taskBundleInput(
     },
     memory: {
       memorySnapshots: composeTaskMemorySnapshotPort(),
-      memoryInjectionQueries: composeMemoryInjectionQueriesFor(db),
+      memoryInjectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
       memoryOperations: {
         distillCommands: {
           async enqueue(request) {

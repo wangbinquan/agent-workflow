@@ -1,3 +1,4 @@
+import type { TaskNodeOutputReads, TaskNodeRunReads } from '@/modules/task-execution/public/types'
 // RFC-461 — application 层的 WS 推送改经端口、运行时类型改取 owner 的出口（RFC-294 W9-D 第八步）。
 //
 // 锁四件事：
@@ -130,6 +131,8 @@ describe('RFC-461 —— memory 工作存储的 events 发到原来的频道', (
     const store = new DrizzleMemoryDistillWorkStore(
       {} as PersistenceDb,
       {} as ClarifyAnswerQueries,
+      {} as TaskNodeRunReads,
+      {} as TaskNodeOutputReads,
       () => {
         throw new Error('the session sink is not used here')
       },

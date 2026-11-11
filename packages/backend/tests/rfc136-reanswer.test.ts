@@ -140,8 +140,8 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'self',
       db,
       taskId,
@@ -152,7 +152,8 @@ async function seedSelfRound(
       iteration: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, originNodeRunId: clarifyNodeRunId }
 }
 
@@ -173,8 +174,8 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -185,7 +186,8 @@ async function seedCrossRound(
       loopIter: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
@@ -221,7 +223,7 @@ async function sealThenUnstage(
     sealedBy: 'u1',
     now: () => now,
   })
-  const dtos = await listTaskQuestions(db, taskId)
+  const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
   const staged = dtos.filter((e) => e.questionId === qid && e.staged)
   expect(staged.length).toBeGreaterThan(0)
   for (const e of staged) await stageTaskQuestion(db, testExecutionPermits, e.id, false, actor)
@@ -314,7 +316,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       expect(designerBefore).toHaveLength(0) // stop 轮无 designer 条目
 
       // 移出待下发 → 重答（路由层 schema 会给 directive 默认 'continue'——防它冲掉 stop）。
-      const dtos = await listTaskQuestions(db, taskId)
+      const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       for (const e of dtos.filter((x) => x.staged))
         await stageTaskQuestion(db, testExecutionPermits, e.id, false, actor)
       await sealRoundQuestions({
@@ -413,6 +415,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
           ),
         )
       const ctx = await buildClarifyQueueContext({
+        taskExecutionParticipants,
         db,
         definition: selfDef(),
         taskId,
@@ -475,8 +478,8 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       // RFC-162: 双角色（questioner + designer）不再来自 scope，而来自人工改派——先让面板建出
       // questioner 条目，再 reassign 到上游 designer 增派一条 designer handler 行；随后 seal
       // (autoStage) 按 (origin × question) 一起盖两行 sealed_at/staged_at → 双行全 staged。
-      const [questioner] = await listTaskQuestions(db, taskId)
-      await reassignTaskQuestion(db, questioner!.id, 'designer', actor)
+      const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+      await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'designer', actor)
       await sealRoundQuestions({
         taskExecutionParticipants,
         db,
@@ -485,7 +488,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
         autoStage: true,
         sealedBy: 'u1',
       })
-      const dtos = await listTaskQuestions(db, taskId)
+      const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       const stagedEntries = dtos.filter((e) => e.staged)
       expect(stagedEntries.length).toBeGreaterThan(1)
       const { taskQuestions } = tablesOf(db)
@@ -514,8 +517,8 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
       // RFC-162: 双行（questioner + designer）来自人工改派（scope 已删）——reassign 增派 designer
       // handler，再 seal(autoStage) 一并盖两行 → 双行两张卡。
-      const [questioner] = await listTaskQuestions(db, taskId)
-      await reassignTaskQuestion(db, questioner!.id, 'designer', actor)
+      const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+      await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'designer', actor)
       await sealRoundQuestions({
         taskExecutionParticipants,
         db,
@@ -524,11 +527,13 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
         autoStage: true,
         sealedBy: 'u1',
       })
-      const stagedEntries = (await listTaskQuestions(db, taskId)).filter((e) => e.staged)
+      const stagedEntries = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).filter(
+        (e) => e.staged,
+      )
       expect(stagedEntries.length).toBeGreaterThan(1)
       // 只对其中一张卡操作「移出待下发」——级联应让同题全部行回 pending。
       await stageTaskQuestion(db, testExecutionPermits, stagedEntries[0]!.id, false, actor)
-      const after = await listTaskQuestions(db, taskId)
+      const after = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(after.filter((e) => e.questionId === 'q1' && e.staged)).toHaveLength(0)
       expect(
         after.filter((e) => e.questionId === 'q1' && e.phase === 'pending').length,

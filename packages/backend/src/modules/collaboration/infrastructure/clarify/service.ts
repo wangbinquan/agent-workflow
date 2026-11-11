@@ -46,11 +46,7 @@ import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 //   - terminatedAs (T9): DTO-level discriminator normalizing the self
 //     'canceled' / cross 'abandoned' terminal statuses.
 
-import {
-  createTaskGateQueries,
-  createNodeRunQueries,
-  type NodeRunFactSnapshot,
-} from '@/modules/task-execution/public/queries'
+import { type NodeRunFactSnapshot } from '@/modules/task-execution/public/queries'
 import { decodeLegacyClarifyArray } from '../clarifyAnswerCodec'
 import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
 
@@ -186,6 +182,8 @@ const frameIs = (db: object, containerRunId: string | null) => {
 
 interface CreateRoundCommon {
   historyRestrictions: HistoryRestrictionPort
+  /** RFC-485: task-execution's task-gate and node-run reads arrive through the participant bindings. */
+  taskExecutionParticipants: TaskExecutionParticipantBindings
   content?: ContentStore
   taskRolePolicy: CollaborationTaskRolePolicy
   taskLock: HumanGateTaskLockPort
@@ -284,6 +282,7 @@ export async function createClarifyRound(
     iteration = args.iteration
     existingRun = await findSelfGateRunForShard(
       args.db,
+      args.taskExecutionParticipants,
       args.taskId,
       args.intermediaryNodeId,
       args.askingShardKey,
@@ -328,7 +327,8 @@ export async function createClarifyRound(
       : null
   const { clarifyRounds } = tablesOf(args.db)
   const taskRow = (
-    await createTaskGateQueries(args.db)
+    await args.taskExecutionParticipants
+      .createTaskGateQueries(args.db)
       .listDefinitionContexts([args.taskId])
       .then((rows) =>
         rows.map((row) => ({
@@ -378,6 +378,7 @@ export async function createClarifyRound(
   )
   const prepared = await prepareClarifyGateOpen(
     createCollaborationCommandContext({
+      taskExecutionParticipants: args.taskExecutionParticipants,
       db: args.db,
       historyRestrictions: args.historyRestrictions,
       content: args.content,
@@ -456,6 +457,7 @@ export async function createClarifyRound(
 
 export async function findSelfGateRunForShard(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   intermediaryNodeId: string,
   shardKey: string | null,
@@ -490,7 +492,7 @@ export async function findSelfGateRunForShard(
     )
     .orderBy(asc(clarifyRounds.createdAt))
   for (const roundRow of roundRows) {
-    const runRows = await createNodeRunQueries(db).list({
+    const runRows = await taskExecutionParticipants.createNodeRunQueries(db).list({
       runIds: [roundRow.intermediaryNodeRunId],
       limit: 1,
     })

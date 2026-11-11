@@ -367,6 +367,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
 
       // 真实入口：先落一条行内评论，再 iterate 打回。
       await addReviewComment({
+        taskExecutionParticipants,
         reviewReader: epoch2ReviewReader(h.db, h.appHome),
 
         db: h.db,

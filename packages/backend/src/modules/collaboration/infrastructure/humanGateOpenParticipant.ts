@@ -16,7 +16,7 @@ import {
 // 事务是中立的 `PersistenceTx`：调用方（task-execution 的 park 原子）在
 // `withTaskExecutionSerializable` 体内把它交进来，本文件只做 collaboration 自己的投影与记账。
 
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import type { TaskNodeRunReads } from '@/modules/task-execution/public/types'
 import type { ConsumedInputsParticipantInTx } from '@/modules/task-execution/public/participants'
 import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -127,11 +127,12 @@ async function projectReviewGateOpen(
   nodeRunMint: TargetHumanGateMintParticipant,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>,
+  nodeRuns: TaskNodeRunReads,
   manifest: ReviewGateOpenManifest,
 ): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
-    const existing = await createNodeRunQueries(tx).readFields(node.id, ['id'])
+    const existing = await nodeRuns.readFields(node.id, ['id'])
     if (existing !== null) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
@@ -162,7 +163,7 @@ async function projectReviewGateOpen(
   } else {
     const { docVersions, reviewComments } = tablesOf(tx)
     const existing = (
-      await createNodeRunQueries(tx).listFields(
+      await nodeRuns.listFields(
         {
           runIds: [node.id],
           taskId: node.taskId,
@@ -349,11 +350,12 @@ export async function projectClarifyGateOpen(
   tx: PersistenceTx,
   nodeRunMint: TargetHumanGateMintParticipant,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
+  nodeRuns: TaskNodeRunReads,
   manifest: ClarifyGateOpenManifest,
 ): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
-    const existing = await createNodeRunQueries(tx).readFields(node.id, ['id'])
+    const existing = await nodeRuns.readFields(node.id, ['id'])
     if (existing !== null) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
@@ -386,7 +388,7 @@ export async function projectClarifyGateOpen(
     })
   } else {
     const existing =
-      (await createNodeRunQueries(tx).readFields(node.id, [
+      (await nodeRuns.readFields(node.id, [
         'taskId',
         'nodeId',
         'status',
@@ -591,6 +593,8 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
     // RFC-395 II-a：消费边写入由 task-execution 注入——本文件被其生命周期持久化 import，
     // 反向 value import 会形成文件级依赖环。
     private readonly consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>,
+    // RFC-485: Task Execution's node-run reads on the same transaction, injected with the other task participants.
+    private readonly nodeRuns: TaskNodeRunReads,
     private readonly historyRestrictions: HistoryRestrictionPort,
   ) {}
 
@@ -746,6 +750,7 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
         this.nodeRunMint,
         this.nodeRunLifecycle,
         this.consumedInputs,
+        this.nodeRuns,
         reviewManifest,
       )
       collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {
@@ -780,6 +785,7 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
         this.tx,
         this.nodeRunMint,
         this.nodeRunLifecycle,
+        this.nodeRuns,
         clarifyManifest,
       )
       collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {

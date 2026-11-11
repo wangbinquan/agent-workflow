@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-127 self/questioner 借壳 → RFC-132 MOVE (去借壳).
 //
 // HISTORY: this file locked the IMMEDIATE (clarify-round) borrow path — the legacy quick channel
@@ -250,17 +251,25 @@ describeEachProvider(
       await seedTask(db, 'move-self')
       await seedDispatchedSelfQEntry(db, 'move-self', 'self', X)
       // X runs its own agent (MOVE) — NOT P borrowing X's brain (the pre-131 borrow).
-      expect(await resolveBorrowForNode(db, 'move-self', X, 0, liveDef())).toBeNull()
+      expect(
+        await resolveBorrowForNode(db, taskExecutionParticipants, 'move-self', X, 0, liveDef()),
+      ).toBeNull()
       // the origin home P does not borrow — the run moved to X (its ledger is empty on P).
-      expect(await resolveBorrowForNode(db, 'move-self', P, 0, liveDef())).toBeNull()
+      expect(
+        await resolveBorrowForNode(db, taskExecutionParticipants, 'move-self', P, 0, liveDef()),
+      ).toBeNull()
     })
 
     test('dispatched questioner entry reassigned to X → resolveBorrowForNode(X)=null (move)', async () => {
       const db = harness.db
       await seedTask(db, 'move-q')
       await seedDispatchedSelfQEntry(db, 'move-q', 'cross', X)
-      expect(await resolveBorrowForNode(db, 'move-q', X, 0, liveDef())).toBeNull()
-      expect(await resolveBorrowForNode(db, 'move-q', Q, 0, liveDef())).toBeNull()
+      expect(
+        await resolveBorrowForNode(db, taskExecutionParticipants, 'move-q', X, 0, liveDef()),
+      ).toBeNull()
+      expect(
+        await resolveBorrowForNode(db, taskExecutionParticipants, 'move-q', Q, 0, liveDef()),
+      ).toBeNull()
     })
 
     test('golden: a dispatched self entry with NO override → resolveBorrowForNode(P)=null (P runs itself)', async () => {
@@ -268,7 +277,16 @@ describeEachProvider(
       await seedTask(db, 'move-self-noov')
       // no reassign (override NULL): effectiveTarget == default == P → the rerun mints on P.
       await seedDispatchedSelfQEntry(db, 'move-self-noov', 'self', null)
-      expect(await resolveBorrowForNode(db, 'move-self-noov', P, 0, liveDef())).toBeNull()
+      expect(
+        await resolveBorrowForNode(
+          db,
+          taskExecutionParticipants,
+          'move-self-noov',
+          P,
+          0,
+          liveDef(),
+        ),
+      ).toBeNull()
     })
   },
 )

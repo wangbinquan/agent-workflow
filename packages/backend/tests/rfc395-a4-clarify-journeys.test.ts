@@ -190,6 +190,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
   test('committed human inputs retain HEAD strict JSON and Zod parsing for every status', async () => {
     const f = await seed(h.db)
     const queries = createCommittedHumanInputQueries({
+      taskExecutionParticipants,
       db: h.db,
       content: fixtureContentStore(h.db, '/unused-a4'),
     })
@@ -271,7 +272,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     expect(part.directive).toBeNull()
     expect(part.draftAnswers).toBe(drafted.draftAnswers)
     expect(part.answerAttributions).toBe(drafted.answerAttributions)
-    const board = await listTaskQuestions(h.db, f.taskId)
+    const board = await listTaskQuestions(h.db, taskExecutionParticipants, f.taskId)
     expect(board.find((row) => row.questionId === 'b')?.answerSummary).toBe('A')
     expect(board.find((row) => row.questionId === 'a')?.answerSummary).toBeNull()
     const full = await sealRoundQuestions({
@@ -296,7 +297,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
       }),
     )
     expect(row.submittedByRole).toBe('owner')
-    const detail = await getClarifyRoundDetail(h.db, f.origin)
+    const detail = await getClarifyRoundDetail(h.db, taskExecutionParticipants, f.origin)
     expect(detail.answers).toEqual(JSON.parse(row.answers!))
     expect(detail.answerAttributions).toEqual(JSON.parse(row.answerAttributions!))
     await expect(f.save(f.questions[0]!)).rejects.toMatchObject({
@@ -354,7 +355,11 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     expect(reopened.answeredBy).toBe(editorA.userId)
     expect(reopened.answerAttributions).toBe(before.answerAttributions)
     expect(reopened.draftAnswers).toBe(drafted.draftAnswers)
-    expect((await listTaskQuestions(h.db, f.taskId)).every((entry) => entry.sealed)).toBe(true)
+    expect(
+      (await listTaskQuestions(h.db, taskExecutionParticipants, f.taskId)).every(
+        (entry) => entry.sealed,
+      ),
+    ).toBe(true)
     expect(
       await createClarifyRepairParticipant(h.db).reopen({
         taskId: f.taskId,
@@ -386,7 +391,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
   test('follow-up appends without changing old questions or drafts; idempotency and stale seal remain unchanged', async () => {
     const f = await seed(h.db, 'self', true)
     await f.save(f.questions[0]!)
-    const store = createClarifyFollowupStore(h.db, events)
+    const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
     const current = await store.read(f.origin, 'a')
     const request: ClarifyFollowup = {
       requestId: 'a4-followup',
@@ -468,10 +473,15 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     await patchClarifyRoundFixture(h.db, { id: second.id }, { answers: [] })
     await patchClarifyRoundFixture(h.db, { id: third.id }, { answers: [] })
     const ids = [second.id, first.id, cross.id, third.id]
-    const sources = await createClarifyAnswerQueries(h.db).listSelfSources(ids)
+    const sources = await createClarifyAnswerQueries(
+      h.db,
+      taskExecutionParticipants,
+    ).listSelfSources(ids)
     expect(sources.map((row) => row.id)).toEqual(['a4-order-0', 'a4-order-Z', 'a4-order-a'])
     expect(sources.every((row) => !('answersJson' in row))).toBe(true)
-    expect(await createClarifyAnswerQueries(h.db).listSelfQuestions(ids)).toEqual(
+    expect(
+      await createClarifyAnswerQueries(h.db, taskExecutionParticipants).listSelfQuestions(ids),
+    ).toEqual(
       [third, first, second].map((fixture) => ({
         id: fixture.id,
         taskId: fixture.taskId,

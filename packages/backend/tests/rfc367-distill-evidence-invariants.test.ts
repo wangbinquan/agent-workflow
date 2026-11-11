@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -172,7 +174,12 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
     runFn: RunDistillOptions['runFn'],
   ): RunDistillOptions => ({
     // No sinkFactory => the REAL memory_distill_events writer.
-    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+    store: new DrizzleMemoryDistillWorkStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+      createNodeRunQueries(db),
+      createNodeOutputQueries(db),
+    ),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
@@ -207,7 +214,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
 
     const view = await composeMemoryDistillQueries(
       db,
-      createClarifyAnswerQueries(db),
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
     ).getJobSessionView(job.id)
     expect(view.attempts).toHaveLength(1)
     expect(view.attempts[0]!.captureFailed).toBe(false)
@@ -241,7 +248,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
 
     const view = await composeMemoryDistillQueries(
       db,
-      createClarifyAnswerQueries(db),
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
     ).getJobSessionView(job.id)
     const tree = view.attempts[0]!.tree
     expect(tree).not.toBeNull()

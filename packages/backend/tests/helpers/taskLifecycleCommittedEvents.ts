@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -61,7 +62,9 @@ export function installTaskLifecycleAfterCommitTestPump(
     ),
     projectors: [
       createDatabaseTaskLifecycleWsProjector(db),
-      createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
+      createCollaborationWsProjector(
+        createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
+      ),
       {
         id: 'task-lifecycle-test-effect-projector',
         eventTypes: TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,

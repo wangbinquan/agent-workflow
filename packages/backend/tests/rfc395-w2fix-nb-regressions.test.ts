@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { createTaskArchiveNodeRunSectionReader } from '@/modules/task-execution/infrastructure/taskArchiveContentCoordinator'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
@@ -744,7 +746,12 @@ describeEachProvider('RFC-395 N-b wave-2 functional regressions', (h) => {
       promptRefJson: prompt.json,
       promptInlineBytes: Buffer.from(prompt.inlineBytes!),
     })
-    const store = new DrizzleMemoryDistillWorkStore(h.db, createClarifyAnswerQueries(h.db))
+    const store = new DrizzleMemoryDistillWorkStore(
+      h.db,
+      createClarifyAnswerQueries(h.db, taskExecutionParticipants),
+      createNodeRunQueries(h.db),
+      createNodeOutputQueries(h.db),
+    )
     expect(await store.listTaskNodeStatuses(['t'])).toEqual([
       {
         taskId: 't',

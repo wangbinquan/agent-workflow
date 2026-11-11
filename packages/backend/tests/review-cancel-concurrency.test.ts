@@ -671,6 +671,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       const mutate = (): Promise<unknown> => {
         if (operation === 'add') {
           return addReviewComment({
+            taskExecutionParticipants,
             db: h.db,
             appHome: h.appHome,
             nodeRunId: h.reviewRunId,
@@ -766,6 +767,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       () => cancelViaEngine(h.db, h.taskId),
       () =>
         setDocumentSelection({
+          taskExecutionParticipants,
           db: h.db,
           nodeRunId: h.reviewRunId,
           docVersionId: h.docVersionId,
@@ -789,6 +791,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       h.taskId,
       () =>
         setDocumentSelection({
+          taskExecutionParticipants,
           db: h.db,
           nodeRunId: h.reviewRunId,
           docVersionId: h.docVersionId,

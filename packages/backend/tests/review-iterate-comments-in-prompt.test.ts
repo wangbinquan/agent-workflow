@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { withO2Closure } from './helpers/o2Closure'
@@ -239,6 +240,7 @@ describe('RFC-005 review iterate — comments reach the upstream re-run prompt',
     const COMMENT = 'include pending_payment in the enum'
 
     await addReviewComment({
+      taskExecutionParticipants,
       db: h.db,
       reviewReader: epoch2ReviewReader(h.db, h.appHome),
       appHome: h.appHome,

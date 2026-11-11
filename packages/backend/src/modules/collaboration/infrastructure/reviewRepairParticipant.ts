@@ -29,7 +29,6 @@
 // 否则 SQLite 侧会永远保留第二份实现。
 
 import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
@@ -44,6 +43,7 @@ type ReviewIdentity = Parameters<ReviewRepairParticipant['inspect']>[0]
 
 async function loadInspection(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   input: ReviewIdentity,
 ): Promise<ReviewRepairInspection | null> {
   const { docVersions } = tablesOf(db)
@@ -66,7 +66,8 @@ async function loadInspection(
       .limit(1)
   )[0]
   if (row === undefined) return null
-  const outputs = await createNodeOutputQueries(db)
+  const outputs = await taskExecutionParticipants
+    .createNodeOutputQueries(db)
     .listPorts(input.nodeRunId)
     .then((ports) => ports.map((portName) => ({ portName })))
     .then((rows) => rows.map((row) => ({ portName: row.portName })))
@@ -89,11 +90,11 @@ export function createReviewRepairParticipant(
 ): ReviewRepairParticipant {
   return Object.freeze({
     async inspect(input: Parameters<ReviewRepairParticipant['inspect']>[0]) {
-      return await loadInspection(db, input)
+      return await loadInspection(db, taskExecutionParticipants, input)
     },
     async completeApproved(input: Parameters<ReviewRepairParticipant['completeApproved']>[0]) {
       return await databaseSessionFor(db).transaction(async (transaction) => {
-        const state = await loadInspection(transaction, input)
+        const state = await loadInspection(transaction, taskExecutionParticipants, input)
         if (state === null || state.decision !== 'approved') return false
         const content = approvedDocContent(input, state.sourceFilePath)
         const metadata = JSON.stringify({

@@ -123,8 +123,8 @@ async function seed(
     status: 'done',
     iteration: 0,
   })
-  const round = await createClarifyRound(
-    withO2Closure({
+  const round = await createClarifyRound({
+    ...withO2Closure({
       db: h.db,
       taskId,
       askingNodeId: 'asking',
@@ -143,7 +143,8 @@ async function seed(
         }),
       ],
     }),
-  )
+    taskExecutionParticipants,
+  })
   const read = async () => {
     return (
       await h.db
@@ -239,7 +240,7 @@ describeEachProvider('RFC-372 review O1: task background for follow-ups', (h) =>
 
   test('the follow-up prompt carries taskContext as background; a failing source never blocks', async () => {
     const fixture = await seed(h)
-    const store = createClarifyFollowupStore(h.db, events)
+    const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
     const background = {
       inputs: [{ key: 'topic', label: 'Topic', value: 'Room booking' }],
       instruction: 'Design {{topic}}',

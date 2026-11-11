@@ -1,4 +1,5 @@
 import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
+import type { TaskNodeOutputReads, TaskNodeRunReads } from '@/modules/task-execution/public/types'
 import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -112,8 +113,11 @@ function composeMemoryInjectionQueries(store: MemoryInjectionReadStore): MemoryI
   })
 }
 
-export function composeMemoryInjectionQueriesFor(db: PersistenceDb): MemoryInjectionQueries {
-  return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
+export function composeMemoryInjectionQueriesFor(
+  db: PersistenceDb,
+  taskNodeRuns: TaskNodeRunReads,
+): MemoryInjectionQueries {
+  return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db, taskNodeRuns))
 }
 export {}
 
@@ -126,6 +130,9 @@ export interface MemoryCatalogBinding {
 
 export interface ComposeMemoryOperationsOptions {
   readonly clarifyAnswers: ClarifyAnswerQueries
+  /** RFC-485: Task Execution's node-run and node-output reads (bootstrap builds them on the root db). */
+  readonly taskNodeRuns: TaskNodeRunReads
+  readonly taskNodeOutputs: TaskNodeOutputReads
   readonly db: PersistenceDb
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly nodeRunPrompts: NodeRunPromptReader
@@ -152,7 +159,12 @@ export function composeMemoryOperationsFor(
   const nativeRuntimeResolver = new DrizzleMemoryDistillRuntimeResolver(input.db)
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db, input.clarifyAnswers),
-    workStore: new DrizzleMemoryDistillWorkStore(input.db, input.clarifyAnswers),
+    workStore: new DrizzleMemoryDistillWorkStore(
+      input.db,
+      input.clarifyAnswers,
+      input.taskNodeRuns,
+      input.taskNodeOutputs,
+    ),
     runtimeResolver: {
       async resolve(request) {
         return input.systemAgentBinding.bindRuntime(await nativeRuntimeResolver.resolve(request))
@@ -161,7 +173,8 @@ export function composeMemoryOperationsFor(
     systemAgents: input.systemAgentBinding.family,
     reviewedArtifacts: input.reviewedArtifacts,
     nodeRunPrompts: input.nodeRunPrompts,
-    injectionQueries: input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db),
+    injectionQueries:
+      input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db, input.taskNodeRuns),
     ...(input.catalogBinding === undefined
       ? {}
       : {

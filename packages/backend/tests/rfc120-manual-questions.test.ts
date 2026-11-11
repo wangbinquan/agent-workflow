@@ -150,7 +150,7 @@ async function seedTask(db: PersistenceDb, _opts: { deferred?: boolean } = {}): 
 }
 
 async function listOne(db: PersistenceDb, taskId: string) {
-  const all = await listTaskQuestions(db, taskId)
+  const all = await listTaskQuestions(db, taskExecutionParticipants, taskId)
   return all.find((e) => e.sourceKind === 'manual')
 }
 
@@ -180,6 +180,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // create WITH a handler (required, §15) → 待下发 (staged). DESIGNER first to exercise reassign.
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         {
           title: 'Tighten the retry backoff',
@@ -203,7 +204,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect(dto?.phase).toBe('staged')
 
       // re-target the handler via the SAME reassign service used for clarify designer entries.
-      await reassignTaskQuestion(db, id, FIXER, actor)
+      await reassignTaskQuestion(db, taskExecutionParticipants, id, FIXER, actor)
       dto = await listOne(db, taskId)
       expect(dto?.effectiveTargetNodeId).toBe(FIXER)
       // still staged (reassign only moves the handler) → awaiting dispatch.
@@ -223,6 +224,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
 
       // FIXER reruns → the unified queue injector binds the manual entry (per-node queue).
       await buildClarifyQueueContext({
+        taskExecutionParticipants,
         db,
         definition: liveDef(),
         taskId,
@@ -240,7 +242,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect((await listOne(db, taskId))?.phase).toBe('awaiting_confirm')
 
       // confirm → 完成.
-      await confirmTaskQuestion(db, id, actor)
+      await confirmTaskQuestion(db, taskExecutionParticipants, id, actor)
       const done = await listOne(db, taskId)
       expect(done?.phase).toBe('done')
       expect(done?.confirmation).toBe('confirmed')
@@ -251,6 +253,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'Add a smoke test', body: 'Cover the happy path.', targetNodeId: FIXER },
         actor,
@@ -274,6 +277,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       const a = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'dupe', body: 'same', targetNodeId: FIXER },
         actor,
@@ -283,6 +287,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       )
       const b = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'dupe', body: 'same', targetNodeId: FIXER },
         actor,
@@ -296,7 +301,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect(rows.length).toBe(2)
       // distinct synthetic origins keep the full uniq_task_questions_identity collision-free.
       expect(rows[0]?.originNodeRunId).not.toBe(rows[1]?.originNodeRunId)
-      const list = await listTaskQuestions(db, taskId)
+      const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(list.filter((e) => e.sourceKind === 'manual').length).toBe(2)
     })
 
@@ -305,6 +310,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'visible?', body: 'yes', targetNodeId: FIXER },
         actor,
@@ -313,7 +319,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         composeCollaborationTaskRolePolicy(),
       )
       await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
-      const list = await listTaskQuestions(db, taskId)
+      const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       const dto = list.find((e) => e.id === id)
       expect(dto).toBeDefined() // would be undefined under the old origin→round skip (H4 bug)
       expect(dto?.phase).toBe('processing')
@@ -324,6 +330,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -331,9 +338,11 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeCollaborationTaskRolePolicy(),
       )
-      const filtered = await listTaskQuestions(db, taskId, { sourceNodeId: FIXER })
+      const filtered = await listTaskQuestions(db, taskExecutionParticipants, taskId, {
+        sourceNodeId: FIXER,
+      })
       expect(filtered.length).toBe(0)
-      const unfiltered = await listTaskQuestions(db, taskId)
+      const unfiltered = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(unfiltered.length).toBe(1)
     })
   })
@@ -350,6 +359,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // (prior run). So a manual entry dispatches like a pure-override with no readiness gate.
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -377,6 +387,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       })
       const a = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'a', body: 'aa', targetNodeId: FIXER },
         actor,
@@ -386,6 +397,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       )
       const b = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'b', body: 'bb', targetNodeId: DESIGNER },
         actor,
@@ -415,6 +427,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       try {
         await createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b', targetNodeId: QUESTIONER },
           actor,
@@ -442,6 +455,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       await expect(
         createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: '  ', body: 'b', targetNodeId: FIXER },
           actor,
@@ -453,6 +467,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       await expect(
         createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: ' ', targetNodeId: FIXER },
           actor,
@@ -470,6 +485,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       try {
         await createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b' },
           actor,
@@ -493,6 +509,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       await expect(
         createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b', targetNodeId: CC },
           actor,
@@ -504,6 +521,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       await expect(
         createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b', targetNodeId: 'ghost' },
           actor,
@@ -520,6 +538,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const secretActor = { userId: 'SECRET-AUTHOR-ID', role: 'owner' as const }
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 'T', body: 'B', targetNodeId: FIXER },
         secretActor,
@@ -532,6 +551,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect(row?.manualCreatedBy).toBe('SECRET-AUTHOR-ID') // recorded for audit
       const result = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       const ctx = await buildClarifyQueueContext({
+        taskExecutionParticipants,
         db,
         definition: liveDef(),
         taskId,
@@ -556,6 +576,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db) // deferred; FIXER has a prior run
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -565,10 +586,14 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       )
       // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
       // the synthetic origin has no clarify round so the INNER JOIN dropped it).
-      expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(true)
+      expect(
+        (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).has(FIXER),
+      ).toBe(true)
       await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       // dispatched → leaves the undispatched set (gate released).
-      expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(false)
+      expect(
+        (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).has(FIXER),
+      ).toBe(false)
     })
 
     test('scheduler deriveFrontier PARKS the manual handler (awaiting_human, not completed) until dispatched', async () => {
@@ -576,6 +601,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -590,7 +616,11 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // BEFORE dispatch: FIXER is undispatched → deriveFrontier must NOT complete it (the
       // scheduler keeps the task awaiting_human so it can't finish past the manual question).
       const rows = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
-      const deferredBefore = await loadUndispatchedDesignerTargets(db, taskId)
+      const deferredBefore = await loadUndispatchedDesignerTargets(
+        db,
+        taskExecutionParticipants,
+        taskId,
+      )
       expect(deferredBefore.has(FIXER)).toBe(true)
       const fBefore = await deriveFrontier(
         rows,
@@ -612,7 +642,11 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // AFTER dispatch: FIXER leaves the set → deriveFrontier no longer parks it (its rerun runs).
       await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       const rows2 = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
-      const deferredAfter = await loadUndispatchedDesignerTargets(db, taskId)
+      const deferredAfter = await loadUndispatchedDesignerTargets(
+        db,
+        taskExecutionParticipants,
+        taskId,
+      )
       expect(deferredAfter.has(FIXER)).toBe(false)
       const fAfter = await deriveFrontier(
         rows2,
@@ -643,6 +677,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db, { deferred: false })
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -661,6 +696,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db) // deferred
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -687,6 +723,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         try {
           await createManualTaskQuestion(
             db,
+            taskExecutionParticipants,
             taskId,
             { title: 't', body: 'b', targetNodeId: FIXER },
             actor,
@@ -708,6 +745,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         // create + stage WHILE running (allowed), then the task goes terminal before dispatch.
         const { id } = await createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
@@ -742,6 +780,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // failed is resumable (resumeTask resumes it), so manual create + dispatch are allowed.
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -782,8 +821,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         iteration: 0,
         startedAt: Date.now() - 700,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -794,7 +833,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           loopIter: 0,
           questions: [mkQ('q1', 'CLARIFY-Q-MARKER?')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       // RFC-162 (designer-by-default deleted): the quick channel seals the round + AUTO-dispatches the
       // QUESTIONER only. To exercise a DESIGNER per-node queue, reassign the questioner entry → DESIGNER
       // (ADDS a designer handler) then dispatch it through the SAME board flow — dispatch backfills
@@ -822,7 +862,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           .from(taskQuestions)
           .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
       )[0]!
-      await reassignTaskQuestion(db, questioner.id, DESIGNER, actor)
+      await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, DESIGNER, actor)
       const designerEntryId = (
         await db
           .select()
@@ -845,6 +885,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect(designer.sealedAt).not.toBeNull()
       expect(designer.dispatchedAt).not.toBeNull()
       const ctx = await buildClarifyQueueContext({
+        taskExecutionParticipants,
         db,
         definition: liveDef(),
         taskId,
@@ -882,6 +923,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       })
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
@@ -892,14 +934,14 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // never-run QUESTIONER → rejected (no park-but-undispatchable).
       let threw: unknown = null
       try {
-        await reassignTaskQuestion(db, id, QUESTIONER, actor)
+        await reassignTaskQuestion(db, taskExecutionParticipants, id, QUESTIONER, actor)
       } catch (e) {
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
       expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(FIXER) // unchanged
       // run DESIGNER → allowed.
-      await reassignTaskQuestion(db, id, DESIGNER, actor)
+      await reassignTaskQuestion(db, taskExecutionParticipants, id, DESIGNER, actor)
       expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(DESIGNER)
     })
 
@@ -948,6 +990,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       try {
         await createManualTaskQuestion(
           racingDb,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
@@ -970,6 +1013,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,

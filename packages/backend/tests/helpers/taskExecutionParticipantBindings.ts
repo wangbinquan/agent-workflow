@@ -15,6 +15,9 @@ import {
   createTaskClarifyDirectivePersistence,
   createTaskSubjectQueries,
   createRunSelectionReader,
+  createNodeRunQueries,
+  createTaskGateQueries,
+  createNodeOutputQueries,
 } from '@/modules/task-execution/composition'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
@@ -33,4 +36,7 @@ export const taskExecutionParticipants: TaskExecutionParticipantBindings = Objec
   createTaskClarifyDirectivePersistence,
   createTaskSubjectQueries,
   createRunSelectionReader,
+  createNodeRunQueries,
+  createTaskGateQueries,
+  createNodeOutputQueries,
 })

@@ -1,4 +1,8 @@
-import { createRunSelectionReader } from '@/modules/task-execution/composition'
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import {
+  createRunSelectionReader,
+  createNodeRunQueries,
+} from '@/modules/task-execution/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { o2Ports } from './helpers/o2Closure'
 import { withO2Closure } from './helpers/o2Closure'
@@ -7,7 +11,7 @@ import { expect, test } from 'bun:test'
 import type { ResolveHandlerInput } from '@agent-workflow/shared'
 import { resolveHandlerRun as legacyHandler } from '@/modules/task-execution/infrastructure/migration/oracle/handlerHistory'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createNodeRunQueries, resolveHandlerRun } from '@/modules/task-execution/public/queries'
+import { resolveHandlerRun } from '@/modules/task-execution/public/queries'
 import { projectWorkgroupRunSelections } from '@/modules/task-execution/infrastructure/runSelection/workgroupProjection'
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
@@ -268,7 +272,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
       injectedMemories: snapshot,
     })
     await add('retry', 'agent', { status: 'running', rerunCause: 'process-retry' })
-    const store = new DrizzleMemoryInjectionReadStore(db)
+    const store = new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db))
     expect(
       await loadInjectedSnapshotFromFirstAttempt(store, {
         taskId,
@@ -477,7 +481,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
       })
     expect(
       (
-        await findSelfGateRunForShard(db, taskId, 'clarify', null, 0, {
+        await findSelfGateRunForShard(db, taskExecutionParticipants, taskId, 'clarify', null, 0, {
           containerRunId: null,
           frameIteration: 0,
         })

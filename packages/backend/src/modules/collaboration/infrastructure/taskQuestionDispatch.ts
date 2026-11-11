@@ -16,9 +16,6 @@ import {
 } from '@/modules/collaboration/domain/questionDispatchDecision'
 import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
 import {
-  createNodeOutputQueries,
-  createTaskGateQueries,
-  createNodeRunQueries,
   createRunHistorySnapshot,
   type NodeRunDispatchFacts,
   isTurnEngineTaskSubject,
@@ -785,7 +782,14 @@ async function planDispatchFrontier(
   //    target is a no-op (it rides the per-node queue, not the graph siblings). Reject the
   //    WHOLE dispatch if any affected graph designer isn't ready (fail fast, nothing stamped).
   for (const nodeId of affected) {
-    await assertDesignerReady(db, taskId, nodeId, byTarget.get(nodeId) ?? [], definition)
+    await assertDesignerReady(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      nodeId,
+      byTarget.get(nodeId) ?? [],
+      definition,
+    )
   }
 
   // 5b. Safety (prior node_run to inherit) — on the FRONTIER nodes only (the ones we mint
@@ -794,7 +798,7 @@ async function planDispatchFrontier(
   //     (non-frontier) affected nodes are minted by the scheduler (first-run / demote
   //     naturally), so they carry no prior-run precondition here.
   for (const nodeId of frontier) {
-    await assertSafeFrontierTarget(db, taskId, nodeId)
+    await assertSafeFrontierTarget(db, taskExecutionParticipants, taskId, nodeId)
   }
 
   // 5c. Codex (ship-gate) — DO NOT mint a second cross-clarify-answer rerun on a node that
@@ -828,7 +832,14 @@ async function planDispatchFrontier(
   for (const [home, homeEntries] of byTarget) {
     mintShardsByTarget.set(home, new Set(homeEntries.map(shardOf)))
   }
-  await assertNoInFlightDispatch(db, taskId, affected, mintCauseByTarget, mintShardsByTarget)
+  await assertNoInFlightDispatch(
+    db,
+    taskExecutionParticipants,
+    taskId,
+    affected,
+    mintCauseByTarget,
+    mintShardsByTarget,
+  )
   // (RFC-132 ③: the 5d immediate-ledger precheck is gone with the immediate quick channel.)
 
   // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
@@ -881,7 +892,8 @@ async function dispatchTaskQuestionsLocked(
   //    against; the `deferredQuestionDispatch` flag is no longer read. Only the not-found + terminal
   //    guards remain.
   const taskRow = (
-    await createTaskGateQueries(db)
+    await taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listDispatchContexts([taskId])
       .then((rows) =>
         rows.map((row) => ({
@@ -1285,7 +1297,8 @@ async function commitDispatchPlan(
         // if the task went terminal, so nothing is minted onto a finished task. Reuses the SAME
         // terminal set as the pre-check (no drift).
         const curTask = (
-          await createTaskGateQueries(tx)
+          await taskExecutionParticipants
+            .createTaskGateQueries(tx)
             .listContexts([taskId])
             .then((rows) =>
               rows.map((row) => ({
@@ -1391,13 +1404,16 @@ async function commitDispatchPlan(
         // — re-run BOTH ledger gates inside the tx so a concurrent dispatch / quick-channel answer
         // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
         // runs + output ids ONCE for both.
-        const txRuns = await createNodeRunQueries(tx).listDispatchFacts({ taskId })
+        const txRuns = await taskExecutionParticipants
+          .createNodeRunQueries(tx)
+          .listDispatchFacts({ taskId })
         const txOutputIds: ReadonlySet<string> =
           txRuns.length === 0
             ? new Set<string>()
             : new Set(
                 (
-                  await createNodeOutputQueries(tx)
+                  await taskExecutionParticipants
+                    .createNodeOutputQueries(tx)
                     .runsWithOutput(txRuns.map((r) => r.id))
                     .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
                     .then((rows) => rows.map((row) => ({ nodeRunId: row.nodeRunId })))
@@ -1507,7 +1523,9 @@ async function commitDispatchPlan(
           const projectionRows =
             rerunNodeRunIds.length === 0
               ? []
-              : await createNodeRunQueries(tx).humanGateProjection(rerunNodeRunIds)
+              : await taskExecutionParticipants
+                  .createNodeRunQueries(tx)
+                  .humanGateProjection(rerunNodeRunIds)
           const accepted = await taskExecutionParticipants
             .createTaskDecisionParticipantInTx(tx)
             .acceptGateDecisionTx({
@@ -1888,6 +1906,7 @@ async function findOpenDispatchTarget(
  */
 async function assertNoInFlightDispatch(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   affected: ReadonlySet<string>,
   mintCauseByTarget: ReadonlyMap<string, CauseClass>,
@@ -1913,9 +1932,12 @@ async function assertNoInFlightDispatch(
       ),
     )
   if (entries.length === 0) return
-  const runs = await createNodeRunQueries(db).listDispatchFacts({ taskId })
+  const runs = await taskExecutionParticipants
+    .createNodeRunQueries(db)
+    .listDispatchFacts({ taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   // RFC-172b (T5): resolve the IN-FLIGHT entries' shards so a sibling member does not block. Only
@@ -2023,6 +2045,7 @@ function ledgerDesc(l: LedgerResolution): string {
 
 export async function resolveBorrowForNode(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   nodeId: string,
   iteration: number,
@@ -2045,13 +2068,21 @@ export async function resolveBorrowForNode(
   if (!hasDispatched) return null
 
   // Dispatched entries exist → FULL open-detection on both ledgers (counting OPEN RUN-SELF).
-  const designer = await resolveDesignerBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
+  const designer = await resolveDesignerBorrowForNode(
+    db,
+    taskExecutionParticipants,
+    taskId,
+    nodeId,
+    iteration,
+    workflowDef,
+  )
   // RFC-128 P5-BC (clean-path ④ / §5.2.12 F3): the THIRD ledger — control-channel DISPATCHED
   // self/questioner reruns (deferred per-question dispatch; dispatched_at + trigger_run_id
   // consumption, mirroring the designer ledger but keyed by the asking run's iteration for the
   // self loop_iter=0 projection — P2-3).
   const deferredSelfQ = await resolveDeferredSelfQuestionerBorrowForNode(
     db,
+    taskExecutionParticipants,
     taskId,
     nodeId,
     iteration,
@@ -2103,6 +2134,7 @@ export async function resolveBorrowForNode(
  */
 async function resolveDeferredSelfQuestionerBorrowForNode(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   nodeId: string,
   iteration: number,
@@ -2143,10 +2175,13 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
       ),
     )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
-  const runs = await createNodeRunQueries(db).listDispatchFacts({ taskId })
+  const runs = await taskExecutionParticipants
+    .createNodeRunQueries(db)
+    .listDispatchFacts({ taskId })
   const runById = new Map(runs.map((r) => [r.id, r]))
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   const lineageViews: RunLineageView[] = runs.map((r) => ({
@@ -2218,6 +2253,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
  */
 async function resolveDesignerBorrowForNode(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   nodeId: string,
   iteration: number,
@@ -2241,9 +2277,12 @@ async function resolveDesignerBorrowForNode(
   const candidates = entries.filter((e) => effectiveTarget(e) === nodeId)
   if (candidates.length === 0) return CLOSED_LEDGER
 
-  const runs = await createNodeRunQueries(db).listDispatchFacts({ taskId })
+  const runs = await taskExecutionParticipants
+    .createNodeRunQueries(db)
+    .listDispatchFacts({ taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   const lineageViews: RunLineageView[] = runs.map((r) => ({
@@ -2293,12 +2332,13 @@ async function resolveDesignerBorrowForNode(
  */
 async function assertSafeFrontierTarget(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   targetNodeId: string,
 ): Promise<void> {
   // Shared predicate (RFC-120 §15 Codex re-gate): create / reassign / dispatch all agree on
   // "runnable" via taskNodeHasRun, so a manual/override target accepted upstream is dispatchable.
-  if (!(await taskNodeHasRun(db, taskId, targetNodeId))) {
+  if (!(await taskNodeHasRun(db, taskExecutionParticipants, taskId, targetNodeId))) {
     throw new ConflictError(
       TASK_QUESTION_CONFLICT.unsafeDispatchTarget,
       `cannot dispatch to frontier '${targetNodeId}': no prior node_run to inherit. Safe first-run minting for never-run frontier targets is the next layer (RFC-120 §16 F3).`,
@@ -2322,6 +2362,7 @@ async function assertSafeFrontierTarget(
  */
 async function assertDesignerReady(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   targetNodeId: string,
   group: TaskQuestionRow[],
@@ -2345,11 +2386,9 @@ async function assertDesignerReady(
   // the rounds of a nested loop's different outer rounds never gate (or satisfy)
   // each other.
   const originFrames = new Map<string, string | null>()
-  for (const row of await createNodeRunQueries(db).listFields({ runIds: [...dispatchedOrigins] }, [
-    'id',
-    'seq',
-    'containerRunId',
-  ])) {
+  for (const row of await taskExecutionParticipants
+    .createNodeRunQueries(db)
+    .listFields({ runIds: [...dispatchedOrigins] }, ['id', 'seq', 'containerRunId'])) {
     originFrames.set(row.id, row.containerRunId)
   }
   const frames = new Map<string, { loopIter: number; containerRunId: string | null }>()
@@ -2413,7 +2452,7 @@ export async function buildFrontierMintPlan(
   // member inheritance set and regress it to `unsafe-dispatch-target`.
   shardKey: string | null | undefined,
 ): Promise<FrontierMintPlan> {
-  const targetRuns = await createNodeRunQueries(db).listWithCheckpoints({
+  const targetRuns = await taskExecutionParticipants.createNodeRunQueries(db).listWithCheckpoints({
     taskId,
     nodeId: targetNodeId,
   })

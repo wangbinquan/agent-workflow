@@ -148,8 +148,8 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'self',
       db,
       taskId,
@@ -160,7 +160,8 @@ async function seedSelfRound(
       iteration: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, originNodeRunId: clarifyNodeRunId }
 }
 
@@ -182,8 +183,8 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -194,7 +195,8 @@ async function seedCrossRound(
       loopIter: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
@@ -348,7 +350,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       })
       expect(res.roundFullySealed).toBe(false)
 
-      const dtos = await listTaskQuestions(db, taskId)
+      const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       const sig = dtos.map((d) => `${d.questionId}:${d.roleKind}`).sort()
       // RFC-162: exactly one questioner entry per question — NEVER a designer entry from a seal.
       expect(sig).toEqual(['q1:questioner', 'q2:questioner'])
@@ -385,7 +387,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         ],
       })
 
-      const dtos = await listTaskQuestions(db, taskId)
+      const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       // 轮仍 awaiting_human（q2 未 seal），但 q1 已 seal。
       expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
       const q1 = dtos.find((d) => d.questionId === 'q1')!
@@ -405,7 +407,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         originNodeRunId,
         answers: [makeAns('q1'), makeAns('q2')],
       })
-      const dtos = await listTaskQuestions(db, taskId)
+      const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(dtos.length).toBeGreaterThan(0)
       expect(dtos.every((d) => d.sealed)).toBe(true)
     })
@@ -554,7 +556,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         autoStage: true,
       })
 
-      const list = await listTaskQuestions(db, taskId)
+      const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       const q1 = list.find((d) => d.questionId === 'q1')!
       const q2 = list.find((d) => d.questionId === 'q2')!
       // q1 sealed + auto-staged → 待下发（staged）。
@@ -578,7 +580,9 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         answers: [makeAns('q1')],
       })
 
-      const q1 = (await listTaskQuestions(db, taskId)).find((d) => d.questionId === 'q1')!
+      const q1 = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+        (d) => d.questionId === 'q1',
+      )!
       expect(q1.sealed).toBe(true)
       expect(q1.staged).toBe(false)
       expect(q1.phase).toBe('pending')
@@ -603,7 +607,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         answers: [makeAns('q2')],
       })
 
-      const list = await listTaskQuestions(db, taskId)
+      const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(list.find((d) => d.questionId === 'q1')!.staged).toBe(true) // preserved from call 1
       expect(list.find((d) => d.questionId === 'q2')!.staged).toBe(false) // call 2 did not stage it
     })

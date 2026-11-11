@@ -6,8 +6,6 @@ import type { TaskExecutionParticipantBindings } from './taskExecutionParticipan
 // 生产上每次 tick 抛 `deferred-question-dispatcher-not-bound`（dual-provider-parity-audit P0-7）。
 // 派发管线（`taskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
 
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm'
 
@@ -117,7 +115,8 @@ async function loadUndispatchedParkTargets(
   const outputRows =
     runs.length === 0
       ? []
-      : await createNodeOutputQueries(db)
+      : await taskExecutionParticipants
+          .createNodeOutputQueries(db)
           .runsWithOutput(runs.map((run) => run.id))
           .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
           .then((rows) => rows.map((row) => ({ nodeRunId: row.nodeRunId })))

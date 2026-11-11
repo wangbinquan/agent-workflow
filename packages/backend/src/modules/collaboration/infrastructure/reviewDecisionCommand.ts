@@ -100,6 +100,7 @@ export function createReviewDecisionCommandContext(input: {
   readonly authorRole: TaskActorRole
 }): CollaborationCommandContext<'reviewDecisions'> {
   return createCollaborationCommandContext({
+    taskExecutionParticipants: input.taskExecutionParticipants,
     taskRolePolicy: input.taskRolePolicy,
     taskLock: input.taskLock,
     historyRestrictions: input.historyRestrictions,

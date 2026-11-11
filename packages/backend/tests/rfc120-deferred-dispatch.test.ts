@@ -191,8 +191,8 @@ async function seedTask(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -203,7 +203,8 @@ async function seedTask(
       loopIter: 0,
       questions: opts.questions ?? [mkQ('q1', 'designer-scoped?')],
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, intermediaryNodeRunId: crossClarifyNodeRunId }
 }
 
@@ -292,8 +293,8 @@ async function seedTwoSource(
       retryIndex: 0,
       iteration: 0,
     })
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-      withO2Closure({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -304,7 +305,8 @@ async function seedTwoSource(
         loopIter: 0,
         questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     return crossClarifyNodeRunId
   }
   const ccA = await open('q_a', 'cc_a')
@@ -338,7 +340,8 @@ async function seedDesignerEntries(
       .from(taskQuestions)
       .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
   ).filter((e) => opts.originNodeRunId === undefined || e.originNodeRunId === opts.originNodeRunId)
-  for (const q of questioners) await reassignTaskQuestion(db, q.id, designerNodeId, actor)
+  for (const q of questioners)
+    await reassignTaskQuestion(db, taskExecutionParticipants, q.id, designerNodeId, actor)
 }
 
 beforeEach(() => resetBroadcastersForTests())
@@ -381,7 +384,9 @@ describeEachProvider(
       expect(designerEntries[0]?.triggerRunId).toBeNull()
       expect(designerEntries[0]?.defaultTargetNodeId).toBe(DESIGNER)
       // the park gate now sees the designer as an undispatched target
-      expect([...(await loadUndispatchedDesignerTargets(db, taskId))]).toEqual([DESIGNER])
+      expect([
+        ...(await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)),
+      ]).toEqual([DESIGNER])
     })
 
     test('quick-channel questioner-only answer → questioner rerun via dispatch + gate empty', async () => {
@@ -399,7 +404,9 @@ describeEachProvider(
       // the questioner rerun is minted through the unified dispatch (not an immediate mint).
       expect(ret.dispatch.reruns.some((r) => r.targetNodeId === QUESTIONER)).toBe(true)
       // no designer entry → no park
-      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
+      expect(
+        (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size,
+      ).toBe(0)
     })
   },
 )
@@ -646,7 +653,9 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     expect(entry?.dispatchedBy).toBe('u1')
     expect(entry?.triggerRunId).toBeNull()
     // gate released (dispatched_at set → leaves the undispatched set)
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
+    expect(
+      (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size,
+    ).toBe(0)
   })
 
   test('CAS idempotency: double dispatch does not double-mint', async () => {
@@ -889,7 +898,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const after = await designerEntries(db, taskId)
     expect(after.every((e) => e.dispatchedAt !== null)).toBe(true)
     expect(after.every((e) => e.triggerRunId === null)).toBe(true) // NOT bound at dispatch
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // gate released
+    expect(
+      (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size,
+    ).toBe(0) // gate released
     const { nodeRuns } = tablesOf(db)
     const designerRuns = await db
       .select(nodeRunFixtureColumns(db))
@@ -930,18 +941,24 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
 
     // Codex H1 re-gate: q1 is dispatched + IN-FLIGHT (its rerun pending). The node must NOT
     // be parked (else q1's minted rerun would be STRANDED) even though q2 is undispatched.
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(false)
+    expect(
+      (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).has(DESIGNER),
+    ).toBe(false)
 
     // The rerun dispatches → binds q1 (the unified queue injector stamps trigger_run_id);
     // still not parked while the run is in flight.
     await bindTriggerRun(db, [entries[0]!.id], runId)
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(false)
+    expect(
+      (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).has(DESIGNER),
+    ).toBe(false)
 
     // q1's rerun finishes done+output → q1 consumed. Now the node RE-PARKS for the still-
     // undispatched q2 (so a later dispatch of q2 isn't lost to an already-completing task).
     await patchNodeRunFixture(db, { id: runId }, { status: 'done' })
     await nodeRunOutputFixture(db, { nodeRunId: runId, portName: 'result', content: 'x' })
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(true)
+    expect(
+      (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).has(DESIGNER),
+    ).toBe(true)
   })
 
   test('H1(re-gate): a node with an in-flight dispatched question is DISPATCHABLE in deriveFrontier (not parked)', async () => {
@@ -964,7 +981,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
 
     // The park set excludes DESIGNER (in-flight q1) → deriveFrontier does NOT bucket it into
     // awaitingHuman; its pending rerun is dispatchable (not stranded).
-    const deferred = await loadUndispatchedDesignerTargets(db, taskId)
+    const deferred = await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)
     const rows = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
     const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
     const f = await deriveFrontier(
@@ -1218,7 +1235,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
               fired = true
               const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
               q.then = (onF: unknown, onR: unknown) =>
-                reassignTaskQuestion(db, entry.id, OTHER, actor).then(
+                reassignTaskQuestion(db, taskExecutionParticipants, entry.id, OTHER, actor).then(
                   () => origThen(onF, onR),
                   onR as never,
                 )
@@ -1329,7 +1346,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
-    await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
+    await reassignTaskQuestion(db, taskExecutionParticipants, entries[0]!.id, OTHER, actor)
 
     // RFC-131 T4 去借壳: effectiveTarget=OTHER → dispatch mints OTHER itself (NOT DESIGNER), running
     // OTHER's OWN agent (no agent_override_name). OTHER is the frontier (it has a prior run).
@@ -1379,7 +1396,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
     // reassign to a NEVER-RUN node — canReassign accepts it, but dispatch is run-gated.
-    await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
+    await reassignTaskQuestion(db, taskExecutionParticipants, entries[0]!.id, OTHER, actor)
 
     // RFC-127 借壳 could mint on the origin DESIGNER (which HAS a run), so a never-run borrow target
     // dispatched fine. RFC-131 T4 去借壳 REVERSES that: the rerun is minted ON the effective target
@@ -1423,7 +1440,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
-    await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
+    await reassignTaskQuestion(db, taskExecutionParticipants, entries[0]!.id, OTHER, actor)
     const result = await dispatchTaskQuestions(
       db,
       taskExecutionParticipants,
@@ -1508,12 +1525,14 @@ describeEachProviderHttpApplication(
         .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
       await reassignTaskQuestion(
         db,
+        taskExecutionParticipants,
         questioners.find((e) => e.questionId === 'q1')!.id,
         OTHER,
         actor,
       )
       await reassignTaskQuestion(
         db,
+        taskExecutionParticipants,
         questioners.find((e) => e.questionId === 'q2')!.id,
         DESIGNER,
         actor,
@@ -1562,7 +1581,7 @@ describeEachProviderHttpApplication(
       // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
-      await reassignTaskQuestion(db, entry.id, OTHER, actor)
+      await reassignTaskQuestion(db, taskExecutionParticipants, entry.id, OTHER, actor)
       // RFC-131 T4 去借壳: the rerun is minted ON the target OTHER. (RFC-141 removed the run-scoped
       // Update-Directive suppression this used to drive — OTHER now also sees its own prior output.)
       const result = await dispatchTaskQuestions(
@@ -1614,7 +1633,9 @@ describeEachProviderHttpApplication(
           status: 'awaiting_human',
         },
       )
-      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(1) // parked
+      expect(
+        (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size,
+      ).toBe(1) // parked
 
       const entry = (await designerEntries(db, taskId))[0]!
       const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
@@ -1643,7 +1664,9 @@ describeEachProviderHttpApplication(
           ),
         )
       expect(pending.length).toBe(1)
-      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // released
+      expect(
+        (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size,
+      ).toBe(0) // released
     })
 
     test('H2: dispatch route rejects empty entryIds (422)', async () => {
@@ -1720,7 +1743,9 @@ describeEachProviderHttpApplication(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const phaseOf = async () =>
-        (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
+        (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+          (e) => e.roleKind === 'designer',
+        )!.phase
 
       // Pre-dispatch: NOT processing — the task is parked, the row is pending.
       expect(await phaseOf()).toBe('pending')
@@ -1774,7 +1799,7 @@ describeEachProviderHttpApplication(
 
       // pre-dispatch (dispatched_at NULL) → reassign allowed; RFC-162 re-targets the designer
       // row's defaultTargetNodeId (override stays null).
-      await reassignTaskQuestion(db, entry.id, OTHER, actor)
+      await reassignTaskQuestion(db, taskExecutionParticipants, entry.id, OTHER, actor)
       expect((await designerEntries(db, taskId))[0]?.defaultTargetNodeId).toBe(OTHER)
 
       // dispatch stamps trigger_run_id.
@@ -1783,7 +1808,7 @@ describeEachProviderHttpApplication(
       // post-dispatch → reassign rejected (reopen is the post-dispatch path).
       let threw: unknown = null
       try {
-        await reassignTaskQuestion(db, entry.id, DESIGNER, actor)
+        await reassignTaskQuestion(db, taskExecutionParticipants, entry.id, DESIGNER, actor)
       } catch (e) {
         threw = e
       }
@@ -1823,7 +1848,9 @@ describeEachProviderHttpApplication(
       expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(anchorRunId)
 
       const phaseOf = async () =>
-        (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
+        (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+          (e) => e.roleKind === 'designer',
+        )!.phase
 
       // The bound run FAILS → still processing (D3), confirm would reject.
       await patchNodeRunFixture(db, { id: anchorRunId }, { status: 'failed' })
@@ -1848,7 +1875,7 @@ describeEachProviderHttpApplication(
       // The entry resolves through the LINEAGE → awaiting_confirm (not stuck).
       expect(await phaseOf()).toBe('awaiting_confirm')
       // confirm now works.
-      await confirmTaskQuestion(db, entry.id, actor)
+      await confirmTaskQuestion(db, taskExecutionParticipants, entry.id, actor)
       expect(await phaseOf()).toBe('done')
     })
 
@@ -1987,8 +2014,8 @@ describeEachProviderHttpApplication(
           retryIndex: 0,
           iteration: 0,
         })
-        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-          withO2Closure({
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+          ...withO2Closure({
             kind: 'cross',
             db,
             taskId,
@@ -1999,7 +2026,8 @@ describeEachProviderHttpApplication(
             loopIter: 0,
             questions: [mkQ(qid, 'designer-scoped?')],
           }),
-        )
+          taskExecutionParticipants,
+        })
         return crossClarifyNodeRunId
       }
       const ccA = await openSession('q_a', 'cc_a', D, 'a1')
@@ -2027,7 +2055,7 @@ describeEachProviderHttpApplication(
       const all = await designerEntries(db, taskId)
       const entryA = all.find((e) => e.defaultTargetNodeId === D)! // default-to-D
       const entryC = all.find((e) => e.defaultTargetNodeId === E)! // default-to-E
-      await reassignTaskQuestion(db, entryC.id, D, actor) // re-target entryC → D (its designer row moves to D)
+      await reassignTaskQuestion(db, taskExecutionParticipants, entryC.id, D, actor) // re-target entryC → D (its designer row moves to D)
 
       // The batch's group for D = {entryA (cc_a), entryC (re-targeted from E)}. Both are now
       // default-to-D designer rows — the readiness gate must NOT be skipped: D's graph subset
@@ -2149,8 +2177,8 @@ describeEachProviderHttpApplication(
           retryIndex: 0,
           iteration: 0,
         })
-        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-          withO2Closure({
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+          ...withO2Closure({
             kind: 'cross',
             db,
             taskId,
@@ -2161,7 +2189,8 @@ describeEachProviderHttpApplication(
             loopIter: 0,
             questions: [mkQ(qid, 'designer-scoped?')],
           }),
-        )
+          taskExecutionParticipants,
+        })
         return crossClarifyNodeRunId
       }
       const ccA = await openSession('q_a', 'cc_a', A, 'a1')
@@ -2265,7 +2294,7 @@ describeEachProviderHttpApplication(
         .where(eq(taskQuestions.id, entry.id))
       let threw: unknown = null
       try {
-        await reassignTaskQuestion(db, entry.id, OTHER, actor)
+        await reassignTaskQuestion(db, taskExecutionParticipants, entry.id, OTHER, actor)
       } catch (e) {
         threw = e
       }
@@ -2405,8 +2434,8 @@ describeEachProviderHttpApplication(
           retryIndex: 0,
           iteration: 0,
         })
-        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-          withO2Closure({
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+          ...withO2Closure({
             kind: 'cross',
             db,
             taskId,
@@ -2417,7 +2446,8 @@ describeEachProviderHttpApplication(
             loopIter: 0,
             questions: [mkQ(qid, 'designer-scoped?')],
           }),
-        )
+          taskExecutionParticipants,
+        })
         return crossClarifyNodeRunId
       }
       const ccA = await open('q_a', 'cc_a', D1, 'a1')
@@ -2483,12 +2513,14 @@ describeEachProviderHttpApplication(
 
       // Lazy reconcile (listTaskQuestions) must NOT mint a designer entry for a stop
       // round → no eternal park. (The questioner entry is still created.)
-      const list = await listTaskQuestions(db, taskId)
+      const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(list.some((e) => e.roleKind === 'questioner')).toBe(true)
       expect(list.some((e) => e.roleKind === 'designer')).toBe(false)
       expect((await designerEntries(db, taskId)).length).toBe(0)
       // The deferred gate stays EMPTY — the task does not get stuck awaiting_human.
-      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
+      expect(
+        (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size,
+      ).toBe(0)
     })
   },
 )
@@ -2619,8 +2651,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -2631,7 +2663,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
           loopIter: 0,
           questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       return crossClarifyNodeRunId
     }
     const ccA = await open('q_a', 'cc_a', DESIGNER)
@@ -2716,7 +2749,9 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     expect((await designerEntries(db, seed.taskId)).every((e) => e.dispatchedAt !== null)).toBe(
       true,
     )
-    expect((await loadUndispatchedDesignerTargets(db, seed.taskId)).size).toBe(0)
+    expect(
+      (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, seed.taskId)).size,
+    ).toBe(0)
   })
 
   test('cascade: once A reruns fresh, deriveFrontier re-dispatches the downstream B (B minted by the SCHEDULER, not dispatch)', async () => {
@@ -2737,7 +2772,11 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     // BOTH entries are dispatched (dispatched_at set) → NEITHER node is in the deferred
     // park set anymore; DOWN is re-dispatched purely by RFC-074 freshness (its draft
     // consumed DESIGNER's OLD run → stale once DESIGNER reran).
-    const deferred = await loadUndispatchedDesignerTargets(db, seed.taskId)
+    const deferred = await loadUndispatchedDesignerTargets(
+      db,
+      taskExecutionParticipants,
+      seed.taskId,
+    )
     expect(deferred.size).toBe(0)
     const f = await deriveFrontier(
       rows,
@@ -2881,7 +2920,7 @@ describeEachProvider(
       // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
-      await reassignTaskQuestion(db, entry.id, OTHER, actor) // default DESIGNER, reassigned to OTHER (run moves)
+      await reassignTaskQuestion(db, taskExecutionParticipants, entry.id, OTHER, actor) // default DESIGNER, reassigned to OTHER (run moves)
       const result = await dispatchTaskQuestions(
         db,
         taskExecutionParticipants,
@@ -2897,6 +2936,7 @@ describeEachProvider(
         .set({ sealedAt: Date.now() })
         .where(eq(taskQuestions.id, entry.id))
       const ctx = await buildClarifyQueueContext({
+        taskExecutionParticipants,
         db,
         definition: liveDef(),
         taskId,
@@ -2939,6 +2979,7 @@ describeEachProvider(
         .set({ sealedAt: Date.now() })
         .where(eq(taskQuestions.id, entry.id))
       const ctx = await buildClarifyQueueContext({
+        taskExecutionParticipants,
         db,
         definition: liveDef(),
         taskId,

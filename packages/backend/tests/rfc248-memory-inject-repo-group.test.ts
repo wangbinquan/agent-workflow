@@ -1,3 +1,4 @@
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 // RFC-248 PR-4 T31 —— 仓库组记忆注入（D4）。
 //
 // 这条是本 RFC 的头号特性之一「记忆也可以绑定在仓库组上」的落地锁。三条语义
@@ -72,12 +73,15 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
     await seedMemory(db, 'repo', fe, 'FE-RULE')
     await seedMemory(db, 'repo', be, 'BE-RULE')
 
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [fe, be],
-      repoGroupId: groupId,
-    })
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [fe, be],
+        repoGroupId: groupId,
+      },
+    )
     expect(set.byScope.repoGroup.map((m) => m.title)).toEqual(['GROUP-RULE'])
     // 两个成员仓的记忆都在——不是只有 repos[0] 那一个。
     expect(set.byScope.repo.map((m) => m.title).sort()).toEqual(['BE-RULE', 'FE-RULE'])
@@ -89,12 +93,15 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
     await seedMemory(db, 'repo_group', groupId, 'GROUP-RULE')
     await seedMemory(db, 'repo', fe, 'FE-RULE')
 
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [fe],
-      repoGroupId: null, // 单仓直启
-    })
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [fe],
+        repoGroupId: null, // 单仓直启
+      },
+    )
     expect(set.byScope.repoGroup).toEqual([])
     expect(set.byScope.repo.map((m) => m.title)).toEqual(['FE-RULE'])
   })
@@ -106,12 +113,15 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
     await seedMemory(db, 'repo_group', mine, 'MINE')
     await seedMemory(db, 'repo_group', other, 'OTHER')
 
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [fe],
-      repoGroupId: mine,
-    })
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [fe],
+        repoGroupId: mine,
+      },
+    )
     expect(set.byScope.repoGroup.map((m) => m.title)).toEqual(['MINE'])
   })
 
@@ -133,24 +143,30 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
         version: 1,
       })
     }
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [],
-      repoGroupId: groupId,
-    })
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [],
+        repoGroupId: groupId,
+      },
+    )
     expect(set.byScope.repoGroup.map((m) => m.title)).toEqual(['OK'])
   })
 
   test('删组把记忆置 archived ⇒ 注入立即停止（G5 的闭环验证）', async () => {
     const groupId = ulid()
     await seedMemory(db, 'repo_group', groupId, 'RULE')
-    const before = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [],
-      repoGroupId: groupId,
-    })
+    const before = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [],
+        repoGroupId: groupId,
+      },
+    )
     expect(before.byScope.repoGroup).toHaveLength(1)
 
     const { memories } = tablesOf(db)
@@ -158,23 +174,29 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
       .update(memories)
       .set({ status: 'archived' })
       .where(eq(memories.scopeType, 'repo_group'))
-    const after = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [],
-      repoGroupId: groupId,
-    })
+    const after = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [],
+        repoGroupId: groupId,
+      },
+    )
     expect(after.byScope.repoGroup).toEqual([])
   })
 
   test('空 repoIds 跳过 repo 档（scratch 任务）', async () => {
     await seedMemory(db, 'global', null, 'G')
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      repoIds: [],
-      repoGroupId: null,
-    })
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        repoIds: [],
+        repoGroupId: null,
+      },
+    )
     expect(set.byScope.repo).toEqual([])
     expect(set.byScope.global.map((m) => m.title)).toEqual(['G'])
   })
@@ -182,13 +204,16 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
   test('同一个仓在组里出现两次（D14）不会把它的记忆注入两遍', async () => {
     const app = await seedRepo(db, 'app')
     await seedMemory(db, 'repo', app, 'APP-RULE')
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId: null,
-      // 调用方已去重，但即便没去重，IN (...) 也只会命中一次行。
-      repoIds: [app, app],
-      repoGroupId: null,
-    })
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId: null,
+        // 调用方已去重，但即便没去重，IN (...) 也只会命中一次行。
+        repoIds: [app, app],
+        repoGroupId: null,
+      },
+    )
     expect(set.byScope.repo.map((m) => m.title)).toEqual(['APP-RULE'])
   })
 })

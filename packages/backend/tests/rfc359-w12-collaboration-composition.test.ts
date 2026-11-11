@@ -1,3 +1,4 @@
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { legacyContentRef } from '@/platform/content/contentRef'
@@ -79,7 +80,9 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
   const memoryOperations = composeMemoryOperationsFor({
-    clarifyAnswers: createClarifyAnswerQueries(db),
+    taskNodeRuns: createNodeRunQueries(db),
+    taskNodeOutputs: createNodeOutputQueries(db),
+    clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(APP_HOME, 'runs')),

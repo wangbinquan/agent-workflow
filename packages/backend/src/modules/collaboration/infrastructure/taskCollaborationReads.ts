@@ -85,7 +85,10 @@ export function createTaskRecoveryHumanGateFacts(db: PersistenceDb): RecoveryHum
   }
 }
 
-export function createTaskNodeRunClarifyNav(db: PersistenceDb): NodeRunClarifyNav {
+export function createTaskNodeRunClarifyNav(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+): NodeRunClarifyNav {
   return {
     async latestRoundStatusByRun(taskId) {
       const { clarifyRounds } = tablesOf(db)
@@ -98,7 +101,7 @@ export function createTaskNodeRunClarifyNav(db: PersistenceDb): NodeRunClarifyNa
         })
         .from(clarifyRounds)
         .where(eq(clarifyRounds.taskId, taskId))
-      const history = await readClarifyHistory(db, { taskId })
+      const history = await readClarifyHistory(db, taskExecutionParticipants, { taskId })
       const rounds = [
         ...liveRounds,
         ...history.filter((old) => !liveRounds.some((row) => row.id === old.id)),

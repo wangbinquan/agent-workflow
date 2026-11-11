@@ -15,6 +15,9 @@ import type {
   HumanGateNodeRunMintOperations,
 } from '@/modules/task-execution/public/participants'
 import type {
+  TaskGateQueries,
+  TaskNodeOutputReads,
+  TaskNodeRunReads,
   TaskRunSelectionReads,
   TaskSubjectQueries,
 } from '@/modules/task-execution/public/types'
@@ -55,4 +58,18 @@ export interface TaskExecutionParticipantBindings {
   ) => TaskClarifyDirectivePersistence
   readonly createTaskSubjectQueries: (db: PersistenceDb) => TaskSubjectQueries
   readonly createRunSelectionReader: (db: PersistenceDb) => TaskRunSelectionReads
+  // RFC-485: the row-shape reads (node runs, node outputs, task gate contexts), typed with the closed reads task-execution
+  // offers. Same rule: each call site passes the handle it holds.
+  readonly createNodeRunQueries: (db: PersistenceDb) => TaskNodeRunReads
+  readonly createTaskGateQueries: (db: PersistenceDb) => TaskGateQueries
+  readonly createNodeOutputQueries: (db: PersistenceDb) => TaskNodeOutputReads
 }
+
+/**
+ * RFC-485: the slice of the bindings the read-only clarify-history projection needs. The full bindings satisfy it; memory's
+ * assembly, which runs before task-execution's permits exist, supplies just these two query factories.
+ */
+export type TaskNodeRunQueryBinding = Pick<
+  TaskExecutionParticipantBindings,
+  'createNodeRunQueries' | 'createTaskGateQueries'
+>

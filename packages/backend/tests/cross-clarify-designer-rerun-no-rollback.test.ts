@@ -56,12 +56,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
@@ -214,8 +214,8 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
 
       // Seed an awaiting cross round, answer it, then reassign to the designer + dispatch — the
       // designer rerun comes out of the unified dispatch (RFC-162: via reassign, not scope).
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -226,7 +226,8 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
           loopIter: 0,
           questions: [makeQ('q1')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-120 — route test for /api/tasks/:id/questions (list + confirm / reassign /
 // stage). The daemon TOKEN actor is the '__system__' user; seeding the task with
 // ownerUserId='__system__' makes it the owner so the member/visibility gates pass
@@ -110,7 +111,7 @@ async function seedSelfAnswered(db: PersistenceDb, taskId: string) {
     status: 'answered',
   })
   // RFC-132: dispatch+bind 取代 consumption-stamp seed(相位读 entry 自身 dispatch 状态)。
-  const [pre] = await listTaskQuestions(db, taskId)
+  const [pre] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
   await db
     .update(taskQuestions)
     .set({ dispatchedAt: Date.now(), triggerRunId: `${taskId}-h` })

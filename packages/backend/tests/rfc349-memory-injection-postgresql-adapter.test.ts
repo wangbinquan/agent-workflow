@@ -1,3 +1,4 @@
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import { expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
@@ -70,7 +71,7 @@ describeEachProvider('RFC-349 runtime memory injection', (h) => {
       })
     const recording = h.recordStatements()
     const fake = {
-      store: new DrizzleMemoryInjectionReadStore(h.db),
+      store: new DrizzleMemoryInjectionReadStore(h.db, createNodeRunQueries(h.db)),
       executions: recording.statements,
     }
 
@@ -122,7 +123,7 @@ describeEachProvider('RFC-349 runtime memory injection', (h) => {
       status: 'running',
       retryIndex: 1,
     })
-    const fake = { store: new DrizzleMemoryInjectionReadStore(h.db) }
+    const fake = { store: new DrizzleMemoryInjectionReadStore(h.db, createNodeRunQueries(h.db)) }
 
     await expect(
       loadInjectedSnapshotFromFirstAttempt(fake.store, {

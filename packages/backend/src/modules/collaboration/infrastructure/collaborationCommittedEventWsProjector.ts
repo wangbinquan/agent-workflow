@@ -18,10 +18,8 @@
 // 评审门挑「哪一份待审文档」的 `item_index ASC`（NULL = RFC-079 单文档判别位）与澄清决定
 // 回落读模型时的 `dispatched_at DESC`（NULL = 尚未下发）。两条都在对拍里带变异验证。
 
-import {
-  type TaskGateDefinitionContext,
-  createTaskGateQueries,
-} from '@/modules/task-execution/public/queries'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
+import { type TaskGateDefinitionContext } from '@/modules/task-execution/public/queries'
 
 import { decodeLegacyClarifyArray } from './clarifyAnswerCodec'
 import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
@@ -109,6 +107,7 @@ function selfSession(
 
 async function openFrames(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   event: CollaborationCommittedV1,
 ): Promise<readonly CollaborationProjectionFrame[]> {
   const gate = event.payload.gate
@@ -163,7 +162,8 @@ async function openFrames(
     ]
   }
   const task = (
-    await createTaskGateQueries(db)
+    await taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listDefinitionContexts([round.taskId])
       .then((rows) =>
         rows.map((row) => ({ name: row.name, workflowSnapshot: row.workflowSnapshot })),
@@ -305,19 +305,22 @@ async function clarifyDecisionFrames(
 
 async function projectionFrames(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   event: CollaborationCommittedV1,
 ): Promise<readonly CollaborationProjectionFrame[]> {
   if (event.payload.projectionFrames.length > 0) return event.payload.projectionFrames
-  if (event.type === 'collaboration.human-gate-opened.v1') return await openFrames(db, event)
+  if (event.type === 'collaboration.human-gate-opened.v1')
+    return await openFrames(db, taskExecutionParticipants, event)
   return await clarifyDecisionFrames(db, event)
 }
 
 export function createCollaborationCommittedEventProjection(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
 ): CollaborationCommittedEventProjection {
   return Object.freeze({
     async frames(event: CollaborationCommittedV1) {
-      return await projectionFrames(db, event)
+      return await projectionFrames(db, taskExecutionParticipants, event)
     },
   })
 }

@@ -76,19 +76,16 @@ export type NodeRunDispatchFacts = Omit<
   'rerunCause' | 'mergeState'
 > & { readonly rerunCause: string | null; readonly mergeState: string | null }
 
-export interface NodeRunQueries {
+/**
+ * RFC-485: the node-run reads other contexts use — collaboration through the participant bindings, memory through its
+ * assembly input. Offered from `public/types`; {@link NodeRunQueries} adds the reads only task-execution itself uses.
+ */
+export interface TaskNodeRunReads {
   listHistory(input: NodeRunFactsQuery): Promise<readonly NodeRunHistoryFactSnapshot[]>
   listHistoryFields<K extends keyof NodeRunFactSnapshot>(
     input: NodeRunFactsQuery,
     fields: readonly K[],
   ): Promise<readonly Pick<NodeRunHistoryFactSnapshot, K>[]>
-
-  heldSession(runId: string): Promise<{ readonly sessionId: string } | undefined>
-  heldSessionRunIds(taskId: string): Promise<readonly string[]>
-  listResumeRuns(
-    taskId: string,
-    mountPaths: readonly string[],
-  ): Promise<readonly NodeRunCheckpointSnapshot[]>
   humanGateProjection(runIds: readonly string[]): Promise<readonly HumanGateNodeProjectionMember[]>
   listDispatchFacts(input: NodeRunFactsQuery): Promise<readonly NodeRunDispatchFacts[]>
   listHistoryDispatchFacts(input: NodeRunFactsQuery): Promise<readonly NodeRunDispatchFacts[]>
@@ -97,14 +94,6 @@ export interface NodeRunQueries {
   ): Promise<
     readonly Pick<
       NodeRunHistoryFactSnapshot,
-      'id' | 'taskId' | 'nodeId' | 'status' | 'retryIndex' | 'finishedAt'
-    >[]
-  >
-  latestPerNode(
-    taskIds: readonly string[],
-  ): Promise<
-    readonly Pick<
-      NodeRunFactSnapshot,
       'id' | 'taskId' | 'nodeId' | 'status' | 'retryIndex' | 'finishedAt'
     >[]
   >
@@ -120,4 +109,21 @@ export interface NodeRunQueries {
   ): Promise<readonly Pick<NodeRunFactSnapshot, K>[]>
   read(runId: string): Promise<NodeRunFactSnapshot | null>
   list(input: NodeRunFactsQuery): Promise<readonly NodeRunFactSnapshot[]>
+}
+
+export interface NodeRunQueries extends TaskNodeRunReads {
+  heldSession(runId: string): Promise<{ readonly sessionId: string } | undefined>
+  heldSessionRunIds(taskId: string): Promise<readonly string[]>
+  listResumeRuns(
+    taskId: string,
+    mountPaths: readonly string[],
+  ): Promise<readonly NodeRunCheckpointSnapshot[]>
+  latestPerNode(
+    taskIds: readonly string[],
+  ): Promise<
+    readonly Pick<
+      NodeRunFactSnapshot,
+      'id' | 'taskId' | 'nodeId' | 'status' | 'retryIndex' | 'finishedAt'
+    >[]
+  >
 }

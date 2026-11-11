@@ -10,13 +10,13 @@ import {
   composeRealtimeTaskFacts,
   composeSubjectTaskReferencePort,
   composeHumanGateTaskLockPort,
+  createTaskGateQueries,
 } from '@/modules/task-execution/composition'
 import {
   composeReviewUpstreamAgents,
   composeRealtimeResourceAcl,
 } from '@/modules/resource-catalog/composition'
 import { composeTaskCollaborationReads } from '@/modules/collaboration/composition'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { DrizzleRealtimeStore } from '@/modules/runtime-management/infrastructure/realtimeStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

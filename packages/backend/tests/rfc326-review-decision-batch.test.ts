@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -495,6 +496,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       f = await buildSingle()
       events = countTaskEvents(f.taskId)
       const earlier = await addReviewComment({
+        taskExecutionParticipants,
         reviewReader: epoch2ReviewReader(f.db, f.appHome),
 
         db: f.db,
@@ -564,6 +566,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       // The upstream re-run prompt sees ALL comments.
       const ctx = await buildReviewPromptContext(
         f.db,
+        taskExecutionParticipants,
         f.appHome,
         'doc',
         f.taskId,
@@ -582,6 +585,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
     test('a batch comment identical to an existing row is skipped, not duplicated', async () => {
       f = await buildSingle()
       await addReviewComment({
+        taskExecutionParticipants,
         reviewReader: epoch2ReviewReader(f.db, f.appHome),
 
         db: f.db,

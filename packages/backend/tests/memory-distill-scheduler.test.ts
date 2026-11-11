@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 // RFC-041 — distill scheduler tests (PR2 scope).
 //
 // Drives `distillTick` synchronously (no setInterval) with a deterministic
@@ -68,7 +70,12 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-provider-'))
   process.env.AGENT_WORKFLOW_HOME = root
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+    store: new DrizzleMemoryDistillWorkStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+      createNodeRunQueries(db),
+      createNodeOutputQueries(db),
+    ),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

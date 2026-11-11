@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import {
   createConsumedInputsParticipantInTx,
   createHumanGatePersistenceParticipantInTx,
@@ -157,6 +159,7 @@ describeEachProvider('RFC-395 C open v2', (h) => {
         createNodeRunMintParticipantInTx(tx),
         createNodeRunLifecycleParticipantInTx(tx),
         createConsumedInputsParticipantInTx(),
+        createNodeRunQueries(tx),
         // @ts-expect-error The negative case deliberately omits the now-required provider.
         historyRestrictions,
       )
@@ -365,10 +368,11 @@ describeEachProvider('RFC-395 C open v2', (h) => {
       createdAt: 30,
       updatedAt: 30,
     })
-    const result = await createCommittedHumanInputQueries({ db: h.db, content }).reviewDecision(
-      f.taskId,
-      nodeRunId,
-    )
+    const result = await createCommittedHumanInputQueries({
+      taskExecutionParticipants,
+      db: h.db,
+      content,
+    }).reviewDecision(f.taskId, nodeRunId)
     expect(result).toMatchObject({
       receiptId: operationId,
       decision: 'approved',
@@ -602,6 +606,7 @@ describeEachProvider('RFC-395 C open v2', (h) => {
     expect((await f.operations.listArtifacts(r.prepared.operation.id))[0]!.state).toBe('consumed')
     let contentReads = 0
     const context = createCollaborationCommandContext({
+      taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       db: h.db,
       taskLock: createHumanGatePersistenceParticipantInTx,
@@ -727,10 +732,11 @@ describeEachProvider('RFC-395 C open v2', (h) => {
         updatedAt: 30,
       })
       expect(
-        await createCommittedHumanInputQueries({ db: h.db, content }).reviewDecision(
-          f.taskId,
-          r.nodeRunId,
-        ),
+        await createCommittedHumanInputQueries({
+          taskExecutionParticipants,
+          db: h.db,
+          content,
+        }).reviewDecision(f.taskId, r.nodeRunId),
       ).toMatchObject({ documentDigests: [sha256Hex(body)] })
       // An existing but changed final file is an error, not a reason to use staged bytes.
       await writeFile(join(root, finalPath), 'changed')
@@ -990,6 +996,7 @@ describeEachProvider('RFC-395 C open v2', (h) => {
       },
     }
     const context = createCollaborationCommandContext({
+      taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       content: epoch2RuntimeTestPorts(h.db).content,
       db: h.db,

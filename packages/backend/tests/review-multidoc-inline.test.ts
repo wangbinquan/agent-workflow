@@ -213,18 +213,21 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
   test('approve emits the accepted subset as list<markdown> (bodies, boundary-joined)', async () => {
     const { reviewNodeRunId, docs } = await seedAndDispatch()
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[0]!.id,
       selection: 'accepted',
     })
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[1]!.id,
       selection: 'not_accepted',
     })
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[2]!.id,

@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 // RFC-359 W12 —— required composition inputs keep their constructed capability in the result
 // type. These tests execute the returned capabilities on both database engines; the assignments
@@ -76,7 +78,9 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   test('memory: a catalog binding yields a usable catalog through every composition name', async () => {
     const options = {
       db: harness.db,
-      clarifyAnswers: createClarifyAnswerQueries(harness.db),
+      clarifyAnswers: createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
+      taskNodeRuns: createNodeRunQueries(harness.db),
+      taskNodeOutputs: createNodeOutputQueries(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),
@@ -112,7 +116,9 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   test('memory: omitted or optional bindings keep the distill-only contract', async () => {
     const options = {
       db: harness.db,
-      clarifyAnswers: createClarifyAnswerQueries(harness.db),
+      clarifyAnswers: createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
+      taskNodeRuns: createNodeRunQueries(harness.db),
+      taskNodeOutputs: createNodeOutputQueries(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),
@@ -131,7 +137,10 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
       optional,
       composeSqliteMemoryOperations(options),
       composePostgresqlMemoryOperations(options),
-      composeMemoryOperationsFor({ ...options, catalogBinding: undefined }),
+      composeMemoryOperationsFor({
+        ...options,
+        catalogBinding: undefined,
+      }),
     ]) {
       expect(module.catalog).toBeUndefined()
       expect(Object.hasOwn(module, 'catalog')).toBe(false)

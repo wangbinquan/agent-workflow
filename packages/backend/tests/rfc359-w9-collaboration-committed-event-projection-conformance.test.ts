@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W9 —— `CollaborationCommittedEventProjection` 的双引擎对拍。
@@ -92,7 +93,7 @@ afterAll(() => {
 
 /** 生产装配的唯一工厂：两个 daemon 都走它（`cli/start.ts:698` / `:2605`）。 */
 function projectionFor(harness: ProviderHarness): CollaborationCommittedEventProjection {
-  return createCollaborationCommittedEventProjection(harness.db)
+  return createCollaborationCommittedEventProjection(harness.db, taskExecutionParticipants)
 }
 
 function definition(): WorkflowDefinition {

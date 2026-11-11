@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -116,7 +118,12 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       }
       const db = harness.db
       const memory = {
-        store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+        store: new DrizzleMemoryDistillWorkStore(
+          db,
+          createClarifyAnswerQueries(db, taskExecutionParticipants),
+          createNodeRunQueries(db),
+          createNodeOutputQueries(db),
+        ),
         nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
         reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
           db,

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import {
@@ -192,7 +193,12 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       nodeRunId: string,
       callback: () => Promise<T>,
     ): Promise<T> {
-      const pause = firstCallback && source === h.db && nodeRunId === h.reviewRunId
+      // RFC-485: the review writers pass `{ db, taskExecutionParticipants }` (or their args) as the lock source.
+      const pause =
+        firstCallback &&
+        !('findTaskId' in source) &&
+        source.db === h.db &&
+        nodeRunId === h.reviewRunId
       if (!pause) return original(source, nodeRunId, callback)
       firstCallback = false
       return original(source, nodeRunId, async () => {
@@ -954,6 +960,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
           ),
         () =>
           addReviewComment({
+            taskExecutionParticipants,
             db: h.db,
             appHome: h.appHome,
             nodeRunId: h.reviewRunId,
@@ -987,6 +994,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         h,
         () =>
           addReviewComment({
+            taskExecutionParticipants,
             db: h.db,
             appHome: h.appHome,
             nodeRunId: h.reviewRunId,

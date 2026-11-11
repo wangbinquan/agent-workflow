@@ -10,7 +10,6 @@ import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestric
 // / `acceptHumanGateDecisionTx` / `appendHumanGateDecisionCommittedEvent`。
 // RFC-359 W12：实现与源锁统一改为中立路径，两个引擎继续共用同一事务参与者。
 
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, isNotNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -327,9 +326,9 @@ export async function prepareClarifyDecision(input: {
         manifestJson,
         now: sealed.now,
       })
-      const sourceRows = await createNodeRunQueries(sealed.tx).humanGateProjection([
-        input.originNodeRunId,
-      ])
+      const sourceRows = await input.taskExecutionParticipants
+        .createNodeRunQueries(sealed.tx)
+        .humanGateProjection([input.originNodeRunId])
       const accepted = await input.taskExecutionParticipants
         .createTaskDecisionParticipantInTx(sealed.tx)
         .acceptGateDecisionTx({

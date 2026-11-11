@@ -1,4 +1,4 @@
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
@@ -14,6 +14,11 @@ import { readCommittedReviewDocumentContent } from './humanGateOperationJournal'
 export function createCommittedHumanInputQueries(input: {
   readonly db: PersistenceDb
   readonly content: Pick<ContentStore, 'read'>
+  /** RFC-485: only the node-output query factory (the digital-employee assembly has no task-execution permits). */
+  readonly taskExecutionParticipants: Pick<
+    TaskExecutionParticipantBindings,
+    'createNodeOutputQueries'
+  >
 }): CollaborationHumanInputQueries {
   const { db } = input
   const readBody = async (row: {
@@ -79,7 +84,8 @@ export function createCommittedHumanInputQueries(input: {
         .where(and(eq(docVersions.taskId, taskId), eq(docVersions.reviewNodeRunId, nodeRunId)))
         .orderBy(desc(docVersions.versionIndex))
       const output = (
-        await createNodeOutputQueries(db)
+        await input.taskExecutionParticipants
+          .createNodeOutputQueries(db)
           .readPort(nodeRunId, 'decision_meta', true)
           .then((output) => (output === null ? [] : [output]))
       )[0]

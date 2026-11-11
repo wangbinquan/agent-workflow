@@ -160,6 +160,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
           const [run] = await readNodeRunFixtures(h.db, { id: request.nodeRunId })
           if (!run) throw new Error('host run was not committed')
           const queue = await buildClarifyQueueContext({
+            taskExecutionParticipants,
             db: h.db,
             taskId: f.taskId,
             definition: f.definition,
@@ -176,6 +177,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
           await patchNodeRunFixture(h.db, { id: run.id }, { status: 'done' })
           if (calls.length === 1) {
             const round = await createClarifyRound({
+              taskExecutionParticipants,
               taskRolePolicy: composeCollaborationTaskRolePolicy(),
               db: h.db,
               taskLock: createHumanGatePersistenceParticipantInTx,

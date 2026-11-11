@@ -1,4 +1,4 @@
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import type { TaskNodeRunQueryBinding } from './taskExecutionParticipantBindings'
 import {
   readDispositionArchives,
   initializeDispositionArchives,
@@ -127,6 +127,7 @@ export async function readClarifyHistoryCandidates(
 /** Only history readers call this; archived rows never enter control-channel decisions. */
 export async function readClarifyHistory(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskNodeRunQueryBinding,
   filter: ClarifyHistoryFilter = {},
 ): Promise<readonly ClarifyHistoryRound[]> {
   const candidates = await readClarifyHistoryCandidates(db, filter)
@@ -147,9 +148,9 @@ export async function readClarifyHistory(
   )
   const existing = new Set(
     (
-      await createTaskGateQueries(db).listContexts([
-        ...new Set(candidates.map((row) => row.taskId)),
-      ])
+      await taskExecutionParticipants
+        .createTaskGateQueries(db)
+        .listContexts([...new Set(candidates.map((row) => row.taskId))])
     ).map((task) => task.id),
   )
   return candidates.filter((row) => existing.has(row.taskId) && !live.has(row.id))

@@ -4,9 +4,8 @@ import { contentRefOf, databaseContentText } from '@/platform/content/infrastruc
 import {
   listNodeEventContents,
   createTaskKnowledgeQueries,
-  createNodeOutputQueries,
-  createNodeRunQueries,
 } from '@/modules/task-execution/public/queries'
+import type { TaskNodeOutputReads, TaskNodeRunReads } from '@/modules/task-execution/public/types'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
@@ -41,6 +40,9 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   constructor(
     private readonly db: PersistenceDb,
     private readonly clarifyAnswers: ClarifyAnswerQueries,
+    /** RFC-485: Task Execution's node-run and node-output reads, built by bootstrap on the root db. */
+    private readonly taskNodeRuns: TaskNodeRunReads,
+    private readonly taskNodeOutputs: TaskNodeOutputReads,
     /**
      * RFC-367 test seam; production omits it and gets the real
      * `memory_distill_events` writer. (It replaces the old `capture` argument,
@@ -258,7 +260,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   // RFC-366 agent-run 源：结算的那一行 node_run 本身。
   async listAgentRunSources(ids: readonly string[]) {
-    return createNodeRunQueries(this.db).listHistoryFields({ runIds: ids }, [
+    return this.taskNodeRuns.listHistoryFields({ runIds: ids }, [
       'id',
       'taskId',
       'nodeId',
@@ -279,16 +281,14 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   async listNodeRunOutputs(ids: readonly string[]) {
     if (ids.length === 0) return []
 
-    return await createNodeOutputQueries(this.db)
-      .listActiveContents([...ids])
-      .then((rows) =>
-        rows.map((row) => ({
-          nodeRunId: row.nodeRunId,
-          portName: row.portName,
-          content: row.content,
-          kind: row.kind,
-        })),
-      )
+    return await this.taskNodeOutputs.listActiveContents([...ids]).then((rows) =>
+      rows.map((row) => ({
+        nodeRunId: row.nodeRunId,
+        portName: row.portName,
+        content: row.content,
+        kind: row.kind,
+      })),
+    )
   }
 
   // RFC-366 task-run 源：任务本身的收尾快照。
@@ -305,7 +305,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
    * 在未结算的行上还是 null。
    */
   async listTaskNodeStatuses(taskIds: readonly string[]) {
-    return (await createNodeRunQueries(this.db).latestHistoryPerNode(taskIds)).map((row) => ({
+    return (await this.taskNodeRuns.latestHistoryPerNode(taskIds)).map((row) => ({
       taskId: row.taskId,
       nodeId: row.nodeId,
       nodeRunId: row.id,
@@ -316,7 +316,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listNodeRuns(ids: readonly string[]) {
-    return createNodeRunQueries(this.db).listHistoryFields({ runIds: ids }, [
+    return this.taskNodeRuns.listHistoryFields({ runIds: ids }, [
       'id',
       'promptText',
       'promptPath',

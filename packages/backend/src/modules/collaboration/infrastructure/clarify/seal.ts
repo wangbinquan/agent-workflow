@@ -1,6 +1,5 @@
 import type { TaskExecutionParticipantBindings } from '../taskExecutionParticipantBindings'
 
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 // RFC-128 / RFC-349 — SQLite per-question answer seal primitive.
@@ -211,7 +210,8 @@ export async function sealRoundQuestions(
       // already done/canceled. Same-tx read keeps it TOCTOU-free. failed /
       // interrupted stay answerable (revivable, design §1).
       const owningTask = (
-        await createTaskGateQueries(tx)
+        await args.taskExecutionParticipants
+          .createTaskGateQueries(tx)
           .listContexts([round.taskId])
           .then((rows) => rows.map((row) => ({ status: row.status })))
       )[0]

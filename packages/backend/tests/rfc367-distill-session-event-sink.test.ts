@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-367 T5 — the live distill event sink.
 //
 // It replaces the RFC-043 post-run opencode SQLite walk. The invariant it must
@@ -210,7 +211,7 @@ describeEachProvider(
 
       const view = await composeMemoryDistillQueries(
         db,
-        createClarifyAnswerQueries(db),
+        createClarifyAnswerQueries(db, taskExecutionParticipants),
       ).getJobSessionView(jobId)
       expect(view.attempts).toHaveLength(1)
       const tree = view.attempts[0]!.tree

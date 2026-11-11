@@ -192,8 +192,8 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'self',
       db,
       taskId,
@@ -204,7 +204,8 @@ async function seedSelfRound(
       iteration: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, nodeRunId: clarifyNodeRunId }
 }
 
@@ -228,8 +229,8 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -240,7 +241,8 @@ async function seedCrossRound(
       loopIter: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, nodeRunId: crossClarifyNodeRunId }
 }
 
@@ -413,7 +415,11 @@ describeEachProviderHttpApplication(
       // P5-BC self/questioner park source holds the deferred task until board dispatch).
       expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
       expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
-      const parked = await loadUndispatchedSelfQuestionerTargets(h.db, taskId)
+      const parked = await loadUndispatchedSelfQuestionerTargets(
+        h.db,
+        taskExecutionParticipants,
+        taskId,
+      )
       expect(parked.has('questioner')).toBe(true)
     })
 
@@ -439,9 +445,11 @@ describeEachProviderHttpApplication(
       expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
       expect((await roundOf(h.db, taskId))[0]?.directive).toBe('stop')
       // stop round → no designer entry; the questioner continuation entry parks the questioner home.
-      expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(
-        true,
-      )
+      expect(
+        (await loadUndispatchedSelfQuestionerTargets(h.db, taskExecutionParticipants, taskId)).has(
+          'questioner',
+        ),
+      ).toBe(true)
     })
 
     test('对照（照常）：cross full seal + directive=continue → 200 + 轮 answered', async () => {
@@ -840,9 +848,11 @@ describeEachProviderHttpApplication(
         .where(eq(clarifyRounds.id, round!.id))
       expect(legacy?.directive).toBe('stop')
       expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
-      expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(
-        true,
-      )
+      expect(
+        (await loadUndispatchedSelfQuestionerTargets(h.db, taskExecutionParticipants, taskId)).has(
+          'questioner',
+        ),
+      ).toBe(true)
     })
 
     test('cross PARTIAL seal + directive=stop → 两表 directive 仍 NULL（resolveCrossNodeStopped=false，节点不被提前 short-circuit）', async () => {

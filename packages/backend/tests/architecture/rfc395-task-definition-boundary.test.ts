@@ -603,8 +603,10 @@ test('human gate lifecycle owns an injected journal and forwards the same restri
   )
   expect(source).toContain('consumedInputs: createConsumedInputsParticipantInTx()')
   expect(source).toContain('this.gates.inTransaction(tx, {')
+  // RFC-485: task-execution's node-run reads on the same transaction arrive with the other task participants.
+  expect(source).toContain('nodeRuns: createNodeRunQueries(tx),')
   expect(factory).toMatch(
-    /new DatabaseHumanGateOpenParticipantInTx\(\s*tx,\s*journal,\s*participants\.mint,\s*participants\.lifecycle,\s*participants\.consumedInputs,\s*input\.historyRestrictions,/,
+    /new DatabaseHumanGateOpenParticipantInTx\(\s*tx,\s*journal,\s*participants\.mint,\s*participants\.lifecycle,\s*participants\.consumedInputs,\s*participants\.nodeRuns,\s*input\.historyRestrictions,/,
   )
   const fenceStart = source.indexOf('async function fence(')
   const fenceEnd = source.indexOf('async function parkRevision(')

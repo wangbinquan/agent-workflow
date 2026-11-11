@@ -403,16 +403,19 @@ export async function composeDaemonSession(
     taskLifecycleCommittedEventCodec,
     collaborationCommittedEventCodec,
   )
+  // RFC-482 / RFC-485: one set of task-execution factory references for the collaboration projection and terminal sweep.
+  const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
+    runtime.taskExecutionModules.executionPermits,
+  )
   const committedEventProjectors = [
     runtime.taskExecution.lifecycleProjector,
-    createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
+    createCollaborationWsProjector(
+      createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
+    ),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
-  const terminalSweep = createHumanGateTerminalSweepCommand(
-    db,
-    composeTaskExecutionParticipantBindings(runtime.taskExecutionModules.executionPermits),
-  )
+  const terminalSweep = createHumanGateTerminalSweepCommand(db, taskExecutionParticipants)
   const committedEventDispatcher = createCommittedEventDispatcher({
     persistence: committedEventPersistence,
     workerId: `committed-events-${DAEMON_GENERATION}`,

@@ -1,8 +1,4 @@
 import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
-import {
-  createTaskGateQueries,
-  createNodeRunQueries,
-} from '@/modules/task-execution/public/queries'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -57,7 +53,8 @@ export async function isTaskClarifySuppressed(
   input: CollaborationClarifySuppressionInput,
 ): Promise<boolean> {
   const row = (
-    await createTaskGateQueries(db)
+    await taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listDispatchContexts([input.taskId])
       .then((rows) => rows.map((row) => ({ config: row.workgroupConfig })))
   )[0]
@@ -101,7 +98,8 @@ export async function dismissOpenClarifyParksForAutonomous(
     input.mode ??
     (await (async () => {
       const row = (
-        await createTaskGateQueries(db)
+        await taskExecutionParticipants
+          .createTaskGateQueries(db)
           .listDispatchContexts([input.taskId])
           .then((rows) => rows.map((row) => ({ config: row.workgroupConfig })))
       )[0]
@@ -133,7 +131,9 @@ export async function dismissOpenClarifyParksForAutonomous(
 
     for (const round of open) {
       dismissedSessionCount += 1
-      const parked = await createNodeRunQueries(tx).readFields(round.nodeRunId, ['status'])
+      const parked = await taskExecutionParticipants
+        .createNodeRunQueries(tx)
+        .readFields(round.nodeRunId, ['status'])
       if (parked?.status === 'awaiting_human') {
         await taskExecutionParticipants
           .createHumanGateNodeRunStateParticipantInTx(tx)

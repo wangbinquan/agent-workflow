@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
@@ -23,9 +24,7 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
 import {
-  createTaskGateQueries,
   resolveHandlerRun,
-  createNodeRunQueries,
   type NodeRunFactSnapshot,
   isTurnEngineTaskSubject,
   taskSubjectFromDefinition,
@@ -310,6 +309,7 @@ async function resolveDispatchedEntryHandler(
  *  and/or by phase (board column). */
 export async function listTaskQuestions(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   opts: { sourceNodeId?: string; phase?: TaskQuestionPhase } = {},
 ): Promise<TaskQuestionDTO[]> {
@@ -325,7 +325,8 @@ export async function listTaskQuestions(
   // contract: done/canceled cards are dead, while failed/interrupted cards are
   // temporarily hidden and reappear if the task resumes. The ledger itself is
   // intentionally retained for audit/recovery.
-  const [task] = await createTaskGateQueries(db)
+  const [task] = await taskExecutionParticipants
+    .createTaskGateQueries(db)
     .listContexts([taskId])
     .then((rows) => rows.map((row) => ({ status: row.status })))
   if (task !== undefined && isTerminalTaskStatus(task.status)) return []
@@ -333,9 +334,10 @@ export async function listTaskQuestions(
   const entries = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
   if (entries.length === 0) return []
 
-  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
+  const runs = await taskExecutionParticipants.createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
@@ -499,15 +501,17 @@ function summarizeAnswer(
  *  dispatch isn't stranded. Empty for any non-deferred task (golden-lock). */
 export async function loadUndispatchedDesignerTargets(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义（旧 flag 门移除）。
   const entries = await fetchDesignerParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
 
-  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
+  const runs = await taskExecutionParticipants.createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   return await partitionUndispatchedParkTargets(entries, runs, outputRunIds)
@@ -662,9 +666,10 @@ async function partitionUndispatchedParkTargets(
  *  the deferred flag — always false for non-deferred tasks.) */
 export async function hasUndispatchedDesignerQuestions(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
 ): Promise<boolean> {
-  return (await loadUndispatchedDesignerTargets(db, taskId)).size > 0
+  return (await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)).size > 0
 }
 
 /**
@@ -687,15 +692,17 @@ export async function hasUndispatchedDesignerQuestions(
  */
 export async function loadUndispatchedSelfQuestionerTargets(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
   const entries = await fetchSelfQuestionerParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
 
-  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
+  const runs = await taskExecutionParticipants.createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   return await partitionUndispatchedParkTargets(entries, runs, outputRunIds)
@@ -756,6 +763,7 @@ async function fetchSelfQuestionerParkEntries(
  */
 export async function loadUndispatchedParkTargets(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
@@ -765,9 +773,10 @@ export async function loadUndispatchedParkTargets(
   ]
   if (entries.length === 0) return new Set()
 
-  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
+  const runs = await taskExecutionParticipants.createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   return await partitionUndispatchedParkTargets(entries, runs, outputRunIds)
@@ -805,15 +814,19 @@ async function loadEntry(db: PersistenceDb, entryId: string): Promise<TaskQuesti
 /** Derive one entry's current phase (loads its round + the task's runs). */
 async function deriveEntryPhase(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   entry: TaskQuestionRow,
 ): Promise<TaskQuestionPhase> {
   // RFC-120 §15 — manual question: no clarify round. Phase from the entry's OWN dispatch
   // state (content always answered; no human-answer step) — the SAME resolution the
   // read-side uses for manual rows.
   if (entry.sourceKind === 'manual') {
-    const runs = await createNodeRunQueries(db).list({ taskId: entry.taskId })
+    const runs = await taskExecutionParticipants
+      .createNodeRunQueries(db)
+      .list({ taskId: entry.taskId })
     const outputRunIds = await runIdsWithOutput(
       db,
+      taskExecutionParticipants,
       runs.map((r) => r.id),
     )
     const { handlerRun, dispatchedInFlight } = await resolveDispatchedEntryHandler(
@@ -836,9 +849,12 @@ async function deriveEntryPhase(
     .where(eq(clarifyRounds.intermediaryNodeRunId, entry.originNodeRunId))
     .limit(1)
   if (!round) return entry.stagedAt !== null ? 'staged' : 'pending'
-  const runs = await createNodeRunQueries(db).list({ taskId: entry.taskId })
+  const runs = await taskExecutionParticipants
+    .createNodeRunQueries(db)
+    .list({ taskId: entry.taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
+    taskExecutionParticipants,
     runs.map((r) => r.id),
   )
   // RFC-132: phase 一律从 entry 自身 dispatch 状态派生(dispatched_at + trigger_run_id)。
@@ -863,17 +879,27 @@ async function deriveEntryPhase(
  *  dispatch). Shared so create / reassign / dispatch agree on "runnable". */
 export async function taskNodeHasRun(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   nodeId: string,
 ): Promise<boolean> {
   return (
-    (await createNodeRunQueries(db).listFields({ taskId, nodeId, limit: 1 }, ['id'])).length > 0
+    (
+      await taskExecutionParticipants
+        .createNodeRunQueries(db)
+        .listFields({ taskId, nodeId, limit: 1 }, ['id'])
+    ).length > 0
   )
 }
 
 /** Agent-kind node ids of the task's frozen workflow snapshot (reassign candidates). */
-async function agentNodeIdsForTask(db: PersistenceDb, taskId: string): Promise<Set<string>> {
-  const [t] = await createTaskGateQueries(db)
+async function agentNodeIdsForTask(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+  taskId: string,
+): Promise<Set<string>> {
+  const [t] = await taskExecutionParticipants
+    .createTaskGateQueries(db)
     .listDefinitionContexts([taskId])
     .then((rows) => rows.map((row) => ({ snapshot: row.workflowSnapshot })))
   if (!t) return new Set()
@@ -891,8 +917,14 @@ async function agentNodeIdsForTask(db: PersistenceDb, taskId: string): Promise<S
 // dynamic_workflow task, an agent node coincidentally named '__wg_member__' is a plain single node
 // with no shard ambiguity, so the manual-target ban below must NOT apply. The frozen task subject
 // and workgroup mode are the discriminator, independent of the legacy workgroupId projection.
-async function taskIsTurnEngineWorkgroup(db: PersistenceDb, taskId: string): Promise<boolean> {
-  const [t] = await createTaskGateQueries(db).listDispatchContexts([taskId])
+async function taskIsTurnEngineWorkgroup(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+  taskId: string,
+): Promise<boolean> {
+  const [t] = await taskExecutionParticipants
+    .createTaskGateQueries(db)
+    .listDispatchContexts([taskId])
   return (
     t !== undefined &&
     isTurnEngineTaskSubject(taskSubjectFromDefinition(t), t.workgroupConfig?.launch.mode)
@@ -909,11 +941,12 @@ async function taskIsTurnEngineWorkgroup(db: PersistenceDb, taskId: string): Pro
 // importing it here risks a module-init cycle; the rfc172 test source-locks the two to match.)
 async function assertManualTargetNotSharedMemberHost(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   target: string,
 ): Promise<void> {
   if (target !== '__wg_member__') return
-  if (!(await taskIsTurnEngineWorkgroup(db, taskId))) return
+  if (!(await taskIsTurnEngineWorkgroup(db, taskExecutionParticipants, taskId))) return
   throw new ValidationError(
     'manual-question-workgroup-member-target',
     `cannot target '${target}': it is the shared workgroup member host node (every member assignment shares it, separated by shard_key). A manual question has no shard binding to select a member.`,
@@ -923,13 +956,14 @@ async function assertManualTargetNotSharedMemberHost(
 /** Confirm (已处理待确认 → 完成). Only from awaiting_confirm; pure closure (D5). */
 export async function confirmTaskQuestion(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   entryId: string,
   actor: TaskQuestionActor,
 ): Promise<void> {
   const entry = await loadEntry(db, entryId)
   // Only an awaiting_confirm entry may be confirmed (已处理待确认 → 完成). (RFC-162: the echo
   // any-phase exemption is gone — echo deleted.)
-  const phase = await deriveEntryPhase(db, entry)
+  const phase = await deriveEntryPhase(db, taskExecutionParticipants, entry)
   if (phase !== 'awaiting_confirm') {
     throw new ConflictError(
       TASK_QUESTION_CONFLICT.notAwaitingConfirm,
@@ -970,12 +1004,13 @@ export type ReassignTaskQuestionAction = 'added-designer' | 'removed-designer' |
  *  constraint is the target must be a workflow agent node (Codex F5). */
 export async function reassignTaskQuestion(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   entryId: string,
   targetNodeId: string,
   actor: TaskQuestionActor,
 ): Promise<ReassignTaskQuestionAction> {
   const entry = await loadEntry(db, entryId)
-  const agentNodeIds = await agentNodeIdsForTask(db, entry.taskId)
+  const agentNodeIds = await agentNodeIdsForTask(db, taskExecutionParticipants, entry.taskId)
   if (!canReassign(targetNodeId, agentNodeIds)) {
     throw new ValidationError(
       TASK_QUESTION_CONFLICT.reassignInvalid,
@@ -987,7 +1022,7 @@ export async function reassignTaskQuestion(
   //      there is no single-card default to keep — a reassign genuinely re-targets the one row.
   if (entry.sourceKind === 'manual') {
     // Codex impl gate F3: don't re-target a terminal (confirmed) entry.
-    const phase = await deriveEntryPhase(db, entry)
+    const phase = await deriveEntryPhase(db, taskExecutionParticipants, entry)
     if (phase === 'done') {
       throw new ConflictError(
         TASK_QUESTION_CONFLICT.terminal,
@@ -996,7 +1031,7 @@ export async function reassignTaskQuestion(
     }
     // RFC-120 §15 (Codex re-gate): a manual question reruns its handler, so the handler must
     // have run at least once (else the §18 park gate parks it on a target dispatch can never mint).
-    if (!(await taskNodeHasRun(db, entry.taskId, targetNodeId))) {
+    if (!(await taskNodeHasRun(db, taskExecutionParticipants, entry.taskId, targetNodeId))) {
       throw new ValidationError(
         'manual-question-target-never-run',
         `cannot assign a manual question to '${targetNodeId}': it has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
@@ -1004,7 +1039,12 @@ export async function reassignTaskQuestion(
     }
     // RFC-172 R2-T5 (Codex impl-gate P1): close the reassign bypass — a manual created for
     // '__wg_leader__' (singleton, shard null) must not be MOVED onto the shared '__wg_member__'.
-    await assertManualTargetNotSharedMemberHost(db, entry.taskId, targetNodeId)
+    await assertManualTargetNotSharedMemberHost(
+      db,
+      taskExecutionParticipants,
+      entry.taskId,
+      targetNodeId,
+    )
     // Once dispatched the entry is committed for execution — CAS on `dispatched_at IS NULL` so a
     // concurrent dispatch that won leaves this a 0-row no-op → reject (reopen's job post-dispatch).
     let updated = false
@@ -1038,7 +1078,7 @@ export async function reassignTaskQuestion(
   // ---- CLARIFY question (self/cross): EDIT the designer handler group of (origin, question).
   // Codex impl gate F3: don't edit a terminal (confirmed → 'done') question — it is closed and
   // adding/removing a handler there only records moot intent.
-  const phase = await deriveEntryPhase(db, entry)
+  const phase = await deriveEntryPhase(db, taskExecutionParticipants, entry)
   if (phase === 'done') {
     throw new ConflictError(
       TASK_QUESTION_CONFLICT.terminal,
@@ -1330,6 +1370,7 @@ export interface CreateManualTaskQuestionInput {
  *  prompt builder reads manual_created_by). */
 export async function createManualTaskQuestion(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
@@ -1340,7 +1381,8 @@ export async function createManualTaskQuestion(
   // RFC-120 §15 — task status (re-gate). RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有
   // 任务都是 deferred-dispatch，manual 恒可创建（旧 deferred-only 门移除）。
   const taskRow = (
-    await createTaskGateQueries(db)
+    await taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listContexts([taskId])
       .then((rows) => rows.map((row) => ({ status: row.status })))
   )[0]
@@ -1386,7 +1428,7 @@ export async function createManualTaskQuestion(
   }
   // Same guard as reassign: a manual question is 修订型 (role designer), so its handler
   // must be a workflow AGENT node (canReassign / Codex F5) — never an io/review/wrapper.
-  const agentNodeIds = await agentNodeIdsForTask(db, taskId)
+  const agentNodeIds = await agentNodeIdsForTask(db, taskExecutionParticipants, taskId)
   if (!agentNodeIds.has(target)) {
     throw new ValidationError(
       'manual-question-target-invalid',
@@ -1396,12 +1438,12 @@ export async function createManualTaskQuestion(
   // RFC-172 R2-T5: a manual question cannot target the shared '__wg_member__' host node (see the
   // helper). Gated on the task actually being a turn-engine workgroup — an ordinary workflow with a
   // node coincidentally named '__wg_member__' is unaffected (Codex impl-gate P2).
-  await assertManualTargetNotSharedMemberHost(db, taskId, target)
+  await assertManualTargetNotSharedMemberHost(db, taskExecutionParticipants, taskId, target)
   // (Codex re-gate H1): the handler must have RUN — a manual question reruns its handler, and
   // dispatch's assertSafeFrontierTarget rejects a never-run frontier. A manual has no graph
   // default to fall back to, so without this the row would park on a node dispatch can never
   // mint → stranded awaiting_human. (v1 limit: can't pre-assign to a not-yet-run node.)
-  if (!(await taskNodeHasRun(db, taskId, target))) {
+  if (!(await taskNodeHasRun(db, taskExecutionParticipants, taskId, target))) {
     throw new ValidationError(
       'manual-question-target-never-run',
       `target node '${target}' has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
@@ -1409,6 +1451,7 @@ export async function createManualTaskQuestion(
   }
   const created = await createManualQuestionOpen(
     createCollaborationCommandContext({
+      taskExecutionParticipants: taskExecutionParticipants,
       db,
       taskLock,
       historyRestrictions,

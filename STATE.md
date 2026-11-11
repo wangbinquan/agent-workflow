@@ -16,7 +16,28 @@
 - **附带**：RFC-484 的 Done 文档提交 `86cad5f11`（6 个文档文件）：exact SHA 主 CI run 43071737089 的 70 个 job 里 69 个通过；Backend tests
   （ubuntu-latest shard 43/44）的 `scheduler-wrapper-fanout-e2e`「every nested wrapper kind fails closed with its exact v1-unsupported-inner-kind」
   `[postgresql]` 一例撞默认 5 秒（5.64 s；父提交 `067169518` 的主 CI 同一分片 1.34 s 通过；本提交只改 6 个文档文件，判为 runner 时序偶发红，
-  用例属 RFC-060，未改、未重跑），其后的 `Received: undefined` 是超时后的连带；「CI required」随之红。
+  用例属 RFC-060，未改、未重跑），其后的 `Received: undefined` 是超时后的连带；「CI required」随之红。本 RFC 的落档提交 `4c416ad75`
+  （5 个文档文件）：exact SHA 主 CI run 43079657649 的 70 个 job 里 69 个通过；Backend tests（ubuntu-latest shard 41/44）的
+  `rfc398-start-auto-upgrade-takeover`「N read no active; C registers; P dies; N acquires after takeover」一例多进程接管到点（`barrier/readiness
+  timed out`，子进程 `JSON Parse error`，184 秒；同文件另两条接管用例同次通过，父提交 `86cad5f11` 的同一分片通过）。同一用例在 run
+  42501878538（`a9207cbc0`）红过一次，判为 runner 负载下的偶发红，用例属 RFC-398，未改、未重跑，记入 `docs/audit-backlog.md`；「CI required」
+  随之红。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 两个闭合读取接口按内容落在 task-execution 的 `application/ports`（全量接口 extends 它们），
+  开门参与者的 node-run 读取由 task-execution 按事务交入；C11 task-execution 的 public 撤 7 增 3（三个工厂与 `NodeRunQueries`、
+  `NodeOutputQueries`、`NodeOutputContent`、`TaskGateQueries` 四个类型名撤出 `public/queries`，`public/types` 增 `TaskNodeRunReads`、
+  `TaskNodeOutputReads` 与移来的 `TaskGateQueries`），collaboration 与 memory 的 public 不变；C12 RFC-485 用例覆盖 task-execution 的全部 public
+  文件、collaboration 与 memory 的全部生产文件、bootstrap 的绑定与 memory 模块装配；C13 触及的减速带收紧到实测（`counts.json` 60 项）。
+- **§14 不变量 / S9 退出门**（task-execution ↔ collaboration 这一对的第四步）：public 类型偏差 68 → 65（这一对 22 → 19）；未消费 public 符号
+  91 不变（task-execution、collaboration 为 0，memory 3 不变）；越 DAG 的 offered 文件对 47、跨 context 内部文件对 43 不变；减速带 60 项每项
+  等于实测。
+- **集中验证**（候选基于 `4c416ad75`，验证期间 HEAD 未前进，详见 plan）：开发期用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的源码文本断言，
+  改了 4 个用例；集中验证又查出两处，已修复并复验——`seal.ts` 的 sha256 钉在 `rfc395-serialized-insert-source-locks.json` 里（更新并补评审
+  说明）；node-output 工厂构造时急切取表，改成装配期建一次后用假 db 装配 memory 的 `rfc461` 在装配处抛错（改交占位读取）。backend `tsc`
+  0 错、eslint 无告警；首批 240 个文件 234 个通过（2 个是上面两处，另 4 个撞自带时限）；全量 SQLite 逐文件跑 2,926 个、2,912 个通过，
+  其余 14 个里发布账本一条是导出仓库没有真实历史（对照同样失败，真实仓库 10 / 10），13 个撞用例自带的时限或内部等待：在只放宽时限常量的
+  副本上全部跑完通过（`rfc363-task-workspace-process-recovery` 照 RFC-482 另加轮询兜底）；RFC-485 用例对 HEAD 的代码 7 条红 6 条；
+  PostgreSQL 以 CI 双引擎分片为证据，另把 85 个相关文件接库跑：1,628 条全过（PostgreSQL 一侧 760 条）；架构报告 60 项实测 = `max`，门里
+  只有偏差一项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-11 RFC-484 减速带判据回到「不高于上限即过」：撤回 RFC-479 的低于即红（Done；`design/RFC-484-count-gate-not-above-max/`）
 

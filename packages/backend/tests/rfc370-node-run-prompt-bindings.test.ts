@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -218,7 +220,12 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     const prompts = composeNodeRunPromptOperations(Object.freeze(new Content()))
     let settled = false
     const pending = loadSourceEvents(
-      new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+      new DrizzleMemoryDistillWorkStore(
+        db,
+        createClarifyAnswerQueries(db, taskExecutionParticipants),
+        createNodeRunQueries(db),
+        createNodeOutputQueries(db),
+      ),
       noReviewedContent,
       [job],
       prompts,
@@ -267,7 +274,12 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       },
     })
     const loaded = await loadSourceEvents(
-      new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+      new DrizzleMemoryDistillWorkStore(
+        db,
+        createClarifyAnswerQueries(db, taskExecutionParticipants),
+        createNodeRunQueries(db),
+        createNodeOutputQueries(db),
+      ),
       noReviewedContent,
       [job],
       prompts,
@@ -282,7 +294,12 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       },
     })
     const degraded = await loadSourceEvents(
-      new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+      new DrizzleMemoryDistillWorkStore(
+        db,
+        createClarifyAnswerQueries(db, taskExecutionParticipants),
+        createNodeRunQueries(db),
+        createNodeOutputQueries(db),
+      ),
       noReviewedContent,
       [job],
       rejectingReader,
@@ -331,7 +348,9 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       }
     }
     const memory = composeMemoryOperationsFor({
-      clarifyAnswers: createClarifyAnswerQueries(db),
+      taskNodeRuns: createNodeRunQueries(db),
+      taskNodeOutputs: createNodeOutputQueries(db),
+      clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
       systemAgentBinding: memorySystemAgentBindingForTest(),
       db,
       reviewedArtifacts: noReviewedContent,

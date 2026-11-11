@@ -1,13 +1,10 @@
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskMountWorktreePath } from '@/modules/task-execution/domain/taskMountPath'
 import { eq } from 'drizzle-orm'
 // RFC-395 II-a A7 part 2：横向调用方改走 owner 后保留投影、空值、原字节、排序与事务可见性。
 import { beforeEach, expect, test } from 'bun:test'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import {
-  createNodeRunQueries,
-  createNodeOutputQueries,
-  createTaskTriggerQueries,
-} from '@/modules/task-execution/public/queries'
+import { createTaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import { createTaskDetailQueries } from '@/modules/task-execution/infrastructure/taskDetailQueries'
 import { createTaskPreparationQueries } from '@/modules/task-execution/infrastructure/taskPreparationQueries'
 // RFC-476: task deletion's queries left task-execution public with their only outside consumer.

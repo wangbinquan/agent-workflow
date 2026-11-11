@@ -93,6 +93,7 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
       expect(meta.receiptId).toBe(result.receipt.operationId)
       expect(
         await createCommittedHumanInputQueries({
+          taskExecutionParticipants,
           db,
           content: fixtureContentStore(db, round.appHome),
         }).reviewDecision(round.taskId, round.reviewRunId),

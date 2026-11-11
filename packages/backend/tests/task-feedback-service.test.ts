@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-041 — task feedback service + clarify/review enqueue hooks.
 
 import { taskFixture, workflowFixture } from './helpers/model'
@@ -79,7 +80,7 @@ describeEachProvider('createTaskFeedback', (harness) => {
   let service: TaskFeedbackService
   beforeEach(() => {
     db = harness.db
-    service = new TaskFeedbackService(new DrizzleTaskFeedbackStore(db), {
+    service = new TaskFeedbackService(new DrizzleTaskFeedbackStore(db, taskExecutionParticipants), {
       canManageReviewers: () => true,
       resolveRelationship: async () => ({
         taskVisible: true,

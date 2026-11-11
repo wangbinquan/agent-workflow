@@ -10,7 +10,6 @@ import type { CollaborationTaskRolePolicy } from '../application/ports/collabora
 import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 
 import type { TaskGateContext } from '@/modules/task-execution/public/queries'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   AssignableTaskMemberRole,
@@ -64,10 +63,12 @@ export async function canViewTask(
  */
 export async function assertCanReplaySourceTask(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   actor: Actor,
   sourceTaskId: string,
 ): Promise<void> {
-  const rows = await createTaskGateQueries(db)
+  const rows = await taskExecutionParticipants
+    .createTaskGateQueries(db)
     .listContexts([sourceTaskId])
     .then((rows) => rows.map((row) => ({ id: row.id, ownerUserId: row.ownerUserId })))
   const row = rows[0]
@@ -324,7 +325,8 @@ export async function updateTaskMembers(
   // take arbitrarily long and must not stall reviews / cancels on the same task.
   const commit = await withTaskReviewMutationLock(task.id, async () => {
     const fresh = (
-      await createTaskGateQueries(db)
+      await taskExecutionParticipants
+        .createTaskGateQueries(db)
         .listContexts([task.id])
         .then((rows) => rows.map((row) => ({ id: row.id, ownerUserId: row.ownerUserId })))
     )[0]

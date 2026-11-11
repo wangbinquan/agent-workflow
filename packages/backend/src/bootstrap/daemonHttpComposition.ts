@@ -252,8 +252,13 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     workspace: createTaskCodeWorkspaceQueries(input.db),
   }
   const codeWorkspace = codeReads.workspace
+  // RFC-482 / RFC-485: one set of task-execution factory references for collaboration's task access and route operations.
+  const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
+    taskExecutionProvider.executionPermits,
+  )
   const collaborationTaskAccess = createCollaborationTaskAccessPort(
     input.db,
+    taskExecutionParticipants,
     taskExecutionProvider.taskRolePolicy,
   )
   const taskRoutes = Object.freeze({
@@ -322,9 +327,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     content: (workspaceRef: string) => input.selections.workspaceContent.bind(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
-    taskExecutionParticipants: composeTaskExecutionParticipantBindings(
-      taskExecutionProvider.executionPermits,
-    ),
+    taskExecutionParticipants,
     taskRolePolicy: taskExecutionProvider.taskRolePolicy,
     historyRestrictions: input.historyRestrictions,
     taskLock: composeHumanGateTaskLockPort,

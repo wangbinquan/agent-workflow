@@ -525,6 +525,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
     const ctx = await buildReviewPromptContext(
       h.db,
+      taskExecutionParticipants,
       h.appHome,
       'designer',
       h.taskId,
@@ -554,6 +555,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
     const ctx = await buildReviewPromptContext(
       h.db,
+      taskExecutionParticipants,
       h.appHome,
       'designer',
       h.taskId,

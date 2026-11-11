@@ -738,6 +738,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   交给消费方，会把事务里的读写换到事务外的连接上（PostgreSQL 上读不到本事务未提交的写）。照 RFC-400 的做法：消费方在自己的
   infrastructure 里声明装配输入（工厂引用，可以带句柄），bootstrap 从拥有方的 composition 取工厂交进来，拥有方的 public 只留接口。
   装配点只在根 db 上读写、自己开事务的（例如指令存储的 `set`），才可以在装配期造好实例交入。
+  补充（RFC-485）：决定交实例前，逐个核对消费方的调用点——句柄都是装配时的根 db、都不在事务体内（memory 的节点运行与产出读取即如此，
+  它们改收装配期建好的只读端口；collaboration 的同一批工厂仍交引用）。还要看拥有方的工厂在构造时有没有急切求值：`createNodeOutputQueries`
+  构造时就调 `tablesOf(db)`。原来每次调用时才构造，改成装配期造一次后，用假 db 装配整个模块的用例在装配处就抛错（RFC-485 的 `rfc461`
+  实撞），这类用例改交占位读取。另一种做法：只需要工厂里一两个成员的装配点（数字员工只用 node-output 读取、memory 的澄清答案只用 node-run
+  与 task-gate 两个），参数收成绑定的 `Pick` 切片，不必为了凑齐整份绑定提前造出它依赖的运行时状态。
 - **撤出会连锁**：只被同一 public 文件里另一个导出的签名引用的符号，在那个导出撤掉后变成未消费。按「撤出 → 复采 → 再撤」迭代，直到
   `unconsumed-public-symbols-<context>` 为 0；别凭一次采数的清单一次删完。
 - **判据的盲区会让你删掉还在用的类型**：架构报告的类型形状遍历（`architectureReport.ts` 的 `collectTypeShape`）原先不进
@@ -762,6 +767,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 - **按整行文本批量改 import，会把用例里作负对照的同一行字符串一起改掉**（RFC-481 实撞）：`rfc476` 的负对照把一行
   `import { … } from '@/modules/collaboration/public/participants'` 当输入、期望判据报出这个来源；改指脚本把这行字符串也换成了新路径，期望
   值没变，用例转红。改 import 时按语法树只动 import 声明，或者替换后逐处核对 diff，确认每一处都是真的 import。
+- **语法树 codemod 在某个实参前插参数，会把它头上的指令注释让给新参数**（RFC-485 实撞）：插入点取 `args[i].getStart()`，落在该实参的前导
+  注释之后，于是 `// @ts-expect-error`（以及 `@ts-ignore`、`eslint-disable-next-line`）管到了新插的那一行。`rfc395-gate-open-v2` 的负对照
+  故意传可能为 `undefined` 的 `historyRestrictions`，期望它那一行类型不符；插入 `createNodeRunQueries(tx)` 后注释跑到新参数头上，`tsc` 报
+  这条指令未被使用（TS2578），原来被期望的类型错误也漏了出来。插完逐处看前导注释里有没有这类指令，把它们留在原目标行之上（或者插在
+  `getFullStart()`，让新参数排在注释前面）。
 - **成对复跑里两边都超时，等于这条用例没跑**：「候选与对照失败形态相同」只说明两边负载相同，不说明候选在这条用例上是绿的。RFC-480 的
   preflight capability 账本（预算 180 秒）在本地全量与成对复跑里两边都超时，被归给负载；CI 上它 96 秒跑完，候选真红（账本多 4 条）。两边都
   超时的用例要换能跑完的条件拿到候选的真结果：单独跑并给够时间，或者在同一份语料上直接调同一个判据函数（本例几十秒）。

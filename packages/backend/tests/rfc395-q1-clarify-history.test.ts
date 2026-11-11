@@ -119,7 +119,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
   test('history detail/list/export/access retain answers, drafts and attribution without activating a round', async () => {
     const { bytes } = await seed()
     await initializeClarifyHistory(h.db)
-    const detail = ClarifyRoundSchema.parse(await getClarifyRoundDetail(h.db, 'carrier'))
+    const detail = ClarifyRoundSchema.parse(
+      await getClarifyRoundDetail(h.db, taskExecutionParticipants, 'carrier'),
+    )
     expect(detail).toMatchObject({
       id: 'archived-round',
       answers: JSON.parse(answers),
@@ -127,12 +129,21 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       answerAttributions: JSON.parse(attrs),
     })
     expect(
-      (await listClarifyRoundSummaries(h.db, { taskId: 't', status: 'all' })).map((r) => r.id),
+      (
+        await listClarifyRoundSummaries(h.db, taskExecutionParticipants, {
+          taskId: 't',
+          status: 'all',
+        })
+      ).map((r) => r.id),
     ).toEqual(['archived-round'])
     expect(
-      (await createTaskNodeRunClarifyNav(h.db).latestRoundStatusByRun('t')).get('carrier'),
+      (
+        await createTaskNodeRunClarifyNav(h.db, taskExecutionParticipants).latestRoundStatusByRun(
+          't',
+        )
+      ).get('carrier'),
     ).toBe('answered')
-    const query = createClarifyAnswerQueries(h.db)
+    const query = createClarifyAnswerQueries(h.db, taskExecutionParticipants)
     expect(await query.listSelfQuestions(['archived-round'])).toEqual([
       { id: 'archived-round', taskId: 't', questionsJson: '[]' },
     ])
@@ -146,6 +157,7 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     expect(
       await createCollaborationTaskAccessPort(
         h.db,
+        taskExecutionParticipants,
         composeCollaborationTaskRolePolicy(),
       ).resolveClarifyRoundTask(actor, 'carrier'),
     ).toMatchObject({ roundExists: true, taskId: 't', visible: true })
@@ -156,7 +168,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     expect(section.dispositionEvidence?.[0]?.bytes).toEqual(Uint8Array.from(bytes))
     expect(await createTaskRecoveryHumanGateFacts(h.db).lifecycleClarifyRounds(['t'])).toEqual([])
     await h.db.delete(tablesOf(h.db).tasks).where(eq(tablesOf(h.db).tasks.id, 't'))
-    expect(await listClarifyRoundSummaries(h.db, { status: 'all' })).toEqual([])
+    expect(
+      await listClarifyRoundSummaries(h.db, taskExecutionParticipants, { status: 'all' }),
+    ).toEqual([])
   })
   test('missing archive bytes are a conversion defect, not an empty history result', async () => {
     const { meta } = await seed()
@@ -178,7 +192,7 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     ] as const) {
       const recording = h.recordStatements()
       try {
-        expect(await listClarifyRoundSummaries(h.db, filter)).toEqual([])
+        expect(await listClarifyRoundSummaries(h.db, taskExecutionParticipants, filter)).toEqual([])
       } finally {
         recording.stop()
       }
@@ -188,7 +202,12 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     const recording = h.recordStatements()
     try {
       expect(
-        (await readClarifyHistory(h.db, { status: 'answered', kind: 'self' })).map((r) => r.id),
+        (
+          await readClarifyHistory(h.db, taskExecutionParticipants, {
+            status: 'answered',
+            kind: 'self',
+          })
+        ).map((r) => r.id),
       ).toEqual(['archived-round'])
     } finally {
       recording.stop()
@@ -227,7 +246,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       const recording = h.recordStatements()
       try {
         expect(
-          (await listClarifyRoundSummaries(h.db, { status, limit: 2 })).map((row) => row.id),
+          (
+            await listClarifyRoundSummaries(h.db, taskExecutionParticipants, { status, limit: 2 })
+          ).map((row) => row.id),
         ).toEqual(['new', 'archived-round'])
       } finally {
         recording.stop()
@@ -251,7 +272,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
         'disposition-archive-missing:key',
       )
       if (mode === 'lazy')
-        await expect(readClarifyHistory(h.db)).rejects.toThrow('disposition-archive-missing:key')
+        await expect(readClarifyHistory(h.db, taskExecutionParticipants)).rejects.toThrow(
+          'disposition-archive-missing:key',
+        )
       await rawRows(
         h.db,
         sql`INSERT INTO ${meta('migration_archives')}
@@ -259,7 +282,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
         VALUES ('q1-run', 'archive', 'unit', 'source-journal', 'clarify_rounds', 'logical-row@1', 1, ${bytes.length}, ${bytes})`,
       )
       // No reinitialization: both rejected cache entries must have been evicted.
-      expect((await readClarifyHistory(h.db)).map((row) => row.id)).toEqual(['archived-round'])
+      expect(
+        (await readClarifyHistory(h.db, taskExecutionParticipants)).map((row) => row.id),
+      ).toEqual(['archived-round'])
       expect(await readDispositionArchives(h.db, 'clarify_rounds')).toHaveLength(1)
     }
   })
@@ -279,14 +304,18 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       sql`UPDATE ${meta('migration_archives')} SET bytes = ${malformed}, byte_size = ${malformed.length} WHERE run_id = 'q1-run'`,
     )
     await expect(initializeClarifyHistory(h.db)).rejects.toThrow('clarify-history-identity-missing')
-    await expect(readClarifyHistory(h.db)).rejects.toThrow('clarify-history-identity-missing')
+    await expect(readClarifyHistory(h.db, taskExecutionParticipants)).rejects.toThrow(
+      'clarify-history-identity-missing',
+    )
     await rawRows(
       h.db,
       sql`UPDATE ${meta('migration_archives')} SET bytes = ${bytes}, byte_size = ${bytes.length} WHERE run_id = 'q1-run'`,
     )
     // A new archive admission after repair; do not reset the failed clarify index.
     await initializeDispositionArchives(h.db, 'clarify_rounds')
-    expect((await readClarifyHistory(h.db)).map((row) => row.id)).toEqual(['archived-round'])
+    expect(
+      (await readClarifyHistory(h.db, taskExecutionParticipants)).map((row) => row.id),
+    ).toEqual(['archived-round'])
   })
 
   test('BF-D23 malformed conversion history does not abort daemon composition and remains a read error', async () => {
@@ -297,9 +326,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       dbVersion: 1,
     })
     try {
-      await expect(getClarifyRoundDetail(h.db, 'carrier')).rejects.toThrow(
-        'disposition-archive-missing:key',
-      )
+      await expect(
+        getClarifyRoundDetail(h.db, taskExecutionParticipants, 'carrier'),
+      ).rejects.toThrow('disposition-archive-missing:key')
     } finally {
       await application.dispose()
     }
@@ -320,27 +349,50 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     })
     const paths: readonly [string, number, () => Promise<unknown>][] = [
       ['badge', 1, () => countAwaitingClarifyRounds(h.db, actor)],
-      ['round list', 1, () => listClarifyRounds(h.db, { taskId: 'fresh' })],
-      ['summary list', 1, () => listClarifyRoundSummaries(h.db, { taskId: 'fresh' })],
+      [
+        'round list',
+        1,
+        () => listClarifyRounds(h.db, taskExecutionParticipants, { taskId: 'fresh' }),
+      ],
+      [
+        'summary list',
+        1,
+        () => listClarifyRoundSummaries(h.db, taskExecutionParticipants, { taskId: 'fresh' }),
+      ],
       [
         'detail',
         1,
         async () => {
-          await expect(getClarifyRoundDetail(h.db, 'fresh-run')).rejects.toMatchObject({
+          await expect(
+            getClarifyRoundDetail(h.db, taskExecutionParticipants, 'fresh-run'),
+          ).rejects.toMatchObject({
             code: 'clarify-round-not-found',
           })
         },
       ],
-      ['navigation', 1, () => createTaskNodeRunClarifyNav(h.db).latestRoundStatusByRun('fresh')],
+      [
+        'navigation',
+        1,
+        () =>
+          createTaskNodeRunClarifyNav(h.db, taskExecutionParticipants).latestRoundStatusByRun(
+            'fresh',
+          ),
+      ],
       [
         'memory questions',
         1,
-        () => createClarifyAnswerQueries(h.db).listSelfQuestions(['fresh-round']),
+        () =>
+          createClarifyAnswerQueries(h.db, taskExecutionParticipants).listSelfQuestions([
+            'fresh-round',
+          ]),
       ],
       [
         'memory sources',
         1,
-        () => createClarifyAnswerQueries(h.db).listSelfSources(['fresh-round']),
+        () =>
+          createClarifyAnswerQueries(h.db, taskExecutionParticipants).listSelfSources([
+            'fresh-round',
+          ]),
       ],
       [
         'visibility',
@@ -348,6 +400,7 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
         () =>
           createCollaborationTaskAccessPort(
             h.db,
+            taskExecutionParticipants,
             composeCollaborationTaskRolePolicy(),
           ).resolveClarifyRoundTask(actor, 'fresh-run'),
       ],
@@ -388,11 +441,17 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     ).toHaveLength(1)
     const warm = h.recordStatements()
     try {
-      expect((await getClarifyRoundDetail(h.db, 'carrier')).id).toBe('archived-round')
-      expect(await createTaskNodeRunClarifyNav(h.db).latestRoundStatusByRun('fresh')).toEqual(
-        new Map(),
+      expect((await getClarifyRoundDetail(h.db, taskExecutionParticipants, 'carrier')).id).toBe(
+        'archived-round',
       )
-      expect(await readClarifyHistory(h.db, { taskId: 'fresh' })).toEqual([])
+      expect(
+        await createTaskNodeRunClarifyNav(h.db, taskExecutionParticipants).latestRoundStatusByRun(
+          'fresh',
+        ),
+      ).toEqual(new Map())
+      expect(
+        await readClarifyHistory(h.db, taskExecutionParticipants, { taskId: 'fresh' }),
+      ).toEqual([])
       await h.session.snapshotRead(async (tx) => {
         expect((await readDispositionArchives(tx, 'clarify_rounds'))[0]?.values.task_id).toBe('t')
         expect(
@@ -410,7 +469,9 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       warm.statements.some((row) => /migration_(archives|row_dispositions)/.test(row.sql)),
     ).toBe(false)
     const unrelated = h.recordStatements()
-    await createTaskNodeRunClarifyNav(h.db).latestRoundStatusByRun('fresh')
+    await createTaskNodeRunClarifyNav(h.db, taskExecutionParticipants).latestRoundStatusByRun(
+      'fresh',
+    )
     unrelated.stop()
     expect(unrelated.statements).toHaveLength(1)
   })
@@ -515,9 +576,13 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       status: 'answered',
     })
     expect(await countAwaitingClarifyRounds(h.db, actor('admin', 'admin'))).toBe(0)
-    expect((await getClarifyRoundDetail(h.db, 'carrier')).status).toBe('answered')
+    expect((await getClarifyRoundDetail(h.db, taskExecutionParticipants, 'carrier')).status).toBe(
+      'answered',
+    )
     await h.db.delete(tablesOf(h.db).tasks).where(eq(tablesOf(h.db).tasks.id, 't'))
     expect(await countAwaitingClarifyRounds(h.db, actor('admin', 'admin'))).toBe(0)
-    expect(await listClarifyRoundSummaries(h.db, { status: 'all' })).toEqual([])
+    expect(
+      await listClarifyRoundSummaries(h.db, taskExecutionParticipants, { status: 'all' }),
+    ).toEqual([])
   })
 })

@@ -72,12 +72,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   intermediaryNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === intermediaryNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${intermediaryNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === intermediaryNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${intermediaryNodeRunId}`)
@@ -643,8 +643,8 @@ function registerProviderCases1(provider: ProviderHarness) {
       retryIndex: 0,
       iteration: 0,
     })
-    const { round: session } = await createClarifyRound(
-      withO2Closure({
+    const { round: session } = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db: h.db,
         taskId,
@@ -666,7 +666,8 @@ function registerProviderCases1(provider: ProviderHarness) {
           },
         ],
       }),
-    )
+      taskExecutionParticipants,
+    })
     // RFC-132 PR-B: the unified driver seals + auto-dispatches BOTH the questioner and designer
     // entries and mints both reruns (§6 delta 1 — the questioner now ALWAYS reruns on a cross
     // answer). The 'questioner' node is intentionally absent from this def's nodes, so its minted
@@ -772,8 +773,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     })
 
     // The questioner asked a cross-clarify question (target = designer); answered.
-    const { round: session } = await createClarifyRound(
-      withO2Closure({
+    const { round: session } = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db: h.db,
         taskId,
@@ -795,7 +796,8 @@ function registerProviderCases1(provider: ProviderHarness) {
           },
         ],
       }),
-    )
+      taskExecutionParticipants,
+    })
     // RFC-132 PR-B (§6 delta 1): the unified driver seals + dispatches the QUESTIONER entry AND the
     // designer entry, minting BOTH reruns — the questioner rerun is now eager (a pending row) rather
     // than the old lazy freshness demote, but the behavioral lock is unchanged: whichever fresh

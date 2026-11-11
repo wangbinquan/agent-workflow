@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
@@ -39,7 +41,12 @@ import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function createMemoryDistillTestContext(db: PersistenceDb) {
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+    store: new DrizzleMemoryDistillWorkStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+      createNodeRunQueries(db),
+      createNodeOutputQueries(db),
+    ),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,

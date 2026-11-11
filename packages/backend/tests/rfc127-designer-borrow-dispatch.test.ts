@@ -152,8 +152,8 @@ async function seedTask(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -164,7 +164,8 @@ async function seedTask(
       loopIter: 0,
       questions: [mkQ('q1', 'designer-scoped?')],
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, crossClarifyNodeRunId }
 }
 
@@ -200,7 +201,13 @@ describeEachProvider('RFC-359 rfc127-designer-borrow-dispatch database behavior'
           .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
       )[0]!
       // Reassign the asker upstream to a DIFFERENT agent node → ADDS a designer handler on it.
-      const action = await reassignTaskQuestion(db, questioner.id, OTHER, actor)
+      const action = await reassignTaskQuestion(
+        db,
+        taskExecutionParticipants,
+        questioner.id,
+        OTHER,
+        actor,
+      )
       expect(action).toBe('added-designer')
       const designer = (await designerEntries(db, taskId))[0]!
       expect(designer.defaultTargetNodeId).toBe(OTHER)

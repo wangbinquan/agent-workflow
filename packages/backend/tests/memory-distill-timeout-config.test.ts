@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { distillTick, runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
@@ -43,7 +45,12 @@ function createContext(db: PersistenceDb) {
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-timeout-'))
   process.env.AGENT_WORKFLOW_HOME = root
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+    store: new DrizzleMemoryDistillWorkStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+      createNodeRunQueries(db),
+      createNodeOutputQueries(db),
+    ),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

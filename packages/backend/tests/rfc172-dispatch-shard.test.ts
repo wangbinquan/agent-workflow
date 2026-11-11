@@ -445,6 +445,7 @@ describeEachProvider(
       try {
         await createManualTaskQuestion(
           db,
+          taskExecutionParticipants,
           taskId,
           { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
           actor,
@@ -469,6 +470,7 @@ describeEachProvider(
       await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
         actor,
@@ -491,6 +493,7 @@ describeEachProvider(
       // Manual created for the leader (singleton, shard null) — allowed.
       const { id } = await createManualTaskQuestion(
         db,
+        taskExecutionParticipants,
         taskId,
         { title: 't', body: 'b', targetNodeId: '__wg_leader__' },
         actor,
@@ -501,7 +504,7 @@ describeEachProvider(
       // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
       let threw: unknown = null
       try {
-        await reassignTaskQuestion(db, id, WG_MEMBER_NODE_ID, actor)
+        await reassignTaskQuestion(db, taskExecutionParticipants, id, WG_MEMBER_NODE_ID, actor)
       } catch (e) {
         threw = e
       }

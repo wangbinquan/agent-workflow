@@ -29,6 +29,8 @@ import {
 } from './domain/ownership'
 import type { TaskExecutionPersistence } from './application/ports/taskExecutionPersistence'
 import type { TaskOwnershipPersistence } from './application/ports/taskOwnershipPersistence'
+import type { NodeRunQueries } from './application/ports/nodeRunQueries'
+import { createNodeRunQueries as createNodeRunQueriesWithContent } from './infrastructure/nodeRunQueries'
 
 export const DEFAULT_OWNERSHIP_LEASE_MS = 60_000
 export const DEFAULT_OWNERSHIP_HEARTBEAT_MS = 15_000
@@ -341,6 +343,14 @@ export { createConsumedInputsParticipantInTx } from './infrastructure/consumedIn
 export { createTaskClarifyDirectivePersistence } from './infrastructure/taskClarifyDirectivePersistence'
 export { createTaskSubjectQueries } from './composition/taskSubjectQueries'
 export { createRunSelectionReader } from './infrastructure/runSelection/table/reader'
+// RFC-485: the node-run, node-output and task-gate query factories reach collaboration through the same bindings and
+// memory through its assembly input (task-execution's public keeps only the closed read interfaces). The node-run factory
+// keeps the owner's database content reader, as the public wrapper did.
+export function createNodeRunQueries(db: PersistenceDb): NodeRunQueries {
+  return createNodeRunQueriesWithContent(db)
+}
+export { createNodeOutputQueries } from './infrastructure/nodeOutputQueries'
+export { createTaskGateQueries } from './infrastructure/taskGateQueries'
 // RFC-477: the daemon's resource-limit tick runs task-execution's policy; bootstrap composes its operations (task facts
 // plus system-operations' cancel audit) and schedules it.
 export {

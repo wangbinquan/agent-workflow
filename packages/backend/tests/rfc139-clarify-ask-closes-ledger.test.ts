@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // Target fixture mint order; missing seq is covered only by conversion/rejection tests.
 let fixtureRunSequence = 0
@@ -299,7 +300,9 @@ describeEachProvider(
         // entry's lineage window — the designer ledger resolves to retry 11, not to this).
         await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'clarify-answer' })
 
-        expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
+        expect(
+          await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef()),
+        ).toBeNull()
       })
 
       test('post-bind (Codex design-gate P1): both ledgers rebound to ONE failed run + revival pending → coalesced, no conflict', async () => {
@@ -334,7 +337,9 @@ describeEachProvider(
           // retry 13: the revival (non-clarify cause — falls INSIDE both windows).
           await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'revival' })
 
-          expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
+          expect(
+            await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef()),
+          ).toBeNull()
         }
       })
 
@@ -364,7 +369,9 @@ describeEachProvider(
         })
         await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'cross-clarify-answer' })
 
-        expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
+        expect(
+          await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef()),
+        ).toBeNull()
       })
 
       test('true conflict preserved: dual-queued (∅ vs ∅ anchors) → still rejects', async () => {
@@ -389,7 +396,7 @@ describeEachProvider(
 
         let caught: unknown
         try {
-          await resolveBorrowForNode(db, taskId, D, 0, liveDef())
+          await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef())
         } catch (e) {
           caught = e
         }
@@ -424,7 +431,7 @@ describeEachProvider(
 
         let caught: unknown
         try {
-          await resolveBorrowForNode(db, taskId, D, 0, liveDef())
+          await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef())
         } catch (e) {
           caught = e
         }
@@ -464,7 +471,9 @@ describeEachProvider(
         })
         await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'revival' })
 
-        expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
+        expect(
+          await resolveBorrowForNode(db, taskExecutionParticipants, taskId, D, 0, liveDef()),
+        ).toBeNull()
       })
     })
   },

@@ -37,6 +37,7 @@ import { createConsumedInputsParticipantInTx } from './consumedInputsParticipant
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { createNodeRunQueries } from './nodeRunQueries'
 import {
   assertTaskOwnerTx,
   assertTaskOwnerlessTx,
@@ -110,6 +111,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
       mint: createNodeRunMintParticipantInTx(tx),
       lifecycle: createNodeRunLifecycleParticipantInTx(tx),
       consumedInputs: createConsumedInputsParticipantInTx(),
+      nodeRuns: createNodeRunQueries(tx),
     })
   }
 

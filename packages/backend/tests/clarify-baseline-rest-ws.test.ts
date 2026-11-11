@@ -160,12 +160,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
@@ -208,8 +208,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
         retryIndex: 0,
         iteration: 0,
       })
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -220,8 +220,12 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
           questions: [makeQuestion()],
         }),
-      )
-      const list = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
+        taskExecutionParticipants,
+      })
+      const list = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+        taskId,
+        kind: 'self',
+      })
       expect(list.length).toBe(1)
       const row = list[0]!
       // RFC-058 baseline locks: ClarifySessionSummary wire fields
@@ -243,8 +247,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
         retryIndex: 0,
         iteration: 0,
       })
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -255,8 +259,12 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
-      const list = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
+        taskExecutionParticipants,
+      })
+      const list = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+        taskId,
+        kind: 'cross',
+      })
       expect(list.length).toBe(1)
       const row = list[0]!
       expect(row.taskId).toBe(taskId)
@@ -287,8 +295,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
         },
       ])
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -299,10 +307,11 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await new Promise((r) => setTimeout(r, 5))
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -313,9 +322,16 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
-      const selfList = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
-      const crossList = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
+        taskExecutionParticipants,
+      })
+      const selfList = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+        taskId,
+        kind: 'self',
+      })
+      const crossList = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+        taskId,
+        kind: 'cross',
+      })
       // Simulating the REST route's merge + tag logic.
       const merged = [
         ...selfList.map((r) => ({ ...r, kind: 'self' as const })),
@@ -337,8 +353,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -349,8 +365,9 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
           questions: [makeQuestion({ title: 'detail Q' })],
         }),
-      )
-      const detail = await getClarifyRoundDetail(db, clarifyNodeRunId)
+        taskExecutionParticipants,
+      })
+      const detail = await getClarifyRoundDetail(db, taskExecutionParticipants, clarifyNodeRunId)
       expect(detail.taskId).toBe(taskId)
       expect(detail.intermediaryNodeId).toBe('clarify1')
       expect(detail.questions[0]?.title).toBe('detail Q')
@@ -367,8 +384,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -379,8 +396,13 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           loopIter: 0,
           questions: [makeQuestion({ title: 'cross detail Q' })],
         }),
+        taskExecutionParticipants,
+      })
+      const detail = await getClarifyRoundDetail(
+        db,
+        taskExecutionParticipants,
+        crossClarifyNodeRunId,
       )
-      const detail = await getClarifyRoundDetail(db, crossClarifyNodeRunId)
       expect(detail.taskId).toBe(taskId)
       expect(detail.intermediaryNodeId).toBe('cc1')
       expect(detail.targetConsumerNodeId).toBe('designer')
@@ -402,8 +424,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
       })
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -414,7 +436,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const m = received.find((message) => message.type === 'clarify.created')!
       expect(m.type).toBe('clarify.created')
       expect((m as { clarifyNodeId?: string }).clarifyNodeId).toBe('clarify1')
@@ -434,8 +457,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
       })
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-      await createClarifyRound(
-        withO2Closure({
+      await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -446,7 +469,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const m = received.find((message) => message.type === 'cross-clarify.created')!
       expect(m.type).toBe('cross-clarify.created')
     })
@@ -473,8 +497,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -485,7 +509,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
       await autoDispatchClarifyRoundWithDecision(
@@ -531,8 +556,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -543,7 +568,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
       await autoDispatchClarifyRoundWithDecision(
@@ -573,8 +599,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'self',
           db,
           taskId,
@@ -585,7 +611,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
           iteration: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
       await autoDispatchClarifyRoundWithDecision(

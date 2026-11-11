@@ -54,12 +54,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
@@ -177,8 +177,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -189,7 +189,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       // RFC-162: the designer rerun comes from reassigning the answered round to the graph
       // designer node + dispatching that designer entry (the legacy scope/direct trigger is gone).
       await autoDispatchClarifyRound({
@@ -231,8 +232,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
       // — cci on the cross-clarify node_run is the session iteration. So this
       // test pivots to: session iteration is per (cc, loopIter), not inheriting
       // from the questioner's cci.
-      const { round: session } = await createClarifyRound(
-        withO2Closure({
+      const { round: session } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -243,7 +244,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       expect(session.iteration).toBe(0)
       // RFC-074 PR-C: the cross-clarify node_run no longer carries a cci counter;
       // assert the row exists and is parked for human input.
@@ -277,8 +279,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -289,7 +291,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,
@@ -329,8 +332,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -341,7 +344,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,
@@ -389,8 +393,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-        withO2Closure({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -401,7 +405,8 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           loopIter: 0,
           questions: [makeQuestion()],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,

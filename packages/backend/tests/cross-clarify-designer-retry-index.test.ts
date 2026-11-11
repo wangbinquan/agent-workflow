@@ -63,12 +63,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
@@ -251,8 +251,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 2 })
 
-    const sess = await createClarifyRound(
-      withO2Closure({
+    const sess = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -263,7 +263,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
         loopIter: 0,
         questions: [makeQ('q1')],
       }),
-    )
+      taskExecutionParticipants,
+    })
 
     await autoDispatchClarifyRound({
       taskExecutionParticipants,
@@ -302,8 +303,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 0 })
 
-    const sess = await createClarifyRound(
-      withO2Closure({
+    const sess = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -314,7 +315,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
         loopIter: 0,
         questions: [makeQ('q1')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     await autoDispatchClarifyRound({
       taskExecutionParticipants,
       db,
@@ -355,8 +357,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
       startedAt: 400,
     })
 
-    const sess = await createClarifyRound(
-      withO2Closure({
+    const sess = await createClarifyRound({
+      ...withO2Closure({
         kind: 'cross',
         db,
         taskId,
@@ -367,7 +369,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
         loopIter: 1,
         questions: [makeQ('q1')],
       }),
-    )
+      taskExecutionParticipants,
+    })
     await autoDispatchClarifyRound({
       taskExecutionParticipants,
       db,

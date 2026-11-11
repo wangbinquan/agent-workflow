@@ -1,3 +1,4 @@
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import {
   inlineContentColumns,
@@ -518,6 +519,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
         mintParticipant(tx),
         lifecycleParticipant,
         createConsumedInputsParticipantInTx(),
+        createNodeRunQueries(tx),
         epoch2RuntimeTestPorts(tx).historyRestrictions,
       ).consumePreparedGateTx({
         prepared: preparedHumanGateRef(prepared),

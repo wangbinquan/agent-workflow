@@ -53,8 +53,9 @@ test('recorded readers use the same projection, without their former private par
     expect(memoryViolations(source)).toEqual([])
   }
   expect(memoryViolations(read('modules/memory/application/ports/distillWorkStore.ts'))).toEqual([])
-  expect(read('bootstrap/daemonModules/memory.ts')).toContain(
-    'clarifyAnswers: createClarifyAnswerQueries(input.db)',
+  // RFC-485: the clarify answer queries take the node-run and task-gate query factories they read through.
+  expect(read('bootstrap/daemonModules/memory.ts')).toMatch(
+    /clarifyAnswers: createClarifyAnswerQueries\(input\.db, \{\s*createNodeRunQueries,\s*createTaskGateQueries,?\s*\}\)/,
   )
   expect(read(co + 'public/queries.ts')).not.toContain('export { createClarifyAnswerQueries }')
 })

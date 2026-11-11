@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-349 — memory distill monitoring uses the same Promise query contract for
 // SQLite and PostgreSQL; only the infrastructure adapter sees the DB client.
 
@@ -57,7 +58,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   return {
     queries: composePostgresqlMemoryDistillQueries(
       createPostgresqlDatabaseClient(runtime),
-      createClarifyAnswerQueries(createPostgresqlDatabaseClient(runtime)),
+      createClarifyAnswerQueries(
+        createPostgresqlDatabaseClient(runtime),
+        taskExecutionParticipants,
+      ),
     ),
     executions,
   }

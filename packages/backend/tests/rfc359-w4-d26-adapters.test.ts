@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
@@ -56,6 +57,7 @@ function writerFor(db: PersistenceDb): DatabaseManualQuestionOpenWriter {
       composeHumanGateTaskLockPort,
       epoch2RuntimeTestPorts(db).historyRestrictions,
     ),
+    taskExecutionParticipants,
   )
 }
 

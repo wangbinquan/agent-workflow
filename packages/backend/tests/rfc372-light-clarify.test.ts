@@ -179,13 +179,14 @@ async function seed(
     intermediaryNodeId: 'gate',
     questions,
   }
-  const round = await createClarifyRound(
-    withO2Closure(
+  const round = await createClarifyRound({
+    ...withO2Closure(
       kind === 'self'
         ? { ...common, kind, askingShardKey: null, iteration: 0 }
         : { ...common, kind, targetConsumerNodeId: 'designer', loopIter: 0 },
     ),
-  )
+    taskExecutionParticipants,
+  })
   const read = async () => {
     return (
       await readClarifyRoundFixtures(h.db, { intermediaryNodeRunId: round.intermediaryNodeRunId })
@@ -203,7 +204,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       })
       // Editing the reusable workflow must not silently change an already running task.
       await patchWorkflowFixture(h.db, undefined, { definition: JSON.stringify({ nodes: [] }) })
-      const store = createClarifyFollowupStore(h.db, events)
+      const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
       const snapshot = await store.read(fixture.nodeRunId, [])
       expect(snapshot.categoryPaths).toEqual([['Scope'], ['Performance', 'Database', 'SQL']])
       expect(snapshot.instruction).toBe('')
@@ -273,7 +274,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
   for (const kind of ['self', 'cross'] as const)
     test(`${kind}: persistent shared draft, append idempotency, old-tab rejection and original seal`, async () => {
       const fixture = await seed(h, kind),
-        store = createClarifyFollowupStore(h.db, events)
+        store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
       const save = async (question: ClarifyQuestion, value = answer(question)) =>
         saveClarifyDraft({
           db: h.db,
@@ -365,7 +366,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     })
   test('late generation is rejected after ancestor edit, cancellation, or whole-round submission; failure is retryable', async () => {
     const fixture = await seed(h),
-      store = createClarifyFollowupStore(h.db, events)
+      store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
     const makeRequest = async (): Promise<ClarifyFollowup> => {
       const snap = await store.read(fixture.nodeRunId, 'b')
       return {
@@ -484,7 +485,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       originNodeRunId: fixture.nodeRunId,
       answers: [final],
     })
-    const store = createClarifyFollowupStore(h.db, events)
+    const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
     const snapshot = await store.read(fixture.nodeRunId, 'b')
     expect(snapshot.canAppend).toBe(true)
     expect(snapshot.drafts.a?.selectedOptionIndices).toEqual([1])
@@ -516,7 +517,10 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       ),
     ).toBe(true)
     await expect(
-      createClarifyFollowupStore(h.db, events).read(plain.nodeRunId, 'a'),
+      createClarifyFollowupStore(h.db, taskExecutionParticipants, events).read(
+        plain.nodeRunId,
+        'a',
+      ),
     ).rejects.toThrow('mindmap mode')
     expect(
       (
@@ -539,7 +543,12 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       answers: [answer(map.questions[0]!)],
     })
     expect(
-      (await createClarifyFollowupStore(h.db, events).read(map.nodeRunId, 'a')).canAppend,
+      (
+        await createClarifyFollowupStore(h.db, taskExecutionParticipants, events).read(
+          map.nodeRunId,
+          'a',
+        )
+      ).canAppend,
     ).toBe(false)
     expect(
       (
@@ -564,7 +573,7 @@ describeEachProvider(
       for (const categoryPath of [['Scope'], []])
         test(`${kind}: ${categoryPath.length ? 'category' : 'root'} directions append peers and preserve prior answers`, async () => {
           const fixture = await seed(h, kind)
-          const store = createClarifyFollowupStore(h.db, events)
+          const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
           await saveClarifyDraft({
             db: h.db,
             intermediaryNodeRunId: fixture.nodeRunId,
@@ -639,7 +648,7 @@ describeEachProvider(
 
     test('category generation rejects stale answers and cancellation, and honors partially/finally sealed branches', async () => {
       const fixture = await seed(h)
-      const store = createClarifyFollowupStore(h.db, events)
+      const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
       await sealRoundQuestions({
         taskExecutionParticipants,
         db: h.db,
@@ -741,7 +750,7 @@ describeEachProvider('RFC-378 decision persistence on the original round', (h) =
           draftEvents: events,
         })
       expect(JSON.parse((await fixture.read()).draftAnswers!).a.decision).toEqual(decision)
-      const store = createClarifyFollowupStore(h.db, events)
+      const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, events)
       expect((await store.read(fixture.nodeRunId, 'b')).drafts.a?.decision).toEqual(decision)
       await sealRoundQuestions({
         taskExecutionParticipants,

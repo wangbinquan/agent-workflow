@@ -361,11 +361,17 @@ describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination
       await seedClarifyRound(db, dead.taskId, 'self', r)
     }
     // limit=2 < zombie count: without filter-before-slice the live round vanishes.
-    const page = await listClarifyRoundSummaries(db, { status: 'awaiting_human', limit: 2 })
+    const page = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      status: 'awaiting_human',
+      limit: 2,
+    })
     expect(page.length).toBe(1)
     expect(page[0]!.taskId).toBe(live.taskId)
     // explicit historical query stays unfiltered
-    const all = await listClarifyRoundSummaries(db, { status: 'all', limit: 100 })
+    const all = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      status: 'all',
+      limit: 100,
+    })
     expect(all.length).toBe(4)
   })
 

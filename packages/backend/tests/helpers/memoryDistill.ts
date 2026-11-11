@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -139,7 +141,12 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
     createFileReviewArtifactContent(root),
   )
   return Object.freeze({
-    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
+    store: new DrizzleMemoryDistillWorkStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+      createNodeRunQueries(db),
+      createNodeOutputQueries(db),
+    ),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts,
@@ -148,7 +155,12 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
 
 /** Provider-real test participant for consumers that only enqueue work. */
 export function createSqliteMemoryDistillEnqueuer(db: PersistenceDb): MemoryDistillEnqueuer {
-  const store = new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db))
+  const store = new DrizzleMemoryDistillWorkStore(
+    db,
+    createClarifyAnswerQueries(db, taskExecutionParticipants),
+    createNodeRunQueries(db),
+    createNodeOutputQueries(db),
+  )
   return Object.freeze({
     enqueue: async (input) => await enqueueDistillJob(store, input),
   })

@@ -92,6 +92,7 @@ export function createCollaborationRuntimeMechanics(
       const result =
         input.kind === 'self'
           ? await createClarifyRound({
+              taskExecutionParticipants: dependencies.taskExecutionParticipants,
               ...common,
               kind: 'self',
               askingShardKey: input.askingShardKey,
@@ -103,6 +104,7 @@ export function createCollaborationRuntimeMechanics(
                 : { parentNodeRunId: input.parentNodeRunId }),
             })
           : await createClarifyRound({
+              taskExecutionParticipants: dependencies.taskExecutionParticipants,
               ...common,
               kind: 'cross',
               targetConsumerNodeId: input.targetConsumerNodeId,
@@ -112,12 +114,20 @@ export function createCollaborationRuntimeMechanics(
     },
     async resolveBorrowForNode(input) {
       const { resolveBorrowForNode } = await import('./taskQuestionDispatch')
-      return resolveBorrowForNode(db, input.taskId, input.nodeId, input.iteration, input.definition)
+      return resolveBorrowForNode(
+        db,
+        dependencies.taskExecutionParticipants,
+        input.taskId,
+        input.nodeId,
+        input.iteration,
+        input.definition,
+      )
     },
     async buildReviewPromptContext(input) {
       const { buildReviewPromptContext } = await import('./review')
       return buildReviewPromptContext(
         db,
+        dependencies.taskExecutionParticipants,
         input.appHome,
         input.upstreamNodeId,
         input.taskId,
@@ -127,7 +137,11 @@ export function createCollaborationRuntimeMechanics(
     },
     async buildClarifyQueueContext(input) {
       const { buildClarifyQueueContext } = await import('./clarify/queue')
-      return buildClarifyQueueContext({ db, ...input })
+      return buildClarifyQueueContext({
+        taskExecutionParticipants: dependencies.taskExecutionParticipants,
+        db,
+        ...input,
+      })
     },
     isTaskClarifySuppressed: (input) =>
       isTaskClarifySuppressed(db, dependencies.taskExecutionParticipants, input),

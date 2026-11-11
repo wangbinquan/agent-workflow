@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // RFC-128 P5-A — pre-refactor 锁网（纯测试，零生产改动）。
 //
@@ -265,7 +266,7 @@ describeEachProvider(
       // Designer park source sees ONLY the designer home (D), NOT the self/q home (P) — there is
       // no self/questioner undispatched-park source yet (the stranding root cause P5-0 guards;
       // P5-C will ADD a self/q park source here → this lock turns red and must migrate).
-      const parked = await loadUndispatchedDesignerTargets(db, taskId)
+      const parked = await loadUndispatchedDesignerTargets(db, taskExecutionParticipants, taskId)
       expect(parked.has(D)).toBe(true)
       expect(parked.has(P)).toBe(false)
 

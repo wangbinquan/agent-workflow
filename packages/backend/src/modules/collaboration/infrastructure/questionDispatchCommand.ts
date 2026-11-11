@@ -71,6 +71,7 @@ export function createQuestionDispatchCommandContext(input: {
   readonly role: TaskActorRole
 }): CollaborationCommandContext<'questionDispatches'> {
   return createCollaborationCommandContext({
+    taskExecutionParticipants: input.taskExecutionParticipants,
     taskRolePolicy: input.taskRolePolicy,
     taskLock: input.taskLock,
     historyRestrictions: input.historyRestrictions,

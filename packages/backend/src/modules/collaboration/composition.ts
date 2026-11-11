@@ -79,7 +79,9 @@ export function composeTaskCollaborationReads(
       createTaskArchiveCollaborationSectionReader(taskExecutionParticipants),
     ),
     recovery: composeTaskRecoveryHumanGateFactsPort(createTaskRecoveryHumanGateFacts(db)),
-    clarifyNav: composeTaskNodeRunClarifyNavPort(createTaskNodeRunClarifyNav(db)),
+    clarifyNav: composeTaskNodeRunClarifyNavPort(
+      createTaskNodeRunClarifyNav(db, taskExecutionParticipants),
+    ),
   }
 }
 
@@ -105,7 +107,7 @@ export function composeTaskMembershipOperations(
     updateTaskMembers: (actor, task, body) =>
       updateTaskMembers(db, taskExecutionParticipants, policy, actor, task, body),
     assertCanReplaySourceTask: (actor, sourceTaskId) =>
-      assertCanReplaySourceTask(db, actor, sourceTaskId),
+      assertCanReplaySourceTask(db, taskExecutionParticipants, actor, sourceTaskId),
   })
 }
 

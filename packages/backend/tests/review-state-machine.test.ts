@@ -441,6 +441,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   test('reject archives v1 comments, bumps reviewIteration, mints a new pending upstream run (RFC-011)', async () => {
     // Drop a comment on v1 so we can verify it gets archived.
     await addReviewComment({
+      taskExecutionParticipants,
       reviewReader: epoch2ReviewReader(h.db, h.appHome),
 
       db: h.db,
@@ -570,6 +571,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
 
   test('iterate path: comments → decisionReason; upstream regenerates with iterate context', async () => {
     await addReviewComment({
+      taskExecutionParticipants,
       reviewReader: epoch2ReviewReader(h.db, h.appHome),
 
       db: h.db,

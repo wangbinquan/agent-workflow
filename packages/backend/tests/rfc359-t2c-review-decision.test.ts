@@ -102,13 +102,14 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     const db = harness.db
     round = await seedReviewRound(db)
     const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
-    const context = createCollaborationCommandContext(
-      withO2Closure({
+    const context = createCollaborationCommandContext({
+      ...withO2Closure({
         db,
         appHome: round.appHome,
         reviewDecisions: command,
       }),
-    )
+      taskExecutionParticipants,
+    })
     const result = await submitReviewDecision(context, {
       actor,
       authorRole: 'owner',
@@ -157,6 +158,7 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     round = await seedReviewRound(db)
     const text = 'same large comment '.repeat(5000)
     const added = await addReviewComment({
+      taskExecutionParticipants,
       db,
       appHome: round.appHome,
       nodeRunId: round.reviewRunId,
@@ -277,6 +279,7 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     round = await seedReviewRound(db)
     const authz = { actorUserId: REVIEW_OWNER, role: 'owner' as const }
     const added = await addReviewComment({
+      taskExecutionParticipants,
       db,
       appHome: round.appHome,
       nodeRunId: round.reviewRunId,
@@ -311,6 +314,7 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     round = await seedReviewRound(db, { bodies: ['# doc zero', '# doc one', '# doc two'] })
     const [dv0, dv1, dv2] = round.docVersionIds as [string, string, string]
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: round.reviewRunId,
       docVersionId: dv0,

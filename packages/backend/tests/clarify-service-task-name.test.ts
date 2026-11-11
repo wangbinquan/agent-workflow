@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-037 T4 — locks `listClarifySummaries` joining `tasks.name` onto each
 // summary row. The inbox / clarify list rely on this field being non-empty
 // for ordinary tasks; if the join silently drops the field, every row
@@ -85,7 +86,9 @@ describeEachProvider('RFC-037 — listClarifySummaries joins tasks.name → task
   test('summary row carries taskName equal to tasks.name', async () => {
     const db = harness.db
     await seed(db, { taskName: 'PR-1234 fix' })
-    const summaries = await listClarifyRoundSummaries(db, { status: 'awaiting_human' })
+    const summaries = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      status: 'awaiting_human',
+    })
     expect(summaries.length).toBe(1)
     expect(summaries[0]?.taskName).toBe('PR-1234 fix')
   })
@@ -94,7 +97,9 @@ describeEachProvider('RFC-037 — listClarifySummaries joins tasks.name → task
     const db = harness.db
     await seed(db, { taskName: 'alpha' })
     await seed(db, { taskName: 'beta' })
-    const summaries = await listClarifyRoundSummaries(db, { status: 'awaiting_human' })
+    const summaries = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      status: 'awaiting_human',
+    })
     expect(summaries.length).toBe(2)
     const names = summaries.map((s) => s.taskName).sort()
     expect(names).toEqual(['alpha', 'beta'])
@@ -103,7 +108,9 @@ describeEachProvider('RFC-037 — listClarifySummaries joins tasks.name → task
   test('summary still includes taskName when status filter narrows results', async () => {
     const db = harness.db
     await seed(db, { taskName: 'answered-task', status: 'answered' })
-    const summaries = await listClarifyRoundSummaries(db, { status: 'answered' })
+    const summaries = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      status: 'answered',
+    })
     expect(summaries[0]?.taskName).toBe('answered-task')
   })
 })

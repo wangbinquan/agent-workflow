@@ -1,3 +1,4 @@
+import type { TaskNodeRunQueryBinding } from './taskExecutionParticipantBindings'
 import {
   readClarifyHistory,
   mergeClarifyHistory,
@@ -10,7 +11,10 @@ import { binaryTextOrder } from '@/platform/persistence/binaryTextOrder'
 import type { ClarifyAnswerQueries } from '../application/ports/clarifyAnswerQueries'
 import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
 
-export function createClarifyAnswerQueries(db: PersistenceDb): ClarifyAnswerQueries {
+export function createClarifyAnswerQueries(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskNodeRunQueryBinding,
+): ClarifyAnswerQueries {
   return {
     async listSelfQuestions(ids) {
       if (ids.length === 0) return []
@@ -24,7 +28,7 @@ export function createClarifyAnswerQueries(db: PersistenceDb): ClarifyAnswerQuer
         .from(clarifyRounds)
         .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, [...ids])))
         .orderBy(asc(binaryTextOrder(db, clarifyRounds.id)))
-      const history = (await readClarifyHistory(db, { roundIds: ids }))
+      const history = (await readClarifyHistory(db, taskExecutionParticipants, { roundIds: ids }))
         .filter((row) => row.kind === 'self' && ids.includes(row.id))
         .map(({ id, taskId, questionsJson }) => ({ id, taskId, questionsJson }))
       return mergeClarifyHistory(live, history).sort((a, b) =>
@@ -49,9 +53,9 @@ export function createClarifyAnswerQueries(db: PersistenceDb): ClarifyAnswerQuer
         .from(clarifyRounds)
         .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, [...ids])))
         .orderBy(asc(binaryTextOrder(db, clarifyRounds.id)))
-      const history = (await readClarifyHistory(db, { roundIds: ids })).filter(
-        (row) => row.kind === 'self' && ids.includes(row.id),
-      )
+      const history = (
+        await readClarifyHistory(db, taskExecutionParticipants, { roundIds: ids })
+      ).filter((row) => row.kind === 'self' && ids.includes(row.id))
       return Promise.all(
         mergeClarifyHistory<
           RecordedAnswers &

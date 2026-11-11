@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // Locks in: listClarifySummaries surfaces each session's source-agent
 // node display name (the new WorkflowNode.title field) so the inbox can
 // render "节点名" rather than the opaque `sourceAgentNodeId`. Three
@@ -116,7 +117,7 @@ describeEachProvider('listClarifySummaries — sourceAgentNodeTitle enrichment',
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_coder_01')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row).toBeDefined()
     expect(row?.askingNodeId).toBe('agent_coder_01')
@@ -132,7 +133,7 @@ describeEachProvider('listClarifySummaries — sourceAgentNodeTitle enrichment',
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_designer_07')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row?.askingNodeTitle).toBeNull()
     expect(row?.askingNodeId).toBe('agent_designer_07')
@@ -148,7 +149,7 @@ describeEachProvider('listClarifySummaries — sourceAgentNodeTitle enrichment',
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_writer_03')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row?.askingNodeTitle).toBeNull()
   })
@@ -157,7 +158,7 @@ describeEachProvider('listClarifySummaries — sourceAgentNodeTitle enrichment',
     const db = harness.db
     const { taskId } = await seedSessionForSnapshot(db, '{not valid json', 'agent_ghost')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row?.askingNodeTitle).toBeNull()
     expect(row?.askingNodeId).toBe('agent_ghost')
@@ -175,7 +176,7 @@ describeEachProvider('listClarifySummaries — sourceAgentNodeTitle enrichment',
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_typo_99')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row?.askingNodeTitle).toBeNull()
     expect(row?.askingNodeId).toBe('agent_typo_99')

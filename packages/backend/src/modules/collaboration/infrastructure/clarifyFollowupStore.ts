@@ -1,4 +1,4 @@
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
 import { createClarifyAnswerWritePort, lockClarifyRound } from './clarifyAnswerWrite'
 import { appendClarifyQuestions, clarifyQuestionsRevision } from '../domain/clarifyQuestions'
@@ -26,6 +26,7 @@ import type { CollaborationClarifyDraftEventPublisher } from '../application/por
 type Reader = PersistenceDb | PersistenceTx
 export function createClarifyFollowupStore(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   events: CollaborationClarifyDraftEventPublisher,
 ): ClarifyFollowupStore {
   const read = async (
@@ -44,7 +45,8 @@ export function createClarifyFollowupStore(
     )[0]
     if (!round) throw new NotFoundError('clarify-round-not-found', 'Clarify round not found.')
     const task = (
-      await createTaskGateQueries(reader)
+      await taskExecutionParticipants
+        .createTaskGateQueries(reader)
         .listDefinitionContexts([round.taskId])
         .then((rows) =>
           rows.map((row) => ({ status: row.status, workflowSnapshot: row.workflowSnapshot })),

@@ -87,6 +87,7 @@ export function createClarifyDecisionCommandContext(input: {
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): CollaborationCommandContext<'clarifyDecisions'> {
   return createCollaborationCommandContext({
+    taskExecutionParticipants: input.taskExecutionParticipants,
     taskRolePolicy: input.taskRolePolicy,
     taskLock: input.taskLock,
     historyRestrictions: input.historyRestrictions,

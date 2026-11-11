@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -283,6 +284,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
   test('iterate decisionReason embeds **File**: header above comments', async () => {
     const COMMENT = 'include pending_payment in the enum'
     await addReviewComment({
+      taskExecutionParticipants,
       db: h.db,
       reviewReader: epoch2ReviewReader(h.db, h.appHome),
       appHome: h.appHome,
@@ -326,6 +328,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
   test('after resume scheduler, fresh designer prompt contains **File**: header', async () => {
     const COMMENT = 'rename order_status to checkout_status'
     await addReviewComment({
+      taskExecutionParticipants,
       db: h.db,
       reviewReader: epoch2ReviewReader(h.db, h.appHome),
       appHome: h.appHome,

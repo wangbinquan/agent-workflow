@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
@@ -53,7 +54,9 @@ export async function installCommittedEventProjectionHarness(
       codecs,
       projectors: [
         createDatabaseTaskLifecycleWsProjector(db),
-        createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
+        createCollaborationWsProjector(
+          createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
+        ),
       ],
       nudgeDispatcher() {},
     }),
@@ -134,7 +137,9 @@ export async function installCommittedEventDeliveryHarness(
   )
   const projectors = [
     createDatabaseTaskLifecycleWsProjector(db),
-    createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
+    createCollaborationWsProjector(
+      createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
+    ),
   ]
   const projectionLedger = createCommittedEventProjectionLedger()
   const dispatcher = createCommittedEventDispatcher({

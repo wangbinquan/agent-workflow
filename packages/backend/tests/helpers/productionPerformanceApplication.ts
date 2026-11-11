@@ -1,3 +1,4 @@
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './o2Closure'
@@ -139,7 +140,9 @@ export async function createProductionPerformanceApplication(
     ],
   })
   const memoryOperations = composeMemoryOperationsFor({
-    clarifyAnswers: createClarifyAnswerQueries(db),
+    taskNodeRuns: createNodeRunQueries(db),
+    taskNodeOutputs: createNodeOutputQueries(db),
+    clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),

@@ -227,11 +227,13 @@ describeEachProvider(
       // dispatch that handler through the SAME dispatchTaskQuestions the board's 批量下发 uses —
       // buildFrontierMintPlan anchors the designer mint on pickFreshestRun(designer rows).
       const actor = { userId: 'u1', role: 'owner' as const }
-      const questioner = (await listTaskQuestions(db, taskId)).find(
+      const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
         (e) => e.roleKind === 'questioner',
       )!
-      await reassignTaskQuestion(db, questioner.id, D, actor)
-      const designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+      await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, D, actor)
+      const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+        (e) => e.roleKind === 'designer',
+      )!
 
       const res = await dispatchTaskQuestions(
         db,

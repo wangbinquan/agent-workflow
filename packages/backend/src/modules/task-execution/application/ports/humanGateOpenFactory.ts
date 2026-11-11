@@ -7,6 +7,7 @@ import type {
   NodeRunLifecycleParticipantInTx,
 } from './nodeRunLifecyclePersistence'
 import type { ConsumedInputsParticipantInTx } from './consumedInputs'
+import type { TaskNodeRunReads } from './nodeRunQueries'
 
 type PreparedGate = Parameters<HumanGateTaskLifecycle['parkPrepared']>[0]['prepared']
 
@@ -35,6 +36,8 @@ export interface HumanGateOpenParticipantScope {
       readonly mint: { mint(input: NodeRunMintInput): Promise<string> }
       readonly lifecycle: NodeRunLifecycleParticipantInTx
       readonly consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>
+      /** RFC-485: Task Execution's node-run reads on the same transaction. */
+      readonly nodeRuns: TaskNodeRunReads
     },
   ): HumanGateOpenParticipantInTx
 }

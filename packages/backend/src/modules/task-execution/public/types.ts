@@ -278,6 +278,11 @@ export type {
 } from '../application/ports/taskSubjectQueries'
 // RFC-482 — the run selection reads collaboration takes through its participant bindings (a closed interface).
 export type { TaskRunSelectionReads } from '../application/ports/runSelection'
+// RFC-485: the closed node-run, node-output and task-gate reads other contexts use (collaboration's participant bindings,
+// memory's assembly input).
+export type { TaskNodeRunReads } from '../application/ports/nodeRunQueries'
+export type { TaskNodeOutputReads } from '../application/ports/nodeOutputQueries'
+export type { TaskGateQueries } from '../application/ports/taskGateQueries'
 export type { TaskDefinitionSubject, TaskSubject, TaskReadSubject } from '../domain/taskSubject'
 
 export type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'

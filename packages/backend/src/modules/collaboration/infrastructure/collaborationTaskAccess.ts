@@ -1,11 +1,8 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 // RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
 
-import {
-  type TaskGateDefinitionContext,
-  createTaskGateQueries,
-  createNodeRunQueries,
-} from '@/modules/task-execution/public/queries'
+import { type TaskGateDefinitionContext } from '@/modules/task-execution/public/queries'
 
 import { readClarifyHistory } from './clarifyHistoryProjection'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -59,15 +56,21 @@ async function resolve(
 
 export function createCollaborationTaskAccessPort(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   policy: CollaborationTaskRolePolicy,
 ): CollaborationTaskAccessPort {
   return {
     async resolveTask(actor, taskId) {
-      const row = await first(createTaskGateQueries(db).listDefinitionContexts([taskId]))
+      const row = await first(
+        taskExecutionParticipants.createTaskGateQueries(db).listDefinitionContexts([taskId]),
+      )
       return await resolve(db, policy, actor, row)
     },
     async resolveNodeRunTask(actor, nodeRunId) {
-      const run = (await createNodeRunQueries(db).readFields(nodeRunId, ['taskId'])) ?? undefined
+      const run =
+        (await taskExecutionParticipants
+          .createNodeRunQueries(db)
+          .readFields(nodeRunId, ['taskId'])) ?? undefined
       if (run === undefined) {
         return { nodeRunExists: false, taskId: null, task: null, visible: false, actorRole: null }
       }
@@ -84,13 +87,17 @@ export function createCollaborationTaskAccessPort(
           .orderBy(desc(clarifyRounds.createdAt))
           .limit(1),
       )
-      const history = (await readClarifyHistory(db, { intermediaryNodeRunId }))
+      const history = (
+        await readClarifyHistory(db, taskExecutionParticipants, { intermediaryNodeRunId })
+      )
         .filter((row) => row.intermediaryNodeRunId === intermediaryNodeRunId)
         .sort((a, b) => b.createdAt - a.createdAt)
       const round = liveRound ?? history[0]
       if (round === undefined) {
         const run =
-          (await createNodeRunQueries(db).readFields(intermediaryNodeRunId, ['id'])) ?? undefined
+          (await taskExecutionParticipants
+            .createNodeRunQueries(db)
+            .readFields(intermediaryNodeRunId, ['id'])) ?? undefined
         return {
           roundExists: false,
           nodeRunExists: run !== undefined,
@@ -106,10 +113,12 @@ export function createCollaborationTaskAccessPort(
     async visibleTaskIds(actor, taskIds) {
       // RFC-395 II-b：判据 + 分块都走 task-execution 的唯一一份。此前这一段与
       // `reviewTaskAccess.ts` 里的**逐字相同**，且两份各自把分块大小硬写成 500。
-      return await createTaskGateQueries(db).visibleTaskIds(
-        { userId: actor.user.id, canReadAllTasks: actor.permissions.has('tasks:read:all') },
-        taskIds,
-      )
+      return await taskExecutionParticipants
+        .createTaskGateQueries(db)
+        .visibleTaskIds(
+          { userId: actor.user.id, canReadAllTasks: actor.permissions.has('tasks:read:all') },
+          taskIds,
+        )
     },
     async questionTaskId(entryId) {
       const { taskQuestions } = tablesOf(db)

@@ -59,13 +59,13 @@ async function reassignAllThenDispatchDesigner(
   crossClarifyNodeRunIds: string[],
 ) {
   for (const origin of crossClarifyNodeRunIds) {
-    const questioner = (await listTaskQuestions(db, taskId)).find(
+    const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
       (e) => e.roleKind === 'questioner' && e.originNodeRunId === origin,
     )
     if (!questioner) throw new Error(`no questioner entry for round ${origin}`)
-    await reassignTaskQuestion(db, questioner.id, 'designer', actor)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
   }
-  const designerIds = (await listTaskQuestions(db, taskId))
+  const designerIds = (await listTaskQuestions(db, taskExecutionParticipants, taskId))
     .filter((e) => e.roleKind === 'designer' && crossClarifyNodeRunIds.includes(e.originNodeRunId!))
     .map((e) => e.id)
   return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, designerIds, actor)
@@ -233,8 +233,8 @@ async function buildHarness(db: PersistenceDb): Promise<{
   const qSec = await seedQRun(db, taskId, 'qSec')
   const qUx = await seedQRun(db, taskId, 'qUx')
   const qPerf = await seedQRun(db, taskId, 'qPerf')
-  const sec = await createClarifyRound(
-    withO2Closure({
+  const sec = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -245,9 +245,10 @@ async function buildHarness(db: PersistenceDb): Promise<{
       loopIter: 0,
       questions: [makeQ('q1')],
     }),
-  )
-  const ux = await createClarifyRound(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const ux = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -258,9 +259,10 @@ async function buildHarness(db: PersistenceDb): Promise<{
       loopIter: 0,
       questions: [makeQ('q1')],
     }),
-  )
-  const perf = await createClarifyRound(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const perf = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -271,7 +273,8 @@ async function buildHarness(db: PersistenceDb): Promise<{
       loopIter: 0,
       questions: [makeQ('q1')],
     }),
-  )
+    taskExecutionParticipants,
+  })
   return {
     db,
     taskId,

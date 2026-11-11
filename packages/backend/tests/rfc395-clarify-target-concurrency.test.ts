@@ -242,7 +242,9 @@ describeEachProvider('RFC-395 C target clarify writes', (h) => {
   })
   test('follow-up rejects a changed generation basis without losing the intervening draft', async () => {
     const f = await seed(h.db)
-    const store = createClarifyFollowupStore(h.db, { publish: async () => {} })
+    const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, {
+      publish: async () => {},
+    })
     const current = await store.read(f.origin, 'a')
     const request: ClarifyFollowup = {
       requestId: 'followup',

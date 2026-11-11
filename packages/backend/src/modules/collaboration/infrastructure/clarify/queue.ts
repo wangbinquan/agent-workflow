@@ -16,8 +16,8 @@
 // PR-1 lands it UNWIRED (no caller): the two legacy injectors are untouched. PR-2 (T3) drops it in
 // and deletes the fork.
 
+import type { TaskExecutionParticipantBindings } from '../taskExecutionParticipantBindings'
 import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
@@ -38,6 +38,8 @@ const log = createLogger('clarify-queue')
 
 export interface SelectAgentQueueArgs {
   db: PersistenceDb
+  /** RFC-485: task-execution's node-run reads arrive through the participant bindings. */
+  taskExecutionParticipants: TaskExecutionParticipantBindings
   taskId: string
   /** The running agent node. Its "agent queue" = task_questions projected to it by
    *  effectiveTarget (override_target_node_id ?? default_target_node_id). */
@@ -140,10 +142,12 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
   // 2. Frame the lineage window on this run's node + iteration (mirrors resolveHandlerRun): all of
   //    the node's runs at this iteration are the process-retry / clarify-rerun chain the derived-
   //    aging oracle scans.
-  const rRow = await createNodeRunQueries(db).readFields(dispatchedRunId, ['iteration'])
+  const rRow = await args.taskExecutionParticipants
+    .createNodeRunQueries(db)
+    .readFields(dispatchedRunId, ['iteration'])
   const iteration = rRow?.iteration ?? 0
   const sameNode = rRow
-    ? await createNodeRunQueries(db).list({
+    ? await args.taskExecutionParticipants.createNodeRunQueries(db).list({
         taskId,
         nodeId: consumerNodeId,
         iteration,
@@ -152,6 +156,7 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
     : []
   const outputRunIds = await runIdsWithOutput(
     db,
+    args.taskExecutionParticipants,
     sameNode.map((r) => r.id),
   )
   const consumed = await Promise.all(
@@ -327,6 +332,8 @@ export interface ClarifyQueueContext {
 
 export interface BuildClarifyQueueContextArgs {
   db: PersistenceDb
+  /** RFC-485: task-execution's node-run reads arrive through the participant bindings. */
+  taskExecutionParticipants: TaskExecutionParticipantBindings
   /** Reserved (design §2 contract) — selection needs no definition; kept for forward-compat. */
   definition: WorkflowDefinition
   taskId: string
@@ -362,6 +369,7 @@ export async function buildClarifyQueueContext(
 ): Promise<ClarifyQueueContext | undefined> {
   const { db, taskId, consumerNodeId, dispatchedRunId, shardKey, currentRunOnly = false } = args
   const entries = await selectAgentQueue({
+    taskExecutionParticipants: args.taskExecutionParticipants,
     db,
     taskId,
     consumerNodeId,

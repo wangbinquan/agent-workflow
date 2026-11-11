@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-058 T12 — unit tests for the unified clarify_rounds service helpers.
 // Exercises:
 //   - computeHistoryCutoff for kind='self' + kind='cross' iterationField
@@ -173,12 +174,20 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         status: 'awaiting_human',
       },
     ])
-    const all = await listClarifyRounds(db, { taskId, kind: 'all', status: 'awaiting_human' })
+    const all = await listClarifyRounds(db, taskExecutionParticipants, {
+      taskId,
+      kind: 'all',
+      status: 'awaiting_human',
+    })
     expect(all.length).toBe(2)
-    const selfOnly = await listClarifyRounds(db, { taskId, kind: 'self', status: 'awaiting_human' })
+    const selfOnly = await listClarifyRounds(db, taskExecutionParticipants, {
+      taskId,
+      kind: 'self',
+      status: 'awaiting_human',
+    })
     expect(selfOnly.length).toBe(1)
     expect(selfOnly[0]?.kind).toBe('self')
-    const crossOnly = await listClarifyRounds(db, {
+    const crossOnly = await listClarifyRounds(db, taskExecutionParticipants, {
       taskId,
       kind: 'cross',
       status: 'awaiting_human',
@@ -237,11 +246,15 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
       },
     ])
     // Default status filter only surfaces awaiting_human
-    const open = await listClarifyRounds(db, { taskId })
+    const open = await listClarifyRounds(db, taskExecutionParticipants, { taskId })
     expect(open.length).toBe(1)
     expect(open[0]?.status).toBe('awaiting_human')
     // Explicit limit cap
-    const limited = await listClarifyRounds(db, { taskId, status: 'all', limit: 1 })
+    const limited = await listClarifyRounds(db, taskExecutionParticipants, {
+      taskId,
+      status: 'all',
+      limit: 1,
+    })
     expect(limited.length).toBe(1)
   })
 })
@@ -295,7 +308,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
       answeredAt: null,
       answeredBy: null,
     })
-    const out = await listClarifyRoundSummaries(db, { taskId })
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants, { taskId })
     expect(out.length).toBe(1)
     expect(out[0]).toMatchObject({
       id: 'r1',
@@ -350,12 +363,19 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
         createdAt: 2000,
       },
     ])
-    const onlyOpen = await listClarifyRoundSummaries(db, { taskId })
+    const onlyOpen = await listClarifyRoundSummaries(db, taskExecutionParticipants, { taskId })
     expect(onlyOpen.length).toBe(1)
     expect(onlyOpen[0]?.status).toBe('awaiting_human')
-    const all = await listClarifyRoundSummaries(db, { taskId, status: 'all' })
+    const all = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      taskId,
+      status: 'all',
+    })
     expect(all.length).toBe(2)
-    const limited = await listClarifyRoundSummaries(db, { taskId, status: 'all', limit: 1 })
+    const limited = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      taskId,
+      status: 'all',
+      limit: 1,
+    })
     expect(limited.length).toBe(1)
   })
 
@@ -395,12 +415,21 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
         createdAt: 2000,
       },
     ])
-    const justSelf = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
+    const justSelf = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      taskId,
+      kind: 'self',
+    })
     expect(justSelf.map((r) => r.id)).toEqual(['r_self'])
-    const justCross = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
+    const justCross = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      taskId,
+      kind: 'cross',
+    })
     expect(justCross.map((r) => r.id)).toEqual(['r_cross'])
     // 'all' returns both, sorted by createdAt desc (cross first since newer)
-    const both = await listClarifyRoundSummaries(db, { taskId, kind: 'all' })
+    const both = await listClarifyRoundSummaries(db, taskExecutionParticipants, {
+      taskId,
+      kind: 'all',
+    })
     expect(both.map((r) => r.id)).toEqual(['r_cross', 'r_self'])
   })
 })
@@ -425,7 +454,7 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
       status: 'awaiting_human',
       createdAt: 1000,
     })
-    const detail = await getClarifyRoundDetail(db, 'nr_c')
+    const detail = await getClarifyRoundDetail(db, taskExecutionParticipants, 'nr_c')
     expect(detail.id).toBe('r1')
     expect(detail.kind).toBe('self')
     expect(detail.intermediaryNodeId).toBe('clarify1')
@@ -457,7 +486,7 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
       createdAt: 1000,
       answeredAt: 2000,
     })
-    const detail = await getClarifyRoundDetail(db, 'nr_c')
+    const detail = await getClarifyRoundDetail(db, taskExecutionParticipants, 'nr_c')
     expect(detail.answers).toBeDefined()
     expect(detail.answers?.length).toBe(1)
     expect(detail.directive).toBe('continue')
@@ -467,6 +496,8 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
   test('throws NotFoundError when intermediary node_run id has no row', async () => {
     const db = harness.db
     await seedTask(db)
-    await expect(getClarifyRoundDetail(db, 'does-not-exist')).rejects.toThrow(NotFoundError)
+    await expect(
+      getClarifyRoundDetail(db, taskExecutionParticipants, 'does-not-exist'),
+    ).rejects.toThrow(NotFoundError)
   })
 })

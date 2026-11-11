@@ -162,8 +162,8 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'self',
       db,
       taskId,
@@ -174,7 +174,8 @@ async function seedSelfRound(
       iteration: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, originNodeRunId: clarifyNodeRunId }
 }
 
@@ -195,8 +196,8 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    withO2Closure({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    ...withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -207,7 +208,8 @@ async function seedCrossRound(
       loopIter: 0,
       questions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
@@ -399,7 +401,7 @@ describeEachProvider('RFC-128 full-seal behavior providers', (harness) => {
       // RFC-162: reconcile ALWAYS produces just the questioner (asker) entry — NO designer entry
       // (designer handlers come only from a human reassign). The "no designer entry" lock holds for
       // every cross round now, stop or continue.
-      const dtos = await listTaskQuestions(db, taskId)
+      const dtos = await listTaskQuestions(db, taskExecutionParticipants, taskId)
       expect(dtos.some((d) => d.roleKind === 'designer')).toBe(false)
       expect(dtos.some((d) => d.roleKind === 'questioner')).toBe(true)
     })

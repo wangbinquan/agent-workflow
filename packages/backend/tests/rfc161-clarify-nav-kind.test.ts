@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-161 — locks taskNodeRunsProjection' per-clarify-run `clarifyNavKind` stamping, the
@@ -263,7 +264,7 @@ describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)'
     const stamp = runs.find((r) => r.id === runId)?.clarifyNavKind
     expect(stamp).not.toBe(null)
     // The safety property: a non-null stamp implies the bare /clarify/{run} route resolves.
-    const detail = await getClarifyRoundDetail(db, runId)
+    const detail = await getClarifyRoundDetail(db, taskExecutionParticipants, runId)
     expect(detail).toBeDefined()
     // best-effort label alignment: stamp == clarifyNavKindForRoundStatus(detail.status).
     expect(stamp).toBe(clarifyNavKindForRoundStatus(detail.status))

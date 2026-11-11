@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-132 PR-1 / T2 — selectAgentQueue + bindTriggerRun (the unified selection + derived-aging
 // helper, DRY-extracted from buildClarifyNodeQueueContext ≈ buildNodeQueueExternalFeedback).
 //
@@ -229,7 +230,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       sealed: true,
       dispatchedAt: Date.now(),
     })
-    const q = await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerun })
+    const q = await selectAgentQueue({
+      taskExecutionParticipants,
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: rerun,
+    })
     expect(q).toHaveLength(1)
     const render = q[0]!.render
     expect('question' in render && render.question.title).toBe('DB choice')
@@ -265,6 +272,7 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     }
 
     const full = await selectAgentQueue({
+      taskExecutionParticipants,
       db,
       taskId,
       consumerNodeId: P,
@@ -273,6 +281,7 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     expect(full.map((entry) => entry.questionId).sort()).toEqual(['new', 'old', 'replay'])
 
     const delta = await selectAgentQueue({
+      taskExecutionParticipants,
       db,
       taskId,
       consumerNodeId: P,
@@ -317,6 +326,7 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       })
     }
     const onlyA = await selectAgentQueue({
+      taskExecutionParticipants,
       db,
       taskId,
       consumerNodeId: P,
@@ -325,6 +335,7 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     })
     expect(onlyA.map((e) => e.questionId)).toEqual(['qa'])
     const onlyB = await selectAgentQueue({
+      taskExecutionParticipants,
       db,
       taskId,
       consumerNodeId: P,
@@ -333,7 +344,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     })
     expect(onlyB.map((e) => e.questionId)).toEqual(['qb'])
     // golden-lock: no shardKey → both (today's node-only behavior,普通节点/leader 零回归)
-    const both = await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerunA })
+    const both = await selectAgentQueue({
+      taskExecutionParticipants,
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: rerunA,
+    })
     expect(both.map((e) => e.questionId).sort()).toEqual(['qa', 'qb'])
   })
 
@@ -363,6 +380,7 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     await seedRun(db, taskId, P, { status: 'done', hasOutput: true, shardKey: 'shard-B' })
     // Unscoped (golden-lock): the sibling output is in the node-wide window → A's entry ages out.
     const unscoped = await selectAgentQueue({
+      taskExecutionParticipants,
       db,
       taskId,
       consumerNodeId: P,
@@ -371,6 +389,7 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     expect(unscoped).toHaveLength(0)
     // Shard-scoped: the sibling B output is excluded from A's window → A's entry survives.
     const scopedA = await selectAgentQueue({
+      taskExecutionParticipants,
       db,
       taskId,
       consumerNodeId: P,
@@ -412,7 +431,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       sealed: true,
       dispatchedAt: Date.now(),
     })
-    const q = await selectAgentQueue({ db, taskId, consumerNodeId: D, dispatchedRunId: rerun })
+    const q = await selectAgentQueue({
+      taskExecutionParticipants,
+      db,
+      taskId,
+      consumerNodeId: D,
+      dispatchedRunId: rerun,
+    })
     expect(q.map((e) => e.roleKind).sort()).toEqual(['designer', 'self'])
   })
 
@@ -436,7 +461,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       dispatchedAt: Date.now(),
     })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: rerun,
+      }),
     ).toHaveLength(0)
   })
 
@@ -456,7 +487,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       manualTitle: 'Deadline',
       manualBody: 'Ship by Friday.',
     })
-    const q = await selectAgentQueue({ db, taskId, consumerNodeId: D, dispatchedRunId: rerun })
+    const q = await selectAgentQueue({
+      taskExecutionParticipants,
+      db,
+      taskId,
+      consumerNodeId: D,
+      dispatchedRunId: rerun,
+    })
     expect(q).toHaveLength(1)
     const render = q[0]!.render
     expect('manualBody' in render && render.manualBody).toBe('Ship by Friday.')
@@ -481,7 +518,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       dispatchedAt: null, // sealed but NOT dispatched
     })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: rerun,
+      }),
     ).toHaveLength(0)
   })
 
@@ -507,11 +550,23 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
     })
     // Consumer X (the override) sees it.
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: X, dispatchedRunId: rerunX }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: X,
+        dispatchedRunId: rerunX,
+      }),
     ).toHaveLength(1)
     // Consumer P (the default) does NOT — override supersedes default.
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerunP }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: rerunP,
+      }),
     ).toHaveLength(0)
   })
 
@@ -535,7 +590,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
       dispatchedAt: Date.now(),
     })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: rerun,
+      }),
     ).toHaveLength(0)
   })
 })
@@ -565,7 +626,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) 
     })
     const laterRerun = await seedRun(db, taskId, P, { status: 'running' })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: laterRerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: laterRerun,
+      }),
     ).toHaveLength(0)
   })
 
@@ -589,7 +656,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) 
       triggerRunId: doneNoOut,
     })
     const laterRerun = await seedRun(db, taskId, P, { status: 'running' })
-    const q = await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: laterRerun })
+    const q = await selectAgentQueue({
+      taskExecutionParticipants,
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: laterRerun,
+    })
     expect(q).toHaveLength(1)
   })
 
@@ -614,7 +687,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) 
     })
     const reviveRerun = await seedRun(db, taskId, P, { status: 'running' })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: reviveRerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: reviveRerun,
+      }),
     ).toHaveLength(1)
   })
 
@@ -656,7 +735,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) 
       dispatchedAt: Date.now(),
       triggerRunId: curRerun,
     })
-    const q = await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: curRerun })
+    const q = await selectAgentQueue({
+      taskExecutionParticipants,
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: curRerun,
+    })
     // Round 1 aged (trigger=prodRerun done+output, id>=trigger); round 2 kept (prodRerun.id<curRerun).
     expect(q.map((e) => e.id)).toEqual([r2eid])
   })
@@ -688,7 +773,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) 
     })
     const laterRerun = await seedRun(db, taskId, P, { status: 'running' })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: laterRerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: laterRerun,
+      }),
     ).toHaveLength(0)
   })
 
@@ -713,7 +804,13 @@ describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) 
     })
     const laterRerun = await seedRun(db, taskId, P, { status: 'running' })
     expect(
-      await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: laterRerun }),
+      await selectAgentQueue({
+        taskExecutionParticipants,
+        db,
+        taskId,
+        consumerNodeId: P,
+        dispatchedRunId: laterRerun,
+      }),
     ).toHaveLength(1)
   })
 })

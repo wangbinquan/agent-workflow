@@ -62,12 +62,12 @@ async function reassignThenDispatchDesigner(
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
-  const questioner = (await listTaskQuestions(db, taskId)).find(
+  const questioner = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
-  await reassignTaskQuestion(db, questioner.id, 'designer', actor)
-  const designer = (await listTaskQuestions(db, taskId)).find(
+  await reassignTaskQuestion(db, taskExecutionParticipants, questioner.id, 'designer', actor)
+  const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
@@ -224,8 +224,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       const qRun = await seedDoneRun(db, taskId, 'questioner')
       // rev2 / out haven't run yet — exercise the "node never ran" branch.
 
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -236,7 +236,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
           loopIter: 0,
           questions: [makeQ('q1')],
         }),
-      )
+        taskExecutionParticipants,
+      })
 
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
@@ -308,8 +309,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       await seedDoneRun(db, taskId, 'rev1')
       const qRun = await seedDoneRun(db, taskId, 'questioner')
 
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -320,7 +321,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
           loopIter: 0,
           questions: [makeQ('q1')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,
@@ -348,8 +350,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       await seedDoneRun(db, taskId, 'designer')
       const qRun = await seedDoneRun(db, taskId, 'questioner')
 
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -360,7 +362,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
           loopIter: 0,
           questions: [makeQ('q1')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,
@@ -396,8 +399,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
         checkpoints: [{ mountPath: '', preSnapshot: 'snap-q-final' }],
       })
 
-      const sess = await createClarifyRound(
-        withO2Closure({
+      const sess = await createClarifyRound({
+        ...withO2Closure({
           kind: 'cross',
           db,
           taskId,
@@ -408,7 +411,8 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
           loopIter: 0,
           questions: [makeQ('q1')],
         }),
-      )
+        taskExecutionParticipants,
+      })
       await autoDispatchClarifyRound({
         taskExecutionParticipants,
         db,

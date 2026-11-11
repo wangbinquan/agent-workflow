@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-050 — getDistillJobDetail surfaces the per-job output language.
 //
 // The detail page header renders "Output language: zh-CN / en-US / default".
@@ -20,7 +21,10 @@ import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function getDistillJobDetail(db: PersistenceDb, jobId: string) {
-  return composeMemoryDistillQueries(db, createClarifyAnswerQueries(db)).getJobDetail(jobId)
+  return composeMemoryDistillQueries(
+    db,
+    createClarifyAnswerQueries(db, taskExecutionParticipants),
+  ).getJobDetail(jobId)
 }
 
 async function seedJob(db: PersistenceDb, outputLang: string | null | undefined): Promise<string> {

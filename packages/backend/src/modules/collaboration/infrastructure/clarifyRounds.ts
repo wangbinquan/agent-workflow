@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import {
   compareClarifyRoundRecency,
   compareClarifyRoundInboxOrder,
@@ -10,8 +11,6 @@ import {
 import {
   taskGateOpenCondition,
   taskGateVisibleCondition,
-  createTaskGateQueries,
-  createNodeRunQueries,
 } from '@/modules/task-execution/public/queries'
 
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
@@ -91,6 +90,7 @@ function clarifyRoundsCondition(
 
 export async function listClarifyRounds(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   filter: ListClarifyRoundsFilter = {},
 ): Promise<Array<PersistenceTables['clarifyRounds']['$inferSelect']>> {
   const { clarifyRounds } = tablesOf(db)
@@ -104,7 +104,7 @@ export async function listClarifyRounds(
     .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
   const rows = mergeClarifyHistory(
     await (filter.limit === undefined ? base : base.limit(filter.limit)),
-    await readClarifyHistory(db, {
+    await readClarifyHistory(db, taskExecutionParticipants, {
       taskId: filter.taskId,
       kind: filter.kind === 'all' ? undefined : filter.kind,
       status: filter.status === 'all' ? undefined : (filter.status ?? 'awaiting_human'),
@@ -138,12 +138,13 @@ export interface ListClarifyRoundSummariesFilter {
  */
 export async function listClarifyRoundSummaries(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   filter: ListClarifyRoundSummariesFilter = {},
 ): Promise<ClarifyRoundSummary[]> {
   const desiredStatus = filter.status ?? 'awaiting_human'
   // Awaiting-human filtering must precede the window; explicit statuses can
   // bound the live page before the sorted merge with immutable history.
-  let filtered = await listClarifyRounds(db, {
+  let filtered = await listClarifyRounds(db, taskExecutionParticipants, {
     ...filter,
     limit: desiredStatus === 'awaiting_human' ? undefined : (filter.limit ?? 100),
   })
@@ -158,6 +159,7 @@ export async function listClarifyRoundSummaries(
   if (desiredStatus === 'awaiting_human' && filtered.length > 0) {
     const statusByTaskId = await loadTaskStatusesByTaskId(
       db,
+      taskExecutionParticipants,
       Array.from(new Set(filtered.map((r) => r.taskId))),
     )
     filtered = filtered.filter((r) => {
@@ -169,8 +171,8 @@ export async function listClarifyRoundSummaries(
   const sliced = filtered.slice(0, limit)
 
   const taskIds = Array.from(new Set(sliced.map((r) => r.taskId)))
-  const taskNameByTaskId = await loadTaskNamesByTaskId(db, taskIds)
-  const titleByTaskAndNode = await loadNodeTitlesByTask(db, taskIds)
+  const taskNameByTaskId = await loadTaskNamesByTaskId(db, taskExecutionParticipants, taskIds)
+  const titleByTaskAndNode = await loadNodeTitlesByTask(db, taskExecutionParticipants, taskIds)
 
   return sliced.map((row) => rowToSummary(row, taskNameByTaskId, titleByTaskAndNode))
 }
@@ -253,6 +255,7 @@ export async function countAwaitingClarifyRounds(db: PersistenceDb, actor: Actor
  */
 export async function getClarifyRoundDetail(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   intermediaryNodeRunId: string,
 ): Promise<ClarifyRound> {
   const { clarifyRounds } = tablesOf(db)
@@ -262,9 +265,9 @@ export async function getClarifyRoundDetail(
     .where(eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId))
     .orderBy(desc(clarifyRounds.createdAt))
     .limit(1)
-  const history = (await readClarifyHistory(db, { intermediaryNodeRunId })).filter(
-    (row) => row.intermediaryNodeRunId === intermediaryNodeRunId,
-  )
+  const history = (
+    await readClarifyHistory(db, taskExecutionParticipants, { intermediaryNodeRunId })
+  ).filter((row) => row.intermediaryNodeRunId === intermediaryNodeRunId)
   const row = mergeClarifyHistory(rows, history).sort(compareClarifyRoundRecency)[0]
   if (row === undefined) {
     throw new NotFoundError(
@@ -272,7 +275,9 @@ export async function getClarifyRoundDetail(
       `no clarify_round for intermediary node_run ${intermediaryNodeRunId}`,
     )
   }
-  const titlesByTaskAndNode = await loadNodeTitlesByTask(db, [row.taskId])
+  const titlesByTaskAndNode = await loadNodeTitlesByTask(db, taskExecutionParticipants, [
+    row.taskId,
+  ])
   const detail = rowToDetail(row, titlesByTaskAndNode, await readClarifyAnswerProjection(db, row))
   // RFC-202 T6 (Codex impl-gate P2): the UI must explain WHY a round was
   // sealed — inferring it from the task's MUTABLE current status misattributes
@@ -282,10 +287,9 @@ export async function getClarifyRoundDetail(
   // sweep, 'wg-clarify-disabled' from the workgroup flip); expose it
   // verbatim as an optional field.
   if (row.status === 'canceled' || row.status === 'abandoned') {
-    const [run] = await createNodeRunQueries(db).listHistoryFields(
-      { runIds: [intermediaryNodeRunId], limit: 1 },
-      ['errorMessage'],
-    )
+    const [run] = await taskExecutionParticipants
+      .createNodeRunQueries(db)
+      .listHistoryFields({ runIds: [intermediaryNodeRunId], limit: 1 }, ['errorMessage'])
     if (run?.errorMessage != null && run.errorMessage !== '') {
       detail.sealedCause = run.errorMessage
     }
@@ -398,12 +402,14 @@ function rowToDetail(
 
 async function loadTaskStatusesByTaskId(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskIds: string[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
 
-  const rows = await createTaskGateQueries(db)
+  const rows = await taskExecutionParticipants
+    .createTaskGateQueries(db)
     .listContexts(taskIds)
     .then((rows) => rows.map((row) => ({ id: row.id, status: row.status })))
   for (const t of rows) out.set(t.id, t.status)
@@ -412,6 +418,7 @@ async function loadTaskStatusesByTaskId(
 
 async function loadTaskNamesByTaskId(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskIds: string[],
 ): Promise<Map<string, string>> {
   // RFC-311: WHERE id IN + two-column projection. The previous shape read the
@@ -422,7 +429,8 @@ async function loadTaskNamesByTaskId(
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
   const rows = await chunkedAll(taskIds, (ids) => {
-    return createTaskGateQueries(db)
+    return taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listContexts(ids)
       .then((rows) => rows.map((row) => ({ id: row.id, name: row.name })))
   })
@@ -432,6 +440,7 @@ async function loadTaskNamesByTaskId(
 
 async function loadNodeTitlesByTask(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskIds: string[],
 ): Promise<Map<string, Map<string, string>>> {
   // RFC-311: same WHERE id IN fix as loadTaskNamesByTaskId — this variant was
@@ -439,7 +448,8 @@ async function loadNodeTitlesByTask(
   const out = new Map<string, Map<string, string>>()
   if (taskIds.length === 0) return out
   const taskRows = await chunkedAll(taskIds, (ids) => {
-    return createTaskGateQueries(db)
+    return taskExecutionParticipants
+      .createTaskGateQueries(db)
       .listDefinitionContexts(ids)
       .then((rows) => rows.map((row) => ({ id: row.id, workflowSnapshot: row.workflowSnapshot })))
   })

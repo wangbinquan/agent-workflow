@@ -336,6 +336,7 @@ describe('review-iterate rerun drops prior clarify Q&A from the prompt', () => {
     const COMMENT = 'tighten the connection pool wording'
 
     await addReviewComment({
+      taskExecutionParticipants,
       db: h.db,
       reviewReader: epoch2ReviewReader(h.db, h.appHome),
       appHome: h.appHome,

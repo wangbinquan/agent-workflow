@@ -29,6 +29,9 @@ const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   createTaskClarifyDirectivePersistence: unusedParticipant,
   createTaskSubjectQueries: unusedParticipant,
   createRunSelectionReader: unusedParticipant,
+  createNodeRunQueries: unusedParticipant,
+  createTaskGateQueries: unusedParticipant,
+  createNodeOutputQueries: unusedParticipant,
 }
 
 // Execute the complete production entry functions with explicit fake ports.
@@ -89,6 +92,21 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
       return query
     },
   }
+  // RFC-395 II-a A7: the moved task-definition read keeps the same query accounting. RFC-485: it now arrives through the
+  // participant bindings the mechanics pass into the round's args.
+  const bindings: TaskExecutionParticipantBindings = {
+    ...taskExecutionParticipants,
+    createTaskGateQueries: ((handle: unknown) => {
+      expect(handle).toBe(db)
+      return {
+        async listDefinitionContexts(ids: string[]) {
+          expect(ids).toEqual(['task'])
+          queried.push(taskTable)
+          return [{ name: 'task', workflowSnapshot: '{"nodes":[]}', lifecycleEventRevision: 7 }]
+        },
+      }
+    }) as unknown as TaskExecutionParticipantBindings['createTaskGateQueries'],
+  }
   const createRound = extract<Open>(
     'modules/collaboration/infrastructure/clarify/service.ts',
     'createClarifyRound',
@@ -99,17 +117,6 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
       tablesOf: (handle: unknown) => {
         expect(handle).toBe(db)
         return { tasks: taskTable, clarifyRounds: roundTable }
-      },
-      // RFC-395 II-a A7: bind the moved task-definition read with the same query accounting.
-      createTaskGateQueries: (handle: unknown) => {
-        expect(handle).toBe(db)
-        return {
-          async listDefinitionContexts(ids: string[]) {
-            expect(ids).toEqual(['task'])
-            queried.push(taskTable)
-            return [{ name: 'task', workflowSnapshot: '{"nodes":[]}', lifecycleEventRevision: 7 }]
-          },
-        }
       },
       eq: () => undefined,
       and: () => undefined,
@@ -172,8 +179,10 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
   )
   return {
     // RFC-395 O2: use the same required-port factory as crossContextClosure.ts.
-    open: compose(db, { taskLock: composeHumanGateTaskLockPort, taskExecutionParticipants })
-      .openAgentClarify,
+    open: compose(db, {
+      taskLock: composeHumanGateTaskLockPort,
+      taskExecutionParticipants: bindings,
+    }).openAgentClarify,
     parks,
     prepared,
     received,

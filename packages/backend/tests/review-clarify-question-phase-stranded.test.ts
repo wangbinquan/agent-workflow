@@ -308,7 +308,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
 
   // ---- THE REGRESSION: qa was answered and its handler rerun COMPLETED (by asking
   // qb). qa must read 已处理待确认, NOT be stranded at 处理中. (Pre-fix: 'processing'.)
-  const afterRound0 = await listTaskQuestions(db, task.id)
+  const afterRound0 = await listTaskQuestions(db, taskExecutionParticipants, task.id)
   expect(phaseOf(afterRound0, 'qa')).toBe('awaiting_confirm')
 
   // Finish the flow so afterEach doesn't race a live worktree write: answer qb
@@ -328,7 +328,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
 
   const rev = await awaitingReviewRun(task.id, 'rev')
   expect(rev).toBeDefined()
-  const atReviewPark = await listTaskQuestions(db, task.id)
+  const atReviewPark = await listTaskQuestions(db, taskExecutionParticipants, task.id)
   expect(phaseOf(atReviewPark, 'qa')).toBe('awaiting_confirm') // still, not dragged back
   expect(phaseOf(atReviewPark, 'qb')).toBe('awaiting_confirm') // qb's handler produced v1
 })

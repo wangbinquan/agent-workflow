@@ -340,6 +340,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   test('setDocumentSelection updates a pending item; rejects unknown/decided', async () => {
     const { reviewNodeRunId, docs } = await dispatchRound()
     const res = await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[0]!.id,
@@ -352,6 +353,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
     await expect(
       setDocumentSelection({
+        taskExecutionParticipants,
         db,
         nodeRunId: reviewNodeRunId,
         docVersionId: 'does-not-exist',
@@ -364,18 +366,21 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     // accept a (0) + c (2), reject b (1)
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[0]!.id,
       selection: 'accepted',
     })
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[1]!.id,
       selection: 'not_accepted',
     })
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[2]!.id,
@@ -422,6 +427,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     for (const doc of docs) {
       await setDocumentSelection({
+        taskExecutionParticipants,
         db,
         nodeRunId: reviewNodeRunId,
         docVersionId: doc.id,
@@ -444,6 +450,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
         ),
       () =>
         setDocumentSelection({
+          taskExecutionParticipants,
           db,
           nodeRunId: reviewNodeRunId,
           docVersionId: docs[0]!.id,
@@ -469,6 +476,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     for (const doc of docs) {
       await setDocumentSelection({
+        taskExecutionParticipants,
         db,
         nodeRunId: reviewNodeRunId,
         docVersionId: doc.id,
@@ -481,6 +489,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       docs[1]!.id,
       () =>
         setDocumentSelection({
+          taskExecutionParticipants,
           db,
           nodeRunId: reviewNodeRunId,
           docVersionId: docs[1]!.id,
@@ -511,6 +520,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   test('approve with an undecided document → 409 review-selection-incomplete — A5', async () => {
     const { reviewNodeRunId, docs } = await dispatchRound()
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[0]!.id,
@@ -575,6 +585,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
     const ctx = await buildReviewPromptContext(
       db,
+      taskExecutionParticipants,
       appHome,
       'src',
       taskId,
@@ -627,6 +638,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   test('getReviewDetail exposes documents[] + listReviewSummaries.isMultiDoc', async () => {
     const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     await setDocumentSelection({
+      taskExecutionParticipants,
       db,
       nodeRunId: reviewNodeRunId,
       docVersionId: docs[1]!.id,

@@ -1,3 +1,4 @@
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { createTaskSubjectQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
@@ -465,12 +466,15 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
           resourceScopeAccessReads.scopeRow(tx, { kind: 'workflow', id: scopeId }),
         ),
       ).toEqual({ ownerUserId: null, visibility: 'public' })
-      const store = new DrizzleMemoryInjectionReadStore(db)
+      const store = new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db))
       expect(await store.findTaskContext(task.id!)).toMatchObject({ workflowId: scopeId })
       expect(
-        await new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)).findTaskScope(
-          task.id!,
-        ),
+        await new DrizzleMemoryDistillWorkStore(
+          db,
+          createClarifyAnswerQueries(db, taskExecutionParticipants),
+          createNodeRunQueries(db),
+          createNodeOutputQueries(db),
+        ).findTaskScope(task.id!),
       ).toMatchObject({
         workflowId: scopeId,
       })

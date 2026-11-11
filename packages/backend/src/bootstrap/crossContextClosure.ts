@@ -14,6 +14,9 @@ import {
   createTaskClarifyDirectivePersistence,
   createTaskSubjectQueries,
   createRunSelectionReader,
+  createNodeRunQueries,
+  createTaskGateQueries,
+  createNodeOutputQueries,
 } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -63,5 +66,8 @@ export function composeTaskExecutionParticipantBindings(executionPermits: TaskEx
     createTaskClarifyDirectivePersistence,
     createTaskSubjectQueries,
     createRunSelectionReader,
+    createNodeRunQueries,
+    createTaskGateQueries,
+    createNodeOutputQueries,
   })
 }

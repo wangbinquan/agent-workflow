@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-372 review follow-up O8 (design/RFC-372-mindmap-clarify/review-followups-20261014.md §4.7).
 //
@@ -105,8 +106,8 @@ async function seed(h: ProviderHarness) {
     status: 'done',
     iteration: 0,
   })
-  const round = await createClarifyRound(
-    withO2Closure({
+  const round = await createClarifyRound({
+    ...withO2Closure({
       db: h.db,
       taskId,
       askingNodeId: 'asking',
@@ -125,8 +126,11 @@ async function seed(h: ProviderHarness) {
         }),
       ],
     }),
-  )
-  const store = createClarifyFollowupStore(h.db, { publish: async () => {} })
+    taskExecutionParticipants,
+  })
+  const store = createClarifyFollowupStore(h.db, taskExecutionParticipants, {
+    publish: async () => {},
+  })
   const request = async (basis?: string): Promise<ClarifyFollowup> => {
     const snapshot = await store.read(round.intermediaryNodeRunId, 'a')
     return {

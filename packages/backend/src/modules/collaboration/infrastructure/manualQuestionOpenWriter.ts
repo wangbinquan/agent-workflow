@@ -8,7 +8,7 @@
 // 事务用中立 `serializable`：SQLite 是 BEGIN IMMEDIATE（本来就全库独占），PG 抬到 SERIALIZABLE 并按
 // 40001 重放，与合一前两侧各自的隔离级别逐字相同。
 
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 
@@ -41,6 +41,7 @@ export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWrite
   constructor(
     private readonly db: PersistenceDb,
     private readonly journal: HumanGateOperationJournal,
+    private readonly taskExecutionParticipants: TaskExecutionParticipantBindings,
   ) {}
 
   async create(input: CreateManualQuestionOpenInput): Promise<CreatedManualQuestionOpen> {
@@ -51,7 +52,8 @@ export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWrite
     const created = await databaseSessionFor(this.db).serializable(async (tx) => {
       const { taskQuestions } = tablesOf(tx)
       const task = (
-        await createTaskGateQueries(tx)
+        await this.taskExecutionParticipants
+          .createTaskGateQueries(tx)
           .listContexts([input.taskId])
           .then((rows) =>
             rows.map((row) => ({

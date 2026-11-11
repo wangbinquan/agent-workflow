@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 // RFC-359 W4-B4 批 a —— identity-access / memory / integration 七对只差客户端类型的适配器合一，两个引擎各跑一遍：
 // owner 身份批量查询、记忆蒸馏读存储、记忆注入读存储、终态工作区归属、webhook 端点管理、webhook 触发器管理、
 // webhook 派发执行运行时装配。
@@ -164,7 +166,10 @@ describeEachProvider('RFC-359 W4-B4a —— owner 身份与记忆读存储', (ha
       distilled: 0,
     })
 
-    const distill = new DrizzleMemoryDistillReadStore(db, createClarifyAnswerQueries(db))
+    const distill = new DrizzleMemoryDistillReadStore(
+      db,
+      createClarifyAnswerQueries(db, taskExecutionParticipants),
+    )
     expect((await distill.findJob(job1))?.id).toBe(job1)
     expect(await distill.findJob('missing')).toBeNull()
     expect((await distill.listSiblingJobs(debounceKey)).map((row) => row.id)).toEqual([job1, job2])
@@ -267,7 +272,7 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       injectedMemories: '[]',
     })
 
-    const injection = new DrizzleMemoryInjectionReadStore(db)
+    const injection = new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db))
     expect(await injection.findTaskContext(taskId)).toEqual({
       workflowId: expect.any(String),
       cachedRepoId: null,

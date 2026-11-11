@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // Locks in RFC-037 follow-up: clarify list + detail surface the user-set
 // `WorkflowNode.title` for the *clarify* node itself (parallel to the
 // existing `sourceAgentNodeTitle` enrichment), so the frontend can render
@@ -120,7 +121,7 @@ describeEachProvider('clarify summary + detail — clarifyNodeTitle enrichment',
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'clarify_db')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row).toBeDefined()
     expect(row?.intermediaryNodeId).toBe('clarify_db')
@@ -139,7 +140,7 @@ describeEachProvider('clarify summary + detail — clarifyNodeTitle enrichment',
       JSON.stringify(def),
       'clarify_db',
     )
-    const session = await getClarifyRoundDetail(db, clarifyNodeRunId)
+    const session = await getClarifyRoundDetail(db, taskExecutionParticipants, clarifyNodeRunId)
     expect(session.intermediaryNodeId).toBe('clarify_db')
     expect(session.intermediaryNodeTitle).toBe('Ask user about the DB')
   })
@@ -149,7 +150,7 @@ describeEachProvider('clarify summary + detail — clarifyNodeTitle enrichment',
     const def = buildDef({ id: 'clarify_legacy', kind: 'clarify' } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'clarify_legacy')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row?.intermediaryNodeTitle).toBeNull()
     expect(row?.intermediaryNodeId).toBe('clarify_legacy')
@@ -167,7 +168,7 @@ describeEachProvider('clarify summary + detail — clarifyNodeTitle enrichment',
       JSON.stringify(def),
       'clarify_blank',
     )
-    const session = await getClarifyRoundDetail(db, clarifyNodeRunId)
+    const session = await getClarifyRoundDetail(db, taskExecutionParticipants, clarifyNodeRunId)
     expect(session.intermediaryNodeTitle).toBeNull()
   })
 
@@ -175,7 +176,7 @@ describeEachProvider('clarify summary + detail — clarifyNodeTitle enrichment',
     const db = harness.db
     const { taskId } = await seedSessionForSnapshot(db, '{not valid json', 'clarify_ghost')
 
-    const out = await listClarifyRoundSummaries(db)
+    const out = await listClarifyRoundSummaries(db, taskExecutionParticipants)
     const row = out.find((r) => r.taskId === taskId)
     expect(row?.intermediaryNodeTitle).toBeNull()
     expect(row?.intermediaryNodeId).toBe('clarify_ghost')

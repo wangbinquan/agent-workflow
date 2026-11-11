@@ -1,3 +1,4 @@
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
@@ -69,7 +70,9 @@ import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function composeCapabilities(db: PersistenceDb, appHome: string) {
   const memory = composeMemoryOperationsFor({
-    clarifyAnswers: createClarifyAnswerQueries(db),
+    taskNodeRuns: createNodeRunQueries(db),
+    taskNodeOutputs: createNodeOutputQueries(db),
+    clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
@@ -116,7 +119,10 @@ function constructionTypeContracts(
   capabilities: Capabilities,
   condition: boolean,
 ) {
-  const base = createCollaborationCommandContext(withO2Closure({ db }))
+  const base = createCollaborationCommandContext({
+    ...withO2Closure({ db }),
+    taskExecutionParticipants,
+  })
   // @ts-expect-error A base context cannot submit review decisions.
   const baseReview: ReviewContext = base
   // @ts-expect-error A base context cannot dispatch questions.
@@ -127,30 +133,34 @@ function constructionTypeContracts(
   const baseReadModels: ReadModelsContext = base
   void [baseReview, baseQuestion, baseClarify, baseReadModels]
 
-  const review = createCollaborationCommandContext(
-    withO2Closure({
+  const review = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       reviewDecisions: capabilities.reviewDecisions,
     }),
-  )
-  const question = createCollaborationCommandContext(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const question = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       questionDispatches: capabilities.questionDispatches,
     }),
-  )
-  const clarify = createCollaborationCommandContext(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const clarify = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       clarifyDecisions: capabilities.clarifyDecisions,
     }),
-  )
-  const reads = createCollaborationCommandContext(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const reads = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       taskExecutionReadModels: capabilities.taskExecutionReadModels,
     }),
-  )
+    taskExecutionParticipants,
+  })
   const singleCapabilities: [ReviewContext, QuestionContext, ClarifyContext, ReadModelsContext] = [
     review,
     question,
@@ -167,9 +177,10 @@ function constructionTypeContracts(
   ] = [base, base, base]
   void [singleCapabilities, narrowConsumers, baseConsumers]
 
-  const full: CollaborationRouteContext = createCollaborationCommandContext(
-    withO2Closure({ db, ...capabilities }),
-  )
+  const full: CollaborationRouteContext = createCollaborationCommandContext({
+    ...withO2Closure({ db, ...capabilities }),
+    taskExecutionParticipants,
+  })
   const completeConsumers: [
     CollaborationCommandContext,
     ReviewContext,
@@ -186,38 +197,42 @@ function constructionTypeContracts(
   const erasedReview: ReviewContext = widened
   void erasedReview
 
-  const missingReview = createCollaborationCommandContext(
-    withO2Closure({
+  const missingReview = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       questionDispatches: capabilities.questionDispatches,
       clarifyDecisions: capabilities.clarifyDecisions,
       taskExecutionReadModels: capabilities.taskExecutionReadModels,
     }),
-  )
-  const missingQuestion = createCollaborationCommandContext(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const missingQuestion = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       reviewDecisions: capabilities.reviewDecisions,
       clarifyDecisions: capabilities.clarifyDecisions,
       taskExecutionReadModels: capabilities.taskExecutionReadModels,
     }),
-  )
-  const missingClarify = createCollaborationCommandContext(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const missingClarify = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       reviewDecisions: capabilities.reviewDecisions,
       questionDispatches: capabilities.questionDispatches,
       taskExecutionReadModels: capabilities.taskExecutionReadModels,
     }),
-  )
-  const missingReads = createCollaborationCommandContext(
-    withO2Closure({
+    taskExecutionParticipants,
+  })
+  const missingReads = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       reviewDecisions: capabilities.reviewDecisions,
       questionDispatches: capabilities.questionDispatches,
       clarifyDecisions: capabilities.clarifyDecisions,
     }),
-  )
+    taskExecutionParticipants,
+  })
   // @ts-expect-error The Sqlite entry must reject the missing Review capability.
   const missingReviewForSqlite: SqliteRouteContext = missingReview
   // @ts-expect-error The Postgresql entry must reject the missing Review capability.
@@ -251,17 +266,22 @@ function constructionTypeContracts(
   void [missingReadsForSqlite, missingReadsForPostgresql, missingReadsForApp]
 
   const optionalInput: CollaborationCommandContextInput = withO2Closure({ db, ...capabilities })
-  const optional = createCollaborationCommandContext(withO2Closure(optionalInput))
-  const conditional = createCollaborationCommandContext(
-    withO2Closure(condition ? { db, ...capabilities } : { db }),
-  )
-  const undefinedPort = createCollaborationCommandContext(
-    withO2Closure({
+  const optional = createCollaborationCommandContext({
+    ...withO2Closure(optionalInput),
+    taskExecutionParticipants,
+  })
+  const conditional = createCollaborationCommandContext({
+    ...withO2Closure(condition ? { db, ...capabilities } : { db }),
+    taskExecutionParticipants,
+  })
+  const undefinedPort = createCollaborationCommandContext({
+    ...withO2Closure({
       db,
       ...capabilities,
       reviewDecisions: undefined,
     }),
-  )
+    taskExecutionParticipants,
+  })
   // @ts-expect-error Optional fields do not promise a complete context.
   const optionalFull: CollaborationRouteContext = optional
   // @ts-expect-error A conditional input must guarantee the capability on both branches.
@@ -270,27 +290,33 @@ function constructionTypeContracts(
   const undefinedReview: ReviewContext = undefinedPort
   void [optionalFull, conditionalFull, undefinedReview]
 
-  const pgFull: CollaborationRouteContext = createCollaborationCommandContext(
-    withO2Closure({
+  const pgFull: CollaborationRouteContext = createCollaborationCommandContext({
+    ...withO2Closure({
       db: pgDb,
       ...capabilities,
     }),
-  )
+    taskExecutionParticipants,
+  })
   const pgOptionalInput: PostgresqlCollaborationCommandContextInput = withO2Closure({
     db: pgDb,
     ...capabilities,
   })
-  const pgOptional = createCollaborationCommandContext(withO2Closure(pgOptionalInput))
-  const pgConditional = createCollaborationCommandContext(
-    withO2Closure(condition ? { db: pgDb, ...capabilities } : { db: pgDb }),
-  )
-  const pgUndefined = createCollaborationCommandContext(
-    withO2Closure({
+  const pgOptional = createCollaborationCommandContext({
+    ...withO2Closure(pgOptionalInput),
+    taskExecutionParticipants,
+  })
+  const pgConditional = createCollaborationCommandContext({
+    ...withO2Closure(condition ? { db: pgDb, ...capabilities } : { db: pgDb }),
+    taskExecutionParticipants,
+  })
+  const pgUndefined = createCollaborationCommandContext({
+    ...withO2Closure({
       db: pgDb,
       ...capabilities,
       reviewDecisions: undefined,
     }),
-  )
+    taskExecutionParticipants,
+  })
   // @ts-expect-error The PG factory must retain the optional-input boundary.
   const pgOptionalFull: CollaborationRouteContext = pgOptional
   // @ts-expect-error The PG factory must not promote a conditional capability.
@@ -369,37 +395,42 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
     const taskId = freshTaskId()
     await seedTask(db, taskId)
     const capabilities = composeCapabilities(db, appHome)
-    const review = createCollaborationCommandContext(
-      withO2Closure({
+    const review = createCollaborationCommandContext({
+      ...withO2Closure({
         db,
         reviewDecisions: capabilities.reviewDecisions,
       }),
-    )
-    const question = createCollaborationCommandContext(
-      withO2Closure({
+      taskExecutionParticipants,
+    })
+    const question = createCollaborationCommandContext({
+      ...withO2Closure({
         db,
         questionDispatches: capabilities.questionDispatches,
       }),
-    )
-    const clarify = createCollaborationCommandContext(
-      withO2Closure({
+      taskExecutionParticipants,
+    })
+    const clarify = createCollaborationCommandContext({
+      ...withO2Closure({
         db,
         clarifyDecisions: capabilities.clarifyDecisions,
       }),
-    )
-    const reads = createCollaborationCommandContext(
-      withO2Closure({
+      taskExecutionParticipants,
+    })
+    const reads = createCollaborationCommandContext({
+      ...withO2Closure({
         db,
         taskExecutionReadModels: capabilities.taskExecutionReadModels,
       }),
-    )
-    const full: CollaborationRouteContext = createCollaborationCommandContext(
-      withO2Closure({
+      taskExecutionParticipants,
+    })
+    const full: CollaborationRouteContext = createCollaborationCommandContext({
+      ...withO2Closure({
         db,
         appHome,
         ...capabilities,
       }),
-    )
+      taskExecutionParticipants,
+    })
     const baseView: CollaborationCommandContext = full
     expect(baseView).toBe(full)
     expect(Object.isFrozen(full)).toBe(true)
@@ -426,7 +457,10 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
 
   test('persistence composition retains the supplied dependency instances in its frozen snapshot', () => {
     const db = harness.db
-    const base = createCollaborationCommandContext(withO2Closure({ db, appHome }))
+    const base = createCollaborationCommandContext({
+      ...withO2Closure({ db, appHome }),
+      taskExecutionParticipants,
+    })
     const original = resolveCollaborationCommandContext(base)
     const capabilities = composeCapabilities(db, appHome)
     const input = { ...original, ...capabilities }
@@ -457,7 +491,10 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const context = createCollaborationCommandContext(withO2Closure({ db }))
+    const context = createCollaborationCommandContext({
+      ...withO2Closure({ db }),
+      taskExecutionParticipants,
+    })
     const created = await createManualQuestionOpen(context, {
       taskId,
       title: 'Investigate this edge case',

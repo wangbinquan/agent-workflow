@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { testExecutionPermits } from './helpers/executionPermits'
 // RFC-120 T3 — integration test for the read-side service (lazy reconcile +
 // handler resolution + list). Locks:
@@ -160,14 +161,14 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
     })
     // RFC-132: 相位派生自 entry 自身 dispatch 状态 — reconcile 建 entry 后 dispatch+bind 到
     // done+output handler(取代旧 consumption-stamp seed)。
-    const [pre] = await listTaskQuestions(db, taskId)
+    const [pre] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), triggerRunId: 'r-handler' })
       .where(eq(taskQuestions.id, pre!.id))
 
-    const list = await listTaskQuestions(db, taskId)
+    const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(list).toHaveLength(1)
     expect(list[0]!.roleKind).toBe('self')
     expect(list[0]!.sourceNodeId).toBe('designer')
@@ -199,7 +200,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       ]),
     })
 
-    const list = await listTaskQuestions(db, taskId)
+    const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(list.map((e) => e.roleKind)).toEqual(['questioner'])
     const questioner = list[0]!
     expect(questioner.defaultTargetNodeId).toBe('auditor')
@@ -218,7 +219,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
-    const list = await listTaskQuestions(db, taskId)
+    const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(list).toHaveLength(1)
     expect(list[0]!.roleKind).toBe('questioner')
     expect(list[0]!.phase).toBe('pending')
@@ -246,14 +247,14 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
     // The first board read happens only after the task is terminal. It must hide
     // the actionable card while still lazily materializing the audit ledger.
     await patchTaskFixture(db, { id: taskId }, { status: 'done' })
-    expect(await listTaskQuestions(db, taskId)).toEqual([])
+    expect(await listTaskQuestions(db, taskExecutionParticipants, taskId)).toEqual([])
     expect(
       await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
     ).toHaveLength(1)
 
     for (const status of ['failed', 'canceled', 'interrupted'] as const) {
       await patchTaskFixture(db, { id: taskId }, { status })
-      expect(await listTaskQuestions(db, taskId), status).toEqual([])
+      expect(await listTaskQuestions(db, taskExecutionParticipants, taskId), status).toEqual([])
       expect(
         await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
         `${status} must preserve the audit ledger`,
@@ -261,7 +262,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
     }
 
     await patchTaskFixture(db, { id: taskId }, { status: 'running' })
-    expect(await listTaskQuestions(db, taskId)).toHaveLength(1)
+    expect(await listTaskQuestions(db, taskExecutionParticipants, taskId)).toHaveLength(1)
   })
 
   test('reconcile idempotent — listing twice does not duplicate', async () => {
@@ -275,8 +276,8 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       questions: JSON.stringify([Q('q1'), Q('q2')]),
       status: 'answered',
     })
-    const first = await listTaskQuestions(db, taskId)
-    const second = await listTaskQuestions(db, taskId)
+    const first = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    const second = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(first).toHaveLength(2)
     expect(second).toHaveLength(2)
     const { taskQuestions } = tablesOf(db)
@@ -303,11 +304,17 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
-    const onlyA = await listTaskQuestions(db, taskId, { sourceNodeId: 'nodeA' })
+    const onlyA = await listTaskQuestions(db, taskExecutionParticipants, taskId, {
+      sourceNodeId: 'nodeA',
+    })
     expect(onlyA.map((e) => e.sourceNodeId)).toEqual(['nodeA'])
-    const pending = await listTaskQuestions(db, taskId, { phase: 'pending' })
+    const pending = await listTaskQuestions(db, taskExecutionParticipants, taskId, {
+      phase: 'pending',
+    })
     expect(pending).toHaveLength(2)
-    const processing = await listTaskQuestions(db, taskId, { phase: 'processing' })
+    const processing = await listTaskQuestions(db, taskExecutionParticipants, taskId, {
+      phase: 'processing',
+    })
     expect(processing).toHaveLength(0)
   })
 })
@@ -329,7 +336,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       status: 'answered', // answered but never dispatched (legacy / data-lost round)
     })
     // RFC-132: dispatch+bind 取代 consumption-stamp seed(相位读 entry 自身 dispatch 状态)。
-    const [pre] = await listTaskQuestions(db, taskId)
+    const [pre] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
@@ -341,10 +348,10 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('confirm: awaiting_confirm → done with confirmedBy', async () => {
     const db = harness.db
     const taskId = await seedSelfAwaitingConfirm(db)
-    const [entry] = await listTaskQuestions(db, taskId)
+    const [entry] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(entry!.phase).toBe('awaiting_confirm')
-    await confirmTaskQuestion(db, entry!.id, ACTOR)
-    const [after] = await listTaskQuestions(db, taskId)
+    await confirmTaskQuestion(db, taskExecutionParticipants, entry!.id, ACTOR)
+    const [after] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(after!.phase).toBe('done')
     expect(after!.confirmation).toBe('confirmed')
     expect(after!.confirmedBy).toBe('u1')
@@ -361,9 +368,11 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
-    const [entry] = await listTaskQuestions(db, taskId)
+    const [entry] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(entry!.phase).toBe('pending')
-    await expect(confirmTaskQuestion(db, entry!.id, ACTOR)).rejects.toThrow()
+    await expect(
+      confirmTaskQuestion(db, taskExecutionParticipants, entry!.id, ACTOR),
+    ).rejects.toThrow()
   })
 
   /** Seed an answered cross round (single questioner card) and return its taskId. */
@@ -389,14 +398,20 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-162: reassign-to-upstream adds a designer handler and keeps the asker', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const before = await listTaskQuestions(db, taskId)
+    const before = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(before.map((e) => e.roleKind)).toEqual(['questioner'])
     const questioner = before[0]!
 
-    const action = await reassignTaskQuestion(db, questioner.id, 'coder', ACTOR)
+    const action = await reassignTaskQuestion(
+      db,
+      taskExecutionParticipants,
+      questioner.id,
+      'coder',
+      ACTOR,
+    )
     expect(action).toBe('added-designer')
 
-    const after = await listTaskQuestions(db, taskId)
+    const after = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     // The asker (questioner) entry is UNTOUCHED — the asker always reruns + gets the Q&A.
     const askerAfter = after.find((e) => e.roleKind === 'questioner')!
     expect(askerAfter.id).toBe(questioner.id)
@@ -426,7 +441,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
-    const [questioner] = await listTaskQuestions(db, taskId)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(questioner!.roleKind).toBe('questioner')
     // Simulate RFC-128 P1 per-question seal: stamp the asker entry sealedAt while the round
     // stays 'awaiting_human' (a partial seal is a pure derived state — clarifySeal.ts:22).
@@ -437,7 +452,13 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       .set({ sealedAt: sealTs })
       .where(eq(taskQuestions.id, questioner!.id))
 
-    const action = await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const action = await reassignTaskQuestion(
+      db,
+      taskExecutionParticipants,
+      questioner!.id,
+      'coder',
+      ACTOR,
+    )
     expect(action).toBe('added-designer')
 
     // The new designer row inherits the asker's sealedAt → stageable, NOT stranded at NULL.
@@ -453,7 +474,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-163: reassign on a DISPATCHED asker still ADDS an undispatched designer (revision flow)', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     const dispatchedAt = Date.now()
     const { taskQuestions } = tablesOf(db)
     await db
@@ -461,7 +482,13 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       .set({ dispatchedAt, dispatchedBy: 'u1' })
       .where(eq(taskQuestions.id, questioner!.id))
 
-    const action = await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const action = await reassignTaskQuestion(
+      db,
+      taskExecutionParticipants,
+      questioner!.id,
+      'coder',
+      ACTOR,
+    )
     expect(action).toBe('added-designer')
     const rows = await db.select().from(taskQuestions)
     const designer = rows.find((r) => r.roleKind === 'designer')
@@ -478,16 +505,22 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-163: dispatched asker + undispatched designer → reassign back to asker still removes the designer', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     // Add the designer first (asker still undispatched), then dispatch the asker.
-    await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'coder', ACTOR)
     const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), dispatchedBy: 'u1' })
       .where(eq(taskQuestions.id, questioner!.id))
 
-    const action = await reassignTaskQuestion(db, questioner!.id, 'auditor', ACTOR)
+    const action = await reassignTaskQuestion(
+      db,
+      taskExecutionParticipants,
+      questioner!.id,
+      'auditor',
+      ACTOR,
+    )
     expect(action).toBe('removed-designer')
     const rows = await db.select().from(taskQuestions)
     expect(rows.some((r) => r.roleKind === 'designer')).toBe(false)
@@ -500,7 +533,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-163: reassign on a STAGED asker → designer inherits stagedAt/stagedBy (group stays 待下发)', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     const stagedAt = Date.now() - 5_000
     const { taskQuestions } = tablesOf(db)
     await db
@@ -508,7 +541,13 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       .set({ stagedAt, stagedBy: 'u9', sealedAt: stagedAt })
       .where(eq(taskQuestions.id, questioner!.id))
 
-    const action = await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const action = await reassignTaskQuestion(
+      db,
+      taskExecutionParticipants,
+      questioner!.id,
+      'coder',
+      ACTOR,
+    )
     expect(action).toBe('added-designer')
     const designer = (await db.select().from(taskQuestions)).find((r) => r.roleKind === 'designer')!
     expect(designer.stagedAt).toBe(stagedAt) // 随组进待下发
@@ -520,8 +559,8 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-163: reassign on a PENDING asker → designer has NO stagedAt', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
-    await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'coder', ACTOR)
     const { taskQuestions } = tablesOf(db)
     const designer = (await db.select().from(taskQuestions)).find((r) => r.roleKind === 'designer')!
     expect(designer.stagedAt).toBeNull()
@@ -531,8 +570,8 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-162: reassign never materializes an echo row', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
-    await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'coder', ACTOR)
     const { taskQuestions } = tablesOf(db)
     const rows = await db.select().from(taskQuestions)
     expect(rows.some((r) => (r.roleKind as string) === 'echo')).toBe(false)
@@ -542,11 +581,13 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-162: re-targeting an added designer moves the designer handler', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
-    await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
-    const designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
-    await reassignTaskQuestion(db, designer.id, 'fixer', ACTOR)
-    const list = await listTaskQuestions(db, taskId)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'coder', ACTOR)
+    const designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+      (e) => e.roleKind === 'designer',
+    )!
+    await reassignTaskQuestion(db, taskExecutionParticipants, designer.id, 'fixer', ACTOR)
+    const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     // Still exactly one designer, now on 'fixer'; the asker is still present (single group).
     expect(list.filter((e) => e.roleKind === 'designer')).toHaveLength(1)
     const after = list.find((e) => e.roleKind === 'designer')!
@@ -558,13 +599,23 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('RFC-162: reassign to the asking node removes the designer (single card)', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
-    await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
-    expect((await listTaskQuestions(db, taskId)).some((e) => e.roleKind === 'designer')).toBe(true)
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'coder', ACTOR)
+    expect(
+      (await listTaskQuestions(db, taskExecutionParticipants, taskId)).some(
+        (e) => e.roleKind === 'designer',
+      ),
+    ).toBe(true)
     // Target == the asking node (auditor) → remove the designer handler.
-    const action = await reassignTaskQuestion(db, questioner!.id, 'auditor', ACTOR)
+    const action = await reassignTaskQuestion(
+      db,
+      taskExecutionParticipants,
+      questioner!.id,
+      'auditor',
+      ACTOR,
+    )
     expect(action).toBe('removed-designer')
-    const list = await listTaskQuestions(db, taskId)
+    const list = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(list.map((e) => e.roleKind)).toEqual(['questioner'])
   })
 
@@ -572,8 +623,10 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   test('reassign: non-agent target rejected', async () => {
     const db = harness.db
     const taskId = await seedAnsweredCross(db)
-    const [questioner] = await listTaskQuestions(db, taskId)
-    await expect(reassignTaskQuestion(db, questioner!.id, 'c1', ACTOR)).rejects.toThrow()
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    await expect(
+      reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'c1', ACTOR),
+    ).rejects.toThrow()
   })
 
   test('stage / unstage toggles the 待下发 phase', async () => {
@@ -587,7 +640,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
-    const [entry] = await listTaskQuestions(db, taskId)
+    const [entry] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(entry!.phase).toBe('pending')
     const { taskQuestions } = tablesOf(db)
     // RFC-128 P2 §11 — 待下发 gate: a question must be SEALED before it can be staged. Stamp
@@ -599,9 +652,13 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       .set({ sealedAt: Date.now() })
       .where(eq(taskQuestions.id, entry!.id))
     await stageTaskQuestion(db, testExecutionPermits, entry!.id, true, ACTOR)
-    expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('staged')
+    expect((await listTaskQuestions(db, taskExecutionParticipants, taskId))[0]!.phase).toBe(
+      'staged',
+    )
     await stageTaskQuestion(db, testExecutionPermits, entry!.id, false, ACTOR)
-    expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('pending')
+    expect((await listTaskQuestions(db, taskExecutionParticipants, taskId))[0]!.phase).toBe(
+      'pending',
+    )
   })
 })
 
@@ -625,7 +682,7 @@ describeEachProvider('RFC-120 Codex impl-gate regressions (F1/F2/F3)', (harness)
     // RFC-132 统一模型:相位一律派生自 entry 自身 dispatch 状态。answered-undispatched(迁移
     // 垫片 skip 的数据损轮)→ pending(可经 board dispatch 补救),不再是旧 consumption-stamp
     // 语义下的永久 processing;'r-later' 依然绝不被猜绑。
-    const [entry] = await listTaskQuestions(db, taskId)
+    const [entry] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
     expect(entry!.phase).toBe('pending')
   })
 
@@ -652,20 +709,28 @@ describeEachProvider('RFC-120 Codex impl-gate regressions (F1/F2/F3)', (harness)
     // RFC-162: a designer handler is created by a reassign (adds a designer row targeting the
     // upstream node), not by scope. Add one, then dispatch + bind it to the done+output handler
     // run 'h' so it reaches awaiting_confirm, confirm it (→ done), and lock the terminal reject.
-    const [questioner] = await listTaskQuestions(db, taskId)
-    await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
-    let designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+    const [questioner] = await listTaskQuestions(db, taskExecutionParticipants, taskId)
+    await reassignTaskQuestion(db, taskExecutionParticipants, questioner!.id, 'coder', ACTOR)
+    let designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+      (e) => e.roleKind === 'designer',
+    )!
     const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), triggerRunId: 'h' })
       .where(eq(taskQuestions.id, designer.id))
-    designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+    designer = (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+      (e) => e.roleKind === 'designer',
+    )!
     expect(designer.phase).toBe('awaiting_confirm')
-    await confirmTaskQuestion(db, designer.id, ACTOR)
+    await confirmTaskQuestion(db, taskExecutionParticipants, designer.id, ACTOR)
     expect(
-      (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase,
+      (await listTaskQuestions(db, taskExecutionParticipants, taskId)).find(
+        (e) => e.roleKind === 'designer',
+      )!.phase,
     ).toBe('done')
-    await expect(reassignTaskQuestion(db, designer.id, 'fixer', ACTOR)).rejects.toThrow()
+    await expect(
+      reassignTaskQuestion(db, taskExecutionParticipants, designer.id, 'fixer', ACTOR),
+    ).rejects.toThrow()
   })
 })

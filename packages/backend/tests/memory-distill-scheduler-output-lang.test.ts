@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 // RFC-050 — locks enqueueDistillJob's output-language plumbing.
 //
 //   - explicit `outputLang` wins over the ambient provider
@@ -59,7 +61,14 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     resetBroadcastersForTests()
     resetMemoryDistillPolicyProviderForTest()
     db = harness.db
-    memory = { store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)) }
+    memory = {
+      store: new DrizzleMemoryDistillWorkStore(
+        db,
+        createClarifyAnswerQueries(db, taskExecutionParticipants),
+        createNodeRunQueries(db),
+        createNodeOutputQueries(db),
+      ),
+    }
   })
 
   afterEach(() => {

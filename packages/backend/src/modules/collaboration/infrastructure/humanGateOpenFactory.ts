@@ -22,6 +22,7 @@ export function createHumanGateOpenParticipantScope(input: {
         readonly consumedInputs: ConstructorParameters<
           typeof DatabaseHumanGateOpenParticipantInTx
         >[4]
+        readonly nodeRuns: ConstructorParameters<typeof DatabaseHumanGateOpenParticipantInTx>[5]
       },
     ) =>
       new DatabaseHumanGateOpenParticipantInTx(
@@ -30,6 +31,7 @@ export function createHumanGateOpenParticipantScope(input: {
         participants.mint,
         participants.lifecycle,
         participants.consumedInputs,
+        participants.nodeRuns,
         input.historyRestrictions,
       ),
   }

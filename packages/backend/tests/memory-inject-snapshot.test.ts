@@ -1,3 +1,4 @@
+import { createNodeRunQueries } from '@/modules/task-execution/composition'
 // RFC-046 — locks the snapshot capture path added to memoryInject.ts:
 //   - injectMemoryForRun returns { block, snapshot } (parity wired in
 //     runner.ts at T4).
@@ -124,7 +125,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       approvedAt: 1_700_000_000_000,
     })
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -164,7 +165,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       createdAt: 1_000_000_000_000,
     })
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -178,7 +179,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
   test('B3: four-scope empty → block null AND snapshot null (in lock-step)', async () => {
     const { taskId } = await seedTask(db)
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -196,7 +197,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       tags: '{not-an-array',
     })
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -213,13 +214,16 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       title: 'WF',
       tags: 'not-json-at-all',
     })
-    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
-      agentIds: [],
-      workflowId,
-      repoIds: [],
+    const set = await loadInjectableMemories(
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      {
+        agentIds: [],
+        workflowId,
+        repoIds: [],
 
-      repoGroupId: null,
-    })
+        repoGroupId: null,
+      },
+    )
     expect(set.byScope.workflow.length).toBe(1)
     expect(set.byScope.workflow[0]!.tags).toEqual([])
   })
@@ -294,7 +298,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
     ])
     const runId = await seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: payload })
     const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db),
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       {
         taskId,
         nodeId: 'agent-1',
@@ -312,7 +316,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
     const { taskId } = await seedTask(db)
     const runId = await seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: null })
     const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db),
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       {
         taskId,
         nodeId: 'agent-1',
@@ -368,7 +372,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       json: payloadB,
     })
     const snapA = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db),
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       {
         taskId,
         nodeId: 'agent-1',
@@ -380,7 +384,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
     )
     expect(snapA?.[0]?.id).toBe('mA')
     const snapB = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db),
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       {
         taskId,
         nodeId: 'agent-1',
@@ -431,7 +435,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       json: null,
     })
     const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db),
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       {
         taskId,
         nodeId: 'designer',
@@ -474,7 +478,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       json: null,
     })
     const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db),
+      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
       {
         taskId,
         nodeId: 'agent-1',

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-043 T4 — getDistillJobDetail aggregator unit tests.
@@ -23,7 +24,10 @@ import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function getDistillJobDetail(db: PersistenceDb, jobId: string) {
-  return composeMemoryDistillQueries(db, createClarifyAnswerQueries(db)).getJobDetail(jobId)
+  return composeMemoryDistillQueries(
+    db,
+    createClarifyAnswerQueries(db, taskExecutionParticipants),
+  ).getJobDetail(jobId)
 }
 
 async function seedTaskWithReviewRun(

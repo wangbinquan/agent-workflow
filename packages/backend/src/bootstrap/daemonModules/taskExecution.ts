@@ -182,6 +182,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     workspacePresence: observation.workspacePresence,
   })
   const collaboration: CollaborationRouteContext = createCollaborationCommandContext({
+    taskExecutionParticipants: closure.taskExecutionParticipants,
     content: input.content,
     historyRestrictions: input.historyRestrictions,
     db,

@@ -84,11 +84,18 @@ export function createCollaborationRouteOperations(
         await loadReviewOperations()
       ).listReviewRounds(db, request.appHome, request.nodeRunId, input.reviewReader),
     setSelection: async (request) =>
-      await (await loadReviewOperations()).setDocumentSelection({ db, ...request }),
+      await (
+        await loadReviewOperations()
+      ).setDocumentSelection({
+        taskExecutionParticipants: input.taskExecutionParticipants,
+        db,
+        ...request,
+      }),
     addComment: async (request) =>
       await (
         await loadReviewOperations()
       ).addReviewComment({
+        taskExecutionParticipants: input.taskExecutionParticipants,
         db,
         appHome: request.appHome,
         reviewReader: input.reviewReader,
@@ -126,7 +133,7 @@ export function createCollaborationRouteOperations(
     list: async (request) =>
       await (
         await loadQuestionOperations()
-      ).listTaskQuestions(db, request.taskId, {
+      ).listTaskQuestions(db, input.taskExecutionParticipants, request.taskId, {
         ...(request.sourceNodeId === undefined ? {} : { sourceNodeId: request.sourceNodeId }),
         ...(request.phase === undefined ? {} : { phase: request.phase }),
       }),
@@ -135,6 +142,7 @@ export function createCollaborationRouteOperations(
         await loadQuestionOperations()
       ).createManualTaskQuestion(
         db,
+        input.taskExecutionParticipants,
         request.taskId,
         {
           title: request.title,
@@ -149,11 +157,17 @@ export function createCollaborationRouteOperations(
     confirm: async (request) =>
       await (
         await loadQuestionOperations()
-      ).confirmTaskQuestion(db, request.entryId, request.actor),
+      ).confirmTaskQuestion(db, input.taskExecutionParticipants, request.entryId, request.actor),
     reassign: async (request) =>
       await (
         await loadQuestionOperations()
-      ).reassignTaskQuestion(db, request.entryId, request.targetNodeId, request.actor),
+      ).reassignTaskQuestion(
+        db,
+        input.taskExecutionParticipants,
+        request.entryId,
+        request.targetNodeId,
+        request.actor,
+      ),
     stage: async (request) =>
       await (
         await loadQuestionOperations()
@@ -167,11 +181,15 @@ export function createCollaborationRouteOperations(
   })
   const clarify: CollaborationRoutePersistenceOperations['clarify'] = Object.freeze({
     list: async (request) =>
-      await (await loadClarifyOperations()).listClarifyRoundSummaries(db, request),
+      await (
+        await loadClarifyOperations()
+      ).listClarifyRoundSummaries(db, input.taskExecutionParticipants, request),
     countPending: async (actor) =>
       await (await loadClarifyOperations()).countAwaitingClarifyRounds(db, actor),
     detail: async (intermediaryNodeRunId) =>
-      await (await loadClarifyOperations()).getClarifyRoundDetail(db, intermediaryNodeRunId),
+      await (
+        await loadClarifyOperations()
+      ).getClarifyRoundDetail(db, input.taskExecutionParticipants, intermediaryNodeRunId),
     seal: async (request) =>
       await (
         await loadClarifySeal()

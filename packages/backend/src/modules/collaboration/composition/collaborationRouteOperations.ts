@@ -93,7 +93,7 @@ export function composeCollaborationRouteOperations(input: {
   const followup =
     input.followupGenerator &&
     createClarifyFollowupOperations(
-      createClarifyFollowupStore(input.db, events),
+      createClarifyFollowupStore(input.db, input.taskExecutionParticipants, events),
       input.followupGenerator,
       clarifyFollowupActivity,
       { events: clarifyFollowupEvents },

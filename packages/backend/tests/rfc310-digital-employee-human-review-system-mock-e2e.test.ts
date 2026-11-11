@@ -410,6 +410,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       )
       if (reviewRun === undefined) throw new Error('review node did not enter durable waiting')
       await addReviewComment({
+        taskExecutionParticipants,
         reviewReader: epoch2ReviewReader(db, appHome),
 
         db,
@@ -469,6 +470,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       const waitingReview = (await readNodeRunFixtures(db, { id: reviewRun.id }))[0]
       expect(waitingReview).toMatchObject({ status: 'awaiting_review', reviewIteration: 1 })
       await addReviewComment({
+        taskExecutionParticipants,
         reviewReader: epoch2ReviewReader(db, appHome),
 
         db,

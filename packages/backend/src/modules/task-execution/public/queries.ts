@@ -5,7 +5,6 @@ export type {
   NodeRunDispatchFacts,
   NodeRunFactSnapshot,
   NodeRunFactsQuery,
-  NodeRunQueries,
 } from '../application/ports/nodeRunQueries'
 export type { PortArtifactReader } from '../application/ports/portArtifactContent'
 // RFC-482: `ShardSetView` was reached only through the table reader factory's return type; the factory left the public
@@ -21,13 +20,9 @@ export type {
 export { isPathishKindString, subsetArchiveJson } from '../domain/portArtifacts'
 // RFC-453: the node-run timeline order (review rows by their round anchor) for workspace-insight's node scope.
 export { compareNodeRunsForTimeline } from '../application/reviewRoundTiming'
-import { createNodeRunQueries as createNodeRunQueriesInternal } from '../infrastructure/nodeRunQueries'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { NodeRunQueries } from '../application/ports/nodeRunQueries'
-/** The offered query factory uses the owner's database content reader. Selected stores are composition-only. */
-export function createNodeRunQueries(db: PersistenceDb): NodeRunQueries {
-  return createNodeRunQueriesInternal(db)
-}
+// RFC-485: the node-run, node-output and task-gate query factories reach collaboration through its participant bindings
+// and memory through its assembly input (bootstrap takes them from task-execution's composition); public/types offers the
+// closed reads `TaskNodeRunReads`, `TaskNodeOutputReads` and `TaskGateQueries`.
 export { resolveHandlerRun } from '../application/resolveHandlerRun'
 export { createRunHistorySnapshot } from '../application/runHistory'
 export type { RunHistoryFacts } from '../application/runHistory'
@@ -97,15 +92,11 @@ export { parseConsumedJson } from '../infrastructure/runSelection/consumedCodec'
 
 export { nodeRunStatusCondition } from '../infrastructure/nodeRunQueries'
 
-export type { NodeOutputContent, NodeOutputQueries } from '../application/ports/nodeOutputQueries'
 export type {
   TaskDispatchContext,
   TaskGateContext,
   TaskGateDefinitionContext,
-  TaskGateQueries,
 } from '../application/ports/taskGateQueries'
-export { createNodeOutputQueries } from '../infrastructure/nodeOutputQueries'
-export { createTaskGateQueries } from '../infrastructure/taskGateQueries'
 
 export { taskGateOpenCondition, taskGateVisibleCondition } from '../infrastructure/taskGateQueries'
 

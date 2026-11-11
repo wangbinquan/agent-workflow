@@ -1,4 +1,9 @@
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import {
+  createNodeOutputQueries,
+  createNodeRunQueries,
+  createTaskGateQueries,
+} from '@/modules/task-execution/composition'
 import type {
   ComposeMemoryOperationsOptions,
   MemoryCatalogBinding,
@@ -13,16 +18,25 @@ import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalo
 export function composeDaemonMemoryModules(
   input: Omit<
     ComposeMemoryOperationsOptions,
-    'injectionQueries' | 'catalogBinding' | 'clarifyAnswers'
+    'injectionQueries' | 'catalogBinding' | 'clarifyAnswers' | 'taskNodeRuns' | 'taskNodeOutputs'
   > & {
     readonly contexts: MemoryCatalogBinding['contexts']
   },
 ) {
-  const memoryInjectionQueries = composeMemoryInjectionQueriesFor(input.db)
+  // RFC-485: task-execution's node-run and node-output reads memory uses, built on the root db (memory reads them outside
+  // transactions only); collaboration's clarify answer queries take just the node-run and task-gate query factories.
+  const taskNodeRuns = createNodeRunQueries(input.db)
+  const taskNodeOutputs = createNodeOutputQueries(input.db)
+  const memoryInjectionQueries = composeMemoryInjectionQueriesFor(input.db, taskNodeRuns)
   const memoryOperations = composeMemoryOperationsFor({
     ...input,
     injectionQueries: memoryInjectionQueries,
-    clarifyAnswers: createClarifyAnswerQueries(input.db),
+    clarifyAnswers: createClarifyAnswerQueries(input.db, {
+      createNodeRunQueries,
+      createTaskGateQueries,
+    }),
+    taskNodeRuns,
+    taskNodeOutputs,
     catalogBinding: {
       contexts: input.contexts,
       authorization: composeResourceScopeAccessParticipant(),

@@ -19,11 +19,19 @@ export function withTaskReviewMutationLock<T>(taskId: string, fn: () => Promise<
 export function withReviewNodeMutationLock<T>(
   source:
     | ReviewMutationScopeResolver
-    | ConstructorParameters<typeof DatabaseReviewMutationScopeResolver>[0],
+    | {
+        readonly db: ConstructorParameters<typeof DatabaseReviewMutationScopeResolver>[0]
+        readonly taskExecutionParticipants: ConstructorParameters<
+          typeof DatabaseReviewMutationScopeResolver
+        >[1]
+      },
   nodeRunId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const resolver = 'findTaskId' in source ? source : new DatabaseReviewMutationScopeResolver(source)
+  const resolver =
+    'findTaskId' in source
+      ? source
+      : new DatabaseReviewMutationScopeResolver(source.db, source.taskExecutionParticipants)
   return taskReviewMutationQueue.serializeAfterLookup(resolver.findTaskId(nodeRunId), {
     run: fn,
     missing: () => {
