@@ -107,6 +107,7 @@
 | S5 第二步                        | [RFC-400](../RFC-400-collaboration-task-participants-actor/proposal.md)                                       | collaboration → task-execution 内部文件对 17 → 0（改经 TE 自有 tx 参与者）、删除 `services/humanGateComposition.ts`、模块 public 合同去 legacy `Actor` | `rfc400-collaboration-task-participants`（collaboration → task-execution 内部文件对 = 0、public 导出签名不带 `Actor`、11 个 owner 工厂不经 TE public 漏出）+ `rfc400-top-level-await-guard`：全 src（≥2000）与全部模块 public 文件（≥500 个导出），负对照 ✓；另有全仓门 `cross-context-internal-file-pairs` 的精确基线 |
 | S7（W6）                         | [RFC-401](../RFC-401-single-resource-write-stack/proposal.md)                                                 | 唯一资源写入栈与三入口错误收敛、AtomicApply 持久 claim / lease、技能 / fusion / restore 接入、旧技能 operation 生命周期与零调用 legacy 写函数删除 | `rfc401-resource-write-participants`（六类资源各一个写入参与者，只有它与 5 个技能恢复文件取写入程序或直写行，7 个退役码不在）：全 src（≥2000，只认顶层具名 import）+ 20 个场景函数，负对照 ✓；另有 `rfc395-a6-atomic-apply`（指定文件）与 `rfc317-table-ownership`（`atomicApplyClaims` 唯一 owner）；lease 与错误收敛只有行为用例 |
 | S11 | [RFC-479](../RFC-479-governance-gap-fill/proposal.md) | 减速带上限 = 实测且低于即红、public 合同两项计数、composition 控制流临时入带、本表增覆盖范围列 | `rfc376-structural-guards`（`counts.json` 42 项实测 = `max`，低于与高于上限都红；全 src TS + JS ≥1500 + shared / frontend / system-mocks src）+ `rfc479-governance-gap-fill`（composition 控制流的 fixture 变异与 F13 逐行对账、public 合同两项的 fixture 变异；全 src ≥2000）+ `rfc376-report`（两项 public 合同计数与报告章节逐条相同，提交的源码）；负对照 ✓ |
+| S9 第一步 | [RFC-480](../RFC-480-te-collaboration-public-unconsumed-sweep/proposal.md) | task-execution 与 collaboration 的未消费 public 符号清零（撤出 218 个名字、49 个声明按内容挪进模块内部）、task-execution `public/operations` 退役、未消费符号按 context 分项入带 | `rfc480-te-collaboration-public-lock`（`public/operations.ts` 不在、零 import；218 个撤出名逐个不在原 public 文件的导出与运行时命名空间，每个 public 文件带正对照；挪走的声明在新位置导出；三处模块外使用取新位置；报告类型遍历的 fixture 回归）：全 src（≥1500）+ 用例 + backend 与仓根脚本，负对照 ✓；全仓门 `unconsumed-public-symbols-<context>` 19 项（两个模块 max=0）与 `public-surface-deviations`（max=77），`rfc376-report` 逐 context 断言分项与报告章节相等；capability owner 的私有登记由 preflight fixture 锁住 |
 
 「结构锁 / 覆盖范围」列（2026-11-10，RFC-479 / S11）：G1～G14 指 RFC-376 的硬结构门（`tests/architecture/rfc376-structural-guards.test.ts`，G2 context 值级 DAG、G3 / G4 public 边界、G6 application 直接 effect、G7 模块分层、G9 部署分支、G14 入口可达）；「全 src」= `packages/backend/src` 的全部源文件，括号里是用例断言的语料下限；「指定 N 个文件」= 只读点名的文件；负对照指合成 fixture 或对真实文件的变异；「未登记 guard-manifest」的锁不受 RFC-317 的语料下限与负对照普查约束。逐行依据是各锁的源码与 `architecture/guard-manifest.json`。
 
@@ -403,6 +404,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 开工前须用户批准。文中的数字取自 HEAD `361945023`，开工前按当时的 HEAD 复核。
 
 ### S9 public 合同收敛
+
+> 后继：task-execution ↔ collaboration 第一步 [RFC-480](../RFC-480-te-collaboration-public-unconsumed-sweep/proposal.md)（Done，2026-11-10，`bb7da0e8d` + `489526d4a`）：两个模块的未消费 public 符号清零（181 + 24 → 0；减速带按 context 分项，两项上限 0，其他 context 合计 91）、task-execution `public/operations` 退役（有该入口的模块 8 → 7）、public 类型偏差 88 → 77。第二步 RFC-481：仍有消费方的类型污染、collaboration 拼 task-execution 的 SQL 片段、反向越 DAG 的类型边。
 
 - **目标**：让“跨模块只走 public”在内容上成立（proposal D15，review R10 / F12 / F19）。先做 task-execution ↔ collaboration：
   类型污染清单的 94 条里 47 条属于这一对，它也是最宽的一条边界（collaboration 取 task-execution 65 个符号）。

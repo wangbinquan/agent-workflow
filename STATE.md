@@ -1,4 +1,4 @@
-## 2026-11-10 RFC-480 task-execution 与 collaboration 的 public 收口：未消费符号清零与 `public/operations` 退役（In Progress；`design/RFC-480-te-collaboration-public-unconsumed-sweep/`）
+## 2026-11-10 RFC-480 task-execution 与 collaboration 的 public 收口：未消费符号清零与 `public/operations` 退役（Done；`design/RFC-480-te-collaboration-public-unconsumed-sweep/`）
 
 - **来由**：RFC-294 plan §3 S9（public 合同收敛），按 context 对拆、先做 task-execution ↔ collaboration；这一对拆两步，本 RFC 做未消费符号清零
   （第 3 项）与 task-execution `public/operations` 收口（第 1 项在 task-execution 上的部分），类型污染、SQL 片段与反向越 DAG 类型边由 RFC-481 做。
@@ -33,6 +33,18 @@
   超时、没拿到结果）；real-PostgreSQL lane 的 P0 变异证据（p0-8 的栈帧正则仍指 `collaboration/public/commands.ts`；脚本只在 CI 跑）。
   Windows e2e 2/4 被 20 分钟 job 时限取消（这一片装依赖 10 分 46 秒，同 run 其余三片 30～43 秒，跑到的用例都通过），不归本 RFC。其余 push
   workflow 全绿。
+- **落地**：`bb7da0e8d`（实现）+ `489526d4a`（CI 修复）。
+- **CI（修复后）**：`489526d4a`：主 CI run 42965912792 的 70 个 job 全部通过（「CI required」绿）；该提交只改用例、脚本与文档，没有命中其余 push workflow 的路径过滤，同一 SHA 只有主 CI 一个 run。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. S9 task-execution ↔ collaboration 第二步（RFC-481）：仍有消费方的类型污染（`PUBLIC_SURFACE_DEBT` 里属于这一对的 31 条：
+     task-execution 30、collaboration 1）、collaboration 拼 task-execution 的 SQL 片段（`nodeRunStatusCondition`、`taskGateOpenCondition`、
+     `taskGateVisibleCondition`，只有 collaboration 的 `review.ts` 与 `clarifyRounds.ts` 在用，换成 owner 提供的业务查询）、反向越 DAG 的
+     类型边；退出门在这一对上成立后，S9 再按 context 对推进其余模块。
+  2. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application，另立、避让 S9 在制文件；运行时驱动一族随后；再 S13、S10、S12。
+  - design §14 收口实测：上下文值环 0、off-DAG 值对 0、后端值级 SCC 0；跨 context 内部文件对 43；public 类型污染 77、未消费 public 符号
+    91（task-execution、collaboration 为 0）；有 `public/operations` 的模块 7；`services/` 业务实现 48；模块级可变状态（报告口径）79；
+    composition 控制流 1,197 行（19 个模块）。减速带 60 项，每项 `max` = 实测。独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭
+    5 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（Done；`design/RFC-479-governance-gap-fill/`）
 

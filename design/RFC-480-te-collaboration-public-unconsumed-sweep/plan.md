@@ -20,7 +20,7 @@
 - [x] AC-1 两个模块的未消费 public 符号为 0；声明按内容落位
 - [x] AC-2 task-execution `public/operations.ts` 不在、零引用；三处使用改取新位置
 - [x] AC-3 未消费符号按 context 分项入带，上限 = 实测，两个模块为 0
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`bb7da0e8d` 的两处缺陷由 `489526d4a` 修复，见 CI 一节）
 
 ## 集中验证（2026-11-10，候选基于 `71202c92a`）
 
@@ -84,6 +84,8 @@
   P0 判决用例共 22 条在导出仓库通过（默认 5 秒、`--randomize`；capability 那条负载下 172.6 秒，预算 180 秒）；P0 变异门本地接库跑两种
   provider：sqlite 的 17 个阶段全部有效（含 p0-8）；PostgreSQL 一半在本机负载下第一个阶段（不带变异的 current-before）就撞
   脚本的 300 秒阶段时限（CI 上 32 秒），本机放不下，以修复提交的 CI 为证据。
+- `489526d4a`：主 CI run 42965912792 的 70 个 job 全部通过（「CI required」绿）；该提交只改用例、脚本与文档，没有命中其余 push workflow 的路径过滤，同一 SHA 只有主 CI 一个 run。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 Done 文档文件）的导出仓库上重跑文档用例（接 PostgreSQL、默认 5 秒、`--randomize`）：13 个文件 111 / 111。
 
 ## 实现门（本会话自审，只审功能）
 
