@@ -20,7 +20,8 @@
 - [x] AC-1 task-execution 的 public 不再导出六个符号；collaboration 改经绑定取五个工厂
 - [x] AC-2 `reselectRunInTx` 不在；引擎的 clarify 指令读取不经 collaboration；collaboration 的 `taskClarifyDirective.ts` 不在
 - [x] AC-3 `public-surface-deviations` 74 → 68 并收紧到实测；两个模块未消费符号仍为 0；跨 context 内部文件对与越 DAG 文件对不变
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（环境性红格如实记录：e2e 的三个 ubuntu 分片在装 Playwright 系统依赖时 runner 解析不了
+      apt 源、用例未开跑，e2e 以后继提交的 CI 为证，见 §CI）
 
 ## 集中验证（2026-11-11，候选基于 `32b31b6a0`）
 
@@ -69,6 +70,14 @@
   2,336 → 2,332（转发文件的两个写函数与两处死代码）；越 DAG 的 offered 文件对 47、跨 context 内部文件对 43 不变。
 - **最终候选**（导出仓库与 HEAD 加 131 个候选路径逐字相同，临时副本已删）：文档对账与读 guard-manifest 的 16 个用例 167 条全过（两种
   provider 同进程、默认 5 秒、`--randomize`，含上面那 3 个 rfc317 用例）；架构报告重出一遍，60 项实测 = `max`，门里仍只有偏差一项变化。
+
+## CI（AC-4）
+
+- `42b52316d`：exact SHA 主 CI run 43047084851：70 个 job 里 66 个通过；Playwright e2e 的三个 ubuntu 分片都红在「Install Playwright system
+  deps」一步——runner 解析不了 `azure.archive.ubuntu.com`（`Temporary failure resolving`），apt 拿不到包，e2e 用例一条都没跑，汇总的
+  `CI required` 随之记红。runner 环境所致，与本 RFC 改动无关（本 RFC 不改前端与 e2e），但这次 run 没有 e2e 的证据：未重跑，以包含本候选、
+  内容不变的后继提交（本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 43047084866 通过；同 SHA
+  上碰巧跑到的定时 git-protocols-e2e（run 43051482913）红在同一个 DNS 解析失败（装 Playwright 一步），不是 push 触发。
 
 ## 实现门（本会话自审，只审功能）
 

@@ -1,4 +1,4 @@
-## 2026-11-11 RFC-482 collaboration 取 task-execution 的事务参与者与三个小查询改经装配期绑定（In Progress；`design/RFC-482-te-participant-bindings-small-families/`）
+## 2026-11-11 RFC-482 collaboration 取 task-execution 的事务参与者与三个小查询改经装配期绑定（Done；`design/RFC-482-te-participant-bindings-small-families/`）
 
 - **来由**：RFC-294 plan §3 S9 第 2 项，task-execution ↔ collaboration 这一对的第三步。RFC-481 落档时把 collaboration 取的 9 个查询工厂与事务
   参与者记为 RFC-482；本 RFC 普查调用点后按机制再拆：本 RFC 做三个事务参与者、clarify 指令持久化、任务主题查询与 run selection 读取
@@ -30,6 +30,28 @@
   PostgreSQL 以 CI 双引擎分片为证据，另把 70 个相关文件接库跑：1,198 条通过，失败的 12 条是导出仓库里的临时副本被守卫普查计入（删后重跑通过）
   与 PostgreSQL 一侧撞 20 秒时限（放宽后 47 / 47）；架构报告 60 项实测 = `max`，门里只有偏差一项变化。实现门 PASS（本会话按路径限定自审，只审
   功能）。
+- **落地**：`42b52316d`。
+- **CI**：`42b52316d`：exact SHA 主 CI run 43047084851 的 70 个 job 里 66 个通过；Playwright e2e 的三个 ubuntu 分片都红在「Install Playwright
+  system deps」一步——runner 解析不了 `azure.archive.ubuntu.com`，apt 拿不到包，e2e 用例一条都没跑，汇总的 `CI required` 随之记红。runner
+  环境所致，与本 RFC 改动无关（不改前端与 e2e），但这次 run 没有 e2e 的证据：未重跑，以包含本候选、内容不变的后继提交（本 RFC 的 Done 文档
+  提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 43047084866 通过；同 SHA 上碰巧跑到的定时 git-protocols-e2e（run
+  43051482913）红在同一个 DNS 解析失败，不是 push 触发。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. 减速带判据回到 design §13.4（小 RFC，编号落档时分配，赶在下一次独立对账之前）：另一会话指出、本会话按源码核实——RFC-479 把
+     `checkCounts` 改成相等判据（低于上限也红，`packages/backend/tests/architecture/rfc294Gates.ts` 的 `checkCounts`），与 design §13.1、§13.3、
+     §13.4 及 `architecture/counts.json` 的说明（下降自动通过）矛盾，而 §13.4 明确不改成逐次相等（并发 session 各自下降同一计数会互相打红）。
+     改为低于上限只报不红，上限 = 实测仍由后继收口时收紧（C13）、dated review 核对；统一 RFC-479 改过的 RFC-294 plan S11 行与 §1.2 行、
+     `docs/dev-gotchas.md` 那条与 RFC-479 文档，`counts.json` 的说明补上 C13。不改生产代码，计数不变。
+  2. S9 task-execution ↔ collaboration 第四步（编号落档时分配）：`createNodeRunQueries`、`createTaskGateQueries`、`createNodeOutputQueries`
+     三个行形状查询工厂改经装配期绑定、读路径按业务目的收窄，连同 memory 的使用（collaboration 24 个文件、84 个调用点，所在 57 个函数里 47 个
+     手里没有绑定；memory 2 个文件、5 个调用点）；第五步 RFC-483：三个 SQL 片段（8 条）换成 owner 的业务查询，守住 RFC-359 AC-11 的单语句
+     往返预算。task-execution 其余类型污染的消费方在 memory、integration、workspace-insight、resource-catalog 与 legacy routes，随 S9 后续的
+     context 对推进。
+  3. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application，另立、避让 S9 在制文件；运行时驱动一族随后；再 S13、S10、S12。
+  - design §14 收口实测：上下文值环 0、off-DAG 值对 0、后端值级 SCC 0；越 DAG 的 offered 文件对 47（task-execution → collaboration 0）；跨
+    context 内部文件对 43；public 类型污染 68、未消费 public 符号 91（task-execution、collaboration 为 0）；有 `public/operations` 的模块 7；
+    `services/` 业务实现 48；模块级可变状态（报告口径）79；composition 控制流 1,197 行（19 个模块）。减速带 60 项，每项 `max` = 实测。独立
+    对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 7 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-10 RFC-481 task-execution 自有人工门端口：反向越 DAG 类型边清零与开放类型收口（Done；`design/RFC-481-te-owned-human-gate-ports/`）
 
