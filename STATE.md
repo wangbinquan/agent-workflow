@@ -1,4 +1,4 @@
-## 2026-11-11 RFC-484 减速带判据回到「不高于上限即过」：撤回 RFC-479 的低于即红（In Progress；`design/RFC-484-count-gate-not-above-max/`）
+## 2026-11-11 RFC-484 减速带判据回到「不高于上限即过」：撤回 RFC-479 的低于即红（Done；`design/RFC-484-count-gate-not-above-max/`）
 
 - **来由**：用户 2026-11-11 转述另一会话的发现——架构门禁的说明与实际检查矛盾：`checkCounts` 自 RFC-479 起把实测低于上限也判红，而 RFC-294
   design §13.1、§13.3、§13.4 与 `architecture/counts.json` 的说明都写下降自动通过，§13.4 还明文不改成逐次相等（并发 session 各自下降同一计数
@@ -19,6 +19,20 @@
   另两个撞自带时限的在放宽副本上跑完（`rfc376-report` 16 / 16、`rfc400` 6 / 6）；把 `checkCounts` 改回相等判据时新单元用例转红。实现门 PASS
   （本会话按路径限定自审，只审功能）。
 - **§14 / 收口对账**：不改生产代码，design §14 的各项实测不变；减速带 60 项每项 `max` = 实测。
+- **落地**：`067169518`。
+- **CI**：`067169518`：exact SHA 主 CI run 43065776872 的 70 个 job 全部通过（「CI required」绿；Playwright e2e 的 ubuntu 3 个、macOS 4 个、
+  Windows 4 个分片都跑完通过）。它同时是 RFC-482 的 e2e 后继证据：`42b52316d` 是它的祖先，两者之间 `packages/backend/src` 没有改动（RFC-482
+  plan §CI 已补记）。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. S9 task-execution ↔ collaboration 第四步（编号落档时分配）：`createNodeRunQueries`、`createTaskGateQueries`、`createNodeOutputQueries`
+     三个行形状查询工厂改经装配期绑定、读路径按业务目的收窄，连同 memory 的使用。普查（2026-11-11，HEAD `067169518`，语法树）：模块外 89 个
+     调用点、62 个函数、26 个文件（collaboration 24、memory 2），手里已有绑定的 16 个函数（33 处），余下 46 个（memory 5 个）；用到的方法
+     NodeRunQueries 12 个（`list` 13 处、`readFields` 8 处为主）、TaskGateQueries 4 个、NodeOutputQueries 4 个，memory 只用
+     `latestHistoryPerNode`、`listHistoryFields`、`listActiveContents`；用例 16 个文件 63 处。第五步 RFC-483：三个 SQL 片段（8 条）换成 owner
+     的业务查询，守住 RFC-359 AC-11 的单语句往返预算。
+  2. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application，另立、避让 S9 在制文件；运行时驱动一族随后；再 S13、S10、S12。
+  - design §14 收口实测不变（见 RFC-482 条目）：public 类型污染 68、未消费 public 符号 91、越 DAG 的 offered 文件对 47、跨 context 内部文件对 43；
+    减速带 60 项，每项 `max` = 实测。独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 8 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-11 RFC-482 collaboration 取 task-execution 的事务参与者与三个小查询改经装配期绑定（Done；`design/RFC-482-te-participant-bindings-small-families/`）
 

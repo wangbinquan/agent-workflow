@@ -17,7 +17,7 @@
 - [x] AC-1 `checkCounts`：等于上限通过；低于上限通过并列入 `decreases`；高于上限、未知 / 缺失 id、非法数值、`reason` 不符报错
 - [x] AC-2 仓内描述减速带判据的现行文字都是「实测不高于上限即过；后继收口时收紧到实测（C13）」；RFC-479 的历史描述带撤回说明
 - [x] AC-3 `counts.json` 60 项 `max` 仍等于实测；架构报告的门不变
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证（2026-11-11，候选基于 `b0de9c6a7`）
 
@@ -33,6 +33,11 @@
   改回后该仓库与 HEAD 加候选逐字相同。
 - **残留文字**（AC-2）：仓内重搜「below max」「低于即红」等：只出现在 RFC-479 的历史正文（状态行与 G1、AC-1、§6 第 1 条、design §2、
   plan AC-1 旁都有撤回说明）、RFC-484 自己的文档与注释，以及 `STATE.md` 的历史条目。
+
+## CI（AC-4）
+
+- `067169518`：exact SHA 主 CI run 43065776872 的 70 个 job 全部通过（「CI required」绿；Playwright e2e 的 ubuntu 3 个、macOS 4 个、Windows
+  4 个分片都跑完通过）。它同时是 RFC-482 的后继证据：`42b52316d` 是它的祖先，两者之间 `packages/backend/src` 没有改动（见 RFC-482 plan §CI）。
 
 ## 实现门（本会话自审，只审功能）
 

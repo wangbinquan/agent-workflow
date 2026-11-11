@@ -81,6 +81,8 @@
 - 后继证据：`b0de9c6a7`（本 RFC 的 Done 文档提交，`42b52316d` 的直接后继，只改 5 个文档文件）exact SHA 主 CI run 43056636241：70 个 job
   里 66 个通过，e2e 的三个 ubuntu 分片又红在同一个 DNS 解析失败（用例未开跑）。e2e 证据顺延到下一个提交（RFC-484，包含本 RFC 的全部代码）
   的 CI，结果记在 RFC-484 的条目。
+- e2e 的后继证据：`067169518`（RFC-484，`42b52316d` 的后代，两者之间 `packages/backend/src` 没有改动）exact SHA 主 CI run 43065776872 的
+  70 个 job 全部通过，e2e 的 ubuntu 3 个分片这次跑完通过（另 macOS 4 个、Windows 4 个）——本 RFC 的 e2e 以此为准。
 
 ## 实现门（本会话自审，只审功能）
 

@@ -464,7 +464,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S11 治理补洞
 
-> 后继：[RFC-479](../RFC-479-governance-gap-fill/proposal.md)（Done，2026-11-10，`0d591604b`）：减速带 42 项每项 `max` = 实测（4 项收紧；当时另把低于上限也判红，与 design §13.4 相悖，2026-11-11 由 [RFC-484](../RFC-484-count-gate-not-above-max/proposal.md) 撤回）；未消费 public 符号 322、public 类型偏差 88 与 19 个模块的 composition 控制流（F13 口径、按语法树计数，合计 1,197 行，临时至 S10）入带；§1.2 增「结构锁 / 覆盖范围」列。
+> 后继：[RFC-479](../RFC-479-governance-gap-fill/proposal.md)（Done，2026-11-10，`0d591604b`）：减速带 42 项每项 `max` = 实测（4 项收紧；当时另把低于上限也判红，与 design §13.4 相悖，2026-11-11 由 [RFC-484](../RFC-484-count-gate-not-above-max/proposal.md) 撤回，Done，`067169518`）；未消费 public 符号 322、public 类型偏差 88 与 19 个模块的 composition 控制流（F13 口径、按语法树计数，合计 1,197 行，临时至 S10）入带；§1.2 增「结构锁 / 覆盖范围」列。
 
 - **范围**：`architecture/counts.json` 六项高于实测的 `max` 收紧到实测值；未消费 public 符号与 public 类型污染条数进入减速带；
   S10 的门落地前临时纳入各模块 `composition/` 的控制流计数（review F13 的口径：行首 `if / for / while / switch / try` 与 `throw`
