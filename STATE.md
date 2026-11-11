@@ -1,3 +1,22 @@
+## 2026-11-11 RFC-483 评审与澄清徽标的联合投影归 collaboration 读模型：task-execution 的三个 SQL 条件片段撤出 public（In Progress；`design/RFC-483-human-gate-badge-read-model/`）
+
+- **来由**：RFC-294 plan §3 S9 第 2 项（类型污染清单里的 SQL 条件片段）与第 4 项（collaboration 不再把 task-execution 的 SQL 片段拼进自己的
+  查询，牵动的用例按 D14 迁入 application），task-execution ↔ collaboration 这一对的第五步、也是最后一步（RFC-481 落档时预留编号）。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计
+  已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`nodeRunStatusCondition`、`taskGateOpenCondition`、`taskGateVisibleCondition` 撤出 task-execution 的 public（类型污染 8 条），改由
+  composition 转出；模块外只有两条徽标计数用它们（collaboration 的 `countPendingReviews`、`countAwaitingClarifyRounds`，7 处），两条都由
+  RFC-359 AC-11 压成一条语句、由 w56 / w57 双引擎钉住。联合投影由 collaboration 的徽标读模型明确拥有（RFC-294 design §3.3），三个谓词经
+  RFC-400 的装配期绑定交入；查看者判定（看全部任务 / 按任务成员）迁入 collaboration 的 application，读模型端口只收 DTO。预期
+  `public-surface-deviations` 65 → 57，collaboration 消费的 task-execution 类型污染清零。
+- **偏离**（design §7，可推翻）：S9 第 4 项字面要求不再拼 task-execution 的 SQL 片段；单语句预算排除了返回 DTO 的业务查询，读模型直接引用
+  对方的表又会复制可见性判据并扩大表归属账本，故两条徽标仍在一条语句里组合 task-execution 的谓词，谓词经 consumer 自有的绑定交入、不经
+  public。Done 文档在 RFC-294 plan S9 第 4 项下记这条裁决。
+- **不做**：其他 context 对的片段（integration 取 `nonTerminalTaskExists`、resource-catalog 的 `workflowNameExpression` 等）；列表查询；计数的
+  SQL、语义、往返数与索引；schema；评审 / 提问用例的整体归位（review §9 待用户决定）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 9 个后继，下一次不晚于 2026-11-23。
+
 ## 2026-11-11 RFC-485 collaboration 与 memory 取 task-execution 的三个行形状查询工厂改经装配期注入（Done；`design/RFC-485-te-row-query-bindings/`）
 
 - **来由**：RFC-294 plan §3 S9 第 2 项（类型污染清单里「收裸 db 句柄的查询工厂」），task-execution ↔ collaboration 这一对的第四步（RFC-482
