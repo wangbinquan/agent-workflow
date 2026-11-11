@@ -17,7 +17,7 @@
 
 ## 验收清单
 
-- [x] AC-1 `counts.json` 每项 `max` = 实测；低于上限即红（带负对照）
+- [x] AC-1 `counts.json` 每项 `max` = 实测；低于上限即红（带负对照；「低于即红」已由 RFC-484 撤回）
 - [x] AC-2 `unconsumed-public-symbols`、`public-surface-deviations` 入带，与报告章节逐条相同，各有会红的变异用例
 - [x] AC-3 19 项 `composition-control-flow-<module>` 入带，与 F13 口径的差异逐条说明，有会红的变异用例
 - [x] AC-4 RFC-294 plan §1.2 新列没有空格、逐行可复核

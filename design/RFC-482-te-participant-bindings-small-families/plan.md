@@ -78,6 +78,9 @@
   `CI required` 随之记红。runner 环境所致，与本 RFC 改动无关（本 RFC 不改前端与 e2e），但这次 run 没有 e2e 的证据：未重跑，以包含本候选、
   内容不变的后继提交（本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。同 SHA 的 windows-platform run 43047084866 通过；同 SHA
   上碰巧跑到的定时 git-protocols-e2e（run 43051482913）红在同一个 DNS 解析失败（装 Playwright 一步），不是 push 触发。
+- 后继证据：`b0de9c6a7`（本 RFC 的 Done 文档提交，`42b52316d` 的直接后继，只改 5 个文档文件）exact SHA 主 CI run 43056636241：70 个 job
+  里 66 个通过，e2e 的三个 ubuntu 分片又红在同一个 DNS 解析失败（用例未开跑）。e2e 证据顺延到下一个提交（RFC-484，包含本 RFC 的全部代码）
+  的 CI，结果记在 RFC-484 的条目。
 
 ## 实现门（本会话自审，只审功能）
 

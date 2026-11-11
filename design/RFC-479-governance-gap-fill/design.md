@@ -18,6 +18,8 @@ bounded context；RFC-294 C10 / C11 不适用，C12 / C13 见 §7。数字取 HE
 
 ## 2. 上限 = 实测
 
+> 2026-11-11：本节的「低于上限判红」已由 [RFC-484](../RFC-484-count-gate-not-above-max/proposal.md) 撤回，`checkCounts` 回到 RFC-294 design §13.4 的「不高于上限即过」。
+
 `checkCounts(measured, limits)` 现在的判据：未知 / 缺失 id、非法数值、`reason` 缺 `max=N`、实测高于上限报错；实测低于上限只放进
 `decreases`，减速带用例把它打印成一行日志。改为：
 

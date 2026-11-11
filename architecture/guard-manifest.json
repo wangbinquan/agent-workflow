@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1094
+      "lines": 1102
     },
     {
       "assertsAbsence": true,
@@ -3487,7 +3487,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc479-governance-gap-fill.test.ts",
       "id": "rfc479-governance-gap-fill",
-      "lines": 278,
+      "lines": 279,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

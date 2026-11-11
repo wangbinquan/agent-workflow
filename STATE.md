@@ -1,3 +1,25 @@
+## 2026-11-11 RFC-484 减速带判据回到「不高于上限即过」：撤回 RFC-479 的低于即红（In Progress；`design/RFC-484-count-gate-not-above-max/`）
+
+- **来由**：用户 2026-11-11 转述另一会话的发现——架构门禁的说明与实际检查矛盾：`checkCounts` 自 RFC-479 起把实测低于上限也判红，而 RFC-294
+  design §13.1、§13.3、§13.4 与 `architecture/counts.json` 的说明都写下降自动通过，§13.4 还明文不改成逐次相等（并发 session 各自下降同一计数
+  会互相打红）。本会话按源码核实：偏离来自本会话的 RFC-479，它既没列出偏离、也没改 §13.4。按用户授权（2026-11-02 / 11-09 / 11-10，原话见
+  proposal）判断并记为已批准，不派 Codex。
+- **范围**：`checkCounts` 对低于上限只列入 `decreases`（带应收紧到的值）、不报错，其余判据不变，减速带用例把 `decreases` 打印成日志；单元用例
+  随改；RFC-479 改成相等判据的文档改回（RFC-294 plan 三处、`docs/dev-gotchas.md` 一条），RFC-479 三件套与 RFC 索引的 RFC-479 行注明撤回，
+  `counts.json` 的说明补 C13，RFC-294 design §13.4 补沿革，plan §1.2 增 RFC-484 一行。
+- **不做**：计数口径与数值（60 项 `max` 仍 = 实测）；`KNOWN` 等逐条清单（双向精确门照旧）；C13 与独立对账规则；生产代码。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。改动小，三件套与实现一起提交（plan §PR / 提交）。独立对账（plan §0 第 10 条）
+  未到期：上次 2026-11-09，其后关闭 7 个后继，下一次不晚于 2026-11-23；本 RFC 在它之前落地。
+- **附带**：RFC-482 的 Done 文档提交 `b0de9c6a7`（5 个文档文件，`42b52316d` 的直接后继）：exact SHA 主 CI run 43056636241 的 70 个 job
+  里 66 个通过；e2e 的三个 ubuntu 分片仍红在「Install Playwright system deps」——runner 解析不了 `azure.archive.ubuntu.com`（与 `42b52316d`
+  的 run 同因，两次相隔一小时），e2e 用例仍未开跑，汇总的 `CI required` 随之记红。未重跑；RFC-482 的 e2e 证据顺延到本 RFC 提交的 CI（包含
+  RFC-482 的全部代码），结果记在下一条目。
+- **集中验证**（候选基于 `b0de9c6a7`，详见 plan）：backend `tsc` 0 错，eslint、prettier 无告警；`tests/architecture/` 全部、文档对账与读
+  `counts.json` 的用例共 149 个文件，147 个通过，`rfc376-structural-guards` 221 / 221（counts 用例实测 60 项全部等于上限，没有打印低于上限的项），
+  另两个撞自带时限的在放宽副本上跑完（`rfc376-report` 16 / 16、`rfc400` 6 / 6）；把 `checkCounts` 改回相等判据时新单元用例转红。实现门 PASS
+  （本会话按路径限定自审，只审功能）。
+- **§14 / 收口对账**：不改生产代码，design §14 的各项实测不变；减速带 60 项每项 `max` = 实测。
+
 ## 2026-11-11 RFC-482 collaboration 取 task-execution 的事务参与者与三个小查询改经装配期绑定（Done；`design/RFC-482-te-participant-bindings-small-families/`）
 
 - **来由**：RFC-294 plan §3 S9 第 2 项，task-execution ↔ collaboration 这一对的第三步。RFC-481 落档时把 collaboration 取的 9 个查询工厂与事务

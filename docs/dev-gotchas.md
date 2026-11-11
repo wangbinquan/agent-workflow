@@ -713,22 +713,23 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   函数名抽函数体求值的站点测试，拆函数时要跟着拆（分别抽出、在测试里组装），绑定表里的自由标识符同步改名。迁出后模块外零消费的 public 符号
   （含 `public/operations` 的写原子）当场撤出，模块内部的同名取用改指定义处（`tsc` 会逐个报出）。
 
-## 减少了某项计数，就在同一提交里收紧 `architecture/counts.json`：低于上限与高于上限一样红（RFC-479，2026-11-10）
+## 减少了某项计数：`architecture/counts.json` 低于上限只报不红，后继收口时收紧到实测（RFC-484，2026-11-11）
 
-- 减速带（`architecture/counts.json`，由 `rfc376-structural-guards` 的 counts 用例按全仓语料实测）每项 `max` 必须等于实测。RFC-479 之前低于
-  上限只打一行日志，余量于是攒了下来（4 项合计 76 个文件或文件对的回长空间，CI 不会红）；现在报
-  `below max: <id>: <实测> < <max> (set max=<实测> in architecture/counts.json)`。
-- 做法：把该项的 `max` 改成实测，`reason` 里写同一个 `max=N`（判据按 `\bmax=N` 校验）并写明这次减少的来由。别为了过门把计数「补回去」。
+- 减速带（`architecture/counts.json`，由 `rfc376-structural-guards` 的 counts 用例按全仓语料实测）按 RFC-294 design §13.4 执行：实测不高于
+  上限即过；低于上限的项在用例日志里打印 `[RFC-376 counts below max] <id>: <实测> < <max> (tighten to max=<实测> …)`，不红。RFC-479
+  （2026-11-10）曾把低于上限也判红，与 §13.4 明文冲突——并发会话各自减少同一项会互相打红，普通功能改动也得同改 JSON——RFC-484 撤回。
+- 上限 = 实测仍是纪律（RFC-294 C13）：RFC-294 的后继收口时，把所触及计数的 `max` 改成实测，`reason` 里写同一个 `max=N`（判据按
+  `\bmax=N` 校验）并写明这次减少的来由；dated review 统一核对余下的余量。普通提交顺手收紧也可以。别为了过门把计数「补回去」；抬高
+  `max` 仍须在同一提交里改数并写明原因。
 - 会随日常改动变化的几项：`unconsumed-public-symbols-<context>`（RFC-480 起按 context 分项）/ `public-surface-deviations`（撤出或新增 public
   符号、改 public 签名），
   `composition-control-flow-<module>`（在模块 `composition/` 里增删行首的 `if` / `for` / `while` / `switch` / `try` / `throw`）。新增一个带
   `composition/` 的模块会报 `missing count`，删掉会报 `unknown count`，都要登记。
-- 两个会话各自减少了同一项：后推的那个合并后，按合并结果的实测再改一次。
 - **逐条清单另有一份**：计数背后的条目还逐条登记在 `rfc376-structural-guards.test.ts` 的 `// BEGIN COMMITTED BASELINES` 块（`KNOWN`，
   按 gate id：`cross-context-internal-file-pairs`、`off-dag-offered-file-context-pairs`、`module-layer-violations`、
-  `unreachable-production-files` 等 12 项），判据双向。所以减少一项要改的不只 `counts.json` 与专项账本（如越 DAG 边的
-  `OFF_DAG_OFFERED_EDGE_DEBT`），还要删掉 `KNOWN` 里对应的行（`BASELINE_SOURCE` 不必动）。RFC-481 实撞：销了 8 条越 DAG 边，只改了前两处，
-  `KNOWN` 留下 8 条 stale，全量里那条用例 6 毫秒就红。
+  `unreachable-production-files` 等 12 项），判据双向（stale 条目也红）。所以减少这些项时，`KNOWN` 里对应的行与专项账本（如越 DAG 边的
+  `OFF_DAG_OFFERED_EDGE_DEBT`）必须同改，`counts.json` 按上一条收紧（`BASELINE_SOURCE` 不必动）。RFC-481 实撞：销了 8 条越 DAG 边，只改了
+  `counts.json` 与专项账本，`KNOWN` 留下 8 条 stale，全量里那条用例 6 毫秒就红。
 
 ## 撤 public 符号：迭代到零、先修判据的盲区，留意豁免入口藏起来的旧债（RFC-480，2026-11-10）
 

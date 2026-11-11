@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "RFC-294 design §13.1 减速带，不是门。measured <= max 即通过；下降不需要改；抬高 max 必须在同一提交，且 reason 含 max=<N>。无 provenance、无过期、无历史比较。",
+  "note": "RFC-294 design §13.1 减速带，不是门。measured <= max 即通过（低于上限只报不红，design §13.4；RFC-484 撤回了 RFC-479 的低于即红）；RFC-294 的后继收口时把所触及计数的 max 收紧到实测（C13），dated review 核对；抬高 max 必须在同一提交，且 reason 含 max=<N>。无 provenance、无过期、无历史比较。",
   "counts": {
     "application-direct-effect-files": {
       "max": 2,

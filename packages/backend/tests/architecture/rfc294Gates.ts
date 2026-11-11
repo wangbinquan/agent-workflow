@@ -928,15 +928,17 @@ export interface CountLimit {
   readonly reason: string
 }
 /**
- * RFC-479 (RFC-294 S11 / C13): every max equals the measurement. A count below its max fails exactly like one above it, so a
- * commit that reduces a count must lower the max (and the `max=N` in its reason) in the same change; slack is never left for
- * silent regrowth.
+ * RFC-294 design §13.4: the speed bump passes while the measurement does not exceed its max. A count below its max is only
+ * reported in `decreases` (with the value to tighten to): successors tighten the counts they touch when they close (C13) and
+ * the dated review reconciles the rest. An equality gate would turn concurrent sessions that lower the same count red against
+ * each other. RFC-479 briefly failed counts below max as well; RFC-484 restored this rule.
  */
 export function checkCounts(
   measured: Readonly<Record<string, number>>,
   limits: Readonly<Record<string, CountLimit>>,
-): { errors: string[] } {
-  const errors: string[] = []
+): { errors: string[]; decreases: string[] } {
+  const errors: string[] = [],
+    decreases: string[] = []
   for (const id of Object.keys(limits)) if (!(id in measured)) errors.push(`unknown count: ${id}`)
   for (const [id, value] of Object.entries(measured)) {
     const limit = limits[id]
@@ -950,11 +952,11 @@ export function checkCounts(
       errors.push(`missing max=${limit.max} reason: ${id}`)
     if (value > limit.max) errors.push(`over max: ${id}: ${value} > ${limit.max}`)
     if (value < limit.max)
-      errors.push(
-        `below max: ${id}: ${value} < ${limit.max} (set max=${value} in architecture/counts.json)`,
+      decreases.push(
+        `${id}: ${value} < ${limit.max} (tighten to max=${value} when a successor closes; RFC-294 C13)`,
       )
   }
-  return { errors: errors.sort() }
+  return { errors: errors.sort(), decreases: decreases.sort() }
 }
 
 const COMPOSITION_UNIT = /^packages\/backend\/src\/modules\/([a-z0-9-]+)\/composition\//

@@ -1052,22 +1052,30 @@ describe('RFC-376 counts speed bump', () => {
         .map(([id, items]) => [id, items.length]),
     )
     console.info('[RFC-376 measured counts]', JSON.stringify(measured))
-    // RFC-479: every max equals the measurement, so a reduction also fails until counts.json is lowered.
-    expect(checkCounts(measured, limits.counts).errors).toEqual([])
+    // RFC-294 design §13.4 (restored by RFC-484): a count may sit below its max; it is reported here and tightened when a
+    // successor closes (C13) or at the dated review. Only a count above its max fails.
+    const result = checkCounts(measured, limits.counts)
+    expect(result.errors).toEqual([])
+    for (const decrease of result.decreases) console.info(`[RFC-376 counts below max] ${decrease}`)
     // Every gate set over the full corpus: 2.4-6.4 s on the macOS nightly after the RFC-395
     // corpus (runs 40859820668, 40909866975; the default 5 s timed out); allow 20 s. RFC-479's
     // public surfaces (36.5 s on a developer machine at 1-minute load 26) are built at load above.
   }, 20_000)
-  test('equal maxima pass; lower and higher measurements both fail (RFC-479)', () => {
+  // RFC-484: RFC-479 failed lower measurements too, against RFC-294 design §13.4 (concurrent sessions lowering the same count
+  // would turn each other red). A lower measurement passes and is listed with the value to tighten to.
+  test('equal maxima pass; lower measurements pass and are reported as decreases (RFC-484)', () => {
     expect(
       checkCounts({ probe: 2 }, { probe: { max: 2, reason: 'max=2: RFC-376 fixture' } }),
-    ).toEqual({ errors: [] })
+    ).toEqual({ errors: [], decreases: [] })
     expect(
-      checkCounts({ probe: 1 }, { probe: { max: 2, reason: 'max=2: RFC-376 fixture' } }).errors,
-    ).toEqual(['below max: probe: 1 < 2 (set max=1 in architecture/counts.json)'])
+      checkCounts({ probe: 1 }, { probe: { max: 2, reason: 'max=2: RFC-376 fixture' } }),
+    ).toEqual({
+      errors: [],
+      decreases: ['probe: 1 < 2 (tighten to max=1 when a successor closes; RFC-294 C13)'],
+    })
     expect(
-      checkCounts({ probe: 0 }, { probe: { max: 0, reason: 'max=0: RFC-479 fixture' } }).errors,
-    ).toEqual([])
+      checkCounts({ probe: 0 }, { probe: { max: 0, reason: 'max=0: RFC-479 fixture' } }),
+    ).toEqual({ errors: [], decreases: [] })
   })
   test('excess, unknown/missing IDs and mismatched numeric reasons fail', () => {
     expect(

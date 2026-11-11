@@ -1,6 +1,7 @@
 // RFC-479 —— 治理补洞（RFC-294 S11）：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带。
 //
-// 锁三件事（「低于上限即红」本身的单元用例在 rfc376-structural-guards 的 checkCounts 一组）：
+// 锁三件事（`checkCounts` 判据本身的单元用例在 rfc376-structural-guards；RFC-479 的「低于上限即红」已由 RFC-484 撤回，回到
+// RFC-294 design §13.4 的「不高于上限即过」）：
 // ① composition 控制流（review-2026-11-09 F13 口径）：fixture 变异——行首 if / for / for-in / for-of / while / switch / try / throw 各计
 //    一行；`} else if`、`do … while`、模板字符串与注释里以这些词开头的行不计；非 composition/ 目录不计；只有声明的 composition 文件
 //    给出空集（id 仍在）。真实语料：与 F13 的行首正则逐模块对账，正则多出的行只能落在字符串 / 模板 / 注释里。
