@@ -1,4 +1,4 @@
-## 2026-11-11 RFC-485 collaboration 与 memory 取 task-execution 的三个行形状查询工厂改经装配期注入（In Progress；`design/RFC-485-te-row-query-bindings/`）
+## 2026-11-11 RFC-485 collaboration 与 memory 取 task-execution 的三个行形状查询工厂改经装配期注入（Done；`design/RFC-485-te-row-query-bindings/`）
 
 - **来由**：RFC-294 plan §3 S9 第 2 项（类型污染清单里「收裸 db 句柄的查询工厂」），task-execution ↔ collaboration 这一对的第四步（RFC-482
   落档时拆出）；memory 是这三个工厂在模块外的另一个使用方，一并处理。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
@@ -38,6 +38,19 @@
   副本上全部跑完通过（`rfc363-task-workspace-process-recovery` 照 RFC-482 另加轮询兜底）；RFC-485 用例对 HEAD 的代码 7 条红 6 条；
   PostgreSQL 以 CI 双引擎分片为证据，另把 85 个相关文件接库跑：1,628 条全过（PostgreSQL 一侧 760 条）；架构报告 60 项实测 = `max`，门里
   只有偏差一项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`9699ad3fd`。
+- **CI**：`9699ad3fd`：exact SHA 主 CI run 43111234874 的 70 个 job 全部通过（「CI required」绿；real PostgreSQL 与 Playwright e2e 的 ubuntu
+  3 个、macOS 4 个、Windows 4 个分片都跑完通过）；同 SHA 的 windows-platform run 43111234860 与 push 触发的 maintenance-soak-nightly run
+  43111234922 通过。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. S9 task-execution ↔ collaboration 第五步 RFC-483：collaboration 拼进自己查询的三个 task-execution SQL 片段（`nodeRunStatusCondition`、
+     `taskGateOpenCondition`、`taskGateVisibleCondition`，8 条类型污染；使用点在 collaboration 的 `clarifyRounds.ts` 与 `review.ts`）换成 owner
+     的业务查询。它们服务的待评审 / 待澄清列表与计数由 RFC-359 AC-11 压成单条语句，往返数由 `rfc359-w57-clarify-badge-round-trip-budget`
+     双引擎钉住，换成业务查询不能退回多次往返，需要单独设计。这一对收口后，S9 余下其他 context 对（integration 取
+     `nonTerminalTaskExists` 等）。
+  2. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application，另立、避让 S9 在制文件；运行时驱动一族随后；再 S13、S10、S12。
+  - design §14 收口实测：public 类型污染 65、未消费 public 符号 91、越 DAG 的 offered 文件对 47、跨 context 内部文件对 43；减速带 60 项，
+    每项 `max` = 实测。独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 9 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-11 RFC-484 减速带判据回到「不高于上限即过」：撤回 RFC-479 的低于即红（Done；`design/RFC-484-count-gate-not-above-max/`）
 

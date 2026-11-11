@@ -20,7 +20,7 @@ Codex）。全部实现与用例完成后集中验证一次；不在实施中途
 - [x] AC-1 task-execution 的 public 不再导出三个工厂；collaboration 经绑定、memory 经装配输入取得读取能力
 - [x] AC-2 两个闭合读取接口只有方法签名、从 `public/types` 交出；task-execution 未消费符号仍为 0
 - [x] AC-3 `public-surface-deviations` 68 → 65 并收紧到实测；跨 context 内部文件对与越 DAG 文件对不变
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证（2026-11-11，候选基于 `4c416ad75`）
 
@@ -70,6 +70,12 @@ RFC-482 的做法用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的�
 - **最终候选**：导出仓库与 HEAD 加 170 个候选路径逐字相同，临时副本已删。文档对账与读 guard-manifest 的 16 个用例 167 条
   全过（两种 provider 同进程、默认 5 秒、`--randomize`，含 3 个 rfc317 守卫账本用例）；候选 4 之后只同步了 5 个文档文件，代码与用例的结果
   沿用，架构报告在候选 4 上重出（与上面逐项相同）。
+
+## CI（AC-4）
+
+- `9699ad3fd`：exact SHA 主 CI run 43111234874 的 70 个 job 全部通过（「CI required」绿；`Backend tests (real PostgreSQL)` 与 Playwright e2e
+  的 ubuntu 3 个、macOS 4 个、Windows 4 个分片都跑完通过）；同 SHA 的 windows-platform run 43111234860 与 push 触发的
+  maintenance-soak-nightly run 43111234922 通过。
 
 ## 实现门（本会话自审，只审功能）
 
