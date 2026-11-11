@@ -19,7 +19,7 @@
 - [x] AC-1 task-execution 不取 collaboration 的 public（只剩 required-SPI 车道一条）；越 DAG 的 8 条销账
 - [x] AC-2 三组端口类型声明在 task-execution，collaboration 改取，collaboration 的 public 不再交出
 - [x] AC-3 两个开放类型与 collaboration 的一条类型污染销账；两项减速带收紧到实测；两个模块未消费符号仍为 0
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`fdc78adf8`，见 CI 一节）
 
 ## 集中验证（2026-11-11，候选基于 `ae835a25d`）
 
@@ -59,6 +59,11 @@
   task-execution `public/commands` 的 1 条、bootstrap 取 collaboration `public/participants` 的 1 条），新增 12 条（collaboration 11 个文件
   取 task-execution `public/types`，在目标 DAG 内；bootstrap 取 collaboration composition 1 条）；跨 context 内部文件对 43、mutation 入口
   2,336 不变，task-execution 执行权一节只差行号。
+
+## CI（AC-4）
+
+- `fdc78adf8`：exact SHA 主 CI run 43000966622 的 70 个 job 全部通过（「CI required」绿），windows-platform run 43000966488 绿；同一 SHA 没有其他 push workflow。
+- Done 文档提交前，在与 HEAD 逐字相同（加本次 Done 文档文件）的导出仓库上重跑文档用例：文档对账 13 个与读 guard-manifest 的 3 个用例共 167 条全过（两种 provider 同进程、默认 5 秒、`--randomize`）。
 
 ## 实现门（本会话自审，只审功能）
 

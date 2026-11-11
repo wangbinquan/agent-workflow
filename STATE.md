@@ -1,4 +1,4 @@
-## 2026-11-10 RFC-481 task-execution 自有人工门端口：反向越 DAG 类型边清零与开放类型收口（In Progress；`design/RFC-481-te-owned-human-gate-ports/`）
+## 2026-11-10 RFC-481 task-execution 自有人工门端口：反向越 DAG 类型边清零与开放类型收口（Done；`design/RFC-481-te-owned-human-gate-ports/`）
 
 - **来由**：RFC-294 plan §3 S9（public 合同收敛），task-execution ↔ collaboration 这一对的第二步。RFC-480 之后这一对余下第 2、4、5 项，按
   依赖与风险再拆三步：本 RFC 做第 5 项（task-execution → collaboration 的 8 条越 DAG 类型边）与第 2 项里不牵动查询路径的 3 条类型污染；
@@ -27,6 +27,24 @@
   等待：单独重跑或在只放宽时限常量的副本上全部跑完通过，preflight 的两条在同一份语料上直接调判据（74 = 74、18 = 18）；PostgreSQL 以 CI
   双引擎分片为证据，另把文档对账、改动用例与用到改动 helper 的 48 个文件接库跑：1,010 条通过、0 失败（三个文件撞时限，单独或放宽预算后
   跑完）；架构报告 60 项实测 = `max`，门里只有上述两项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`fdc78adf8`。
+- **CI**：`fdc78adf8`：exact SHA 主 CI run 43000966622 的 70 个 job 全部通过（「CI required」绿），windows-platform run 43000966488 绿；同一 SHA 没有其他 push workflow。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. S9 task-execution ↔ collaboration 第三步（RFC-482）：collaboration 取 task-execution 的 9 个行形状查询工厂与事务参与者
+     （`createNodeRunQueries`、`createTaskGateQueries`、`createNodeOutputQueries`、`createRunSelectionReader`、`createTaskSubjectQueries`、
+     `createTaskClarifyDirectivePersistence`、`createHumanGatePersistenceParticipantInTx`、`createConsumedInputsParticipantInTx`、
+     `reselectRunInTx`）改经 RFC-400 的装配期绑定、读路径按业务目的收窄；其中 `createNodeRunQueries` 与 `createNodeOutputQueries` 另有
+     memory 在取，撤出 public 要连同它一起改指或先留给 memory。普查（2026-11-11，语法树）：模块外 119 个调用点、74 个函数，手里已有
+     RFC-400 绑定的只有 11 个函数（39 处）；`PersistenceTx` 就是 `PersistenceDb`，不少调用点传的是事务句柄，所以只能传工厂引用、不能在
+     装配期用根 db 预绑实例。余下 63 个函数在 src 约 220 处、用例约 560 处被调用，落档时按家族再拆：先做三个事务参与者、clarify 指令持久化、
+     任务主题查询与 run selection 读取（6 条），node run / gate / output 三个查询工厂连同 memory 的使用随后。第四步 RFC-483：三个 SQL 片段（8 条）换成 owner 的业务查询，守住 RFC-359
+     AC-11 的单语句往返预算。task-execution 其余 11 条类型污染的消费方在 memory、integration、workspace-insight、resource-catalog 与 legacy
+     routes，随 S9 后续的 context 对推进。
+  2. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application，另立、避让 S9 在制文件；运行时驱动一族随后；再 S13、S10、S12。
+  - design §14 收口实测：上下文值环 0、off-DAG 值对 0、后端值级 SCC 0；越 DAG 的 offered 文件对 47（task-execution → collaboration 0）；跨
+    context 内部文件对 43；public 类型污染 74、未消费 public 符号 91（task-execution、collaboration 为 0）；有 `public/operations` 的模块 7；
+    `services/` 业务实现 48；模块级可变状态（报告口径）79；composition 控制流 1,197 行（19 个模块）。减速带 60 项，每项 `max` = 实测。独立
+    对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 6 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-10 RFC-480 task-execution 与 collaboration 的 public 收口：未消费符号清零与 `public/operations` 退役（Done；`design/RFC-480-te-collaboration-public-unconsumed-sweep/`）
 
