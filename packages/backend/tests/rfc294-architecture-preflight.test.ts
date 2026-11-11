@@ -280,6 +280,41 @@ describe('RFC-294 W0-R target architecture scanner contract', () => {
     expect(violations).toContain('serializes sensitive capability/authority')
     expect(violations).toContain('RequestAuthority leaks through public/events')
   })
+
+  test('RFC-480: the task-ownership capabilities keep the owner rules in domain/ownership, and only there', () => {
+    const owner = 'packages/backend/src/modules/task-execution/domain/ownership.ts'
+    const factory = `
+      const issued = new WeakSet<object>()
+      export function createWorkerIdentity(workerId: string): WorkerIdentity {
+        const identity = Object.freeze({ workerId }) as unknown as WorkerIdentity
+        issued.add(identity)
+        return identity
+      }
+    `
+    const branded = `
+      declare const workerIdentityBrand: unique symbol
+      export type WorkerIdentity = Readonly<{ [workerIdentityBrand]: true; readonly workerId: string }>
+    `
+    expect(capabilityForgeViolations(sourceUnits({ [owner]: branded + factory }))).toEqual([])
+    // The owner registration does not silence the rules: an unbranded declaration is still reported there.
+    expect(
+      capabilityForgeViolations(
+        sourceUnits({
+          [owner]:
+            'export type WorkerIdentity = Readonly<{ readonly workerId: string }>\n' + factory,
+        }),
+      ),
+    ).toContain('modules/task-execution/domain/ownership.ts#WorkerIdentity: missing private brand')
+    // The exception is file-exact: the same declaration and factory in another domain file is a forger.
+    const elsewhere = capabilityForgeViolations(
+      sourceUnits({
+        'packages/backend/src/modules/task-execution/domain/other.ts': branded + factory,
+      }),
+    )
+    expect(elsewhere).toContain(
+      'modules/task-execution/domain/other.ts#createWorkerIdentity: factory is outside capability owner',
+    )
+  })
 })
 
 // BEGIN COMMITTED G3 BASELINES — committed source 2a70c93285000d9413dfb7c2c835714a99701e2d.

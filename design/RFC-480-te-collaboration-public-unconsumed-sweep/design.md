@@ -107,6 +107,10 @@ runtime-management 1）。`rfc376-report` 的计数项断言改为「21 + 偏差
   进了 application 端口）、`rfc310-digital-employee-os-architecture`（它读的 RFC-310 `os-architecture-manifest.json` 里，取 event-center
   `public/types` 的 task-execution 文件由 `public/events.ts` 改为 `application/taskLifecycleEvents.ts`）、`rfc333-human-gate-source-locks`
   （续跑准入的唯一权威改为锁 `infrastructure/taskContinuationAdmission.ts` 的定义，`public/participants` 不再转出它）。
+- **CI 查出的两处**（`bb7da0e8d` 的主 CI）：`rfc294Gates.ts` 的 capability owner 登记照 RFC-363 先例写明 task-execution `domain/ownership`
+  的 `WorkerIdentity` / `OwnedTaskTx`（挪位后它们不再声明在 `public/participants`，原本合规的两个工厂被当成伪造），preflight 加 fixture 锁住
+  规则在新位置照旧作用、例外只认这个文件；`scripts/rfc359-p0-mutations.ts` 里 p0-8 的栈帧证据与指纹清单改指 `application/commandEntries.ts`，
+  `rfc359-w14-p0-mutation-verdict` 的转录与负对照随之改指。
 - **账本**：`counts.json` 的分项与收紧；public surface、未消费、偏差三个报告数随实测变化；`PUBLIC_SURFACE_DEBT`（rfc294-architecture-preflight）
   删 12 条、加 1 条（§3）；guard-manifest 登记新用例并刷新改到的守卫行数。
 

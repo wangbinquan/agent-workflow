@@ -64,6 +64,27 @@
   mutation 入口 2,347 → 2,336（collaboration 4 个用例函数换了位置，`composition/processEffectObserver.ts` 的 1 个挪到 tests/helpers，10 个
   `export const X = XInternal` 别名撤掉）；事务内外部效应与 task-execution 执行权两节只差行号。
 
+## CI（AC-4）
+
+- `bb7da0e8d` 主 CI run 42958471515：70 个 job 里 3 个未通过（其余 push workflow：windows-platform、integration-opencode、
+  maintenance-soak-nightly 全绿）。2 个是本 RFC 的缺陷，本地集中验证漏掉了，在下一个提交修复：
+  1. `rfc294-architecture-preflight` 的「module capability ownership cannot be structurally forged or serialized」：`WorkerIdentity` /
+     `OwnedTaskTx`（连同 brand）挪进 `domain/ownership.ts` 后，`capabilityForgeViolations` 只认声明在 `public/participants`（与 RFC-363 的
+     两处私有端口）里的 capability owner，两个工厂被当成 owner 外的伪造，账本多出 4 条。本地这条用例在全量与成对复跑里候选、对照两边都超时
+     （负载下超过 180 秒预算），没有拿到结果，被当成「两边一样」归给了负载。修法照 RFC-363 的先例在 owner 登记里写明这个私有 owner 文件，
+     brand、readonly、唯一工厂、冻结与私有登记表规则照旧作用；加 fixture（合规时为空、去掉 brand 仍报、同样的声明与工厂放到别的 domain 文件
+     仍报 owner 外工厂）。
+  2. real-PostgreSQL lane 的「Verify RFC-359 original P0 mutations on both databases」：p0-8 的证据要求栈帧落在
+     `collaboration/public/commands.ts`，三个命令入口已进了 `application/commandEntries.ts`。`scripts/rfc359-p0-mutations.ts` 的三条栈帧正则
+     与指纹清单改指，`rfc359-w14-p0-mutation-verdict` 的历史转录与「换成无关路径必拒」的负对照随之改指。这个脚本只在 real-PostgreSQL 那个
+     job 里跑，本地集中验证没有覆盖。
+- 第三个是 Playwright e2e（windows-latest shard 2/4）被 20 分钟的 job 时限取消：同一 run 里另三片 Windows 装依赖 30～43 秒，这一片 10 分 46 秒
+  （上一个 run 同一片 36 秒），被取消前跑到的 e2e 用例都通过——不归本 RFC，没有为它重跑。
+- 修复的本地复验：capability 判据在 preflight 的同一份语料上与账本逐条相等（18 / 18）；preflight 的 scanner contract 与 capability 两组、
+  P0 判决用例共 22 条在导出仓库通过（默认 5 秒、`--randomize`；capability 那条负载下 172.6 秒，预算 180 秒）；P0 变异门本地接库跑两种
+  provider：sqlite 的 17 个阶段全部有效（含 p0-8）；PostgreSQL 一半在本机负载下第一个阶段（不带变异的 current-before）就撞
+  脚本的 300 秒阶段时限（CI 上 32 秒），本机放不下，以修复提交的 CI 为证据。
+
 ## 实现门（本会话自审，只审功能）
 
 按路径限定在本 RFC 的改动，结论 PASS：

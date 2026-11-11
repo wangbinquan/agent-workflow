@@ -451,6 +451,8 @@ export const PHASES: readonly Phase[] = [
   {
     // RFC-400 T3: the mutated adapter registers contexts without the three commands; the real resolvers
     // now live in collaboration/application/commandContext.ts, so the throw frame is that file.
+    // RFC-480: the three command entries left public/commands for collaboration/application/commandEntries.ts
+    // (no other module called them), so their calling frame is that file.
     id: 'p0-8-command-omission',
     mutation: 'p0-8-command-omission',
     passes: [collaborationDraft],
@@ -460,7 +462,7 @@ export const PHASES: readonly Phase[] = [
         diagnostics: [
           /^error: collaboration question dispatch command is not composed$/m,
           /at requireQuestionDispatchCommand \([^\n]*collaboration\/application\/commandContext\.ts:\d+:\d+\)/,
-          /at dispatchTaskQuestions \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
+          /at dispatchTaskQuestions \([^\n]*collaboration\/application\/commandEntries\.ts:\d+:\d+\)/,
           /rfc359-t2-question-dispatch-command\.test\.ts:\d+:\d+/,
         ],
       },
@@ -469,7 +471,7 @@ export const PHASES: readonly Phase[] = [
         diagnostics: [
           /^error: collaboration clarify decision command is not composed$/m,
           /at requireClarifyDecisionCommand \([^\n]*collaboration\/application\/commandContext\.ts:\d+:\d+\)/,
-          /at submitClarifyDecision \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
+          /at submitClarifyDecision \([^\n]*collaboration\/application\/commandEntries\.ts:\d+:\d+\)/,
           /rfc359-t2b-clarify-decision\.test\.ts:\d+:\d+/,
         ],
       },
@@ -478,7 +480,7 @@ export const PHASES: readonly Phase[] = [
         diagnostics: [
           /^error: collaboration review decision command is not composed$/m,
           /at requireReviewDecisionCommand \([^\n]*collaboration\/application\/commandContext\.ts:\d+:\d+\)/,
-          /at submitReviewDecision \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
+          /at submitReviewDecision \([^\n]*collaboration\/application\/commandEntries\.ts:\d+:\d+\)/,
           /rfc359-t2c-review-decision\.test\.ts:\d+:\d+/,
         ],
       },
@@ -674,7 +676,8 @@ export const sourceFiles = [
   'packages/backend/src/modules/collaboration/application/commandContext.ts',
   'packages/backend/src/modules/collaboration/infrastructure/collaborationCommandContext.ts',
   'packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts',
-  'packages/backend/src/modules/collaboration/public/commands.ts',
+  // RFC-480: the three command entries moved from public/commands to application/commandEntries.
+  'packages/backend/src/modules/collaboration/application/commandEntries.ts',
   'packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts',
   'packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
   'packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts',

@@ -28,6 +28,11 @@
   下被时限杀掉，按 bun 的分片规则重建清单补跑 1,430 个文件，全量里有失败或输出的 69 个文件与对照成对复跑：除上述 7 处外的失败两边逐条相同
   （负载下的超时与内部等待）；架构报告 60 项实测 = `max`，其他 context 的 937 个 public 条目逐个相同；PostgreSQL 以 CI 双引擎分片为证据。
   实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI（第一次）**：`bb7da0e8d` 主 CI run 42958471515 的 70 个 job 里 3 个未通过。2 个是本 RFC 的缺陷、集中验证漏掉的，由下一个提交修复：
+  preflight 的 capability owner 账本（`WorkerIdentity` / `OwnedTaskTx` 挪进 `domain/ownership.ts` 后两个工厂被当成伪造；本地这条用例两边都
+  超时、没拿到结果）；real-PostgreSQL lane 的 P0 变异证据（p0-8 的栈帧正则仍指 `collaboration/public/commands.ts`；脚本只在 CI 跑）。
+  Windows e2e 2/4 被 20 分钟 job 时限取消（这一片装依赖 10 分 46 秒，同 run 其余三片 30～43 秒，跑到的用例都通过），不归本 RFC。其余 push
+  workflow 全绿。
 
 ## 2026-11-10 RFC-479 治理补洞：减速带上限 = 实测、public 合同两项计数与 composition 控制流入带（Done；`design/RFC-479-governance-gap-fill/`）
 

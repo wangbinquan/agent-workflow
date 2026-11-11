@@ -1710,7 +1710,13 @@ export function capabilityForgeViolations(units: readonly SourceUnit[]): string[
               statement.name.text === 'RepositoryPreparationEffectCapability')) ||
           (location.context === 'task-execution' &&
             location.rest === 'application/ports/workspaceLaunch' &&
-            statement.name.text === 'WorkspaceReadCapability'))
+            statement.name.text === 'WorkspaceReadCapability') ||
+          // RFC-480 moved the task-ownership capabilities out of public/participants (no other
+          // module named them) into the domain file that holds their brands and their one factory
+          // each; the same brand/readonly/factory/registry rules keep applying there.
+          (location.context === 'task-execution' &&
+            location.rest === 'domain/ownership' &&
+            (statement.name.text === 'WorkerIdentity' || statement.name.text === 'OwnedTaskTx')))
       ) {
         const key = `${location.context}:${statement.name.text}`
         sensitiveOwners.set(key, unit.path)

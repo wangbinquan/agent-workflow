@@ -23,15 +23,15 @@ TaskExecutionError: task 't7_01M20746EQP6RMXG9PVEAYH351' mutation was fenced
   'p0-8-command-omission': [
     `error: collaboration question dispatch command is not composed
       at requireQuestionDispatchCommand (/repo/packages/backend/src/modules/collaboration/application/commandContext.ts:112:11)
-      at dispatchTaskQuestions (/repo/packages/backend/src/modules/collaboration/public/commands.ts:200:10)
+      at dispatchTaskQuestions (/repo/packages/backend/src/modules/collaboration/application/commandEntries.ts:155:10)
       at <anonymous> (/repo/packages/backend/tests/rfc359-t2-question-dispatch-command.test.ts:49:25)`,
     `error: collaboration clarify decision command is not composed
       at requireClarifyDecisionCommand (/repo/packages/backend/src/modules/collaboration/application/commandContext.ts:121:11)
-      at submitClarifyDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:208:10)
+      at submitClarifyDecision (/repo/packages/backend/src/modules/collaboration/application/commandEntries.ts:163:10)
       at <anonymous> (/repo/packages/backend/tests/rfc359-t2b-clarify-decision.test.ts:109:26)`,
     `error: collaboration review decision command is not composed
       at requireReviewDecisionCommand (/repo/packages/backend/src/modules/collaboration/application/commandContext.ts:103:11)
-      at submitReviewDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:192:10)
+      at submitReviewDecision (/repo/packages/backend/src/modules/collaboration/application/commandEntries.ts:147:10)
       at <anonymous> (/repo/packages/backend/tests/rfc359-t2c-review-decision.test.ts:94:26)`,
   ],
   'p0-1-ambient-context': [
@@ -262,7 +262,8 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
     )
   })
 
-  test('P0-8 requires all three original missing commands at their own public entries', () => {
+  // RFC-480: the three entries left public/commands for collaboration/application/commandEntries.ts.
+  test('P0-8 requires all three original missing commands at their own command entries', () => {
     const id = 'p0-8-command-omission'
     const log = transcript(id)
     expect(verdict(id, log).valid).toBe(true)
@@ -276,7 +277,10 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
           /at (dispatchTaskQuestions|submitClarifyDecision|submitReviewDecision) \(/,
           'at unrelatedPublicEntry (',
         ),
-        diagnostic.replace('collaboration/public/commands.ts:', 'unrelated/commands.ts:'),
+        diagnostic.replace(
+          'collaboration/application/commandEntries.ts:',
+          'unrelated/commandEntries.ts:',
+        ),
         diagnostic.replace(/rfc359-t2[^)]+/, 'unrelated.test.ts:1:1)'),
         'error: Test timed out after 5000ms',
         'TypeError: Cannot read properties of undefined',
