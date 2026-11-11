@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
@@ -876,7 +877,9 @@ describeEachProviderHttpApplication(
         .where(eq(clarifyRounds.id, round!.id))
       expect(legacy?.directive ?? null).toBeNull() // legacy session: still NULL
       // node NOT short-circuited (questioner node-level directive not written on a partial seal)
-      expect(await resolveCrossNodeStopped(h.db, taskId, 'questioner')).toBe(false)
+      expect(
+        await resolveCrossNodeStopped(h.db, taskExecutionParticipants, taskId, 'questioner'),
+      ).toBe(false)
     })
   },
 )

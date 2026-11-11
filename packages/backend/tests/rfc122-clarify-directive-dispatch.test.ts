@@ -41,7 +41,7 @@ import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
-} from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
+} from './helpers/clarifyDirectives'
 import { reenterScheduler } from './reenter-scheduler'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -604,7 +604,10 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   test('scheduler reads the override at dispatch and threads it (source-level lock)', () => {
     const src = AGENT_MECHANICS_SOURCE
     // Dispatch read (parallel to hasPersistentStop) gated on hasClarifyChannel.
-    expect(src).toContain('collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })')
+    // RFC-482 改锚：引擎直接读 task-execution 自己的指令表（持久化包的 clarifyDirectives），
+    // 不再经 collaboration 端口转一圈；读点与门控不变。
+    expect(src).toContain('clarifyDirectives.get(taskId, node.id)')
+    expect(src).not.toContain('collaboration.getNodeClarifyDirective')
     expect(src).toContain('const nodeStopOverride =')
     // RFC-132 (PR-C): TWO threads now — the effective-channel oracle + the runNode stop notice. The
     // per-round injector override thread is gone (the flat context carries no directive; the node
@@ -619,7 +622,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
 
   test('H1: the override is read INSIDE the retry loop (per attempt), not cached before it', () => {
     const src = AGENT_MECHANICS_SOURCE
-    // The getNodeClarifyDirective read must happen ONCE PER ATTEMPT so each
+    // The node clarify directive read must happen ONCE PER ATTEMPT so each
     // attempt's freshly-minted process-retry row re-reads the latest toggle. A
     // refactor that hoists it above the per-attempt boundary (stale cache) → red.
     //
@@ -640,7 +643,8 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     expect(attemptFnIdx, '每 attempt 机身函数应存在（重试边界）').toBeGreaterThan(0)
     expect(keepIfIdx, 'keepIf 回调应存在（每轮重试各调一次）').toBeGreaterThan(0)
     const reads: number[] = []
-    const directiveRead = 'collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })'
+    // RFC-482 改锚：读点改为引擎直接读持久化包的 clarifyDirectives（每个读点的位置判据不变）。
+    const directiveRead = 'clarifyDirectives.get(taskId, node.id)'
     for (let i = src.indexOf(directiveRead); i >= 0; ) {
       reads.push(i)
       i = src.indexOf(directiveRead, i + 1)

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import {
   compareClarifyRoundInboxOrder,
   compareClarifyRoundRecency,
@@ -212,7 +213,7 @@ describeEachProvider('RFC-395 C target clarify writes', (h) => {
     expect((await f.projection()).answers).toBeNull()
     expect((await f.projection()).answerAttributions).toEqual(final.answerAttributions)
     const archive = await h.session.transaction((tx) =>
-      createTaskArchiveCollaborationSectionReader().load(tx, [f.taskId]),
+      createTaskArchiveCollaborationSectionReader(taskExecutionParticipants).load(tx, [f.taskId]),
     )
     expect(archive.rows.clarify_answers).toEqual([])
     expect(archive.rows.clarify_answer_drafts).toEqual([])

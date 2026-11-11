@@ -276,6 +276,8 @@ export type {
   TaskSubjectProjection,
   TaskSubjectQueries,
 } from '../application/ports/taskSubjectQueries'
+// RFC-482 — the run selection reads collaboration takes through its participant bindings (a closed interface).
+export type { TaskRunSelectionReads } from '../application/ports/runSelection'
 export type { TaskDefinitionSubject, TaskSubject, TaskReadSubject } from '../domain/taskSubject'
 
 export type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'

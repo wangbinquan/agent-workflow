@@ -5,7 +5,8 @@ import type {
   CollaborationNodeRunTaskAccessDecision,
   CollaborationClarifyTaskAccessDecision,
 } from './ports/collaborationTaskAccess'
-import { requireCollaborationTaskAccess, requireClarifyDirectiveStore } from './commandContext'
+import { requireCollaborationTaskAccess } from './commandContext'
+import type { ClarifyDirectiveStore } from './ports/clarifyDirectiveStore'
 import type { ClarifyDirective } from '@agent-workflow/shared'
 
 export function resolveCollaborationNodeRunTaskAccess(
@@ -39,9 +40,10 @@ export function collaborationQuestionTaskId(
   return requireCollaborationTaskAccess(context).questionTaskId(entryId)
 }
 
+/** RFC-482: reads through the directive store the route operations were handed (see setCollaborationClarifyDirective). */
 export function listCollaborationClarifyDirectives(
-  context: CollaborationCommandContext,
+  directives: ClarifyDirectiveStore,
   taskId: string,
 ): Promise<readonly Readonly<{ nodeId: string; directive: ClarifyDirective }>[]> {
-  return requireClarifyDirectiveStore(context).listNodeDirectives(taskId)
+  return directives.listNodeDirectives(taskId)
 }

@@ -2,7 +2,6 @@ import type { TaskExecutionParticipantBindings } from './taskExecutionParticipan
 // RFC-359 W4-B3 —— 任务终态时的人工门清扫（澄清轮次封存 / 作废 + 挂起 run 取消 + node-statuses committed event）：
 // 一份实现，两个 provider 共用。SQLite 此前经 dbTxSync + 同步 committed-event 参与者，PG 经 SERIALIZABLE；现在同走统一写事务。
 
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
@@ -40,7 +39,8 @@ export function createHumanGateTerminalSweepCommand(
           .where(
             and(eq(clarifyRounds.taskId, input.taskId), eq(clarifyRounds.status, 'awaiting_human')),
           )
-        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        const taskHumanGate =
+          taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
         for (const round of openRounds) {
           await createClarifyAnswerWritePort(db).transition(
             {

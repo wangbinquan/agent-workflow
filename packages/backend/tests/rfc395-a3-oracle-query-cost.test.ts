@@ -17,7 +17,6 @@ import { DrizzleSchedulerCompletionPersistence } from '@/modules/task-execution/
 import type { NodeActivationSnapshotReader } from '@/modules/task-execution/application/ports/nodeActivationSnapshotReader'
 import { DrizzleNodeActivationSnapshotReader } from '@/modules/task-execution/infrastructure/nodeActivationSnapshotReader'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
-import { reselectRunInTx } from '@/modules/task-execution/infrastructure/runSelection/selectionWrite'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/runSelection/table/reader'
@@ -201,7 +200,9 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
     }
   })
 
-  test('park facts stay PK reads and re-opening a review adds no selection query', async () => {
+  // RFC-482: re-opening a review no longer calls the former no-op `reselectRunInTx`, so it adds no selection query
+  // by construction; the park-fact read below keeps its PK-read budget.
+  test('park facts stay PK reads', async () => {
     await seed()
     const run = (await createNodeRunQueries(harness.db).read('query-a-new'))!
     expect(Object.keys(run)).not.toContain('preSnapshot')
@@ -215,9 +216,6 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
         expect(recording.selects()[0]!.values).toContain('query-a-new')
         expect(recording.selects()[0]!.sql).toMatch(/limit/i)
         expect(recording.selects()[0]!.sql).not.toContain('task_repos')
-        const count = recording.statements.length
-        expect(await reselectRunInTx(tx, run, 'review-reset')).toEqual([])
-        expect(recording.statements).toHaveLength(count)
       } finally {
         recording.stop()
       }

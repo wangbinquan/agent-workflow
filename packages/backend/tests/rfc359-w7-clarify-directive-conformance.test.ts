@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-359 W7 —— `ClarifyDirectiveStore` 的双引擎对拍。
 //
 // 为什么存在：合一前这一对是 `sqliteClarifyDirectiveStore.ts`（34 行纯转发）+
@@ -10,9 +11,9 @@
 // 本文件把那七条判据 + 重入语义写成**同一段断言**，`describeEachProvider` 在两个引擎上各跑
 // 一遍。任何一侧再长出私有分支，这里立刻红。
 //
-// 判据来源：`application/ports/clarifyDirectiveStore.ts` 的端口契约，语义注释在
-// `infrastructure/taskClarifyDirective.ts`（RFC-122 覆盖、RFC-123 recency、
-// RFC-207 per-asker 行与节点级 continue 的「解除全部静音」手势）。
+// 判据来源：`application/ports/clarifyDirectiveStore.ts` 的端口契约，语义注释在 task-execution 的
+// `infrastructure/taskClarifyDirectivePersistence.ts`（RFC-122 覆盖、RFC-123 recency、RFC-207 per-asker 行与节点级
+// continue 的「解除全部静音」手势）。RFC-482 起工厂收 task-execution 的指令持久化实例（经参与者绑定取得）。
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -45,7 +46,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
     expect(await store.get({ taskId, nodeId: 'asker' })).toBeNull()
     expect(await store.get({ taskId, nodeId: 'asker', shardKey: 'a1' })).toBeNull()
     expect(await store.get({ taskId, nodeId: 'asker', shardKey: null })).toBeNull()
@@ -56,7 +59,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     await store.set({ taskId, nodeId: 'asker', directive: 'stop', setBy: 'u1', now: 1000 })
     // 节点级行对每一种读法都成立：省略 / null / 任意未建行的 shard
@@ -99,7 +104,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const otherTask = freshTaskId()
     await seedTask(db, taskId)
     await seedTask(db, otherTask)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     await store.set({ taskId, nodeId: 'n1', directive: 'stop', setBy: null, now: 1 })
     await store.set({ taskId, nodeId: 'n2', directive: 'continue', setBy: null, now: 1 })
@@ -136,7 +143,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     await store.set({ taskId, nodeId: 'n1', directive: 'stop', setBy: 'u1', now: 10 })
     // 同键第二次写：directive / setBy / updatedAt 全部就地更新，不新增行
@@ -168,7 +177,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const otherTask = freshTaskId()
     await seedTask(db, taskId)
     await seedTask(db, otherTask)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     for (const shardKey of ['s1', 's2']) {
       await store.set({ taskId, nodeId: 'n1', directive: 'stop', setBy: null, shardKey, now: 1 })
@@ -232,7 +243,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     const before = Date.now()
     await store.set({ taskId, nodeId: 'n1', directive: 'stop', setBy: null })
@@ -249,7 +262,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     await store.set({
       taskId,
@@ -269,7 +284,9 @@ describeEachProvider('RFC-359 W7 —— 澄清指令存储（ClarifyDirectiveSto
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const store = createClarifyDirectiveStore(db)
+    const store = createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    )
 
     // 合一前 PG 那份走裸 db.transaction：另开连接、独立提交，外层回滚带不走 —— 这条锁住它不复发。
     await expect(

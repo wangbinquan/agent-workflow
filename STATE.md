@@ -9,13 +9,27 @@
 - **范围**：五个工厂改经 RFC-400 的装配期绑定（`TaskExecutionParticipantBindings` 增五个工厂引用，bootstrap 从 task-execution 的 composition
   取来交入；`PersistenceTx` 就是 `PersistenceDb`，只能交工厂、不能预绑实例），task-execution 的 public 撤出它们、只交出接口（run selection 的
   读取收成三个方法的闭合接口）；空操作 `reselectRunInTx` 删除；task-execution 的引擎直接读自己的 clarify 指令表，`CollaborationRuntimeMechanics`
-  去掉 `getNodeClarifyDirective`，collaboration 的转发文件 `taskClarifyDirective.ts` 删除，指令存储改为命令上下文的可选能力。预期
+  去掉 `getNodeClarifyDirective`，collaboration 的转发文件 `taskClarifyDirective.ts` 删除，指令存储由 bootstrap 用绑定造好、直接交给指令路由操作适配器。预期
   `public-surface-deviations` 74 → 68。
 - **不做**：三个行形状查询工厂与 memory 的使用（下一步）；SQL 片段（RFC-483）；其他 context 对；评审 / 提问用例的整体归位（review §9 待用户
   决定）；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
   上次 2026-11-09，其后关闭 6 个后继，下一次不晚于 2026-11-23。
 - **附带**：RFC-481 的 Done 文档提交 `68086c6cd`（5 个文档文件）：exact SHA 主 CI run 43006550311 的 70 个 job 全绿。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 新接口按内容落在 task-execution 的 `application/ports`，clarify 指令的读取回到存储的拥有者；
+  C11 task-execution 的 public 撤 6 增 1（`TaskRunSelectionReads`），只经被撤工厂返回类型可达的 `ShardSetView` 随之撤出，collaboration 的
+  public 不变；C12 RFC-482 用例覆盖 task-execution 的全部 public 文件、collaboration 的全部生产文件与 bootstrap 的绑定；C13 触及的减速带收紧
+  到实测（`counts.json` 60 项）。
+- **§14 不变量 / S9 退出门**（task-execution ↔ collaboration 这一对的第三步）：public 类型偏差 74 → 68（这一对 28 → 22）；未消费 public 符号
+  91 不变（两个模块为 0）；越 DAG 的 offered 文件对 47、跨 context 内部文件对 43 不变；减速带 60 项每项等于实测。
+- **集中验证**（候选基于 `32b31b6a0`，验证期间 HEAD 未前进，详见 plan）：查出本 RFC 的三类问题，已修复并复验——指令存储起初做成命令上下文
+  的可选能力，组合根守卫的兜底 5 → 6（改为直接交给适配器）；`ShardSetView` 成了未消费符号（随之撤出）；`tsc` 看不到的文本与哈希账本，首批
+  5 个文件、全量又 8 个文件（改后全过，再用字面量扫描对 HEAD 与候选核一遍）。backend `tsc` 0 错、eslint 无告警；全量 SQLite 逐文件跑 2,932 个、
+  2,911 个通过，其余 21 个里 8 个是上面的文本断言，发布账本一条是导出仓库没有真实历史（对照同样失败），12 个撞用例自带的时限或内部等待：
+  在只放宽时限常量的副本上全部跑完通过（`rfc363-task-workspace-process-recovery` 只靠 `fs.watch` 的事件等检查点，副本另加轮询兜底）；
+  PostgreSQL 以 CI 双引擎分片为证据，另把 70 个相关文件接库跑：1,198 条通过，失败的 12 条是导出仓库里的临时副本被守卫普查计入（删后重跑通过）
+  与 PostgreSQL 一侧撞 20 秒时限（放宽后 47 / 47）；架构报告 60 项实测 = `max`，门里只有偏差一项变化。实现门 PASS（本会话按路径限定自审，只审
+  功能）。
 
 ## 2026-11-10 RFC-481 task-execution 自有人工门端口：反向越 DAG 类型边清零与开放类型收口（Done；`design/RFC-481-te-owned-human-gate-ports/`）
 

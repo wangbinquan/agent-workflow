@@ -32,6 +32,7 @@ import { DrizzleMergeStateLifecyclePersistence } from '../infrastructure/mergeSt
 import { DrizzleTaskArtifactPathQueries } from '../infrastructure/taskArtifactPathQueries'
 import { createTaskRecoveryAdministration } from '../infrastructure/taskRecoveryAdministration'
 import { DrizzleTaskExecutionIntentTerminalPersistence } from '../infrastructure/taskExecutionIntentTerminalPersistence'
+import { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
 
 /**
  * 一份 persistence 聚合，里面没有任何一个参与者看 provider。
@@ -101,6 +102,7 @@ export function createTaskExecutionPersistence(
     ),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
+    clarifyDirectives: createTaskClarifyDirectivePersistence(db),
   })
 }
 

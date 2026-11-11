@@ -52,6 +52,8 @@ import type { TaskClarifyDirectiveRouteOperations } from '@/modules/task-executi
  */
 export function composeTaskClarifyDirectiveRouteOperations(
   collaboration: CollaborationCommandContext,
+  // RFC-482: bootstrap builds the store over task-execution's directive persistence (participant bindings).
+  directives: ClarifyDirectiveStore,
 ): TaskClarifyDirectiveRouteOperations {
   return Object.freeze({
     async resolveAccess(
@@ -64,9 +66,9 @@ export function composeTaskClarifyDirectiveRouteOperations(
         actorRole: access.actorRole,
       })
     },
-    list: async (taskId: string) => await listCollaborationClarifyDirectives(collaboration, taskId),
+    list: async (taskId: string) => await listCollaborationClarifyDirectives(directives, taskId),
     set: async (input: Parameters<TaskClarifyDirectiveRouteOperations['set']>[0]) =>
-      await setCollaborationClarifyDirective(collaboration, input),
+      await setCollaborationClarifyDirective(directives, input),
   })
 }
 
@@ -81,6 +83,7 @@ import type { ClarifyRepairParticipant } from '../ports/clarifyRepairParticipant
 import type { ReviewRepairParticipant } from '../ports/reviewRepairParticipant'
 import type { ClarifyContinuationConvergence } from '../ports/clarifyContinuationConvergence'
 import { listCollaborationClarifyDirectives } from '../queryEntries'
+import type { ClarifyDirectiveStore } from '../ports/clarifyDirectiveStore'
 import { setCollaborationClarifyDirective } from '../commandEntries'
 import {
   getReviewNodeReviewerConfig,

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-369 G3 / AC-5 —— 工作组一轮在 host 执行中遇到**内部错误**时按这一轮失败收场（design §4.4）。
 //
 // 为什么这条测试存在：内部错误（铸 run / 开跑提交 / 反问判定读 / runHost 在 assembly 前抛错）此前被
@@ -68,9 +69,9 @@ function injectedDrive(input: {
   const actual = createWorkgroupTurnsPersistence({
     db: input.db,
     hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
-    clarifyAskGate: createWorkgroupClarifyAskGate(input.db),
+    clarifyAskGate: createWorkgroupClarifyAskGate(input.db, taskExecutionParticipants),
   })
   const persistence: WorkgroupTurnsPersistencePort = {
     ...actual,
@@ -664,7 +665,7 @@ describeEachProvider('RFC-369 §4.4 —— fail-host-run 宿主账本操作', (h
       })
     }
     const factory = composeWorkgroupHostLedgerParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     })
     const receipt = await databaseSessionFor(db).transaction(
       async (tx) =>

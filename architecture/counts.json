@@ -147,8 +147,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 19 -> 0."
     },
     "public-surface-deviations": {
-      "max": 74,
-      "reason": "max=74: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); no growth authorized."
+      "max": 68,
+      "reason": "max=68: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); RFC-482 measures 74 -> 68 (five task-execution factories reach collaboration through its participant bindings and left the public entries; the no-op reselectRunInTx is gone); no growth authorized."
     },
     "repo-value-scc": {
       "max": 0,

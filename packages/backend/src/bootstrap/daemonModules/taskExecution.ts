@@ -33,6 +33,7 @@ import {
   type RepositoryPreparationInput,
 } from '@/modules/source-control/composition/repositoryPreparation'
 import {
+  createClarifyDirectiveStore,
   createCollaborationCommandContext,
   createCollaborationRuntimeMechanics,
   createTaskDeletionCollaborationParticipantInTx,
@@ -216,7 +217,9 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     ),
   })
   const validationContext = composeDynamicWorkflowValidationContext(db)
-  const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
+  const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory(
+    closure.taskExecutionParticipants,
+  )
   const agentLaunchResources = Object.freeze({
     resources: composeAgentLaunchResourceOperations({ db }),
     integrity: input.resources.agentResourceIntegrity.launch,
@@ -300,7 +303,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   })
   const coordinator = coordinatorFactory.session
   const provider = composeTaskExecutionProviderRuntime({
-    collaborationRepair: composeCollaborationRepairPorts(db),
+    collaborationRepair: composeCollaborationRepairPorts(db, closure.taskExecutionParticipants),
     db,
     historyRestrictions: input.historyRestrictions,
     archiveCollaboration: closure.collaborationReads.archive,
@@ -344,7 +347,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       workgroupTurns: composeWorkgroupTurnsOperations(
         db,
         composeWorkgroupHostLedgerParticipantFactory({ collaboration: workgroupClarify }),
-        createWorkgroupClarifyAskGate(db),
+        createWorkgroupClarifyAskGate(db, closure.taskExecutionParticipants),
       ),
       identityAccess: {
         delegatedRequests: core.identityAccess.delegatedRequests,
@@ -383,7 +386,12 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       archivedEvents: selection.archivedEvents,
       effects: selection.effects,
       nodeRunPrompts: selection.nodeRunPrompts,
-      clarifyDirective: composeTaskClarifyDirectiveRouteOperations(collaboration),
+      clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
+        collaboration,
+        createClarifyDirectiveStore(
+          closure.taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+        ),
+      ),
       reviewers: composeTaskReviewersPort(collaboration),
       taskMembership: closure.taskMembership,
       // RFC-476: the deletion's collaboration half (audience snapshot, feedback rows), per transaction.

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-311 PR-1 — inbox badge count(*) rewrites, locked to the list pipelines.
@@ -127,7 +128,7 @@ async function addDocVersion(
 
 /** The exact pipeline the badge endpoint used before RFC-311. */
 async function legacyReviewBadge(db: Db, who: Actor): Promise<number> {
-  const pending = await listReviewSummaries(db, {
+  const pending = await listReviewSummaries(db, taskExecutionParticipants, {
     status: 'pending',
     limit: Number.MAX_SAFE_INTEGER,
   })

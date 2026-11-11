@@ -10,6 +10,11 @@ import {
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
   createNodeRunWorkspaceRollback,
+  createHumanGatePersistenceParticipantInTx,
+  createConsumedInputsParticipantInTx,
+  createTaskClarifyDirectivePersistence,
+  createTaskSubjectQueries,
+  createRunSelectionReader,
 } from '@/modules/task-execution/composition'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
@@ -23,4 +28,9 @@ export const taskExecutionParticipants: TaskExecutionParticipantBindings = Objec
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
   createNodeRunWorkspaceRollback,
+  createHumanGatePersistenceParticipantInTx,
+  createConsumedInputsParticipantInTx,
+  createTaskClarifyDirectivePersistence,
+  createTaskSubjectQueries,
+  createRunSelectionReader,
 })

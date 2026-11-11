@@ -296,6 +296,7 @@ describeEachProvider('RFC-172 S3 — buildFrontierMintPlan shard scoping', (harn
     // inherits B's shard).
     const planA = await buildFrontierMintPlan(
       db,
+      taskExecutionParticipants,
       taskId,
       '__wg_member__',
       null,
@@ -314,6 +315,7 @@ describeEachProvider('RFC-172 S3 — buildFrontierMintPlan shard scoping', (harn
     // inherited from a real run, not overwritten/nulled.
     const planGlobal = await buildFrontierMintPlan(
       db,
+      taskExecutionParticipants,
       taskId,
       '__wg_member__',
       null,

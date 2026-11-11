@@ -87,8 +87,9 @@ export function createCrossClarifyNodeExecutionPorts(
       setNodeRunStatus: (input) => nodeRunLedger(state).setNodeRunStatus(input),
     },
     status: { broadcastNodeStatus },
-    getNodeClarifyDirective: (input) =>
-      state.opts.collaborationRuntime.getNodeClarifyDirective(input),
+    get clarifyDirectives() {
+      return state.opts.persistence.clarifyDirectives
+    },
     inspectCrossClarify: (input) =>
       state.opts.collaborationRuntime.inspectCrossClarify({
         ...input,

@@ -217,8 +217,8 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       directive: 'stop',
       actor,
     })
-    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
-    expect(await resolveCrossNodeStopped(db, taskId, 'qB')).toBe(false)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qA')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qB')).toBe(false)
   })
 
   test('persistence survives a sibling cross-clarify submit on a different cross node', async () => {
@@ -272,7 +272,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       answers: [makeAns('q1')],
       actor,
     })
-    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qA')).toBe(true)
   })
 
   test('persistence survives a designer self-clarify iterate on the same designer node', async () => {
@@ -327,7 +327,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       createdAt: Date.now(),
       answeredAt: Date.now(),
     })
-    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qA')).toBe(true)
   })
 
   test('persistence is keyed by (task, node_id) — a different cross node remains unaffected', async () => {
@@ -357,8 +357,8 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       directive: 'stop',
       actor,
     })
-    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
-    expect(await resolveCrossNodeStopped(db, taskId, 'qB')).toBe(false)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qA')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qB')).toBe(false)
   })
 
   test('dispatchCrossClarifyNode on a fresh node_run for the stopped node short-circuits to done (no new awaiting session)', async () => {

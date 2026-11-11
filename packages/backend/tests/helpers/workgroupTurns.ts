@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 // RFC-359 W4-D19c —— 工作组回合的测试驱动入口。
 //
 // 合一之前这些套件直接调 legacy engine 的 `runWorkgroupEngine`——也就是说它们锁的是**那一份**
@@ -30,9 +31,9 @@ export function composeTestWorkgroupTurns(db: PersistenceDb) {
   return composeWorkgroupTurnsOperations(
     db,
     composeWorkgroupHostLedgerParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
-    createWorkgroupClarifyAskGate(db),
+    createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
   )
 }
 

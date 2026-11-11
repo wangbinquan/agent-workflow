@@ -224,7 +224,9 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
       actor,
     })
     // Persistence is keyed by (task, questioner node) — loop-iter agnostic.
-    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'questioner')).toBe(
+      true,
+    )
   })
 
   test('iter 1 evaluateDesignerRerunReadiness does NOT see iter 0 continue submissions as iter-1 feedback', async () => {

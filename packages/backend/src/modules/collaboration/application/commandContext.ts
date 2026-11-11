@@ -12,7 +12,6 @@ import type { ReviewNodeReviewerStore } from './ports/reviewNodeReviewerStore'
 import type { ReviewTaskAccessPort } from './ports/reviewTaskAccess'
 import type { TaskFeedbackStore } from './ports/taskFeedbackStore'
 import type { CollaborationTaskAccessPort } from './ports/collaborationTaskAccess'
-import type { ClarifyDirectiveStore } from './ports/clarifyDirectiveStore'
 
 // The sole registry for every collaboration command context.
 export interface CollaborationPersistence {
@@ -22,7 +21,6 @@ export interface CollaborationPersistence {
   readonly committedArtifacts?: CommittedReviewArtifactReader
   readonly reviewers: ReviewNodeReviewerStore
   readonly feedback: TaskFeedbackStore
-  readonly clarifyDirectives: ClarifyDirectiveStore
 }
 
 export interface CollaborationCommandDependencies {
@@ -146,10 +144,4 @@ export function requireCollaborationTaskAccess(
   context: CollaborationCommandContext,
 ): CollaborationTaskAccessPort {
   return resolveCollaborationCommandContext(context).taskAccess
-}
-
-export function requireClarifyDirectiveStore(
-  context: CollaborationCommandContext,
-): ClarifyDirectiveStore {
-  return resolveCollaborationCommandContext(context).persistence.clarifyDirectives
 }

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-395 II-b package O2: real-provider proofs for moved queries, transaction binding and epoch-1 bytes.
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -228,7 +229,7 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
     const runId = ulid()
     await nodeRunFixture(db, { id: runId, taskId, nodeId: 'clarify', status: 'awaiting_human' })
     await seedRound(db, taskId, runId)
-    const archive = composeTaskCollaborationReads(db).archive
+    const archive = composeTaskCollaborationReads(db, taskExecutionParticipants).archive
     const section = await archive.load(db, [taskId])
     expect(section.owner).toBe('C')
     expect(section.rows.clarify_rounds).toEqual(await readStoredClarifyRoundRows(db, taskId))
@@ -275,7 +276,10 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
     await question(runId, 'self', 4, 'confirmed')
     await question(runId, 'self', 5, 'open', 'questioner')
     await question(stoppedRunId, 'self', 6)
-    const entries = await composeTaskCollaborationReads(db).recovery.designerParkEntries(taskId)
+    const entries = await composeTaskCollaborationReads(
+      db,
+      taskExecutionParticipants,
+    ).recovery.designerParkEntries(taskId)
     expect(entries).toHaveLength(6)
     expect(
       entries
@@ -307,7 +311,7 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
     await seedRound(db, taskId, runId, { status: 'answered' })
     await seedRound(db, taskId, runId, { status: 'canceled' })
     const before = await readStoredClarifyNavRows(db, taskId)
-    const reads = composeTaskCollaborationReads(db)
+    const reads = composeTaskCollaborationReads(db, taskExecutionParticipants)
     expect((await reads.clarifyNav.latestRoundStatusByRun(taskId)).get(runId)).toBe(
       before[0]!.status,
     )

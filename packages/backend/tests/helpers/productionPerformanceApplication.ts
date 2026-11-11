@@ -176,7 +176,7 @@ export async function createProductionPerformanceApplication(
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
     activeUsers: composeWorkgroupTaskRoomActiveUsers({
       userDirectory: identityAccess.userDirectory,

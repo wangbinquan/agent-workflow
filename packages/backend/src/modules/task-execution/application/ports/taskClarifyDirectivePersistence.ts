@@ -10,15 +10,22 @@ export interface TaskClarifyDirectiveArchiveRow {
   readonly updatedAt: number
 }
 
-/** 同一会话的澄清覆盖；set 保留原事务包装，setInTx 参加绑定的调用方事务。 */
-export interface TaskClarifyDirectivePersistence {
-  /** Complete archive rows in the bound caller transaction, without an added sort. */
-  archiveRows(taskIds: readonly string[]): Promise<TaskClarifyDirectiveArchiveRow[]>
+/**
+ * RFC-482 — the directive read the engine takes at dispatch. Task Execution owns the directive table (RFC-395 A7), so the
+ * engine reads it from its own persistence bundle rather than through collaboration's runtime mechanics.
+ */
+export interface TaskClarifyDirectiveReads {
   get(
     taskId: string,
     nodeId: string,
     shardKey?: string | null,
   ): Promise<ClarifyDirective | undefined>
+}
+
+/** 同一会话的澄清覆盖；set 保留原事务包装，setInTx 参加绑定的调用方事务。 */
+export interface TaskClarifyDirectivePersistence extends TaskClarifyDirectiveReads {
+  /** Complete archive rows in the bound caller transaction, without an added sort. */
+  archiveRows(taskIds: readonly string[]): Promise<TaskClarifyDirectiveArchiveRow[]>
   getRow(
     taskId: string,
     nodeId: string,

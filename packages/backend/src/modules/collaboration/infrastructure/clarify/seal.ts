@@ -1,5 +1,4 @@
 import type { TaskExecutionParticipantBindings } from '../taskExecutionParticipantBindings'
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
 
 import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -48,7 +47,6 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sealAnswersServerSide } from './service'
 import { reconcileRoundEntriesTx } from '../taskQuestions'
 import { wgClarifyAskerKeyForRound } from '../../domain/workgroupClarifyAskerKey'
-import { setNodeClarifyDirectiveTx } from '../taskClarifyDirective'
 import {
   classifyClarifyReseal,
   sealedClarifyQuestionIds,
@@ -174,7 +172,8 @@ export async function sealRoundQuestions(
     .limit(1)
   const runSealTx = async () => {
     const committed = await databaseSessionFor(args.db).transaction(async (tx) => {
-      const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+      const taskHumanGate =
+        args.taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
       // Quick decisions have no execution-owner context. L-1 therefore starts
       // at the task root, before the round and any node-run writes. The control
       // channel keeps only the round lock for independent question editing.
@@ -412,15 +411,16 @@ export async function sealRoundQuestions(
       // RFC-341 — stop is part of the committed decision fact, not an async
       // post-commit side effect that can be lost at the commit-before-wake edge.
       if (flipNow && effectiveDirective === 'stop' && round.askingNodeId) {
-        await setNodeClarifyDirectiveTx(
-          tx,
-          round.taskId,
-          round.askingNodeId,
-          'stop',
-          args.sealedBy ?? 'local',
-          wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null),
-          ts,
-        )
+        await args.taskExecutionParticipants
+          .createTaskClarifyDirectivePersistence(tx)
+          .setInTx(
+            round.taskId,
+            round.askingNodeId,
+            'stop',
+            args.sealedBy ?? 'local',
+            wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null),
+            ts,
+          )
       }
 
       const eventRefs: CommittedEventRef[] = []

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
 import { readClarifyHistory } from '@/modules/collaboration/infrastructure/clarifyHistoryProjection'
@@ -149,7 +150,7 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       ).resolveClarifyRoundTask(actor, 'carrier'),
     ).toMatchObject({ roundExists: true, taskId: 't', visible: true })
     const section = await h.session.snapshotRead((tx) =>
-      createTaskArchiveCollaborationSectionReader().load(tx, ['t']),
+      createTaskArchiveCollaborationSectionReader(taskExecutionParticipants).load(tx, ['t']),
     )
     expect(section.rows.clarify_rounds).toEqual([])
     expect(section.dispositionEvidence?.[0]?.bytes).toEqual(Uint8Array.from(bytes))
@@ -395,7 +396,11 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       await h.session.snapshotRead(async (tx) => {
         expect((await readDispositionArchives(tx, 'clarify_rounds'))[0]?.values.task_id).toBe('t')
         expect(
-          (await createTaskArchiveCollaborationSectionReader().load(tx, ['t'])).dispositionEvidence,
+          (
+            await createTaskArchiveCollaborationSectionReader(taskExecutionParticipants).load(tx, [
+              't',
+            ])
+          ).dispositionEvidence,
         ).toHaveLength(1)
       })
     } finally {

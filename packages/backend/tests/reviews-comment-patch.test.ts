@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import {
   databaseContentText,
   contentRowColumns,
@@ -162,6 +163,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
       )[0]!
     await updateReviewCommentText(
       harness.db,
+      taskExecutionParticipants,
       fixture.nodeRunId,
       fixture.commentId,
       large,
@@ -172,6 +174,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
     expect(JSON.parse(first.contentRefJson).kind).toBe('database-bytes')
     await updateReviewCommentText(
       harness.db,
+      taskExecutionParticipants,
       fixture.nodeRunId,
       fixture.commentId,
       'short',
@@ -184,6 +187,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
     ])
     await updateReviewCommentText(
       harness.db,
+      taskExecutionParticipants,
       fixture.nodeRunId,
       fixture.commentId,
       large,
@@ -194,7 +198,13 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
       JSON.parse(first.contentRefJson).contentId,
     )
     expect(await databaseContentText(harness.db, second)).toBe(large)
-    await deleteReviewComment(harness.db, fixture.nodeRunId, fixture.commentId, OWNER_AUTHZ)
+    await deleteReviewComment(
+      harness.db,
+      taskExecutionParticipants,
+      fixture.nodeRunId,
+      fixture.commentId,
+      OWNER_AUTHZ,
+    )
     expect((await harness.db.select().from(contentPublications)).map((row) => row.state)).toEqual([
       'releasing',
       'releasing',
@@ -207,6 +217,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
     await Promise.all([
       updateReviewCommentText(
         harness.db,
+        taskExecutionParticipants,
         fixture.nodeRunId,
         fixture.commentId,
         'a'.repeat(70_000),
@@ -214,6 +225,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
       ),
       updateReviewCommentText(
         harness.db,
+        taskExecutionParticipants,
         fixture.nodeRunId,
         fixture.commentId,
         'b'.repeat(70_000),
@@ -231,9 +243,16 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
     expect(ready[0]!.contentId).toBe(JSON.parse(row!.contentRefJson).contentId)
     expect(publications.filter((publication) => publication.state === 'releasing')).toHaveLength(1)
     await Promise.allSettled([
-      deleteReviewComment(harness.db, fixture.nodeRunId, fixture.commentId, OWNER_AUTHZ),
+      deleteReviewComment(
+        harness.db,
+        taskExecutionParticipants,
+        fixture.nodeRunId,
+        fixture.commentId,
+        OWNER_AUTHZ,
+      ),
       updateReviewCommentText(
         harness.db,
+        taskExecutionParticipants,
         fixture.nodeRunId,
         fixture.commentId,
         'c'.repeat(70_000),
@@ -264,6 +283,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
 
     const updated = await updateReviewCommentText(
       s.db,
+      taskExecutionParticipants,
       s.nodeRunId,
       s.commentId,
       'revised text',
@@ -294,21 +314,42 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
   test('404 — commentId does not exist', async () => {
     const s = await seed(harness.db)
     await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, 'cmt_missing', 'x', OWNER_AUTHZ),
+      updateReviewCommentText(
+        s.db,
+        taskExecutionParticipants,
+        s.nodeRunId,
+        'cmt_missing',
+        'x',
+        OWNER_AUTHZ,
+      ),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
   test('404 — nodeRunId mismatched (cross-review write)', async () => {
     const s = await seed(harness.db)
     await expect(
-      updateReviewCommentText(s.db, 'run_other', s.commentId, 'x', OWNER_AUTHZ),
+      updateReviewCommentText(
+        s.db,
+        taskExecutionParticipants,
+        'run_other',
+        s.commentId,
+        'x',
+        OWNER_AUTHZ,
+      ),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
   test('409 — doc_version no longer pending (review already decided)', async () => {
     const s = await seed(harness.db, { decision: 'approved' })
     await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
+      updateReviewCommentText(
+        s.db,
+        taskExecutionParticipants,
+        s.nodeRunId,
+        s.commentId,
+        'too late',
+        OWNER_AUTHZ,
+      ),
     ).rejects.toBeInstanceOf(ConflictError)
 
     const { reviewComments } = tablesOf(s.db)
@@ -365,7 +406,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
     })
 
     await expect(
-      deleteReviewComment(s.db, s.nodeRunId, 'cmt_other', OWNER_AUTHZ),
+      deleteReviewComment(s.db, taskExecutionParticipants, s.nodeRunId, 'cmt_other', OWNER_AUTHZ),
     ).rejects.toMatchObject({
       code: 'review-comment-not-found',
     })
@@ -382,7 +423,14 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
     await patchTaskFixture(s.db, { id: s.taskId }, { status: 'canceled' })
 
     await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
+      updateReviewCommentText(
+        s.db,
+        taskExecutionParticipants,
+        s.nodeRunId,
+        s.commentId,
+        'too late',
+        OWNER_AUTHZ,
+      ),
     ).rejects.toMatchObject({ code: 'task-terminal' })
     const stored = await s.db
       .select()
@@ -505,7 +553,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
   test('协作者改他人评论 → 403 review-comment-not-author，行不动', async () => {
     const s = await seedAuthored('u_author')
     await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'hijack', {
+      updateReviewCommentText(s.db, taskExecutionParticipants, s.nodeRunId, s.commentId, 'hijack', {
         actorUserId: 'u_other',
         role: 'user',
       }),
@@ -519,10 +567,17 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
 
   test('作者本人（user 角色）改自己的评论 → 成功', async () => {
     const s = await seedAuthored('u_author')
-    const updated = await updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'mine', {
-      actorUserId: 'u_author',
-      role: 'user',
-    })
+    const updated = await updateReviewCommentText(
+      s.db,
+      taskExecutionParticipants,
+      s.nodeRunId,
+      s.commentId,
+      'mine',
+      {
+        actorUserId: 'u_author',
+        role: 'user',
+      },
+    )
     expect(updated.commentText).toBe('mine')
   })
 
@@ -530,6 +585,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
     const own = await seedAuthored('u_reviewer')
     const updated = await updateReviewCommentText(
       own.db,
+      taskExecutionParticipants,
       own.nodeRunId,
       own.commentId,
       'reviewer edit',
@@ -537,7 +593,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
     )
     expect(updated.commentText).toBe('reviewer edit')
     await expect(
-      deleteReviewComment(own.db, own.nodeRunId, own.commentId, {
+      deleteReviewComment(own.db, taskExecutionParticipants, own.nodeRunId, own.commentId, {
         actorUserId: 'u_reviewer',
         role: 'reviewer',
       }),
@@ -549,13 +605,20 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
 
     const other = await seedAuthored('u_other')
     await expect(
-      updateReviewCommentText(other.db, other.nodeRunId, other.commentId, 'hijack', {
-        actorUserId: 'u_reviewer',
-        role: 'reviewer',
-      }),
+      updateReviewCommentText(
+        other.db,
+        taskExecutionParticipants,
+        other.nodeRunId,
+        other.commentId,
+        'hijack',
+        {
+          actorUserId: 'u_reviewer',
+          role: 'reviewer',
+        },
+      ),
     ).rejects.toMatchObject({ code: 'review-comment-not-author', status: 403 })
     await expect(
-      deleteReviewComment(other.db, other.nodeRunId, other.commentId, {
+      deleteReviewComment(other.db, taskExecutionParticipants, other.nodeRunId, other.commentId, {
         actorUserId: 'u_reviewer',
         role: 'reviewer',
       }),
@@ -571,6 +634,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
       const marker = authz.role === 'owner' ? 'owner' : 'acl-bypass'
       const updated = await updateReviewCommentText(
         s.db,
+        taskExecutionParticipants,
         s.nodeRunId,
         s.commentId,
         `by-${marker}`,
@@ -586,27 +650,34 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
   test('LOCAL_DECIDER 兜底行：协作者 403（即便自称 local）、owner 可动（Q 拍板 owner/admin-only）', async () => {
     const s = await seedAuthored('local')
     await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'x', {
+      updateReviewCommentText(s.db, taskExecutionParticipants, s.nodeRunId, s.commentId, 'x', {
         actorUserId: 'u_random',
         role: 'user',
       }),
     ).rejects.toMatchObject({ code: 'review-comment-not-author' })
-    const ok = await updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'owner-touch', {
-      actorUserId: 'u_owner',
-      role: 'owner',
-    })
+    const ok = await updateReviewCommentText(
+      s.db,
+      taskExecutionParticipants,
+      s.nodeRunId,
+      s.commentId,
+      'owner-touch',
+      {
+        actorUserId: 'u_owner',
+        role: 'owner',
+      },
+    )
     expect(ok.commentText).toBe('owner-touch')
   })
 
   test('delete 同矩阵：协作者删他人 403、作者删自己成功', async () => {
     const s = await seedAuthored('u_author')
     await expect(
-      deleteReviewComment(s.db, s.nodeRunId, s.commentId, {
+      deleteReviewComment(s.db, taskExecutionParticipants, s.nodeRunId, s.commentId, {
         actorUserId: 'u_other',
         role: 'user',
       }),
     ).rejects.toMatchObject({ code: 'review-comment-not-author' })
-    await deleteReviewComment(s.db, s.nodeRunId, s.commentId, {
+    await deleteReviewComment(s.db, taskExecutionParticipants, s.nodeRunId, s.commentId, {
       actorUserId: 'u_author',
       role: 'user',
     })
@@ -621,7 +692,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
   test('冻结优先于作者校验：decided 行对非作者也是 409 而非 403', async () => {
     const s = await seed(harness.db, { decision: 'approved' })
     await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'x', {
+      updateReviewCommentText(s.db, taskExecutionParticipants, s.nodeRunId, s.commentId, 'x', {
         actorUserId: 'u_other',
         role: 'user',
       }),

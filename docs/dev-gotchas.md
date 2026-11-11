@@ -732,6 +732,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 
 ## 撤 public 符号：迭代到零、先修判据的盲区，留意豁免入口藏起来的旧债（RFC-480，2026-11-10）
 
+- **带持久化句柄的工厂撤出 public 时，交工厂引用、不交实例**（RFC-482）：`PersistenceTx` 就是 `PersistenceDb`
+  （`platform/persistence/querySurface.ts`），收 `db` 的调用点常常拿的是调用方的事务句柄。在装配期用根 db 预先造好查询 / 参与者实例
+  交给消费方，会把事务里的读写换到事务外的连接上（PostgreSQL 上读不到本事务未提交的写）。照 RFC-400 的做法：消费方在自己的
+  infrastructure 里声明装配输入（工厂引用，可以带句柄），bootstrap 从拥有方的 composition 取工厂交进来，拥有方的 public 只留接口。
+  装配点只在根 db 上读写、自己开事务的（例如指令存储的 `set`），才可以在装配期造好实例交入。
 - **撤出会连锁**：只被同一 public 文件里另一个导出的签名引用的符号，在那个导出撤掉后变成未消费。按「撤出 → 复采 → 再撤」迭代，直到
   `unconsumed-public-symbols-<context>` 为 0；别凭一次采数的清单一次删完。
 - **判据的盲区会让你删掉还在用的类型**：架构报告的类型形状遍历（`architectureReport.ts` 的 `collectTypeShape`）原先不进
@@ -747,6 +752,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   （`tests/architecture/` 全部，加上 `tests/` 里读 `src/` 文件的用例）跑一遍，它们快、不怕负载，再上全量。按路径或栈帧断言源码的门不止在
   `tests/`：`scripts/rfc359-p0-mutations.ts` 的 p0-8 证据要求栈帧落在命令入口所在的文件，只在 real-PostgreSQL 那个 job 里跑，挪文件时把
   `scripts/` 一起搜。
+  补充（RFC-482）：改调用形状（加参数、改走绑定、换读取入口）时同样如此——全量里 9 个文件红在旧调用文本上（`setNodeClarifyDirectiveTx(`、
+  `createReviewRepairParticipant(db)` 之类）；还有一种 `tsc` 看不到的：`tests/helpers/rfc395SourceFunction.ts` 从生产源码抠出函数体、给自由
+  变量绑值后执行，函数体改成经 `args.taskExecutionParticipants` 取工厂后多出自由变量 `args`，运行时 `ReferenceError`。一次找全的做法：用语法树
+  取出 `tests/`、`scripts/` 与账本 JSON 里的字符串、模板片段和正则字面量，对每个改动的生产文件比 HEAD 与候选，HEAD 命中、候选不命中的就是要改
+  的断言（反向的看是不是 `not.toContain`）；只比该用例实际读的文件（路径或 basename 出现在用例或它 import 的 helper 里），命中从上万条降到
+  几十条。
 - **按整行文本批量改 import，会把用例里作负对照的同一行字符串一起改掉**（RFC-481 实撞）：`rfc476` 的负对照把一行
   `import { … } from '@/modules/collaboration/public/participants'` 当输入、期望判据报出这个来源；改指脚本把这行字符串也换成了新路径，期望
   值没变，用例转红。改 import 时按语法树只动 import 声明，或者替换后逐处核对 diff，确认每一处都是真的 import。
@@ -756,6 +767,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 - **「给够时间」不能只靠 `bun test --timeout`**：它只改默认值；用例的第三个参数、文件里的 `setDefaultTimeout` 和用例内部的等待（检查点、
   收敛轮询、流程时限、子进程的 SIGKILL 定时器）都不受它影响。负载下要拿真结果，就在导出仓库另存一份只放宽这些常量的副本跑完，跑完删掉。
   要把同一条路径上的定时器一起放宽：RFC-481 只放宽了 30 秒的检查点等待，worker 仍在 45 秒被 `launch` 里的 SIGKILL 定时器杀掉（退出码 137）。
+- **只靠 `fs.watch` 等检查点的用例，放宽时限也拿不到真结果**（RFC-482 实撞）：两个 `rfc363-*-process-recovery` 用例的父进程只凭目录事件
+  发现 worker 写下的 `ready.json`，没有轮询兜底。本机 fseventsd 忙时事件丢失或晚到，worker 早已到点阻塞，父进程却等到时限——检查点等待
+  放宽到 300 秒仍有两条撞线，每轮撞线的条目都不同。副本里给等待加一个 250 毫秒的 `existsSync` 轮询后 8 / 8 通过、每条 4～10 秒。拿这类
+  用例的真结果时，加轮询兜底比继续放宽时限有效。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

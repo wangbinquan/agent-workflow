@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-164 PR-2 — engine-core pure functions: assignment lifecycle matrix,
 // envelope port parsing (dispatch atomicity on unknown members), the 2³
 // visibility-switch injection matrix, cursor-based slicing (restart-idempotent
@@ -61,10 +62,11 @@ function turnsLedger(client: PersistenceDb) {
     hostLedgerFactory: {
       inTransaction: (transaction) =>
         composeWorkgroupHostLedgerParticipantFactory({
-          collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+          collaboration:
+            composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
         }).inTransaction(transaction),
     },
-    clarifyAskGate: createWorkgroupClarifyAskGate(client),
+    clarifyAskGate: createWorkgroupClarifyAskGate(client, taskExecutionParticipants),
   })
 }
 

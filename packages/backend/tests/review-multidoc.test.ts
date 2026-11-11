@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { inlineContentColumns } from '@/platform/content/infrastructure/contentStore'
@@ -634,6 +635,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
     const detail = await getReviewDetail(
       db,
+      taskExecutionParticipants,
       appHome,
       reviewNodeRunId,
       epoch2ReviewReader(db, appHome),
@@ -649,7 +651,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     // currentVersion defaults to the first item
     expect(detail.currentVersion.itemIndex).toBe(0)
 
-    const summaries = await listReviewSummaries(db, { taskId })
+    const summaries = await listReviewSummaries(db, taskExecutionParticipants, { taskId })
     const summary = summaries.find((s) => s.nodeRunId === reviewNodeRunId)
     expect(summary?.isMultiDoc).toBe(true)
   })

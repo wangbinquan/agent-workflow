@@ -7,7 +7,7 @@ import type { CollaborationTaskRolePolicy } from '../application/ports/collabora
 // rights as the owner (cancel / retry / resume) — only member management,
 // owner transfer and task deletion stay with the owner or explicit permission holders.
 
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 
 import type { TaskGateContext } from '@/modules/task-execution/public/queries'
 import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
@@ -306,6 +306,7 @@ interface MembersCommit {
 
 export async function updateTaskMembers(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
@@ -329,7 +330,14 @@ export async function updateTaskMembers(
     )[0]
     if (fresh === undefined)
       throw new NotFoundError('task-not-found', `task '${task.id}' not found`)
-    const committed = await updateTaskMembersLocked(db, policy, actor, fresh, body)
+    const committed = await updateTaskMembersLocked(
+      db,
+      taskExecutionParticipants,
+      policy,
+      actor,
+      fresh,
+      body,
+    )
     // The response is the state THIS commit produced, read while the lock still
     // excludes the next writer — composing it after the (lock-free) revalidation
     // wait from a fresh member query would pair this commit's owner with rows a
@@ -363,6 +371,7 @@ export async function updateTaskMembers(
 
 async function updateTaskMembersLocked(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
@@ -395,7 +404,7 @@ async function updateTaskMembersLocked(
   // 事务都判成读写依赖（实测 32 并发 22.9% 冲突逃逸成 500）。锁 tasks 行即可。
   await databaseSessionFor(db).transaction(async (tx) => {
     const { taskCollaborators } = tablesOf(tx)
-    const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+    const taskHumanGate = taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
     await taskHumanGate.lockTask(task.id)
     // Freeze the pre-change audience in the same transaction as the full
     // replacement. The post-commit WS frame can then authorize both sides of

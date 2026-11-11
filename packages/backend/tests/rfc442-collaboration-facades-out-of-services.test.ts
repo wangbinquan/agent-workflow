@@ -72,12 +72,16 @@ describe('RFC-442 —— 位置', () => {
   })
 
   test('infrastructure 不再定义提问节点判定', () => {
+    // RFC-482: collaboration's directive forwarders (`infrastructure/taskClarifyDirective.ts`) are gone — production
+    // code reaches task-execution's directive persistence through the participant bindings — so the directive store
+    // adapter is the infrastructure file left to check.
+    expect(existsSync(join(COLLABORATION, 'infrastructure', 'taskClarifyDirective.ts'))).toBe(false)
     const infra = readFileSync(
-      join(COLLABORATION, 'infrastructure', 'taskClarifyDirective.ts'),
+      join(COLLABORATION, 'infrastructure', 'clarifyDirectiveStore.ts'),
       'utf8',
     )
     expect(infra).not.toContain('isAskingNodeInSnapshot')
-    expect(infra).toContain('export function setNodeClarifyDirective(')
+    expect(infra).toContain('export function createClarifyDirectiveStore(')
   })
 })
 

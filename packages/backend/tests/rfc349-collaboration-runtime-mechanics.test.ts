@@ -365,7 +365,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         decision: 'approved',
       })
 
-      const sqlite = createReviewRepairParticipant(db)
+      const sqlite = createReviewRepairParticipant(db, taskExecutionParticipants)
       const identity = { taskId, docVersionId, nodeRunId }
       await expect(sqlite.inspect(identity)).resolves.toEqual({
         decision: 'approved',
@@ -411,7 +411,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         [['approved_doc'], ['approval_meta']],
       ])
       await expect(
-        createReviewRepairParticipant(postgresql.db).inspect({
+        createReviewRepairParticipant(postgresql.db, taskExecutionParticipants).inspect({
           taskId: 'task-pg',
           docVersionId: 'doc-pg',
           nodeRunId: 'review-run-pg',
@@ -439,7 +439,10 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         [], // COMMIT
       ])
       await expect(
-        createReviewRepairParticipant(postgresqlComplete.db).completeApproved({
+        createReviewRepairParticipant(
+          postgresqlComplete.db,
+          taskExecutionParticipants,
+        ).completeApproved({
           taskId: 'task-pg',
           docVersionId: 'doc-pg',
           nodeRunId: 'review-run-pg',
@@ -487,7 +490,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
 
       const postgresqlUnapprove = postgresqlFixture([[], [['doc-pg']], []])
       await expect(
-        createReviewRepairParticipant(postgresqlUnapprove.db).unapprove({
+        createReviewRepairParticipant(postgresqlUnapprove.db, taskExecutionParticipants).unapprove({
           taskId: 'task-pg',
           docVersionId: 'doc-pg',
           nodeRunId: 'review-run-pg',
@@ -512,7 +515,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
   // 回滚带不走它的写（实测：合一实现回滚后仍 awaiting_human，那份重写回滚后已 canceled）。
   test('运行期机制只有一个工厂，契约仍不含任何 provider 类型', () => {
     const reservedTransactionFactory: TaskExecutionClarifyParticipantFactory =
-      composeWorkgroupTaskRoomClarifyParticipantFactory()
+      composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants)
     // RFC-481: the contract is Task Execution's required port now; collaboration's factory implements it.
     const contract = SRC(
       'modules/task-execution/application/ports/collaborationRuntimeMechanics.ts',
@@ -632,7 +635,9 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       >
       dbTxSync(db, (transaction) => {
         const participant =
-          composeWorkgroupTaskRoomClarifyParticipantFactory().inTransaction(transaction)
+          composeWorkgroupTaskRoomClarifyParticipantFactory(
+            taskExecutionParticipants,
+          ).inTransaction(transaction)
         projectionPromise = participant.loadProjection(taskId)
         dismissalPromise = participant.dismissOpenSelfClarifies({ taskId, occurredAt: 4 })
       })

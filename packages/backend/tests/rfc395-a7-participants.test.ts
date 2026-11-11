@@ -1,10 +1,10 @@
 // RFC-395 II-a A7：原人工门 CAS、输出更新和 directive 操作继续参加调用方事务。
-import { beforeEach, expect, test } from 'bun:test'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   createTaskClarifyDirectivePersistence,
   createHumanGatePersistenceParticipantInTx,
-} from '@/modules/task-execution/public/participants'
+} from '@/modules/task-execution/composition'
+import { beforeEach, expect, test } from 'bun:test'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { listNodeEventContents } from '@/modules/task-execution/public/queries'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

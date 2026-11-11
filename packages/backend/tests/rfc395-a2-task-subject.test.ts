@@ -1,3 +1,5 @@
+import { createTaskSubjectQueries } from '@/modules/task-execution/composition'
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -16,7 +18,6 @@ import {
 import { buildActor } from '@/auth/actor'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createTaskSubjectQueries } from '@/modules/task-execution/public/queries'
 import {
   definitionAnchorId,
   TASK_DEFINITION_HOSTS,
@@ -356,15 +357,25 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
         decision: 'pending',
       })
     }
-    const listed = await listReviewSummaries(db, { status: 'pending' })
+    const listed = await listReviewSummaries(db, taskExecutionParticipants, { status: 'pending' })
     expect(listed).toHaveLength(5)
     expect(await countPendingReviews(db)).toBe(5)
     for (const row of rows.slice(0, 5)) {
-      const detail = await getReviewDetail(db, '/tmp/subject-missing-artifacts', `${row.id}-review`)
+      const detail = await getReviewDetail(
+        db,
+        taskExecutionParticipants,
+        '/tmp/subject-missing-artifacts',
+        `${row.id}-review`,
+      )
       expect(detail.summary).toEqual(listed.find((review) => review.taskId === row.id)!)
     }
     await expect(
-      getReviewDetail(db, '/tmp/subject-missing-artifacts', `${rows[5]!.id}-review`),
+      getReviewDetail(
+        db,
+        taskExecutionParticipants,
+        '/tmp/subject-missing-artifacts',
+        `${rows[5]!.id}-review`,
+      ),
     ).rejects.toMatchObject({ code: 'review-not-found' })
     expect((await readWorkflowFixtures(db)).map((row) => row.id)).toEqual(['authored'])
   })

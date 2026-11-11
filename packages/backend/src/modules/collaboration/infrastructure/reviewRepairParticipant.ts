@@ -28,7 +28,7 @@
 // 合一只消掉了这份零调用方的重复，**没有**消掉错位本身：下一步应让 `options-R1.ts` 改为消费本端口，
 // 否则 SQLite 侧会永远保留第二份实现。
 
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
@@ -83,7 +83,10 @@ function approvedDocContent(input: ReviewIdentity, sourceFilePath: string | null
     : `__rfc057_manual_repair__:doc_version=${input.docVersionId}`
 }
 
-export function createReviewRepairParticipant(db: PersistenceDb): ReviewRepairParticipant {
+export function createReviewRepairParticipant(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+): ReviewRepairParticipant {
   return Object.freeze({
     async inspect(input: Parameters<ReviewRepairParticipant['inspect']>[0]) {
       return await loadInspection(db, input)
@@ -100,7 +103,8 @@ export function createReviewRepairParticipant(db: PersistenceDb): ReviewRepairPa
           reviewIteration: state.reviewIteration,
           versionIndex: state.versionIndex,
         })
-        const taskHumanGate = createHumanGatePersistenceParticipantInTx(transaction)
+        const taskHumanGate =
+          taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(transaction)
 
         await taskHumanGate.writeReviewOutput({
           nodeRunId: input.nodeRunId,

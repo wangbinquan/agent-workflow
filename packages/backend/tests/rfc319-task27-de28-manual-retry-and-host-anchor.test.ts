@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -155,13 +156,14 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
       ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'missing.md')),
       decision: 'pending',
     })
-    expect(await listReviewSummaries(db, { status: 'pending' })).toMatchObject([
-      { workflowId: host.id, workflowName: host.name },
-    ])
+    expect(
+      await listReviewSummaries(db, taskExecutionParticipants, { status: 'pending' }),
+    ).toMatchObject([{ workflowId: host.id, workflowName: host.name }])
     expect(await countPendingReviews(db)).toBe(1)
     expect(
       await getReviewDetail(
         db,
+        taskExecutionParticipants,
         '/tmp/aw-no-artifacts',
         runId,
         epoch2ReviewReader(db, '/tmp/aw-no-artifacts'),

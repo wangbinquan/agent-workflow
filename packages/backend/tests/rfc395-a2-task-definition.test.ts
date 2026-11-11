@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 // RFC-395 II-a A2: preserve all three definition CAS operations, config projections and exact room bytes on both providers.
@@ -544,7 +545,9 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
         ).findTaskScope(taskId)
       )?.workgroupConfig,
     ).toBeNull()
-    expect(await isTaskClarifySuppressed(harness.db, { taskId })).toBe(false)
+    expect(await isTaskClarifySuppressed(harness.db, taskExecutionParticipants, { taskId })).toBe(
+      false,
+    )
     expect(parseConfig(null)).toBeNull()
     expect(workgroupLaunchMode(null)).toBeNull()
   })
@@ -582,7 +585,9 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
         (await createWorkgroupHostLedgerParticipantInTx(tx, clarify).load(taskId))?.workgroupConfig,
       ).toEqual(expected)
     })
-    expect(await isTaskClarifySuppressed(harness.db, { taskId })).toBe(true)
+    expect(await isTaskClarifySuppressed(harness.db, taskExecutionParticipants, { taskId })).toBe(
+      true,
+    )
     expect(await readConfig(harness.db, 'missing')).toBeNull()
   })
 
@@ -603,6 +608,8 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
       .where(eq(tasks.id, taskId))
     expect(launch?.value).toEqual(value?.launch)
     expect(value?.runtime.config).toBeNull()
-    expect(await isTaskClarifySuppressed(harness.db, { taskId })).toBe(true)
+    expect(await isTaskClarifySuppressed(harness.db, taskExecutionParticipants, { taskId })).toBe(
+      true,
+    )
   })
 })

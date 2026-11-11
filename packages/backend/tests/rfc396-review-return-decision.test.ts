@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { fixtureContentStore } from './helpers/model/content'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -104,7 +105,12 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
       if (decision === 'rejected') expect(meta.reason).toBe(request.rejectReason)
       if (decision === 'iterated')
         expect(meta.reason).toContain('Keep the original assumption visible')
-      const detail = await getReviewDetail(db, round.appHome, round.reviewRunId)
+      const detail = await getReviewDetail(
+        db,
+        taskExecutionParticipants,
+        round.appHome,
+        round.reviewRunId,
+      )
       expect(detail.decisionHandling).toBe('return-decision')
     })
   }

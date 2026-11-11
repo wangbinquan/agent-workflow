@@ -1,10 +1,10 @@
 // RFC-395 II-a A3 consumed inputs：双 provider 锁定 source-node 粒度、旧 JSON 字节与 caller-owned transaction 回滚；A1 使用同一生产 codec。
-import { expect, test } from 'bun:test'
 import {
   createConsumedInputsParticipantInTx,
-  prepareConsumedInputs,
-} from '@/modules/task-execution/public/participants'
-import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
+  createRunSelectionReader,
+} from '@/modules/task-execution/composition'
+import { expect, test } from 'bun:test'
+import { prepareConsumedInputs } from '@/modules/task-execution/public/participants'
 import { encodeConsumedEdges } from '@/modules/task-execution/infrastructure/runSelection/consumedCodec'
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { describeEachProvider } from './helpers/eachProvider'

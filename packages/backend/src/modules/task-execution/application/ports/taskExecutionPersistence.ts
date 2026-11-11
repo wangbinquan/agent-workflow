@@ -24,6 +24,7 @@ import type { TaskRecoveryOperations } from './taskRecoveryOperations'
 // RFC-465: the runtime drivers' capture write port is runtime-management's; task-execution implements it.
 import type { RuntimeSessionCapturePersistence } from '@/modules/runtime-management/public/participants'
 import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'
+import type { TaskClarifyDirectiveReads } from './taskClarifyDirectivePersistence'
 
 /** Bootstrap-selected task-execution persistence. Every member is a named
  * Promise port; provider clients remain in infrastructure factories. */
@@ -53,4 +54,6 @@ export interface TaskExecutionPersistence {
   readonly recoveryAdministration: TaskRecoveryOperations
   readonly shutdown: TaskExecutionShutdownOperations
   readonly runtimeSessionCapture: RuntimeSessionCapturePersistence
+  /** RFC-482: the clarify directive the engine reads at dispatch (Task Execution's own table). */
+  readonly clarifyDirectives: TaskClarifyDirectiveReads
 }

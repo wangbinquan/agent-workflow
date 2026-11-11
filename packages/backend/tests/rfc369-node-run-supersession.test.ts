@@ -1,3 +1,4 @@
+import { createRunSelectionReader } from '@/modules/task-execution/composition'
 import { frozenTablesOf } from '@/platform/persistence/migration/epoch1/tables'
 import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
@@ -19,7 +20,6 @@ import {
   type SupersessionRow,
 } from '@/modules/task-execution/infrastructure/migration/oracle/supersession'
 import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/migration/oracle/snapshot'
-import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
 import {
   readNodeRunFixtures,
   taskFixture,

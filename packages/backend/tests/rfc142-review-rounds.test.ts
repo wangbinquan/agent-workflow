@@ -476,6 +476,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     )
     const detail = await getReviewDetail(
       db,
+      taskExecutionParticipants,
       appHome,
       reviewNodeRunId,
       epoch2ReviewReader(db, appHome),
@@ -546,6 +547,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
 
     const detail = await getReviewDetail(
       db,
+      taskExecutionParticipants,
       appHome,
       reviewNodeRunId,
       epoch2ReviewReader(db, appHome),

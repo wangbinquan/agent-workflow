@@ -11,6 +11,7 @@ import type {
   RunSlot,
   SelectedRun,
   ShardSetView,
+  TaskRunSelectionReads,
 } from '../../../application/ports/runSelection'
 import {
   decodeCanonicalRunSlot,
@@ -82,10 +83,10 @@ export type RunHistoryRef = RunRef | UnresolvedRunHistoryRef
 export interface TableShardSetView extends ShardSetView {
   readonly history: readonly RunHistoryRef[]
 }
-export interface TableRunSelectionReader extends Omit<
-  RunSelectionReader,
-  'slotHistory' | 'familyHistory' | 'shardSet'
-> {
+export interface TableRunSelectionReader
+  extends
+    Omit<RunSelectionReader, 'slotHistory' | 'familyHistory' | 'shardSet'>,
+    TaskRunSelectionReads {
   /** Zero only when no row exists; a cleared slot retains its last revision. */
   revision(taskId: string, slot: RunSlot): Promise<number>
   slotHistory(

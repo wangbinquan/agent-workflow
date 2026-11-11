@@ -1,3 +1,7 @@
+import {
+  createConsumedInputsParticipantInTx,
+  createHumanGatePersistenceParticipantInTx,
+} from '@/modules/task-execution/composition'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 C: v2 open manifests, content publication and history-only replay fences.
@@ -20,10 +24,6 @@ import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/in
 import { HumanGateOperationRecovery } from '@/modules/collaboration/application/recoverHumanGateOperations'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createNodeRunLifecycleParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import {
-  createConsumedInputsParticipantInTx,
-  createHumanGatePersistenceParticipantInTx,
-} from '@/modules/task-execution/public/participants'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import { resolveCollaborationCommandContext } from '@/modules/collaboration/application/commandContext'
 import { contentRefColumns } from '@/platform/content/contentStore'

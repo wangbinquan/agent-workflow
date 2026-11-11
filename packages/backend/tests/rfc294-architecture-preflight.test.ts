@@ -365,6 +365,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
+  // RFC-482: five task-execution factories reach collaboration through its participant bindings (factory references
+  // handed over by bootstrap) and left the public entries; the no-op `reselectRunInTx` is gone — six entries settled.
   // RFC-481: collaboration's task-deletion participant factory reaches bootstrap through composition (left public),
   // and the two frame functions take closed reader / lookup interfaces instead of callbacks — three entries settled.
   // RFC-471: composeSelectedDevelopmentPipelineEvidence is no longer public (its only consumer moved into the module); the
@@ -425,13 +427,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/util/log#Logger',
   // RFC-399 A8: the clarify directive route port moved from TE public/types into TE application/ports
   // (public/types re-exports it); same Actor debt, new declaration site.
-  'modules/task-execution/composition/taskSubjectQueries.ts#createTaskSubjectQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-480: public/operations (exempt from this scan as an RFC-344 operation entrypoint) was retired; the consumer-owned prune
   // policy integration implements is the same contract on public/types, so its function type is visible here (S12 replaces the
   // process-level registration that takes it).
   'modules/task-execution/domain/terminalWorkspacePrune.ts#TerminalWorkspacePrunePolicy: unsafe/open type FunctionType',
-  'modules/task-execution/infrastructure/consumedInputsParticipant.ts#createConsumedInputsParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts#createHumanGatePersistenceParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   // RFC-395 II-a transitional owner contracts bound to the caller's session / transaction / statement.
   // Successor RFC-294 S5/S6: binding in composition; shared platform DTOs avoid new context edges.
   'modules/task-execution/infrastructure/nodeEventQueries.ts#listNodeEventContents: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
@@ -441,9 +440,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#AnyColumn',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#SQL',
-  'modules/task-execution/infrastructure/runSelection/selectionWrite.ts#reselectRunInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/task-execution/infrastructure/runSelection/table/reader.ts#createRunSelectionReader: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskClarifyDirectivePersistence.ts#createTaskClarifyDirectivePersistence: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#createTaskGateQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import drizzle-orm#AnyColumn',

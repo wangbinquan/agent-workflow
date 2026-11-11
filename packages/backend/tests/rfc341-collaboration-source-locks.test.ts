@@ -156,13 +156,15 @@ describe('RFC-341 collaboration owner source locks', () => {
     expect(seal).toContain(
       'await createClarifyAnswerWritePort(args.db).seal(tx, round.id, transition)',
     )
-    expect(seal).toContain('setNodeClarifyDirectiveTx(')
+    // RFC-482: the stop-directive write builds task-execution's directive persistence from the
+    // same transaction handle through the composition-time bindings; still before afterCommit.
+    const directiveWrite = '.createTaskClarifyDirectivePersistence(tx)'
+    expect(seal).toContain(directiveWrite)
     expect(seal.indexOf('await createClarifyAnswerWritePort(args.db).seal(')).toBeLessThan(
       seal.indexOf('await args.afterCommit?.()'),
     )
-    expect(seal.indexOf('setNodeClarifyDirectiveTx(')).toBeLessThan(
-      seal.indexOf('await args.afterCommit?.()'),
-    )
+    expect(seal.indexOf(directiveWrite)).toBeGreaterThan(-1)
+    expect(seal.indexOf(directiveWrite)).toBeLessThan(seal.indexOf('await args.afterCommit?.()'))
   })
 
   test('covered collaboration writers have no legacy direct broadcaster', () => {

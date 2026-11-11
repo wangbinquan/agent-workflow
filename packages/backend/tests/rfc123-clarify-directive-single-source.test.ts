@@ -49,7 +49,7 @@ import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
-} from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
+} from './helpers/clarifyDirectives'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 function makeQ(id = 'q1'): ClarifyQuestion {
@@ -328,7 +328,9 @@ describeEachProvider(
       async function seedRejectedCross(db: PersistenceDb, taskId: string): Promise<void> {
         await seedCrossStopAnswered(db, taskId, 'stop')
         // sanity: the questioner node's node-level directive is 'stop'.
-        expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
+        expect(await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'qA')).toBe(
+          true,
+        )
       }
 
       async function dispatchFresh(db: PersistenceDb, taskId: string) {
@@ -486,13 +488,16 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     // RFC-132 T7: node mechanics 传 questioner 节点（reenableQuestionerNodeId），非 cross node.id；
     // resolveCrossNodeStopped 收敛为只读 questioner 节点的 node 级 directive（node last-write-wins
     // 天然等价 RFC-123 recency gate）。旧 recency 闸（latestPersistentStopAt + stopAt 比较）已删。
+    // RFC-482 改锚：引擎直接读 task-execution 自己的指令表（持久化包的 clarifyDirectives），
+    // collaboration 的判定经装配期绑定取指令持久化；读的仍是 questioner 节点的 node 级 directive。
     expect(norm(CROSS_CLARIFY_SOURCE)).toContain(
-      "await ports.getNodeClarifyDirective({ taskId, nodeId: reenableQuestionerNodeId, })) === 'stop'",
+      "(await ports.clarifyDirectives.get(taskId, reenableQuestionerNodeId)) === 'stop'",
     )
     expect(crossSrc).toContain('export async function resolveCrossNodeStopped')
     expect(norm(crossSrc)).toContain(
-      "getNodeClarifyDirectiveRow(db, taskId, questionerNodeId))?.directive === 'stop'",
+      '.createTaskClarifyDirectivePersistence(db) .getRow(taskId, questionerNodeId)',
     )
+    expect(crossSrc).toContain("return row?.directive === 'stop'")
     expect(crossSrc).not.toContain('latestPersistentStopAt')
     expect(crossSrc).not.toContain('function hasPersistentStop')
   })
@@ -506,18 +511,22 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     const txAt = sealSrc.indexOf(
       'const committed = await databaseSessionFor(args.db).transaction(async (tx) => {',
     )
-    const directiveAt = sealSrc.indexOf('setNodeClarifyDirectiveTx(', txAt)
+    // RFC-482 改锚：写点经装配期绑定用同一个事务句柄构造 task-execution 的指令持久化再 setInTx
+    // （collaboration 的转发文件已删）；仍在 seal 事务内、afterCommit 之前，且只有一处。
+    const directiveAt = sealSrc.indexOf('.createTaskClarifyDirectivePersistence(tx)', txAt)
     const afterCommitAt = sealSrc.indexOf('await args.afterCommit?.()', directiveAt)
 
     expect(txAt).toBeGreaterThan(-1)
     expect(directiveAt).toBeGreaterThan(txAt)
     expect(afterCommitAt).toBeGreaterThan(directiveAt)
-    expect(sealSrc.match(/setNodeClarifyDirectiveTx\(/g)).toHaveLength(1)
+    expect(sealSrc.match(/\.createTaskClarifyDirectivePersistence\(/g)).toHaveLength(1)
+    expect(sealSrc.match(/\.setInTx\(/g)).toHaveLength(1)
     expect(norm(sealSrc)).toContain(
       // RFC-207 — the call gained a 6th arg: WHICH asker to stop. Without it a
       // workgroup stop would silence every member sharing the host node.
-      "setNodeClarifyDirectiveTx( tx, round.taskId, round.askingNodeId, 'stop', args.sealedBy ?? 'local', wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null), ts, )",
+      "await args.taskExecutionParticipants .createTaskClarifyDirectivePersistence(tx) .setInTx( round.taskId, round.askingNodeId, 'stop', args.sealedBy ?? 'local', wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null), ts, )",
     )
+    expect(sealSrc).not.toContain('setNodeClarifyDirectiveTx')
     expect(sealSrc).not.toContain('await setNodeClarifyDirective(')
   })
 })

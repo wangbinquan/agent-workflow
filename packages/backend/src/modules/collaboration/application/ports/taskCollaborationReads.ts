@@ -1,12 +1,5 @@
 import type { ClarifyRoundStatus } from '@agent-workflow/shared'
 
-export interface ArchiveCollaborationSections {
-  readonly sections: readonly string[]
-  load(
-    taskIds: readonly string[],
-  ): Promise<Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>>
-}
-
 export interface RecoveryHumanGateFacts {
   designerParkEntries(taskId: string): Promise<
     readonly {

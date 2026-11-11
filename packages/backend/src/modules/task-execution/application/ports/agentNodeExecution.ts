@@ -18,6 +18,7 @@ import type { IsoHandle, MergeBackConflict } from '@/platform/contracts/isolatio
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import type * as agentRunHistory from '../agentRunHistory'
 import type { PortValidationFailure } from '../portOutputValidation'
+import type { TaskClarifyDirectiveReads } from './taskClarifyDirectivePersistence'
 import type { AgentRunSettledObserver } from './agentRunSettledObserver'
 import type { AgentClarifyGateReceipt, AgentClarifyGateRequest } from './collaborationNodeGate'
 import type { Logger } from './executionKernel'
@@ -83,11 +84,6 @@ export interface AgentCollaborationPort {
     readonly taskId: string
     readonly iteration: number
   }): Promise<ReviewPromptContext | undefined>
-  getNodeClarifyDirective(input: {
-    readonly taskId: string
-    readonly nodeId: string
-    readonly shardKey?: string | null
-  }): Promise<ClarifyDirective | undefined>
   buildClarifyQueueContext(input: {
     readonly definition: WorkflowDefinition
     readonly taskId: string
@@ -262,6 +258,8 @@ export interface AgentNodeExecutionPorts {
   readonly subprocessSem: Semaphore
   readonly resources: AgentResources
   readonly collaboration: AgentCollaborationPort
+  /** RFC-482: the node's clarify directive, read from Task Execution's own table (not through collaboration). */
+  readonly clarifyDirectives: TaskClarifyDirectiveReads
   readonly rules: AgentRules
   readonly input: ScriptInputPort
   readonly ledger: Pick<

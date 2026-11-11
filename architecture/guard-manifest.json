@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 552,
+      "lines": 548,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -2167,7 +2167,7 @@
       "corpusScanner": false,
       "file": "packages/backend/tests/rfc341-collaboration-source-locks.test.ts",
       "id": "rfc341-collaboration-source-locks",
-      "lines": 245,
+      "lines": 247,
       "mechanism": "source-text",
       "minCorpusFiles": null,
       "negativeFixture": false,
@@ -3514,6 +3514,18 @@
       "lines": 320,
       "mechanism": "ast",
       "minCorpusFiles": 500,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc482-te-participant-bindings-boundary.test.ts",
+      "id": "rfc482-te-participant-bindings-boundary",
+      "lines": 362,
+      "mechanism": "ast",
+      "minCorpusFiles": 150,
       "negativeFixture": true,
       "runner": "bun"
     }

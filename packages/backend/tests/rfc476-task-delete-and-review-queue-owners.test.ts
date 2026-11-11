@@ -417,8 +417,9 @@ describe('RFC-476 —— 合同与 public 收口', () => {
       expect([name, name in taskExecutionQueries]).toEqual([name, false])
     }
     // Positive control: the export reader sees what the entry still offers.
-    // RFC-478 withdrew `createTaskPreparationParticipantInTx`; its sibling factory stays.
-    expect(exported).toContain('createConsumedInputsParticipantInTx')
+    // RFC-478 withdrew `createTaskPreparationParticipantInTx`; RFC-482 moved its sibling factory to the
+    // composition-time bindings, so the control is the consumed-inputs projection the entry still offers.
+    expect(exported).toContain('prepareConsumedInputs')
     expect(exported).toContain('TaskExecutionPermits')
   })
 

@@ -1,5 +1,6 @@
 // RFC-395 II-a A3 sites fix round: B1/B5/B10/SA7 must observe migrated sites and exact bytes,
 // not merely repeat reader calls. Private site bodies are evaluated with external effects bound.
+import { createRunSelectionReader } from '@/modules/task-execution/composition'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
@@ -11,7 +12,6 @@ import {
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import {
   createNodeRunQueries,
-  createRunSelectionReader,
   createRunHistorySnapshot,
 } from '@/modules/task-execution/public/queries'
 import { createTaskPreparationQueries } from '@/modules/task-execution/infrastructure/taskPreparationQueries'
@@ -244,12 +244,17 @@ describe('RFC-395 A3 source lookup and designer anchors', () => {
             sourceNodeId,
             sourceRun: { id: 'source-run' },
             db: {},
-            createRunSelectionReader: () => ({
-              consumed: async () =>
-                Object.entries(headParseConsumedJson(json)).map(
-                  ([producerNodeId, producerRunId]) => ({ producerNodeId, producerRunId }),
-                ),
-            }),
+            // RFC-482: the review site reaches the run-selection reader through the participant bindings.
+            args: {
+              taskExecutionParticipants: {
+                createRunSelectionReader: () => ({
+                  consumed: async () =>
+                    Object.entries(headParseConsumedJson(json)).map(
+                      ([producerNodeId, producerRunId]) => ({ producerNodeId, producerRunId }),
+                    ),
+                }),
+              },
+            },
           },
         )
         const prior = headParseConsumedJson(json)[sourceNodeId]

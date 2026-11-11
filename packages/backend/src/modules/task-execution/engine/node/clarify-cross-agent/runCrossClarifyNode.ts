@@ -85,10 +85,7 @@ export async function runCrossClarifyNode(
   // fallback is defensive only.
   const reenableQuestionerNodeId = findQuestionerNodeForCrossClarify(definition, node.id)
   const stopped = reenableQuestionerNodeId
-    ? (await ports.getNodeClarifyDirective({
-        taskId,
-        nodeId: reenableQuestionerNodeId,
-      })) === 'stop'
+    ? (await ports.clarifyDirectives.get(taskId, reenableQuestionerNodeId)) === 'stop'
     : false
   if (stopped) {
     const stopRunId = await ports.ledger.mintNodeRun({

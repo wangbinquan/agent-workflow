@@ -688,9 +688,22 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
           })
         }
         if (operation === 'update') {
-          return updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'too late', OWNER_AUTHZ)
+          return updateReviewCommentText(
+            h.db,
+            taskExecutionParticipants,
+            h.reviewRunId,
+            h.commentId,
+            'too late',
+            OWNER_AUTHZ,
+          )
         }
-        return deleteReviewComment(h.db, h.reviewRunId, h.commentId, OWNER_AUTHZ)
+        return deleteReviewComment(
+          h.db,
+          taskExecutionParticipants,
+          h.reviewRunId,
+          h.commentId,
+          OWNER_AUTHZ,
+        )
       }
       const [cancelResult, commentResult] = await settleInOrder(
         h.taskId,
@@ -715,7 +728,15 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     const h = (current = await seedHarness(harness.db))
     const [commentResult, cancelResult] = await settleInOrder(
       h.taskId,
-      () => updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'landed first', OWNER_AUTHZ),
+      () =>
+        updateReviewCommentText(
+          h.db,
+          taskExecutionParticipants,
+          h.reviewRunId,
+          h.commentId,
+          'landed first',
+          OWNER_AUTHZ,
+        ),
       () => cancelViaEngine(h.db, h.taskId),
     )
 
@@ -1133,6 +1154,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
 
       await updateReviewCommentText(
         h.db,
+        taskExecutionParticipants,
         h.reviewRunId,
         h.commentId,
         `${taskStatus}-draft`,

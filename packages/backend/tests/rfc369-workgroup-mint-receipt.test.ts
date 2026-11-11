@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // CI 36665459531: same-task fan-out lost a member before runHostNode while PG
 // repeatedly reported 40001 on the post-insert nonce read. Keep the real dual
@@ -73,7 +74,7 @@ function mintOperation(shardKey: string): WorkgroupHostLedgerOperation {
 
 describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (harness) => {
   const hostLedgerFactory = composeWorkgroupHostLedgerParticipantFactory({
-    collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+    collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
   })
 
   test.each([1, 2, 3, 4, 5])(

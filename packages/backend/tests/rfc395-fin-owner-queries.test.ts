@@ -1,3 +1,5 @@
+import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/composition'
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-395 T18 FIN R01: owner queries retain release selection, archive rows and caller transactions.
 import { expect, test } from 'bun:test'
 import { createTaskArchiveCollaborationSectionReader } from '@/modules/collaboration/infrastructure/taskCollaborationReads'
@@ -8,7 +10,6 @@ import {
   readTreeRows,
   writeTree,
 } from '@/modules/resource-catalog/infrastructure/databaseSkillTrees'
-import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
 import { contentRefColumns, type ContentPutRequest } from '@/platform/content/contentStore'
 import {
   createContentPublicationLedger,
@@ -154,7 +155,7 @@ describeEachProvider('RFC-395 FIN exact owner queries', (harness) => {
         inputs: {},
         startedAt: 1,
       })
-    const reader = createTaskArchiveCollaborationSectionReader()
+    const reader = createTaskArchiveCollaborationSectionReader(taskExecutionParticipants)
     const rollback = new Error('rollback archive snapshot')
     await expect(
       harness.session.transaction(async (tx) => {

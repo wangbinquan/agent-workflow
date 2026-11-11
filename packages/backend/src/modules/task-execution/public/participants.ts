@@ -228,18 +228,14 @@ export type {
   ConsumedInputsParticipantInTx,
   ConsumedInputsWrite,
 } from '../application/ports/consumedInputs'
-export {
-  createConsumedInputsParticipantInTx,
-  prepareConsumedInputs,
-} from '../infrastructure/consumedInputsParticipant'
+export { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 
-export { reselectRunInTx } from '../infrastructure/runSelection/selectionWrite'
-
+// RFC-482: the consumed-inputs and human-gate persistence participants and the clarify-directive persistence reach
+// collaboration as factory references through its participant bindings (bootstrap hands them over from composition);
+// only their interfaces are public. The no-op `reselectRunInTx` is gone.
 export type { HumanGatePersistenceParticipantInTx } from '../application/ports/humanGatePersistenceParticipant'
-export { createHumanGatePersistenceParticipantInTx } from '../infrastructure/humanGatePersistenceParticipant'
 
 export type { TaskClarifyDirectivePersistence } from '../application/ports/taskClarifyDirectivePersistence'
-export { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
 
 // RFC-478：`createTaskPreparationParticipantInTx` 撤出后，它的返回类型 `TaskPreparationParticipant` 也一并撤出。
 

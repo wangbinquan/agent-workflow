@@ -131,7 +131,7 @@ export function createRepairEngine(
         ...{ upstreamAgents: o2Ports(db).upstreamAgents },
       }),
     clarify: createClarifyRepairParticipant(db),
-    review: createReviewRepairParticipant(db),
+    review: createReviewRepairParticipant(db, taskExecutionParticipants),
     appHome,
     ...(options.now === undefined ? {} : { now: options.now }),
   } as unknown as Dependencies)

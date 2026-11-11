@@ -8,6 +8,8 @@ export type {
   NodeRunQueries,
 } from '../application/ports/nodeRunQueries'
 export type { PortArtifactReader } from '../application/ports/portArtifactContent'
+// RFC-482: `ShardSetView` was reached only through the table reader factory's return type; the factory left the public
+// entries, so it left with it (the closed `TaskRunSelectionReads` in public/types does not use it).
 export type {
   FamilyRef,
   Frame,
@@ -15,7 +17,6 @@ export type {
   RunRef,
   RunSlot,
   SelectedRun,
-  ShardSetView,
 } from '../application/ports/runSelection'
 export { isPathishKindString, subsetArchiveJson } from '../domain/portArtifacts'
 // RFC-453: the node-run timeline order (review rows by their round anchor) for workspace-insight's node scope.
@@ -30,7 +31,8 @@ export function createNodeRunQueries(db: PersistenceDb): NodeRunQueries {
 export { resolveHandlerRun } from '../application/resolveHandlerRun'
 export { createRunHistorySnapshot } from '../application/runHistory'
 export type { RunHistoryFacts } from '../application/runHistory'
-export { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
+// RFC-482: the run selection reader reaches collaboration through its participant bindings (`TaskRunSelectionReads`
+// in public/types is the contract); the table reader factory stays inside Task Execution.
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
 import { type OverviewTasks } from '@agent-workflow/shared'
@@ -82,7 +84,7 @@ export function readWrapperGitBaseline(progressJson: string | null | undefined):
 // RFC-478：`createRunHistoryBatchSnapshot`、`resolveTaskLaunchRuntimeConfiguration`、`TaskLaunchConfigurationQueries`、
 // `createTaskDetailQueries` 与 `createTaskPreparationQueries` 模块外唯一的生产读者是 `services/task.ts`，它退役后撤出（本模块改取定义处）。
 
-export { createTaskSubjectQueries } from '../composition/taskSubjectQueries'
+// RFC-482: `createTaskSubjectQueries` reaches collaboration through its participant bindings; `TaskSubjectQueries` is public.
 export { isTurnEngineTaskSubject, taskSubjectFromDefinition } from '../domain/taskSubject'
 
 export { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'

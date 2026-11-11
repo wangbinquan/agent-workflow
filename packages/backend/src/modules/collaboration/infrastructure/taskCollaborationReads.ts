@@ -1,29 +1,16 @@
 import { readDispositionArchives } from '@/platform/persistence/schema/history/dispositionArchive'
-import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import { readClarifyHistory } from './clarifyHistoryProjection'
 import type { TaskArchiveCollaborationSectionReader } from '../application/ports/taskArchiveSections'
-import { TASK_ARCHIVE_V3_TABLES } from '@/platform/contracts/taskArchive'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { chunkedAll } from '@/util/sqlChunk'
 import type {
-  ArchiveCollaborationSections,
   RecoveryHumanGateFacts,
   NodeRunClarifyNav,
 } from '../application/ports/taskCollaborationReads'
-
-export function createTaskArchiveCollaborationSections(
-  db: PersistenceDb,
-): ArchiveCollaborationSections {
-  return {
-    sections: Object.keys(TASK_ARCHIVE_V3_TABLES.collaboration),
-    async load(taskIds) {
-      return (await createTaskArchiveCollaborationSectionReader().load(db, taskIds)).rows
-    },
-  }
-}
 
 export function createTaskRecoveryHumanGateFacts(db: PersistenceDb): RecoveryHumanGateFacts {
   return {
@@ -129,10 +116,12 @@ export function createTaskNodeRunClarifyNav(db: PersistenceDb): NodeRunClarifyNa
   }
 }
 
-export function createTaskArchiveCollaborationSectionReader(): TaskArchiveCollaborationSectionReader {
+export function createTaskArchiveCollaborationSectionReader(
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+): TaskArchiveCollaborationSectionReader {
   return {
     async load(tx, taskIds) {
-      const directives = createTaskClarifyDirectivePersistence(tx)
+      const directives = taskExecutionParticipants.createTaskClarifyDirectivePersistence(tx)
       const {
         taskCollaborators,
         reviewNodeReviewers,

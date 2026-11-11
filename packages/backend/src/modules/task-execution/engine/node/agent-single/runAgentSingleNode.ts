@@ -39,7 +39,17 @@ export async function runAgentSingleNode(
   ports: AgentNodeExecutionPorts,
   args: NodeStepRequest<'agent-single'>,
 ): Promise<NodeStepOutcome> {
-  const { task, policy: opts, collaboration, rules, ledger, history, workspace, log } = ports
+  const {
+    task,
+    policy: opts,
+    collaboration,
+    clarifyDirectives,
+    rules,
+    ledger,
+    history,
+    workspace,
+    log,
+  } = ports
   const { taskId, definition } = task
   const { node, iteration } = args
 
@@ -293,7 +303,7 @@ export async function runAgentSingleNode(
       // 链顶恰逢翻转时升级会抢先生效，把用户的正常翻转执行成升级（AC-8 违反 + 未合并
       // 成果丢失）。只读这一个值、只在挂了 clarify 通道时读。
       const stopOverrideNow = hasClarifyChannel
-        ? (await collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })) === 'stop'
+        ? (await clarifyDirectives.get(taskId, node.id)) === 'stop'
         : false
       const clarifyFlipPending =
         priorAttemptStopOverride !== undefined && stopOverrideNow !== priorAttemptStopOverride
@@ -574,7 +584,7 @@ export async function runAgentSingleNode(
       // can re-open a stopped channel (nodeStopOverride flips false → resolveEffectiveClarifyChannel
       // re-opens). No row ⇒ undefined ⇒ byte-for-byte unchanged.
       const nodeDirectiveRow = hasClarifyChannel
-        ? await collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })
+        ? await clarifyDirectives.get(taskId, node.id)
         : undefined
       const nodeDirective = nodeDirectiveRow
       const nodeStopOverride = nodeDirective === 'stop'

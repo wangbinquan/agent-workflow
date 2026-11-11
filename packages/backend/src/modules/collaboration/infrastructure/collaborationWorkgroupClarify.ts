@@ -53,6 +53,7 @@ async function countClarifyAsks(
 /** 实时反问许可（预算 / 已问次数 / stop 指令）：一份实现，两个 provider 共用。 */
 export async function isTaskClarifySuppressed(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   input: CollaborationClarifySuppressionInput,
 ): Promise<boolean> {
   const row = (
@@ -73,7 +74,9 @@ export async function isTaskClarifySuppressed(
     const budget = resolveClarifyBudget({ clarifyBudget: parsed.clarifyBudget })
     if (budget <= 0) return true
     const askerKey = wgClarifyAskerKey(input.nodeId, input.shardKey ?? null, WG_LEADER_NODE_ID)
-    const directive = await createClarifyDirectiveStore(db).get({
+    const directive = await createClarifyDirectiveStore(
+      taskExecutionParticipants.createTaskClarifyDirectivePersistence(db),
+    ).get({
       taskId: input.taskId,
       nodeId: input.nodeId,
       shardKey: askerKey,

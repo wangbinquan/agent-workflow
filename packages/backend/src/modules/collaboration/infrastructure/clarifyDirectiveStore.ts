@@ -8,36 +8,30 @@
 // `databaseSessionFor`，于是它**不可重入**：在外层显式事务里调用 `set` 会另开一条连接、
 // 独立提交，外层回滚也带不走它（2026-09-06 双引擎实测：SQLite 回滚后 0 行、PG 回滚后 1 行）。
 //
-// 正典是 `taskClarifyDirective.ts`——它早已是中立实现（`PersistenceDb`
-// 上的 drizzle query builder + `databaseSessionFor(db).transaction`），还额外导出
-// `setNodeClarifyDirectiveTx`（RFC-341 的澄清决定 seal 拿它当事务参与者；提问节点判定
-// `isAskingNodeInSnapshot` 自 RFC-442 起在 domain）。本工厂只是把那三个中立函数适配到 `ClarifyDirectiveStore` 端口
-// 的形状上，装配点因此对两个引擎是同一个工厂。
+// 正典是 task-execution 的指令持久化（RFC-395 A7：存储归执行域）。RFC-482 起本工厂不再经
+// `taskClarifyDirective.ts` 那层转发（已删除），直接收 task-execution 交出的 `TaskClarifyDirectivePersistence`
+// 实例（collaboration 经参与者绑定拿到工厂，在根 db 上造好；`set` 自己开事务），把它适配到
+// `ClarifyDirectiveStore` 端口的形状上，装配点因此对两个引擎是同一个工厂。
 // RFC-359 W12：正典文件及其消费路径已统一使用中立名称。
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { TaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
 import type { ClarifyDirectiveStore } from '../application/ports/clarifyDirectiveStore'
-import {
-  getNodeClarifyDirectiveRow,
-  listNodeClarifyDirectives,
-  setNodeClarifyDirective,
-} from './taskClarifyDirective'
 
-export function createClarifyDirectiveStore(db: PersistenceDb): ClarifyDirectiveStore {
+export function createClarifyDirectiveStore(
+  directives: TaskClarifyDirectivePersistence,
+): ClarifyDirectiveStore {
   const store: ClarifyDirectiveStore = {
     async get(input) {
-      return (
-        (await getNodeClarifyDirectiveRow(db, input.taskId, input.nodeId, input.shardKey)) ?? null
-      )
+      return (await directives.getRow(input.taskId, input.nodeId, input.shardKey)) ?? null
     },
     async listNodeDirectives(taskId) {
-      return Object.entries(await listNodeClarifyDirectives(db, taskId)).map(
-        ([nodeId, directive]) => ({ nodeId, directive }),
-      )
+      return Object.entries(await directives.list(taskId)).map(([nodeId, directive]) => ({
+        nodeId,
+        directive,
+      }))
     },
     async set(input) {
-      await setNodeClarifyDirective(
-        db,
+      await directives.set(
         input.taskId,
         input.nodeId,
         input.directive,

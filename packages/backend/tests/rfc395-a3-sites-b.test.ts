@@ -1,3 +1,4 @@
+import { createRunSelectionReader } from '@/modules/task-execution/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { o2Ports } from './helpers/o2Closure'
 import { withO2Closure } from './helpers/o2Closure'
@@ -6,13 +7,8 @@ import { expect, test } from 'bun:test'
 import type { ResolveHandlerInput } from '@agent-workflow/shared'
 import { resolveHandlerRun as legacyHandler } from '@/modules/task-execution/infrastructure/migration/oracle/handlerHistory'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  createNodeRunQueries,
-  createRunSelectionReader,
-  resolveHandlerRun,
-} from '@/modules/task-execution/public/queries'
+import { createNodeRunQueries, resolveHandlerRun } from '@/modules/task-execution/public/queries'
 import { projectWorkgroupRunSelections } from '@/modules/task-execution/infrastructure/runSelection/workgroupProjection'
-import { reselectRunInTx } from '@/modules/task-execution/public/participants'
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
@@ -94,19 +90,13 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
       frame: { containerRunId: null, iteration: 0 },
     }
     expect((await reader.current(taskId, root))?.id).toBe(id('root'))
+    // Reopening changes status only: no selection write follows it (RFC-482 removed the former no-op
+    // `reselectRunInTx` the review decision used to call here), so the persisted selection stays put.
     await withTaskExecutionWrite(db, async (tx) => {
       await patchNodeRunFixture(tx, { id: id('root') }, { status: 'pending', reviewIteration: 1 })
-      const before = await readNodeRunFixtures(tx, { taskId })
-      const reopened = await createNodeRunQueries(tx).read(id('root'))
-      expect(await reselectRunInTx(tx, reopened!, 'iterate-review')).toEqual([])
-      expect(await readNodeRunFixtures(tx, { taskId })).toEqual(before)
     })
     expect((await reader.current(taskId, root))?.id).toBe(id('root'))
     await add('new-root', 'review', { status: 'awaiting_review' })
-    await withTaskExecutionWrite(db, async (tx) => {
-      const old = await createNodeRunQueries(tx).read(id('root'))
-      expect(await reselectRunInTx(tx, old!, 'review-sibling-cascade')).toEqual([])
-    })
     expect((await reader.current(taskId, root))?.id).toBe(id('new-root'))
   })
 

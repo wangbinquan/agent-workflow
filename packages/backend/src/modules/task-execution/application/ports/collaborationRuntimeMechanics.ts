@@ -2,7 +2,6 @@
 // clarify, borrowing, prompt context). Declared here, moved from collaboration `application/ports/`: Task Execution owns
 // the contract and collaboration implements it (RFC-294 design §3.1 — task-execution does not import collaboration).
 import type {
-  ClarifyDirective,
   ClarifyQuestion,
   ClarifyTruncationWarning,
   ReviewPromptContext,
@@ -101,12 +100,6 @@ export interface CollaborationReviewPromptInput {
   readonly iteration: number
 }
 
-export interface CollaborationClarifyDirectiveInput {
-  readonly taskId: string
-  readonly nodeId: string
-  readonly shardKey?: string | null
-}
-
 export interface CollaborationClarifyQueueInput {
   readonly definition: WorkflowDefinition
   readonly taskId: string
@@ -175,9 +168,6 @@ export interface CollaborationRuntimeMechanics {
   buildReviewPromptContext(
     input: CollaborationReviewPromptInput,
   ): Promise<ReviewPromptContext | undefined>
-  getNodeClarifyDirective(
-    input: CollaborationClarifyDirectiveInput,
-  ): Promise<ClarifyDirective | undefined>
   buildClarifyQueueContext(
     input: CollaborationClarifyQueueInput,
   ): Promise<CollaborationClarifyQueueContext | undefined>

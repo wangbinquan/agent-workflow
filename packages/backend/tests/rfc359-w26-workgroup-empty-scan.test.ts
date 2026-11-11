@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC359 W26: preserve the original ordered listActive result and its single
@@ -222,7 +223,7 @@ async function setWorkgroupSubject(
 }
 
 const factory = composeWorkgroupTaskRoomTaskParticipantFactory({
-  collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+  collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
 })
 
 async function recorded(

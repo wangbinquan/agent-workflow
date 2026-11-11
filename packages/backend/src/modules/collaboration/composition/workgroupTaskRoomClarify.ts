@@ -1,6 +1,7 @@
 import type { WorkgroupTaskRoomClarifyParticipantInTx } from '@/modules/task-execution/public/commands'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createWorkgroupTaskRoomClarifyParticipantInTx } from '../infrastructure/workgroupTaskRoomClarifyParticipant'
+import type { TaskExecutionParticipantBindings } from '../infrastructure/taskExecutionParticipantBindings'
 
 /**
  * RFC-359 W4-D19a —— 工作组任务房里 Collaboration 那一半的参与者工厂：一份装配，两个 provider 共用。
@@ -10,8 +11,11 @@ export interface WorkgroupTaskRoomClarifyParticipantFactory {
   inTransaction(transaction: PersistenceTx): WorkgroupTaskRoomClarifyParticipantInTx
 }
 
-export function composeWorkgroupTaskRoomClarifyParticipantFactory(): WorkgroupTaskRoomClarifyParticipantFactory {
+export function composeWorkgroupTaskRoomClarifyParticipantFactory(
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+): WorkgroupTaskRoomClarifyParticipantFactory {
   return Object.freeze({
-    inTransaction: createWorkgroupTaskRoomClarifyParticipantInTx,
+    inTransaction: (transaction: PersistenceTx) =>
+      createWorkgroupTaskRoomClarifyParticipantInTx(transaction, taskExecutionParticipants),
   })
 }

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-185 — locks the leader fan-out dispatch contract (design/RFC-185-workgroup-leader-fanout).
 //
 // Why this file exists: the ENGINE has always been able to run same-member
@@ -842,9 +843,9 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     const actual = createWorkgroupTurnsPersistence({
       db,
       hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
-        collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+        collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
       }),
-      clarifyAskGate: createWorkgroupClarifyAskGate(db),
+      clarifyAskGate: createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
     })
     const persistence: WorkgroupTurnsPersistencePort = {
       ...actual,

@@ -6,10 +6,7 @@ import type { TaskExecutionParticipantBindings } from './taskExecutionParticipan
 // 生产上每次 tick 抛 `deferred-question-dispatcher-not-bound`（dual-provider-parity-audit P0-7）。
 // 派发管线（`taskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
 
-import {
-  createNodeOutputQueries,
-  createRunSelectionReader,
-} from '@/modules/task-execution/public/queries'
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm'
@@ -108,12 +105,15 @@ async function loadParkEntries(
 
 async function loadUndispatchedParkTargets(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
 ): Promise<ReadonlySet<string>> {
   const entries = await loadParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
 
-  const runs = await createRunSelectionReader(db).familyHistory(taskId, {})
+  const runs = await taskExecutionParticipants
+    .createRunSelectionReader(db)
+    .familyHistory(taskId, {})
   const outputRows =
     runs.length === 0
       ? []
@@ -139,6 +139,7 @@ export function createTaskDagCollaborationOperations(
       await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId)
     },
     loadOpenClarifyEvidence: (taskId: string) => loadOpenClarifyEvidence(db, taskId),
-    loadUndispatchedParkTargets: (taskId: string) => loadUndispatchedParkTargets(db, taskId),
+    loadUndispatchedParkTargets: (taskId: string) =>
+      loadUndispatchedParkTargets(db, taskExecutionParticipants, taskId),
   })
 }

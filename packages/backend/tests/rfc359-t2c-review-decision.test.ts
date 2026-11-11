@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { databaseContentText } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-359 W1-T2c（F-H2-1 之三）—— 评审决定命令在两个引擎上各跑一遍。
@@ -288,10 +289,17 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     expect((await commentsOf(db, round.docVersionIds[0]!)).map((c) => c.commentText)).toEqual([
       'first',
     ])
-    const updated = await updateReviewCommentText(db, round.reviewRunId, added.id, 'second', authz)
+    const updated = await updateReviewCommentText(
+      db,
+      taskExecutionParticipants,
+      round.reviewRunId,
+      added.id,
+      'second',
+      authz,
+    )
     expect(updated.commentText).toBe('second')
     expect((await commentsOf(db, round.docVersionIds[0]!))[0]!.commentText).toBe('second')
-    await deleteReviewComment(db, round.reviewRunId, added.id, authz)
+    await deleteReviewComment(db, taskExecutionParticipants, round.reviewRunId, added.id, authz)
     expect(await commentsOf(db, round.docVersionIds[0]!)).toHaveLength(0)
     expect(
       await reviewEvents(db, round.reviewRunId, 'collaboration.review-comments-changed.v1'),

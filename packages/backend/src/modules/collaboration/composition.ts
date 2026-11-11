@@ -20,6 +20,8 @@ export function composeLocalWorkspaceRollbackSnapshots(): WorkspaceRollbackSnaps
 // RFC-388：修复参与者只有中立工厂，两个部署共用。
 export { createClarifyRepairParticipant } from './infrastructure/clarifyRepairParticipant'
 export { createReviewRepairParticipant } from './infrastructure/reviewRepairParticipant'
+// RFC-482: bootstrap composes the route context's clarify-directive store from task-execution's directive persistence.
+export { createClarifyDirectiveStore } from './infrastructure/clarifyDirectiveStore'
 // RFC-359 W7：运行期机制合一后只剩一个工厂（`infrastructure/collaborationRuntimeMechanics.ts`）。
 export { createCollaborationRuntimeMechanics } from './infrastructure/collaborationRuntimeMechanics'
 // RFC-359 W9：已提交事件的 WS 投影合一后只剩一个工厂
@@ -68,10 +70,13 @@ import {
   createTaskNodeRunClarifyNav,
 } from './infrastructure/taskCollaborationReads'
 
-export function composeTaskCollaborationReads(db: PersistenceDb) {
+export function composeTaskCollaborationReads(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+) {
   return {
     archive: composeTaskArchiveCollaborationSectionsPort(
-      createTaskArchiveCollaborationSectionReader(),
+      createTaskArchiveCollaborationSectionReader(taskExecutionParticipants),
     ),
     recovery: composeTaskRecoveryHumanGateFactsPort(createTaskRecoveryHumanGateFacts(db)),
     clarifyNav: composeTaskNodeRunClarifyNavPort(createTaskNodeRunClarifyNav(db)),
@@ -91,12 +96,14 @@ import {
 export function composeTaskMembershipOperations(
   db: PersistenceDb,
   policy: CollaborationTaskRolePolicy,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
 ) {
   return composeTaskMembershipOperationsPort({
     canViewTask: (actor, task) => canViewTask(db, actor, task),
     getTaskMembers: (actor, task) => getTaskMembers(db, policy, actor, task),
     requireTaskOperator: (actor, task) => requireTaskOperator(db, policy, actor, task),
-    updateTaskMembers: (actor, task, body) => updateTaskMembers(db, policy, actor, task, body),
+    updateTaskMembers: (actor, task, body) =>
+      updateTaskMembers(db, taskExecutionParticipants, policy, actor, task, body),
     assertCanReplaySourceTask: (actor, sourceTaskId) =>
       assertCanReplaySourceTask(db, actor, sourceTaskId),
   })
@@ -111,6 +118,7 @@ import {
 } from './application/adapters/task-execution-adapter'
 import { createClarifyRepairParticipant } from './infrastructure/clarifyRepairParticipant'
 import { createReviewRepairParticipant } from './infrastructure/reviewRepairParticipant'
+import type { TaskExecutionParticipantBindings } from './infrastructure/taskExecutionParticipantBindings'
 import { GateWorkspaceRollbackExecutorAdapter } from './infrastructure/gateWorkspaceRollbackExecutor'
 import { DatabaseHumanGateOperationPersistence } from './infrastructure/humanGateOperationPersistence'
 import { createHumanGateOpenParticipantScope } from './infrastructure/humanGateOpenFactory'
@@ -119,10 +127,13 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from './composition/required-ports'
 
-export function composeCollaborationRepairPorts(db: PersistenceDb) {
+export function composeCollaborationRepairPorts(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+) {
   return bindCollaborationRepairPorts(
     createClarifyRepairParticipant(db),
-    createReviewRepairParticipant(db),
+    createReviewRepairParticipant(db, taskExecutionParticipants),
   )
 }
 

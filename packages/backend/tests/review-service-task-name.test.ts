@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-037 T4 — locks `listReviewSummaries` returning `taskName: tasks.name`
@@ -77,7 +78,10 @@ describeEachProvider('RFC-037 — listReviewSummaries joins tasks.name → taskN
   test('summary row carries taskName equal to tasks.name', async () => {
     const db = harness.db
     await seedReview(db, 'PR-9999 doc review')
-    const summaries = await listReviewSummaries(db, { status: 'all', limit: 100 })
+    const summaries = await listReviewSummaries(db, taskExecutionParticipants, {
+      status: 'all',
+      limit: 100,
+    })
     expect(summaries.length).toBe(1)
     expect(summaries[0]?.taskName).toBe('PR-9999 doc review')
   })
@@ -86,7 +90,10 @@ describeEachProvider('RFC-037 — listReviewSummaries joins tasks.name → taskN
     const db = harness.db
     await seedReview(db, 'task-A')
     await seedReview(db, 'task-B')
-    const summaries = await listReviewSummaries(db, { status: 'all', limit: 100 })
+    const summaries = await listReviewSummaries(db, taskExecutionParticipants, {
+      status: 'all',
+      limit: 100,
+    })
     const names = summaries.map((s) => s.taskName).sort()
     expect(names).toEqual(['task-A', 'task-B'])
   })

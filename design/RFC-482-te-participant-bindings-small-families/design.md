@@ -39,9 +39,8 @@
   `clarifyDirectiveStore.ts`（← `isTaskClarifySuppressed` 与 `createCollaborationCommandContext`）。
 - 命令上下文里的指令存储：`createCollaborationCommandContext` 总在必填的 `persistence.clarifyDirectives` 里造一份指令存储，但读它的只有
   路由的查询入口与命令入口（`application/queryEntries.ts:46`、`application/commandEntries.ts:176`，经 `requireClarifyDirectiveStore`）；它的
-  其余调用方（`createClarifyRound`、`createManualTaskQuestion`、评审派发与三个决定命令）不用它。上下文已有「可选能力」的做法：
-  `reviewDecisions`、`questionDispatches`、`clarifyDecisions`、`taskExecutionReadModels` 是依赖对象的顶层可选字段，由组装路由上下文的
-  bootstrap 交入，`CollaborationRouteContext` 以类型参数声明它带哪些能力（`public/types.ts:64`）。
+  其余调用方（`createClarifyRound`、`createManualTaskQuestion`、评审派发与三个决定命令）不用它；这两个入口唯一的使用方是 bootstrap 组装的
+  指令路由操作适配器 `composeTaskClarifyDirectiveRouteOperations`（`application/adapters/task-execution-adapter.ts`）。
 
 ## 2. 机制与落位
 
@@ -61,10 +60,10 @@
 - **传参**：已有绑定的函数直接用 `taskExecutionParticipants.<工厂>(handle)`；§1 列的没有绑定的函数各加一个绑定参数（有入参对象的加字段），
   由调用方传下去；bootstrap 里的五个装配点（`composeCollaborationRepairPorts`、`composeTaskMembershipOperations`、
   `composeTaskCollaborationReads`、`composeWorkgroupTaskRoomClarifyParticipantFactory`、`createWorkgroupClarifyAskGate`）改收绑定。
-- **指令存储改为可选能力**：`clarifyDirectives` 从 `CollaborationPersistence` 挪到 `CollaborationCommandDependencies` 的顶层可选字段，
-  `CollaborationRouteContext` 加上这项能力，`requireClarifyDirectiveStore` 要求带它的上下文；`createClarifyDirectiveStore` 改收
-  task-execution 的指令持久化实例（它只在根 db 上读写，`set` 自己开事务），由 collaboration 的 composition 转出，bootstrap 组装路由上下文时用
-  绑定造好交入。其余组装命令上下文的地方不再造它。
+- **指令存储直接交给用它的适配器**：命令上下文不再带指令存储（`CollaborationPersistence.clarifyDirectives` 与
+  `requireClarifyDirectiveStore` 删除）；`composeTaskClarifyDirectiveRouteOperations` 多收一个 `ClarifyDirectiveStore` 参数，两个入口改收这个
+  端口而不是上下文。`createClarifyDirectiveStore` 改收 task-execution 的指令持久化实例（它只在根 db 上读写，`set` 自己开事务），由
+  collaboration 的 composition 转出，bootstrap 用绑定造好交给适配器。这样不增加可空依赖与「not composed」的运行期兜底（§6）。
 - **task-execution 的 public**：撤出这六个符号。参与者与查询的接口类型已在 public 的照旧（`HumanGatePersistenceParticipantInTx`、
   `ConsumedInputsParticipantInTx`、`TaskClarifyDirectivePersistence`、`TaskSubjectQueries`）；run selection 的读取在
   `application/ports/runSelection.ts` 声明闭合接口 `TaskRunSelectionReads`（`current`、`consumed`、`familyHistory` 三个方法，签名与表实现
@@ -108,13 +107,38 @@
 
 ## 6. 实施中的细化
 
-（实施后填写。）
+- **两处死代码随之删除**：`taskCollaborationReads.ts` 的 `createTaskArchiveCollaborationSections` 自 RFC-395 II-b 起全仓零调用（它是
+  `createTaskArchiveCollaborationSectionReader` 在本 RFC 改签名时唯一的另一个使用方），连同只被它用的端口类型
+  `ArchiveCollaborationSections` 一起删掉，不为它改签名。
+- **撤出的连锁**：`ShardSetView`（task-execution `public/queries`）只经表读取器工厂的返回类型被消费，工厂撤出后成为未消费符号
+  （架构报告 `unconsumed-public-symbols-task-execution` 0 → 1），随之撤出；模块外无人按名字取它。
+- **引擎端口的分组**：指令读取不是协作能力，从 agent 节点端口的 `collaboration` 分组移出，成为 `AgentNodeExecutionPorts.clarifyDirectives`；
+  跨澄清节点端口同样改为 `clarifyDirectives`，不再从 `CollaborationRuntimeMechanics` 推导类型。`CollaborationClarifyDirectiveInput` 随端口成员
+  一起删除。
+- **指令存储不做成上下文的可选能力**：起初照 `reviewDecisions` 等四项把它做成命令上下文的可选能力（路由上下文加一项、入口要求带它的
+  上下文），集中验证时 `rfc359-w5-t19b-composition-root-complete` 报 `commandContext.ts` 的「not composed」兜底 5 → 6——这个守卫只降不升，
+  RFC-359 W5-T19b 正是把可空依赖改成必填才降到 5。改为把存储直接交给唯一用它的适配器后，上下文没有新的可空依赖，命令上下文与路由上下文
+  的公开类型都不变。
+- **用例侧**：调用新加了绑定参数的函数的用例由语法树 codemod 补传 `tests/helpers/taskExecutionParticipantBindings.ts` 的绑定（只改从
+  collaboration 模块 import 的那个函数的直接调用）；直接读写指令的用例改取新 helper `tests/helpers/clarifyDirectives.ts`（同样五个函数，
+  落在 task-execution 的指令持久化上）；取被撤五个工厂的用例改取 task-execution 的 composition。
+- **tsc 看不到的文本与哈希账本**（按 §3 末条先搜后改）：`rfc395-selection-semantics-ledger` 的三条 `familyHistory` 站点 `source`（调用文本多了
+  绑定这一层接收者）；`rfc395-serialized-insert-source-locks.json` 里 `clarify/seal.ts` 的 sha256（评审说明随附）；`rfc359-t7e` 断言 bootstrap
+  源码里问询门的调用写法；`rfc395-clarify-answer-boundary` 断言 `seal.ts` 在 seal 事务里构造人工门持久化参与者的那一行（改成容忍空白的
+  正则）；RFC-442 用例断言 collaboration 的指令转发文件存在（改为断言它不在、并在 `clarifyDirectiveStore.ts` 上检查同一判据）。
+  P0 变异 fixture 的各处锚点文本逐条核对仍各出现一次，问询门变异是零参函数，不受新参数影响。全量里又红了 8 个读源码的用例，同样随改动
+  改写：引擎读指令的旧调用文本（`rfc122` 两条、`rfc123` 的跨澄清短路与 `resolveCrossNodeStopped`、`cross-clarify-stop-directive-scoped-to-cci-rerun`、
+  `scheduler-cross-clarify-no-runaway`）改断言 `clarifyDirectives.get(…)`，读点位置的判据不变；seal 事务里的指令写点（`rfc123`、`rfc341`）改断言
+  经绑定构造的 `.createTaskClarifyDirectivePersistence(tx)`，仍在事务内、`afterCommit` 之前、只有一处；`rfc349` 断言评审修复参与者与 bootstrap
+  修复端口的调用写法；`rfc476` 的正对照取的正是被撤的 `createConsumedInputsParticipantInTx`，改用仍交出的 `prepareConsumedInputs`；
+  `rfc395-a3-site-regressions` 从 `review.ts` 抠出 `coversSource` 的函数体执行，绑定的自由变量改为 `args.taskExecutionParticipants`。随后用字面量
+  扫描对 HEAD 与候选比了一遍（做法见 `docs/dev-gotchas.md`），余下的命中都是模块名一类的通用词或本 RFC 新写的断言。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 
 - **C10**：新接口按内容落在 task-execution 的 `application/ports`；clarify 指令的读取回到存储的拥有者；collaboration 只剩自己的协作逻辑。
-- **C11**：task-execution 的 public 撤 6 增 1（`TaskRunSelectionReads`，取代原先经工厂返回类型暴露的整个表读取器）；collaboration 的 public
-  只是 `CollaborationRouteContext` 的能力参数多一项（`clarifyDirectives`）。
+- **C11**：task-execution 的 public 撤 6 增 1（`TaskRunSelectionReads`，取代原先经工厂返回类型暴露的整个表读取器），随之撤出只经那个工厂
+  返回类型可达的 `ShardSetView`；collaboration 的 public 不变。
 - **C12**：RFC-482 用例覆盖 task-execution 的全部 public 文件、collaboration 的全部生产文件与 bootstrap 的绑定。
 - **C13**：触及的减速带收紧到实测。
 - **取舍（可推翻）**：沿用 RFC-400 的绑定对象并扩充它，而不是另立一个只装查询的绑定（同一份装配输入、同一条传递路径）；`reselectRunInTx`

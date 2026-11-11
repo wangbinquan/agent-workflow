@@ -233,11 +233,12 @@ export async function createEachProviderTaskExecution(
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },
   })
-  const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
+  const workgroupClarify =
+    composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants)
   const workgroupTurns = composeWorkgroupTurnsOperations(
     db,
     composeWorkgroupHostLedgerParticipantFactory({ collaboration: workgroupClarify }),
-    createWorkgroupClarifyAskGate(db),
+    createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
   )
   const runtimeIdentity = {
     delegatedRequests: identityAccess.delegatedRequests,
@@ -307,7 +308,7 @@ export async function createEachProviderTaskExecution(
     const sqlite = db as unknown as DbClient
     const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
       withO2Closure({
-        collaborationRepair: composeCollaborationRepairPorts(db),
+        collaborationRepair: composeCollaborationRepairPorts(db, taskExecutionParticipants),
         archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
@@ -383,6 +384,7 @@ export async function createEachProviderTaskExecution(
           reviewers: composeTaskReviewersPort(unusedCapability('collaboration route')),
           clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
             unusedCapability('collaboration route'),
+            unusedCapability('clarify directive store'),
           ),
           taskMembership: o2Ports(db).taskMembership,
           taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,
@@ -483,7 +485,7 @@ export async function createEachProviderTaskExecution(
   const log = createLogger('rfc359-execution-chain')
   const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
     withO2Closure({
-      collaborationRepair: composeCollaborationRepairPorts(db),
+      collaborationRepair: composeCollaborationRepairPorts(db, taskExecutionParticipants),
       archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
@@ -553,6 +555,7 @@ export async function createEachProviderTaskExecution(
         reviewers: composeTaskReviewersPort(unusedCapability('collaboration route')),
         clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
           unusedCapability('collaboration route'),
+          unusedCapability('clarify directive store'),
         ),
         taskMembership: o2Ports(db).taskMembership,
         taskDeletionCollaboration: createTaskDeletionCollaborationParticipantInTx,

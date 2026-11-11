@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-359 W4-D19b —— 工作组任务房本体合一：SQLite 不再走 legacy engine 上的薄驱动，两个 provider 用同一份
 // 任务房实现（`workgroupTaskRoom.ts` / `-Commands.ts` / `-Queries.ts` + 一份装配）。
 //
@@ -118,7 +119,7 @@ function roomFor(db: PersistenceDb, broadcasts: string[]) {
   return composeWorkgroupTaskRoom({
     db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
     activeUsers: {
       async findActiveUserIds(userIds) {

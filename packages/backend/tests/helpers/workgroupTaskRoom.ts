@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 // RFC-359 W4-D19b —— 测试侧装配工作组任务房的唯一入口。
 //
 // 合一之前测试是直接 new legacy 的 `buildRoomReads` / `buildWorkgroupTaskActions` 的，那条路已随
@@ -38,7 +39,7 @@ export function composeTestWorkgroupTaskRoom(
   return composeWorkgroupTaskRoom({
     db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
     activeUsers: {
       async findActiveUserIds(userIds) {

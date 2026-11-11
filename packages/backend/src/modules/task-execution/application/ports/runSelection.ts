@@ -159,6 +159,20 @@ export interface RunSelectionReader<Seq extends LegacyRunSeq = number> {
   consumed(runId: string): Promise<readonly ConsumedEdge[]>
 }
 
+/**
+ * RFC-482 — the run selection reads collaboration takes through its participant bindings: a closed interface with the
+ * three methods it calls (the table reader implements it; the rest of the reader stays inside Task Execution).
+ */
+export interface TaskRunSelectionReads {
+  current(taskId: string, slot: RunSlot): Promise<SelectedRun | null>
+  familyHistory(
+    taskId: string,
+    family: FamilyRef,
+    filter?: HistoryFilter,
+  ): Promise<readonly RunHistoryRef[]>
+  consumed(runId: string): Promise<readonly ConsumedEdge[]>
+}
+
 export interface TableShardSetView extends ShardSetView {
   readonly history: readonly RunHistoryRef[]
 }

@@ -24,6 +24,11 @@ const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   createTaskAuthorizationQueries: unusedParticipant,
   createTaskAuthorizationParticipantInTx: unusedParticipant,
   createNodeRunWorkspaceRollback: unusedParticipant,
+  createHumanGatePersistenceParticipantInTx: unusedParticipant,
+  createConsumedInputsParticipantInTx: unusedParticipant,
+  createTaskClarifyDirectivePersistence: unusedParticipant,
+  createTaskSubjectQueries: unusedParticipant,
+  createRunSelectionReader: unusedParticipant,
 }
 
 // Execute the complete production entry functions with explicit fake ports.

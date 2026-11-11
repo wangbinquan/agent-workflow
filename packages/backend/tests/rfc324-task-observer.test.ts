@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 —— 任务的第三档：观察者。
@@ -199,12 +200,19 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
   })
 
   test('PUT members：档位是全量替换的一部分，降档立刻生效', async () => {
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row(), {
-      members: [
-        { userId: collaborator, role: 'observer' },
-        { userId: observer, role: 'collaborator' },
-      ],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(owner),
+      row(),
+      {
+        members: [
+          { userId: collaborator, role: 'observer' },
+          { userId: observer, role: 'collaborator' },
+        ],
+      },
+    )
     // 两个人换了位置：原协作者现在只能看，原观察者可以动。
     expect(await hasActingMembership(db, taskId, collaborator)).toBe(false)
     expect(await hasActingMembership(db, taskId, observer)).toBe(true)
@@ -215,12 +223,19 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
   })
 
   test('同一用户只留一行：重复条目取最后一条，不产生两档并存', async () => {
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row(), {
-      members: [
-        { userId: observer, role: 'collaborator' },
-        { userId: observer, role: 'observer' },
-      ],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(owner),
+      row(),
+      {
+        members: [
+          { userId: observer, role: 'collaborator' },
+          { userId: observer, role: 'observer' },
+        ],
+      },
+    )
     const { taskCollaborators } = tablesOf(db)
     const rows = await db.select().from(taskCollaborators)
     const forObserver = rows.filter((r) => r.userId === observer)
@@ -229,9 +244,16 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
   })
 
   test('存量语义不变：没有 observer 的任务，collaborator 与 owner 同权', async () => {
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row(), {
-      members: [{ userId: collaborator, role: 'collaborator' }],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(owner),
+      row(),
+      {
+        members: [{ userId: collaborator, role: 'collaborator' }],
+      },
+    )
     const members = await getTaskMembers(
       db,
       composeCollaborationTaskRolePolicy(),

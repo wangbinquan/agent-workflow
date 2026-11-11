@@ -18,7 +18,7 @@ import { createClarifyDecisionCommand } from '@/modules/collaboration/infrastruc
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import { submitClarifyDecision } from '@/modules/collaboration/application/commandEntries'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
+import { listNodeClarifyDirectives } from './helpers/clarifyDirectives'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
 import type { EnqueueMemoryDistillJobInput } from '@/modules/memory/public/commands'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'

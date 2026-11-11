@@ -1,5 +1,4 @@
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import type { NodeRunFactSnapshot } from '../../application/ports/nodeRunQueries'
 import type { RunSlot } from '../../application/ports/runSelection'
 import { createRunSelectionReader } from './table/reader'
 import { createRunSelectionParticipantInTx } from './table/selectionWrite'
@@ -36,13 +35,4 @@ export async function selectMintedRunInTx(
       cause,
     },
   ])
-}
-
-/** Reopening changes status only; it never replaces a newer persisted selection. */
-export async function reselectRunInTx(
-  _tx: PersistenceTx,
-  _run: NodeRunFactSnapshot,
-  _cause: string,
-) {
-  return []
 }

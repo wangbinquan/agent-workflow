@@ -334,6 +334,13 @@ export {
 // RFC-477: collaboration's review rollback planning and clarify self-rollback enter through its own
 // `NodeRunWorkspaceRollbackPort`; bootstrap hands this factory to collaboration's participant bindings.
 export { createNodeRunWorkspaceRollback } from './infrastructure/nodeRollback'
+// RFC-482: collaboration's remaining transaction participants and small reads arrive through the same participant
+// bindings; bootstrap hands these factory references over (task-execution's public keeps only their interfaces).
+export { createHumanGatePersistenceParticipantInTx } from './infrastructure/humanGatePersistenceParticipant'
+export { createConsumedInputsParticipantInTx } from './infrastructure/consumedInputsParticipant'
+export { createTaskClarifyDirectivePersistence } from './infrastructure/taskClarifyDirectivePersistence'
+export { createTaskSubjectQueries } from './composition/taskSubjectQueries'
+export { createRunSelectionReader } from './infrastructure/runSelection/table/reader'
 // RFC-477: the daemon's resource-limit tick runs task-execution's policy; bootstrap composes its operations (task facts
 // plus system-operations' cancel audit) and schedules it.
 export {

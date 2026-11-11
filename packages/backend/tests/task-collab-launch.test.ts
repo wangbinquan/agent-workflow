@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-036 PR4 launch-context test, rewritten for RFC-099 (D6/D10/D13):
@@ -204,13 +205,21 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
     const task = { id: 'task-4', ownerUserId: bob }
     // carol (plain member) cannot manage members
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(carol, 'user'), task, {
-        members: [{ userId: dave, role: 'collaborator' as const }],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorFor(carol, 'user'),
+        task,
+        {
+          members: [{ userId: dave, role: 'collaborator' as const }],
+        },
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError)
     // owner transfers to carol; bob auto-kept as collaborator
     const after = await updateTaskMembers(
       db,
+      taskExecutionParticipants,
       composeCollaborationTaskRolePolicy(),
       actorFor(bob, 'user'),
       task,
@@ -258,6 +267,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
     expect(carolView.members.map((m) => m.user.id)).toEqual([carol])
     const updated = await updateTaskMembers(
       db,
+      taskExecutionParticipants,
       composeCollaborationTaskRolePolicy(),
       actorFor(admin, 'admin'),
       task,
@@ -306,6 +316,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
     try {
       const update = updateTaskMembers(
         db,
+        taskExecutionParticipants,
         composeCollaborationTaskRolePolicy(),
         actorFor(bob, 'user'),
         { id: 'task-audience', ownerUserId: bob },
@@ -340,14 +351,28 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, dave))
     const task = { id: 'task-6', ownerUserId: bob }
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(bob, 'user'), task, {
-        members: [{ userId: dave, role: 'collaborator' as const }],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorFor(bob, 'user'),
+        task,
+        {
+          members: [{ userId: dave, role: 'collaborator' as const }],
+        },
+      ),
     ).rejects.toThrow(/not active/)
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(bob, 'user'), task, {
-        members: [{ userId: '__system__', role: 'collaborator' as const }],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorFor(bob, 'user'),
+        task,
+        {
+          members: [{ userId: '__system__', role: 'collaborator' as const }],
+        },
+      ),
     ).rejects.toThrow(/not active/)
   })
 })

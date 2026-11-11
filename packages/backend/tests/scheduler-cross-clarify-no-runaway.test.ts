@@ -205,7 +205,8 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
     // Three locks: live-row probe, persistent-stop fallback, and the
     // common path explicitly returning without minting a row.
     expect(body).toContain('cross-clarify-live-row-exists')
-    expect(body).toContain('ports.getNodeClarifyDirective({')
+    // RFC-482: the persistent-stop fallback reads Task Execution's own directive persistence.
+    expect(body).toContain('ports.clarifyDirectives.get(')
     expect(body).toContain('ports.inspectCrossClarify({')
     expect(body).toContain('// Common path: no live row, no persistent stop')
 

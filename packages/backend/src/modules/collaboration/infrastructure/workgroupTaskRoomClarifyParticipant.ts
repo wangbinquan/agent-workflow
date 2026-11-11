@@ -1,4 +1,4 @@
-import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, exists, isNotNull, isNull, or } from 'drizzle-orm'
@@ -8,12 +8,15 @@ import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /**
  * RFC-359 W4-D19a —— Collaboration 在工作组任务房事务里的那一半：一份实现，两个 provider 共用。
- * 调用方持有事务；这个参与者只直接访问 Collaboration 自己的表；directive 投影通过 TaskExecution public query 读取同一事务。
+ * 调用方持有事务；这个参与者只直接访问 Collaboration 自己的表；directive 投影经 Task Execution 的参与者绑定
+ * （RFC-482，装配期交入的工厂引用）在同一事务里读取。
  */
 export function createWorkgroupTaskRoomClarifyParticipantInTx(
   transaction: PersistenceTx,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
 ): WorkgroupTaskRoomClarifyParticipantInTx {
-  const clarifyDirectives = createTaskClarifyDirectivePersistence(transaction)
+  const clarifyDirectives =
+    taskExecutionParticipants.createTaskClarifyDirectivePersistence(transaction)
   return Object.freeze({
     async loadProjection(taskId) {
       const { clarifyRounds, taskQuestions } = tablesOf(transaction)

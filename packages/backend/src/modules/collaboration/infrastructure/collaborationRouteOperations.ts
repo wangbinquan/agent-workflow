@@ -51,13 +51,22 @@ export function createCollaborationRouteOperations(
 ): CollaborationRoutePersistenceOperations {
   const db = input.db
   const reviews: CollaborationRoutePersistenceOperations['reviews'] = Object.freeze({
-    list: async (filter) => await (await loadReviewOperations()).listReviewSummaries(db, filter),
+    list: async (filter) =>
+      await (
+        await loadReviewOperations()
+      ).listReviewSummaries(db, input.taskExecutionParticipants, filter),
     countPending: async (actor) =>
       await (await loadReviewOperations()).countPendingReviews(db, actor),
     detail: async (request) =>
       await (
         await loadReviewOperations()
-      ).getReviewDetail(db, request.appHome, request.nodeRunId, input.reviewReader),
+      ).getReviewDetail(
+        db,
+        input.taskExecutionParticipants,
+        request.appHome,
+        request.nodeRunId,
+        input.reviewReader,
+      ),
     listVersions: async (nodeRunId) =>
       await (await loadReviewOperations()).listDocVersionsForReview(db, nodeRunId),
     versionDetail: async (request) =>
@@ -96,6 +105,7 @@ export function createCollaborationRouteOperations(
         await loadReviewOperations()
       ).updateReviewCommentText(
         db,
+        input.taskExecutionParticipants,
         request.nodeRunId,
         request.commentId,
         request.commentText,
@@ -104,7 +114,13 @@ export function createCollaborationRouteOperations(
     deleteComment: async (request) =>
       await (
         await loadReviewOperations()
-      ).deleteReviewComment(db, request.nodeRunId, request.commentId, request.authority),
+      ).deleteReviewComment(
+        db,
+        input.taskExecutionParticipants,
+        request.nodeRunId,
+        request.commentId,
+        request.authority,
+      ),
   })
   const questions: CollaborationRoutePersistenceOperations['questions'] = Object.freeze({
     list: async (request) =>

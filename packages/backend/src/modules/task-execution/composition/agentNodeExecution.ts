@@ -152,10 +152,13 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
       sourcePortKind: (nodeId, portName) =>
         sourcePortKindOf(agentResolutionResources(state), nodeId, portName),
     },
+    // RFC-482: Task Execution reads its own directive table; collaboration's runtime mechanics no longer relay it.
+    get clarifyDirectives() {
+      return state.opts.persistence.clarifyDirectives
+    },
     collaboration: {
       resolveBorrowForNode: (input) => collaboration().resolveBorrowForNode(input),
       buildReviewPromptContext: (input) => collaboration().buildReviewPromptContext(input),
-      getNodeClarifyDirective: (input) => collaboration().getNodeClarifyDirective(input),
       buildClarifyQueueContext: (input) => collaboration().buildClarifyQueueContext(input),
       openAgentClarify: (request) =>
         collaboration().openAgentClarify({

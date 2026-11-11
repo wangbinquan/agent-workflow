@@ -770,7 +770,9 @@ describeEachProvider(
     test('returns false when no stop submit yet', async () => {
       const db = harness.db
       const { taskId } = await seedCrossClarifyTask(db)
-      expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(false)
+      expect(
+        await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'questioner'),
+      ).toBe(false)
     })
 
     test('returns true after stop submit, persists across additional continue submits on other ccs', async () => {
@@ -822,8 +824,12 @@ describeEachProvider(
         ifMatchIteration: 0,
         actor,
       })
-      expect(await resolveCrossNodeStopped(db, taskId, 'questioner_a')).toBe(true)
-      expect(await resolveCrossNodeStopped(db, taskId, 'questioner_b')).toBe(false)
+      expect(
+        await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'questioner_a'),
+      ).toBe(true)
+      expect(
+        await resolveCrossNodeStopped(db, taskExecutionParticipants, taskId, 'questioner_b'),
+      ).toBe(false)
     })
   },
 )

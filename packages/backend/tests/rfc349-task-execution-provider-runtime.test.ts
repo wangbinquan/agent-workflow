@@ -45,8 +45,11 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     const collaboration = read('modules/collaboration/composition.ts')
     const bootstrap = read('bootstrap/daemonModules/taskExecution.ts')
     expect(collaboration).toContain('createClarifyRepairParticipant(db)')
-    expect(collaboration).toContain('createReviewRepairParticipant(db)')
-    expect(bootstrap).toContain('collaborationRepair: composeCollaborationRepairPorts(db)')
+    // RFC-482: the review repair participant reaches task-execution's factories through the bindings.
+    expect(collaboration).toContain('createReviewRepairParticipant(db, taskExecutionParticipants)')
+    expect(bootstrap).toContain(
+      'collaborationRepair: composeCollaborationRepairPorts(db, closure.taskExecutionParticipants)',
+    )
     expect(provider).toContain('...dependencies.collaborationRepair')
     expect(provider).toContain('composeTaskExecutionProviderBackground({')
 

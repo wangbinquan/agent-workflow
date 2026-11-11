@@ -59,7 +59,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 // isTargetNodeConsumed's aging-side supersede exception). If S3/S6 wedge again on
 // dispatch-in-flight, that exception regressed.
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { setNodeClarifyDirective } from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
+import { setNodeClarifyDirective } from './helpers/clarifyDirectives'
 import {
   addReviewComment,
   submitReviewDecision,

@@ -92,7 +92,6 @@ import {
   fenceTaskWrite,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/public/participants'
-import { getNodeClarifyDirectiveRow } from '../taskClarifyDirective'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
@@ -676,7 +675,12 @@ export async function dispatchCrossClarifyNode(args: {
   if (questionerNodeId === undefined) {
     return { kind: 'no-questioner' }
   }
-  const stopped = await resolveCrossNodeStopped(args.db, args.taskId, questionerNodeId)
+  const stopped = await resolveCrossNodeStopped(
+    args.db,
+    args.taskExecutionParticipants,
+    args.taskId,
+    questionerNodeId,
+  )
   if (stopped) {
     const now = Date.now()
     // RFC-359 W7：与合一前的 `setNodeRunStatus`（同步 `withOwnedTaskTx`，bun:sqlite 独有）
@@ -719,10 +723,14 @@ export async function dispatchCrossClarifyNode(args: {
  */
 export async function resolveCrossNodeStopped(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   questionerNodeId: string,
 ): Promise<boolean> {
-  return (await getNodeClarifyDirectiveRow(db, taskId, questionerNodeId))?.directive === 'stop'
+  const row = await taskExecutionParticipants
+    .createTaskClarifyDirectivePersistence(db)
+    .getRow(taskId, questionerNodeId)
+  return row?.directive === 'stop'
 }
 
 // ---------------------------------------------------------------------------

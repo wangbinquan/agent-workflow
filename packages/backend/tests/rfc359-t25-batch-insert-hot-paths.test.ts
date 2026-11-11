@@ -3,7 +3,10 @@ import {
   inlineContentColumns,
   databaseContentText,
 } from '@/platform/content/infrastructure/contentStore'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  createConsumedInputsParticipantInTx,
+} from '@/modules/task-execution/composition'
 // RFC-359 W6-T25 收尾 —— 剩下的逐行 INSERT 热路径改按批，判据是**语句数**。
 //
 // 前一批（`rfc359-t25-batch-insert.test.ts`）钉住了设施本身（`insertInBatches` / `lastPerKey` /
@@ -64,7 +67,6 @@ import { preparedHumanGateRef } from '@/modules/collaboration/domain/humanGateOp
 import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/infrastructure/humanGateOpenParticipant'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { reconcileTaskQuestionsForRound } from '@/modules/collaboration/infrastructure/taskQuestions'
-import { createConsumedInputsParticipantInTx } from '@/modules/task-execution/public/participants'
 import type { CustomEventSourceDraft } from '@/modules/event-center/domain/customEventSource'
 import {
   eventContentDigest,

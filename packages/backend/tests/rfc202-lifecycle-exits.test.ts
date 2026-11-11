@@ -393,10 +393,16 @@ describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination
     const liveIds = [await mk('running'), await mk('awaiting_review'), await mk('running')]
     await mk('canceled')
     await mk('failed')
-    const pending = await listReviewSummaries(db, { status: 'pending', limit: 100 })
+    const pending = await listReviewSummaries(db, taskExecutionParticipants, {
+      status: 'pending',
+      limit: 100,
+    })
     expect(pending.map((p) => p.taskId).sort()).toEqual([...liveIds].sort())
     // pagination window: limit 2 returns 2 LIVE rounds (zombies must not consume the window)
-    const page = await listReviewSummaries(db, { status: 'pending', limit: 2 })
+    const page = await listReviewSummaries(db, taskExecutionParticipants, {
+      status: 'pending',
+      limit: 2,
+    })
     expect(page.length).toBe(2)
     expect(page.every((p) => liveIds.includes(p.taskId))).toBe(true)
     expect(await countPendingReviews(db)).toBe(3)

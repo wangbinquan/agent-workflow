@@ -10,8 +10,8 @@ import {
   requireReviewDecisionCommand,
   requireQuestionDispatchCommand,
   requireClarifyDecisionCommand,
-  requireClarifyDirectiveStore,
 } from './commandContext'
+import type { ClarifyDirectiveStore } from './ports/clarifyDirectiveStore'
 import {
   type PrepareClarifyGateOpenInput,
   ClarifyGateOpenPreparation,
@@ -163,8 +163,10 @@ export async function submitClarifyDecision(
   return requireClarifyDecisionCommand(context).submit(input)
 }
 
+/** RFC-482: the directive store is handed to the route operations directly (built by bootstrap over task-execution's
+ * directive persistence), not stashed in the command context. */
 export function setCollaborationClarifyDirective(
-  context: CollaborationCommandContext,
+  directives: ClarifyDirectiveStore,
   input: {
     readonly taskId: string
     readonly nodeId: string
@@ -173,5 +175,5 @@ export function setCollaborationClarifyDirective(
     readonly shardKey?: string | null
   },
 ): Promise<void> {
-  return requireClarifyDirectiveStore(context).set(input)
+  return directives.set(input)
 }

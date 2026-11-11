@@ -56,7 +56,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
-import { setNodeClarifyDirective } from '../src/modules/collaboration/infrastructure/taskClarifyDirective'
+import { setNodeClarifyDirective } from './helpers/clarifyDirectives'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

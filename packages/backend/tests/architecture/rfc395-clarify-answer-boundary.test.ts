@@ -86,7 +86,10 @@ test('seal participant is typed in ports and domain transition commits inside th
   expect(seal.indexOf('.seal(tx, round.id, transition)')).toBeLessThan(
     seal.indexOf('await args.decisionParticipant?.acceptTx('),
   )
-  expect(seal).toContain('const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)')
+  // RFC-482: the participant factory comes from the participant bindings (same factory, same seal transaction).
+  expect(seal).toMatch(
+    /const taskHumanGate =\s*args\.taskExecutionParticipants\.createHumanGatePersistenceParticipantInTx\(tx\)/,
+  )
   expect(seal).toContain('lockClarifyRound(tx, roundIdentity.id)')
   expect(writer).toContain('holdAggregateRoot(tx, clarifyRounds, clarifyRounds.id, input.roundId)')
   expect(seal).toContain('if (args.decisionParticipant && roundIdentity)')

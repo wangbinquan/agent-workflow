@@ -196,9 +196,10 @@ export function composeTaskExecutionTestRuntime(
       workgroupTurns: composeWorkgroupTurnsOperations(
         db,
         composeWorkgroupHostLedgerParticipantFactory({
-          collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+          collaboration:
+            composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
         }),
-        createWorkgroupClarifyAskGate(db),
+        createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
       ),
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       runtimeRegistry: composeRuntimeRegistryOperations(db),
@@ -389,9 +390,10 @@ export function runTaskWithRealTestTopology(
       workgroupTurns: composeWorkgroupTurnsOperations(
         options.db,
         composeWorkgroupHostLedgerParticipantFactory({
-          collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+          collaboration:
+            composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
         }),
-        createWorkgroupClarifyAskGate(options.db),
+        createWorkgroupClarifyAskGate(options.db, taskExecutionParticipants),
       ),
       runtimeSessionLeases,
       runtimeRegistry,
@@ -440,9 +442,10 @@ export function runTaskWithRealTestTopology(
         composeWorkgroupTurnsOperations(
           options.db,
           composeWorkgroupHostLedgerParticipantFactory({
-            collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+            collaboration:
+              composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
           }),
-          createWorkgroupClarifyAskGate(options.db),
+          createWorkgroupClarifyAskGate(options.db, taskExecutionParticipants),
         ),
       childLaunch:
         options.childLaunch ??

@@ -311,13 +311,14 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
 
   test('countPendingReviews / listReviewSummaries / getReviewDetail surface the pending review', async () => {
     expect(await countPendingReviews(h.db)).toBe(1)
-    const list = await listReviewSummaries(h.db, { status: 'pending' })
+    const list = await listReviewSummaries(h.db, taskExecutionParticipants, { status: 'pending' })
     expect(list.length).toBe(1)
     expect(list[0]?.nodeRunId).toBe(h.reviewNodeRunId)
     expect(list[0]?.awaitingReview).toBe(true)
 
     const detail = await getReviewDetail(
       h.db,
+      taskExecutionParticipants,
       h.appHome,
       h.reviewNodeRunId,
       epoch2ReviewReader(h.db, h.appHome),

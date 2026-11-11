@@ -23,7 +23,9 @@ describe('TaskExecution wiring: cross-questioner clarify state', () => {
     expect(source).not.toContain('applyLatestDirective')
     expect(source).not.toContain("consumerKind: 'cross-questioner'")
     expect(source).toContain('await collaboration.buildClarifyQueueContext({')
-    expect(source).toContain('await collaboration.getNodeClarifyDirective({')
+    // RFC-482: the per-node directive is Task Execution's own read (persistence bundle), not a collaboration call.
+    expect(source).toContain('await clarifyDirectives.get(taskId, node.id)')
+    expect(source).not.toContain('collaboration.getNodeClarifyDirective')
     expect(source).toContain('const nodeStopOverride = nodeDirective === ')
   })
 })

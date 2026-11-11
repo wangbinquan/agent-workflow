@@ -56,7 +56,6 @@ function fixture() {
   const collaborationRuntime = {
     resolveBorrowForNode: recorder(calls, 'resolveBorrowForNode', null),
     buildReviewPromptContext: recorder(calls, 'buildReviewPromptContext', undefined),
-    getNodeClarifyDirective: recorder(calls, 'getNodeClarifyDirective', 'stop'),
     buildClarifyQueueContext: recorder(calls, 'buildClarifyQueueContext', undefined),
     openAgentClarify: recorder(calls, 'openAgentClarify', { intermediaryNodeRunId: 'gate-1' }),
   }
@@ -95,7 +94,12 @@ function fixture() {
       defaultRuntime: 'opencode' as string | undefined,
       executionContext: { sentinel: 'context-1' } as unknown,
       collaborationRuntime: collaborationRuntime as unknown,
-      persistence: { nodeExecution: persistence, nodeRuns: {} } as unknown,
+      persistence: {
+        nodeExecution: persistence,
+        nodeRuns: {},
+        // RFC-482: the engine reads its own directive table through the persistence bundle.
+        clarifyDirectives: { get: recorder(calls, 'clarifyDirectives.get', 'stop') },
+      } as unknown,
       taskAgentRuns: family('family-1') as unknown,
       observationInvocations: { name: 'observations' },
       memorySnapshots: { name: 'memory-snapshots' },
@@ -185,21 +189,21 @@ test('runtime bindings and the session-not-found detector use the current family
   )
 })
 
-test('collaboration forwards the four reads unchanged and adds the execution context to openAgentClarify', async () => {
+test('collaboration forwards the three reads unchanged and adds the execution context to openAgentClarify', async () => {
   const { raw, state, calls } = fixture()
   const ports = createAgentNodeExecutionPorts(state)
   const inputs = {
     resolveBorrowForNode: { taskId: 'task-1', nodeId: 'agent-node', iteration: 0 },
     buildReviewPromptContext: { taskId: 'task-1', nodeId: 'agent-node' },
-    getNodeClarifyDirective: { taskId: 'task-1', nodeId: 'agent-node' },
     buildClarifyQueueContext: { taskId: 'task-1', nodeId: 'agent-node' },
   }
   await ports.collaboration.resolveBorrowForNode(inputs.resolveBorrowForNode as never)
   await ports.collaboration.buildReviewPromptContext(inputs.buildReviewPromptContext as never)
-  expect(
-    await ports.collaboration.getNodeClarifyDirective(inputs.getNodeClarifyDirective as never),
-  ).toBe('stop')
   await ports.collaboration.buildClarifyQueueContext(inputs.buildClarifyQueueContext as never)
+  // RFC-482: the node's clarify directive is Task Execution's own read, not a collaboration call.
+  expect('getNodeClarifyDirective' in ports.collaboration).toBe(false)
+  expect(await ports.clarifyDirectives.get('task-1', 'agent-node')).toBe('stop')
+  expect(calls['clarifyDirectives.get']).toEqual([['task-1', 'agent-node']])
   for (const [name, input] of Object.entries(inputs)) {
     expect(calls[name]).toHaveLength(1)
     expect(calls[name]![0]).toBe(input)

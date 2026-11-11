@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-359 W4-D19a —— 工作组任务房的两个「事务内参与者」合一：Collaboration 那一半（反问投影 / 关闭未决自问）
 // 与 TaskExecution 那一半（继续 / 失败任务）各只剩一份实现，两个 provider 共用；同批把 TaskExecution 的
 // 无主写入围栏去重（`assertPostgresqlTaskOwnerlessTx` 与中立的 `assertTaskOwnerlessTx` 逐字重复）。
@@ -166,7 +167,7 @@ describeEachProvider('RFC-359 W4-D19a —— 任务房事务内参与者', (harn
       updatedAt: T0 + 1,
     })
 
-    const participant = composeWorkgroupTaskRoomClarifyParticipantFactory()
+    const participant = composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants)
     const projection = await harness.session.transaction((tx) =>
       participant.inTransaction(tx).loadProjection(taskId),
     )
@@ -195,7 +196,7 @@ describeEachProvider('RFC-359 W4-D19a —— 任务房事务内参与者', (harn
       status: 'answered',
     })
 
-    const participant = composeWorkgroupTaskRoomClarifyParticipantFactory()
+    const participant = composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants)
     const dismissed = await harness.session.transaction((tx) =>
       participant.inTransaction(tx).dismissOpenSelfClarifies({ taskId, occurredAt: T0 + 5 }),
     )

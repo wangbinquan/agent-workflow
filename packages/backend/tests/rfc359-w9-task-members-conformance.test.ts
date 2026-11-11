@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W9 —— 任务成员面（`GET/PUT /api/tasks/:id/members`）的双引擎对拍。
@@ -248,6 +249,7 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     })
     const view = await updateTaskMembers(
       db,
+      taskExecutionParticipants,
       composeCollaborationTaskRolePolicy(),
       actorOf(OWNER),
       task,
@@ -269,9 +271,16 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
       ownerUserId: OWNER,
       members: [{ userId: OBSERVER, role: 'observer' }],
     })
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-      ownerUserId: COLLAB,
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorOf(OWNER),
+      task,
+      {
+        ownerUserId: COLLAB,
+      },
+    )
     expect(await ownerOf(db, task.id)).toBe(COLLAB)
     expect(await memberRows(db, task.id)).toEqual([
       // 前任 owner 自动降为 collaborator（镜像资源 ACL 保留前任 grant 的规则）
@@ -285,10 +294,17 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const db = harness.db
     await seedUsers(db)
     const task = await seedTask(db, { ownerUserId: OWNER })
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-      ownerUserId: COLLAB,
-      members: [{ userId: OWNER, role: 'observer' }],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorOf(OWNER),
+      task,
+      {
+        ownerUserId: COLLAB,
+        members: [{ userId: OWNER, role: 'observer' }],
+      },
+    )
     expect(await memberRows(db, task.id)).toEqual([
       { userId: OWNER, role: 'observer' },
       { userId: COLLAB, role: 'owner' },
@@ -299,10 +315,17 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const db = harness.db
     await seedUsers(db)
     const task = await seedTask(db, { ownerUserId: OWNER })
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-      ownerUserId: COLLAB,
-      members: [{ userId: COLLAB, role: 'collaborator' }],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorOf(OWNER),
+      task,
+      {
+        ownerUserId: COLLAB,
+        members: [{ userId: COLLAB, role: 'collaborator' }],
+      },
+    )
     expect(await memberRows(db, task.id)).toEqual([
       { userId: OWNER, role: 'collaborator' },
       { userId: COLLAB, role: 'owner' },
@@ -315,6 +338,7 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const task = await seedTask(db, { ownerUserId: SYSTEM_USER_ID })
     await updateTaskMembers(
       db,
+      taskExecutionParticipants,
       composeCollaborationTaskRolePolicy(),
       actorOf(OWNER, { admin: true }),
       task,
@@ -327,12 +351,19 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const db = harness.db
     await seedUsers(db)
     const task = await seedTask(db, { ownerUserId: OWNER })
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-      members: [
-        { userId: COLLAB, role: 'collaborator' },
-        { userId: COLLAB, role: 'observer' },
-      ],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorOf(OWNER),
+      task,
+      {
+        members: [
+          { userId: COLLAB, role: 'collaborator' },
+          { userId: COLLAB, role: 'observer' },
+        ],
+      },
+    )
     expect(await memberRows(db, task.id)).toEqual([
       { userId: COLLAB, role: 'observer' },
       { userId: OWNER, role: 'owner' },
@@ -348,14 +379,28 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     await seedUsers(db)
     const task = await seedTask(db, { ownerUserId: OWNER })
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-        members: [{ userId: DISABLED, role: 'collaborator' }],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorOf(OWNER),
+        task,
+        {
+          members: [{ userId: DISABLED, role: 'collaborator' }],
+        },
+      ),
     ).rejects.toMatchObject({ code: 'members-user-invalid' })
     // 反向对照：同一条请求换成 active 用户就通过——证明拒绝不是「永远拒绝」。
-    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-      members: [{ userId: COLLAB, role: 'collaborator' }],
-    })
+    await updateTaskMembers(
+      db,
+      taskExecutionParticipants,
+      composeCollaborationTaskRolePolicy(),
+      actorOf(OWNER),
+      task,
+      {
+        members: [{ userId: COLLAB, role: 'collaborator' }],
+      },
+    )
     expect(await memberRows(db, task.id)).toEqual([
       { userId: COLLAB, role: 'collaborator' },
       { userId: OWNER, role: 'owner' },
@@ -374,6 +419,7 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     await expect(
       updateTaskMembers(
         db,
+        taskExecutionParticipants,
         composeCollaborationTaskRolePolicy(),
         actorOf(STRANGER),
         { id: task.id, ownerUserId: STRANGER },
@@ -394,6 +440,7 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     // 用过期的 STRANGER 当 prevOwner 会把 STRANGER 降级成 collaborator 塞进成员表。
     await updateTaskMembers(
       db,
+      taskExecutionParticipants,
       composeCollaborationTaskRolePolicy(),
       actorOf(OWNER),
       { id: task.id, ownerUserId: STRANGER },
@@ -416,9 +463,16 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
       members: [{ userId: COLLAB, role: 'collaborator' }],
     })
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-        members: [{ userId: SYSTEM_USER_ID, role: 'collaborator' }],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorOf(OWNER),
+        task,
+        {
+          members: [{ userId: SYSTEM_USER_ID, role: 'collaborator' }],
+        },
+      ),
     ).rejects.toMatchObject({ code: 'members-user-invalid' })
     expect(await memberRows(db, task.id)).toEqual([
       { userId: COLLAB, role: 'collaborator' },
@@ -434,9 +488,16 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
       members: [{ userId: COLLAB, role: 'collaborator' }],
     })
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(COLLAB), task, {
-        members: [],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorOf(COLLAB),
+        task,
+        {
+          members: [],
+        },
+      ),
     ).rejects.toMatchObject({ code: 'forbidden' })
     expect(await memberRows(db, task.id)).toEqual([
       { userId: COLLAB, role: 'collaborator' },
@@ -445,6 +506,7 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     // 反向对照：admin 自带 resource-acl:bypass，同一条请求通过。
     await updateTaskMembers(
       db,
+      taskExecutionParticipants,
       composeCollaborationTaskRolePolicy(),
       actorOf(STRANGER, { admin: true }),
       task,
@@ -462,9 +524,16 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id))
     await db.delete(tasks).where(eq(tasks.id, task.id))
     await expect(
-      updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-        members: [],
-      }),
+      updateTaskMembers(
+        db,
+        taskExecutionParticipants,
+        composeCollaborationTaskRolePolicy(),
+        actorOf(OWNER),
+        task,
+        {
+          members: [],
+        },
+      ),
     ).rejects.toMatchObject({ code: 'task-not-found' })
   })
 
@@ -482,10 +551,17 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const boom = new Error('rfc359-w9-rollback')
     await expect(
       databaseSessionFor(db).transaction(async () => {
-        await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorOf(OWNER), task, {
-          ownerUserId: COLLAB,
-          members: [{ userId: OBSERVER, role: 'observer' }],
-        })
+        await updateTaskMembers(
+          db,
+          taskExecutionParticipants,
+          composeCollaborationTaskRolePolicy(),
+          actorOf(OWNER),
+          task,
+          {
+            ownerUserId: COLLAB,
+            members: [{ userId: OBSERVER, role: 'observer' }],
+          },
+        )
         throw boom
       }),
     ).rejects.toBe(boom)

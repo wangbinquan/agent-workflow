@@ -300,32 +300,23 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
   })
 
   // -------------------------------------------------------------------------
-  // getNodeClarifyDirective
+  // clarify directive read —— RFC-482: no longer a collaboration mechanic. The engine reads Task Execution's own
+  // directive table through its persistence bundle; the RFC-207 fallback semantics stay with that persistence.
   // -------------------------------------------------------------------------
 
-  test('getNodeClarifyDirective —— 节点级与 per-asker 回退（RFC-207）', async () => {
+  test('clarify directive read —— 节点级与 per-asker 回退（RFC-207），归 task-execution 的持久化', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const mechanics = createCollaborationRuntimeMechanics(db, {
-      taskExecutionParticipants,
-      taskRolePolicy: composeCollaborationTaskRolePolicy(),
-      ...epoch2RuntimeTestPorts(db),
-      taskLock: o2Ports(db).taskLock,
-      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
-    })
-    expect(await mechanics.getNodeClarifyDirective({ taskId, nodeId: ASKER })).toBeUndefined()
+    const directives = taskExecutionParticipants.createTaskClarifyDirectivePersistence(db)
+    expect(await directives.get(taskId, ASKER)).toBeUndefined()
     const { taskNodeClarifyDirectives } = tablesOf(db)
     await db.insert(taskNodeClarifyDirectives).values([
       { taskId, nodeId: ASKER, shardKey: '', directive: 'stop', updatedAt: 1 },
       { taskId, nodeId: ASKER, shardKey: 'a1', directive: 'continue', updatedAt: 2 },
     ])
-    expect(await mechanics.getNodeClarifyDirective({ taskId, nodeId: ASKER })).toBe('stop')
-    expect(await mechanics.getNodeClarifyDirective({ taskId, nodeId: ASKER, shardKey: 'a1' })).toBe(
-      'continue',
-    )
-    expect(await mechanics.getNodeClarifyDirective({ taskId, nodeId: ASKER, shardKey: 'a2' })).toBe(
-      'stop',
-    )
+    expect(await directives.get(taskId, ASKER)).toBe('stop')
+    expect(await directives.get(taskId, ASKER, 'a1')).toBe('continue')
+    expect(await directives.get(taskId, ASKER, 'a2')).toBe('stop')
   })
 
   // -------------------------------------------------------------------------

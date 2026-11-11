@@ -9,6 +9,11 @@ import {
   createTaskAuthorizationQueries,
   createTaskAuthorizationParticipantInTx,
   createNodeRunWorkspaceRollback,
+  createHumanGatePersistenceParticipantInTx,
+  createConsumedInputsParticipantInTx,
+  createTaskClarifyDirectivePersistence,
+  createTaskSubjectQueries,
+  createRunSelectionReader,
 } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -28,12 +33,13 @@ export function composeCrossContextClosure(
   executionPermits: TaskExecutionPermits,
 ) {
   const taskRolePolicy = composeCollaborationTaskRolePolicy()
+  const taskExecutionParticipants = composeTaskExecutionParticipantBindings(executionPermits)
   return {
     taskRolePolicy,
-    taskExecutionParticipants: composeTaskExecutionParticipantBindings(executionPermits),
+    taskExecutionParticipants,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
-    taskMembership: composeTaskMembershipOperations(db, taskRolePolicy),
-    collaborationReads: composeTaskCollaborationReads(db),
+    taskMembership: composeTaskMembershipOperations(db, taskRolePolicy, taskExecutionParticipants),
+    collaborationReads: composeTaskCollaborationReads(db, taskExecutionParticipants),
     upstreamAgents: composeReviewUpstreamAgents(db),
     taskLock: composeHumanGateTaskLockPort,
   }
@@ -52,5 +58,10 @@ export function composeTaskExecutionParticipantBindings(executionPermits: TaskEx
     createTaskAuthorizationQueries,
     createTaskAuthorizationParticipantInTx,
     createNodeRunWorkspaceRollback,
+    createHumanGatePersistenceParticipantInTx,
+    createConsumedInputsParticipantInTx,
+    createTaskClarifyDirectivePersistence,
+    createTaskSubjectQueries,
+    createRunSelectionReader,
   })
 }

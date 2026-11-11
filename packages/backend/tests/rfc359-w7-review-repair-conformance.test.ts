@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W7 —— `ReviewRepairParticipant`（RFC-057 R1 修复的协作侧事实面）双引擎对拍。
@@ -114,7 +115,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：inspect', (harne
     const taskId = await seedTask(db)
     const nodeRunId = await seedReviewRun(db, taskId)
     const docVersionId = await seedDocVersion(db, taskId, nodeRunId)
-    const repair = createReviewRepairParticipant(db)
+    const repair = createReviewRepairParticipant(db, taskExecutionParticipants)
     const identity = { taskId, docVersionId, nodeRunId }
 
     expect(await repair.inspect(identity)).toEqual({
@@ -149,7 +150,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：completeApproved
     const taskId = await seedTask(db)
     const nodeRunId = await seedReviewRun(db, taskId)
     const docVersionId = await seedDocVersion(db, taskId, nodeRunId)
-    const repair = createReviewRepairParticipant(db)
+    const repair = createReviewRepairParticipant(db, taskExecutionParticipants)
     const identity = { taskId, docVersionId, nodeRunId }
 
     expect(await repair.completeApproved({ ...identity, occurredAt: 9 })).toBe(true)
@@ -179,7 +180,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：completeApproved
     const db = harness.db
     const taskId = await seedTask(db)
     const nodeRunId = await seedReviewRun(db, taskId)
-    const repair = createReviewRepairParticipant(db)
+    const repair = createReviewRepairParticipant(db, taskExecutionParticipants)
 
     const pending = await seedDocVersion(db, taskId, nodeRunId, { decision: 'pending' })
     expect(
@@ -202,7 +203,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：completeApproved
   test('sourceFilePath 缺失 / 空白时落兜底内容，不写空串', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const repair = createReviewRepairParticipant(db)
+    const repair = createReviewRepairParticipant(db, taskExecutionParticipants)
 
     const nullRun = await seedReviewRun(db, taskId)
     const nullDoc = await seedDocVersion(db, taskId, nullRun, { sourceFilePath: null })
@@ -240,7 +241,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：unapprove', (har
     const taskId = await seedTask(db)
     const nodeRunId = await seedReviewRun(db, taskId)
     const docVersionId = await seedDocVersion(db, taskId, nodeRunId)
-    const repair = createReviewRepairParticipant(db)
+    const repair = createReviewRepairParticipant(db, taskExecutionParticipants)
     const identity = { taskId, docVersionId, nodeRunId }
 
     expect(await repair.unapprove(identity)).toBe(true)
@@ -270,7 +271,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：unapprove', (har
     const nodeRunId = await seedReviewRun(db, taskId)
     const otherRunId = await seedReviewRun(db, taskId)
     const docVersionId = await seedDocVersion(db, taskId, nodeRunId)
-    const repair = createReviewRepairParticipant(db)
+    const repair = createReviewRepairParticipant(db, taskExecutionParticipants)
 
     expect(await repair.unapprove({ taskId: otherTaskId, docVersionId, nodeRunId })).toBe(false)
     expect(await repair.unapprove({ taskId, docVersionId, nodeRunId: otherRunId })).toBe(false)

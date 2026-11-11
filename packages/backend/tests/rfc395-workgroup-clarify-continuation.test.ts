@@ -125,9 +125,9 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
     const persistence = createWorkgroupTurnsPersistence({
       db: h.db,
       hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
-        collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+        collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
       }),
-      clarifyAskGate: createWorkgroupClarifyAskGate(h.db),
+      clarifyAskGate: createWorkgroupClarifyAskGate(h.db, taskExecutionParticipants),
     })
     return { taskId, definition, persistence, ...epoch2RuntimeTestPorts(h.db) }
   }

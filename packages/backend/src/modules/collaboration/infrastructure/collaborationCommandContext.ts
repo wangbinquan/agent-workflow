@@ -16,7 +16,6 @@ import { DrizzleReviewNodeReviewerStore } from '../infrastructure/reviewNodeRevi
 import { createReviewTaskAccessPort } from '../infrastructure/reviewTaskAccess'
 import { DrizzleTaskFeedbackStore } from '../infrastructure/taskFeedbackStore'
 import { createCollaborationTaskAccessPort } from '../infrastructure/collaborationTaskAccess'
-import { createClarifyDirectiveStore } from '../infrastructure/clarifyDirectiveStore'
 import type { CollaborationCommandContext } from '../public/types'
 import {
   createCollaborationCommandContextFromPersistence,
@@ -82,7 +81,6 @@ export function createCollaborationCommandContext(
       ),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),
-      clarifyDirectives: createClarifyDirectiveStore(input.db),
       ...(reviewArtifacts === undefined
         ? {}
         : {

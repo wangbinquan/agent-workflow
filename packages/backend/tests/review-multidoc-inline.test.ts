@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
@@ -197,6 +198,7 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     const { reviewNodeRunId } = await seedAndDispatch()
     const detail = await getReviewDetail(
       db,
+      taskExecutionParticipants,
       appHome,
       reviewNodeRunId,
       epoch2ReviewReader(db, appHome),

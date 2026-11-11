@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 import { eq } from 'drizzle-orm'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -177,7 +178,7 @@ describeEachProvider(
         })
       })
 
-      const detail = await getReviewDetail(db, appHome, targetRun)
+      const detail = await getReviewDetail(db, taskExecutionParticipants, appHome, targetRun)
       expect(detail.summary.nodeRunId).toBe(targetRun)
       expect(detail.currentVersion.versionIndex).toBe(1)
       expect(detail.currentBody).toBe('# target body')
@@ -204,9 +205,11 @@ describeEachProvider(
         .where(eq(nodeRuns.id, run))
       await seedNodeRunDisplayEvidence(db, taskId, run, { retry_index: 0, scope_path: '' })
       expect(
-        (await listReviewSummaries(db, { taskId, status: 'approved' })).map((row) => row.nodeRunId),
+        (
+          await listReviewSummaries(db, taskExecutionParticipants, { taskId, status: 'approved' })
+        ).map((row) => row.nodeRunId),
       ).toContain(run)
-      const detail = await getReviewDetail(db, appHome, run)
+      const detail = await getReviewDetail(db, taskExecutionParticipants, appHome, run)
       expect(detail.summary.nodeRunId).toBe(run)
       expect(detail.currentBody).toBe('# historical decision')
     })
@@ -221,7 +224,7 @@ describeEachProvider(
         decision: 'pending',
       })
 
-      const detail = await getReviewDetail(db, appHome, run)
+      const detail = await getReviewDetail(db, taskExecutionParticipants, appHome, run)
       expect(detail.summary.nodeRunId).toBe(run)
       expect(detail.currentBody).toBe('')
     })

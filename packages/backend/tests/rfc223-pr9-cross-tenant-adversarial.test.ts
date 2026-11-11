@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
@@ -734,6 +735,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
 
     const plan = await buildFrontierMintPlan(
       db,
+      taskExecutionParticipants,
       taskId,
       'home',
       'target',

@@ -4,13 +4,14 @@ import type { NodeRunLedger, NodeRunIdentityFactory, Logger } from './executionK
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
 import type { RunSelectionReader } from './runSelection'
 import type { NodeStatusEvents } from './nodeExecutionSupport'
+import type { TaskClarifyDirectiveReads } from './taskClarifyDirectivePersistence'
 import type { recordSkippedRun } from '../nodeBranchActivation'
 import type { NodeStepRequest, NodeStepOutcome } from '../../domain/nodeExecution'
 
 /** The three gates derive collaboration's exact offered contracts here, once. */
 type HumanGateCollaboration = Pick<
   CollaborationRuntimeMechanics,
-  'dispatchReviewNode' | 'inspectCrossClarify' | 'getNodeClarifyDirective'
+  'dispatchReviewNode' | 'inspectCrossClarify'
 >
 type BoundGate<T extends (...args: never[]) => unknown> = (
   input: Omit<Parameters<T>[0], 'executionContext'>,
@@ -37,7 +38,8 @@ export interface CrossClarifyNodeExecutionPorts {
   readonly rows: Pick<NodeExecutionPersistence, 'list'>
   readonly ledger: Pick<NodeRunLedger, 'mintNodeRun' | 'setNodeRunStatus'> & NodeRunIdentityFactory
   readonly status: NodeStatusEvents
-  getNodeClarifyDirective: HumanGateCollaboration['getNodeClarifyDirective']
+  /** RFC-482: the questioner's clarify directive, read from Task Execution's own table. */
+  readonly clarifyDirectives: TaskClarifyDirectiveReads
   inspectCrossClarify: BoundGate<HumanGateCollaboration['inspectCrossClarify']>
   settleIdleClarify(request: NodeStepRequest<'clarify-cross-agent'>): Promise<NodeStepOutcome>
 }

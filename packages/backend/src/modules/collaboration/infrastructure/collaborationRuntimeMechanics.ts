@@ -125,15 +125,12 @@ export function createCollaborationRuntimeMechanics(
         dependencies.upstreamAgents,
       )
     },
-    async getNodeClarifyDirective(input) {
-      const { getNodeClarifyDirective } = await import('./taskClarifyDirective')
-      return getNodeClarifyDirective(db, input.taskId, input.nodeId, input.shardKey)
-    },
     async buildClarifyQueueContext(input) {
       const { buildClarifyQueueContext } = await import('./clarify/queue')
       return buildClarifyQueueContext({ db, ...input })
     },
-    isTaskClarifySuppressed: (input) => isTaskClarifySuppressed(db, input),
+    isTaskClarifySuppressed: (input) =>
+      isTaskClarifySuppressed(db, dependencies.taskExecutionParticipants, input),
     dismissOpenClarifyParksForAutonomous: (input) =>
       dismissOpenClarifyParksForAutonomous(db, dependencies.taskExecutionParticipants, input),
   } satisfies CollaborationRuntimeMechanics)

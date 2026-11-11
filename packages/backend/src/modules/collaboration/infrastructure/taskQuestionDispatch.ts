@@ -16,7 +16,6 @@ import {
 } from '@/modules/collaboration/domain/questionDispatchDecision'
 import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
 import {
-  createRunSelectionReader,
   createNodeOutputQueries,
   createTaskGateQueries,
   createNodeRunQueries,
@@ -59,10 +58,7 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // exclusion / dispatch-time trigger_run_id binding are GONE — the per-node queue model
 // (buildExternalFeedbackContext / markClarifyRoundsConsumedBy) replaces them.
 
-import {
-  createHumanGatePersistenceParticipantInTx,
-  humanGateNodeProjectionFence,
-} from '@/modules/task-execution/public/participants'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
 
 import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
 
@@ -756,6 +752,7 @@ function selectDispatchBatch(requested: TaskQuestionRow[]): {
  *  async reads happen HERE so the commit tx body stays purely synchronous). */
 async function planDispatchFrontier(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   snapshot: string,
   byTarget: Map<string, TaskQuestionRow[]>,
@@ -848,6 +845,7 @@ async function planDispatchFrontier(
       return shards.map((sk) =>
         buildFrontierMintPlan(
           db,
+          taskExecutionParticipants,
           taskId,
           nodeId,
           null,
@@ -1079,7 +1077,14 @@ async function dispatchTaskQuestionsLocked(
   }
 
   const { affected, mintPlans, mintCauseByTarget, mintShardsByTarget, shardOf } =
-    await planDispatchFrontier(db, taskId, taskRow.snapshot, byTarget, dispatchEntries)
+    await planDispatchFrontier(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      taskRow.snapshot,
+      byTarget,
+      dispatchEntries,
+    )
 
   const prepared =
     decision === undefined
@@ -1269,7 +1274,8 @@ async function commitDispatchPlan(
     {
       await databaseSessionFor(db).transaction(async (tx) => {
         const { taskQuestions } = tablesOf(tx)
-        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        const taskHumanGate =
+          taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
         // PostgreSQL READ COMMITTED 下「先 SELECT 再 CAS」要靠任务聚合根行锁在同任务的并发派发之间串行；
         // SQLite 的 BEGIN IMMEDIATE 本就全库独占（no-op）。
         await taskHumanGate.lockTask(taskId)
@@ -2388,6 +2394,7 @@ interface FrontierMintPlan {
  */
 export async function buildFrontierMintPlan(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   targetNodeId: string,
   // RFC-127 借壳: the node whose agent X is borrowed (null = home runs its own agent).
@@ -2410,10 +2417,12 @@ export async function buildFrontierMintPlan(
     taskId,
     nodeId: targetNodeId,
   })
-  const history = await createRunSelectionReader(db).familyHistory(taskId, {
-    nodeId: targetNodeId,
-    ...(shardKey === undefined ? {} : { shardKey }),
-  })
+  const history = await taskExecutionParticipants
+    .createRunSelectionReader(db)
+    .familyHistory(taskId, {
+      nodeId: targetNodeId,
+      ...(shardKey === undefined ? {} : { shardKey }),
+    })
   const byId = new Map(targetRuns.map((row) => [row.id, row]))
   const scoped = history.flatMap((ref) => {
     const run = byId.get(ref.id)

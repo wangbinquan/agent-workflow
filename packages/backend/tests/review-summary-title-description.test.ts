@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // Locks in that listReviewSummaries surfaces the review node's
@@ -123,7 +124,7 @@ describeEachProvider(
         workflowSnapshot: snapshot,
         reviewNodes: [{ nodeId: 'review_1' }],
       })
-      const list = await listReviewSummaries(db, { status: 'all' })
+      const list = await listReviewSummaries(db, taskExecutionParticipants, { status: 'all' })
       expect(list).toHaveLength(1)
       expect(list[0]!.title).toBe('Design Review')
       expect(list[0]!.description).toBe('Check the architecture before merging.')
@@ -150,7 +151,7 @@ describeEachProvider(
         workflowSnapshot: snapshot,
         reviewNodes: [{ nodeId: 'review_blank' }],
       })
-      const list = await listReviewSummaries(db, { status: 'all' })
+      const list = await listReviewSummaries(db, taskExecutionParticipants, { status: 'all' })
       expect(list).toHaveLength(1)
       expect(list[0]!.title).toBe('review_blank')
       expect(list[0]!.description).toBe('')
@@ -177,7 +178,7 @@ describeEachProvider(
         workflowSnapshot: snapshot,
         reviewNodes: [{ nodeId: 'review_ws' }],
       })
-      const list = await listReviewSummaries(db, { status: 'all' })
+      const list = await listReviewSummaries(db, taskExecutionParticipants, { status: 'all' })
       expect(list[0]!.title).toBe('review_ws')
       expect(list[0]!.description).toBe('has description though')
     })
@@ -187,7 +188,7 @@ describeEachProvider(
         workflowSnapshot: 'not valid json {{{',
         reviewNodes: [{ nodeId: 'review_corrupt' }],
       })
-      const list = await listReviewSummaries(db, { status: 'all' })
+      const list = await listReviewSummaries(db, taskExecutionParticipants, { status: 'all' })
       expect(list).toHaveLength(1)
       expect(list[0]!.title).toBe('review_corrupt')
       expect(list[0]!.description).toBe('')
@@ -223,7 +224,7 @@ describeEachProvider(
         workflowSnapshot: snapshot,
         reviewNodes: [{ nodeId: 'review_a' }, { nodeId: 'review_b' }],
       })
-      const list = await listReviewSummaries(db, { status: 'all' })
+      const list = await listReviewSummaries(db, taskExecutionParticipants, { status: 'all' })
       const byNode = new Map(list.map((r) => [r.reviewNodeId, r]))
       expect(byNode.get('review_a')!.title).toBe('A title')
       expect(byNode.get('review_a')!.description).toBe('A desc')

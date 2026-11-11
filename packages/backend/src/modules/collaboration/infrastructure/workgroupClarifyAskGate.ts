@@ -17,7 +17,7 @@ import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
-import { getNodeClarifyDirective } from './taskClarifyDirective'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 
 export interface WorkgroupClarifyAskInput {
   readonly taskId: string
@@ -49,6 +49,7 @@ export async function countWorkgroupClarifyAsks(
 
 export async function resolveWorkgroupClarifyAllowed(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   input: WorkgroupClarifyAskInput,
 ): Promise<boolean> {
   if (!workgroupHasHumanMember(input.members)) return false
@@ -56,14 +57,21 @@ export async function resolveWorkgroupClarifyAllowed(
   if (budget <= 0) return false
   const askerKey = wgClarifyAskerKey(input.nodeId, input.shardKey, WORKGROUP_TURN_LEADER_NODE_ID)
   // 人类明确让这个 asker 停下——优先于任何剩余预算。
-  if ((await getNodeClarifyDirective(db, input.taskId, input.nodeId, askerKey)) === 'stop') {
+  const directive = await taskExecutionParticipants
+    .createTaskClarifyDirectivePersistence(db)
+    .get(input.taskId, input.nodeId, askerKey)
+  if (directive === 'stop') {
     return false
   }
   return (await countWorkgroupClarifyAsks(db, input.taskId, askerKey)) < budget
 }
 
-export function createWorkgroupClarifyAskGate(db: PersistenceDb): WorkgroupClarifyAskGate {
+export function createWorkgroupClarifyAskGate(
+  db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
+): WorkgroupClarifyAskGate {
   return Object.freeze({
-    allowed: (input: WorkgroupClarifyAskInput) => resolveWorkgroupClarifyAllowed(db, input),
+    allowed: (input: WorkgroupClarifyAskInput) =>
+      resolveWorkgroupClarifyAllowed(db, taskExecutionParticipants, input),
   })
 }

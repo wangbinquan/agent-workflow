@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // The real persistence port supplies every row and commit. Only host arrival
 // and load continuation are held to expose cancellation during an async read.
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
@@ -148,9 +149,9 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
   const actual = createWorkgroupTurnsPersistence({
     db,
     hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
-    clarifyAskGate: createWorkgroupClarifyAskGate(db),
+    clarifyAskGate: createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
   })
   const persistence: WorkgroupTurnsPersistencePort = {
     ...actual,

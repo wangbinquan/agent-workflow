@@ -23,7 +23,6 @@ import type { CollaborationTaskRolePolicy } from '../application/ports/collabora
 import type { ContentStore } from '@/platform/content/contentStore'
 import {
   nodeOutputSlot,
-  createRunSelectionReader,
   taskGateOpenCondition,
   taskGateVisibleCondition,
   createNodeOutputQueries,
@@ -37,7 +36,6 @@ import {
   type NodeRunCheckpointSnapshot,
   type RunHistoryFacts,
   hasTaskRollbackCheckpoint,
-  createTaskSubjectQueries,
   isPathishKindString,
   subsetArchiveJson,
   type PortArtifactReader,
@@ -56,11 +54,8 @@ import {
   releaseContentRowsInTx,
 } from '@/platform/content/infrastructure/contentStore'
 import {
-  createHumanGatePersistenceParticipantInTx,
-  createConsumedInputsParticipantInTx,
   prepareConsumedInputs,
   selectPortArtifactReader,
-  reselectRunInTx,
 } from '@/modules/task-execution/public/participants'
 
 import { reviewBodyPath } from '@/platform/content/locations/review'
@@ -742,14 +737,16 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   })
   const sourceRun = await databaseSessionFor(db).snapshotRead(async (tx) => {
     const selectedSource = sourceFrame.ok
-      ? await createRunSelectionReader(tx).current(
-          taskId,
-          nodeOutputSlot(
-            sourceNodeId,
-            definition.nodes.find((source) => source.id === sourceNodeId)?.kind,
-            sourceFrame.frame,
-          ),
-        )
+      ? await args.taskExecutionParticipants
+          .createRunSelectionReader(tx)
+          .current(
+            taskId,
+            nodeOutputSlot(
+              sourceNodeId,
+              definition.nodes.find((source) => source.id === sourceNodeId)?.kind,
+              sourceFrame.frame,
+            ),
+          )
       : null
     return selectedSource === null
       ? undefined
@@ -865,10 +862,9 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   const coversSource = async (row: NodeRunFactSnapshot): Promise<boolean> => {
     // HEAD looked up a plain object: inherited names also participate in this comparison.
     const consumed = Object.fromEntries(
-      (await createRunSelectionReader(db).consumed(row.id)).map((edge) => [
-        edge.producerNodeId,
-        edge.producerRunId,
-      ]),
+      (await args.taskExecutionParticipants.createRunSelectionReader(db).consumed(row.id)).map(
+        (edge) => [edge.producerNodeId, edge.producerRunId],
+      ),
     )
     const c = consumed[sourceNodeId]
     return c === undefined || c === sourceRun.id
@@ -996,7 +992,9 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       })
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId, context: executionContext, now: decidedAt })
-        await createHumanGatePersistenceParticipantInTx(tx).lockTask(taskId)
+        await args.taskExecutionParticipants
+          .createHumanGatePersistenceParticipantInTx(tx)
+          .lockTask(taskId)
         if (refreshAwaitingReview) {
           const { docVersions, reviewComments } = tablesOf(tx)
           const current = await createNodeRunQueries(tx).read(reuse.id)
@@ -1045,9 +1043,11 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               })
               .where(inArray(docVersions.id, currentPendingIds))
           }
-          await createConsumedInputsParticipantInTx().record(tx, reuse.id, {
-            legacyJson: consumedJson,
-          })
+          await args.taskExecutionParticipants
+            .createConsumedInputsParticipantInTx()
+            .record(tx, reuse.id, {
+              legacyJson: consumedJson,
+            })
         } else if (reuse?.status === 'pending') {
           await args.taskExecutionParticipants
             .createHumanGateNodeRunStateParticipantInTx(tx)
@@ -1091,7 +1091,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               },
             })
         }
-        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        const taskHumanGate =
+          args.taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
         await taskHumanGate.writeReviewOutput({
           nodeRunId: reviewNodeRunId,
           portName: REVIEW_APPROVED_PORT_MULTI,
@@ -1252,7 +1253,9 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // 事务内 CAS，只是跑在两引擎共用的写事务上；顺带与紧随其后的 consumed 写并成一笔。
     await withTaskExecutionWrite(db, async (tx) => {
       await fenceTaskWrite(tx, { taskId, context: executionContext })
-      await createHumanGatePersistenceParticipantInTx(tx).lockTask(taskId)
+      await args.taskExecutionParticipants
+        .createHumanGatePersistenceParticipantInTx(tx)
+        .lockTask(taskId)
       await args.taskExecutionParticipants
         .createHumanGateNodeRunStateParticipantInTx(tx)
         .transitionNodeRunStatus({
@@ -1264,9 +1267,11 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
             },
           },
         })
-      await createConsumedInputsParticipantInTx().record(tx, reviewNodeRunId, {
-        legacyJson: consumedJson,
-      })
+      await args.taskExecutionParticipants
+        .createConsumedInputsParticipantInTx()
+        .record(tx, reviewNodeRunId, {
+          legacyJson: consumedJson,
+        })
     })
   } else {
     // No prior review row, OR the freshest is a terminal decision against an
@@ -1432,7 +1437,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       })
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId, context: executionContext })
-        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        const taskHumanGate =
+          args.taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
         await taskHumanGate.lockTask(taskId)
         await taskHumanGate.writeReviewOutput({
           nodeRunId: reviewNodeRunId,
@@ -1890,6 +1896,7 @@ function assembleReviewSummary(
 
 export async function listReviewSummaries(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   filter: ListReviewSummariesFilter = {},
 ): Promise<ReviewSummary[]> {
   // Join doc_versions ↔ nodeRuns ↔ tasks，主体名由 task-execution 投影. We do it manually with
@@ -1944,9 +1951,9 @@ export async function listReviewSummaries(
       )
   })
   const taskById = new Map(taskRows.map((r) => [r.id, r]))
-  const subjects = await createTaskSubjectQueries(db).taskSubjectProjection(
-    taskRows.map((task) => task.id),
-  )
+  const subjects = await taskExecutionParticipants
+    .createTaskSubjectQueries(db)
+    .taskSubjectProjection(taskRows.map((task) => task.id))
 
   // Parse each task's workflowSnapshot once to extract the per-review-node
   // human-readable title/description set in the workflow editor. Falls back
@@ -2095,6 +2102,7 @@ export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Pro
 
 export async function getReviewDetail(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   appHome: string,
   nodeRunId: string,
   reader?: CommittedReviewArtifactReader,
@@ -2127,9 +2135,11 @@ export async function getReviewDetail(
   if (summaryTask === undefined) {
     throw new NotFoundError('review-not-found', `task ${summaryRun.taskId} not found`)
   }
-  const subject = (await createTaskSubjectQueries(db).taskSubjectProjection([summaryTask.id])).get(
-    summaryTask.id,
-  )
+  const subject = (
+    await taskExecutionParticipants
+      .createTaskSubjectQueries(db)
+      .taskSubjectProjection([summaryTask.id])
+  ).get(summaryTask.id)
   if (subject === undefined || subject.workflowName === null) {
     throw new NotFoundError('review-not-found', `workflow ${summaryTask.workflowId} not found`)
   }
@@ -2779,18 +2789,27 @@ function assertCommentWriteAllowed(author: string, authz: ReviewCommentAuthz): v
 
 export async function updateReviewCommentText(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   nodeRunId: string,
   commentId: string,
   commentText: string,
   authz: ReviewCommentAuthz,
 ): Promise<ReviewComment> {
   return withReviewNodeMutationLock(db, nodeRunId, () =>
-    updateReviewCommentTextUnlocked(db, nodeRunId, commentId, commentText, authz),
+    updateReviewCommentTextUnlocked(
+      db,
+      taskExecutionParticipants,
+      nodeRunId,
+      commentId,
+      commentText,
+      authz,
+    ),
   )
 }
 
 async function updateReviewCommentTextUnlocked(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   nodeRunId: string,
   commentId: string,
   commentText: string,
@@ -2855,7 +2874,9 @@ async function updateReviewCommentTextUnlocked(
   const operationRef = `review-comment:update:${commentId}:${ulid(now)}`
   const eventRefs = await databaseSessionFor(db).transaction(async (tx) => {
     const { reviewComments } = tablesOf(tx)
-    await createHumanGatePersistenceParticipantInTx(tx).lockTask(dv.taskId)
+    await taskExecutionParticipants
+      .createHumanGatePersistenceParticipantInTx(tx)
+      .lockTask(dv.taskId)
     await engineOf(tx).lockAggregateRoot(tx, reviewComments, reviewComments.id, commentId)
     const [current] = await tx
       .select()
@@ -2905,17 +2926,19 @@ async function updateReviewCommentTextUnlocked(
 
 export async function deleteReviewComment(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   nodeRunId: string,
   commentId: string,
   authz: ReviewCommentAuthz,
 ): Promise<void> {
   return withReviewNodeMutationLock(db, nodeRunId, () =>
-    deleteReviewCommentUnlocked(db, nodeRunId, commentId, authz),
+    deleteReviewCommentUnlocked(db, taskExecutionParticipants, nodeRunId, commentId, authz),
   )
 }
 
 async function deleteReviewCommentUnlocked(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   nodeRunId: string,
   commentId: string,
   authz: ReviewCommentAuthz,
@@ -2963,7 +2986,9 @@ async function deleteReviewCommentUnlocked(
   const now = Date.now()
   const eventRefs = await databaseSessionFor(db).transaction(async (tx) => {
     const { reviewComments } = tablesOf(tx)
-    await createHumanGatePersistenceParticipantInTx(tx).lockTask(dv.taskId)
+    await taskExecutionParticipants
+      .createHumanGatePersistenceParticipantInTx(tx)
+      .lockTask(dv.taskId)
     await engineOf(tx).lockAggregateRoot(tx, reviewComments, reviewComments.id, commentId)
     const [current] = await tx
       .select()
@@ -3748,7 +3773,8 @@ async function submitReviewDecisionUnlocked(
     policy.bumpsIteration && !returnDecision ? run.reviewIteration + 1 : run.reviewIteration
   const committed = await databaseSessionFor(db).transaction(async (tx) => {
     const { docVersions, reviewComments } = tablesOf(tx)
-    const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+    const taskHumanGate =
+      args.taskExecutionParticipants.createHumanGatePersistenceParticipantInTx(tx)
     // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发决定 / 取消靠任务聚合根行锁串行
     // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。
     await taskHumanGate.lockTask(run.taskId)
@@ -4112,7 +4138,6 @@ async function submitReviewDecisionUnlocked(
               },
             },
           })
-        await reselectRunInTx(tx, sibling.run, 'review-sibling-cascade')
       }
       // Bump this review's reviewIteration + status=pending so the scheduler
       // re-runs it (RFC-053: iterate-review / reject-review enforce
@@ -4128,7 +4153,6 @@ async function submitReviewDecisionUnlocked(
             },
           },
         })
-      await reselectRunInTx(tx, run, policy.lifecycleEvent)
     }
 
     const lineageIds = [...sourceNodeRunIds, ...rerunNodeRunIds]
@@ -4457,11 +4481,13 @@ async function planRerun(
         nodeId,
         iteration: run.iteration,
       })
-      const history = await createRunSelectionReader(tx).familyHistory(
-        dv.taskId,
-        { nodeId, iteration: run.iteration, runIds: upRuns.map((row) => row.id) },
-        { topLevelOnly: true },
-      )
+      const history = await args.taskExecutionParticipants
+        .createRunSelectionReader(tx)
+        .familyHistory(
+          dv.taskId,
+          { nodeId, iteration: run.iteration, runIds: upRuns.map((row) => row.id) },
+          { topLevelOnly: true },
+        )
       return upRuns.find((row) => row.id === history.at(-1)?.id)
     })
     if (latest === undefined) continue

@@ -18,7 +18,7 @@
       "path": "src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "symbol": "buildFrontierMintPlan",
       "ordinal": 1,
-      "source": "createRunSelectionReader(db).familyHistory(taskId, { nodeId: targetNodeId, ...(shardKey === undefined ? {} : { shardKey }), })",
+      "source": "taskExecutionParticipants .createRunSelectionReader(db) .familyHistory(taskId, { nodeId: targetNodeId, ...(shardKey === undefined ? {} : { shardKey }), })",
       "reference": "G3 #61",
       "today": "同 task/node，可选 shard；包含所有 iteration、parent、container；末行继承检查点。 II-b 由持久化选择表或仅展示的历史快照提供相同筛选。",
       "whyFrameless": "旧 query 仅限 node 与可选 shard，保留跨帧继承。"
@@ -58,7 +58,7 @@
       "path": "src/modules/collaboration/infrastructure/review.ts",
       "symbol": "planRerun",
       "ordinal": 1,
-      "source": "createRunSelectionReader(tx).familyHistory( dv.taskId, { nodeId, iteration: run.iteration, runIds: upRuns.map((row) => row.id) }, { topLevelOnly: true }, )",
+      "source": "args.taskExecutionParticipants .createRunSelectionReader(tx) .familyHistory( dv.taskId, { nodeId, iteration: run.iteration, runIds: upRuns.map((row) => row.id) }, { topLevelOnly: true }, )",
       "reference": "G3 #59",
       "today": "同 task/node/iteration、顶层的最新 seq；容器身份由被选行继承。 II-b 明确用 runIds 限定已经审定的候选行。",
       "whyFrameless": "旧 upstream rerun 查询没有 container 条件；不能改成当前 review 的 frame。"
@@ -68,7 +68,7 @@
       "path": "src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
       "symbol": "loadUndispatchedParkTargets",
       "ordinal": 1,
-      "source": "createRunSelectionReader(db).familyHistory(taskId, {})",
+      "source": "taskExecutionParticipants .createRunSelectionReader(db) .familyHistory(taskId, {})",
       "reference": "G4 #66",
       "today": "整个任务所有历史，再由澄清窗口判定 park 是否已派发。",
       "whyFrameless": "旧恢复分区基于任务级历史。"

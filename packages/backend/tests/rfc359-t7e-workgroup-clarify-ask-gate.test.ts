@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-359 W1-T7e（P0-12）—— 工作组反问许可与协议块在两个引擎上是同一份。
 //
 // dual-provider-parity-audit-2026-09-04 P0-12：provider-中立的回合驱动（PostgreSQL 在用）里
@@ -23,7 +24,7 @@ import { monotonicFactory } from 'ulid'
 import { wgClarifyAskerKey, type WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { setNodeClarifyDirective } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
+import { setNodeClarifyDirective } from './helpers/clarifyDirectives'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import {
   renderWgProtocolBlock,
@@ -169,7 +170,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     const db = harness.db
     const taskId = freshTaskId()
     await seedTask(db, taskId)
-    const gate = createWorkgroupClarifyAskGate(db)
+    const gate = createWorkgroupClarifyAskGate(db, taskExecutionParticipants)
     const base = { taskId, nodeId: WORKGROUP_TURN_MEMBER_NODE_ID, shardKey: 'asg:1' }
     expect(await gate.allowed({ ...base, members: AGENTS_ONLY, clarifyBudget: 3 })).toBe(false)
     expect(await gate.allowed({ ...base, members: HUMAN_AND_AGENT, clarifyBudget: 0 })).toBe(false)
@@ -182,7 +183,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     await seedTask(db, taskId)
     await seedSelfAsk(db, taskId, WORKGROUP_TURN_MEMBER_NODE_ID, 'asg:1')
     await seedSelfAsk(db, taskId, WORKGROUP_TURN_MEMBER_NODE_ID, 'asg:1')
-    const gate = createWorkgroupClarifyAskGate(db)
+    const gate = createWorkgroupClarifyAskGate(db, taskExecutionParticipants)
     const shard1 = { taskId, nodeId: WORKGROUP_TURN_MEMBER_NODE_ID, shardKey: 'asg:1' }
     const shard2 = { taskId, nodeId: WORKGROUP_TURN_MEMBER_NODE_ID, shardKey: 'asg:2' }
     expect(await gate.allowed({ ...shard1, members: HUMAN_AND_AGENT, clarifyBudget: 2 })).toBe(
@@ -198,7 +199,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     await seedTask(db, taskId)
     const askerKey = wgClarifyAskerKey(DESIGNER, null, '__wg_leader__')
     await setNodeClarifyDirective(db, taskId, DESIGNER, 'stop', 'u1', askerKey)
-    const gate = createWorkgroupClarifyAskGate(db)
+    const gate = createWorkgroupClarifyAskGate(db, taskExecutionParticipants)
     const input = {
       taskId,
       nodeId: DESIGNER,
@@ -210,7 +211,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     // RFC-359 W4-D19c-tail：legacy 的 `resolveWgClarifyAllowed` 本来就只是转发给这同一个 gate，
     // 转发层退役后直接问 gate 本身——判定只有一份，这一条锁的就是它。
     expect(
-      await createWorkgroupClarifyAskGate(db as never).allowed({
+      await createWorkgroupClarifyAskGate(db as never, taskExecutionParticipants).allowed({
         taskId,
         nodeId: DESIGNER,
         shardKey: null,
@@ -431,7 +432,8 @@ test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配�
   const daemon = readFileSync(resolve(root, 'bootstrap/daemonApplication.ts'), 'utf8')
   expect(daemon).toContain('composeDaemonTaskExecutionModules({')
   const bundle = readFileSync(resolve(root, 'bootstrap/daemonModules/taskExecution.ts'), 'utf8')
-  expect(bundle).toContain('createWorkgroupClarifyAskGate(db)')
+  // RFC-482: the gate reads the stop directive through task-execution's participant bindings.
+  expect(bundle).toContain('createWorkgroupClarifyAskGate(db, closure.taskExecutionParticipants)')
   // RFC-359 W4-D19c-tail：转发这一份的 legacy 回合执行已随工作组引擎岛退役，判定只剩这一处。
   const server = readFileSync(resolve(root, 'bootstrap/daemonApplication.ts'), 'utf8')
   expect(server).toContain('composeDaemonTaskExecutionModules({')
