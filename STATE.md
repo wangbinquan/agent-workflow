@@ -1,3 +1,23 @@
+## 2026-11-11 RFC-485 collaboration 与 memory 取 task-execution 的三个行形状查询工厂改经装配期注入（In Progress；`design/RFC-485-te-row-query-bindings/`）
+
+- **来由**：RFC-294 plan §3 S9 第 2 项（类型污染清单里「收裸 db 句柄的查询工厂」），task-execution ↔ collaboration 这一对的第四步（RFC-482
+  落档时拆出）；memory 是这三个工厂在模块外的另一个使用方，一并处理。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
+  不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施
+  与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`createNodeRunQueries`、`createTaskGateQueries`、`createNodeOutputQueries` 撤出 task-execution 的 public（类型污染 3 条）。collaboration
+  经 RFC-400 的装配期绑定取工厂（`TaskExecutionParticipantBindings` 增三个成员，调用点照旧传原来的句柄），手里没有绑定的函数沿调用链接上；
+  memory 的装配输入增两个只读端口，由 bootstrap 用根 db 建好交入（与 `clarifyAnswers` 同一条路）。task-execution 只交出模块外用到的读取：
+  闭合接口 `TaskNodeRunReads`（16 个方法里的 12 个）与 `TaskNodeOutputReads`（5 个里的 4 个），`TaskGateQueries` 原样。普查（HEAD `067169518`，
+  语法树）：模块外 89 个调用点、62 个函数、26 个文件（collaboration 24、memory 2），已有绑定的 16 个函数，余下 46 个；用例 16 个文件 63 处。
+  预期 `public-surface-deviations` 68 → 65。
+- **不做**：SQL 片段（RFC-483）；其他 context 对；查询的 SQL、语义与事务边界；评审 / 提问用例的整体归位（review §9 待用户决定）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 8 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-484 的 Done 文档提交 `86cad5f11`（6 个文档文件）：exact SHA 主 CI run 43071737089 的 70 个 job 里 69 个通过；Backend tests
+  （ubuntu-latest shard 43/44）的 `scheduler-wrapper-fanout-e2e`「every nested wrapper kind fails closed with its exact v1-unsupported-inner-kind」
+  `[postgresql]` 一例撞默认 5 秒（5.64 s；父提交 `067169518` 的主 CI 同一分片 1.34 s 通过；本提交只改 6 个文档文件，判为 runner 时序偶发红，
+  用例属 RFC-060，未改、未重跑），其后的 `Received: undefined` 是超时后的连带；「CI required」随之红。
+
 ## 2026-11-11 RFC-484 减速带判据回到「不高于上限即过」：撤回 RFC-479 的低于即红（Done；`design/RFC-484-count-gate-not-above-max/`）
 
 - **来由**：用户 2026-11-11 转述另一会话的发现——架构门禁的说明与实际检查矛盾：`checkCounts` 自 RFC-479 起把实测低于上限也判红，而 RFC-294
