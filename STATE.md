@@ -1,3 +1,22 @@
+## 2026-11-11 RFC-482 collaboration 取 task-execution 的事务参与者与三个小查询改经装配期绑定（In Progress；`design/RFC-482-te-participant-bindings-small-families/`）
+
+- **来由**：RFC-294 plan §3 S9 第 2 项，task-execution ↔ collaboration 这一对的第三步。RFC-481 落档时把 collaboration 取的 9 个查询工厂与事务
+  参与者记为 RFC-482；本 RFC 普查调用点后按机制再拆：本 RFC 做三个事务参与者、clarify 指令持久化、任务主题查询与 run selection 读取
+  （6 条类型污染，collaboration 10 个文件、30 个调用点）；`createNodeRunQueries`、`createTaskGateQueries`、`createNodeOutputQueries` 三个行形状
+  查询工厂（collaboration 24 个文件、84 个调用点，所在 57 个函数里 47 个手里没有绑定，另有 memory 的 5 个调用点）留给下一步；SQL 片段仍归
+  RFC-483。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10
+  「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：五个工厂改经 RFC-400 的装配期绑定（`TaskExecutionParticipantBindings` 增五个工厂引用，bootstrap 从 task-execution 的 composition
+  取来交入；`PersistenceTx` 就是 `PersistenceDb`，只能交工厂、不能预绑实例），task-execution 的 public 撤出它们、只交出接口（run selection 的
+  读取收成三个方法的闭合接口）；空操作 `reselectRunInTx` 删除；task-execution 的引擎直接读自己的 clarify 指令表，`CollaborationRuntimeMechanics`
+  去掉 `getNodeClarifyDirective`，collaboration 的转发文件 `taskClarifyDirective.ts` 删除，指令存储改为命令上下文的可选能力。预期
+  `public-surface-deviations` 74 → 68。
+- **不做**：三个行形状查询工厂与 memory 的使用（下一步）；SQL 片段（RFC-483）；其他 context 对；评审 / 提问用例的整体归位（review §9 待用户
+  决定）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 6 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-481 的 Done 文档提交 `68086c6cd`（5 个文档文件）：exact SHA 主 CI run 43006550311 的 70 个 job 全绿。
+
 ## 2026-11-10 RFC-481 task-execution 自有人工门端口：反向越 DAG 类型边清零与开放类型收口（Done；`design/RFC-481-te-owned-human-gate-ports/`）
 
 - **来由**：RFC-294 plan §3 S9（public 合同收敛），task-execution ↔ collaboration 这一对的第二步。RFC-480 之后这一对余下第 2、4、5 项，按
