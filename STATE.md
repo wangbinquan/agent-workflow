@@ -1,3 +1,20 @@
+## 2026-11-10 RFC-481 task-execution 自有人工门端口：反向越 DAG 类型边清零与开放类型收口（In Progress；`design/RFC-481-te-owned-human-gate-ports/`）
+
+- **来由**：RFC-294 plan §3 S9（public 合同收敛），task-execution ↔ collaboration 这一对的第二步。RFC-480 之后这一对余下第 2、4、5 项，按
+  依赖与风险再拆三步：本 RFC 做第 5 项（task-execution → collaboration 的 8 条越 DAG 类型边）与第 2 项里不牵动查询路径的 3 条类型污染；
+  行形状查询工厂与事务参与者（9 条，collaboration 二十多个文件、仅两个工厂就有 76 个调用点）归 RFC-482；SQL 片段（8 条，服务的计数受
+  RFC-359 AC-11 的单语句往返预算约束）归 RFC-483。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：`PreparedHumanGateRef`、`CollaborationRuntimeMechanics`（连同输入输出类型）、`TaskDagCollaborationOperations` 改由 task-execution
+  声明（domain / application/ports），从 `public/types` 交出，collaboration 改取并照旧实现；task-execution 路由依赖删去只是转手的
+  `collaboration` 字段；`loadFrameChain` / `resolveSourceFrame` 的回调参数收成闭合接口；collaboration 的删除参与者工厂改由 composition 交给
+  bootstrap。预期 `off-dag-offered-file-context-pairs` 55 → 47、`public-surface-deviations` 77 → 74。
+- **不做**：RFC-482、RFC-483 的范围；其他 context 对；端口改名或改成员；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 5 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-480 的 Done 文档提交 `c28b1a8d8`（5 个文档文件）：exact SHA 主 CI run 42970673097 的 70 个 job 全绿。
+
 ## 2026-11-10 RFC-480 task-execution 与 collaboration 的 public 收口：未消费符号清零与 `public/operations` 退役（Done；`design/RFC-480-te-collaboration-public-unconsumed-sweep/`）
 
 - **来由**：RFC-294 plan §3 S9（public 合同收敛），按 context 对拆、先做 task-execution ↔ collaboration；这一对拆两步，本 RFC 做未消费符号清零
