@@ -1,3 +1,22 @@
+## 2026-11-12 RFC-488 resource-catalog 本机 MCP 诊断的运行时工作改经自有端口（In Progress；`design/RFC-488-local-mcp-diagnostic-execution-port/`）
+
+- **来由**：RFC-294 plan §4.7——运行时驱动一族归 runtime-management infrastructure，先把经 `services/` 取驱动的其他 context 换成端口或
+  装配，再整族迁入。RFC-487 收掉 DAG 外四个 context 的其余使用，只留 resource-catalog 本机 MCP 诊断的执行体（三条边逐条钉住）。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的
+  设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：resource-catalog 声明本机执行端口 `LocalMcpDiagnosticExecution`（跨轮会话支持、原生会话号、可执行文件、一轮诊断的运行与
+  启动校验），本机执行体只保留 resource-catalog 自己的工作（租约、按 pid 的回执与回收、工作区布局与清理、界面事件、计时器）；
+  task-execution 实现它（`infrastructure/local/mcpDiagnosticRunner.ts`，由 composition 交出，与托管形态的执行体对称），测试夹具随实现走；
+  bootstrap 绑定，给了夹具时选本机装配，CrewStation 的诊断装配不再按夹具分支；RFC-294 design §3.1 与 `rfc294Target.ts` 登记新虚线；
+  RFC-487 用例的例外清单收到空。
+- **不做**：task-execution 对一族的其余使用与 task-execution → runtime-management 的 18 个跨 context 内部文件对（另立）；整族迁入，含
+  `services/systemAgentRun.ts` 的去向（另立）；托管形态；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 12 个后继。
+- **附带**：RFC-487 的 Done 文档提交 `15f7a86d4`（5 个文档文件）：exact SHA 主 CI run 43247846697 的 70 个 job 里 68 个通过。
+  `Playwright e2e (macos-latest shard 4/4)` 没有分到 runner（0 个 step、没有日志，排队约 30 分钟后取消），「CI required」随之红。与该提交
+  无关：它只改文档，同一分片在 `76fcd805a` 上通过，同一 run 的 macOS 其余三片通过。未重跑，以本 RFC 落档提交的 CI 为后继证据。
+
 ## 2026-11-12 RFC-487 运行时驱动一族的 DAG 外使用方改经各自的端口（Done；`design/RFC-487-runtime-family-forbidden-consumers/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族（`services/runtime/**` 等 41 个文件、约 7.4 千行）归 runtime-management infrastructure，
