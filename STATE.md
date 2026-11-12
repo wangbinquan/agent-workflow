@@ -1,3 +1,23 @@
+## 2026-11-11 RFC-486 任务启动用例归 task-execution 的 application：`taskRouteLaunchOperations.ts` 按内容分层（In Progress；`design/RFC-486-task-route-launch-application/`）
+
+- **来由**：RFC-294 design §5.6 与 plan §4.7——`infrastructure/` 的路由操作文件是用例，按 §3 常驻规则 10 属于 application，
+  `taskRouteLaunchOperations.ts` 随 W4-E1（RFC-478 之后 W4-E1 只剩这一个文件，另立）；RFC-483 收口 S9 的 task-execution ↔ collaboration
+  一对后，按刷新后的后继顺序接着做。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09
+  再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，
+  不派 Codex。
+- **范围**：该文件 1,457 行按内容分层。根启动内核、两条启动臂、路由启动操作与启动参与者迁入 `application/launch/`，依赖改收端口（准入、
+  上传落地、授权查询、上传上限、直接启动人），不再收裸 `db` 与配置文件路径；准入事务（守卫复核、活跃成员、lane 准入、任务创建、成员行、
+  意图行、工作组状态、创建事件，次序不变）、`projectLaunchedTask` 与自动化回执查询留在 infrastructure 适配器；工作组运行时配置的三个构建
+  函数迁入 domain。启动守卫收成 task-execution 自有的 `TaskLaunchGuard`（`public/types` 交出，integration 的 `ProtectedMrLaunchGuard` 扩展它），
+  task-execution → integration 的越 DAG 文件对销账（预期 47 → 46）。该路径由生产 10 个文件、用例 11 个文件 import，另有 21 个文本断言
+  （架构账本 6 个、读源码的用例 15 个）与表归属债 fixture 点名。
+- **不做**：`task_collaborators` 与 `users` 的表归属（成员表一族横跨 task-execution 的 9 个与 4 个文件，另立；这两条债随内容搬迁按后继身份
+  改键）；`taskRouteOperations.ts` 与 `taskRouteRepairOperations.ts`；启动语义、SQL、事务边界与次序；`public/commands` 合同；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
+  上次 2026-11-09，其后关闭 10 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-483 的 Done 文档提交 `f6a7fadea`（6 个文档文件，`8f7463f57` 的直接后继）：exact SHA 主 CI run 43146287814 的 70 个 job
+  全部通过，含实现提交上撞时限的两格（后端 ubuntu 5/44 片、macOS e2e 3/4 片）与 real PostgreSQL，即 RFC-483 的后继证据，已记入其 plan §CI。
+
 ## 2026-11-11 RFC-483 评审与澄清徽标的联合投影归 collaboration 读模型：task-execution 的三个 SQL 条件片段撤出 public（Done；`design/RFC-483-human-gate-badge-read-model/`）
 
 - **来由**：RFC-294 plan §3 S9 第 2 项（类型污染清单里的 SQL 条件片段）与第 4 项（collaboration 不再把 task-execution 的 SQL 片段拼进自己的
