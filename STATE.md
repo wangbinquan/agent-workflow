@@ -1,3 +1,19 @@
+## 2026-11-12 RFC-487 运行时驱动一族的 DAG 外使用方改经各自的端口（In Progress；`design/RFC-487-runtime-family-forbidden-consumers/`）
+
+- **来由**：RFC-294 plan §4.7——运行时驱动一族（`services/runtime/**` 等 41 个文件、约 7.4 千行）归 runtime-management infrastructure，
+  先把经 `services/` 取驱动的其他 context 换成 runtime-management 的端口或装配，再整族迁入。按刷新后的后继顺序，W4-E1 收口（RFC-486）
+  之后接着做这一族。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：DAG 上不消费 runtime-management 的四个 context 对一族的四处使用（一族迁入后它们会成为越 DAG 的值边）：memory 的蒸馏运行时
+  解析器是 runtime-management `resolveInternalAgentRuntime` 的复制、还直接读 `runtimes` 表——删除，改由 bootstrap 绑定（表归属债销一条）；
+  system-operations 的 doctor 探测改经自有端口、由 bootstrap 绑定 runtime-management 的默认二进制探测（standalone 的软探测共用）；
+  `resolveBoundaryMounts` 归 source-control 的 domain；`ResolvedSkill`、`SkillSource`、`RuntimePlugin` 归 resource-catalog 的 domain。
+- **不做**：resource-catalog 本机 MCP 诊断的执行体（另立下一步）；task-execution 对一族的 16 处使用与 task-execution → runtime-management
+  的 18 个跨 context 内部文件对（另立）；整族迁入（另立）；任何行为变化（唯一可观察的差别是 memory 选到不存在的运行时名字时多一条警告日志）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 11 个后继。
+- **附带**：RFC-486 的 Done 文档提交 `f74014135`（6 个文档文件）：exact SHA 主 CI run 43195710857 的 70 个 job 全部通过。
+
 ## 2026-11-11 RFC-486 任务启动用例归 task-execution 的 application：`taskRouteLaunchOperations.ts` 按内容分层（Done；`design/RFC-486-task-route-launch-application/`）
 
 - **来由**：RFC-294 design §5.6 与 plan §4.7——`infrastructure/` 的路由操作文件是用例，按 §3 常驻规则 10 属于 application，
