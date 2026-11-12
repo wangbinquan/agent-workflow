@@ -20,7 +20,8 @@
       启动校验的逻辑
 - [x] AC-2 本机 MCP 诊断在同样输入下与此前一致（启动上下文、包裹、假运行、观测与续会话、启动校验、四种运行时错误）
 - [x] AC-3 越 DAG 的值边与 offered 文件对不升；public surface 不增；consumer 自有端口只增 1；减速带不升、触及的收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`9ff1274b0` 主 CI run 43287034076 的 70 个 job 里 68 个通过，红的一格是 `docs/audit-backlog.md`
+      已登记的 RFC-398 多进程接管用例偶发到点（与本 RFC 无关，逐格归因见 §CI），windows-platform 与 maintenance-soak-nightly 通过
 
 ## 集中验证（2026-11-12，候选基于 `39c1d7c11`）
 
@@ -106,6 +107,22 @@ task-execution，锚点改指新位置（design §6 细化 2；dev-gotchas 补�
   - 这三个文件与 HEAD 的代码同时、同样跑法 A/B 三轮：候选的 PostgreSQL 一侧每轮红 2、3、4 条，HEAD 红 5、2、2 条。HTTP 的两条每轮
     两边都红，service 与家族用例两边各红不同的几条。分布相同，不归本 RFC。
   - 导出仓库与 HEAD 加 28 个候选路径逐字相同（同步后逐个路径核对，0 处不符）。
+
+## CI（AC-4）
+
+- `9ff1274b0`（实现）：exact SHA 主 CI run 43287034076 的 70 个 job 里 68 个通过：
+  - 红的一格是 `Backend tests (ubuntu-latest shard 41/44)`，「CI required」随之红。`rfc398-start-auto-upgrade-takeover` 的「N read no
+    active; C registers; P dies; N acquires before takeover」184.6 秒后 barrier / readiness 到点，子进程（真 `src/main.ts`）的 stderr 是
+    `JSON Parse error: Unable to parse JSON string`。
+  - 归因：同一文件另两例（同样起真 daemon、走同一套装配）在这次 run 里通过，各约 28 秒；父提交 `39c1d7c11` 的主 CI run 43257929716
+    同一分片三例全过；本地全量 SQLite 里该文件通过，最终候选上另跑两轮三例全过（「…before takeover」38.2 秒、35.6 秒）。本 RFC 改的是 MCP 诊断的装配，启动时只建闭包、不读
+    JSON。这是 `docs/audit-backlog.md` 已登记的 RFC-398 多进程接管偶发红：第三次，前两次落在无关提交上（其中一次只改文档），本次红的是
+    同组的另一例，登记已补。用例属 RFC-398，未改、未重跑；以本 RFC Done 文档提交的 CI 为后继证据。
+  - 同一推送按路径触发的 windows-platform run 43287034082 通过，本机 MCP 诊断链新登记的位置在 Windows 上跑过；maintenance-soak-nightly
+    run 43287034102 通过。
+- 本 RFC 的落档提交 `39c1d7c11`（只改文档）：exact SHA 主 CI run 43257929716 的 70 个 job 里 68 个通过。
+  `Playwright e2e (macos-latest shard 1/4)` 没有分到 runner（0 个 step、没有日志），「CI required」随之红。与该提交无关：它只改文档，同一
+  run 的 macOS 其余三片通过，`15f7a86d4` 上 shard 4/4 同样没分到 runner。未重跑；实现提交的 CI 里 macOS e2e 四片全过，作为后继证据。
 
 ## 实现门（本会话自审，只审功能）
 

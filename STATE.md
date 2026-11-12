@@ -1,4 +1,4 @@
-## 2026-11-12 RFC-488 resource-catalog 本机 MCP 诊断的运行时工作改经自有端口（In Progress；`design/RFC-488-local-mcp-diagnostic-execution-port/`）
+## 2026-11-12 RFC-488 resource-catalog 本机 MCP 诊断的运行时工作改经自有端口（Done；`design/RFC-488-local-mcp-diagnostic-execution-port/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族归 runtime-management infrastructure，先把经 `services/` 取驱动的其他 context 换成端口或
   装配，再整族迁入。RFC-487 收掉 DAG 外四个 context 的其余使用，只留 resource-catalog 本机 MCP 诊断的执行体（三条边逐条钉住）。用户
@@ -44,6 +44,19 @@
   相关文件，227 条全过（PostgreSQL 一侧 111 条）；按 CI 的跑法（默认 5 秒）跑 38 个相关文件，406 条里 402 条通过，红的 4 条都在
   PostgreSQL 一侧、撞默认 5 秒或用例自己的 2 秒等待，与 HEAD 的代码同时 A/B 三轮分布相同（候选红 2、3、4 条，HEAD 红 5、2、2 条）；
   架构报告 60 项实测 = `max`（触及的一项已收紧），其余与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`9ff1274b0`。
+- **CI**：`9ff1274b0`：exact SHA 主 CI run 43287034076 的 70 个 job 里 68 个通过。红的一格是 `Backend tests (ubuntu-latest shard 41/44)`
+  的 `rfc398-start-auto-upgrade-takeover`「…acquires before takeover」：184.6 秒后 barrier / readiness 到点，子进程 stderr 是
+  `JSON Parse error`，「CI required」随之红。同文件另两例同次通过，父提交 `39c1d7c11` 同一分片三例全过，本地全量与最终候选另跑两轮
+  都过；这是 `docs/audit-backlog.md` 已登记的 RFC-398 多进程接管偶发红（第三次，前两次落在无关提交上，登记已补），与本 RFC 无关，
+  未改、未重跑，以 Done 文档提交的 CI 为后继证据。同一推送按路径触发的 windows-platform run 43287034082（本机 MCP 诊断链的新登记位置
+  在 Windows 上跑过）与 maintenance-soak-nightly run 43287034102 通过。落档提交 `39c1d7c11`：主 CI run 43257929716 的 70 个 job 里
+  68 个通过，`Playwright e2e (macos-latest shard 1/4)` 没有分到 runner（0 个 step），只改文档，未重跑，实现提交的 macOS e2e 四片全过。
+- **下一步**（运行时驱动一族，RFC-294 plan §4.7）：1. task-execution 对一族的 17 处使用与 task-execution → runtime-management 的
+  18 个跨 context 内部文件对（先重画驱动接缝：task-execution composition 里把自己的运行入口与 runtime-management 的材料、协议、运行时
+  绑定配对的六个根，以及 task-execution infrastructure 直取 runtime-management infrastructure 的三对）；2. 整族迁入 runtime-management
+  infrastructure（含 `services/systemAgentRun.ts` 的去向；各自另立）。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的其他 context
+  对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 13 个后继。
 
 ## 2026-11-12 RFC-487 运行时驱动一族的 DAG 外使用方改经各自的端口（Done；`design/RFC-487-runtime-family-forbidden-consumers/`）
 

@@ -5702,14 +5702,18 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办：先确认机制（在该用例的测试仓里强制一次 `git gc` 的变异应能稳定复现）；再决定是测试仓关闭 `gc.auto`，还是树快照把 `info/refs`
   这类 git 自维护产物排除在越界判定之外（后者是产品语义，需对托管越界规则单独评估）。
 
-## 启动自动升级的多进程接管：`rfc398-start-auto-upgrade-takeover` 一例偶发到点（2026-11-11 第二次，CI 偶发，未处置）
+## 启动自动升级的多进程接管：`rfc398-start-auto-upgrade-takeover` 一例偶发到点（2026-11-12 第三次，CI 偶发，未处置）
 
-- 现象：后端 ubuntu 41/44 分片的「N read no active; C registers; P dies; N acquires after takeover」到点失败——`barrier/readiness timed out`，
-  子进程输出 `JSON Parse error: Unable to parse JSON string`，用时 184 s。两次都落在与该用例无关的提交上：主 CI run 42501878538
-  （`a9207cbc0`，见 `STATE.md` 当时的 CI 记录）与 run 43079657649（`4c416ad75`，RFC-485 落档提交，只改文档）。同文件的「…acquires before
-  takeover」与「takeover between run return and verify…」两条同次通过。
-- 归因：两次提交都没有改到启动升级与接管路径（前者改开发交付的代码托管桥，后者只改了五个文档文件），父提交的同一分片同一用例通过；
-  用例属 RFC-398，未改、未重跑。子进程在 barrier 前没有写出完整的 JSON 就号称就绪，像是多进程握手在 runner 负载下的时序问题。
+- 现象：后端 ubuntu 41/44 分片里 RFC-398 的多进程接管用例到点失败——`barrier/readiness timed out`，子进程输出
+  `JSON Parse error: Unable to parse JSON string`，用时约 184 s。三次都落在与该用例无关的提交上：
+  - 前两次红的是「N read no active; C registers; P dies; N acquires after takeover」：主 CI run 42501878538（`a9207cbc0`，见 `STATE.md`
+    当时的 CI 记录）与 run 43079657649（`4c416ad75`，RFC-485 落档提交，只改文档）。同文件的「…acquires before takeover」与「takeover
+    between run return and verify…」两条同次通过。
+  - 第三次（2026-11-12，run 43287034076，`9ff1274b0` RFC-488 实现）红的是同组的另一例「…acquires before takeover」（184.6 s）；
+    「…acquires after takeover」与「takeover between…」同次通过（各约 28 s），父提交 `39c1d7c11` 的同一分片三例全过。
+- 归因：三次提交都没有改到启动升级与接管路径（第一次改开发交付的代码托管桥，第二次只改了五个文档文件，第三次改 MCP 诊断的装配，
+  启动时只建闭包、不读 JSON），父提交的同一分片同一用例通过；用例属 RFC-398，未改、未重跑。子进程在 barrier 前没有写出完整的 JSON
+  就号称就绪，像是多进程握手在 runner 负载下的时序问题；同组两例都撞过，不是某一例独有的路径。
 - 待办：先在用例里把子进程的原始 stdout / stderr 与退出码随失败一起打印（确认是半行输出还是进程被杀），再决定是给 readiness 改成按行协议、
   还是给 barrier 加超时后的诊断转储。
 
