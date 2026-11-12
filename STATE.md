@@ -1,4 +1,4 @@
-## 2026-11-12 RFC-487 运行时驱动一族的 DAG 外使用方改经各自的端口（In Progress；`design/RFC-487-runtime-family-forbidden-consumers/`）
+## 2026-11-12 RFC-487 运行时驱动一族的 DAG 外使用方改经各自的端口（Done；`design/RFC-487-runtime-family-forbidden-consumers/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族（`services/runtime/**` 等 41 个文件、约 7.4 千行）归 runtime-management infrastructure，
   先把经 `services/` 取驱动的其他 context 换成 runtime-management 的端口或装配，再整族迁入。按刷新后的后继顺序，W4-E1 收口（RFC-486）
@@ -38,6 +38,14 @@
   的时限或内部等待）；修复后的候选 3 复验 556 个文件、候选 4 复验 53 个文件，红的仍只有上面的发布账本与时限；只放宽时限常量的 16 个
   副本 385 条全过。PostgreSQL 一侧接库跑 52 个相关文件：1,002 条里 991 条通过，11 条红都是三个调度用例文件撞文件时限（15 / 60 秒）
   的连带，只放宽时限的副本全过。架构报告 60 项实测 = `max`、与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`76fcd805a`。
+- **CI**：`76fcd805a`：exact SHA 主 CI run 43239678675 的 70 个 job 全部通过（含 real PostgreSQL）；同一推送按路径触发的 windows-platform
+  run 43239678736 通过（doctor 一族的 Windows 用例经新登记的探测链跑过），integration-opencode run 43239678749 与 maintenance-soak-nightly
+  run 43239678741 通过。落档提交 `829bc54f5`：exact SHA 主 CI run 43201303106 的 70 个 job 全部通过。
+- **下一步**（运行时驱动一族，RFC-294 plan §4.7）：1. resource-catalog 本机 MCP 诊断的执行体（本 RFC 钉住的三条边）；2. task-execution
+  对一族的 16 处使用与 task-execution → runtime-management 的 18 个跨 context 内部文件对；3. 整族迁入 runtime-management
+  infrastructure（各自另立）。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的其他 context 对按对另立；成员表一族另立。独立对账
+  （plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 12 个后继。
 
 ## 2026-11-11 RFC-486 任务启动用例归 task-execution 的 application：`taskRouteLaunchOperations.ts` 按内容分层（Done；`design/RFC-486-task-route-launch-application/`）
 

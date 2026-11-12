@@ -21,7 +21,7 @@
       解析器删除，表归属债销这一条
 - [x] AC-2 memory 蒸馏的运行时解析、doctor 探测、挂载列表与原生内容记录在同样输入下与此前一致
 - [x] AC-3 越 DAG 的值边与 offered 文件对不升；public surface 只增本 RFC 声明的 4 个符号；减速带不升、触及的收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证（2026-11-12，候选基于 `829bc54f5`）
 
@@ -132,6 +132,13 @@
     37 个文件 358 条里 357 条通过。红的一条是 `rfc294-architecture-preflight` 的 `module capability ownership…` 撞 180 秒（同上；
     它只读生产源码，自候选 4 未变，候选 4 的放宽副本已通过）。RFC-487 用例最慢一条 3.1 秒（① 的四个 context 全量扫描）。
   - 导出仓库与 HEAD 加 39 个候选路径逐字相同（同步后逐个路径核对，0 处不符），临时副本已删。
+
+## CI（AC-4）
+
+- `76fcd805a`（实现）：exact SHA 主 CI run 43239678675 的 70 个 job 全部通过（含 real PostgreSQL）。同一推送按路径触发的
+  windows-platform run 43239678736 通过，doctor 一族的 Windows 用例经新登记的探测链跑过；integration-opencode run 43239678749 与
+  maintenance-soak-nightly run 43239678741 通过。
+- 本 RFC 的落档提交 `829bc54f5`（只改文档）：exact SHA 主 CI run 43201303106 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
