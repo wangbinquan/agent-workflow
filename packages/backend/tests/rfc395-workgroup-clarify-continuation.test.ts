@@ -23,7 +23,7 @@ import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/infrastructure/humanGatePersistenceParticipant'
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,

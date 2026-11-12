@@ -29,7 +29,7 @@ import {
   projectWorkflowSnapshotForRead,
 } from '@/modules/task-execution/domain/builtinWorkflowLayout'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 function withoutGeometry(definition: WorkflowDefinition): unknown {

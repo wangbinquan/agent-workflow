@@ -104,7 +104,10 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 TaskContinuation
   })
 
   test('生产根启动不再用 per-task 预算 fallback（自动接线已移出）', () => {
-    const taskSrc = src('modules/task-execution/infrastructure/taskRouteLaunchOperations.ts')
+    // RFC-486: the kernel moved to application, the task INSERT to the admission adapter.
+    const taskSrc =
+      src('modules/task-execution/application/launch/rootTaskLaunch.ts') +
+      src('modules/task-execution/infrastructure/rootTaskAdmission.ts')
     expect(taskSrc).toContain('maxDurationMs: input.task.maxDurationMs ?? null')
     expect(taskSrc).not.toContain('deps.defaultPerTaskMaxDurationMs')
   })

@@ -30,7 +30,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
-import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/application/launch/taskExecutionLaunchParticipant'
 import {
   notifyTaskTerminal,
   resetTaskTerminalWatchersForTests,
@@ -96,7 +96,15 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
   // 这条锁的意图（**启动编排只有一处**）改由下面这条承担：三个 legacy 启动服务
   // 在生产里已经没有任何「同时调用它们」的模块，启动参与者一个都不 import。
   test('启动参与者不 import 任何 legacy 启动服务——编排只有一处', () => {
-    const text = srcText('modules/task-execution/infrastructure/taskRouteLaunchOperations.ts')
+    // RFC-486: the launch orchestration moved to application/launch (kernel, arms, route operations, participant).
+    const text = [
+      'rootTaskLaunch.ts',
+      'taskLaunchArms.ts',
+      'taskRouteLaunchOperations.ts',
+      'taskExecutionLaunchParticipant.ts',
+    ]
+      .map((file) => srcText(`modules/task-execution/application/launch/${file}`))
+      .join('\n')
     for (const legacy of ['startTask', 'startAgentTask', 'startWorkgroupTask']) {
       expect(new RegExp(`\\b${legacy}\\(`).test(text), `${legacy} 不该出现在启动参与者里`).toBe(
         false,

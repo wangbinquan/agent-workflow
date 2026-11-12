@@ -48,6 +48,9 @@ export type {
   SourceTerminationSnapshot,
 } from '@/modules/task-execution/domain/sourceTermination'
 
+/** RFC-486: the launch guard task-execution declares; integration's protected MR launch guard extends it. */
+export type { TaskLaunchGuard } from '@/modules/task-execution/application/ports/taskLaunchGuard'
+
 /**
  * RFC-359 W8-A —— 子任务启动的父任务准入判定。两个引擎的铸行事务各自读行、调这一份，
  * 于是同一次子启动在两侧同码同判（判定顺序也定死在 domain 那一份里）。

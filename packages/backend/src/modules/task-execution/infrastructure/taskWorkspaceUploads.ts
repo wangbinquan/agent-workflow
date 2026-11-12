@@ -12,6 +12,7 @@ import { ConflictError } from '@/util/errors'
 import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 import { withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskInputFiles } from '../application/ports/taskInputFiles'
+import type { TaskLaunchUploads } from '../application/ports/taskLaunchUploads'
 
 /** Preserve the original upload writer and record its complete packed-path receipt
  * before admission. A resumed launch must not turn the same upload into "file (1)". */
@@ -134,4 +135,27 @@ export async function applyTaskWorkspaceUploads(input: {
       throw new Error('workspace-preparation-owner-changed')
   })
   return result
+}
+
+/**
+ * RFC-486: the launch kernel's upload port. Binds the database, the workspace upload content and the input file store
+ * that the launch dependencies used to carry, and forwards each landing to `applyTaskWorkspaceUploads` unchanged.
+ */
+export function createTaskLaunchUploads(
+  dependencies: Readonly<{
+    db: PersistenceDb
+    workspaceUploads?: WorkspaceUploadContentFactory
+    inputFiles?: TaskInputFiles
+  }>,
+): TaskLaunchUploads {
+  return Object.freeze<TaskLaunchUploads>({
+    apply: async ({ taskId, plan }) =>
+      await applyTaskWorkspaceUploads({
+        db: dependencies.db,
+        taskId,
+        workspaceUploads: dependencies.workspaceUploads,
+        inputFiles: dependencies.inputFiles,
+        plan,
+      }),
+  })
 }

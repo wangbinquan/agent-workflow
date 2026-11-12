@@ -10,7 +10,7 @@ import type { TaskExecutionResourceAuthority } from '../application/ports/taskEx
 import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
 import type { ExecutionInvoker } from '../public/commands'
 import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
-import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from '../application/launch/taskExecutionLaunchParticipant'
 
 export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<
   TaskExecutionResourceAuthority,

@@ -39,6 +39,7 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'
 import {
   createRootTaskLaunchKernel,
+  createRootTaskLaunchKernelPorts,
   createTaskRouteWorkspaceParticipant,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
@@ -127,7 +128,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     const submitted: string[] = []
     function kernel(rollback = false, inspect?: (path: string, taskId: string) => Promise<void>) {
       return createRootTaskLaunchKernel({
-        db: harness.db,
+        ...createRootTaskLaunchKernelPorts({ db: harness.db }),
         gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
         workspace:
           rollback || inspect !== undefined

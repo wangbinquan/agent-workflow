@@ -7,8 +7,9 @@
 // 这份配置是引擎**唯一**读的那份（design §8.4，引擎从不读 workgroups 资源行），
 // 少填一个字段就是一整类运行时行为在某一条启动路径上悄悄消失。
 //
-// 落在这个目录而不是 shared：`FrozenWorkgroupGroup` 是 backend 侧的类型（RFC-454 起在 resource-catalog 的
-// `domain/callClosure.ts`，经其 `public/types` 取）；两个调用点也都在本目录。
+// 落在 task-execution 而不是 shared：`FrozenWorkgroupGroup` 是 backend 侧的类型（RFC-454 起在 resource-catalog 的
+// `domain/callClosure.ts`，经其 `public/types` 取）。RFC-486：纯函数，从 infrastructure 迁入 domain，两个调用点是 application 的
+// 工作组启动臂与 infrastructure 的子任务启动。
 
 import {
   WorkgroupRuntimeConfigSchema,

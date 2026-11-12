@@ -21,7 +21,7 @@ import { createFileProgramToolSource } from '../infrastructure/local/fileProgram
 import { createReactionAdmissionStore } from '../infrastructure/reactionExecutionAdmissions'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
-import type { RootTaskLaunchKernel } from '../infrastructure/taskRouteLaunchOperations'
+import type { RootTaskLaunchKernel } from '../application/launch/rootTaskLaunch'
 import { launchDigitalEmployeeHost } from '../infrastructure/hostTaskLaunch'
 import { composeTaskCancellation } from './taskCancellation'
 

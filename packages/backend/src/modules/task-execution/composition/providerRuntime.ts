@@ -64,11 +64,14 @@ import { createTaskOverviewQuery } from './taskOverview'
 import { createFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
 import {
   createRootTaskLaunchKernel,
-  createTaskExecutionLaunchParticipant,
-  createTaskRouteLaunchOperations,
   type RootTaskLaunchKernel,
+} from '../application/launch/rootTaskLaunch'
+import { createTaskExecutionLaunchParticipant } from '../application/launch/taskExecutionLaunchParticipant'
+import {
+  createTaskRouteLaunchOperations,
   type TaskRouteLaunchDependencies,
-} from '../infrastructure/taskRouteLaunchOperations'
+} from '../application/launch/taskRouteLaunchOperations'
+import { createRootTaskLaunchPorts, type TaskRouteLaunchAssembly } from './taskRouteLaunch'
 import {
   createTaskRouteWorkspaceParticipant,
   type TaskRouteWorkspaceDependencies,
@@ -207,7 +210,7 @@ export interface TaskExecutionProviderRuntimeDependencies {
     ProviderTaskRunBindingSelection &
     Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'workspaceExcludeProfilesFor'>>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
-  readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
+  readonly routeLaunch: TaskRouteLaunchAssembly
   readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     TaskRouteOperationsDependencies,
@@ -287,13 +290,15 @@ export function composeTaskExecutionProviderRuntime(
     ...dependencies.routeWorkspace,
   }
   const routeWorkspace = createTaskRouteWorkspaceParticipant(workspaceDependencies)
-  const taskRouteLaunchDependencies: Omit<TaskRouteLaunchDependencies, 'db'> = {
+  // RFC-486: the launch use case takes ports, not the provider db or the config path; composition builds them here.
+  const { configPath, workspaceUploads, inputFiles, ...routeLaunchInput } = dependencies.routeLaunch
+  const taskRouteLaunchDependencies = {
     workspace: routeWorkspace,
-    ...dependencies.routeLaunch,
+    ...routeLaunchInput,
   }
   const routeLaunchDependencies: TaskRouteLaunchDependencies = {
-    db,
     ...taskRouteLaunchDependencies,
+    ...createRootTaskLaunchPorts({ db, configPath, workspaceUploads, inputFiles }),
   }
   const routeLaunch = createTaskRouteLaunchOperations(routeLaunchDependencies)
   // RFC-359 AC-1（plan §5hn 批次二 ⑥）：装配一次，路由（JSON / multipart）与触发器三处共用。

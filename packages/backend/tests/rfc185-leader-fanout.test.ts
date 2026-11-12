@@ -45,7 +45,7 @@ import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/work
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
-} from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+} from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,

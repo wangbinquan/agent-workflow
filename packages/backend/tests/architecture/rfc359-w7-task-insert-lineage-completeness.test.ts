@@ -191,7 +191,7 @@ describe('RFC-359 W7 —— insert(tasks) 的血缘 / 启动来源三列完整�
   test('唯一 participant 承接根启动、子任务和 fusion', () => {
     expect(TASK_INSERT_SITES).toHaveLength(1)
     for (const file of [
-      'taskRouteLaunchOperations',
+      'rootTaskAdmission',
       'childExecutionLaunchOperations',
       'fusionEngineTaskOperations',
     ]) {

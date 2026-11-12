@@ -42,13 +42,16 @@ const TASK_SRC =
     ),
     'utf8',
   )
-const ROOT_LAUNCH_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-  ),
-  'utf8',
-)
+const ROOT_LAUNCH_SRC =
+  // RFC-486: the kernel moved to application, the task INSERT to the admission adapter.
+  readFileSync(
+    resolve(import.meta.dir, '../src/modules/task-execution/application/launch/rootTaskLaunch.ts'),
+    'utf8',
+  ) +
+  readFileSync(
+    resolve(import.meta.dir, '../src/modules/task-execution/infrastructure/rootTaskAdmission.ts'),
+    'utf8',
+  )
 const SCHEMA_SRC = readFileSync(
   resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'task.ts'),
   'utf-8',

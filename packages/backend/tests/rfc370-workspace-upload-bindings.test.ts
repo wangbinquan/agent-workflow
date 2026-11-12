@@ -20,6 +20,7 @@ import { createTaskExecutionResourceBinding } from '@/modules/task-execution/inf
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import {
   createRootTaskLaunchKernel,
+  createRootTaskLaunchKernelPorts,
   createTaskRouteWorkspaceParticipant,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
@@ -226,9 +227,8 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         factory = Object.freeze(new MemoryWorkspaceUploadFactory(content))
       const submitted: string[] = []
       const kernel = createRootTaskLaunchKernel({
-        db: harness.db,
+        ...createRootTaskLaunchKernelPorts({ db: harness.db, workspaceUploads: factory }),
         workspace,
-        workspaceUploads: factory,
         gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
         coordinator: {
           async submit(request) {
@@ -426,12 +426,19 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
   )
   const providers = source('modules/task-execution/composition/providerRuntime.ts')
   expect(providers).toContain('createTaskExecutionLaunchParticipant(routeLaunchDependencies)')
-  expect(providers).toContain('workspace: routeWorkspace,\n    ...dependencies.routeLaunch,')
+  expect(providers).toContain('workspace: routeWorkspace,\n    ...routeLaunchInput,')
+  // RFC-486: the provider assembly builds the launch ports from the selected upload bindings.
+  expect(providers).toContain(
+    'createRootTaskLaunchPorts({ db, configPath, workspaceUploads, inputFiles })',
+  )
   expect(providers).toContain('createRootTaskLaunchKernel(routeLaunchDependencies)')
   expect(providers).toContain('createTaskRouteLaunchOperations(routeLaunchDependencies)')
   expect(
+    values(source('modules/task-execution/composition/taskRouteLaunch.ts'), 'workspaceUploads'),
+  ).toEqual(['input.workspaceUploads'])
+  expect(
     values(
-      source('modules/task-execution/infrastructure/taskRouteLaunchOperations.ts'),
+      source('modules/task-execution/infrastructure/taskWorkspaceUploads.ts'),
       'workspaceUploads',
     ),
   ).toEqual(['dependencies.workspaceUploads'])

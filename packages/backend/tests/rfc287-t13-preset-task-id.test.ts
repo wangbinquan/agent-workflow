@@ -58,8 +58,9 @@ describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', ()
         'src',
         'modules',
         'task-execution',
-        'infrastructure',
-        'taskRouteLaunchOperations.ts',
+        'application',
+        'launch',
+        'rootTaskLaunch.ts',
       ),
       'utf8',
     )

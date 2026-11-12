@@ -1,5 +1,5 @@
 import type { StartAgentTask, StartTask, StartWorkgroupTask } from '@agent-workflow/shared'
-import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
+import type { TaskLaunchGuard } from '@/modules/task-execution/public/types'
 
 export interface EventWorkStartOrigin {
   readonly eventSubscriptionId: string
@@ -75,21 +75,13 @@ export type ProtectedMrLaunchGuardInput = Readonly<{
   triggerName: string
 }>
 
-export interface ProtectedMrLaunchGuard {
+/**
+ * RFC-486: the members task-execution's launch uses are declared by task-execution (`TaskLaunchGuard`); this guard adds
+ * its reservation id. `assertCanCommit` is the process-local final check; the provider-neutral durable check is
+ * `verifyCanCommit`, which bootstrap must run immediately before handing control to the task owner.
+ */
+export interface ProtectedMrLaunchGuard extends TaskLaunchGuard {
   readonly id: string
-  readonly signal: AbortSignal
-  readonly snapshot: SourceTerminationSnapshot
-  /**
-   * Process-local final guard used by the legacy task INSERT callback.  The
-   * provider-neutral durable check is `verifyCanCommit`; bootstrap must run it
-   * immediately before handing control to the task owner.
-   */
-  assertCanCommit(): void
-  verifyCanCommit(): Promise<void>
-  taskCommitted(taskId: string): Promise<void>
-  launchSettled(taskId: string): Promise<void>
-  failed(errorCode: string): Promise<void>
-  release(): void
 }
 
 export interface MrTerminalControl {

@@ -923,7 +923,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const postgresqlLaunch = readFileSync(
-      resolve(sourceRoot, 'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts'),
+      resolve(sourceRoot, 'modules/task-execution/application/launch/taskRouteLaunchOperations.ts'),
       'utf8',
     )
 

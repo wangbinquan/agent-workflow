@@ -1,5 +1,5 @@
 import { TASK_DEFINITION_HOSTS, decodeTaskWorkgroupConfig } from '@agent-workflow/shared'
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import { workgroupConfig } from './taskFixtures'
 import type { V2Harness } from '../rfc395V2Harness'

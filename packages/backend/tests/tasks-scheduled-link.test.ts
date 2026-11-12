@@ -68,13 +68,22 @@ describe('RFC-159 — tasks.scheduled_task_id link', () => {
   })
 
   test('production root launch stamps invoker schedule metadata in the task INSERT (source lock)', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-      ),
-      'utf-8',
-    )
+    const src =
+      // RFC-486: the kernel moved to application, the task INSERT to the admission adapter.
+      readFileSync(
+        resolve(
+          import.meta.dir,
+          '../src/modules/task-execution/application/launch/rootTaskLaunch.ts',
+        ),
+        'utf-8',
+      ) +
+      readFileSync(
+        resolve(
+          import.meta.dir,
+          '../src/modules/task-execution/infrastructure/rootTaskAdmission.ts',
+        ),
+        'utf-8',
+      )
     // The stamp lives in the single task INSERT so it is atomic with row creation.
     expect(src).toContain('scheduledTaskId: metadata.scheduledTaskId')
     expect(src).toContain(

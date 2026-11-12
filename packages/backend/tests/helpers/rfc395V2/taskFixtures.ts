@@ -1,4 +1,4 @@
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import {
   decodeLogicalValue,

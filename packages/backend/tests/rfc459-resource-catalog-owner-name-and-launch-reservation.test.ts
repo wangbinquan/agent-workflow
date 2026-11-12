@@ -142,11 +142,11 @@ describe('RFC-459 —— 代理启动保留只有一张进程内表', () => {
     ).toEqual([])
     expect(
       importsMatching(
-        [join(SRC, 'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts')],
+        [join(SRC, 'modules/task-execution/application/launch/taskLaunchArms.ts')],
         (t) => t === `${RC}public/participants`,
       ),
     ).toEqual([
-      `packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts -> ${RC}public/participants`,
+      `packages/backend/src/modules/task-execution/application/launch/taskLaunchArms.ts -> ${RC}public/participants`,
     ])
   })
 })

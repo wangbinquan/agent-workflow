@@ -1049,7 +1049,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
     // ——它是 `startExecution` 三分支 switch 的第三份写法。定时启动改走与路由同一份编排，
     // 本条的判据面（「失败也留任务行 + `__repo_prep__` 失败行」）一字未动。
-    const { createTaskExecutionLaunchParticipant } =
+    const { createRootTaskLaunchPorts, createTaskExecutionLaunchParticipant } =
       await import('@/modules/task-execution/composition/taskRouteLaunch')
     const { createBuildScheduleLaunch, createTaskExecutionTriggerParticipant } =
       await import('@/modules/task-execution/infrastructure/taskExecutionTrigger')
@@ -1114,8 +1114,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const scheduleLaunch = createBuildScheduleLaunch(
       createTaskExecutionTriggerParticipant({
         launches: createTaskExecutionLaunchParticipant({
-          db: db2,
-          configPath: cfgPath,
+          ...createRootTaskLaunchPorts({ db: db2, configPath: cfgPath }),
           gitCommitIdentity: identityAccess2.getUserGitCommitIdentity,
           agent: Object.freeze({
             resources: composeAgentLaunchResourceOperations({ db: db2 }),

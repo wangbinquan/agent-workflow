@@ -10,7 +10,7 @@
 
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { RootTaskLaunchKernel } from '../infrastructure/taskRouteLaunchOperations'
+import type { RootTaskLaunchKernel } from '../application/launch/rootTaskLaunch'
 import { launchActionHostTask } from '../infrastructure/hostTaskLaunch'
 import type { TaskExecutionReadModels } from '../public/types'
 import type {

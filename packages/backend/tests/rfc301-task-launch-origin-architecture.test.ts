@@ -102,8 +102,9 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     expect(Object.fromEntries(identifierCalls('directTaskInitiatorFromActorSource'))).toEqual({
       'modules/knowledge-evolution/inbound/fusionRoutes.ts': 2,
       // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 那一处随门面删除。
-      // 直连启动的 initiator 映射现在只有内核这一处（`rootLaunchMetadata`）。
-      'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts': 1,
+      // RFC-486：直连启动的 initiator 映射只在 composition 装配这一处（`createRootTaskLaunchKernelPorts`），
+      // 内核经注入的 `directTaskInitiator` 取得——actor source 仍只在 inbound 函数里观察。
+      'modules/task-execution/composition/taskRouteLaunch.ts': 1,
     })
   })
 
@@ -113,7 +114,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
         BACKEND_SRC,
         'modules',
         'task-execution',
-        'infrastructure',
+        'application',
+        'launch',
         'taskRouteLaunchOperations.ts',
       ),
       'utf8',

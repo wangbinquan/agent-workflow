@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
-import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { createRootTaskLaunchKernel } from '@/modules/task-execution/application/launch/rootTaskLaunch'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { createRepoGroup } from '@/modules/source-control/application/repositoryGroups'
@@ -21,6 +21,7 @@ import type { ProviderHarness } from './eachProvider'
 import { createEachProviderTaskExecution } from './eachProviderTaskExecution'
 import { remoteUrlFor } from './gitHttpRemote'
 import { repoGroupNodesFromAttachments } from './repoGroupFixture'
+import { createRootTaskLaunchKernelPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 
 export async function workspaceGit(cwd: string, args: string[]): Promise<string> {
   const result = await runGit(cwd, args)
@@ -125,7 +126,7 @@ export async function singleMemberWorkspaceFixture(
   cleanup.push(() => execution.shutdown())
   const submitted: string[] = []
   const kernel = createRootTaskLaunchKernel({
-    db,
+    ...createRootTaskLaunchKernelPorts({ db }),
     gitCommitIdentity: execution.identityAccess.getUserGitCommitIdentity,
     workspace: createTaskRouteWorkspaceParticipant({
       db,

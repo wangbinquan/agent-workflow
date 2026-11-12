@@ -17,6 +17,30 @@
   上次 2026-11-09，其后关闭 10 个后继，下一次不晚于 2026-11-23。
 - **附带**：RFC-483 的 Done 文档提交 `f6a7fadea`（6 个文档文件，`8f7463f57` 的直接后继）：exact SHA 主 CI run 43146287814 的 70 个 job
   全部通过，含实现提交上撞时限的两格（后端 ubuntu 5/44 片、macOS e2e 3/4 片）与 real PostgreSQL，即 RFC-483 的后继证据，已记入其 plan §CI。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 四个启动用例（根启动内核、两条启动臂、路由启动操作、启动参与者）在 `application/launch/`，
+  端口（工作区参与者三件与工作组资源投影、准入、上传落地、`TaskLaunchGuard`）在 `application/ports/`；准入事务、`projectLaunchedTask`、
+  活跃成员查询与提交后发布在 `infrastructure/rootTaskAdmission.ts`，自动化回执查询在 `infrastructure/taskAutomationReceipts.ts`，上传落地的
+  适配器在 `infrastructure/taskWorkspaceUploads.ts`；工作组运行时配置的三个构建函数在 domain；准入、上传落地、授权查询、上传上限与直接启动人
+  由 composition 装配。C11 task-execution 的 public 增 1 撤 0（`TaskLaunchGuard` 经 `public/types`，public surface 226 → 227），integration 的
+  public 不变（34；`ProtectedMrLaunchGuard` 扩展它、只多 `id`）。C12 RFC-486 用例覆盖 `application/launch/` 全部 5 个文件、task-execution
+  全部 814 个生产文件（下限 700，查不取 `ProtectedMrLaunchGuard`）、准入适配器的事务次序、domain 的唯一声明、composition 的装配点与守卫的
+  成员集合，import 识别带负对照（相对路径、别名、re-export、动态 import、仅类型 import）。C13 触及的减速带收紧到实测
+  （`off-dag-offered-file-context-pairs` 的 `max` 47 → 46，`counts.json` 60 项每项 `max` = 实测）。
+- **§14 不变量 / W4-E1 退出门**：越 DAG 的 offered 文件对 47 → 46（task-execution → integration 一对销掉）；public 类型偏差 57、未消费 public
+  符号 91、跨 context 内部文件对 43、`module-layer` 1、application 直接副作用 2 不变；`taskRouteLaunchOperations.ts` 删除，其编排在
+  `application/launch/`，该目录不 import `infrastructure/**`、inbound、表与发布 runtime，依赖接口不收 `db` 与配置路径。表归属债 121 条不变
+  （两条随内容改键为 `rootTaskAdmission.ts`，成员表一族另立）。
+- **集中验证**（候选基于 `109187d5c`，验证期间 HEAD 未前进，详见 plan）：开发期用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的源码文本断言
+  （HEAD 命中、候选不命中的 4 条逐条核对：1 条是另一个面的禁用清单，3 条是本 RFC 用例自己的反向断言）。集中验证查出本 RFC 的两处问题，已
+  修复并复验：`rfc243-executor-facade` 读旧文件的文本检查（开发期改写文本引用时跳过了 import 该模块的文件），`rfc359-w7-task-route-conformance`
+  经 `as never` 交入缺端口的依赖（同形的 `eachProviderTaskExecution` 按扫描一并改），两条教训记入 `docs/dev-gotchas.md`。backend `tsc` 0 错、
+  eslint 无告警；RFC-486 用例候选 11 / 11，对 HEAD 的代码 9 条红 7 条（另一节在 describe 处报错）；首批 215 个文件 210 个通过（2 个是上面
+  两处，发布账本 1 个是导出仓库没有真实历史，2 个撞自带时限）；修复批 16 个 15 个通过（`rfc359-w9` 撞 10 秒默认时限）；全量 SQLite 逐文件
+  跑 2,928 个、2,913 个通过，其余 15 个都不归本 RFC：发布账本一条同上（真实仓库 10 / 10），14 个撞用例自带的时限或内部等待，连同 `rfc359-w9`
+  在只放宽时限常量的副本上 15 个 369 条全过。PostgreSQL 以 CI 双引擎分片为证据，另把 29 个相关文件接库跑：676 条通过（PostgreSQL 一侧
+  351 条），两条红都撞用例自带的时限（`rfc359-w9` 的文件默认 10 秒；`rfc359-w14` 的 25 秒终态回调等待——HEAD 对照在同一负载下 3 轮红
+  2 轮，放宽副本在候选与 HEAD 上都通过），`single-nonroot-member-workspace` 被 runner 的 1,500 秒闹钟截停时 PostgreSQL 一侧 113 条已全过。
+  架构报告 60 项实测 = `max`，门里只有越 DAG 一项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-11 RFC-483 评审与澄清徽标的联合投影归 collaboration 读模型：task-execution 的三个 SQL 条件片段撤出 public（Done；`design/RFC-483-human-gate-badge-read-model/`）
 

@@ -57,7 +57,7 @@ import {
   withSerializableTaskExecution,
   type TaskExecutionTransaction,
 } from './taskLifecycleTransaction'
-import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
+import { buildWorkgroupRuntimeConfig } from '../domain/workgroupRuntimeConfig'
 
 export interface ChildWorkgroupLaunchResources {
   loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]>

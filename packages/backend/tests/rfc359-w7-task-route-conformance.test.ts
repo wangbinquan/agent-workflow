@@ -49,9 +49,9 @@ import { monotonicFactory } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import { createTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { createTaskRouteLaunchOperations } from '@/modules/task-execution/application/launch/taskRouteLaunchOperations'
 import type {
   AgentRouteTaskLaunchOperations,
   TaskRouteOperations,
@@ -247,16 +247,11 @@ interface LaunchArms {
 
 function launchOperations(harness: ProviderHarness): LaunchArms {
   const configPath = join(APP_HOME, 'config.json')
-  if (harness.capabilities.provider === 'postgresql') {
-    return createTaskRouteLaunchOperations({
-      db: harness.db as unknown as PostgresqlDatabaseClient,
-      configPath,
-    } as never)
-  }
-  return createTaskRouteLaunchOperations({
-    db: harness.db,
-    configPath,
-  } as never)
+  // RFC-486: the route launch takes ports instead of the raw db and config path; the C segment drives only the upload
+  // limits and the replay visibility, so the composition-built ports are all it needs (same factory on both providers).
+  return createTaskRouteLaunchOperations(
+    createRootTaskLaunchPorts({ db: harness.db, configPath }) as never,
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

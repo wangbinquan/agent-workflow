@@ -525,12 +525,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-    to: 'integration',
-    why: 'RFC-434：边本身早已存在——此前经非精确 public 文件（`memory/public/catalog`、`integration/public/mrTerminalControl`）引用，被记作跨 context 内部边；这三个文件并入精确入口后，同一依赖如实归为 DAG 外的 offered 边（跨 context 内部边同步 −8）。待 bounded-context 对正式进入 design §3.1 目标 DAG 或依赖改道后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts',
     to: 'knowledge-evolution',
     why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',

@@ -57,7 +57,10 @@ import {
 import { createUser } from './helpers/userFixture'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
-import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
+import {
+  createRootTaskLaunchPorts,
+  createTaskRouteWorkspaceParticipant,
+} from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -95,8 +98,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
   const identityAccess = createIdentityAccessRuntime({ db })
   const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
   const launches = createTaskExecutionLaunchParticipant({
-    db,
-    configPath,
+    ...createRootTaskLaunchPorts({ db, configPath }),
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
     agent: Object.freeze({
       resources: composeAgentLaunchResourceOperations({ db }),

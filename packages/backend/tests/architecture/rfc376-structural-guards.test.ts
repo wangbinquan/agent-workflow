@@ -172,7 +172,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts -> memory',
     'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> memory',
-    'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts -> integration',
   ],
   'platform-to-modules-file-pairs': [],
   'application-direct-effect-files': [

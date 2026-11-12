@@ -2002,7 +2002,7 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
           "catalogVisibility: text('catalog_visibility'",
         ),
         anchor({
-          file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+          file: 'packages/backend/src/modules/task-execution/application/launch/rootTaskLaunch.ts',
           symbol: 'RootTaskLaunchRequest',
           sourceToken: 'readonly catalogVisibility?: TaskCatalogVisibility',
         }),
@@ -2065,15 +2065,15 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       purpose: 'Trusted internal launch projection into the TaskExecution-owned membership field.',
       dataClass: 'metadata',
       owner: anchor({
-        file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+        file: 'packages/backend/src/modules/task-execution/application/launch/rootTaskLaunch.ts',
         symbol: 'RootTaskLaunchRequest',
         sourceToken: 'readonly catalogVisibility?: TaskCatalogVisibility',
       }),
       writers: internalWriters,
       consumers: [
         anchor({
-          file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-          symbol: 'createRootLaunch',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/rootTaskAdmission.ts',
+          symbol: 'createRootTaskAdmission',
           sourceToken: "catalogVisibility: input.internal?.catalogVisibility ?? 'public'",
         }),
       ],
@@ -2097,8 +2097,8 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       ),
       writers: [
         anchor({
-          file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-          symbol: 'createRootLaunch',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/rootTaskAdmission.ts',
+          symbol: 'createRootTaskAdmission',
           sourceToken:
             'digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null',
         }),

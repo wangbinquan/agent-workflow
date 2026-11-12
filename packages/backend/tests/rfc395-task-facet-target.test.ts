@@ -99,7 +99,7 @@ test('workspace replay accepts v2 and rejects the old or malformed envelope', ()
 
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 import { listSourceTerminationTargets } from '@/modules/task-execution/infrastructure/sourceTerminationTargets'
-import { findTaskAutomationReceipt } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { findTaskAutomationReceipt } from '@/modules/task-execution/infrastructure/taskAutomationReceipts'
 import { taskListSummariesProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { taskWorkgroupConfigSelection } from '@/modules/task-execution/infrastructure/taskWorkgroupConfig'
 

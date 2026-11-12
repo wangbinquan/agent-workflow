@@ -37,6 +37,8 @@ import {
   createRootTaskLaunchKernel,
   createTaskRouteWorkspaceParticipant,
   createTaskExecutionLaunchParticipant,
+  createRootTaskLaunchKernelPorts,
+  createRootTaskLaunchPorts,
   createTaskRouteLaunchOperations,
   type RootTaskLaunchDependencies,
   type RootTaskLaunchRequest,
@@ -432,8 +434,7 @@ async function harness(input: {
     })
   const ids = ['task-agent', 'intent-agent', 'task-workgroup', 'intent-workgroup']
   const dependencies: TaskRouteLaunchDependencies = {
-    db: postgres.db,
-    configPath: join(configRoot, 'config.json'),
+    ...createRootTaskLaunchPorts({ db: postgres.db, configPath: join(configRoot, 'config.json') }),
     resourceAuthorityFor,
     gitCommitIdentity: {
       async execute(userId) {
@@ -826,7 +827,7 @@ function gitMetadataHarness(
   })
   let sequence = 0
   const dependencies: RootTaskLaunchDependencies = {
-    db: postgres.db,
+    ...createRootTaskLaunchKernelPorts({ db: postgres.db }),
     gitCommitIdentity: { execute: lookup },
     workspace: {
       async prepare(request) {

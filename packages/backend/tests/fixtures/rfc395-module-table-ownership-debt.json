@@ -805,12 +805,12 @@
     {
       "table": "taskCollaborators",
       "owner": "collaboration",
-      "file": "task-execution/infrastructure/taskRouteLaunchOperations.ts",
+      "file": "task-execution/infrastructure/rootTaskAdmission.ts",
       "module": "task-execution",
       "tableId": "task_collaborators",
       "kind": "other",
-      "why": "task-execution/infrastructure/taskRouteLaunchOperations.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
-      "removeWhen": "RFC-395 T11 task-execution/taskRouteLaunchOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+      "why": "task-execution/infrastructure/rootTaskAdmission.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/rootTaskAdmission 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
     },
     {
       "table": "taskCollaborators",
@@ -1075,12 +1075,12 @@
     {
       "table": "users",
       "owner": "identity-access",
-      "file": "task-execution/infrastructure/taskRouteLaunchOperations.ts",
+      "file": "task-execution/infrastructure/rootTaskAdmission.ts",
       "module": "task-execution",
       "tableId": "users",
       "kind": "other",
-      "why": "task-execution/infrastructure/taskRouteLaunchOperations.ts 的路由启动事务中的 owner 与成员建立仍使用 users；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
-      "removeWhen": "RFC-395 T11 task-execution/taskRouteLaunchOperations 端口任务：在 identity-access 实现对应的 taskRouteLaunchOperations query/participant 并迁移该联合操作。"
+      "why": "task-execution/infrastructure/rootTaskAdmission.ts 的路由启动事务中的 owner 与成员建立仍使用 users；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/rootTaskAdmission 端口任务：在 identity-access 实现对应的 rootTaskAdmission query/participant 并迁移该联合操作。"
     },
     {
       "table": "verificationProfiles",

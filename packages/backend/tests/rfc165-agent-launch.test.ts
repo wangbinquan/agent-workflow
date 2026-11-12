@@ -88,7 +88,7 @@ import {
 } from './helpers/participantLaunch'
 import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { createAgentRouteLaunch } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { createAgentRouteLaunch } from '@/modules/task-execution/application/launch/taskLaunchArms'
 import { composeAgentLaunchResourceOperations } from '../src/modules/resource-catalog/composition/agentLaunchResources'
 import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { createUser } from './helpers/userFixture'
@@ -101,6 +101,7 @@ import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createAgent, renameAgent } from './helpers/model/resourceWrites'
+import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -441,8 +442,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       preparations = 0,
       drives = 0
     const launch = createAgentRouteLaunch({
-      db,
-      configPath: join(appHome, 'config.json'),
+      ...createRootTaskLaunchPorts({ db, configPath: join(appHome, 'config.json') }),
       agent: {
         resources: {
           ...resources,

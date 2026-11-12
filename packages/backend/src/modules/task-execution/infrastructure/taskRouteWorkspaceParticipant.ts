@@ -34,7 +34,7 @@ import type {
   TaskRoutePreparedWorkspace,
   TaskRouteWorkspaceParticipant,
   TaskRouteWorkspaceRepository,
-} from './taskRouteLaunchOperations'
+} from '../application/ports/taskRouteLaunch'
 
 export interface TaskRouteWorkspaceDependencies {
   readonly sourceContexts: (authority: RequestAuthority, taskId: string) => IdempotentCommandContext

@@ -40,7 +40,7 @@ import {
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
-import type { RootTaskLaunchRequest } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import type { RootTaskLaunchRequest } from '@/modules/task-execution/application/launch/rootTaskLaunch'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { describeEachProvider } from './helpers/eachProvider'

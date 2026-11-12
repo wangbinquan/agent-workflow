@@ -11,7 +11,7 @@ import {
   type Task,
 } from '@agent-workflow/shared'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { projectLaunchedTask } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { projectLaunchedTask } from '@/modules/task-execution/infrastructure/rootTaskAdmission'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import {
   loadTaskProjection,

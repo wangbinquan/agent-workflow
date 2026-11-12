@@ -231,8 +231,9 @@ describe('RFC-165 T1 — applySpaceFields shared assembly point', () => {
         'src',
         'modules',
         'task-execution',
-        'infrastructure',
-        'taskRouteLaunchOperations.ts',
+        'application',
+        'launch',
+        'taskLaunchArms.ts',
       ),
       'utf8',
     )

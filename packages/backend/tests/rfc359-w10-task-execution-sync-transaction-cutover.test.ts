@@ -781,7 +781,8 @@ const TERMINALS = new Set(['run', 'get', 'all'])
 const AUDITED = [
   // RFC-478：原 `services/task.ts` 的两笔事务（准备重试前的纯围栏、延后准备的回填投影）随文件迁到这里。
   'modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
-  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+  // RFC-486: the root task admission transaction moved out of the route launch file unchanged.
+  'modules/task-execution/infrastructure/rootTaskAdmission.ts',
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
   'modules/task-execution/infrastructure/sourceTerminationParticipant.ts',
 ] as const

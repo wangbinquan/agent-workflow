@@ -21,7 +21,7 @@ import { composeAgentLaunchResourceOperations } from '../../src/modules/resource
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
 import { createTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { TaskExecutionLaunchParticipant } from '../../src/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from '../../src/modules/task-execution/application/launch/taskExecutionLaunchParticipant'
 import type { TaskDriveCompletionMode } from '../../src/modules/task-execution/application/drive/taskDriveTypes'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -32,7 +32,10 @@ import { createTaskExecutionResourceBinding } from '../../src/modules/task-execu
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
 import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
-import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
+import {
+  createRootTaskLaunchPorts,
+  createTaskRouteWorkspaceParticipant,
+} from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 
 /**
@@ -125,8 +128,7 @@ export function createTestTaskExecutionLaunchParticipant(
     },
   })
   return createTaskExecutionLaunchParticipant({
-    db: input.db,
-    configPath,
+    ...createRootTaskLaunchPorts({ db: input.db, configPath }),
     gitCommitIdentity: composeIdentityAccess(input.db).getUserGitCommitIdentity,
     agent: { resources: composeAgentLaunchResourceOperations({ db: input.db }), integrity },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),

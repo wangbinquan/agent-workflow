@@ -327,7 +327,7 @@ test('detail, launch, lists and WS keep the repository projection boundary', () 
   for (const path of [
     // RFC-395 II-a A7 moved rowToTask into its owning query adapter.
     'modules/task-execution/infrastructure/taskDetailQueries.ts',
-    'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+    'modules/task-execution/infrastructure/rootTaskAdmission.ts',
     'modules/task-execution/infrastructure/taskRouteOperations.ts',
   ])
     expect(callsProjection(source(path), 'projectStoredTaskRepositorySurface'), path).toBe(true)
@@ -346,10 +346,20 @@ test('detail, launch, lists and WS keep the repository projection boundary', () 
     ).toBe(true)
   for (const path of [
     'taskRouteWorkspaceParticipant.ts',
-    'taskRouteLaunchOperations.ts',
+    'rootTaskAdmission.ts',
     'taskRouteOperations.ts',
   ])
     expect(source(`modules/task-execution/infrastructure/${path}`)).not.toMatch(
+      /\.worktreeDirName\b/,
+    )
+  // RFC-486: the launch use case itself now lives in application.
+  for (const path of [
+    'rootTaskLaunch.ts',
+    'taskLaunchArms.ts',
+    'taskRouteLaunchOperations.ts',
+    'taskExecutionLaunchParticipant.ts',
+  ])
+    expect(source(`modules/task-execution/application/launch/${path}`)).not.toMatch(
       /\.worktreeDirName\b/,
     )
   expect(

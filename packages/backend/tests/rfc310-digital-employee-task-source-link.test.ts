@@ -89,7 +89,8 @@ describe('RFC-310 digital employee task source link', () => {
         import.meta.dirname,
         '..',
         'src',
-        'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+        // RFC-486: the kernel hands `internal` to the admission adapter, which writes the frozen case ref.
+        'modules/task-execution/infrastructure/rootTaskAdmission.ts',
       ),
       'utf8',
     )

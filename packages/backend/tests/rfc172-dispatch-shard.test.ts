@@ -38,7 +38,7 @@ import {
   resolveEntryShardKeys,
 } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import {
   createManualTaskQuestion,

@@ -772,6 +772,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   故意传可能为 `undefined` 的 `historyRestrictions`，期望它那一行类型不符；插入 `createNodeRunQueries(tx)` 后注释跑到新参数头上，`tsc` 报
   这条指令未被使用（TS2578），原来被期望的类型错误也漏了出来。插完逐处看前导注释里有没有这类指令，把它们留在原目标行之上（或者插在
   `getFullStart()`，让新参数排在注释前面）。
+- **依赖接口新增必填成员时，`tsc` 看不到被 `as never` / `as unknown as` 断言过的装配点**（RFC-486 实撞）：启动依赖改收端口后 `tsc` 0 错，
+  但 `rfc359-w7-task-route-conformance` 用 `{ db, configPath } as never` 造路由启动操作，运行时才在 `dependencies.fileUploadLimits()` 上抛
+  `TypeError`；`eachProviderTaskExecution` 的 `launchViaKernel` 也是 `{ db, … } as unknown as Parameters<…>[0]`，跑到就会同样炸。改依赖形状后
+  按语法树扫一遍工厂调用点（实参里带 `as never`、`as unknown as`、`as any` 的）与 `as <依赖类型>` 的变量，逐处补上新成员。同一轮另一个漏网：
+  按「点名旧路径的文本断言」清单改用例时排除了 import 该模块的文件，而 `rfc243-executor-facade` 恰好既 import 它、又按路径读它的源码——
+  清单要按「出现旧路径字面量」取，不按「是否 import」分。
 - **成对复跑里两边都超时，等于这条用例没跑**：「候选与对照失败形态相同」只说明两边负载相同，不说明候选在这条用例上是绿的。RFC-480 的
   preflight capability 账本（预算 180 秒）在本地全量与成对复跑里两边都超时，被归给负载；CI 上它 96 秒跑完，候选真红（账本多 4 条）。两边都
   超时的用例要换能跑完的条件拿到候选的真结果：单独跑并给够时间，或者在同一份语料上直接调同一个判据函数（本例几十秒）。

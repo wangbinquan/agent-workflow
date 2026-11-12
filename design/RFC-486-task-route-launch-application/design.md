@@ -42,7 +42,7 @@
 | 单代理与工作组两臂                                                                | `application/launch/taskLaunchArms.ts`                         | 上传上限改收 `resolveUploadLimits()` 端口函数，不再收 `configPath`                                                                                                                                                                                                         |
 | 路由启动操作                                                                      | `application/launch/taskRouteLaunchOperations.ts`              | 任务授权改收 `TaskAuthorizationQueries`，不再收 `db`                                                                                                                                                                                                                       |
 | 启动参与者                                                                        | `application/launch/taskExecutionLaunchParticipant.ts`         | 同上                                                                                                                                                                                                                                                                       |
-| 工作区参与者三件、工作组资源投影                                                  | `application/ports/taskRouteWorkspace.ts`                      | 实现方（infrastructure）改从这里取类型；`admit(transaction)` 的参数仍是 `PersistenceDb` 类型                                                                                                                                                                               |
+| 工作区参与者三件、工作组资源投影                                                  | `application/ports/taskRouteLaunch.ts`                         | 实现方（infrastructure）改从这里取类型；`admit(transaction)` 的参数仍是 `PersistenceDb` 类型                                                                                                                                                                               |
 | 准入端口与准入请求                                                                | `application/ports/rootTaskAdmission.ts`                       | `admit(request)` 返回投影好的任务与事件引用；`publishAfterCommit(ref)`                                                                                                                                                                                                     |
 | 上传落地端口                                                                      | `application/ports/taskLaunchUploads.ts`                       | 包 `applyTaskWorkspaceUploads` 的 db、上传内容与输入文件存储                                                                                                                                                                                                               |
 | 准入事务、`projectLaunchedTask`、活跃成员查询、事件发布                           | `infrastructure/rootTaskAdmission.ts`                          | 事务内语句与次序逐条不变；两条表归属债随之改键                                                                                                                                                                                                                             |
@@ -87,7 +87,25 @@
 
 ## 6. 实施中的细化
 
-（实施后补。）
+- **准入请求**：请求只带两个 id、时间戳（内核的时钟读数）、启动事实与工作区租约；失败 / 分支默认值 / 成员去重仍在适配器里与行的拼装放在
+  一起（与 `projectLaunchedTask` 是同一份推导，事务体逐字搬迁）。`RootTaskLaunchSubject` 与 `RootLaunchMetadata` 两侧都要用，落在
+  `application/ports/rootTaskAdmission.ts`；`refClosureJson` 照实写成 `string | null`。工作区参与者三件与工作组资源投影落在
+  `application/ports/taskRouteLaunch.ts`。
+- **搬迁方式**：语法树脚本按行段把旧文件切到八个新文件（各段逐字），改动只在接缝：内核的上传落地、准入与发布三处改调端口，元数据推导改收
+  注入的 `directTaskInitiator`，两臂依赖的 `configPath` 换成 `fileUploadLimits`（声明位置不变，`launchConfiguration` 缺席时的条件分支逐字
+  保留），路由启动操作的授权查询改收 `taskAuthorization`，三处守卫类型改成 `TaskLaunchGuard`。导入由脚本按新位置改写相对路径、剔除未用项。
+- **上传端口**：计划类型按 domain 的类型声明（infrastructure 的 `UploadPlan` 在 `infrastructure/local/`，application 取不到）；适配器
+  `createTaskLaunchUploads` 放在 `infrastructure/taskWorkspaceUploads.ts`、紧挨被包的 `applyTaskWorkspaceUploads`；`Object.freeze` 写成
+  `Object.freeze<TaskLaunchUploads>(…)`，否则方法参数不受上下文类型约束（RFC-483 同一处）。
+- **装配**：composition 分两层——`createRootTaskLaunchKernelPorts({ db, workspaceUploads?, inputFiles? })` 给只用内核的装配点，
+  `createRootTaskLaunchPorts({ db, configPath, … })` 再加上传上限与授权查询；`providerRuntime` 的输入改为 `TaskRouteLaunchAssembly`，
+  形状与 bootstrap 现在传的相同，bootstrap 不改。
+- **用例**：构造内核、两臂、启动参与者与路由启动操作的 12 处改传上面两个装配函数；11 个用例改取 `domain/workgroupRuntimeConfig`；读源码的
+  15 个用例按断言意图改指新文件（需要两处来源的拼接内核与适配器），`rfc370-workspace-upload-bindings` 改锚新的装配文本，`rfc301` 的
+  initiator 映射计数改记在 composition；架构账本 6 个改路径（`rfc328` 的写入点分类、`rfc359-w7` 的建任务点与架构报告的字段锚点指向适配器）。
+  双引擎行为不新增用例：根启动、单代理、工作组、启动参与者与路由启动操作的既有双引擎用例（`rfc349-task-route-launch-postgresql-adapter`、
+  `rfc165-agent-launch`、`rfc165-scheduled-kinds`、`rfc363-task-preparation-admission`、`rfc370-workspace-upload-bindings` 等）走的就是
+  新内核与适配器。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 

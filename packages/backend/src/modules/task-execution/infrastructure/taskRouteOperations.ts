@@ -138,7 +138,7 @@ import {
   taskListOwnershipScopeCondition,
 } from './taskListPage/authorization'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
-import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from '../application/launch/taskExecutionLaunchParticipant'
 
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import {

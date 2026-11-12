@@ -6,12 +6,12 @@ import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ActionHostTaskLaunch } from '../application/ports/actionExecution'
 import type { DigitalEmployeeHostLaunch } from '../application/ports/digitalEmployeeExecution'
+import type { RootTaskLaunchKernel } from '../application/launch/rootTaskLaunch'
+import type { RootTaskLaunchSubject } from '../application/ports/rootTaskAdmission'
 import type {
-  RootTaskLaunchKernel,
-  RootTaskLaunchSubject,
   TaskRoutePreparedWorkspace,
   TaskRouteWorkspaceParticipant,
-} from './taskRouteLaunchOperations'
+} from '../application/ports/taskRouteLaunch'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 
 /** The launch actor (resolved lazily), its resource authority and the kernel; both adapters take the same three. */

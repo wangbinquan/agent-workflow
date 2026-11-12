@@ -5,7 +5,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
 import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
-import type { WorkgroupRouteLaunchResources } from './taskRouteLaunchOperations'
+import type { WorkgroupRouteLaunchResources } from '../application/ports/taskRouteLaunch'
 
 /**
  * RFC-359 AC-1（plan §5hn 批次二 ①）—— 工作组启动的资源面，**两个 provider 唯一的一份**。

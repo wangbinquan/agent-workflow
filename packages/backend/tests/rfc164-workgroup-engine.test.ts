@@ -62,7 +62,7 @@ import { createUser } from './helpers/userFixture'
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
-} from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+} from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID as WG_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID,
@@ -520,7 +520,7 @@ describeEachProviderHttpApplication(
       // the concurrent RFC-165 space-schema migration (scratch/repoUrl), so we
       // lock the wiring at the pure boundary.
       const { resolveWorkgroupCollaborators } =
-        await import('@/modules/task-execution/infrastructure/workgroupRuntimeConfig')
+        await import('@/modules/task-execution/domain/workgroupRuntimeConfig')
       const members = [
         { memberType: 'agent' as const, userId: null },
         { memberType: 'human' as const, userId: 'u-pm' },

@@ -41,7 +41,7 @@ import {
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
 } from './helpers/workgroupTurns'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import { createLogger } from '../src/util/log'
 import { createAgent } from './helpers/model/resourceWrites'
 

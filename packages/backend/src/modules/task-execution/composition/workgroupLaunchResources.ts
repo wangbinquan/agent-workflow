@@ -2,7 +2,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 
 import { createWorkgroupLaunchResourceOperations } from '../infrastructure/workgroupLaunchResourceOperations'
-import type { WorkgroupRouteLaunchResources } from '../infrastructure/taskRouteLaunchOperations'
+import type { WorkgroupRouteLaunchResources } from '../application/ports/taskRouteLaunch'
 
 /**
  * 组合根取工作组启动资源面的**唯一入口**（与 `agentLaunchResources.ts` 同形）：

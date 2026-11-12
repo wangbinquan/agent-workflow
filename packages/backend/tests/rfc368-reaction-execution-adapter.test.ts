@@ -381,7 +381,7 @@ describe('RFC-368 T7 —— 预分配 taskId 的接线（源码层兜底，端�
     const kernel = readFileSync(
       resolve(
         ROOT,
-        'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+        'packages/backend/src/modules/task-execution/application/launch/rootTaskLaunch.ts',
       ),
       'utf8',
     )

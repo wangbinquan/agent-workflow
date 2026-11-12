@@ -151,16 +151,22 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）**改锚**：multipart 编排体
     // （`services/multipartTaskStart.ts`）整份删除——那条路由改走与 PostgreSQL 共用的启动
     // 参与者 → 根启动内核。原来那四条断言锁的是「编排体自己解析一次启动配置、并把同一份
-    // 依赖交给两条交接」，等价的新形状是：**内核从 `dependencies.configPath` 解析上传上限，
-    // 路由一个字都不自解析**。
+    // 依赖交给两条交接」，等价的新形状是：**启动参与者经 `dependencies.fileUploadLimits()` 取上传上限
+    // （RFC-486：composition 用 `resolveUploadLimits(input.configPath)` 装配），路由一个字都不自解析**。
     const kernel = readFileSync(
       join(
         import.meta.dir,
-        '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+        '../src/modules/task-execution/application/launch/taskExecutionLaunchParticipant.ts',
       ),
       'utf8',
     )
-    expect(kernel).toContain('resolveUploadLimits(dependencies.configPath)')
+    expect(kernel).toContain('dependencies.fileUploadLimits()')
+    expect(
+      readFileSync(
+        join(import.meta.dir, '../src/modules/task-execution/composition/taskRouteLaunch.ts'),
+        'utf8',
+      ),
+    ).toContain('fileUploadLimits: () => resolveUploadLimits(input.configPath)')
     expect(routesSrc).not.toContain('resolveUploadLimits(')
     // T25 后路由侧不再持有 launchRuntime spread（三处全随编排体走）。
     expect(routesSrc.includes('...launchRuntime')).toBe(false)

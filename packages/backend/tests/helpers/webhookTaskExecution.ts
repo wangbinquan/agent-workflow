@@ -3,7 +3,10 @@ import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
-import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
+import {
+  createRootTaskLaunchPorts,
+  createTaskRouteWorkspaceParticipant,
+} from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hn 批次二 ⑦）—— webhook 触发的 TaskExecution 参与者，**照生产装配**。
 //
@@ -67,8 +70,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       : { gitBaselineSyncWindowMs: launchRuntime.gitBaselineSyncWindowMs }),
   })
   const launches = createTaskExecutionLaunchParticipant({
-    db: input.db,
-    configPath: input.configPath,
+    ...createRootTaskLaunchPorts({ db: input.db, configPath: input.configPath }),
     gitCommitIdentity: input.identityAccess.getUserGitCommitIdentity,
     agent: {
       resources: composeAgentLaunchResourceOperations({ db: input.db }),

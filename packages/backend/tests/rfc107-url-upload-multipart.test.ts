@@ -937,8 +937,9 @@ describe('RFC-107 — source anchors', () => {
         'src',
         'modules',
         'task-execution',
-        'infrastructure',
-        'taskRouteLaunchOperations.ts',
+        'application',
+        'launch',
+        'rootTaskLaunch.ts',
       ),
       'utf8',
     )

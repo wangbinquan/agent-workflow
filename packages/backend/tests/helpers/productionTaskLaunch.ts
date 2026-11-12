@@ -28,11 +28,9 @@ import {
 } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import {
-  createTaskExecutionLaunchParticipant,
-  type RootTaskLaunchRequest,
-  type TaskRouteWorkspaceParticipant,
-} from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+import { createTaskExecutionLaunchParticipant } from '@/modules/task-execution/application/launch/taskExecutionLaunchParticipant'
+import { type RootTaskLaunchRequest } from '@/modules/task-execution/application/launch/rootTaskLaunch'
+import { type TaskRouteWorkspaceParticipant } from '@/modules/task-execution/application/ports/taskRouteLaunch'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { admitTransferredWorkspace } from '@/modules/task-execution/infrastructure/transferredWorkspaceAdmission'
 import { loadFrozenSpaceLayout } from '@/modules/task-execution/infrastructure/frozenWorkspaceLayout'
@@ -55,6 +53,7 @@ import { composeTestTaskDriveFactory, createTestTaskDriveCoordinator } from './l
 import { Paths } from '@/util/paths'
 import { NotFoundError } from '@/util/errors'
 import type { WorktreeCleanupProvenance } from '@/util/git'
+import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 
 export interface TestTaskLaunchOptions extends Omit<
   TaskContinuationDependencies,
@@ -415,7 +414,10 @@ export async function launchTestTask(
   } else {
     const participant = createTaskExecutionLaunchParticipant({
       ...dependencies,
-      configPath: options.configPath ?? `${appHome}/config.json`,
+      ...createRootTaskLaunchPorts({
+        db,
+        configPath: options.configPath ?? `${appHome}/config.json`,
+      }),
       agent: {
         resources: composeAgentLaunchResourceOperations({ db }),
         integrity: undefined as never,

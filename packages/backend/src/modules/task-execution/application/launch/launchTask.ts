@@ -1,4 +1,5 @@
 import { DomainError } from '@/util/errors'
+import type { TaskLaunchGuard } from '../ports/taskLaunchGuard'
 
 interface PreparedWorkspace {
   readonly taskId: string
@@ -9,12 +10,8 @@ interface Admission<Result> {
   readonly failed: boolean
   readonly projection: Result
 }
-interface LaunchGuard {
-  taskCommitted(taskId: string): Promise<void>
-  launchSettled(taskId: string): Promise<void>
-  failed(code: string): Promise<void>
-  release(): void
-}
+/** RFC-486: the lifecycle half of the task-execution-owned launch guard. */
+type LaunchGuard = Pick<TaskLaunchGuard, 'taskCommitted' | 'launchSettled' | 'failed' | 'release'>
 
 /** Task owns the admission boundary. A committed workspace is never rolled back
  * when event publication, dispatch, or a source receipt subsequently fails.

@@ -18,7 +18,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { buildWorkgroupRuntimeConfig } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupRuntimeConfig } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import {
   deriveWorkgroupRunHistory,
   type HostRunLite,

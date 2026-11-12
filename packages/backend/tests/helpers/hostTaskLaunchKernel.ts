@@ -15,13 +15,14 @@ import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/in
 import {
   createRootTaskLaunchKernel,
   type RootTaskLaunchDependencies,
-} from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
-import type { RootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
+} from '@/modules/task-execution/application/launch/rootTaskLaunch'
+import type { RootTaskLaunchKernel } from '@/modules/task-execution/application/launch/rootTaskLaunch'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import {
   createTestTaskDriveCoordinator,
   type TaskDriveCoordinatorDependencies,
 } from './legacyTaskDrive'
+import { createRootTaskLaunchKernelPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 
 export function createTestHostTaskLaunchKernel(input: {
   readonly humanGateOpen: Parameters<typeof createTestTaskDriveCoordinator>[0]['humanGateOpen']
@@ -64,7 +65,7 @@ export function createTestHostTaskLaunchKernel(input: {
   // RFC-382: the session bundle supplies this primitive in production; this legacy
   // fixture retains its explicit completion mode without a test-only production wrapper.
   return createRootTaskLaunchKernel({
-    db: input.db,
+    ...createRootTaskLaunchKernelPorts({ db: input.db }),
     gitCommitIdentity: input.gitCommitIdentity,
     coordinator: input.coordinator ?? coordinator,
     workspace:

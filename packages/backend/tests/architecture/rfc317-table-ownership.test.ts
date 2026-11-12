@@ -358,6 +358,11 @@ const key = (entry: { readonly table: string; readonly file: string }): string =
 // reads `users` — from the workgroup repository into the one workgroup write
 // participant; the move keeps the original debt identity the same way.
 const CONTENT_DEBT_SUCCESSORS: Readonly<Record<string, string>> = {
+  // RFC-486: the root task admission transaction moved out of the route launch file unchanged.
+  'taskCollaborators|task-execution/infrastructure/rootTaskAdmission.ts':
+    'taskCollaborators|task-execution/infrastructure/taskRouteLaunchOperations.ts',
+  'users|task-execution/infrastructure/rootTaskAdmission.ts':
+    'users|task-execution/infrastructure/taskRouteLaunchOperations.ts',
   'users|resource-catalog/infrastructure/workgroupMutationParticipant.ts':
     'users|resource-catalog/infrastructure/workgroupRepository.ts',
   'contentObjects|system-operations/infrastructure/crewstation/objectPublications.ts':

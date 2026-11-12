@@ -26,7 +26,7 @@ import { createResumeEngine } from './helpers/resumeEngine'
 import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
-import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,

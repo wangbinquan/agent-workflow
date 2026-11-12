@@ -24,6 +24,7 @@ import {
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import {
   createRootTaskLaunchKernel,
+  createRootTaskLaunchKernelPorts,
   createTaskRouteWorkspaceParticipant,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
@@ -165,7 +166,7 @@ try {
     })
   }
   const kernel = createRootTaskLaunchKernel({
-    db,
+    ...createRootTaskLaunchKernelPorts({ db }),
     id: () => input.taskId,
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
     workspace: {
