@@ -17,7 +17,7 @@ import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastruc
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
 import { bindNativeAgentMaterialWorkspace, getRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnPlan } from '@/services/runtime/types'
-import { resolveBoundaryMounts } from '@/services/execution/workspaceBoundary'
+import { resolveBoundaryMounts } from '@/modules/source-control/public/queries'
 
 /** Explicit compatibility binding. Getters retain the original options reads
  * at their original core boundaries; creating the purpose performs no IO,

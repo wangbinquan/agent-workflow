@@ -17,6 +17,8 @@ export interface RepositoryOverviewQueries {
 }
 
 export { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
+// RFC-487: the task agent mount rule; Task Execution's local run entry reads it here.
+export { resolveBoundaryMounts } from '../domain/taskAgentMounts'
 
 export {
   existingRepositoryIds,

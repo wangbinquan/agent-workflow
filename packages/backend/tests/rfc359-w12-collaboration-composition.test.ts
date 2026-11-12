@@ -12,7 +12,10 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
+import {
+  memorySystemAgentBindingForTest,
+  runtimeManagementDistillRuntimes,
+} from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 W12 — exercise the two collaboration route composition roots.
@@ -84,6 +87,7 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
     taskNodeOutputs: createNodeOutputQueries(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
+    runtimeProfiles: runtimeManagementDistillRuntimes(db),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(APP_HOME, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

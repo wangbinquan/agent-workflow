@@ -3,6 +3,7 @@ import type {
   RuntimeDriverCapabilities,
   SystemEventObservation,
 } from '@/modules/runtime-management/public/participants'
+import type { NativeSkillContent } from '@/modules/resource-catalog/public/types'
 // RFC-462 (RFC-294 W9-D): the observation vocabulary (normalized events, system-event observation, the driver's
 // static capability declaration) lives in runtime-management; re-exported so the drivers' imports stay put.
 export type {
@@ -108,20 +109,11 @@ export interface RenderedInjectionV1 {
   declared: DeclaredManifestV1
 }
 
-/** Where an injected skill comes from (RFC-004; moved here from runner.ts so
- *  drivers can type their skill inputs without a runner import — RFC-143 PR-4;
- *  runner re-exports both for existing import sites). RFC-178: skills are
- *  managed-only; `project` = a repo-local skill the CLI self-discovers. */
-export type SkillSource = 'managed' | 'project'
-
-export interface ResolvedSkill {
-  name: string
-  sourceKind: SkillSource
-  /** Absolute path for managed. Unused for project (self-discovered). */
-  sourcePath?: string
-  /** Managed resource identity and revision used for dispatch fencing. */
-  skillId?: string
-  contentVersion?: number
+// RFC-487: the native skill content record is produced by Resource Catalog and declared there (`NativeSkillContent`,
+// `SkillSource` re-exported so the drivers' imports stay put). The driver side adds the revision re-read that the local
+// material compiler fills for dispatch fencing; Resource Catalog's public contract stays data-only.
+export type { SkillSource } from '@/modules/resource-catalog/public/types'
+export interface ResolvedSkill extends NativeSkillContent {
   /** Re-read the owning row at both sides of the filesystem snapshot. */
   readContentVersion?: () => Promise<number>
 }

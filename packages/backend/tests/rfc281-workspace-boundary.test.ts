@@ -21,11 +21,12 @@ import { resolve } from 'node:path'
 // RFC-282 C4 — import paths follow the per-runtime split; every assertion
 // below is byte-unchanged (golden table: 断言内容一字不改).
 import {
-  resolveBoundaryMounts,
   scanSiblingTaskRoots,
   toolchainCacheDirs,
   type BoundaryCtx,
 } from '../src/services/execution/workspaceBoundary'
+// RFC-487: the mount rule moved into source-control's domain and is offered through its public queries.
+import { resolveBoundaryMounts } from '@/modules/source-control/public/queries'
 import {
   composeOpencodeBoundary,
   machineSkillRoots,

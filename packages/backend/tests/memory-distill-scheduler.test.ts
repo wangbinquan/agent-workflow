@@ -18,7 +18,12 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
-import { distillTick, type RunDistillOptions } from './helpers/memoryDistill'
+// RFC-487: the distiller's runtime resolution is runtime-management's, bound as bootstrap binds it.
+import {
+  distillTick,
+  runtimeManagementDistillRuntimes,
+  type RunDistillOptions,
+} from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -51,7 +56,6 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
@@ -76,7 +80,7 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
     ),
-    runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
+    runtimeResolver: runtimeManagementDistillRuntimes(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,

@@ -36,8 +36,9 @@ resource-catalog）。现在它们绕道 `services/` 取驱动不算 context 边
   composition 交出「按协议探测默认二进制」，bootstrap 绑定（standalone 启动时对 claude-code 的软探测共用它）。
 - **G3 挂载规则归 source-control**：`resolveBoundaryMounts` 迁入 source-control 的 domain，经 `public/queries` 交给 task-execution 的
   本地运行入口。
-- **G4 原生内容记录的类型归 resource-catalog**：`ResolvedSkill`、`SkillSource`、`RuntimePlugin` 由 resource-catalog 声明并从
-  `public/types` 交出（runtime-management → resource-catalog 是允许方向）；一族的原位置改为类型转出，其他使用方不改。
+- **G4 原生内容记录的类型归 resource-catalog**：`SkillSource`、`RuntimePlugin` 与技能内容记录 `NativeSkillContent`（原
+  `ResolvedSkill` 的数据字段）由 resource-catalog 声明并从 `public/types` 交出（runtime-management → resource-catalog 是允许方向）；
+  一族的 `ResolvedSkill` 扩展 `NativeSkillContent`、只加驱动侧的 `readContentVersion` 重读（public 合同只放数据）；其他使用方不改。
 - **G5 锁与账本**：新增 RFC-487 用例锁住四个 context 不再取一族；表归属债按实测销账；减速带不升、触及的收紧到实测。
 
 ## 3. 非目标
@@ -58,8 +59,9 @@ resource-catalog）。现在它们绕道 `services/` 取驱动不算 context 边
 
 ## 5. 验收标准
 
-- **AC-1**：memory、resource-catalog、source-control、system-operations 的生产文件不再 import 运行时驱动一族；memory 不再读
-  `runtimes` 表，其解析器删除，表归属债销这一条。
+- **AC-1**：memory、resource-catalog、source-control、system-operations 的生产文件不再 import 运行时驱动一族，唯一的例外是
+  resource-catalog 本机 MCP 诊断的执行体（§3 非目标，三条边逐条钉住、另立下一步）；memory 不再读 `runtimes` 表，其解析器删除，表
+  归属债销这一条。
 - **AC-2**：memory 蒸馏的运行时解析、doctor 的运行时探测、任务代理的挂载列表与原生内容记录在同样的输入下与此前一致（用例对拍）。
 - **AC-3**：越 DAG 的值边与 offered 文件对不升；public surface 只增本 RFC 声明的符号；减速带 60 项不升、触及的收紧到实测。
 - **AC-4**：受影响用例全部通过；推送后 exact SHA 的 GitHub Actions 全绿（环境性红格逐格归因、如实记录）。

@@ -6,7 +6,7 @@ import {
   mergeTreeGateError,
   MIN_GIT_VERSION,
 } from '@/platform/workspace/local/gitVersion'
-import { getRuntimeDriver } from '@/services/runtime'
+import { composeDefaultRuntimeBinaryProbe } from '@/modules/runtime-management/composition/defaultRuntimeBinaryProbe'
 import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { createFileArchivedEventsReader } from '@/platform/background/eventsArchiveReader'
@@ -208,13 +208,14 @@ export function composeStandaloneProfile(): DeploymentProfile {
       // optional too, but deliberately does not probe it here at all: its
       // version/build admission belongs to explicit runtime validation and use.
       if (config.defaultRuntime === 'claude-code') {
-        const ccDriver = getRuntimeDriver('claude-code')
-        const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
+        // RFC-487: the same default-binary probe the native doctor receives from runtime-management.
+        const runtimeBinary = composeDefaultRuntimeBinaryProbe()
+        const claudeProbe = await runtimeBinary.probe('claude-code', config)
         if (!claudeProbe.compatible) {
           log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
             binary: claudeProbe.binary,
             found: claudeProbe.version,
-            requiredMinimum: ccDriver.minVersion,
+            requiredMinimum: runtimeBinary.minVersion('claude-code'),
             reason: claudeProbe.incompatibleReason ?? 'not found',
           })
         } else {

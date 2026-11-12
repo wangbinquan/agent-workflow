@@ -418,6 +418,10 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     db: input.db,
     nodeRunPrompts,
     systemAgentBinding: memorySystemAgentBinding,
+    // RFC-487: the distiller resolves its runtime through runtime-management's internal-agent resolution.
+    runtimeProfiles: {
+      resolve: (request) => core.runtimeRegistry.resolveInternalAgentRuntime(request),
+    },
     contexts: identityAccess.contexts,
     reviewedArtifacts: {
       read: async (finalPath) =>

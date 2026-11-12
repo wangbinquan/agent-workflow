@@ -19,7 +19,10 @@ import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expectNoDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
-import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
+import {
+  memorySystemAgentBindingForTest,
+  runtimeManagementDistillRuntimes,
+} from './helpers/memoryDistill'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -352,6 +355,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       taskNodeOutputs: createNodeOutputQueries(db),
       clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
       systemAgentBinding: memorySystemAgentBindingForTest(),
+      runtimeProfiles: runtimeManagementDistillRuntimes(db),
       db,
       reviewedArtifacts: noReviewedContent,
       nodeRunPrompts: Object.freeze(new Reader()),

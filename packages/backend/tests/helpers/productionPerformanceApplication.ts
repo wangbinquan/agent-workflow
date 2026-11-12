@@ -3,7 +3,7 @@ import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './o2Closure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
-import { memorySystemAgentBindingForTest } from './memoryDistill'
+import { memorySystemAgentBindingForTest, runtimeManagementDistillRuntimes } from './memoryDistill'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -144,6 +144,7 @@ export async function createProductionPerformanceApplication(
     taskNodeOutputs: createNodeOutputQueries(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
+    runtimeProfiles: runtimeManagementDistillRuntimes(db),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

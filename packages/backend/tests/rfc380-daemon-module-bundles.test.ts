@@ -118,6 +118,10 @@ function graph(
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     systemAgentBinding: observationModules.memorySystemAgentBinding,
+    // RFC-487: bound as daemonApplication binds it.
+    runtimeProfiles: {
+      resolve: (request) => core.runtimeRegistry.resolveInternalAgentRuntime(request),
+    },
     contexts: core.identityAccess.contexts,
     reviewedArtifacts: { read: async () => '' },
   })

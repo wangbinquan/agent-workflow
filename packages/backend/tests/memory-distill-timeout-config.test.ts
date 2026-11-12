@@ -1,7 +1,13 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { taskFixture, workflowFixture } from './helpers/model'
-import { distillTick, runDistill, type RunDistillOptions } from './helpers/memoryDistill'
+// RFC-487: the distiller's runtime resolution is runtime-management's, bound as bootstrap binds it.
+import {
+  distillTick,
+  runDistill,
+  runtimeManagementDistillRuntimes,
+  type RunDistillOptions,
+} from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // 记忆蒸馏超时：默认值 + 可配置 + 全链路接线。
@@ -33,7 +39,6 @@ import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
@@ -51,7 +56,7 @@ function createContext(db: PersistenceDb) {
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
     ),
-    runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
+    runtimeResolver: runtimeManagementDistillRuntimes(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,

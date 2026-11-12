@@ -116,22 +116,8 @@ export function toolchainCacheDirs(home: string = homedir()): string[] {
   ]
 }
 
-/**
- * 本次 run 的边界 mounts（runner 用）。
- *
- * 数据源是 scheduler 已填的 per-repo worktree 路径；**无论元数据说什么，进程
- * cwd 恒在其中**——否则 agent 会被挡在自己的工作树外（§0 最忌）。提成纯函数是
- * 为了让这条不变量有真正锁得住的断言面（实现门 P3-7：原先测试手抄了 runner 里
- * 的表达式，改 runner 测试照样绿）。
- */
-export function resolveBoundaryMounts(
-  worktreePath: string,
-  repoWorktreePaths: readonly string[],
-): string[] {
-  const fromRepos = repoWorktreePaths.filter((p) => p.length > 0)
-  const withCwd = fromRepos.includes(worktreePath) ? fromRepos : [worktreePath, ...fromRepos]
-  return withCwd.length > 0 ? withCwd : [worktreePath]
-}
+// RFC-487：`resolveBoundaryMounts`（本次 run 的边界 mounts）迁入 source-control 的
+// `domain/taskAgentMounts.ts`，经其 `public/queries` 交出。
 
 /** 本次 run 的合法工作区数据源（全部取自 scheduler/runner 既有结构，不从路径形状猜）。 */
 export interface BoundaryCtx {

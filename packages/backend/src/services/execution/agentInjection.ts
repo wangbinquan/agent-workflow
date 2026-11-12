@@ -17,11 +17,12 @@
 // `public/types` 里的 EMPTY_RUNTIME_PROFILE（RFC-463）—— 不得引入对 driver / runner / scheduler
 // 的运行时依赖（会成环）。
 
-import type { Agent, DeclaredInjectionManifest, Mcp, Plugin } from '@agent-workflow/shared'
+import type { Agent, DeclaredInjectionManifest, Mcp } from '@agent-workflow/shared'
 import {
   EMPTY_RUNTIME_PROFILE,
   type RuntimeProfile,
 } from '@/modules/runtime-management/public/types'
+import type { RuntimePlugin } from '@/modules/resource-catalog/public/types'
 
 export class AgentInjectionError extends Error {
   constructor(
@@ -40,16 +41,9 @@ export class AgentInjectionError extends Error {
  */
 export type DeclaredManifestV1 = DeclaredInjectionManifest
 
-/**
- * Runtime-only plugin projection. Persistence may provide the historical
- * cached path while Resource Catalog provides an already-normalized file
- * specifier; spawn assembly consumes exactly one locator and never a row.
- */
-export type RuntimePlugin = Pick<Plugin, 'id' | 'name' | 'options' | 'enabled'> &
-  (
-    | { readonly cachedPath: string; readonly runtimeSpecifier?: never }
-    | { readonly runtimeSpecifier: string; readonly cachedPath?: never }
-  )
+// RFC-487: the runtime-only plugin projection is produced by Resource Catalog and declared there; re-exported so the
+// injection renderers' importers stay put until the family moves into runtime-management.
+export type { RuntimePlugin } from '@/modules/resource-catalog/public/types'
 
 /** 全空 manifest —— 各渲染路径在此之上按面填充。 */
 export function emptyDeclaredManifest(): DeclaredManifestV1 {

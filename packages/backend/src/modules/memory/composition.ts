@@ -4,6 +4,7 @@ import type { NodeRunPromptReader } from '@/modules/task-execution/public/querie
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createMemoryDistillQueries } from './application/distillQueries'
+import { distillRuntimeProfile } from './application/distill/distillRuntimeProfile'
 import type { MemoryDistillReadStore } from './application/ports/distillReadStore'
 import type { MemoryInjectionReadStore } from './application/ports/injectionReadStore'
 import type { MemoryResourceScopeAccessParticipant } from './application/ports/resourceScopeAccess'
@@ -11,6 +12,7 @@ import type {
   MemoryDistillReviewedArtifactReader,
   MemoryDistillRuntimeResolver,
   MemoryDistillWorkStore,
+  NativeMemoryDistillRuntimeResolver,
   ResolvedMemoryDistillRuntime,
   SelectedMemoryDistillRuntime,
 } from './application/ports/distillWorkStore'
@@ -32,7 +34,6 @@ import {
   type MemoryCatalogTestHooks,
   type MemoryTransaction,
 } from './infrastructure/memoryCatalogOperations'
-import { DrizzleMemoryDistillRuntimeResolver } from './infrastructure/memoryDistillRuntimeResolver'
 import type { MemoryOperations } from './public/operations'
 import type { MemoryInjectionQueries } from './public/queries'
 import type { MemoryCatalogOperations } from './public/operations'
@@ -140,6 +141,12 @@ export interface ComposeMemoryOperationsOptions {
     readonly family: SystemAgentRunFamily
     bindRuntime(runtime: ResolvedMemoryDistillRuntime): SelectedMemoryDistillRuntime
   }
+  /**
+   * RFC-487: the distiller's runtime profile resolution. Bootstrap binds runtime-management's
+   * `resolveInternalAgentRuntime` (the one internal-agent resolution, RFC-117); memory neither reads the `runtimes` table
+   * nor the runtime driver registry.
+   */
+  readonly runtimeProfiles: NativeMemoryDistillRuntimeResolver
   readonly injectionQueries?: MemoryInjectionQueries
   readonly catalogBinding?: MemoryCatalogBinding
 }
@@ -156,7 +163,7 @@ export function composeMemoryOperationsFor(input: ComposeMemoryOperationsOptions
 export function composeMemoryOperationsFor(
   input: ComposeMemoryOperationsOptions,
 ): MemoryOperations {
-  const nativeRuntimeResolver = new DrizzleMemoryDistillRuntimeResolver(input.db)
+  const nativeRuntimeResolver = input.runtimeProfiles
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db, input.clarifyAnswers),
     workStore: new DrizzleMemoryDistillWorkStore(
@@ -167,7 +174,9 @@ export function composeMemoryOperationsFor(
     ),
     runtimeResolver: {
       async resolve(request) {
-        return input.systemAgentBinding.bindRuntime(await nativeRuntimeResolver.resolve(request))
+        return input.systemAgentBinding.bindRuntime(
+          distillRuntimeProfile(await nativeRuntimeResolver.resolve(request)),
+        )
       },
     },
     systemAgents: input.systemAgentBinding.family,

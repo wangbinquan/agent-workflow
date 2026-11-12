@@ -61,6 +61,9 @@ runtime-management，它们对运行时驱动一族的四处使用改到各自 o
 - 删除 `infrastructure/memoryDistillRuntimeResolver.ts`。
 - `ComposeMemoryOperationsOptions` 增 `runtimeProfiles: NativeMemoryDistillRuntimeResolver`，类型是 memory 自有的端口。
   `composeMemoryOperationsFor` 用它代替 `new DrizzleMemoryDistillRuntimeResolver(db)`，外层的 `bindRuntime` 照旧。
+- runtime-management 的返回值是超集。memory 用 application 里的纯函数 `distillRuntimeProfile` 先投影，再交给 `bindRuntime`，只留端口
+  声明的协议、二进制、模型、`isSandbox` 与观测身份。`bindRuntime` 本会转发 `variant`、`temperature`、`configDir` 等字段；不投影，
+  蒸馏运行就会开始带上已登记运行时的这些参数（§6 细化 3）。
 - `composeDaemonMemoryModules` 原样转交。`daemonApplication` 绑定 `{ resolve: (request) => core.runtimeRegistry.resolveInternalAgentRuntime(request) }`。
   runtime-management 的返回值在结构上满足 memory 的 `ResolvedMemoryDistillRuntime`，memory 不 import runtime-management 的值。
 - 用例里直接 new 这个解析器的三处改用同一绑定（helper 用 runtime-management 的 composition 组注册表）。
@@ -88,10 +91,13 @@ runtime-management，它们对运行时驱动一族的四处使用改到各自 o
 
 **resource-catalog（G4）**
 
-- `SkillSource`、`ResolvedSkill`、`RuntimePlugin` 的声明逐字迁入 resource-catalog 的 `domain/nativeAgentMaterialContents.ts`，由
-  `public/types.ts` 交出。
-- `services/runtime/types.ts` 与 `services/execution/agentInjection.ts` 改为从 resource-catalog 的 `public/types` 转出同名类型，
-  自己用时 `import type`。
+- `SkillSource`、`RuntimePlugin` 的声明逐字迁入 resource-catalog 的 `domain/nativeAgentMaterialContents.ts`；技能内容记录以
+  `NativeSkillContent` 迁入，只带数据字段。三者由 `public/types.ts` 交出。
+- `ResolvedSkill` 的 `readContentVersion` 是驱动侧的重读：只有 runtime-management 的本机材料编译器填写与转交，resource-catalog
+  从不产出。它留在一族：`interface ResolvedSkill extends NativeSkillContent`，只加这一个成员。public 合同只放数据，函数成员会计作
+  public surface 偏差（§6 细化 2）。
+- `services/runtime/types.ts` 转出 `SkillSource`，`services/execution/agentInjection.ts` 转出 `RuntimePlugin`；二者都取 resource-catalog
+  的 `public/types`，自己用时 `import type`。
   - legacy → 模块 public 是允许的形状，一族的 `runtime/selfCheck.ts` 已经这样取 resource-catalog 的 `public/types`。
   - 一族、runtime-management 与 task-execution 的其余使用方一个不改，整族迁入时再改取 public。
 - 材料引用改从自己的 domain 取类型。
@@ -106,7 +112,7 @@ runtime-management，它们对运行时驱动一族的四处使用改到各自 o
   - source-control 的新转出由 task-execution 消费，是 DAG 内的边；
   - 四个 context 现有的、指向 runtime-management `public/participants` 的类型边不在范围内，原样保留。
 - public surface 增：
-  - resource-catalog `public/types` 3 个类型；
+  - resource-catalog `public/types` 3 个类型（`NativeSkillContent`、`RuntimePlugin`、`SkillSource`，都只有数据成员）；
   - source-control `public/queries` 1 个函数。
 
   预期它们都有生产消费方：一族与 task-execution 的本机运行入口。未消费 public 符号以报告实测为准，不得升。
@@ -124,12 +130,13 @@ runtime-management，它们对运行时驱动一族的四处使用改到各自 o
 2. memory 的生产文件不再引用 `runtimes` 表，`DrizzleMemoryDistillRuntimeResolver` 不再存在；memory 的装配从输入取 `runtimeProfiles`；
    bootstrap 用 `resolveInternalAgentRuntime` 绑定它。
 3. system-operations 的本机 doctor 经注入的 `DoctorRuntimeBinaryProbe` 探测；bootstrap 的 doctor 工厂与 standalone 软探测都取
-   runtime-management 的 `composeDefaultRuntimeBinaryProbe`。
+   runtime-management 的 `composeDefaultRuntimeBinaryProbe`。`windows-platform.yml` 的两份路径过滤都登记探测链的新位置（§6 细化 4）。
 4. 下面两类声明各只在 owner 的 domain 出现一次：
    - `resolveBoundaryMounts` 只在 source-control 的 domain 声明一次，经 `public/queries` 交出；
-   - `ResolvedSkill`、`SkillSource`、`RuntimePlugin` 只在 resource-catalog 的 domain 声明一次，经 `public/types` 交出。
+   - `SkillSource`、`NativeSkillContent`、`RuntimePlugin` 只在 resource-catalog 的 domain 声明一次，经 `public/types` 交出；
+     `ResolvedSkill` 只在一族声明一次，扩展 `NativeSkillContent`、成员只有 `readContentVersion`。
 
-   一族的原位置只剩类型转出，没有第二份声明。
+   一族的其余原位置只剩类型转出，没有第二份声明。第 1 条里 resource-catalog 本机 MCP 诊断执行体的三条边逐条钉住（§6 细化 1）。
 
 5. 行为对拍（两种 provider）：memory 经 bootstrap 形状的绑定解析四种输入，结果与此前一致：
    - 已注册的名字（带观测身份）；
@@ -155,7 +162,32 @@ runtime-management，它们对运行时驱动一族的四处使用改到各自 o
 - 行为偏移：memory 解析与此前不同 → 第 5 条与既有蒸馏用例红。唯一允许的差别是未知名字的那条警告日志（proposal §4）。
 - 装配漏传：memory 或 doctor 少了绑定 → `tsc` 报缺成员，所以端口一律是必填成员。
 
-## 6. 取舍（可推翻）
+## 6. 取舍（可推翻）与实施中的细化
+
+细化（集中验证与实现门查出，已改；1、2 是首批用例，3 是实现门自审，4 是全仓旧路径扫描）：
+
+1. 第 1 条用例原先断言 resource-catalog 全部生产文件零依赖，但本机 MCP 诊断的执行体是 proposal §3 写明的非目标。现在这三条边
+   逐条钉住，只许减。proposal AC-1 同步写明这一例外。
+2. 第一版把含函数成员的 `ResolvedSkill` 整个交出 resource-catalog 的 `public/types`：
+   - `rfc294-architecture-preflight` 报一条未登记的类型偏差（函数类型）；
+   - `public-surface-deviations` 58 > 57。
+
+   改为 resource-catalog 只交数据字段（`NativeSkillContent`），驱动侧的重读留在一族的扩展里。
+
+3. 实现门自审发现 memory 的系统代理绑定 `bindRuntime` 按固定字段表转发（含 `variant`、`temperature`、`steps`、`maxSteps`、
+   `extraArgs`、`configDir`、`name`）。
+   - 旧的 memory 解析器只给协议、二进制、模型、`isSandbox` 与观测身份；
+   - runtime-management 的解析给的是全量档案。
+
+   直接接上会让蒸馏运行带上已登记运行时的参数，这是行为变化。所以 memory 在自己的边界投影回端口声明的字段
+   （`application/distill/distillRuntimeProfile.ts`），用例 ② 钉住投影。
+
+4. 集中验证的全仓旧路径扫描发现：`windows-platform.yml` 的路径过滤逐个文件登记 doctor 一族，Windows 上的 doctor 用例经 bootstrap 的
+   工厂建 doctor。探测从一族的 `getRuntimeDriver`（`services/runtime/index.ts` 已登记）换到 runtime-management 的两个新文件、由
+   bootstrap 绑定之后，改这三个文件不会在推送时触发 Windows 运行。两份过滤（push 与 pull_request）都登记这三个文件，用例 ③ 钉住
+   （同 RFC-473 的登记做法）。
+
+取舍：
 
 - **memory 改用 runtime-management 的解析，而不是给 memory 留一份读表的实现**：同一规则只留一份。RFC-117 本就把蒸馏器列为它的
   使用方，复制品读的是别人的表。代价是未知名字多一条警告日志。

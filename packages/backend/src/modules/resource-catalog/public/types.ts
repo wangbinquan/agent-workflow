@@ -1,6 +1,12 @@
 export type { ResourcePackageApplyArtifactRecoveryPort } from '../application/resourcePackageMaintenance'
 export type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
 export type { PluginGenerationFilesystemGcPort } from '../application/ports/pluginGenerationGc'
+// RFC-487: native skill / plugin content records this module produces for a task agent's local material compiler.
+export type {
+  NativeSkillContent,
+  RuntimePlugin,
+  SkillSource,
+} from '../domain/nativeAgentMaterialContents'
 
 import type {
   McpRuntimeTestCancelRequest,

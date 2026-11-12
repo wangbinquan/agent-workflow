@@ -1,6 +1,6 @@
 import { ulid } from 'ulid'
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
-import { resolveBoundaryMounts } from '@/services/execution/workspaceBoundary'
+import { resolveBoundaryMounts } from '../../domain/taskAgentMounts'
 
 type AgentMaterialContentReference = AgentMaterialIntent['workspace']
 

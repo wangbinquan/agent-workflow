@@ -4,7 +4,10 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
+import {
+  memorySystemAgentBindingForTest,
+  runtimeManagementDistillRuntimes,
+} from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 AC12: command contexts must retain the capabilities actually supplied at
@@ -74,6 +77,7 @@ function composeCapabilities(db: PersistenceDb, appHome: string) {
     taskNodeOutputs: createNodeOutputQueries(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
+    runtimeProfiles: runtimeManagementDistillRuntimes(db),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

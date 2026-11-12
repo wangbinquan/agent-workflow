@@ -5,7 +5,8 @@ import { composeNodeRunPromptOperations } from '@/modules/task-execution/composi
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { DrizzleMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
+import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
+import { distillRuntimeProfile } from '@/modules/memory/application/distill/distillRuntimeProfile'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { enqueueDistillJob } from '@/modules/memory/application/distill/schedule'
@@ -37,6 +38,17 @@ export type RunDistillOptions = Omit<
 > & {
   readonly runFn?: NativeRunFixture
   readonly runtimeBinary?: string | null
+}
+
+/**
+ * RFC-487: the distiller's runtime resolution as bootstrap binds it — runtime-management's internal-agent resolution
+ * (`resolveInternalAgentRuntime`) over the same db. Memory no longer has a resolver of its own.
+ */
+export function runtimeManagementDistillRuntimes(
+  db: PersistenceDb,
+): NativeMemoryDistillRuntimeResolver {
+  const registry = composeRuntimeRegistryOperations(db)
+  return { resolve: (request) => registry.resolveInternalAgentRuntime(request) }
 }
 
 type NativeTickOptions = Omit<DistillTickOptions, 'systemAgents' | 'runtimeResolver'> & {
@@ -111,7 +123,8 @@ function nativeScheduleOptions<T>(options: NativeTickOptions, fields: readonly s
         const native = options.runtimeResolver
         return {
           async resolve(input: Parameters<NativeMemoryDistillRuntimeResolver['resolve']>[0]) {
-            return binding.bindRuntime(await native.resolve(input))
+            // RFC-487: as the composition does — keep exactly the distiller's declared runtime fields.
+            return binding.bindRuntime(distillRuntimeProfile(await native.resolve(input)))
           },
         }
       },
@@ -147,7 +160,7 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
     ),
-    runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
+    runtimeResolver: runtimeManagementDistillRuntimes(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts,
   })

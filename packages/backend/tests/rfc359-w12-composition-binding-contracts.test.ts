@@ -1,6 +1,9 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
-import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
+import {
+  memorySystemAgentBindingForTest,
+  runtimeManagementDistillRuntimes,
+} from './helpers/memoryDistill'
 // RFC-359 W12 —— required composition inputs keep their constructed capability in the result
 // type. These tests execute the returned capabilities on both database engines; the assignments
 // also run through the repository typecheck, including the optional-input counterexamples.
@@ -84,6 +87,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),
+      runtimeProfiles: runtimeManagementDistillRuntimes(harness.db),
       catalogBinding: {
         contexts: composeIdentityAccess(harness.db).contexts,
         authorization: composeResourceScopeAccessParticipant(),
@@ -122,6 +126,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),
+      runtimeProfiles: runtimeManagementDistillRuntimes(harness.db),
     }
     const omitted = composeMemoryOperationsFor(options)
     const optionalInput: ComposeMemoryOperationsOptions = options

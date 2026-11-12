@@ -13,6 +13,7 @@ import {
 import type {
   DoctorDiagnosticsFamily,
   DoctorDiagnosticsFactory,
+  DoctorRuntimeBinaryProbe,
   DoctorRuntimeSelectionRef,
 } from '../../application/ports/doctorDiagnostics'
 // `agent-workflow doctor` — run all health checks without starting daemon.
@@ -37,7 +38,6 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { doctorEpochUpgrade } from './doctorEpochUpgrade'
@@ -554,6 +554,8 @@ function checkMigrations(): CheckResult {
 export function createLocalDoctorDiagnostics(input: {
   readonly tasks: DoctorTaskLifecyclePort
   readonly contract: LogicalSchemaContract
+  /** RFC-487: bootstrap binds runtime-management's default-binary probe. */
+  readonly runtimeBinary: DoctorRuntimeBinaryProbe
   readonly configuration?: ApplicationConfigurationQueries
 }): DoctorDiagnosticsFamily {
   const selected = input.configuration
@@ -567,8 +569,7 @@ export function createLocalDoctorDiagnostics(input: {
     },
     async probeRuntime(selection: DoctorRuntimeSelectionRef) {
       const opencodePath = selection as Config['opencodePath']
-      const ocDriver = getRuntimeDriver('opencode')
-      return await ocDriver.probe(ocDriver.defaultBinary({ opencodePath })[0]!)
+      return await input.runtimeBinary.probe('opencode', { opencodePath })
     },
     git() {
       return checkGit()
@@ -600,10 +601,11 @@ export function createLocalDoctorDiagnostics(input: {
 export function createLocalDoctorDiagnosticsFactory(
   contract: LogicalSchemaContract,
   tasks: DoctorTaskLifecyclePort,
+  runtimeBinary: DoctorRuntimeBinaryProbe,
 ): DoctorDiagnosticsFactory {
   return {
     create(input) {
-      return createLocalDoctorDiagnostics({ ...input, contract, tasks })
+      return createLocalDoctorDiagnostics({ ...input, contract, tasks, runtimeBinary })
     },
   }
 }

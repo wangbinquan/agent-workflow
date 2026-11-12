@@ -9,6 +9,16 @@ export interface DoctorRuntimeProbe {
   readonly ran?: boolean
 }
 type MaybeAsync<T> = T | Promise<T>
+/**
+ * RFC-487: probes a runtime's default binary for the doctor. Declared with this module's own types; bootstrap binds
+ * runtime-management's default-binary probe, so system-operations never imports the runtime drivers.
+ */
+export interface DoctorRuntimeBinaryProbe {
+  probe(
+    protocol: 'opencode',
+    config: { readonly opencodePath?: string | null },
+  ): Promise<DoctorRuntimeProbe>
+}
 export interface DoctorDiagnosticsFamily {
   loadRuntimeConfiguration(): MaybeAsync<DoctorRuntimeSelectionRef>
   probeRuntime(selection: DoctorRuntimeSelectionRef): MaybeAsync<DoctorRuntimeProbe>

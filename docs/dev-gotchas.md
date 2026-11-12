@@ -84,6 +84,10 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
 - 账本按 ratchet 清零时，先查钉「剩余债务落在哪」的用例：形如 `expect(layers).toEqual(['application'])` 的断言把「债务非空」也一并钉了，
   销掉最后一条当场就红（2026-11-07 RFC-465 把 `R2` 清零时 `rfc317-module-boundary` 实撞，集中验证才查出）。这类不变量写成「指定范围
   之外为空」（例如 `filter((layer) => layer !== 'application')` 等于 `[]`）：债务还在时约束不变，清零后照样成立。
+- **复制品换成 owner 的能力时，先比对返回形状**（RFC-487 实现门自审查出）：memory 删掉自己复制的蒸馏运行时解析器，改由 bootstrap
+  绑定 runtime-management 的 `resolveInternalAgentRuntime`。后者返回全量运行时档案（`variant`、`temperature`、`steps`、`extraArgs`
+  等），memory 下游的 `bindRuntime` 又按固定字段表转发；直接接上，蒸馏运行就会带上已登记运行时的参数。`tsc` 看不出（超集可以赋给
+  子集类型），既有用例也不碰这些字段。在 consumer 自己的边界把结果投影回端口声明的字段，再用一条超集输入的用例钉住投影。
 
 ## 被 import 的模块不要写 top-level await：Bun 1.4.3 打包器会漏输出 `__promiseAll`（2026-10-31 RFC-400 实撞）
 
@@ -340,7 +344,7 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
 - **退役一份实现时，守卫的「语料」会静默缩小——抽取器只认一种写法的那些尤其危险**（2026-09-18 RFC-359 第 8 刀实撞）：`rfc317-transition-table-oracle` 靠 AST 抽 `setTaskStatus({ to, allowedFrom })` 这种**调用参数对象**来数「CAS 站点」。合并两份修复实现、退役其中一份之后，语料从 **35 掉到 15**——而掉走的那 20 个正是这条预言头注释里逐条点名的**反例来源**。留下的那份把同样的 `(from, to)` 放在 `kind: 'task-transition' 的动作描述符里，一样静态可知，抽取器却看不见。**症状是「守卫还绿着，射程却少了一半」**，比红更难发现：只有「语料非空」那条下限断言偶然挡了一下（`>= 35`变成量到 15）。**定式**：①这类守卫必须有「语料下限」断言，且下限要够高、能在射程塌一半时报出来（只写`> 0` 等于没有）；②被测实现换写法（哪怕只是把参数对象挪进一个描述符）时，要回头问一句「原来那个抽取器还认得它吗」；③给抽取器补第二种形态时，把两种形态各写一条自证 fixture，别让「只认一种」再次静默发生。本次补上第二种形态后语料回到 28，三条越界边按新锚点重新入账。
 - **源码锁的锚点文件被删掉时，要跟着实现走、不是删条目**（同一刀，8 处）：`lifecycle-repair-grep-guard`（不许裸写 node_run 状态 / 不许 delete）、`rfc165 A7c`（会复活执行的修复选项必须盖章）、`rfc193 case 8d`（S1 的 scopeRoot 要按 wrapper 血缘推导）、`s13 G5`（fork 排序不得回来）这些锁**锁的是行为约束，不是那个文件**。实现搬家 / 合并时把锚点换到留下的那一份，约束就继续生效；顺手删掉条目则等于把约束一起退役——而这次重挂锚点**当场照出一处真缺陷**：留下的那份 S1 直接传 `task.worktreePath`，正是 case 8d 明令禁止的写法（wrapper 内的评审修复会落在任务根而不是 iso 工作树上）。
 - **搬迁把调用从标识符改成经 binding / 端口的属性调用时，AST 抽取器同样会漏站点，转发层还会被记成新站点**（2026-10-31 RFC-402 集中验证实撞）：上两条讲退役实现时语料缩小，搬迁还会改变调用形状。`runAssembly` 迁入 `engine/kernel/` 后，kernel 经 `args.binding.createLocalEffectAttemptObserver(...)` 调用观察者，RFC-328 effect 账本只认标识符调用，原站点「消失」，infrastructure 里那层一行转发反倒成了未分类的新站点；按文件路径取语料的源码锁（RFC-188 / 292 / 345）在主体搬到新文件后直接扫不到；RFC-317 的 `casSites` 按 `file:line` 字符串排序，新用例按数字行号写期望也会红。**定式**：①搬迁前对 tests / `.github/workflows` / scripts 全量 grep 被搬文件的路径与被调函数名，列出要改指的守卫；②AST 账本把新的属性调用形状显式识别为原站点，转发层只接受「原样转发」并补负例（改写参数、删观察者调用、附加字段），不靠放宽匹配；③CI `paths:` 过滤与 JSON 账本按原格式改，不要整文件重排。
-- **负例在整份 live corpus 上反复跑同一个全量 AST 扫描，本机几秒、Windows runner 就超 bun 默认 5 s**（2026-10-31 RFC-403 实撞）：新结构锁的 owner 检查每次调用都按 6 个 helper 各遍历一遍 task-execution 全部文件，两个负例共调用约 50 次；本机 3.0 s / 2.5 s 能过，windows-platform `41279488331` 上 6.1 s 超时（`d18850d35` 修）。**定式**：负例只替换或新增少数文件时，把逐文件扫描结果按 `SourceUnit` 对象缓存（`WeakMap`），每个文件一次遍历收集全部目标名；计数保留原语义。本机用例超过 1 s 就要按 Windows 约 2 倍的余量重新估算，不靠调大超时。
+- **负例在整份 live corpus 上反复跑同一个全量 AST 扫描，本机几秒、Windows runner 就超 bun 默认 5 s**（2026-10-31 RFC-403 实撞）：新结构锁的 owner 检查每次调用都按 6 个 helper 各遍历一遍 task-execution 全部文件，两个负例共调用约 50 次；本机 3.0 s / 2.5 s 能过，windows-platform `41279488331` 上 6.1 s 超时（`d18850d35` 修）。**定式**：负例只替换或新增少数文件时，把逐文件扫描结果按 `SourceUnit` 对象缓存（`WeakMap`），每个文件一次遍历收集全部目标名；计数保留原语义。本机用例超过 1 s 就要按 Windows 约 2 倍的余量重新估算，不靠调大超时。按名字逐个做全量声明扫描也一样（RFC-487：④ 对 4 个名字各解析一遍全部约 3,200 个生产文件，负载下 8.7 s 超默认 5 s；本地前几轮都给了 60 秒单条时限，直到按 CI 跑法跑文档批才现形）：先按文本筛出含该名字的文件再解析，文件文本只读一次。
 - **主体搬出一个文件后，按显式文件清单做「不得出现」扫描的守卫会静默失去对它的覆盖**（2026-11-01 RFC-405 漏、RFC-406 补）：RFC-395 checkpoint 边界、RFC-285 B3、RFC-321、RFC-359 W5-T19b 都把 `nodeMechanics.ts` 列进清单做缺席断言；agent 主体迁出后清单里只剩 workgroup host，断言照绿，agent 主体却不再被扫。「锚点有没有从原文件消失」这类检查抓不到它——缺席断言本来就该在原文件里找不到。**定式**：搬主体前 grep 所有提到原文件路径的测试，逐个判断它是在找「存在」（改指新 owner）还是在扫「缺席」（把新 owner 加进清单）；后一类漏改永远不会变红。
 - **端口类型用 `typeof` 引用 `services/` 的实现、或从别的 context 的合同 `Pick`，会给 application 层新增 R2 边或 off-DAG 文件边**（2026-11-01 RFC-405 实撞）：两本账都是只减不增，集中验证当场判红（8 条 R2、off-DAG 文件边 54 → 55 超 counts 上限）。**定式**：端口声明 consumer 自有的结构类型，只写主体实际用到的字段与签名；真实实现在 composition 绑定里交进去，由编译器检查它满足端口——联合类型这类需要两边一致的定义在 TE 侧留一份，绑定的赋值会在对方扩出新成员时报错。
 - **负 fixture 判据认不出「import 进来的语料常量」**（2026-11-01 RFC-405 实撞）：`rfc317-guard-negative-fixture` 按「断言主体是不是经 `readFileSync` 一类调用读出来的」区分真实语料与伪造源码。把锁改读 helper 导出的组合常量后，`occurrences(常量, '源码片段')` 这种主体里带源码片段的断言被判成负 fixture，账本 `negativeFixture` 对不上。**定式**：断言主体里要拼源码片段时，在测试文件内用 `readFileSync`（或本文件的 `read` 包装）读 owner；`expect(常量).toContain(…)` 这种主体只是标识符的不受影响。
@@ -598,6 +602,10 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
 - **定式**：挪 / 删文件时把 `.github/workflows/*.yml` 一起 grep 旧路径；`packages/backend/tests/ci-workflow-path-filters.test.ts`
   锁住「每条 `paths` / `paths-ignore` 的字面条目存在、每条 glob 的目录前缀存在」。原文件里有逻辑被拆到别处（如 RFC-451 的子模块
   参数解析归平台）时，拆出去的新文件也要登记，否则那段逻辑的改动同样不再触发。
+- **文件没挪、依赖改成注入也一样**（RFC-487）：doctor 原来直接调一族的 `getRuntimeDriver`（`services/runtime/index.ts` 已登记），改成调
+  注入的探测端口后，真正执行的代码落在 runtime-management 的两个新文件里，由 bootstrap 的 doctor 工厂绑定；三个文件都不在清单上，
+  doctor 的文件本身却还在，按旧路径 grep 什么也扫不出来。改依赖时按「被测用例实际走到的文件」核对清单：实现方与绑定方都登记，
+  `push` 与 `pull_request` 两份各一条。
 
 ## 文件挪进模块后，模块内部别再经**本模块的 public 入口**取值：public 反向 import composition barrel，barrel 一导出它就成了求值环（RFC-452 实撞，2026-11-05）
 

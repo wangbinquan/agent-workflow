@@ -7,12 +7,37 @@
 - **范围**：DAG 上不消费 runtime-management 的四个 context 对一族的四处使用（一族迁入后它们会成为越 DAG 的值边）：memory 的蒸馏运行时
   解析器是 runtime-management `resolveInternalAgentRuntime` 的复制、还直接读 `runtimes` 表——删除，改由 bootstrap 绑定（表归属债销一条）；
   system-operations 的 doctor 探测改经自有端口、由 bootstrap 绑定 runtime-management 的默认二进制探测（standalone 的软探测共用）；
-  `resolveBoundaryMounts` 归 source-control 的 domain；`ResolvedSkill`、`SkillSource`、`RuntimePlugin` 归 resource-catalog 的 domain。
+  `resolveBoundaryMounts` 归 source-control 的 domain；`SkillSource`、`RuntimePlugin` 与只有数据成员的 `NativeSkillContent` 归
+  resource-catalog 的 domain（一族的 `ResolvedSkill` 扩展它，只加驱动侧的重读）。
 - **不做**：resource-catalog 本机 MCP 诊断的执行体（另立下一步）；task-execution 对一族的 16 处使用与 task-execution → runtime-management
   的 18 个跨 context 内部文件对（另立）；整族迁入（另立）；任何行为变化（唯一可观察的差别是 memory 选到不存在的运行时名字时多一条警告日志）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
   2026-11-23：上次 2026-11-09，其后关闭 11 个后继。
 - **附带**：RFC-486 的 Done 文档提交 `f74014135`（6 个文档文件）：exact SHA 主 CI run 43195710857 的 70 个 job 全部通过。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 挂载列表规则在 source-control 的 domain（`domain/taskAgentMounts.ts`，经
+  `public/queries` 交出），原生技能 / 插件内容记录的类型在 resource-catalog 的 domain（`domain/nativeAgentMaterialContents.ts`，经
+  `public/types` 交出），默认二进制探测在 runtime-management 的 infrastructure（`infrastructure/local/defaultRuntimeBinaryProbe.ts`，由
+  composition 转出），memory 蒸馏的运行时投影在 memory 的 application（`application/distill/distillRuntimeProfile.ts`），doctor 的探测端口
+  在 system-operations 的 `application/ports/`；memory 的 `runtimeProfiles`、doctor 的探测与 standalone 的软探测由 bootstrap 绑定；memory
+  删除复制的持久化读取。C11 public 增 4 撤 0（resource-catalog `public/types` 3 个只有数据成员的类型、source-control `public/queries`
+  1 个函数，各有生产消费方；public surface 1,204 → 1,208）。C12 RFC-487 用例覆盖四个 context 的全部 757 个生产文件（下限 600，import
+  识别带负对照：相对路径、别名、re-export、动态 import）、bootstrap 的三处绑定、两个 owner 的唯一声明、memory 的投影、两种 provider 下的
+  解析与探测行为，以及 `windows-platform.yml` 两份路径过滤的登记。C13 `counts.json` 60 项实测 = `max`，与对照逐项相同，没有可收紧的项。
+- **§14 不变量 / 运行时驱动一族第一步**：四个 context 对一族的 import 只剩 resource-catalog 本机 MCP 诊断执行体的三条（逐条钉住，另立）；
+  越 DAG 的 offered 文件对 46、跨 context 内部文件对 43、context 值级越 DAG 对 0、public 类型偏差 57、未消费 public 符号 91、`module-layer`
+  1、application 直接副作用 2、legacy 横向文件 167、legacy 服务实现 48 不变；表归属债 121 → 120（memory 解析器那条）。下一步：
+  resource-catalog 本机 MCP 诊断执行体；task-execution 对一族的 16 处使用与 task-execution → runtime-management 的 18 个跨 context 内部
+  文件对；整族迁入 runtime-management infrastructure（各自另立）。
+- **集中验证**（候选基于 `829bc54f5`，验证期间 HEAD 未前进，详见 plan）：集中验证与实现门查出本 RFC 的五处问题，已修复并复验
+  （前四处见 design §6 细化 1～4）：用例 ① 漏算 proposal 的非目标；含函数成员的 `ResolvedSkill` 整个交出 public（preflight 报未登记偏差、
+  `public-surface-deviations` 58 > 57），改为只交数据字段；实现门自审发现 memory 的 `bindRuntime` 会把 runtime-management 全量档案里
+  已登记运行时的参数带进蒸馏运行，改在 memory 的边界投影回端口字段；全仓旧路径扫描发现 `windows-platform.yml` 的路径过滤未登记 doctor
+  探测链的新位置；本 RFC 用例 ④ 对每个名字都把全部生产文件解析一遍，按 CI 跑法（默认 5 秒）跑文档批时超时，改为先按文本筛选再解析。
+  后三条教训记入 `docs/dev-gotchas.md`。backend `tsc` 0 错、eslint 无告警；RFC-487 用例候选 11 / 11；首批 448 个文件
+  440 个通过；全量 SQLite 逐文件跑 2,929 个、2,914 个通过，其余 15 个都不归本 RFC（发布账本 1 个是导出仓库没有真实历史，14 个撞用例自带
+  的时限或内部等待）；修复后的候选 3 复验 556 个文件、候选 4 复验 53 个文件，红的仍只有上面的发布账本与时限；只放宽时限常量的 16 个
+  副本 385 条全过。PostgreSQL 一侧接库跑 52 个相关文件：1,002 条里 991 条通过，11 条红都是三个调度用例文件撞文件时限（15 / 60 秒）
+  的连带，只放宽时限的副本全过。架构报告 60 项实测 = `max`、与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-11 RFC-486 任务启动用例归 task-execution 的 application：`taskRouteLaunchOperations.ts` 按内容分层（Done；`design/RFC-486-task-route-launch-application/`）
 

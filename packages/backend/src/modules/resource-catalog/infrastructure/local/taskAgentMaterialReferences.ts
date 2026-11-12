@@ -1,8 +1,7 @@
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
-import type { ResolvedSkill } from '@/services/runtime/types'
-import type { RuntimePlugin } from '@/services/execution/agentInjection'
+import type { NativeSkillContent, RuntimePlugin } from '../../domain/nativeAgentMaterialContents'
 import type {
   TaskAgentMaterialReferences,
   TaskAgentResourceMaterial,
@@ -15,13 +14,13 @@ type ContentReference = AgentMaterialIntent['workspace']
 /** Local content locations stay in this selected owner. Constructing the binding
  * performs no content read. Weak bindings have the invocation reference lifetime. */
 export function createLocalTaskAgentMaterialReferences(input: { readonly appHome: string }) {
-  const skills = new WeakMap<ContentReference, ResolvedSkill>()
+  const skills = new WeakMap<ContentReference, NativeSkillContent>()
   const plugins = new WeakMap<ContentReference, RuntimePlugin>()
   const references: TaskAgentMaterialReferences = {
     references(snapshot) {
       const scope = ulid()
       const skillReferences = snapshot.skills.map((skill, index): MaterialSkill => {
-        const native: ResolvedSkill =
+        const native: NativeSkillContent =
           skill.kind === 'project'
             ? { name: skill.name, sourceKind: 'project' }
             : {
@@ -72,7 +71,7 @@ export function createLocalTaskAgentMaterialReferences(input: { readonly appHome
     references,
     /** Private native receiver passed only to the chosen local compiler. */
     contents: {
-      skill(reference: MaterialSkill): ResolvedSkill {
+      skill(reference: MaterialSkill): NativeSkillContent {
         const value = skills.get(reference.content)
         if (value === undefined) throw new Error('task-agent-skill-content-unavailable')
         return value
