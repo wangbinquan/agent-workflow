@@ -722,14 +722,12 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
   // errorSummary marker, so lock the two together — a change to the backend
   // emitter must red this test, not silently break the discriminator.
   // RFC-395 II-pre: the emitter is the production root launch kernel; the old
-  // services/task.ts launcher that also wrote it is deleted.
+  // services/task.ts launcher that also wrote it is deleted. RFC-486: the
+  // kernel moved to application; the admission adapter writes the summary.
   test('impl-gate F2 marker is coupled to the backend worktree-creation errorSummary', () => {
     const here = dirname(fileURLToPath(import.meta.url))
     const backend = readFileSync(
-      join(
-        here,
-        '../../backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
-      ),
+      join(here, '../../backend/src/modules/task-execution/infrastructure/rootTaskAdmission.ts'),
       'utf-8',
     )
     expect(backend).toContain('worktree creation failed:')

@@ -777,7 +777,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `TypeError`；`eachProviderTaskExecution` 的 `launchViaKernel` 也是 `{ db, … } as unknown as Parameters<…>[0]`，跑到就会同样炸。改依赖形状后
   按语法树扫一遍工厂调用点（实参里带 `as never`、`as unknown as`、`as any` 的）与 `as <依赖类型>` 的变量，逐处补上新成员。同一轮另一个漏网：
   按「点名旧路径的文本断言」清单改用例时排除了 import 该模块的文件，而 `rfc243-executor-facade` 恰好既 import 它、又按路径读它的源码——
-  清单要按「出现旧路径字面量」取，不按「是否 import」分。
+  清单要按「出现旧路径字面量」取，不按「是否 import」分。**而且要扫全仓，不只 backend 的 `src/` 与 `tests/`**：删掉或搬走源码文件后，
+  RFC-486 的实现提交在 CI 上红了两格——前端用例按相对路径读后端源码（`packages/frontend/tests/task-wizard-builders.test.ts` 读启动文件
+  锁 errorSummary 前缀，两个 OS 的 frontend shard 2/3 都 ENOENT），`design/**` 里一条 Markdown 链接指向被删的文件（Markdown link check
+  逐条校验相对路径）。本地的全量 backend 跑不到这两类。按 `git ls-files` 扫全部跟踪文件里的旧路径：代码里的按路径读取改指新文件，
+  文档里的 Markdown 链接改指新位置；反引号里的纯文本与钉了 `sourceSha` 的历史基线 JSON 是当时的事实，不改。
 - **成对复跑里两边都超时，等于这条用例没跑**：「候选与对照失败形态相同」只说明两边负载相同，不说明候选在这条用例上是绿的。RFC-480 的
   preflight capability 账本（预算 180 秒）在本地全量与成对复跑里两边都超时，被归给负载；CI 上它 96 秒跑完，候选真红（账本多 4 条）。两边都
   超时的用例要换能跑完的条件拿到候选的真结果：单独跑并给够时间，或者在同一份语料上直接调同一个判据函数（本例几十秒）。
