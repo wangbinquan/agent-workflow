@@ -90,15 +90,15 @@ export { validateAgentLaunchShape } from '../domain/agentHostWorkflow'
 
 export { parseConsumedJson } from '../infrastructure/runSelection/consumedCodec'
 
-export { nodeRunStatusCondition } from '../infrastructure/nodeRunQueries'
+// RFC-483: the SQL conditions `nodeRunStatusCondition`, `taskGateOpenCondition` and `taskGateVisibleCondition` left the public:
+// collaboration's badge read model (their only use outside this module) takes them through its participant bindings, which
+// bootstrap fills from task-execution's composition.
 
 export type {
   TaskDispatchContext,
   TaskGateContext,
   TaskGateDefinitionContext,
 } from '../application/ports/taskGateQueries'
-
-export { taskGateOpenCondition, taskGateVisibleCondition } from '../infrastructure/taskGateQueries'
 
 export { createTaskKnowledgeQueries } from '../infrastructure/taskKnowledgeQueries'
 export { createTaskTriggerQueries } from '../infrastructure/taskTriggerQueries'

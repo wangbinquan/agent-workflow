@@ -18,6 +18,9 @@ import {
   createNodeRunQueries,
   createTaskGateQueries,
   createNodeOutputQueries,
+  nodeRunStatusCondition,
+  taskGateOpenCondition,
+  taskGateVisibleCondition,
 } from '@/modules/task-execution/composition'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
@@ -39,4 +42,7 @@ export const taskExecutionParticipants: TaskExecutionParticipantBindings = Objec
   createNodeRunQueries,
   createTaskGateQueries,
   createNodeOutputQueries,
+  nodeRunStatusCondition,
+  taskGateOpenCondition,
+  taskGateVisibleCondition,
 })

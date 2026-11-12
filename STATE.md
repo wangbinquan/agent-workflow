@@ -16,6 +16,32 @@
   SQL、语义、往返数与索引；schema；评审 / 提问用例的整体归位（review §9 待用户决定）；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）未到期：
   上次 2026-11-09，其后关闭 9 个后继，下一次不晚于 2026-11-23。
+- **附带**：RFC-485 的 Done 文档提交 `1fa9be87c`（5 个文档文件）：exact SHA 主 CI run 43116796078 的 70 个 job 里 67 个通过；
+  `Backend tests (ubuntu-latest shard 3/44)` 与 `Playwright e2e (macos-latest shard 3/4)` 撞作业时限（15 / 20 分钟）被取消（e2e 分片里两条
+  首轮红、重试通过，一条跑了 7.1 分钟后红、没等到报文；后端分片的日志没有落盘），「CI required」随之红。两格的代码与父提交 `9699ad3fd`
+  相同、在它上面都通过，记入 `docs/audit-backlog.md` 第九条的补记，未重跑。本 RFC 的落档提交 `fb469ce00`（只改文档）：exact SHA 主 CI
+  run 43118856145 的 70 个 job 全部通过，含上面两格。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 读模型端口（只有 DTO 签名）、查看者判定与两个徽标用例按内容落在 collaboration 的
+  application，联合投影留在 collaboration 的 infrastructure（`review.ts`、`clarifyRounds.ts` 的两个计数函数），三个谓词仍在 task-execution 的
+  infrastructure、改经 composition 转出；C11 task-execution 的 public 撤 3 增 0（public surface 229 → 226），collaboration 的 public 不变（40）；
+  C12 RFC-483 用例覆盖 task-execution 的全部 public 文件、collaboration 的全部生产文件（≥150）、bootstrap 的绑定与 application 的徽标端口；
+  C13 触及的减速带收紧到实测（`public-surface-deviations` 的 `max` 65 → 57，`counts.json` 60 项每项 `max` = 实测）。
+- **§14 不变量 / S9 退出门**（task-execution ↔ collaboration 这一对的第五步，也是最后一步）：public 类型偏差 65 → 57（这一对 19 → 11）。
+  剩下的 11 条都在 task-execution 的 public，消费方是 memory、workspace-insight、integration、resource-catalog 与 `routes/`
+  （`WorkgroupTaskRoomHostRunSnapshot` 经 resource-catalog 取用的房间参与者类型到达），collaboration 的 public 为 0 条，collaboration 消费的
+  task-execution 类型污染清零。未消费 public 符号 91 不变（task-execution、collaboration 为 0）；越 DAG 的 offered 文件对 47、跨 context
+  内部文件对 43 不变，两者都没有这一对之间的条目；三个片段不再从任何 `public/*` 导出；减速带 60 项每项等于实测。这一对的 S9 退出门在它
+  认领的范围上成立，偏离见 design §7（两条徽标仍在一条语句里组合 task-execution 的谓词，谓词经 consumer 自有的绑定交入）。
+- **集中验证**（候选基于 `fb469ce00`，验证期间 HEAD 未前进，详见 plan）：开发期用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的源码文本
+  断言（HEAD 命中、候选不命中的 8 条逐条核对，都不是对改动文件的断言）；集中验证查出 RFC-483 用例自己的一处判据问题（读模型端口「不出现
+  `SQL`」把文件头注释也算进去），已修复并复验。backend `tsc` 0 错、eslint 无告警；首批 245 个文件 240 个通过（1 个是上面那处，另 4 个撞
+  自带时限）；全量 SQLite 逐文件跑 2,927 个、2,906 个通过，其余 21 个都不归本 RFC：发布账本一条是导出仓库没有真实历史（真实仓库 10 / 10），
+  18 个撞用例自带的时限或内部等待、在只放宽时限常量的副本上全部跑完通过，`rfc370-execution-effect` 的检查点只靠目录事件、加轮询的副本在
+  并发负载下 3 轮 13 / 13，`rfc310-digital-employee-system-mock-e2e` 两次红在 system-mock 网关的 seed 请求上（`ECONNRESET`；单独跑在候选
+  与 HEAD 对照上都 2 / 2，记入 `docs/audit-backlog.md`）。RFC-483 用例对 HEAD 的代码 5 条结构用例红 4 条。PostgreSQL 以 CI 双引擎分片为
+  证据，另把 22 个相关文件接库跑：21 个 304 条全过（PostgreSQL 一侧 144 条），`rfc359-w6-t26-postgresql-plan-audit` 在本机铺语料撞 600 秒的
+  `beforeAll`，HEAD 对照同样到点，以 CI 为证据。架构报告 60 项实测 = `max`，门里只有偏差一项变化。实现门 PASS（本会话按路径限定自审，只审
+  功能）。
 
 ## 2026-11-11 RFC-485 collaboration 与 memory 取 task-execution 的三个行形状查询工厂改经装配期注入（Done；`design/RFC-485-te-row-query-bindings/`）
 

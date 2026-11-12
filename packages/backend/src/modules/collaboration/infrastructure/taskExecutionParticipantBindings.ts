@@ -1,5 +1,7 @@
 import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { NodeRunStatus } from '@agent-workflow/shared'
+import type { AnyColumn, SQL } from 'drizzle-orm'
 import type { NodeRunWorkspaceRollbackPort } from '../application/ports/nodeRunWorkspaceRollback'
 import type {
   AsyncTaskAuthorizationParticipantInTx,
@@ -63,6 +65,25 @@ export interface TaskExecutionParticipantBindings {
   readonly createNodeRunQueries: (db: PersistenceDb) => TaskNodeRunReads
   readonly createTaskGateQueries: (db: PersistenceDb) => TaskGateQueries
   readonly createNodeOutputQueries: (db: PersistenceDb) => TaskNodeOutputReads
+  // RFC-483: the task scope conditions the human-gate badge read model composes into its single-statement counts
+  // (RFC-359 AC-11). Task-execution implements them (the visibility condition is the one its `visibleTaskIds` uses); the
+  // badge read model owns the joint projection (RFC-294 design §3.3), so neither side references the other's tables.
+  readonly nodeRunStatusCondition: (
+    db: PersistenceDb,
+    runId: AnyColumn,
+    status: NodeRunStatus,
+  ) => SQL
+  readonly taskGateOpenCondition: (
+    db: PersistenceDb,
+    taskId: AnyColumn | SQL,
+    includeMissing?: boolean,
+    requireSubjectName?: boolean,
+  ) => SQL
+  readonly taskGateVisibleCondition: (
+    db: PersistenceDb,
+    taskId: AnyColumn | SQL,
+    viewer: { readonly userId: string; readonly canReadAllTasks: boolean },
+  ) => SQL
 }
 
 /**
@@ -72,4 +93,10 @@ export interface TaskExecutionParticipantBindings {
 export type TaskNodeRunQueryBinding = Pick<
   TaskExecutionParticipantBindings,
   'createNodeRunQueries' | 'createTaskGateQueries'
+>
+
+/** RFC-483: the slice the human-gate badge read model needs (the two badge counts' task scope conditions). */
+export type HumanGateBadgeTaskScope = Pick<
+  TaskExecutionParticipantBindings,
+  'nodeRunStatusCondition' | 'taskGateOpenCondition' | 'taskGateVisibleCondition'
 >

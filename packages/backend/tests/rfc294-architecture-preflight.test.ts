@@ -436,17 +436,11 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-395 II-a transitional owner contracts bound to the caller's session / transaction / statement.
   // Successor RFC-294 S5/S6: binding in composition; shared platform DTOs avoid new context edges.
   'modules/task-execution/infrastructure/nodeEventQueries.ts#listNodeEventContents: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/nodeRunQueries.ts#nodeRunStatusCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/nodeRunQueries.ts#nodeRunStatusCondition: forbidden type import drizzle-orm#AnyColumn',
+  // RFC-483: the SQL conditions `nodeRunStatusCondition`, `taskGateOpenCondition` and `taskGateVisibleCondition` left the
+  // public — collaboration's badge read model takes them through its participant bindings — eight entries settled.
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#AnyColumn',
   'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#SQL',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import drizzle-orm#AnyColumn',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateOpenCondition: forbidden type import drizzle-orm#SQL',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateVisibleCondition: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateVisibleCondition: forbidden type import drizzle-orm#AnyColumn',
-  'modules/task-execution/infrastructure/taskGateQueries.ts#taskGateVisibleCondition: forbidden type import drizzle-orm#SQL',
   'modules/task-execution/infrastructure/taskKnowledgeQueries.ts#createTaskKnowledgeQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskTriggerQueries.ts#createTaskTriggerQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).

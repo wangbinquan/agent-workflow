@@ -1,3 +1,4 @@
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
@@ -310,7 +311,9 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   })
 
   test('countPendingReviews / listReviewSummaries / getReviewDetail surface the pending review', async () => {
-    expect(await countPendingReviews(h.db)).toBe(1)
+    expect(await countPendingReviews(h.db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(
+      1,
+    )
     const list = await listReviewSummaries(h.db, taskExecutionParticipants, { status: 'pending' })
     expect(list.length).toBe(1)
     expect(list[0]?.nodeRunId).toBe(h.reviewNodeRunId)
@@ -360,7 +363,9 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     )[0]
     expect(dv?.decision).toBe('approved')
 
-    expect(await countPendingReviews(h.db)).toBe(0)
+    expect(await countPendingReviews(h.db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(
+      0,
+    )
   })
 
   // Regression: approving a review used to flip status=done but never write

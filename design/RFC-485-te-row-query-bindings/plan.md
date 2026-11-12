@@ -76,6 +76,10 @@ RFC-482 的做法用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的�
 - `9699ad3fd`：exact SHA 主 CI run 43111234874 的 70 个 job 全部通过（「CI required」绿；`Backend tests (real PostgreSQL)` 与 Playwright e2e
   的 ubuntu 3 个、macOS 4 个、Windows 4 个分片都跑完通过）；同 SHA 的 windows-platform run 43111234860 与 push 触发的
   maintenance-soak-nightly run 43111234922 通过。
+- Done 文档 `1fa9be87c`（只改 5 个文档文件）exact SHA 主 CI run 43116796078：70 个 job 里 67 个通过。`Backend tests (ubuntu-latest shard 3/44)`
+  与 `Playwright e2e (macos-latest shard 3/4)` 撞作业时限（15 / 20 分钟）被取消，「CI required」随之红；两格的代码与 `9699ad3fd` 相同，在它上面
+  都通过（经过见 `docs/audit-backlog.md` 第九条的 2026-11-11 补记）。未重跑；只改文档的后继 `fb469ce00`（RFC-483 落档）run 43118856145 的 70 个
+  job 全部通过，含这两格。
 
 ## 实现门（本会话自审，只审功能）
 

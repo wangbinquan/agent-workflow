@@ -32,6 +32,9 @@ const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   createNodeRunQueries: unusedParticipant,
   createTaskGateQueries: unusedParticipant,
   createNodeOutputQueries: unusedParticipant,
+  nodeRunStatusCondition: unusedParticipant,
+  taskGateOpenCondition: unusedParticipant,
+  taskGateVisibleCondition: unusedParticipant,
 }
 
 // Execute the complete production entry functions with explicit fake ports.

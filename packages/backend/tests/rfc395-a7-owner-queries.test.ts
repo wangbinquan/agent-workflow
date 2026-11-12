@@ -2,14 +2,14 @@
 import {
   createTaskGateQueries,
   createNodeOutputQueries,
+  taskGateOpenCondition,
+  taskGateVisibleCondition,
 } from '@/modules/task-execution/composition'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { TASK_DEFINITION_HOSTS, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
-  taskGateOpenCondition,
-  taskGateVisibleCondition,
   createTaskKnowledgeQueries,
   createTaskTriggerQueries,
   listNodeEventContents,

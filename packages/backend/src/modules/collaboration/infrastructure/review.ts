@@ -1,4 +1,7 @@
-import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
+import type {
+  HumanGateBadgeTaskScope,
+  TaskExecutionParticipantBindings,
+} from './taskExecutionParticipantBindings'
 import { nextRetryIndex } from '@/modules/task-execution/public/queries'
 import {
   canonicalHumanGateRequestHash,
@@ -23,11 +26,8 @@ import type { CollaborationTaskRolePolicy } from '../application/ports/collabora
 import type { ContentStore } from '@/platform/content/contentStore'
 import {
   nodeOutputSlot,
-  taskGateOpenCondition,
-  taskGateVisibleCondition,
   type TaskGateContext,
   type TaskGateDefinitionContext,
-  nodeRunStatusCondition,
   createRunHistorySnapshot,
   type NodeRunFactSnapshot,
   type NodeRunCheckpointSnapshot,
@@ -167,6 +167,7 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
+import type { HumanGateBadgeViewer } from '../application/ports/humanGateBadgeReadModel'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
@@ -2035,8 +2036,16 @@ export async function listReviewSummaries(
  * plus route-level per-actor visibility (task visibility or a review-node
  * assignment) applied before counting. The oracle test (rfc311-badge-counts)
  * locks this count to the list+filter pipeline's length.
+ *
+ * RFC-483: this is the human-gate badge read model's review count. It owns the joint projection (RFC-294 design §3.3): the
+ * rows are collaboration's, the task scope conditions are task-execution's, handed over through the participant bindings;
+ * the viewer is picked by the badge use case (application/humanGateBadges.ts).
  */
-export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Promise<number> {
+export async function countPendingReviews(
+  db: PersistenceDb,
+  taskScope: HumanGateBadgeTaskScope,
+  viewer: HumanGateBadgeViewer,
+): Promise<number> {
   const { reviewNodeReviewers } = tablesOf(db)
   const { docVersions } = tablesOf(db)
   // RFC-359 AC-11 —— 这条端点原本打**三次串行往返**：①主 join 捞出全部待审行，
@@ -2072,16 +2081,16 @@ export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Pro
         ),
     ),
   ]
-  if (actor !== undefined && !actor.permissions.has('tasks:read:all')) {
-    // 只有在 actor 存在**且**不能读全部任务时才需要收窄；`canReadAllTasks` 为真时
+  if (viewer.kind === 'task-member') {
+    // 只有按任务成员计（actor 存在**且**不能读全部任务）时才需要收窄；看全部任务时
     // 原 `visibleIds` 的可见性谓词恒真，此处同样不加条件（少一层无谓的 OR）。
     conditions.push(
       or(
         // 可见性判据取自共享持久化词汇 `db/taskVisibility`——与 `taskAuthorization.visibleIds`
         // 同一份代码，这里只是把它下推进本条语句（AC-11：省掉「先捞列表再问一次」的那次往返）。
-        taskGateVisibleCondition(db, docVersions.taskId, {
-          userId: actor.user.id,
-          canReadAllTasks: actor.permissions.has('tasks:read:all'),
+        taskScope.taskGateVisibleCondition(db, docVersions.taskId, {
+          userId: viewer.userId,
+          canReadAllTasks: false,
         }),
         exists(
           db
@@ -2091,15 +2100,17 @@ export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Pro
               and(
                 eq(reviewNodeReviewers.taskId, docVersions.taskId),
                 eq(reviewNodeReviewers.reviewNodeId, docVersions.reviewNodeId),
-                eq(reviewNodeReviewers.reviewerUserId, actor.user.id),
+                eq(reviewNodeReviewers.reviewerUserId, viewer.userId),
               ),
             ),
         ),
       )!,
     )
   }
-  conditions.push(nodeRunStatusCondition(db, docVersions.reviewNodeRunId, 'awaiting_review'))
-  conditions.push(taskGateOpenCondition(db, docVersions.taskId, false, true))
+  conditions.push(
+    taskScope.nodeRunStatusCondition(db, docVersions.reviewNodeRunId, 'awaiting_review'),
+  )
+  conditions.push(taskScope.taskGateOpenCondition(db, docVersions.taskId, false, true))
   const counted = await db
     // RFC-349：必须走 drizzle 的 `count()`（= ``sql`count(*)`.mapWith(Number)``）。
     // 裸 `sql<number>\`count(*)\`` 在 PostgreSQL 上没有 mapper——`count(*)` 是 int8，

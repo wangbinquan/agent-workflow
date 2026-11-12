@@ -23,6 +23,8 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W12：这些正典文件与消费路径已统一使用中立名称。
 
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
+import type { HumanGateBadgeReadModel } from '../application/ports/humanGateBadgeReadModel'
+import { countAwaitingClarifyBadge, countPendingReviewBadge } from '../application/humanGateBadges'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationClarifyDraftEventPublisher,
@@ -50,13 +52,24 @@ export function createCollaborationRouteOperations(
   input: CreateCollaborationRouteOperationsInput,
 ): CollaborationRoutePersistenceOperations {
   const db = input.db
+  // RFC-483: the human-gate badge read model — two single-statement counts over collaboration's gate rows that compose
+  // task-execution's task scope conditions from the bindings; the badge use cases (application) pick the viewer.
+  const badges = Object.freeze<HumanGateBadgeReadModel>({
+    countPendingReviews: async (viewer) =>
+      await (
+        await loadReviewOperations()
+      ).countPendingReviews(db, input.taskExecutionParticipants, viewer),
+    countAwaitingClarifyRounds: async (viewer) =>
+      await (
+        await loadClarifyOperations()
+      ).countAwaitingClarifyRounds(db, input.taskExecutionParticipants, viewer),
+  })
   const reviews: CollaborationRoutePersistenceOperations['reviews'] = Object.freeze({
     list: async (filter) =>
       await (
         await loadReviewOperations()
       ).listReviewSummaries(db, input.taskExecutionParticipants, filter),
-    countPending: async (actor) =>
-      await (await loadReviewOperations()).countPendingReviews(db, actor),
+    countPending: async (actor) => await countPendingReviewBadge(badges, actor),
     detail: async (request) =>
       await (
         await loadReviewOperations()
@@ -184,8 +197,7 @@ export function createCollaborationRouteOperations(
       await (
         await loadClarifyOperations()
       ).listClarifyRoundSummaries(db, input.taskExecutionParticipants, request),
-    countPending: async (actor) =>
-      await (await loadClarifyOperations()).countAwaitingClarifyRounds(db, actor),
+    countPending: async (actor) => await countAwaitingClarifyBadge(badges, actor),
     detail: async (intermediaryNodeRunId) =>
       await (
         await loadClarifyOperations()

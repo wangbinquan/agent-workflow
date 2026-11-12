@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 AC-11 —— 徽标计数的**往返数预算**（双引擎，只降不升）。
@@ -114,7 +116,7 @@ describeEachProvider('RFC-359 AC-11 —— 徽标计数的往返数预算', (h) 
     ] as const) {
       const recording = h.recordStatements()
       try {
-        await countPendingReviews(h.db, who)
+        await countPendingReviews(h.db, taskExecutionParticipants, humanGateBadgeViewer(who))
       } finally {
         recording.stop()
       }
@@ -134,9 +136,29 @@ describeEachProvider('RFC-359 AC-11 —— 徽标计数的往返数预算', (h) 
 
   test('结果本身不变：owner 数得到、非成员数不到、无 actor 数全部', async () => {
     await seedOnePendingReview(h.db)
-    expect(await countPendingReviews(h.db, actorOf('alice'))).toBe(1)
-    expect(await countPendingReviews(h.db, actorOf('carol'))).toBe(0)
-    expect(await countPendingReviews(h.db)).toBe(1)
-    expect(await countPendingReviews(h.db, actorOf('root', 'admin'))).toBe(1)
+    expect(
+      await countPendingReviews(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('alice')),
+      ),
+    ).toBe(1)
+    expect(
+      await countPendingReviews(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('carol')),
+      ),
+    ).toBe(0)
+    expect(await countPendingReviews(h.db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(
+      1,
+    )
+    expect(
+      await countPendingReviews(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('root', 'admin')),
+      ),
+    ).toBe(1)
   })
 })

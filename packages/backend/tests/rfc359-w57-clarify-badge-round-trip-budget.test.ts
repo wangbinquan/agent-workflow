@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
 // RFC-359 AC-11 —— 反问徽标计数的**往返数预算**（双引擎，只降不升）。
 //
@@ -139,7 +141,7 @@ describeEachProvider('RFC-359 AC-11 —— 反问徽标计数的往返数预算'
     ] as const) {
       const recording = h.recordStatements()
       try {
-        await countAwaitingClarifyRounds(h.db, who)
+        await countAwaitingClarifyRounds(h.db, taskExecutionParticipants, humanGateBadgeViewer(who))
       } finally {
         recording.stop()
       }
@@ -159,10 +161,34 @@ describeEachProvider('RFC-359 AC-11 —— 反问徽标计数的往返数预算'
 
   test('结果本身不变：admin 数全部、属主与协作者各数到自己那条、无关用户数不到', async () => {
     await seed(h.db)
-    expect(await countAwaitingClarifyRounds(h.db, actorOf('admin', 'admin'))).toBe(2)
-    expect(await countAwaitingClarifyRounds(h.db, actorOf('alice'))).toBe(1)
-    expect(await countAwaitingClarifyRounds(h.db, actorOf('carol'))).toBe(1)
-    expect(await countAwaitingClarifyRounds(h.db, actorOf('bob'))).toBe(1)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('admin', 'admin')),
+      ),
+    ).toBe(2)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('alice')),
+      ),
+    ).toBe(1)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('carol')),
+      ),
+    ).toBe(1)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('bob')),
+      ),
+    ).toBe(1)
   })
 
   // `countAwaitingClarifyRounds` 里那两条防孤儿的分支（`or(isNull(tasks.id), …)` 与
@@ -184,7 +210,13 @@ describeEachProvider('RFC-359 AC-11 —— 反问徽标计数的往返数预算'
         '而它们此刻没有任何行为覆盖。',
     ).toBeDefined()
     // 前提没变：语料本身的计数不受影响。
-    expect(await countAwaitingClarifyRounds(h.db, actorOf('admin', 'admin'))).toBe(2)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actorOf('admin', 'admin')),
+      ),
+    ).toBe(2)
   })
 })
 

@@ -17,6 +17,9 @@ import {
   createNodeRunQueries,
   createTaskGateQueries,
   createNodeOutputQueries,
+  nodeRunStatusCondition,
+  taskGateOpenCondition,
+  taskGateVisibleCondition,
 } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -69,5 +72,8 @@ export function composeTaskExecutionParticipantBindings(executionPermits: TaskEx
     createNodeRunQueries,
     createTaskGateQueries,
     createNodeOutputQueries,
+    nodeRunStatusCondition,
+    taskGateOpenCondition,
+    taskGateVisibleCondition,
   })
 }

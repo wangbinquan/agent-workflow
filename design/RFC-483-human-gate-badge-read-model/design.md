@@ -79,7 +79,19 @@ composition 与 public（片段改由 composition 转出、撤出 public），bo
 
 ## 6. 实施中的细化
 
-（实施后补。）
+- **绑定成员的类型**：三个成员照 task-execution 函数的签名写（`taskGateOpenCondition` 的两个布尔参数仍可省），bootstrap 直接交
+  task-execution composition 转出的同一函数；读模型侧的 `HumanGateBadgeTaskScope` 是这三个成员的 `Pick`，路由操作交的是整份绑定。
+- **路由操作里的读模型**：`createCollaborationRouteOperations` 用 `Object.freeze<HumanGateBadgeReadModel>({ … })` 组出读模型（标注在
+  `const` 上时 `Object.freeze` 的泛型推断不把上下文类型传给方法参数，`viewer` 会成隐式 any），两个方法照旧在调用时才懒加载
+  `review.ts` / `clarifyRounds.ts`。
+- **查看者分支**：澄清计数保留 `canReadAllTasks`（= 查看者是 all-tasks）这个局部量，活跃轮次与归档轮次两段仍用它选分支，与原实现逐行
+  对应；评审计数在 task-member 分支里把可见性的 `canReadAllTasks` 写成常量 `false`（原实现在这个分支里求出的也恒为 false）。两个计数
+  函数里不再判 `tasks:read:all`（只剩澄清文件头注释里的说明），澄清文件的 `Actor` import 随之删除。
+- **用例侧**：调两个计数函数的 9 个用例文件由语法树 codemod 改成 `(db, taskExecutionParticipants, humanGateBadgeViewer(actor?))`（34 处，
+  补两个 import）；`rfc395-a7-owner-queries` 的两个 task gate 片段改取 composition；`rfc359-w55` 的伪造绑定补三个不该被调用的成员。
+- **tsc 看不到的文本断言**：字面量扫描（对照 HEAD `fb469ce00`）在真实用例里只有 8 条「HEAD 命中、候选不命中」，逐条核对都不是对改动
+  文件的断言（用例自己的负对照字符串与 import、旧管线的对拍代码、RFC-483 用例自己的反向断言）；三份钉 sha256 的 fixture 都不含改动的
+  文件，`rfc395-selection-semantics-ledger` 记的 `review.ts` 站点按函数名与序号定位、不在改动的函数里。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 

@@ -813,9 +813,11 @@ the option AND advances`（:908）在 **windows-latest shard 3/3** 撞 **20s 用
   **2026-11-02 补记（e2e 腿，RFC-425 `aa275ba44`，run 41426366662）**：`Playwright e2e (windows-latest shard 3/4)` 2 failed / 2 flaky （`rfc372-recorded-directions.spec.ts:87` 30s 轮询超时、`rfc396-graph-development.spec.ts:855` 订票旅程 90s 等 `editableClarify` 超时，重试时 `beforeAll` 起 daemon 90s 超时）。同一时段 daemon 日志 `event loop stalled gapMs=102821` 与 `[db-slow] 102732ms (cpu 407ms)`：墙钟 102 秒、CPU 0.4 秒，进程被 runner 挂起，不是在算。**归属不在该提交**：同一 SHA 的 macOS shard 3/4 跑同样两条用例全部通过（订票旅程 3.1m），ubuntu 三片、windows 其余三片全绿；该分片在前三个提交上均通过；RFC-425 对单机部署的运行时取值与改动前相同。与本条前端分片的现象同源（整机吞吐 / 调度），e2e 长旅程本就贴着超时跑（`128e439d7` 上 `rfc396-graph-development` 一个文件 10.4m）。
   **2026-11-04 补记（e2e 腿，RFC-444 `98cd1706f`，run 41881968088 attempt 1，job 126758337400 `Playwright e2e (macos-latest shard 3/4)`）**：1 failed / 2 flaky / 137 passed（15.8m）：`rfc396-graph-development.spec.ts:855` 订票旅程 `locator.click` 与 `page.screenshot` 15s 超时，`rfc372-recorded-directions.spec.ts:87`、`rfc372-recorded-mindmap.spec.ts:154` 点击超时后重试通过。同一时段 macOS arm64 runner 容量不足（见上一节）。**归属不在该提交**：RFC-444 只把内建资源清单原样搬进 resource-catalog，两条旅程都不经过它；只重跑失败作业（attempt 2）全绿，重跑只作佐证。
   **2026-11-04 补记（e2e 腿，RFC-446 `a85eeebb6`，run 41968848710 attempt 1，job 127052889202 `Playwright e2e (macos-latest shard 3/4)`）**：另一种形态——拿到 runner 后 140 条里已完成的全部通过（无失败、无 flaky），RFC-396 三条长旅程分别 5.8m / 6.6m / 3.8m，把分片拖过作业 20 分钟上限（`The job has exceeded the maximum execution time of 20m0s`）被取消，注记同样带 macOS arm64 容量提示。同一分片在 RFC-445 的运行里约 5 分钟、在 `60a8b2c7c` 的 attempt 2 约 14 分钟。**归属不在该提交**：RFC-446 只把仓库 refs / files 读取迁入 source-control，长旅程不经过它；只重跑失败作业（attempt 2，13.5 分钟）全绿，重跑只作佐证。**判据**：`runner_name` 非空、已完成用例全绿、注记是 `maximum execution time` 而非 `not acquired`，就是作业时限被慢 runner 撑破，不是用例红。
+  **2026-11-11 补记（e2e 腿，RFC-485 的 Done 文档 `1fa9be87c`，run 43116796078 attempt 1，job 130847904817 `Playwright e2e (macos-latest shard 3/4)`）**：140 条里 `rfc372-mindmap.spec.ts:269`（大投影，15s 等不到 `Clarification mindmap`）与 `runtime-scenario-matrix.spec.ts:920`（claude-code 取消，`afterAll` 删临时目录报 `ENOTEMPTY`）首轮红、重试通过；`rfc396-graph-care-repair.spec.ts:404` 跑了 7.1m 后红，报文与重试都没等到，分片就撞作业 20 分钟上限（`The job has exceeded the maximum execution time of 20m0s`）被取消；同一时段 daemon 日志连串 `event loop stalled gapMs=1027～2374`。**归属不在该提交**：`1fa9be87c` 只改 5 个文档文件，代码与父提交 `9699ad3fd` 相同，后者同一分片 12.7 分钟全过；同样只改文档的后继 `fb469ce00`（run 43118856145）同一分片 11.5 分钟全过。未重跑。
   **2026-11-02 补记（后端腿，RFC-401 A1 `b00be9c37`，run 41491898920，job 125436760954 `Backend tests (ubuntu-latest shard 16/44)`）**：`rfc311-perf-guards` 的 AC-11 塌方探测红在 `task-operations catalog — 过滤视图（G1 快路径）`：PostgreSQL P95 10522ms 对 SQLite 99ms（105.8×，阈值 50×）。同一条 PG 用例整条跑了 71.4s（同分片其余 PG 性能用例各约 8s、P95 1～30ms），即测量窗口里整机或 PG 容器停顿，不是查询退化。**归属不在该提交**：RFC-401 A1 只改 resource-catalog 的 agent 写入，不触及任务目录读路径；本机在该候选上跑同一文件（`AW_TEST_PROVIDERS=sqlite,postgresql`）两侧 P95 33ms / 32ms（1.0×），25/25 通过；该用例在前面的提交上全部通过。与本条同源（runner 吞吐 / 调度）。
   **2026-11-04 补记（后端腿，RFC-441 `19ba4671b`，run 41840584975，job 126610803448 `Backend tests (ubuntu-latest shard 16/44)`）**：同一分片同一用例再红：PostgreSQL P95 8241ms 对 SQLite 82ms（100.6×），整条 PG 用例 61.7s，仍是测量窗口里的停顿形态。**归属不在该提交**：RFC-441 只迁移 API 文档、PlantUML 渲染与外部入口开关，不触及任务目录读路径。只重跑失败作业（attempt 2）全绿，重跑只作佐证。
   **2026-11-05 补记（后端腿，RFC-447 `531566b35`，run 41988443836 attempt 1，job 127114665701 `Backend tests (ubuntu-latest shard 16/44)`）**：同一分片同一用例再红：PostgreSQL P95 8159.91ms 对 SQLite 121.75ms（67.0×，阈值 50×），仍是测量窗口里的停顿形态。**归属不在该提交**：RFC-447 只把仓库组用例迁入 source-control，不触及任务目录读路径。只重跑失败作业（attempt 2）全绿，重跑只作佐证。
+  **2026-11-11 补记（后端腿，同一 run，job 130846753481 `Backend tests (ubuntu-latest shard 3/44)`）**：测试步骤 23:06 开跑后没有跑完，作业撞 15 分钟上限（`The job has exceeded the maximum execution time of 15m0s`）被取消；作业日志没有落盘（下载返回 `BlobNotFound`），看不到停在哪个文件。同一分片在 `9699ad3fd` 上 9.4 分钟、在 `fb469ce00` 上 8.8 分钟全过，三个提交的代码相同。**归属不在该提交**，未重跑。
 
 - ⏳ **第十二条：`rfc359-w8-t28-lost-update` L6（并发删兄弟任务后父行物化列收敛）[postgresql] 偶发漏出 40001**（2026-11-02，RFC-401 A1 `b00be9c37`，run 41491898920，job 125436761544 `Backend tests (ubuntu-latest shard 20/44)`）。报文：`Failed query: update "agent_workflow"."task_execution_maintenance_claims" set "state" = $1 …`（`io-complete`），`PostgresError: could not serialize access due to read/write dependencies among transactions`（40001，`Canceled on identification as a pivot, during write`）。该转移在 `task-execution/infrastructure/terminalMaintenancePersistence.ts` 的 `transition` 里经 `databaseSessionFor(db).serializable(...)`（PG 40001 最多重放 10 次）执行，仍有一次 40001 漏给了调用方——要么重放用尽，要么这一段是在外层事务里加入、没有自己的重放。**归属不在该提交**：RFC-401 A1 不触及任务删除、维护 claim 或事务原语；这两个生产文件最近一次实质改动在 RFC-395（`045abf20a`，10-26），RFC-402 只改了该用例的 import 路径；此前各提交的 CI 上该用例均通过。**未定位**：需要复现两笔并发删除下 claim 转移的事务嵌套，确认 40001 是否应由外层整笔重放。按 CLAUDE.md 不以重跑为据，后继提交的 CI 作观察。
 
@@ -5708,6 +5710,21 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
   用例属 RFC-398，未改、未重跑。子进程在 barrier 前没有写出完整的 JSON 就号称就绪，像是多进程握手在 runner 负载下的时序问题。
 - 待办：先在用例里把子进程的原始 stdout / stderr 与退出码随失败一起打印（确认是半行输出还是进程被杀），再决定是给 readiness 改成按行协议、
   还是给 barrier 加超时后的诊断转储。
+
+## system-mock 网关的控制请求在本机并发负载下被对端重置：`rfc310-digital-employee-system-mock-e2e`（2026-11-11 首见，本机，未处置）
+
+- 现象：RFC-483 集中验证时，本机全量 SQLite（6 个 worker）与只放宽时限的副本批次（3 个 worker）里这条用例两次都红在
+  `seedDevelopmentPipeline` 的 `POST /__system-mocks/development-pipeline/seed`：`TypeError: ECONNRESET: The socket connection was closed
+  unexpectedly`（`packages/system-mocks/src/client.ts:123`），没走到断言。两条是同一个 `test.each` 用例体的 direct / crewstation：第一次
+  只红 direct（用例文件 `:1922` 的 seed），第二次 direct 红在 `:1805`、crewstation 红在用例体的第一次 seed（`:1561`），每次落在不同的 seed 上。
+  当时 10 核机器的 1 分钟负载约 23～63。同一文件单独跑
+  （1 个 worker）在候选与 HEAD 对照上都 2 / 2 通过；此前 RFC-480、481、482、485 的四轮全量都通过；主 CI 上未见。
+- 归因：网关的 seed 处理只存种子、回 204（`packages/system-mocks/src/suite.ts:318-322`），自身不会出错；失败的一跳在用例与同进程的 mock
+  网关之间。RFC-483 没有改 `packages/system-mocks`；用例的 import 闭包里 RFC-483 改到的只有一个纯类型文件与两处 re-export，用例也不调两个
+  徽标计数。机制未证实：Bun 的 `node:http` 服务端默认 `keepAliveTimeout` 5000 ms，像是长时间的后端步骤之后，客户端复用的 keep-alive
+  连接恰被服务端回收（POST 不会自动重试）；空闲机器上按 4.9～5.1 s 的间隔各发一次 POST 没有复现。
+- 待办：复现时在网关的 `connection` / `close` 事件上记录 socket 的关闭方与时刻，确认机制后再定改法（网关设 `keepAliveTimeout`、控制请求带
+  `connection: close`，或客户端对连接级错误重试）。
 
 ## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
 

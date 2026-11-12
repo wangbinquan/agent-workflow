@@ -1,3 +1,5 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import {
   databaseContentText,
   contentRowColumns,
@@ -253,7 +255,9 @@ describeEachProviderHttpApplication(
       expect(
         await resolveReviewAccess(context, { actor: reviewer, nodeRunId: 'run-history' }),
       ).toMatchObject({ capabilities: { scope: 'review-node' } })
-      expect(await countPendingReviews(db, reviewer)).toBe(1)
+      expect(
+        await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer(reviewer)),
+      ).toBe(1)
 
       await replaceReviewNodeReviewers(context, {
         actor: owner,
@@ -261,7 +265,9 @@ describeEachProviderHttpApplication(
         body: { nodes: [] },
       })
       expect(await resolveReviewAccess(context, { actor: reviewer, nodeRunId: 'run' })).toBeNull()
-      expect(await countPendingReviews(db, reviewer)).toBe(0)
+      expect(
+        await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer(reviewer)),
+      ).toBe(0)
 
       await replaceReviewNodeReviewers(context, {
         actor: owner,

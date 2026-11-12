@@ -1,3 +1,4 @@
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -185,17 +186,39 @@ describeEachProvider('RFC-311 — countPendingReviews oracle', (harness) => {
     await addDocVersion(db, 't-bob', 'run-bob', 1, 'pending')
 
     for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob'), actor('carol')]) {
-      expect(await countPendingReviews(db, who)).toBe(await legacyReviewBadge(db, who))
+      expect(
+        await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer(who)),
+      ).toBe(await legacyReviewBadge(db, who))
     }
     // Spot values so the oracle cannot go green by both sides being zero:
     // alice sees her 2 (latest per port); carol the same 2 as collaborator;
     // bob only his 1; admin all 3.
-    expect(await countPendingReviews(db, actor('admin', 'admin'))).toBe(3)
-    expect(await countPendingReviews(db, actor('alice'))).toBe(2)
-    expect(await countPendingReviews(db, actor('carol'))).toBe(2)
-    expect(await countPendingReviews(db, actor('bob'))).toBe(1)
+    expect(
+      await countPendingReviews(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('admin', 'admin')),
+      ),
+    ).toBe(3)
+    expect(
+      await countPendingReviews(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('alice')),
+      ),
+    ).toBe(2)
+    expect(
+      await countPendingReviews(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('carol')),
+      ),
+    ).toBe(2)
+    expect(
+      await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer(actor('bob'))),
+    ).toBe(1)
     // No actor → no visibility condition (internal/count-all form).
-    expect(await countPendingReviews(db)).toBe(3)
+    expect(await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(3)
   })
 })
 
@@ -243,12 +266,38 @@ describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) 
     await addRound(db, 'c-bob', 'awaiting_human')
 
     for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob'), actor('carol')]) {
-      expect(await countAwaitingClarifyRounds(db, who)).toBe(await legacyClarifyBadge(db, who))
+      expect(
+        await countAwaitingClarifyRounds(db, taskExecutionParticipants, humanGateBadgeViewer(who)),
+      ).toBe(await legacyClarifyBadge(db, who))
     }
-    expect(await countAwaitingClarifyRounds(db, actor('admin', 'admin'))).toBe(2)
-    expect(await countAwaitingClarifyRounds(db, actor('alice'))).toBe(1)
-    expect(await countAwaitingClarifyRounds(db, actor('bob'))).toBe(1)
-    expect(await countAwaitingClarifyRounds(db, actor('carol'))).toBe(0)
+    expect(
+      await countAwaitingClarifyRounds(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('admin', 'admin')),
+      ),
+    ).toBe(2)
+    expect(
+      await countAwaitingClarifyRounds(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('alice')),
+      ),
+    ).toBe(1)
+    expect(
+      await countAwaitingClarifyRounds(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('bob')),
+      ),
+    ).toBe(1)
+    expect(
+      await countAwaitingClarifyRounds(
+        db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('carol')),
+      ),
+    ).toBe(0)
   })
 })
 

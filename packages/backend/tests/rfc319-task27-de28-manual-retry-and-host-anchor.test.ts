@@ -1,3 +1,4 @@
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
@@ -159,7 +160,7 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
     expect(
       await listReviewSummaries(db, taskExecutionParticipants, { status: 'pending' }),
     ).toMatchObject([{ workflowId: host.id, workflowName: host.name }])
-    expect(await countPendingReviews(db)).toBe(1)
+    expect(await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(1)
     expect(
       await getReviewDetail(
         db,

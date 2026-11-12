@@ -1,3 +1,4 @@
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
@@ -348,7 +349,12 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       source: 'session',
     })
     const paths: readonly [string, number, () => Promise<unknown>][] = [
-      ['badge', 1, () => countAwaitingClarifyRounds(h.db, actor)],
+      [
+        'badge',
+        1,
+        () =>
+          countAwaitingClarifyRounds(h.db, taskExecutionParticipants, humanGateBadgeViewer(actor)),
+      ],
       [
         'round list',
         1,
@@ -532,7 +538,13 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
     })
     const recording = h.recordStatements()
     try {
-      expect(await countAwaitingClarifyRounds(h.db, admin)).toBe(total)
+      expect(
+        await countAwaitingClarifyRounds(
+          h.db,
+          taskExecutionParticipants,
+          humanGateBadgeViewer(admin),
+        ),
+      ).toBe(total)
     } finally {
       recording.stop()
     }
@@ -558,7 +570,13 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       [actor('other'), 0],
     ] as const) {
       const recording = h.recordStatements()
-      expect(await countAwaitingClarifyRounds(h.db, who)).toBe(expected)
+      expect(
+        await countAwaitingClarifyRounds(
+          h.db,
+          taskExecutionParticipants,
+          humanGateBadgeViewer(who),
+        ),
+      ).toBe(expected)
       recording.stop()
       expect(recording.statements).toHaveLength(1)
     }
@@ -575,12 +593,24 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       questions: '[]',
       status: 'answered',
     })
-    expect(await countAwaitingClarifyRounds(h.db, actor('admin', 'admin'))).toBe(0)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('admin', 'admin')),
+      ),
+    ).toBe(0)
     expect((await getClarifyRoundDetail(h.db, taskExecutionParticipants, 'carrier')).status).toBe(
       'answered',
     )
     await h.db.delete(tablesOf(h.db).tasks).where(eq(tablesOf(h.db).tasks.id, 't'))
-    expect(await countAwaitingClarifyRounds(h.db, actor('admin', 'admin'))).toBe(0)
+    expect(
+      await countAwaitingClarifyRounds(
+        h.db,
+        taskExecutionParticipants,
+        humanGateBadgeViewer(actor('admin', 'admin')),
+      ),
+    ).toBe(0)
     expect(
       await listClarifyRoundSummaries(h.db, taskExecutionParticipants, { status: 'all' }),
     ).toEqual([])

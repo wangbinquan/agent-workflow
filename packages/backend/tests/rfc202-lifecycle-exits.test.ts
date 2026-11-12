@@ -1,3 +1,4 @@
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -411,7 +412,7 @@ describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination
     })
     expect(page.length).toBe(2)
     expect(page.every((p) => liveIds.includes(p.taskId))).toBe(true)
-    expect(await countPendingReviews(db)).toBe(3)
+    expect(await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(3)
   })
 })
 

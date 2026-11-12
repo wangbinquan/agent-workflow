@@ -1,3 +1,4 @@
+import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { createTaskSubjectQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
@@ -360,7 +361,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     }
     const listed = await listReviewSummaries(db, taskExecutionParticipants, { status: 'pending' })
     expect(listed).toHaveLength(5)
-    expect(await countPendingReviews(db)).toBe(5)
+    expect(await countPendingReviews(db, taskExecutionParticipants, humanGateBadgeViewer())).toBe(5)
     for (const row of rows.slice(0, 5)) {
       const detail = await getReviewDetail(
         db,

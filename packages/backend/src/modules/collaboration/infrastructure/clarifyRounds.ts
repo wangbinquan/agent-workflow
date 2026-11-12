@@ -1,4 +1,8 @@
-import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
+import type {
+  HumanGateBadgeTaskScope,
+  TaskExecutionParticipantBindings,
+} from './taskExecutionParticipantBindings'
+import type { HumanGateBadgeViewer } from '../application/ports/humanGateBadgeReadModel'
 import {
   compareClarifyRoundRecency,
   compareClarifyRoundInboxOrder,
@@ -8,11 +12,6 @@ import {
   readClarifyHistoryCandidates,
   mergeClarifyHistory,
 } from './clarifyHistoryProjection'
-import {
-  taskGateOpenCondition,
-  taskGateVisibleCondition,
-} from '@/modules/task-execution/public/queries'
-
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   isMindmapRound,
@@ -45,8 +44,6 @@ import {
 //     逐题归属 + 提交冻结）。
 
 import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm'
-
-import type { Actor } from '@/auth/actor'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { chunkedAll } from '@/util/sqlChunk'
@@ -198,18 +195,26 @@ export async function listClarifyRoundSummaries(
  * 现在两条分支都是一条语句：可见性谓词由 `taskVisibilityCondition` 直接 AND 进 WHERE，
  * 与 `visibleTaskIds` 同一个片段，两条路不可能漂。往返数由
  * `rfc359-w57-clarify-badge-round-trip-budget` 双引擎钉住。
+ *
+ * RFC-483: this is the human-gate badge read model's clarify count. It owns the joint projection (RFC-294 design §3.3):
+ * the rounds are collaboration's, the task scope conditions are task-execution's, handed over through the participant
+ * bindings; the viewer is picked by the badge use case (application/humanGateBadges.ts).
  */
-export async function countAwaitingClarifyRounds(db: PersistenceDb, actor: Actor): Promise<number> {
-  const canReadAllTasks = actor.permissions.has('tasks:read:all')
+export async function countAwaitingClarifyRounds(
+  db: PersistenceDb,
+  taskScope: HumanGateBadgeTaskScope,
+  viewer: HumanGateBadgeViewer,
+): Promise<number> {
+  const canReadAllTasks = viewer.kind === 'all-tasks'
   const { clarifyRounds } = tablesOf(db)
   const conditions: SQL<unknown>[] = [
     eq(clarifyRounds.status, 'awaiting_human'),
-    taskGateOpenCondition(db, clarifyRounds.taskId, canReadAllTasks),
+    taskScope.taskGateOpenCondition(db, clarifyRounds.taskId, canReadAllTasks),
   ]
-  if (!canReadAllTasks) {
+  if (viewer.kind === 'task-member') {
     conditions.push(
-      taskGateVisibleCondition(db, clarifyRounds.taskId, {
-        userId: actor.user.id,
+      taskScope.taskGateVisibleCondition(db, clarifyRounds.taskId, {
+        userId: viewer.userId,
         canReadAllTasks: false,
       }),
     )
@@ -226,12 +231,12 @@ export async function countAwaitingClarifyRounds(db: PersistenceDb, actor: Actor
     )})
     SELECT count(*) FROM archived_clarify
     WHERE NOT EXISTS (SELECT 1 FROM ${clarifyRounds} WHERE ${clarifyRounds.id} = archived_clarify.round_id)
-    AND ${taskGateOpenCondition(db, sql`archived_clarify.task_id`, false)}
+    AND ${taskScope.taskGateOpenCondition(db, sql`archived_clarify.task_id`, false)}
     ${
       canReadAllTasks
         ? sql``
-        : sql`AND ${taskGateVisibleCondition(db, sql`archived_clarify.task_id`, {
-            userId: actor.user.id,
+        : sql`AND ${taskScope.taskGateVisibleCondition(db, sql`archived_clarify.task_id`, {
+            userId: viewer.userId,
             canReadAllTasks: false,
           })}`
     }
