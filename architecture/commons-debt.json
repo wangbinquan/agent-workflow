@@ -730,8 +730,8 @@
     {
       "anchors": [
         "packages/backend/src/modules/runtime-management/infrastructure/mcpTestEligibility.ts:3-9",
-        "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts:109-124",
-        "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts:101-103",
+        "packages/backend/src/modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts:232-235",
+        "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts:158",
         "packages/backend/src/services/runtime/types.ts:781-792",
         "packages/backend/src/services/runtime/claudeCode/driver.ts:485-488",
         "packages/backend/tests/rfc282-a3-driver-selfcheck.test.ts:59-173"

@@ -4,8 +4,8 @@
 // ① memory、resource-catalog、source-control、system-operations 的全部生产文件不 import 运行时驱动一族（`services/runtime/**` 与
 //    `services/execution/{agentInjection,workspaceBoundary,taskExecutionResourceDependencies}`、`services/{driverLease,runtimeSmoke,
 //    systemAgentRun}`）；相对路径、`@/` 别名、re-export 与动态 import 都认，带负对照。按 RFC-294 design §3.1 这四个 context 不消费
-//    runtime-management，一族迁入后这些 import 会成为越 DAG 的值边。唯一的例外是 resource-catalog 本机 MCP 诊断的执行体
-//    （proposal §3 非目标，另立下一步）：它的三条边逐条钉住，只许减不许增。
+//    runtime-management，一族迁入后这些 import 会成为越 DAG 的值边。RFC-487 时唯一的例外是 resource-catalog 本机 MCP 诊断的
+//    执行体（三条边逐条钉住）；RFC-488 把它的运行时工作移到 task-execution 实现的端口后，四个 context 都是零。
 // ② memory 不再读 runtime-management 的 `runtimes` 表，复制的解析器删除；memory 的装配从输入取 `runtimeProfiles`，bootstrap 用
 //    runtime-management 的 `resolveInternalAgentRuntime` 绑定（RFC-117 的内部代理解析只留一份）。
 // ③ 本机 doctor 经注入的 `DoctorRuntimeBinaryProbe` 探测；bootstrap 的 doctor 工厂与 standalone 的软探测都取 runtime-management 的
@@ -158,20 +158,13 @@ function reExportsFrom(path: string, from: string): string[] {
 }
 
 const CONSUMERS = ['memory', 'resource-catalog', 'source-control', 'system-operations'] as const
-/** The one deferred site (proposal §3): resource-catalog's local MCP diagnostic runner, its own next step. */
-const DEFERRED_MCP_DIAGNOSTICS =
-  'modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts'
 const CONSUMER_FILES = CONSUMERS.flatMap((context) => filesOf(`modules/${context}`))
 const PRODUCTION = filesOf('.')
 
 describe('RFC-487 ① DAG 外的四个 context 不取运行时驱动一族', () => {
-  test('四个 context 的全部生产文件不 import 一族（本机 MCP 诊断执行体的三条边逐条钉住）', () => {
+  test('四个 context 的全部生产文件不 import 一族（RFC-488 起本机 MCP 诊断执行体也是零）', () => {
     expect(CONSUMER_FILES.length).toBeGreaterThanOrEqual(600)
-    expect(CONSUMER_FILES.flatMap((path) => familyImports(path, read(path))).sort()).toEqual([
-      `${DEFERRED_MCP_DIAGNOSTICS} -> services/runtime`,
-      `${DEFERRED_MCP_DIAGNOSTICS} -> services/runtime/types`,
-      `${DEFERRED_MCP_DIAGNOSTICS} -> services/systemAgentRun`,
-    ])
+    expect(CONSUMER_FILES.flatMap((path) => familyImports(path, read(path))).sort()).toEqual([])
   })
 
   test('负对照：相对路径、别名、re-export 与动态 import 都会被认出', () => {

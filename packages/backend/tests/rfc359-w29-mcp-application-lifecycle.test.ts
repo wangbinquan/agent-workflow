@@ -5,6 +5,7 @@ import {
   type LocalMcpDiagnosticsApplicationInput as McpDiagnosticsApplicationInput,
 } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { McpDiagnosticsApplication } from '@/modules/resource-catalog/application/mcps/runtimeDiagnostics'
+import { createLocalMcpDiagnosticRunner } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 
 // Real service lifecycle with controlled persistence protocol replies. No database,
 // runtime driver, MCP process, network, configuration file or lease is opened.
@@ -116,7 +117,8 @@ function fixture(overrides: Partial<McpRuntimeTestPersistence> = {}) {
     isRuntimeEligible: unexpected,
     configuration: { read: unexpected },
     appHome: '/unused/w29-mcp-home',
-    runFn: unexpected,
+    // RFC-488: the fixture rides Task Execution's local runner.
+    execution: createLocalMcpDiagnosticRunner({ fixture: { runFn: unexpected } }),
     now: () => 100,
     capacity: 1,
     killStaleRunProcessTree: unexpected,

@@ -25,9 +25,13 @@ import {
 } from '@/modules/resource-catalog/domain/mcps/runtimeDiagnostics'
 import { McpRuntimeTestEventSink } from '@/modules/resource-catalog/application/mcps/runtimeTestEventSink'
 import {
-  createLocalMcpDiagnosticsApplication as createMcpDiagnosticsApplication,
-  type LocalMcpDiagnosticsApplicationInput as McpDiagnosticsApplicationInput,
+  createLocalMcpDiagnosticsApplication,
+  type LocalMcpDiagnosticsApplicationInput,
 } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import {
+  createLocalMcpDiagnosticRunner,
+  type LocalMcpDiagnosticRunFixture,
+} from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { getRuntimeDriver } from '../src/services/runtime'
 import {
@@ -73,6 +77,21 @@ function mcpBinding(db: PersistenceDb): McpServiceBinding {
     { ...actor, userId: actor.user.id },
   ).actor
   return Object.freeze({ catalog, authority })
+}
+
+/**
+ * RFC-488: the in-process fixture rides Task Execution's local MCP diagnostic runner, which the resource-catalog family
+ * takes as its `execution`; without a fixture the runner makes real runs, as before.
+ */
+type McpDiagnosticsApplicationInput = Omit<LocalMcpDiagnosticsApplicationInput, 'execution'> & {
+  readonly runFn?: LocalMcpDiagnosticRunFixture['runFn']
+}
+function createMcpDiagnosticsApplication(input: McpDiagnosticsApplicationInput) {
+  const { runFn, ...dependencies } = input
+  return createLocalMcpDiagnosticsApplication({
+    ...dependencies,
+    execution: createLocalMcpDiagnosticRunner(runFn === undefined ? {} : { fixture: { runFn } }),
+  })
 }
 
 function runtimeTestDependencies(db: PersistenceDb, root: string): McpDiagnosticsApplicationInput {

@@ -6,6 +6,18 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import type { McpDiagnosticRunResult } from '../mcps/runtimeDiagnosticsEffects'
 
+/** One diagnostic call's system-agent observation, opened when the agent starts (hosted and local runners alike). */
+export type McpDiagnosticObservation = (startedAt: number) => Promise<{
+  readonly callId: string
+  accept(): Promise<void>
+  usage(snapshot: RuntimeUsageSnapshot): Promise<void>
+  finish(outcome: {
+    readonly status: 'done' | 'failed' | 'canceled' | 'interrupted'
+    readonly endedAt: number
+    readonly usage: RuntimeUsageSnapshot | null
+  }): Promise<void>
+}>
+
 /** The selected runner for one diagnostics-effects instance. */
 export interface McpDiagnosticExecution {
   workspaceReference(sessionId: string): string
@@ -38,16 +50,7 @@ export interface McpDiagnosticExecution {
     readonly maxEventTextBytes: number
     readonly beforeStart: () => Promise<void>
     readonly acknowledgeStarted: () => Promise<void>
-    readonly observe?: (startedAt: number) => Promise<{
-      readonly callId: string
-      accept(): Promise<void>
-      usage(snapshot: RuntimeUsageSnapshot): Promise<void>
-      finish(outcome: {
-        readonly status: 'done' | 'failed' | 'canceled' | 'interrupted'
-        readonly endedAt: number
-        readonly usage: RuntimeUsageSnapshot | null
-      }): Promise<void>
-    }>
+    readonly observe?: McpDiagnosticObservation
   }): Promise<
     Omit<McpDiagnosticRunResult, 'verifyAfterCapture'> & {
       readonly declared?: DeclaredInjectionManifest

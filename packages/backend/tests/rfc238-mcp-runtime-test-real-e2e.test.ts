@@ -19,6 +19,7 @@ import {
   composeMcpServiceBindingForTest,
   getMcpByIdForTest as getMcpById,
 } from './helpers/mcpServiceBinding'
+import { createLocalMcpDiagnosticRunner } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 
 const MOCK_RUNTIME = resolve(import.meta.dir, 'fixtures', 'rfc238', 'mock-claude-runtime.js')
 const tempDirs: string[] = []
@@ -206,6 +207,8 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
           loadRuntime: (name) => runtimeRegistry.getRuntime(name),
           configuration: composeFileApplicationConfigurationQueries(join(root, 'config.json')),
           appHome: root,
+          // RFC-488: Task Execution's local runner does the runtime work (real runs, no fixture).
+          execution: createLocalMcpDiagnosticRunner(),
         })
 
         const created = await service.create(actor, mcp, {

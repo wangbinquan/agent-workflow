@@ -218,6 +218,7 @@ flowchart LR
   RC -. "implements IntegrationTriggerSnapshotFactory" .-> INTEG
   TE -. "implements McpDiagnosticExecution" .-> RC
   TE -. "implements McpDiagnosticExecutionFactory" .-> RC
+  TE -. "implements LocalMcpDiagnosticExecution" .-> RC
   COL -. "implements GateWorkspaceRollbackExecutor" .-> TE
   COL -. "implements TaskClarifyContinuationPort" .-> TE
   COL -. "implements CollaborationRepairPorts" .-> TE

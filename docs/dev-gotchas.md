@@ -80,7 +80,8 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
 - 模块文件搬家或改依赖时，RFC-317 的 R1 / R2 精确账本（`architecture/commons-debt.json`）、`architecture/guard-manifest.json`、
   RFC-395 横向表引用债务（`tests/fixtures/rfc395-horizontal-table-ownership-debt.json`）与 `rfc294-review-offered-edge-dag` 的例外
   清单都按文件路径钉死，要同批改；原来藏在 platform / composition 里的 `services/` 依赖搬进模块 `application/` 后会在 R2 里现形，
-  优先改成由 bootstrap 注入，不要加账本。
+  优先改成由 bootstrap 注入，不要加账本。同一文件里 `registeredFindings` 的锚点（RFC-317 的 P3 登记）没有用例校验，搬走锚定的代码后
+  要自己改指（RFC-488 全仓扫描查出 RT-13 的两个锚点早已指向一个 8 行的转出文件）。
 - 账本按 ratchet 清零时，先查钉「剩余债务落在哪」的用例：形如 `expect(layers).toEqual(['application'])` 的断言把「债务非空」也一并钉了，
   销掉最后一条当场就红（2026-11-07 RFC-465 把 `R2` 清零时 `rfc317-module-boundary` 实撞，集中验证才查出）。这类不变量写成「指定范围
   之外为空」（例如 `filter((layer) => layer !== 'application')` 等于 `[]`）：债务还在时约束不变，清零后照样成立。
@@ -88,6 +89,10 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   绑定 runtime-management 的 `resolveInternalAgentRuntime`。后者返回全量运行时档案（`variant`、`temperature`、`steps`、`extraArgs`
   等），memory 下游的 `bindRuntime` 又按固定字段表转发；直接接上，蒸馏运行就会带上已登记运行时的参数。`tsc` 看不出（超集可以赋给
   子集类型），既有用例也不碰这些字段。在 consumer 自己的边界把结果投影回端口声明的字段，再用一条超集输入的用例钉住投影。
+- **把装配的选择挪到上层时，别绕过原调用点经手的工厂**（RFC-488 实现门自审查出）：CrewStation 的 MCP 诊断装配原来在内部按测试夹具
+  退回本机装配。第一版把这个选择挪到观测模块、直接调本机装配；但 unstarted 阶段观测模块拿到的是 scope 的 `createMcpRuntimeTests`，它
+  组装本机装配之外还把实例登记给 scope，应用释放时一并释放。直接调就漏了登记，`tsc` 与既有用例都看不出（两者签名相同）。选择放在
+  按阶段选装配的地方（`daemonApplication.ts`），只在守护进程阶段生效；挪之前先看原调用点在各阶段实际拿到的是谁。
 
 ## 被 import 的模块不要写 top-level await：Bun 1.4.3 打包器会漏输出 `__promiseAll`（2026-10-31 RFC-400 实撞）
 

@@ -1,27 +1,11 @@
 import { existsSync, rmSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import {
-  DEFAULT_CONFIG_DIR_PROFILE,
-  observationForVerification,
-  verifyStartup,
-  type Config,
-  type StartupObservation,
-  type StartupVerificationResult,
-} from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
-import type { AgentSpawnContext, AgentSpawnPlan, SpawnPlan } from '@/services/runtime/types'
-import {
-  runSystemAgent,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '@/services/systemAgentRun'
+import type { Config } from '@agent-workflow/shared'
 import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
   type StaleRunKillOutcome,
 } from '@/util/process'
 import { ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import {
   AGENT_NAME,
@@ -41,13 +25,25 @@ import type {
   McpRuntimeTestTurnRecord,
   McpRuntimeTestPersistence,
 } from '../../application/mcps/runtimeTestPersistence'
+import type {
+  LocalMcpDiagnosticExecution,
+  LocalMcpDiagnosticSpawnReceipt,
+} from '../../application/ports/localMcpDiagnosticExecution'
+import type { McpDiagnosticObservation } from '../../application/ports/mcpDiagnosticExecution'
+
+/**
+ * RFC-488: the local MCP diagnostic family keeps Resource Catalog's own work here — leases and pid receipts, reaping,
+ * the workspace layout and cleanup, UI events and timers. The runtime-specific work (driver session support, native
+ * session ids, the executable, one turn's run and its startup verification) goes through the injected
+ * `LocalMcpDiagnosticExecution`, which Task Execution implements and bootstrap binds.
+ */
 export interface McpDiagnosticsEffectDependencies {
   readonly observe?: (input: {
     readonly session: SessionRow
     readonly turn: McpRuntimeTestTurnRecord
     readonly runtime: ResolvedTestRuntime
     readonly callId?: string
-  }) => SystemAgentRunOptions['observe']
+  }) => McpDiagnosticObservation | undefined
   readonly configuration: {
     read():
       | Pick<Config, 'defaultRuntime' | 'opencodePath' | 'claudeCodePath'>
@@ -56,7 +52,8 @@ export interface McpDiagnosticsEffectDependencies {
   readonly appHome: string
   readonly loadRuntime: (name: string) => Promise<McpDiagnosticRuntime | null>
   readonly isRuntimeEligible: (runtime: McpDiagnosticRuntime) => boolean
-  readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  /** The runtime-specific work, bound by bootstrap (Task Execution's local runner, with its test fixture if any). */
+  readonly execution: LocalMcpDiagnosticExecution
   readonly now?: () => number
   readonly killStaleRunProcessTree?: (
     run: { pid: number | null; startedAt: number | null; spawnBinaryPath?: string | null },
@@ -78,10 +75,8 @@ export function createLocalMcpDiagnosticsEffects(
   deps: McpDiagnosticsEffectDependencies,
   ownership: LocalMcpDiagnosticExecutionOwnership,
 ): LocalMcpDiagnosticsEffects {
-  const runFn = deps.runFn ?? runSystemAgent
-  const log = createLogger('mcp-runtime-test')
   const binaries = new WeakMap<object, string>()
-  const starts = new WeakMap<object, NonNullable<SystemAgentRunOptions['onSpawned']>>()
+  const starts = new WeakMap<object, (receipt: LocalMcpDiagnosticSpawnReceipt) => Promise<void>>()
   function captureTarget(binary: string): McpDiagnosticRuntimeTarget {
     const reference = Object.freeze({})
     binaries.set(reference, binary)
@@ -96,38 +91,6 @@ export function createLocalMcpDiagnosticsEffects(
     const callback = starts.get(start.reference)
     if (callback === undefined) throw new Error('mcp-test-turn-start-not-owned')
     return callback
-  }
-  async function verifyTurn(
-    session: SessionRow,
-    turn: McpRuntimeTestTurnRecord,
-    result: SystemAgentRunResult,
-  ) {
-    let verification: StartupVerificationResult | undefined
-    if (result.status === 'ok' && deps.runFn === undefined) {
-      const driver = getRuntimeDriver(session.runtimeProtocol)
-      const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
-      // RFC-282 C2 — observation source from the driver's static declaration
-      // (the presence-proxy sent a third runtime down the claude branch).
-      // RFC-297 T12：判据收进单点（RFC-463 起在 shared），测试台与 runner 共用同一份
-      // （此前两处各写一遍同样的 switch）。取数时机仍归调用方（它持有 runRoot），
-      // 判据归被调方——收口后这里只剩一次赋值，故 const。
-      const observation: StartupObservation = await observationForVerification(
-        driver.capabilities,
-        {
-          claudeInit: result.startupInventory ?? null,
-          // 惰性：只有以文件为观测源的运行时才会真的去读（判据在被调方）。
-          loadSnapshot: async () =>
-            (await driver
-              .readInventory?.({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
-              .catch(() => null)) ?? null,
-        },
-      )
-      if (result.declared === undefined) {
-        throw new Error('mcp-test declared manifest missing from run result (assembly seam broken)')
-      }
-      verification = verifyStartup(result.declared, observation)
-    }
-    return verification
   }
   return {
     now: (() => {
@@ -144,9 +107,8 @@ export function createLocalMcpDiagnosticsEffects(
     },
     workspaceReference: (id) => join(deps.appHome, 'mcp-runtime-tests', id),
     workspaceExists: (reference) => existsSync(reference),
-    supportsSession: (protocol) => getRuntimeDriver(protocol).mcpTestSessionReference !== undefined,
-    createNativeSessionId: (runtime) =>
-      getRuntimeDriver(runtime.row.protocol).createMcpTestNativeSessionId?.() ?? null,
+    supportsSession: (protocol) => deps.execution.supportsSession(protocol),
+    createNativeSessionId: (runtime) => deps.execution.createNativeSessionId(runtime.row.protocol),
     reapTurn: (() => {
       const reap = deps.killStaleRunProcessTree ?? productionKillStaleRunProcessTree
       return (turn: McpRuntimeTestTurnRecord, readNow: () => number) =>
@@ -193,14 +155,13 @@ export function createLocalMcpDiagnosticsEffects(
       if (!row.enabled) {
         throw new ValidationError('mcp-test-runtime-disabled', `runtime '${selected}' is disabled`)
       }
-      const driver = getRuntimeDriver(row.protocol)
-      if (driver.mcpTestSessionReference === undefined || !deps.isRuntimeEligible(row)) {
+      if (!deps.execution.supportsSession(row.protocol) || !deps.isRuntimeEligible(row)) {
         throw new ValidationError(
           'mcp-test-runtime-unsupported',
           `runtime '${selected}' does not support mcp-test-v1`,
         )
       }
-      const binary = row.binaryPath ?? driver.defaultBinary(config)[0]
+      const binary = deps.execution.executable(row.protocol, row.binaryPath, config)
       if (binary === undefined || binary === '') {
         throw new ValidationError(
           'mcp-test-runtime-unsupported',
@@ -283,25 +244,34 @@ export function createLocalMcpDiagnosticsEffects(
       assertSpawnAllowed,
       turnStart,
     }) {
-      const driver = getRuntimeDriver(runtime.row.protocol)
-      const result = await runFn({
+      return await deps.execution.run({
         feature: 'mcp-runtime-test',
+        protocol: session.runtimeProtocol,
         agentName: AGENT_NAME,
         systemPrompt: SYSTEM_PROMPT,
         prompt: turn.promptText,
-        protocol: session.runtimeProtocol,
-        runtimeBinary: binaryFor(runtime.target),
-        model: runtime.row.model,
-        scratchParent: join(deps.appHome, 'mcp-runtime-tests'),
-        scratchName: session.id,
-        timeoutMs,
-        maxEventTextBytes: MCP_RUNTIME_TEST_EVENT_BYTES,
-        maxRawFrameBytes: 2 * 1024 * 1024,
-        abortSignal: signal,
-        eventSink: sink,
-        nativeIdentityAuthoritative: true,
-        retainScratchOnSuccess: true,
-        ...(deps.runFn !== undefined || deps.observe === undefined
+        scratch: {
+          parent: join(deps.appHome, 'mcp-runtime-tests'),
+          name: session.id,
+          root: session.scratchRoot,
+        },
+        turn: { id: turn.id, seq: turn.seq },
+        mcp,
+        binary: binaryFor(runtime.target),
+        runtime: {
+          protocol: runtime.row.protocol,
+          model: runtime.row.model,
+          variant: runtime.row.variant,
+          temperature: runtime.row.temperature,
+          steps: runtime.row.steps,
+          maxSteps: runtime.row.maxSteps,
+          isSandbox: runtime.row.isSandbox,
+          configDirEnv: runtime.row.configDirEnv,
+          configDirName: runtime.row.configDirName,
+        },
+        nativeSessionId: session.runtimeSessionId,
+        // Observation and session resume ride together, as before (the runner leaves both out of fixture runs).
+        ...(deps.observe === undefined
           ? {}
           : {
               observe: deps.observe({ session, turn, runtime }),
@@ -309,108 +279,14 @@ export function createLocalMcpDiagnosticsEffects(
                 ? { resumeSessionId: session.runtimeSessionId }
                 : {}),
             }),
-        // RFC-282 B1b (§2.1b) — the old `buildPlan` escape hatch could return an
-        // arbitrary plan, making the declared manifest a SECOND computation at
-        // settle. Narrowed: buildCtx customizes the assembly INPUT (admission
-        // gate runs before assembling), wrapPlan only WRAPS cleanup/beforeSpawn,
-        // and the declared manifest rides the run result (§2.1b-2).
-        ...(deps.runFn !== undefined
-          ? {
-              // In-process fake runs (fixture runFn): no real assembly.
-              testPlanOverride: (): SpawnPlan => {
-                return {
-                  cmd: [binaryFor(runtime.target)],
-                  env: {},
-                  stdin: { mode: 'ignore' },
-                  beforeSpawn: assertSpawnAllowed,
-                }
-              },
-            }
-          : {
-              buildCtx: ({
-                worktreePath,
-                runDir,
-              }: {
-                worktreePath: string
-                runDir: string
-              }): AgentSpawnContext => {
-                const turnRunRoot = join(runDir, 'turns', turn.id)
-                // RFC-284 T13（审计 N4）：手写二元 cast 会绕开 shared 的
-                // RuntimeKind 完备性设计（新增第三 kind 编译照过、运行时
-                // TypeError）——改走 runtimeRegistry 的穷尽访问器。
-                const protocolDefaults = DEFAULT_CONFIG_DIR_PROFILE[session.runtimeProtocol]
-                // RFC-280 T6 — the playground rides the unified injection layer;
-                // the RFC-029 inventory plugin is FORCED on runtimes that observe
-                // via file (P1-4 — a strict consumer must never run blind).
-                return {
-                  injection: { mcps: [mcp] },
-                  prompt: turn.promptText,
-                  agentName: AGENT_NAME,
-                  systemPrompt: SYSTEM_PROMPT,
-                  resolvedParamsByAgent: new Map([
-                    [
-                      AGENT_NAME,
-                      {
-                        model: runtime.row.model ?? null,
-                        variant: runtime.row.variant ?? null,
-                        temperature: runtime.row.temperature ?? null,
-                        steps: runtime.row.steps ?? null,
-                        maxSteps: runtime.row.maxSteps ?? null,
-                        isSandbox: runtime.row.isSandbox === true,
-                      },
-                    ],
-                  ]),
-                  cwd: worktreePath,
-                  runRoot: turnRunRoot,
-                  configDir: {
-                    env: runtime.row.configDirEnv ?? protocolDefaults.env,
-                    name: runtime.row.configDirName ?? protocolDefaults.name,
-                  },
-                  runtimeBinary: binaryFor(runtime.target),
-                  // RFC-297 T13：测试台每一轮都是**新 spawn 的 agent 运行**，
-                  // 如实陈述即可；「据此要不要物化 dump 插件」是 driver 的知识
-                  // （此前这里写的是 `startupObservation === 'inventory-file'`,
-                  // 等于把某个运行时的实现细节搬进了调用方）。
-                  freshAgentRun: true,
-                  ...driver.mcpTestSessionReference?.({
-                    turnSeq: turn.seq,
-                    nativeSessionId: session.runtimeSessionId,
-                  }),
-                  nodeRunId: turn.id,
-                  log: log,
-                }
-              },
-              // §2.1b（实现门 P2-2）— wrap-only: return just the two slots;
-              // the plan itself never passes through adapter hands.
-              wrapPlan: (basePlan: AgentSpawnPlan, { runDir }: { runDir: string }) => ({
-                // P1-7: secret material must not outlive the turn — the claude
-                // mcp-config.json goes here; inventory.json is kept for the
-                // post-run observation read (the session scratch owns the dir).
-                cleanup: async () => {
-                  await basePlan.cleanup?.()
-                  await rm(join(runDir, 'turns', turn.id, 'mcp-config.json'), { force: true })
-                },
-                beforeSpawn: async () => {
-                  await basePlan.beforeSpawn?.()
-                  await assertSpawnAllowed()
-                },
-              }),
-            }),
+        timeoutMs,
+        maxEventTextBytes: MCP_RUNTIME_TEST_EVENT_BYTES,
+        maxRawFrameBytes: 2 * 1024 * 1024,
+        signal,
+        sink,
+        beforeSpawn: assertSpawnAllowed,
         onSpawned: startFor(turnStart),
       })
-      return {
-        status: result.status,
-        exitCode: result.exitCode,
-        stderrTail: result.stderrTail,
-        durationMs: result.durationMs,
-        ...(result.capturedSessionId === undefined
-          ? {}
-          : { capturedSessionId: result.capturedSessionId }),
-        ...(result.nativeSessionIntegrityFailed === undefined
-          ? {}
-          : { nativeSessionIntegrityFailed: result.nativeSessionIntegrityFailed }),
-        verifyAfterCapture: () => verifyTurn(session, turn, result),
-      }
     },
     failedResult(_session, aborted, durationMs) {
       return {

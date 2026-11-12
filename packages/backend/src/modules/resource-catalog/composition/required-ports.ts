@@ -13,3 +13,4 @@ export type {
   McpDiagnosticExecution,
   McpDiagnosticExecutionFactory,
 } from '../application/ports/mcpDiagnosticExecution'
+export type { LocalMcpDiagnosticExecution } from '../application/ports/localMcpDiagnosticExecution'

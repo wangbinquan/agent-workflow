@@ -118,6 +118,7 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   ['resource-catalog', 'integration', 'IntegrationTriggerSnapshotFactory'],
   ['task-execution', 'resource-catalog', 'McpDiagnosticExecution'],
   ['task-execution', 'resource-catalog', 'McpDiagnosticExecutionFactory'],
+  ['task-execution', 'resource-catalog', 'LocalMcpDiagnosticExecution'],
   ['collaboration', 'task-execution', 'GateWorkspaceRollbackExecutor'],
   ['collaboration', 'task-execution', 'TaskClarifyContinuationPort'],
   ['collaboration', 'task-execution', 'CollaborationRepairPorts'],

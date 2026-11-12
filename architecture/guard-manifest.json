@@ -3571,9 +3571,21 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc487-runtime-family-forbidden-consumers-boundary.test.ts",
       "id": "rfc487-runtime-family-forbidden-consumers-boundary",
-      "lines": 438,
+      "lines": 431,
       "mechanism": "ast",
       "minCorpusFiles": 600,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc488-local-mcp-diagnostic-execution-boundary.test.ts",
+      "id": "rfc488-local-mcp-diagnostic-execution-boundary",
+      "lines": 544,
+      "mechanism": "ast",
+      "minCorpusFiles": 350,
       "negativeFixture": true,
       "runner": "bun"
     }

@@ -107,8 +107,9 @@ describe('RFC-376 G11 design parity', () => {
     expect(parityErrors(DESIGN)).toEqual([])
   })
   test('design corpus has the complete offered, required and authority denominator', () => {
-    // RFC-395 O adds 4 SC, 8 O2 closure and 1 Doctor required-SPI edges.
-    expect(designEdges(DESIGN)).toHaveLength(99)
+    // RFC-395 O adds 4 SC, 8 O2 closure and 1 Doctor required-SPI edges; RFC-488 adds the local MCP diagnostic
+    // execution required-SPI edge (99 -> 100).
+    expect(designEdges(DESIGN)).toHaveLength(100)
     expect(designPublicContexts(DESIGN)).toHaveLength(18)
   })
   test('in-memory design mutations add and remove edges, rename a context, or delete the IA row', () => {

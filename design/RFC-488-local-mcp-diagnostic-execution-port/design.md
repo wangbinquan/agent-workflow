@@ -94,7 +94,9 @@ export interface LocalMcpDiagnosticExecution {
 **绑定（bootstrap）**
 
 - `daemonModules/observation.ts` 建出本机实现：测试接缝给了 `runFn` 就作为夹具，其余接缝（`now`、`capacity`）照旧摊进依赖。实现以
-  `execution` 交给诊断装配。给了夹具时 bootstrap 直接用 resource-catalog 的本机装配，不论部署档案。
+  `execution` 交给部署档案选中的诊断装配（仍是一次调用）。
+- `daemonApplication.ts` 选装配：守护进程阶段给了夹具就用 resource-catalog 的本机装配，否则用部署档案的；unstarted 阶段照旧用 scope
+  的 `createMcpRuntimeTests`（它自己组装本机装配并登记，便于释放）。见 §6 细化 1。
 - 测试接缝的类型改取 task-execution composition 交出的夹具类型。
 - `createCrewStationMcpDiagnostics` 删去按 `runFn` 退回本机装配的分支：它只做托管形态，选择归 bootstrap。
 
@@ -133,8 +135,13 @@ export interface LocalMcpDiagnosticExecution {
    - 启动校验：成功才校验、声明清单缺失报错、假运行不校验；
    - `executable` 的登记优先与缺省。
 
-RFC-487 用例 ① 的例外清单改为空。既有用例按新装配改指（本机诊断的服务用例、配置用例、家族用例、HTTP 与守护进程身份用例、两条
-rfc359-w29、rfc364、`providerHttpApplication`），断言意图不变。
+RFC-487 用例 ① 的例外清单改为空。直接组装本机执行体的既有用例按新装配改指，断言意图不变：
+
+- 改为传 `execution`：本机诊断的服务用例与真运行用例、配置用例、家族用例（两处）、`rfc359-w29-mcp-application-lifecycle`（夹具随实现）；
+- 登记新文件：`rfc282-c0c2-runtime-fence` 的两份清单加上本机实现；`rfc294-design-parity` 的虚线计数加一。
+
+经守护进程测试接缝传夹具的用例（HTTP、守护进程身份、`providerHttpApplication`）与 `rfc364` 不改：接缝的名字与形状不变，夹具由 bootstrap
+交给本机实现（细化 1）。
 
 ## 5. 失败模式
 
@@ -142,14 +149,26 @@ rfc359-w29、rfc364、`providerHttpApplication`），断言意图不变。
 - 行为偏移：启动上下文或包裹少字段、观测或续会话条件变了 → 第 4 条与本机诊断服务用例红。
 - 装配漏传：`execution` 是必填，`tsc` 报缺。夹具没接上 → 用夹具的服务用例走真运行，在找不到可执行文件处红。
 
-## 6. 取舍（可推翻）
+## 6. 取舍（可推翻）与实施中的细化
+
+细化（实现门自审与全仓旧路径扫描查出，已改）：
+
+1. 第一版把「给了夹具就用本机装配」放在观测模块，直接调本机装配。unstarted 阶段的诊断装配是 scope 的 `createMcpRuntimeTests`：它组装
+   本机装配，并把实例登记给 scope，应用释放时一并释放。观测模块绕过它，夹具用例里的诊断实例就不再被释放。改为观测模块照旧调选中的
+   装配，由 `daemonApplication.ts` 只在守护进程阶段按夹具选本机装配，与原来 CrewStation 装配内部的退回等价。
+2. 全仓旧路径扫描查出，`architecture/commons-debt.json` 里 RFC-317 登记的 RT-13（P3：测试台支持按驱动方法是否存在来判定）有两个锚点指向
+   `infrastructure/mcpDiagnosticsEffects.ts:101-103` 与 `:109-124`。该文件在 HEAD 上已是 8 行的转出文件，判定本身本 RFC 又移到了
+   task-execution 的本机实现。锚点改指 `mcpDiagnosticRunner.ts` 的 `supportsSession` 与 `createNativeSessionId`，以及本机执行体
+   `resolveRuntime` 的准入判定。RT-13 本身不修：改成声明式能力是驱动合同的事，随整族迁入再定，本 RFC 不改行为。
+
+取舍：
 
 - **一个端口收下全部运行时相关的工作，由 task-execution 实现**：与托管形态对称（托管的执行由 task-execution 实现）。跨轮会话支持、原生
   会话号与可执行文件也是驱动知识，本可由 runtime-management 另给一个端口；但本机实现本来就要取驱动来组装启动上下文与做启动校验，分成
   两个端口只多一次绑定。task-execution 取驱动的地方随 task-execution 那一步统一改走 runtime-management。
 - **夹具随实现走**：夹具的参数就是一族的运行选项，resource-catalog 声明不了它；放进实现的输入，测试与 bootstrap 建实现时带上。
 - **按夹具选本机装配的决定归 bootstrap**：CrewStation 的诊断装配原来按 `runFn` 退回本机装配，现在 resource-catalog 已经看不到 `runFn`。
-  选择本来就是装配者的事。
+  选择本来就是装配者的事，放在按阶段选装配的 `daemonApplication.ts`（细化 1）。
 - **`services/systemAgentRun.ts` 留在原处**：本 RFC 后它只剩 task-execution 一个值使用方，去向随整族迁入一并定。
 
 ## 7. 对 RFC-294 刷新后规则的对账

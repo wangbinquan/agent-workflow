@@ -55,8 +55,8 @@
       "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/memory/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-resource-catalog": {
-      "max": 93,
-      "reason": "max=93: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/resource-catalog/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 92,
+      "reason": "max=92: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/resource-catalog/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; RFC-488 removes the CrewStation diagnostics family's fixture branch (93 -> 92: bootstrap selects the local family when a test fixture is given); no growth authorized."
     },
     "composition-control-flow-run-observability": {
       "max": 0,

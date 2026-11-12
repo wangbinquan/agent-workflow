@@ -18,9 +18,9 @@ import type {
   ResolvedTestRuntime,
 } from '../application/mcps/runtimeDiagnosticsEffects'
 import { bindMcpDiagnosticsRuntime, createMcpDiagnosticsApplication } from './mcpDiagnostics'
-import {
+import type {
   composeLocalMcpDiagnostics,
-  type LocalMcpDiagnosticsCompositionInput,
+  LocalMcpDiagnosticsCompositionInput,
 } from './localMcpDiagnostics'
 import { composeMcpRuntimeTestProvider } from './mcpRuntimeTestPersistence'
 import { createHostedMcpProbe } from '../infrastructure/crewstation/mcpProbe'
@@ -45,8 +45,8 @@ type HostedInput = {
 export function createCrewStationMcpDiagnostics(
   input: HostedInput,
 ): typeof composeLocalMcpDiagnostics {
+  // RFC-488: a test fixture selects the local family in bootstrap; this family is hosted only.
   return (options) => {
-    if (options.runFn !== undefined) return composeLocalMcpDiagnostics(options)
     const selected = {
       ...options,
       ...composeMcpRuntimeTestProvider(input.db, (tx) =>

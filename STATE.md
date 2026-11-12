@@ -16,6 +16,34 @@
 - **附带**：RFC-487 的 Done 文档提交 `15f7a86d4`（5 个文档文件）：exact SHA 主 CI run 43247846697 的 70 个 job 里 68 个通过。
   `Playwright e2e (macos-latest shard 4/4)` 没有分到 runner（0 个 step、没有日志，排队约 30 分钟后取消），「CI required」随之红。与该提交
   无关：它只改文档，同一分片在 `76fcd805a` 上通过，同一 run 的 macOS 其余三片通过。未重跑，以本 RFC 落档提交的 CI 为后继证据。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 端口在 resource-catalog 的 `application/ports/`（`localMcpDiagnosticExecution.ts`，经
+  `composition/required-ports.ts` 转出；观测类型与托管端口共用 `McpDiagnosticObservation`）；运行时相关的执行在 task-execution 的
+  `infrastructure/local/mcpDiagnosticRunner.ts`，由 `composition/localMcpDiagnosticRunner.ts` 交出，与托管形态的执行体对称；bootstrap 的
+  观测模块建实现、以 `execution` 交给诊断装配，`daemonApplication.ts` 在守护进程阶段给了夹具时选本机装配；resource-catalog 的本机执行体
+  只做自己的工作（租约、按 pid 的回执与回收、工作区布局与清理、界面事件、计时器）。C11 public surface 不增（1,208）；consumer 自有端口
+  增 1（`LocalMcpDiagnosticExecution`），RFC-294 design §3.1 与 `rfc294Target.ts` 登记虚线（目标边 99 → 100）。C12 RFC-488 用例覆盖
+  resource-catalog 全部 373 个生产文件（下限 350，import 识别带负对照：相对路径、别名、re-export、动态 import）、本机执行体、端口与观测
+  类型的唯一声明、task-execution 的实现与 composition、bootstrap 的两处绑定、`windows-platform.yml` 两份路径过滤，以及本机实现的行为
+  （真运行与假运行的选项、包裹、观测与续会话、启动校验、驱动取值）。C13 `counts.json` 60 项实测 = `max`；
+  `composition-control-flow-resource-catalog` 93 → 92（CrewStation 诊断装配删去按夹具的分支），已收紧到实测，其余与对照逐项相同。
+- **§14 不变量 / 运行时驱动一族第二步**：DAG 外四个 context 对一族的 import 归零（RFC-487 用例 ① 的例外清单为空）。一族之外 import
+  它的生产文件仍是 31 个：resource-catalog 1 → 0，task-execution 16 → 17（本机 MCP 诊断的实现，DAG 允许的方向），runtime-management 12、
+  bootstrap 2 不变；`services/systemAgentRun.ts` 的值使用方只剩 task-execution 的这一个实现。越 DAG 的 offered 文件对 46、跨 context
+  内部文件对 43、context 值级越 DAG 对 0、public 类型偏差 57、未消费 public 符号 91、`module-layer` 1、application 直接副作用 2、legacy
+  横向文件 167、legacy 服务实现 48 不变；跨 context import 7,664 → 7,668（删 9 增 13）。下一步：task-execution 对一族的 17 处使用与
+  task-execution → runtime-management 的 18 个跨 context 内部文件对；整族迁入 runtime-management infrastructure（含
+  `services/systemAgentRun.ts` 的去向）。
+- **集中验证**（候选基于 `39c1d7c11`，验证期间 HEAD 未前进，详见 plan）：集中验证与实现门查出本 RFC 的四处问题，已修复并复验：用例 ④
+  把 opencode 的原生会话号写错（它不自己生成）；第一版在观测模块按夹具直接调本机装配，`rfc364` 钉的调用形状随之消失；
+  `rfc294-design-parity` 钉了虚线总数（99 → 100）；实现门自审发现按夹具选装配绕过了 unstarted scope 的 `createMcpRuntimeTests`（它登记
+  实例、随应用释放），改由 `daemonApplication.ts` 只在守护进程阶段选（design §6 细化 1）。全仓旧路径扫描另查出 RFC-317 RT-13 的两个锚点
+  早已过期，改指新位置（细化 2）。教训记入 `docs/dev-gotchas.md`。backend `tsc` 0 错、eslint 无告警；RFC-488 用例候选 13 / 13（①～③ 的
+  结构副本对 HEAD 红 7 条）；首批 256 个文件 250 个通过；全量 SQLite 逐文件跑 2,930 个、2,920 个通过，其余 10 个都不归本 RFC（发布账本
+  1 个是导出仓库没有真实历史，9 个撞用例自带的时限或内部等待）；修复后的候选 3 复验 458 个文件，红的仍只有上面的发布账本与时限；
+  只放宽时限的 10 个副本全过（`rfc363` 进程恢复照 RFC-486 另加轮询兜底：负载下 FSEvents 丢了改名事件）；PostgreSQL 一侧接库跑 14 个
+  相关文件，227 条全过（PostgreSQL 一侧 111 条）；按 CI 的跑法（默认 5 秒）跑 38 个相关文件，406 条里 402 条通过，红的 4 条都在
+  PostgreSQL 一侧、撞默认 5 秒或用例自己的 2 秒等待，与 HEAD 的代码同时 A/B 三轮分布相同（候选红 2、3、4 条，HEAD 红 5、2、2 条）；
+  架构报告 60 项实测 = `max`（触及的一项已收紧），其余与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-12 RFC-487 运行时驱动一族的 DAG 外使用方改经各自的端口（Done；`design/RFC-487-runtime-family-forbidden-consumers/`）
 

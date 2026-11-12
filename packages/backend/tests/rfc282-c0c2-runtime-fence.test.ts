@@ -56,6 +56,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
       'modules/task-execution/application/taskAgentRun.ts',
       'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+      // RFC-488: the MCP test bench's startup observation now lives in Task Execution's local runner.
+      'modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts',
     ]) {
       const text = read(rel)
       expect(text, `${rel} still discriminates on readInventory presence`).not.toContain(
@@ -81,6 +83,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
       'modules/task-execution/application/taskAgentRun.ts',
       'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+      // RFC-488: the MCP test bench's startup observation now lives in Task Execution's local runner.
+      'modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts',
     ]) {
       const consumer = read(rel)
       expect(consumer, `${rel} still switches on startupObservation`).not.toContain(

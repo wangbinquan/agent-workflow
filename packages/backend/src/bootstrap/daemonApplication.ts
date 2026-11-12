@@ -124,8 +124,9 @@ import { invalidateCallGraphIndex } from '@/modules/workspace-insight/compositio
 import type { createLogger } from '@/util/log'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
-import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import type { LocalMcpDiagnosticRunFixture } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 import { batchOwnerUserId } from '@/modules/source-control/composition'
 import { redactEventPayload } from '@/auth/tokenRedaction'
 import {
@@ -190,7 +191,8 @@ export interface DaemonApplicationTestSeams<P extends DatabaseProvider = Databas
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
   readonly webhookDispatcher?: WebhookDispatcher
   readonly mcpRuntimeTestDependencies?: {
-    readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+    /** RFC-488: Task Execution's local MCP diagnostic runner takes it as its fixture. */
+    readonly runFn?: LocalMcpDiagnosticRunFixture['runFn']
     readonly now?: () => number
     readonly capacity?: number
   }
@@ -372,8 +374,14 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     mcpCatalog: () => mcpCatalog,
     adapters: {
       systemAgentRunFamily: input.systemAgentRunFamily,
+      // RFC-488: a test fixture selects the local family in the daemon phase (the CrewStation family has no fixture
+      // branch); the unstarted scope composes the local family itself and tracks it for disposal.
       mcpDiagnostics:
-        phase.kind === 'daemon' ? input.mcpDiagnostics : phase.scope.createMcpRuntimeTests,
+        phase.kind !== 'daemon'
+          ? phase.scope.createMcpRuntimeTests
+          : input.testSeams?.mcpRuntimeTestDependencies?.runFn === undefined
+            ? input.mcpDiagnostics
+            : composeLocalMcpDiagnostics,
       runtimeManagement: input.runtimeManagement,
       workspacePresence: input.workspacePresence,
     },

@@ -7,6 +7,10 @@ import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/qu
 import { type ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import {
+  createLocalMcpDiagnosticRunner,
+  type LocalMcpDiagnosticRunFixture,
+} from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mcpOperationCoordinator } from '@/modules/resource-catalog/composition'
 import type { DeploymentSelections } from '../deploymentProfile'
@@ -29,11 +33,11 @@ export interface DaemonObservationInput {
   readonly mcpCatalog: () => McpCatalogModule
   readonly adapters: DaemonObservationAdapters
   readonly mcpRuntimeTestDependencies?: Partial<
-    Pick<
-      Parameters<DaemonObservationAdapters['mcpDiagnostics']>[0],
-      'runFn' | 'now' | 'capacity' | 'appHome'
-    >
-  >
+    Pick<Parameters<DaemonObservationAdapters['mcpDiagnostics']>[0], 'now' | 'capacity' | 'appHome'>
+  > & {
+    /** RFC-488: in-process fake runs; they go to Task Execution's local runner as its fixture. */
+    readonly runFn?: LocalMcpDiagnosticRunFixture['runFn']
+  }
   readonly runtimeDiagnosticTestDependencies?: Parameters<
     DaemonObservationAdapters['runtimeManagement']
   >[0]['runtimeDiagnosticTestDependencies']
@@ -54,6 +58,10 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
   const intentHttpSystemAgentBinding = family()
   const workspacePresence = input.adapters.workspacePresence
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(input.db)
+  // RFC-488: Task Execution's local runner does the local family's runtime work; a test fixture rides it. Which family
+  // runs is the adapter's selection (daemonApplication picks the local family for a fixture in the daemon phase).
+  const { runFn: mcpRunFixture, ...mcpRuntimeTestDependencies } =
+    input.mcpRuntimeTestDependencies ?? {}
   const mcpRuntimeTests = input.adapters.mcpDiagnostics({
     observe:
       ({ session, turn, runtime, callId }) =>
@@ -99,8 +107,11 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
     },
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
     configuration: input.configuration,
-    ...input.mcpRuntimeTestDependencies,
-    appHome: input.mcpRuntimeTestDependencies?.appHome ?? input.appHome,
+    execution: createLocalMcpDiagnosticRunner(
+      mcpRunFixture === undefined ? {} : { fixture: { runFn: mcpRunFixture } },
+    ),
+    ...mcpRuntimeTestDependencies,
+    appHome: mcpRuntimeTestDependencies.appHome ?? input.appHome,
   })
   const runtimeManagement = input.adapters.runtimeManagement({
     observations: () => systemAgentObservations,
