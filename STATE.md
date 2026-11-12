@@ -1,4 +1,4 @@
-## 2026-11-11 RFC-483 评审与澄清徽标的联合投影归 collaboration 读模型：task-execution 的三个 SQL 条件片段撤出 public（In Progress；`design/RFC-483-human-gate-badge-read-model/`）
+## 2026-11-11 RFC-483 评审与澄清徽标的联合投影归 collaboration 读模型：task-execution 的三个 SQL 条件片段撤出 public（Done；`design/RFC-483-human-gate-badge-read-model/`）
 
 - **来由**：RFC-294 plan §3 S9 第 2 项（类型污染清单里的 SQL 条件片段）与第 4 项（collaboration 不再把 task-execution 的 SQL 片段拼进自己的
   查询，牵动的用例按 D14 迁入 application），task-execution ↔ collaboration 这一对的第五步、也是最后一步（RFC-481 落档时预留编号）。用户
@@ -42,6 +42,20 @@
   证据，另把 22 个相关文件接库跑：21 个 304 条全过（PostgreSQL 一侧 144 条），`rfc359-w6-t26-postgresql-plan-audit` 在本机铺语料撞 600 秒的
   `beforeAll`，HEAD 对照同样到点，以 CI 为证据。架构报告 60 项实测 = `max`，门里只有偏差一项变化。实现门 PASS（本会话按路径限定自审，只审
   功能）。
+- **落地**：`8f7463f57`。
+- **CI**：`8f7463f57`：exact SHA 主 CI run 43141424266 的 70 个 job 里 67 个通过：`Backend tests (ubuntu-latest shard 5/44)` 撞作业
+  15 分钟上限（与父提交同一片相同的 11 个 release-upgrade-matrix 文件，这次每个约 2.7 分钟，父提交上约 47 秒），
+  `Playwright e2e (macos-latest shard 3/4)` 的 `rfc372-recorded-mindmap.spec.ts:154` 两次尝试都撞 Playwright 15 秒的动作时限（139 条通过，
+  daemon 日志 7 次 event loop stall），两格都不归本 RFC（详见 plan §CI），「CI required」随之红；同 SHA 的 windows-platform run
+  43141424278 通过。未重跑，以 Done 文档提交的 CI 作后继证据。
+- **下一步**（按 RFC-294 2026-11-09 刷新后的总纲：review §7、plan §5；进度以 design §14 的不变量与各后继退出门为主口径）：
+  1. W4-E1 余项：`infrastructure/taskRouteLaunchOperations.ts` 归 application，另立。
+  2. 运行时驱动一族；再 S13、S10、S12。S9 余下的其他 context 对按对另立：task-execution 的 public 里剩下的 11 条类型偏差分属 integration
+     （`nonTerminalTaskExists`、触发查询、终态工作区清理策略）、memory（系统 agent 运行族、节点事件内容、知识查询）、workspace-insight
+     （系统 agent 运行族）、resource-catalog（工作组房间参与者）与 `routes/`（`TaskRouteOperations`）；另有 resource-catalog 交给
+     task-execution 的 SQL 片段 `workflowNameExpression`（resource-catalog ↔ task-execution 一对）。
+  - design §14 收口实测：public 类型污染 57、未消费 public 符号 91、越 DAG 的 offered 文件对 47、跨 context 内部文件对 43；减速带 60 项，
+    每项 `max` = 实测。独立对账（plan §0 第 10 条）：上次 2026-11-09，其后关闭 10 个后继，下一次不晚于 2026-11-23。
 
 ## 2026-11-11 RFC-485 collaboration 与 memory 取 task-execution 的三个行形状查询工厂改经装配期注入（Done；`design/RFC-485-te-row-query-bindings/`）
 

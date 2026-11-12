@@ -17,10 +17,11 @@
 
 ## 验收清单
 
-- [ ] AC-1 task-execution 的 public 不导出三个片段；collaboration 不从 task-execution 取它们；徽标读模型经绑定取得
-- [ ] AC-2 查看者判定在 application，读模型端口只有 DTO 签名；路由操作经 application 的徽标用例计数
-- [ ] AC-3 `public-surface-deviations` 65 → 57 并收紧到实测；跨 context 内部文件对、越 DAG 文件对与表归属账本不变
-- [ ] AC-4 两条徽标仍各发一条语句、`rfc311` 对拍通过；受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-1 task-execution 的 public 不导出三个片段；collaboration 不从 task-execution 取它们；徽标读模型经绑定取得
+- [x] AC-2 查看者判定在 application，读模型端口只有 DTO 签名；路由操作经 application 的徽标用例计数
+- [x] AC-3 `public-surface-deviations` 65 → 57 并收紧到实测；跨 context 内部文件对、越 DAG 文件对与表归属账本不变
+- [x] AC-4 两条徽标仍各发一条语句、`rfc311` 对拍通过；受影响用例全部通过；exact SHA CI 全绿（环境性红格如实记录：后端 ubuntu 5/44 片
+      撞作业时限、macOS e2e 3/4 片一条撞 Playwright 动作时限，两格的红都不由本 RFC 的改动引起，以后继提交的 CI 为证，见 §CI）
 
 ## 集中验证（2026-11-11，候选基于 `fb469ce00`）
 
@@ -67,6 +68,20 @@ RFC-482 的做法用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的�
   用例 167 条（两种 provider 同进程、默认 5 秒、`--randomize`，含 3 个 rfc317 守卫账本用例）166 条通过；`rfc128-p5-a-pre-refactor-net` 的
   `[postgresql]` 一条在负载下用了 7.2 秒、撞默认 5 秒，按 PostgreSQL lane 的单条 60 秒再跑 3 / 3（那条 4.4 秒；它不调两个徽标计数）。候选 2
   之后只同步了文档，代码与用例的结果沿用，架构报告不变。
+
+## CI（AC-4）
+
+- `8f7463f57`：exact SHA 主 CI run 43141424266 的 70 个 job 里 67 个通过（run 结论 cancelled，「CI required」随之红）；同 SHA 的
+  windows-platform run 43141424278 通过。两格没过，都不归本 RFC：
+  - `Backend tests (ubuntu-latest shard 5/44)` 撞作业 15 分钟上限被取消。这一片与父提交 `fb469ce00` 的同一片是同样的 11 个
+    release-upgrade-matrix 文件（父提交上每个约 47 秒、8.6 分钟跑完，与 `.github/backend-test-timings.json` 记的 46～49 秒相符）；这次每个
+    约 2.7 分钟，跑完 5 个就到点。矩阵用例不调两条徽标计数，新增的用例文件也没进这一片。
+  - `Playwright e2e (macos-latest shard 3/4)` 139 条通过、1 条红：`rfc372-recorded-mindmap.spec.ts:154` 两次尝试都撞 Playwright 15 秒的
+    动作时限（首轮 `fill`、重试 `click`，元素都已解析、可见且稳定；同一时段 daemon 日志 7 次 `event loop stalled`，1.1～1.8 秒）。外壳的
+    收件箱按钮会轮询两条 pending-count，同一分片其余 139 条与其余 10 个 e2e 分片都照常通过；这条 spec 不读徽标，RFC-444 的运行里撞过同样
+    的点击超时（`docs/audit-backlog.md` 第九条）。父提交同一分片通过。
+
+  未重跑；内容不变的后继提交（本 RFC 的 Done 文档提交）的 CI 作后继证据，结果记在下一条目。
 
 ## 实现门（本会话自审，只审功能）
 
