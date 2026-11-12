@@ -1,3 +1,21 @@
+## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（In Progress；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
+
+- **来由**：RFC-294 plan §4.7——运行时驱动一族整族迁入 runtime-management 之前，先重画 task-execution ↔ runtime-management 的驱动接缝；
+  §4.6 第 5 项把 task-execution → runtime-management 的 18 个跨 context 内部文件对归给这一族。RFC-487、RFC-488 已把 DAG 外四个 context
+  对一族的 import 清零。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：运行时管理（本机、托管）的装配迁入 runtime-management 的 composition，task-execution 的探测族经它效果自有的探测端口注入；本机
+  探测族的协议与运行证据改取材料定义（与另两族一致）；系统代理、任务代理与探测的根只装 task-execution 自己的部分，runtime-management、
+  resource-catalog、source-control 的实现作为提供者由 bootstrap 交入；本机调用的材料引用与运行证据改由材料定义提供。三份精确账本销去
+  21 对（跨 context 内部文件对 43 → 22）。
+- **不做**：task-execution 对一族（`services/`）的其余使用与一族指回 task-execution 的两条边（下一步）；整族迁入（另立）；其余跨 context
+  内部文件对；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 13 个后继。
+- **附带**：RFC-488 的 Done 文档提交 `ca08a9365`（6 个文档文件）：exact SHA 主 CI run 43294932125 的 70 个 job 全部通过。其中
+  `Backend tests (ubuntu-latest shard 41/44)` 里 `rfc398-start-auto-upgrade-takeover` 三例全过（「…acquires before takeover」22.7 秒）；
+  它与 `9ff1274b0` 相比不改 `packages/`，作为 RFC-488 实现提交那格偶发红的后继证据。
+
 ## 2026-11-12 RFC-488 resource-catalog 本机 MCP 诊断的运行时工作改经自有端口（Done；`design/RFC-488-local-mcp-diagnostic-execution-port/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族归 runtime-management infrastructure，先把经 `services/` 取驱动的其他 context 换成端口或
