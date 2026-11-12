@@ -448,7 +448,8 @@ S6 关闭后，§5.2 的四层在 `engine/` 内成立，`composition/` 只装配
 
 - `infrastructure/` 的三个“路由操作”文件（`taskRouteOperations.ts`、`taskRouteRepairOperations.ts`、`taskRouteLaunchOperations.ts`，
   合计约 5.9k 行）把准入规则与查询写在一起。它们是用例，按 §3 常驻规则 10 属于 application：`taskRouteLaunchOperations.ts` 随
-  W4-E1，其余按 proposal D14 随功能 RFC 触及时归位，不设单独的退出门。`taskLifecycle.ts` 是 §12 所定的生命周期写入序列，留在
+  W4-E1（2026-11-12 [RFC-486](../RFC-486-task-route-launch-application/proposal.md) Done，`b69dfabe8`：启动用例拆入 `application/launch/`，
+  准入事务留在 infrastructure 适配器），其余按 proposal D14 随功能 RFC 触及时归位，不设单独的退出门。`taskLifecycle.ts` 是 §12 所定的生命周期写入序列，留在
   infrastructure；它构造带 HTTP 状态的错误这一点归 W9-C。
 - `application/taskAgentRun.ts` 的 `runNode` 是单个约 2.2k 行的函数，是 agent 运行的主体。按 §5.2 的口径，其中的装配顺序应归
   机制库、kind 专属判定应归执行器；后继触及时拆分，不单设波次。

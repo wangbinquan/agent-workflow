@@ -1,4 +1,4 @@
-## 2026-11-11 RFC-486 任务启动用例归 task-execution 的 application：`taskRouteLaunchOperations.ts` 按内容分层（In Progress；`design/RFC-486-task-route-launch-application/`）
+## 2026-11-11 RFC-486 任务启动用例归 task-execution 的 application：`taskRouteLaunchOperations.ts` 按内容分层（Done；`design/RFC-486-task-route-launch-application/`）
 
 - **来由**：RFC-294 design §5.6 与 plan §4.7——`infrastructure/` 的路由操作文件是用例，按 §3 常驻规则 10 属于 application，
   `taskRouteLaunchOperations.ts` 随 W4-E1（RFC-478 之后 W4-E1 只剩这一个文件，另立）；RFC-483 收口 S9 的 task-execution ↔ collaboration
@@ -29,7 +29,8 @@
 - **§14 不变量 / W4-E1 退出门**：越 DAG 的 offered 文件对 47 → 46（task-execution → integration 一对销掉）；public 类型偏差 57、未消费 public
   符号 91、跨 context 内部文件对 43、`module-layer` 1、application 直接副作用 2 不变；`taskRouteLaunchOperations.ts` 删除，其编排在
   `application/launch/`，该目录不 import `infrastructure/**`、inbound、表与发布 runtime，依赖接口不收 `db` 与配置路径。表归属债 121 条不变
-  （两条随内容改键为 `rootTaskAdmission.ts`，成员表一族另立）。
+  （两条随内容改键为 `rootTaskAdmission.ts`，成员表一族另立）。W4-E1 至此收口：`services/task.ts` 已由 RFC-478 退役，本文件是它最后的
+  余项。
 - **集中验证**（候选基于 `109187d5c`，验证期间 HEAD 未前进，详见 plan）：开发期用字面量扫描对 HEAD 与候选核过 `tsc` 看不到的源码文本断言
   （HEAD 命中、候选不命中的 4 条逐条核对：1 条是另一个面的禁用清单，3 条是本 RFC 用例自己的反向断言）。集中验证查出本 RFC 的两处问题，已
   修复并复验：`rfc243-executor-facade` 读旧文件的文本检查（开发期改写文本引用时跳过了 import 该模块的文件），`rfc359-w7-task-route-conformance`
@@ -41,6 +42,18 @@
   351 条），两条红都撞用例自带的时限（`rfc359-w9` 的文件默认 10 秒；`rfc359-w14` 的 25 秒终态回调等待——HEAD 对照在同一负载下 3 轮红
   2 轮，放宽副本在候选与 HEAD 上都通过），`single-nonroot-member-workspace` 被 runner 的 1,500 秒闹钟截停时 PostgreSQL 一侧 113 条已全过。
   架构报告 60 项实测 = `max`，门里只有越 DAG 一项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`b69dfabe8`（实现）；`6452036ac`（修复 CI 上查出的两处全仓引用）。
+- **CI**：`b69dfabe8`：exact SHA 主 CI run 43183698283 的 70 个 job 里 67 个通过，红的三格都由本 RFC 引起——删掉旧文件时文本引用只在
+  backend 的 `src/` 与 `tests/` 里扫过：`packages/frontend/tests/task-wizard-builders.test.ts` 按相对路径读被删文件（Frontend tests
+  ubuntu / windows 的 shard 2/3 都 ENOENT），`design/RFC-395-database-target-schema-rebuild/research.md` 的一条 Markdown 链接指向它
+  （Markdown link check (design/) 红），「CI required」随之红；同 SHA 的 windows-platform run 43183698269 通过。`6452036ac` 修复（前端用例
+  改读准入适配器、链接改指 `taskLaunchArms.ts`，`docs/dev-gotchas.md` 的 RFC-486 一条补「旧路径按 `git ls-files` 扫全仓」）：exact SHA 主
+  CI run 43189398886 的 70 个 job 全部通过（含上面三格与 real PostgreSQL）。落档提交 `109187d5c`：exact SHA 主 CI run 43152049452 的 70 个
+  job 全部通过。
+- **下一步**（刷新后的后继顺序）：1. 运行时驱动一族（`services/runtime/**` 等 38 个文件归 runtime-management，RFC-294 plan §4.7：先把经
+  `services/` 取驱动的其他 context 换成 runtime-management 的端口或装配，再整族迁入）；2. S13、S10、S12；3. S9 余下的其他 context 对按对
+  另立；成员表一族（`task_collaborators`、`users` 的表归属）另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭
+  11 个后继。
 
 ## 2026-11-11 RFC-483 评审与澄清徽标的联合投影归 collaboration 读模型：task-execution 的三个 SQL 条件片段撤出 public（Done；`design/RFC-483-human-gate-badge-read-model/`）
 

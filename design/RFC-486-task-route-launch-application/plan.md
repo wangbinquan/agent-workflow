@@ -20,7 +20,7 @@
 - [x] AC-1 `infrastructure/taskRouteLaunchOperations.ts` 删除；启动编排在 `application/launch/`，不 import `infrastructure/**`、不收裸 `db`
 - [x] AC-2 准入事务由一个 infrastructure 适配器实现，语句与次序不变；两条表归属债按后继身份改键，账本条数不变
 - [x] AC-3 越 DAG 的 offered 文件对 47 → 46；减速带不升、触及的收紧到实测；task-execution 的 public 只增 `TaskLaunchGuard`
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证（2026-11-11，候选基于 `109187d5c`）
 
@@ -76,6 +76,24 @@
 - **最终候选**：导出仓库与 HEAD 加 86 个候选路径逐字相同（12,162 个文件逐字节比对），临时副本已删。文档对账与读 guard-manifest 的
   17 个用例 178 条全过（两种 provider 同进程、默认 5 秒、`--randomize`，含 3 个 rfc317 守卫账本用例与 RFC-486 用例）。候选 3 之后只同步了
   文档（本 plan 与 `STATE.md`），代码与用例的结果沿用，架构报告不变。
+
+## CI（AC-4）
+
+- `b69dfabe8`：exact SHA 主 CI run 43183698283 的 70 个 job 里 67 个通过；同 SHA 的 windows-platform run 43183698269 通过。红的三格都由本
+  RFC 引起：删掉 `infrastructure/taskRouteLaunchOperations.ts` 时只在 backend 的 `src/` 与 `tests/` 里改了文本引用，漏了全仓另外两处，
+  集中验证只跑 backend，这两类都不在其中。
+  - `Frontend tests (ubuntu-latest shard 2/3)` 与 `Frontend tests (windows-latest shard 2/3)`：
+    `packages/frontend/tests/task-wizard-builders.test.ts` 的 impl-gate F2 用例按相对路径读被删文件（锁 errorSummary 的
+    `worktree creation failed:` 前缀），ENOENT。
+  - `Markdown link check (design/)`：`design/RFC-395-database-target-schema-rebuild/research.md` 第 62 行的链接指向被删文件。
+
+  「CI required」随之红。
+
+- `6452036ac`（修复，3 个文件）：前端用例改读写这一前缀的准入适配器 `infrastructure/rootTaskAdmission.ts`，断言不变；research 的链接
+  改指 Agent / Workgroup 启动臂的新位置 `application/launch/taskLaunchArms.ts` 并注明原文件；`docs/dev-gotchas.md` 的 RFC-486 一条补
+  「旧路径按 `git ls-files` 扫全仓」。本地该前端用例文件 39 / 39。exact SHA 主 CI run 43189398886 的 70 个 job 全部通过（含上面三格与
+  real PostgreSQL）；同一推送的 visual-regression-nightly run 43189398790 通过。
+- 本 RFC 的落档提交 `109187d5c`（只改文档）：exact SHA 主 CI run 43152049452 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
