@@ -110,7 +110,10 @@
   后继证据（相对 `aff2c86e3` 只改文档，不是重跑）：收口文档 `cf948fd5c` 的 run 43396166831、通用坑文档 `65e57fab7` 的 run 43396518679
   各 70 个 job 全部通过，其中包括同一格 `Backend tests (ubuntu-latest shard 20/44)`。
 - **留待后续**：真人试用观察未做；跨轮次的空分类覆盖判断与带前序问答的补题；恢复作答只在本次页面会话内取回跳过前的回答（design §10）。
-  能力影响清单 C1～C13（proposal §4）已在交付说明中逐项列出，任何一项用户不认可都可单独撤回。
+  能力影响清单 C1～C13（proposal §4）：用户 2026-11-13 交付时逐组确认，全部保留。
+- **那格红的归因补证（2026-11-13）**：后继 `cf948fd5c`、`65e57fab7` 相对 `aff2c86e3` 只改文档，两轮 CI 各 70 个 job 全绿（后端 44 片与真实
+  PostgreSQL，含分片 20/44）。本机同条件对照：L6 [postgresql] 在实现提交之前的 `33661e100` 上 40 次失败 13 次、在 `aff2c86e3` 上 40 次
+  失败 11 次，失败处相同（`waitForQueued` 等不到写锁排队），该用例在没有本次改动的代码上同样不稳定；证据记在 `docs/audit-backlog.md` 第十二条。
 
 ## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（Done；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
 
