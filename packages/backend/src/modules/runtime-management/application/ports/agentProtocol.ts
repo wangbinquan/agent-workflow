@@ -27,7 +27,7 @@ export interface AgentInvocationProtocol {
  * on. Derived with `keyof`, so ADDING a manifest face is a compile error in
  * every driver's `declarationFaces` record until it states support (§4.4-2).
  */
-// RFC-462: `DeclaredManifestV1` (services/execution/agentInjection) is an alias of shared `DeclaredInjectionManifest`.
+// RFC-462: `DeclaredManifestV1` (`infrastructure/drivers/agentInjection`) is an alias of shared `DeclaredInjectionManifest`.
 export type DeclarationFace = keyof DeclaredInjectionManifest
 
 /**

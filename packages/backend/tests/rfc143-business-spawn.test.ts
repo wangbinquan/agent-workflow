@@ -18,17 +18,20 @@ import {
   type Mcp,
   type Plugin,
 } from '@agent-workflow/shared'
-import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
-import { buildOpencodeSpawn } from '../src/services/runtime/opencode/spawn'
-import { machineSkillRoots, opencodeDataDir } from '../src/services/runtime/opencode/boundary'
-import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
-import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
-import { renderClaudeMcpInjection } from '../src/services/execution/agentInjection'
-import { claudeBusinessGate } from '../src/services/runtime/claudeCode/permissionMap'
+import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
+import { buildOpencodeSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/spawn'
+import {
+  machineSkillRoots,
+  opencodeDataDir,
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/boundary'
+import { buildInlineConfig } from '../src/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
+import { toClaudeAgents } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/inject'
+import { renderClaudeMcpInjection } from '../src/modules/runtime-management/infrastructure/drivers/agentInjection'
+import { claudeBusinessGate } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/permissionMap'
 import { createLogger } from '../src/util/log'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
-import { assembleOpencodeBusinessSpawn } from '../src/services/runtime/opencode/driver'
-import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
+import { assembleOpencodeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 function mkAgent(name: string, overrides: Partial<Agent> = {}): Agent {
   return {

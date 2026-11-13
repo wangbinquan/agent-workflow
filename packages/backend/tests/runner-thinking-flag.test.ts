@@ -10,7 +10,7 @@ import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import { buildCommand } from '../src/services/runtime/opencode/spawn'
+import { buildCommand } from '../src/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 import type { RunNodeOptions } from './helpers/runner'
 
 const AGENT: Agent = {

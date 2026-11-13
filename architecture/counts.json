@@ -119,12 +119,12 @@
       "reason": "max=1: RFC-479 (RFC-294 S11) tightens every max to the measured census (21 -> 1); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "legacy-horizontal-files": {
-      "max": 165,
-      "reason": "max=165: RFC-478 closes with the measured census per RFC-294 C13 (168 -> 167: services/task.ts moved into task-execution by layer); RFC-491 (RFC-294 C13): services/systemAgentRun.ts moved into task-execution and services/runtimeSmoke.ts to tests/helpers (167 -> 165); no growth authorized."
+      "max": 125,
+      "reason": "max=125: RFC-478 closes with the measured census per RFC-294 C13 (168 -> 167: services/task.ts moved into task-execution by layer); RFC-491 (RFC-294 C13): services/systemAgentRun.ts moved into task-execution and services/runtimeSmoke.ts to tests/helpers (167 -> 165); RFC-492 (RFC-294 C13): the runtime driver family (services/runtime/**, services/execution/{agentInjection,workspaceBoundary,taskExecutionResourceDependencies}, services/driverLease) left services/ (165 -> 125); no growth authorized."
     },
     "legacy-service-implementations": {
-      "max": 46,
-      "reason": "max=46: RFC-478 closes with the measured census per RFC-294 C13 (49 -> 48: services/task.ts moved into task-execution by layer); RFC-491 (RFC-294 C13): services/systemAgentRun.ts moved into task-execution and services/runtimeSmoke.ts to tests/helpers (48 -> 46); no growth authorized."
+      "max": 6,
+      "reason": "max=6: RFC-478 closes with the measured census per RFC-294 C13 (49 -> 48: services/task.ts moved into task-execution by layer); RFC-491 (RFC-294 C13): services/systemAgentRun.ts moved into task-execution and services/runtimeSmoke.ts to tests/helpers (48 -> 46); RFC-492 (RFC-294 C13): the runtime driver family moved into runtime-management infrastructure, its policy bundle to bootstrap and the RFC-108 driver-lease fixture to tests/helpers (46 -> 6); no growth authorized."
     },
     "legacy-thin-facades": {
       "max": 0,
@@ -147,8 +147,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 19 -> 0."
     },
     "public-surface-deviations": {
-      "max": 57,
-      "reason": "max=57: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); RFC-482 measures 74 -> 68 (five task-execution factories reach collaboration through its participant bindings and left the public entries; the no-op reselectRunInTx is gone); RFC-485 measures 68 -> 65 (the node-run, node-output and task-gate query factories reach collaboration through the bindings and memory through its assembly input); RFC-483 measures 65 -> 57 (the three SQL conditions left the public; collaboration's badge read model takes them through the bindings); no growth authorized."
+      "max": 56,
+      "reason": "max=56: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); RFC-482 measures 74 -> 68 (five task-execution factories reach collaboration through its participant bindings and left the public entries; the no-op reselectRunInTx is gone); RFC-485 measures 68 -> 65 (the node-run, node-output and task-gate query factories reach collaboration through the bindings and memory through its assembly input); RFC-483 measures 65 -> 57 (the three SQL conditions left the public; collaboration's badge read model takes them through the bindings); RFC-492 withdraws modelKey with the fourteen family-only runtime-management public members (57 -> 56: its unsafe/open type entry); no growth authorized."
     },
     "repo-value-scc": {
       "max": 0,
@@ -239,8 +239,8 @@
       "reason": "max=0: public symbols of workspace-insight that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
     },
     "unreachable-production-files": {
-      "max": 16,
-      "reason": "max=16: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; RFC-491 moves the two contract-test-only native task agent run files to tests/helpers (18 -> 16); no growth authorized."
+      "max": 15,
+      "reason": "max=15: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; RFC-491 moves the two contract-test-only native task agent run files to tests/helpers (18 -> 16); RFC-492 moves the RFC-108 driver-lease compatibility fixture to tests/helpers (16 -> 15); no growth authorized."
     }
   }
 }

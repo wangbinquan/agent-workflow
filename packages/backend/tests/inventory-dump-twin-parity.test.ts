@@ -9,7 +9,17 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const ROOT = resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'plugin')
+const ROOT = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'runtime-management',
+  'infrastructure',
+  'drivers',
+  'opencode',
+  'plugin',
+)
 const MJS = readFileSync(resolve(ROOT, 'aw-inventory-dump.mjs'), 'utf-8')
 const TS = readFileSync(resolve(ROOT, 'transcoder.ts'), 'utf-8')
 

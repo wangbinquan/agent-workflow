@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { runRootFor } from '../src/services/runtime/opencode/inventory'
+import { runRootFor } from '../src/modules/runtime-management/infrastructure/drivers/opencode/inventory'
 import type {
   InventorySnapshot,
   RuntimeInventoryResponse,

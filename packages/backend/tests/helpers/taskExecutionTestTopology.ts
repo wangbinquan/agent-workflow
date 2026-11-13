@@ -46,7 +46,7 @@ import type { RunTaskOptions } from '../../src/modules/task-execution/compositio
 import { pickInheritableRunConfig } from '../../src/modules/task-execution/application/ports/taskExecutionTopology'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
-import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '../../src/bootstrap/taskExecutionResourceDependencies'
 import { createTaskExecutionResourceBinding } from '../../src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { runGit } from '../../src/util/git'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'

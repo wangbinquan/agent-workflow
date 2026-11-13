@@ -1,7 +1,8 @@
 // RFC-464 — 无实时捕获按缺席处理、intent 自持轮次事件 sink 合同（RFC-294 W9-D 第十一步）。
 //
 // 锁三件事：
-// ① task-execution 的 `taskAgentRun` 不再借 opencode 驱动的 no-op 句柄去补 runtime-management 合同里的可选能力：不取 `@/services/runtime`、
+// ① task-execution 的 `taskAgentRun` 不再借 opencode 驱动的 no-op 句柄去补 runtime-management 合同里的可选能力：不取驱动注册表
+//    （`@/services/runtime`；RFC-492 后是 runtime-management 的 `infrastructure/drivers`）、
 //    源码不含 `NOOP_HANDLE`，两处 stop 是可选调用，会话捕获的去重表只在有句柄时带上（census AST + 源码锚点，带负对照）。
 // ② intent 的 application 层零取 `@/services/`；系统代理运行端口不再反取 application 层的 sink 类，`eventSink` 是端口自己声明的接口。
 // ③ intent 声明的 sink 合同与 runtime-management 的会话事件 sink 是同一份：联合类型双向相等，四个成员按严格函数类型可互换（方法写法是双变的，
@@ -46,8 +47,11 @@ const specifiersOf = (path: string) => {
 describe('RFC-464 —— 无实时捕获按缺席处理', () => {
   const src = readFileSync(TASK_AGENT_RUN, 'utf8')
 
-  test('taskAgentRun 不取 @/services/runtime，源码不含 NOOP_HANDLE', () => {
-    expect(specifiersOf(TASK_AGENT_RUN)).not.toContain('@/services/runtime')
+  // RFC-492: the driver registry moved from `@/services/runtime` into runtime-management's infrastructure.
+  test('taskAgentRun 不取驱动注册表，源码不含 NOOP_HANDLE', () => {
+    expect(specifiersOf(TASK_AGENT_RUN)).not.toContain(
+      '@/modules/runtime-management/infrastructure/drivers',
+    )
     expect(src).not.toContain('NOOP_HANDLE')
   })
 
@@ -61,12 +65,14 @@ describe('RFC-464 —— 无实时捕获按缺席处理', () => {
     )
   })
 
-  test('负对照：判据认得出经 services/runtime 取的写法', () => {
+  test('负对照：判据认得出经驱动注册表取的写法', () => {
     const probe = sourceUnit(
       'packages/backend/src/modules/task-execution/application/probe.ts',
-      "import { NOOP_HANDLE } from '@/services/runtime'\n",
+      "import { NOOP_HANDLE } from '@/modules/runtime-management/infrastructure/drivers'\n",
     )
-    expect(importEdges(probe).map((edge) => edge.specifier)).toEqual(['@/services/runtime'])
+    expect(importEdges(probe).map((edge) => edge.specifier)).toEqual([
+      '@/modules/runtime-management/infrastructure/drivers',
+    ])
   })
 })
 

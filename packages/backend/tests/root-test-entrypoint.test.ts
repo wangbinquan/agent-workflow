@@ -825,11 +825,33 @@ describe('repository test entrypoint', () => {
 
   test('OpenCode admission and CI define no version floor or ceiling', () => {
     const opencodeUtil = readFileSync(
-      resolve(root, 'packages', 'backend', 'src', 'services', 'runtime', 'opencode', 'util.ts'),
+      resolve(
+        root,
+        'packages',
+        'backend',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'opencode',
+        'util.ts',
+      ),
       'utf8',
     )
     const opencodeDriver = readFileSync(
-      resolve(root, 'packages', 'backend', 'src', 'services', 'runtime', 'opencode', 'driver.ts'),
+      resolve(
+        root,
+        'packages',
+        'backend',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'opencode',
+        'driver.ts',
+      ),
       'utf8',
     )
     for (const [name, source] of [

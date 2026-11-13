@@ -206,3 +206,34 @@ export function nativePlatform(): Platform {
 export function executableName(platform: Platform): string {
   return `agent-workflow-${platform}${platform.startsWith('windows') ? '.exe' : ''}`
 }
+
+/**
+ * Where a published tag keeps its OpenCode CLI probe (the version bounds the registry records),
+ * tried in this order. A tag matching none of them stops registration until its layout is
+ * inspected and added here. RFC-492 appended the runtime-management layout: the runtime driver
+ * family moved from `services/runtime/` into runtime-management's infrastructure.
+ */
+export const OPENCODE_PROBE_SUFFIXES = [
+  '/util/opencode.ts',
+  '/runtime/opencode/util.ts',
+  '/opencodeProbe.ts',
+  '/runtime-management/infrastructure/drivers/opencode/util.ts',
+] as const
+
+export function opencodeProbePath(files: readonly string[]): string | undefined {
+  for (const suffix of OPENCODE_PROBE_SUFFIXES) {
+    const path = files.find((file) => file.endsWith(suffix))
+    if (path !== undefined) return path
+  }
+  return undefined
+}
+
+/** The production OpenCode driver of each published layout (read for the L2 support judgment). */
+export const OPENCODE_DRIVER_PATHS = [
+  'packages/backend/src/services/runtime/opencode/driver.ts',
+  'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/driver.ts',
+] as const
+
+export function opencodeDriverPath(has: (path: string) => boolean): string | undefined {
+  return OPENCODE_DRIVER_PATHS.find((path) => has(path))
+}

@@ -31,7 +31,7 @@ import {
 import { type LocalMcpDiagnosticRunFixture } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 import { composeLocalMcpDiagnosticRunnerSelection } from '@/bootstrap/runFamilyProviders'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
 import type {
   SystemAgentRunOptions,

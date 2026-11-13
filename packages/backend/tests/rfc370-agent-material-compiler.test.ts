@@ -29,15 +29,15 @@ import {
   compileLegacyNativeAgentMaterial,
 } from '../src/modules/runtime-management/infrastructure/local/legacyAgentMaterialBinding'
 import type { RuntimeProfile } from '../src/modules/runtime-management/public/types'
-import { type RuntimePlugin } from '../src/services/execution/agentInjection'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { type RuntimePlugin } from '../src/modules/runtime-management/infrastructure/drivers/agentInjection'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { selectLocalAgentMaterialDefinition } from '../src/modules/runtime-management/infrastructure/local/localAgentMaterialDefinition'
 import { createLocalAgentMaterialEvidence } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import type {
   AgentSpawnContext,
   AgentSpawnPlan,
   ResolvedSkill,
-} from '../src/services/runtime/types'
+} from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { createLogger } from '../src/util/log'
 
 const capabilities: AgentMaterialEvidenceCapabilities = Object.freeze({

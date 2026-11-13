@@ -285,7 +285,8 @@ describe('RFC-376 C7 report-only consumers', () => {
   test('embedded assets stay in RFC-375 retention inventory, not executable roots', () => {
     expect(
       binaryEntries(
-        "const mainEntry = join(backendSrc, 'main.ts'); const pluginsDir = join(backendSrc, 'services/runtime/opencode/plugin')",
+        // RFC-492: the plugin directory moved with the driver family; it stays an embedded asset, not a root.
+        "const mainEntry = join(backendSrc, 'main.ts'); const pluginsDir = join(backendSrc, 'modules', 'runtime-management', 'infrastructure', 'drivers', 'opencode', 'plugin')",
       ),
     ).toEqual([PREFIX + 'main.ts'])
   })

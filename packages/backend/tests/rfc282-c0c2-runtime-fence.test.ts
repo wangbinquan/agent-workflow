@@ -16,8 +16,11 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { getRuntimeDriver, tryGetRuntimeDriver } from '../src/services/runtime'
-import type { RuntimeKind } from '../src/services/runtime'
+import {
+  getRuntimeDriver,
+  tryGetRuntimeDriver,
+} from '../src/modules/runtime-management/infrastructure/drivers'
+import type { RuntimeKind } from '../src/modules/runtime-management/infrastructure/drivers'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 const read = (rel: string): string => readFileSync(resolve(SRC, rel), 'utf8')
@@ -29,11 +32,14 @@ describe('RFC-282 C0 — laundering channel closed', () => {
   })
 
   test('ProbeOpts has ONE definition (runtime/types); the opencode util re-exports it', () => {
-    // C3 relocated util/opencode.ts → services/runtime/opencode/util.ts.
-    expect(read('services/runtime/types.ts')).toContain('export interface ProbeOpts')
-    const util = read('services/runtime/opencode/util.ts')
+    // C3 relocated util/opencode.ts → services/runtime/opencode/util.ts; RFC-492 moved the driver family into
+    // runtime-management's infrastructure (`modules/runtime-management/infrastructure/drivers/`), where the util re-exports from the sibling types.
+    expect(read('modules/runtime-management/infrastructure/drivers/types.ts')).toContain(
+      'export interface ProbeOpts',
+    )
+    const util = read('modules/runtime-management/infrastructure/drivers/opencode/util.ts')
     expect(util).not.toContain('export interface ProbeOpts')
-    expect(util).toContain("export type { ProbeOpts } from '@/services/runtime/types'")
+    expect(util).toContain("export type { ProbeOpts } from '../types'")
   })
 })
 
@@ -120,7 +126,7 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
   })
 
   test('DRIVERS fallback `?? opencodeDriver` is gone from the registry', () => {
-    const text = read('services/runtime/index.ts')
+    const text = read('modules/runtime-management/infrastructure/drivers/index.ts')
     expect(text).not.toContain('?? opencodeDriver')
   })
 })

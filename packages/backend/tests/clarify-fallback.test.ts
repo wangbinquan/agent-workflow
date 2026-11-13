@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decideResumeSessionId } from '../src/modules/task-execution/domain/sessionModeFallback'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 // RFC-284 T15 改锚：stderr 判据下沉 driver 能力面；本文件经 opencode driver 复验。
 const detectSessionNotFoundFromStderr = (s: string): boolean =>
   getRuntimeDriver('opencode').detectSessionNotFound?.(s) === true

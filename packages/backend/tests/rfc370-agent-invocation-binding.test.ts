@@ -23,8 +23,11 @@ import {
 import { requestHash } from '../src/modules/task-execution/domain/executionEffect'
 import { sha256Hex } from '../src/modules/task-execution/domain/digest'
 import type { AgentProcessRequest } from '../src/platform/execution/local/agentProcess'
-import type { AgentSpawnPlan, RuntimeDriver } from '../src/services/runtime/types'
-import { getRuntimeDriver } from '../src/services/runtime'
+import type {
+  AgentSpawnPlan,
+  RuntimeDriver,
+} from '../src/modules/runtime-management/infrastructure/drivers/types'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 const unavailable = () => {
   throw new Error('unselected physical scope read')

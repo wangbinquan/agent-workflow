@@ -35,7 +35,16 @@ const schemaHistoryDir = join(repoRoot, 'packages', 'backend', 'db', 'schema-his
 const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 // RFC-029: opencode plugin .mjs files that need to ride along inside the
 // binary so the runner can copy them into per-run dirs at task time.
-const pluginsDir = join(backendSrc, 'services', 'runtime', 'opencode', 'plugin')
+// RFC-492: the driver family lives in runtime-management's infrastructure.
+const pluginsDir = join(
+  backendSrc,
+  'modules',
+  'runtime-management',
+  'infrastructure',
+  'drivers',
+  'opencode',
+  'plugin',
+)
 const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
 const managedProcessLauncherEntry = join(

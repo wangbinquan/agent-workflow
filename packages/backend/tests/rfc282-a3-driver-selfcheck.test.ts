@@ -11,13 +11,16 @@ import {
   assertRuntimeDeclarations,
   declarationFaceUniverse,
   verifyRuntimeDeclarations,
-} from '../src/services/runtime/selfCheck'
-import { getRuntimeDriver, RUNTIME_KINDS } from '../src/services/runtime'
+} from '../src/modules/runtime-management/infrastructure/drivers/selfCheck'
+import {
+  getRuntimeDriver,
+  RUNTIME_KINDS,
+} from '../src/modules/runtime-management/infrastructure/drivers'
 import {
   DISABLED_RESOURCE_POLICY,
   notModeledDisabledKinds,
 } from '../src/modules/resource-catalog/domain/disabledResourcePolicy'
-import type { RuntimeDriver } from '../src/services/runtime/types'
+import type { RuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers/types'
 
 const REAL_DRIVERS = RUNTIME_KINDS.map(getRuntimeDriver)
 

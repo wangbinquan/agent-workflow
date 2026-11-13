@@ -6,8 +6,8 @@ import type {
   AgentMaterialSkill,
 } from '../../application/ports/agentMaterial'
 import type { RuntimeKind } from '../../public/types'
-import type { AgentSpawnContext, AgentSpawnPlan, ResolvedSkill } from '@/services/runtime/types'
-import type { RuntimePlugin } from '@/services/execution/agentInjection'
+import type { AgentSpawnContext, AgentSpawnPlan, ResolvedSkill } from '../drivers/types'
+import type { RuntimePlugin } from '../drivers/agentInjection'
 import {
   createLocalAgentMaterialCompiler,
   type NativeAgentMaterialContents,

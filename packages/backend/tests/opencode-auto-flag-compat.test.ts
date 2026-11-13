@@ -27,19 +27,19 @@ import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import {
   OPENCODE_AUTO_FLAG_RENAME_VERSION,
   resolveAutoApproveFlag,
-} from '@/services/runtime/opencode/spawn'
-import type { BusinessNodeSpawnContext } from '@/services/runtime/types'
-import { probeOpencode } from '@/services/runtime/opencode/util'
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/spawn'
+import type { BusinessNodeSpawnContext } from '@/modules/runtime-management/infrastructure/drivers/types'
+import { probeOpencode } from '@/modules/runtime-management/infrastructure/drivers/opencode/util'
 import {
   getOpencodeBinaryVersion,
   recordOpencodeBinaryVersion,
   resetOpencodeBinaryVersionsForTests,
-} from '@/services/runtime/opencode/versionRegistry'
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/versionRegistry'
 import { createLogger } from '@/util/log'
 import {
   assembleOpencodeBusinessSpawn,
   assembleOpencodePersonaSpawn,
-} from '../src/services/runtime/opencode/driver'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
 
 const LEGACY = '--dangerously-skip-permissions'
 

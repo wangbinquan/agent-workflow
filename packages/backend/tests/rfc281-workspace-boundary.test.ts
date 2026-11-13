@@ -24,7 +24,7 @@ import {
   scanSiblingTaskRoots,
   toolchainCacheDirs,
   type BoundaryCtx,
-} from '../src/services/execution/workspaceBoundary'
+} from '../src/modules/runtime-management/infrastructure/drivers/workspaceBoundary'
 // RFC-487: the mount rule moved into source-control's domain and is offered through its public queries.
 // RFC-491: the rule is read at its source-control domain declaration (no longer offered by the public queries).
 import { resolveBoundaryMounts } from '@/modules/source-control/domain/taskAgentMounts'
@@ -32,14 +32,14 @@ import {
   composeOpencodeBoundary,
   machineSkillRoots,
   opencodeDataDir,
-} from '../src/services/runtime/opencode/boundary'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/boundary'
 import {
   claudeExpressibleAuthorDirs,
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
   isClaudeRuleExpressible,
   renderClaudeBoundary,
-} from '../src/services/runtime/claudeCode/boundary'
+} from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/boundary'
 
 const CTX: BoundaryCtx = {
   taskMounts: ['/home/aw/iso/T1/R1'],

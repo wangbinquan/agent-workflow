@@ -40,9 +40,9 @@ import {
   accumulateTokens,
   extractTextFromEvent,
   inferEventKind,
-} from '@/services/runtime/opencode/events'
-import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
-import { probeOpencode } from '@/services/runtime/opencode/util'
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/events'
+import { resolveAutoApproveFlag } from '@/modules/runtime-management/infrastructure/drivers/opencode/spawn'
+import { probeOpencode } from '@/modules/runtime-management/infrastructure/drivers/opencode/util'
 
 const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'
 

@@ -15,7 +15,10 @@ import {
   INVENTORY_FIELDS_BY_FACE,
   type InventoryFace,
 } from '@agent-workflow/shared'
-import { RUNTIME_KINDS, getRuntimeDriver } from '@/services/runtime'
+import {
+  RUNTIME_KINDS,
+  getRuntimeDriver,
+} from '@/modules/runtime-management/infrastructure/drivers'
 
 const drivers = RUNTIME_KINDS.map((kind) => ({ kind, driver: getRuntimeDriver(kind) }))
 

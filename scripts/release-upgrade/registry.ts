@@ -3,7 +3,15 @@
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { LEGACY_MIGRATION_HASHES } from '../../packages/backend/src/platform/persistence/migration/epoch1/journalAliases'
-import { buildIdentity, executableName, l1Builds, PLATFORMS, selectRegistryTags } from './lib/model'
+import {
+  buildIdentity,
+  executableName,
+  l1Builds,
+  opencodeDriverPath,
+  opencodeProbePath,
+  PLATFORMS,
+  selectRegistryTags,
+} from './lib/model'
 import type {
   BinarySource,
   ReleaseEntry,
@@ -53,10 +61,7 @@ const RETAINED: Readonly<Record<string, string>> = {
 }
 
 function runtimeFor(source: TagSource): ReleaseEntry['runtime'] {
-  const path =
-    [...source.files.keys()].find((file) => file.endsWith('/util/opencode.ts')) ??
-    [...source.files.keys()].find((file) => file.endsWith('/runtime/opencode/util.ts')) ??
-    [...source.files.keys()].find((file) => file.endsWith('/opencodeProbe.ts'))
+  const path = opencodeProbePath([...source.files.keys()])
   if (!path)
     throw new Error(`${source.tag}: inspect the new runtime probe layout before registering`)
   const probe = source.text(path)
@@ -316,7 +321,8 @@ export async function generateRegistry(options: { readonly candidate?: string } 
           : {}),
       }
     }
-    const driver = source.text('packages/backend/src/services/runtime/opencode/driver.ts')
+    const driverPath = opencodeDriverPath((path) => source.has(path))
+    const driver = driverPath === undefined ? '' : source.text(driverPath)
     const unsupported = driver.includes('buildVerifiedOpencodeBusinessPlan')
       ? 'Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.'
       : undefined

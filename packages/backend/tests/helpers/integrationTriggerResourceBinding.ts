@@ -27,7 +27,7 @@ import {
 } from '../../src/modules/integration/application/scheduledTasks'
 import { healScheduledLaunchPayloads as healScheduledLaunchPayloadsService } from './scheduledPayloadHeal'
 import type { IntegrationTriggerResourceAuthority } from '../../src/modules/integration/application/ports/scheduledTaskPersistence'
-import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '../../src/bootstrap/taskExecutionResourceDependencies'
 import { composeScheduledTaskRuntimeFor } from '../../src/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '../../src/modules/resource-catalog/composition/agentLaunchResources'
 import { assertAgentResourceIntegrity } from '../../src/modules/resource-catalog/application/agents/agentResourceIntegrity'

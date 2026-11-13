@@ -2,7 +2,8 @@
 //
 // 锁三件事：
 // ① 七个观测词汇（规范化事件一族、系统事件观测、驱动能力声明）在后端源码里只在 runtime-management 的两个端口文件各定义一次，
-//    `services/runtime/types.ts` 不再声明、只经 runtime-management `public/participants` 再导出。
+//    `services/runtime/types.ts` 不再声明、只经 runtime-management `public/participants` 再导出（RFC-492：一族迁入
+//    runtime-management 的 `infrastructure/drivers/`，`types.ts` 改从两个声明文件再导出，不经本模块的 public）。
 // ② task-execution 的 `ports/agentExecution` 与 `taskAgentRun`、runtime-management 的 `agentProtocol` 不再为它们取 `services/`；
 //    `agentMaterialEvidence` 也不再取 `services/`（RFC-465 把会话捕获 / 清扫合同收回 runtime-management）。census AST，带负对照。
 // ③ `DeclarationFace` 仍是声明清单的面集合：驱动的 `declarationFaces` 记录与 shared `DeclaredInjectionManifest` 的键一一对应。
@@ -10,7 +11,8 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
-import type { DeclarationFace } from '@/modules/runtime-management/public/participants'
+// RFC-492: no longer offered by runtime-management's public (only the driver family read it); read the declaration.
+import type { DeclarationFace } from '@/modules/runtime-management/application/ports/agentProtocol'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -57,15 +59,20 @@ describe('RFC-462 —— 观测词汇只在 runtime-management 定义一次', ()
       expect([name, definers(name)]).toEqual([name, [RM_PORTS + 'agentProtocol.ts']])
   }, 30_000)
 
-  test('services/runtime/types 只从 runtime-management public 再导出它们', () => {
-    const types = readFileSync(join(SRC, 'services/runtime/types.ts'), 'utf8')
-    const reexport =
-      /export type \{([^}]*)\} from '@\/modules\/runtime-management\/public\/participants'/.exec(
-        types,
-      )
-    expect(reexport).not.toBeNull()
-    const names = reexport![1]!.split(',').map((name) => name.trim())
-    for (const name of [...OBSERVATIONS, ...CAPABILITIES]) expect(names).toContain(name)
+  test('驱动的 types 只从两个声明文件再导出它们', () => {
+    const types = readFileSync(
+      join(SRC, 'modules/runtime-management/infrastructure/drivers/types.ts'),
+      'utf8',
+    )
+    const reexported = (port: string) => {
+      const match = new RegExp(
+        `export type \\{([^}]*)\\} from '\\.\\./\\.\\./application/ports/${port}'`,
+      ).exec(types)
+      expect([port, match === null]).toEqual([port, false])
+      return match![1]!.split(',').map((name) => name.trim())
+    }
+    for (const name of OBSERVATIONS) expect(reexported('agentObservations')).toContain(name)
+    for (const name of CAPABILITIES) expect(reexported('agentProtocol')).toContain(name)
   })
 })
 

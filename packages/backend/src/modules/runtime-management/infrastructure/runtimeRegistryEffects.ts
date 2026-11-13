@@ -1,4 +1,4 @@
-import { getRuntimeDriver, RUNTIME_KINDS, CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime'
+import { getRuntimeDriver, RUNTIME_KINDS, CLAUDE_PLATFORM_OWNED_FLAGS } from './drivers'
 import type { RuntimeRegistryEffects } from '../application/ports/runtimeRegistryEffects'
 
 export function createRuntimeRegistryEffects(): RuntimeRegistryEffects {

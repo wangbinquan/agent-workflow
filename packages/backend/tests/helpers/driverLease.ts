@@ -6,6 +6,9 @@
 // retained only so RFC-108's historical unit contract remains reproducible;
 // production code must not import it, and the RFC-328 architecture guard makes
 // any such import fail. It is neither an admission gate nor a fallback.
+//
+// RFC-492: moved verbatim from `src/services/driverLease.ts` (an unreachable production file) into the test helpers,
+// next to the RFC-108 unit contract that is its only reader.
 
 export type LiveStateOp = 'auto-resume' | 'auto-repair' | 'heartbeat-kill' | 'periodic-reconcile'
 

@@ -30,12 +30,15 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Agent } from '@agent-workflow/shared'
-import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
+import { buildInlineConfig } from '@/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
 import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
-import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
-import { machineSkillRoots, opencodeDataDir } from '@/services/runtime/opencode/boundary'
-import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
-import { probeOpencode } from '@/services/runtime/opencode/util'
+import type { BoundaryCtx } from '@/modules/runtime-management/infrastructure/drivers/workspaceBoundary'
+import {
+  machineSkillRoots,
+  opencodeDataDir,
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/boundary'
+import { resolveAutoApproveFlag } from '@/modules/runtime-management/infrastructure/drivers/opencode/spawn'
+import { probeOpencode } from '@/modules/runtime-management/infrastructure/drivers/opencode/util'
 import type { RuntimeProfile } from '../helpers/runtimeRegistryApplication'
 
 const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'

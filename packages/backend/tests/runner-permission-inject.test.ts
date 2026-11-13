@@ -5,7 +5,7 @@ import type { Agent } from '@agent-workflow/shared'
 import {
   buildInlineAgentEntry,
   buildInlineConfig,
-} from '../src/services/runtime/opencode/inlineConfig'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
 
 function agent(name: string, permission: Record<string, unknown> = {}): Agent {
   return {

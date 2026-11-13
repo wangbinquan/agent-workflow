@@ -1,7 +1,7 @@
 // RFC-491: moved verbatim from task-execution's `infrastructure/local/nativeTaskAgentPluginLoadDiagnostics.ts` — the
 // runtime's plugin-load stderr format and the plugin locator projection are this module's knowledge. Task Execution's
 // local task agent family receives it as a provider (`pluginLoadFailures`), bound by bootstrap.
-import { pluginFileSpec } from '@/services/runtime'
+import { pluginFileSpec } from '../drivers'
 import type { RuntimePlugin } from '@/modules/resource-catalog/public/types'
 
 // -----------------------------------------------------------------------------

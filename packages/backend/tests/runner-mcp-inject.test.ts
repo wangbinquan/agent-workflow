@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent, Mcp } from '@agent-workflow/shared'
-import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
+import { buildInlineConfig } from '../src/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
 
 function agent(name: string): Agent {
   return {
@@ -181,10 +181,19 @@ describe('RFC-028 buildInlineConfig MCP injection', () => {
     // in place (the test above only catches it in the output of one snapshot
     // input). RFC-143 PR-4 moved the definition to runtime/opencode/
     // inlineConfig.ts; RFC-280 T1 moved it to the unified injection layer
-    // (services/execution/agentInjection.ts) — the lock follows the single
+    // (`modules/runtime-management/infrastructure/drivers/agentInjection.ts`) — the lock follows the single
     // implementation.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'agentInjection.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'agentInjection.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('entry.environment = m.config.env')

@@ -35,10 +35,8 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // RFC-367：`services/runtime/opencode/distillSessionCapture.ts` 随事后蒸馏会话走查一并删除
   // （记录改由 runSystemAgent 的实时事件流经 memory 自己的 sink 落库），这条债销账。
   // RFC-371：该只读边读取 OpenCode 原生文件格式，两种 AW provider 共用；随 runtime W9-D 一起迁移。
-  'packages/backend/src/services/runtime/opencode/nativeUsage.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
-  'packages/backend/src/services/runtime/opencode/sessionCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
-  'packages/backend/src/services/runtime/opencode/sessionWalk.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase',
-  'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
+  // RFC-492：运行时驱动一族整族迁入 runtime-management 的 `infrastructure/drivers/`（适配层，不再是业务 / 传输层），
+  // opencode 的 nativeUsage / sessionCapture / sessionWalk / subagentLiveCapture 取只读 SQLite 的四条债随之销账。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除，这条债随之销账。
   // RFC-359 AC-6：`TaskContinuationDependencies.db` 放宽到中立句柄（被测的 `buildStartTaskDeps` 只把它原样
   // 透传，用例自己就断言 `expect(withCmd.db).toBe(db)`），类型来源随之换成同目录的

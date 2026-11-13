@@ -110,7 +110,7 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
       'routes/config.ts',
       'modules/system-operations/application/applicationConfiguration.ts',
       'modules/intent/application/turnEngine.ts',
-      'services/runtime/types.ts',
+      'modules/runtime-management/infrastructure/drivers/types.ts',
     ]) {
       const text = src(path)
       expect(text).not.toContain('intent-read-v1')

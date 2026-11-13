@@ -131,7 +131,8 @@ test('negative fixtures: fabricated sources alone are judged by the same checks'
     for (const specifier of [
       '@/modules/task-execution/composition/localSystemAgentRunFamily',
       '@/modules/task-execution/infrastructure/local/agentInvocation',
-      '@/services/runtime',
+      // RFC-492: the driver family moved from services/runtime into runtime-management's infrastructure.
+      '@/modules/runtime-management/infrastructure/drivers',
       '@/routes/tasks',
     ])
       expect(

@@ -133,7 +133,7 @@ function ensureGitRepo(): string {
  * opencode ≥1.18 renamed `run --dangerously-skip-permissions` → `--auto`
  * (pure rename; the legacy spelling is REMOVED and the strict parser rejects
  * it with a bare usage dump). Keep in sync with resolveAutoApproveFlag in
- * packages/backend/src/services/runtime/opencode/spawn.ts — this script can't
+ * packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/spawn.ts — this script can't
  * import backend '@/…' aliases, so the 3-line pick is duplicated here.
  */
 function autoApproveFlag(version: string): string {

@@ -16,7 +16,7 @@ import {
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { RUNTIME_KINDS } from '../src/services/runtime'
+import { RUNTIME_KINDS } from '../src/modules/runtime-management/infrastructure/drivers'
 import {
   EXECUTION_CAPABILITY_COVERAGE,
   RUNTIME_SCENARIOS,

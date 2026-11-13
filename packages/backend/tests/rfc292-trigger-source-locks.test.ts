@@ -221,7 +221,8 @@ describe('RFC-292 trigger namespace source locks', () => {
     expect(sharedSummaryProjection).not.toMatch(/comment_text|event_json|triggerContext:/)
 
     for (const rel of [
-      'services/runtime',
+      // RFC-492: the runtime driver family moved into runtime-management's infrastructure.
+      'modules/runtime-management/infrastructure/drivers',
       // RFC-467: `services/agentDeps.ts` moved to the test helpers with the RFC-349 injection oracle.
       // RFC-455：资源包一族迁入 resource-catalog（算法层、依赖规划与回执、两个装配绑定）。
       'modules/resource-catalog/application/package',

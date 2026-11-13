@@ -6,6 +6,7 @@
 //    systemAgentRun}`）；相对路径、`@/` 别名、re-export 与动态 import 都认，带负对照。按 RFC-294 design §3.1 这四个 context 不消费
 //    runtime-management，一族迁入后这些 import 会成为越 DAG 的值边。RFC-487 时唯一的例外是 resource-catalog 本机 MCP 诊断的
 //    执行体（三条边逐条钉住）；RFC-488 把它的运行时工作移到 task-execution 实现的端口后，四个 context 都是零。
+//    RFC-492 起一族在 runtime-management 的 `infrastructure/drivers/`，判据改认新位置，旧的 `services/` 拼写照认。
 // ② memory 不再读 runtime-management 的 `runtimes` 表，复制的解析器删除；memory 的装配从输入取 `runtimeProfiles`，bootstrap 用
 //    runtime-management 的 `resolveInternalAgentRuntime` 绑定（RFC-117 的内部代理解析只留一份）。
 // ③ 本机 doctor 经注入的 `DoctorRuntimeBinaryProbe` 探测；bootstrap 的 doctor 工厂与 standalone 的软探测都取 runtime-management 的
@@ -77,6 +78,9 @@ function specifiers(path: string, text: string): string[] {
   return out
 }
 
+// RFC-492: the family moved into runtime-management's infrastructure (`infrastructure/drivers/`); the retired services/
+// spellings stay recognised so a revived copy there is caught too.
+const DRIVERS = 'modules/runtime-management/infrastructure/drivers'
 const FAMILY_FILES = new Set([
   'services/execution/agentInjection',
   'services/execution/workspaceBoundary',
@@ -86,9 +90,14 @@ const FAMILY_FILES = new Set([
   'services/systemAgentRun',
 ])
 function inFamily(target: string): boolean {
-  const bare = target.replace(/\.[cm]?tsx?$/, '').replace(/\/index$/, '')
+  const bare = target.replace(/\.[cm]?tsx?$/, '')
+  const dir = bare.replace(/\/index$/, '')
   return (
-    bare === 'services/runtime' || bare.startsWith('services/runtime/') || FAMILY_FILES.has(bare)
+    dir === DRIVERS ||
+    bare.startsWith(DRIVERS + '/') ||
+    dir === 'services/runtime' ||
+    bare.startsWith('services/runtime/') ||
+    FAMILY_FILES.has(bare)
   )
 }
 function familyImports(path: string, text: string): string[] {
@@ -170,21 +179,23 @@ describe('RFC-487 ① DAG 外的四个 context 不取运行时驱动一族', () 
   test('负对照：相对路径、别名、re-export 与动态 import 都会被认出', () => {
     const path = 'modules/source-control/infrastructure/local/probe.ts'
     const fixture = [
-      "import { resolveBoundaryMounts } from '@/services/execution/workspaceBoundary'",
-      "import { getRuntimeDriver } from '../../../../services/runtime'",
-      "import type { ResolvedSkill } from '@/services/runtime/types'",
+      "import { resolveBoundaryMounts } from '@/modules/runtime-management/infrastructure/drivers/workspaceBoundary'",
+      "import { getRuntimeDriver } from '../../../runtime-management/infrastructure/drivers'",
+      "import type { ResolvedSkill } from '@/modules/runtime-management/infrastructure/drivers/types'",
       "export { runSystemAgent } from '@/services/systemAgentRun'",
-      "const later = () => import('@/services/runtime/index')",
+      "const later = () => import('@/modules/runtime-management/infrastructure/drivers/index')",
+      "import { getRuntimeDriver as legacy } from '../../../../services/runtime'",
       "import { resolveBoundaryMounts as ok } from '../../domain/taskAgentMounts'",
       "import type { RuntimeKind } from '@/modules/runtime-management/public/types'",
       "import { notFamily } from '@/services/mergeAgent'",
     ].join('\n')
     expect(familyImports(path, fixture)).toEqual([
-      `${path} -> services/execution/workspaceBoundary`,
-      `${path} -> services/runtime`,
-      `${path} -> services/runtime/types`,
+      `${path} -> ${DRIVERS}/workspaceBoundary`,
+      `${path} -> ${DRIVERS}`,
+      `${path} -> ${DRIVERS}/types`,
       `${path} -> services/systemAgentRun`,
-      `${path} -> services/runtime/index`,
+      `${path} -> ${DRIVERS}/index`,
+      `${path} -> services/runtime`,
     ])
   })
 })
@@ -326,11 +337,11 @@ describe('RFC-487 ④ 挂载规则与原生内容记录的类型各在 owner 声
         '../domain/nativeAgentMaterialContents',
       ),
     ).toEqual(['NativeSkillContent', 'RuntimePlugin', 'SkillSource'])
-    expect(
-      reExportsFrom('services/runtime/types.ts', '@/modules/resource-catalog/public/types'),
-    ).toEqual(['SkillSource'])
-    expect(declarationsOf('ResolvedSkill', PRODUCTION)).toEqual(['services/runtime/types.ts'])
-    const family = parse('services/runtime/types.ts', read('services/runtime/types.ts'))
+    expect(reExportsFrom(`${DRIVERS}/types.ts`, '@/modules/resource-catalog/public/types')).toEqual(
+      ['SkillSource'],
+    )
+    expect(declarationsOf('ResolvedSkill', PRODUCTION)).toEqual([`${DRIVERS}/types.ts`])
+    const family = parse(`${DRIVERS}/types.ts`, read(`${DRIVERS}/types.ts`))
     const resolved = family.statements.find(
       (statement): statement is ts.InterfaceDeclaration =>
         ts.isInterfaceDeclaration(statement) && statement.name.text === 'ResolvedSkill',
@@ -342,10 +353,7 @@ describe('RFC-487 ④ 挂载规则与原生内容记录的类型各在 owner 声
       'readContentVersion',
     ])
     expect(
-      reExportsFrom(
-        'services/execution/agentInjection.ts',
-        '@/modules/resource-catalog/public/types',
-      ),
+      reExportsFrom(`${DRIVERS}/agentInjection.ts`, '@/modules/resource-catalog/public/types'),
     ).toEqual(['RuntimePlugin'])
   })
 })

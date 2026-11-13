@@ -42,12 +42,12 @@ import {
   validateExtraArgs,
 } from './helpers/runtimeRegistryApplication'
 import { resolveFrozenRuntime } from './helpers/nodeRunRuntime'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   buildClaudeSpawn,
   CLAUDE_PLATFORM_OWNED_FLAGS,
-} from '../src/services/runtime/claudeCode/spawn'
+} from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn'
 
 async function seedRun(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
@@ -259,7 +259,17 @@ describe('buildClaudeSpawn argv', () => {
 describe('CLAUDE_PLATFORM_OWNED_FLAGS covers the spawn module argv surface', () => {
   test('every --flag literal emitted by spawn.ts is reserved', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'claudeCode', 'spawn.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'claudeCode',
+        'spawn.ts',
+      ),
       'utf8',
     )
     // Flag literals the module can push into cmd (quoted '--…' tokens outside

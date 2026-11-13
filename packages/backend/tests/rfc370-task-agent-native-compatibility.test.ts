@@ -3,8 +3,8 @@ import { bindNativeTaskAgentRunPurpose, runNativeTaskAgent } from './helpers/nat
 import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
 import type { RunNodeOptions } from './helpers/nativeTaskAgentRunOptions'
 import type { TaskAgentMaterialDeclaration } from '../src/modules/task-execution/application/ports/taskAgentMaterial'
-import type { AgentSpawnPlan } from '../src/services/runtime/types'
-import { getRuntimeDriver } from '../src/services/runtime'
+import type { AgentSpawnPlan } from '../src/modules/runtime-management/infrastructure/drivers/types'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '../src/util/log'
 

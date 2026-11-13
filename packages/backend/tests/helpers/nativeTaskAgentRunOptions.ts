@@ -74,7 +74,7 @@ import type { PortArtifactOperations } from '@/modules/task-execution/public/typ
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
 // (tests, memoryDistiller) used to resolve from '@/services/runner'; RFC-454 deleted that re-export, so they import the declaration sites.
-import { type RuntimeKind } from '@/services/runtime'
+import { type RuntimeKind } from '@/modules/runtime-management/infrastructure/drivers'
 import type {
   RuntimeProfile,
   RuntimeObservationIdentity,
@@ -82,8 +82,8 @@ import type {
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
-import type { ResolvedSkill } from '@/services/runtime/types'
-import { type RuntimePlugin } from '@/services/execution/agentInjection'
+import type { ResolvedSkill } from '@/modules/runtime-management/infrastructure/drivers/types'
+import { type RuntimePlugin } from '@/modules/runtime-management/infrastructure/drivers/agentInjection'
 
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
 

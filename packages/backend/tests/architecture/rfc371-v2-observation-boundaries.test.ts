@@ -155,7 +155,9 @@ describe('RFC-371 v2 observation boundaries', () => {
     const scoped = [...backend, ...frontend, ...shared].filter(
       (unit) =>
         unit.path.startsWith(MODULE) ||
-        unit.path.startsWith('packages/backend/src/services/runtime/') ||
+        unit.path.startsWith(
+          'packages/backend/src/modules/runtime-management/infrastructure/drivers/',
+        ) ||
         unit.path.startsWith('packages/shared/src/schemas/observation') ||
         /packages\/frontend\/src\/.*observ/i.test(unit.path),
     )

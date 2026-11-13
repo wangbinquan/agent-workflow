@@ -9,21 +9,21 @@ import {
   renderClaudeSubagentEntries,
   type ClaudeAgentEntry,
   type ClaudeAgentsOpts,
-} from '@/services/execution/agentInjection'
+} from '../agentInjection'
 import { claudeBusinessGate } from './permissionMap'
 
 // (RFC-282 B4 — `toClaudeMcpConfig` deleted: it was a src-dead wrapper around
 // renderClaudeMcpInjection; the drivers call the unified render directly.)
 
 // RFC-280 T2 — the subagent entry renderer moved to the unified injection
-// layer (services/execution/agentInjection.ts, `renderClaudeSubagentEntries`).
+// layer (../agentInjection.ts, `renderClaudeSubagentEntries`).
 // This adapter binds the production permission gate (claudeBusinessGate stays
 // the single definition) and keeps the historical signature for import sites.
 
 export type {
   ClaudeAgentEntry,
   ClaudeAgentsOpts as ClaudeAgentsRenderOpts,
-} from '@/services/execution/agentInjection'
+} from '../agentInjection'
 
 export function toClaudeAgents(
   dependents: readonly Agent[],

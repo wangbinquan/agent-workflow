@@ -36,12 +36,12 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
-import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
-import { claudeExplicitPermissionArgv } from '../src/services/runtime/claudeCode/spawn'
-import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
+import { toClaudeAgents } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/inject'
+import { claudeExplicitPermissionArgv } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn'
+import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import { createLogger } from '../src/util/log'
-import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const tempDirs: string[] = []
 const log = createLogger('claude-dependency-injection-test')

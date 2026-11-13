@@ -14,11 +14,11 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SystemAgentSpawnContext } from '@/services/runtime/types'
+import type { SystemAgentSpawnContext } from '@/modules/runtime-management/infrastructure/drivers/types'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
-import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
-import { assembleClaudePersonaSpawn } from '../src/services/runtime/claudeCode/driver'
+import { assembleOpencodePersonaSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
+import { assembleClaudePersonaSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const BASE: SystemAgentSpawnContext = {
   agentName: 'aw-memory-distiller',
@@ -202,7 +202,10 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
 
   test('source: runtime-controlled IS_SANDBOX assignment follows ambient scrubbing', () => {
     const src = readFileSync(
-      join(import.meta.dir, '../src/services/runtime/claudeCode/spawn.ts'),
+      join(
+        import.meta.dir,
+        '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn.ts',
+      ),
       'utf-8',
     )
     const inherit = src.indexOf('for (const [key, value] of Object.entries(source))')

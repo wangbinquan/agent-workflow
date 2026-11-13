@@ -4,15 +4,15 @@
 // ① RFC-349 的注入解析行为预言与只有它在用的 `services/agentDeps` / `mcpClosure` / `pluginClosure` 不在 src、在 `tests/helpers/`，两个
 //    技能转出（`services/skillBootVerify`、`services/skillIdentityPaths`）不在；src / 用例 / 脚本零 import 这六个原路径（census AST，别名与
 //    相对路径都认，带负对照）；预言改取同目录 helper 与 resource-catalog 定义处。
-// ② bootstrap 注入的策略束只剩 3 个外部策略字段（对象键逐个相等），不再取任何模块文件（RFC-477：插件禁用错误码随停用策略归
-//    resource-catalog，退出策略束，原为 4 个）。
+// ② bootstrap 注入的策略束只剩 3 个外部策略字段（对象键逐个相等），不取 resource-catalog 的文件（RFC-477：插件禁用错误码随停用策略归
+//    resource-catalog，退出策略束，原为 4 个；RFC-492：策略束迁入 bootstrap，运行时的两个判定只经 runtime-management 的 composition）。
 // ③ resource-catalog 的端口同样只剩这 3 个字段，适配器直接取 resource-catalog 自己的 `assertNotBuiltin`、`isSkillInjectableThisBoot` 与
 //    插件禁用错误码。
 // ④ 唯一的模块外读者随预言迁走的 `validateAgentDependencies` 退出 resource-catalog `public/queries`（RFC-294 design §3.3）。
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import * as resourceCatalogQueries from '@/modules/resource-catalog/public/queries'
 import { importEdges, sourceUnit } from './architecture/census'
 
@@ -112,11 +112,17 @@ describe('RFC-467 —— 预言一族离开生产树', () => {
 })
 
 describe('RFC-467 —— 策略束只留外部策略', () => {
-  test('bootstrap 注入的策略束只剩 3 个外部策略字段，不取任何模块文件', () => {
+  // RFC-492: the bundle moved from services/execution/ to bootstrap; the two runtime judgments now come from
+  // runtime-management's composition entry (the driver family moved into that module), never from resource-catalog.
+  test('bootstrap 注入的策略束只剩 3 个外部策略字段，不取 resource-catalog，运行时判定只经 runtime-management 的 composition', () => {
     expect(Object.keys(taskExecutionResourceDependencies).sort()).toEqual(EXTERNAL_POLICY)
-    expect(read('services/execution/taskExecutionResourceDependencies.ts')).not.toContain(
-      '@/modules/',
-    )
+    const bundle = 'bootstrap/taskExecutionResourceDependencies.ts'
+    expect(
+      importEdges(sourceUnit(bundle, read(bundle)))
+        .map((edge) => edge.specifier)
+        .filter((specifier) => specifier.startsWith('@/modules/')),
+    ).toEqual(['@/modules/runtime-management/composition/runtimeDrivers'])
+    expect(read(bundle)).not.toContain('@/modules/resource-catalog/')
   })
 
   test('resource-catalog 端口只剩这 3 个字段，适配器直接取自己的两个判定与插件禁用错误码', () => {

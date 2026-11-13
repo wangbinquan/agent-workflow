@@ -10,8 +10,8 @@ import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/proc
 // RFC-282 C0 (设计门 P2-7) — the probe-options shape lives on the runtime
 // contract surface; this module re-exports it so existing `util/opencode`
 // import sites keep resolving until C3 relocates the whole module.
-import type { ProbeOpts } from '@/services/runtime/types'
-export type { ProbeOpts } from '@/services/runtime/types'
+import type { ProbeOpts } from '../types'
+export type { ProbeOpts } from '../types'
 
 // RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
 // shared with the claude probe); re-exported so existing import sites

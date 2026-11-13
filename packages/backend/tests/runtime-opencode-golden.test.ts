@@ -12,7 +12,7 @@ import {
   buildCommand,
   buildOpencodeSpawn,
   MAX_OPENCODE_PROMPT_BYTES,
-} from '@/services/runtime/opencode/spawn'
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 
 const BASE = {
   agentName: 'my-agent',

@@ -141,6 +141,9 @@ export const BOOTSTRAP_FILES = [
   // RFC-489: bootstrap binds the run-family providers (runtime-management, resource-catalog, source-control) into
   // Task Execution's run families and pairs Runtime Management's assembly with the smoke run families.
   'packages/backend/src/bootstrap/runFamilyProviders.ts',
+  // RFC-492: bootstrap assembles Resource Catalog's task-execution policy bundle from Runtime Management's composition
+  // entry (the managed-injection name-conflict judgment) and shared's call-target choice.
+  'packages/backend/src/bootstrap/taskExecutionResourceDependencies.ts',
   'packages/backend/src/server.ts',
 ] as const
 

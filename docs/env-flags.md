@@ -8,16 +8,16 @@
 
 ## 运维 / 部署面（daemon 自身读取）
 
-| 变量                                      | 读取点                                                  | 语义                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                             | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
-| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                           | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
-| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/bootstrap/daemonStart.ts`                  | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
-| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/bootstrap/daemonStart.ts`                  | dev 模式下单实例 flock 交接的等待毫秒数                                              |
-| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/bootstrap/daemonStart.ts`                  | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
-| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts`       | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
-| `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts` | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
-| `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts` | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因  |
+| 变量                                      | 读取点                                                                             | 语义                                                                                 |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                                                        | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
+| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                                                      | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
+| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/bootstrap/daemonStart.ts`                                             | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
+| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/bootstrap/daemonStart.ts`                                             | dev 模式下单实例 flock 交接的等待毫秒数                                              |
+| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/bootstrap/daemonStart.ts`                                             | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
+| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/modules/runtime-management/infrastructure/drivers/opencode/driver.ts` | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
+| `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts`                            | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
+| `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts`                            | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因  |
 
 ## CrewStation 托管（RFC-370，daemon 自身读取）
 
@@ -143,7 +143,7 @@ define 固定为 `false`，所以同名进程变量不会暂停正式服务。
 
 | token                             | 位置                                                                                                                           | 实为                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `AW_E2E_BUILD`                    | `scripts/build-binary.ts` → `backend/src/modules/collaboration/infrastructure/humanGateDecisionE2eBarrier.ts`                                              | 构建期 test-only binary 布尔开关                                             |
+| `AW_E2E_BUILD`                    | `scripts/build-binary.ts` → `backend/src/modules/collaboration/infrastructure/humanGateDecisionE2eBarrier.ts`                  | 构建期 test-only binary 布尔开关                                             |
 | `AW_COMPILED_BUILD`               | `scripts/build-binary.ts` → `backend/src/platform/background/maintenanceWorkerSupervisor.ts`、`backend/src/services/backup.ts` | 构建期 define 注入的布尔常量，用于选择 bundled Worker 入口与编译产物备份实现 |
 | `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`）                                                   | 构建期 define 注入的全局常量                                                 |
 | `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                                                                      | 导出的 TS 常量名（内部 git spawn 的身份 env 集合）                           |

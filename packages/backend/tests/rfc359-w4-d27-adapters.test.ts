@@ -19,7 +19,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_969_900_000

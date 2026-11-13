@@ -512,6 +512,8 @@ RFC-395 II-b 的 T18 在本机把后端跑全了：SQLite 全量 22,510 / 0，Po
 - 新增的重型用例先压掉浪费（每条用例重装整个 schema、重编 catalog 等），再按实测用 `setDefaultTimeout` 写明理由；单个文件要能放进
   一个分片的预算，超过约 150 秒就拆文件。
 - 上库前按文件统计一次耗时（CI 日志里每条 `(pass)` / `(fail)` 后的时长求和），和分片预算对账，见下一条。
+- 读全部生产文件的 AST 守卫（RFC-492 实撞，2026-11-13）：语料 3,000 多个文件，第一次读盘加解析在本机负载下要 4.1 秒，离默认 5 秒
+  太近。解析结果在用例之间共用（按路径缓存说明符），`--randomize` 下哪条先跑由它付冷读，所以读全量的几条都给显式时限、写明实测。
 
 ## PostgreSQL 夹具的每例开销算在每条用例的 5 秒里（2026-10-26 实测，RFC-395 激活后 PG 用例整体慢约一半）
 
@@ -702,6 +704,15 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   RFC-491 再撞（迁走的是读者，不是转出）：只供契约用例的本机任务运行与 `services/systemAgentRun.ts` 移出生产后，source-control 的
   `resolveBoundaryMounts`、task-execution 的 `SystemAgentObservationRun` 各成未消费、越过上限，到首批的 `rfc376-structural-guards` 才红。
   迁出前对被迁文件 import 的每个 `public/` 符号全仓查一遍其余生产读者；没有就同批撤下出口，读者改取声明处。
+  RFC-492 第三种（读者迁进本模块）：运行时驱动一族从 `services/` 整族迁入 runtime-management，它取本模块 public 的 14 个出口失去模块外
+  读者。迁移前用架构报告 `publicSurfaces[].productionConsumers` 找出消费方全在被迁文件里的符号，同批撤下，读者改取声明处。
+- **整族迁入模块后，只数模块文件的门跟着变**（RFC-492 实撞）：`services/` 文件迁入 `modules/<ctx>/` 后，`export-star-barrels`（只数模块内
+  的星号转出）、R1 的装配根清单（`census.ts` 的 `BOOTSTRAP_FILES`，新加的 bootstrap 装配文件要登记）、`rfc349-provider-cutover` 的业务层
+  provider 债（`services/` 算业务层、`infrastructure/` 不算）都会变。迁移后先跑一次架构报告与 `rfc317-module-boundary`、
+  `rfc349-provider-cutover`、`rfc376-structural-guards`，按报告收紧或销账。
+- **正则批量改 import 说明符会连带改到测试夹具字符串**（RFC-492 实撞）：按 `from '…'` 匹配的替换也改了负对照与逆变换夹具里写成字符串的
+  import 语句（RFC-328、RFC-462、RFC-213 三处），断言随之失去原意。批量改写后，把改动行里不是 import 语句的那些逐条列出来复核（或只改 AST
+  里的 import 声明）。
 - **钉调用行原文的源码兜底**（RFC-466 实撞）：把直调改成端口注入之前，按被改那一行的**原文**全仓搜用例——`rfc359-w58` 钉着
   `canViewResource(dependencies.db, actor, 'workflow', workflow)`，改成 `dependencies.canViewWorkflow(...)` 后 1 ms 内红；兜底改成同时锁
   注入的调用与实现处的那一条，等价于原来那一行。
@@ -2136,6 +2147,12 @@ grep -rn "\b$old\b" packages/backend/tests                   # ③ 只提文件�
 静默过期——按内容在新文件里重新定位行号改指。清点消费方的 grep 也不要接 `| head`：RFC-463 清点 `EMPTY_RUNTIME_PROFILE` 时 `head` 截掉了
 opencode 集成用例（`packages/backend/tests/integration-opencode/`，只在 integration-opencode workflow 里跑，本地全量与主 CI 的后端分片都
 不跑它），靠 backend `tsc` 才报出。
+
+搬目录时还要扫**按后缀认文件**的写法（RFC-492，2026-11-13）：`scripts/release-upgrade/registry.ts` 在每个 tag 的全部文件里按
+`endsWith('/runtime/opencode/util.ts')` 找 OpenCode 探测，找不到就拒绝登记。路径里只剩 `runtime/opencode/util.ts` 一段，①～③ 都扫不到；
+一族迁到 `drivers/opencode/` 后，下一次发布后的 `--write` 会停在「inspect the new runtime probe layout」。目录整体搬家后按旧目录的**尾段**
+再搜一遍（`grep -rn "runtime/opencode" scripts .github`），连带看 `endsWith(` / `includes(` 的判定；这类布局表要追加新布局，不要改掉旧的
+（已登记的旧 tag 仍按旧布局认）。
 
 ②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
 它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。

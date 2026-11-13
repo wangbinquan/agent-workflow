@@ -391,7 +391,17 @@ describe('runner.ts source: dump plugin wiring lock', () => {
     expect(src).toContain('isAgentNodeKind')
     expect(src).toContain('freshAgentRun')
     const spawnSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'opencode',
+        'spawn.ts',
+      ),
       'utf-8',
     )
     expect(spawnSrc).toContain('OPENCODE_AW_INVENTORY_OUT')
@@ -403,8 +413,10 @@ describe('runner.ts source: dump plugin wiring lock', () => {
         import.meta.dir,
         '..',
         'src',
-        'services',
-        'runtime',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
         'opencode',
         'plugin',
         'index.ts',
@@ -438,8 +450,10 @@ describe('runner.ts source: dump plugin wiring lock', () => {
       import.meta.dir,
       '..',
       'src',
-      'services',
-      'runtime',
+      'modules',
+      'runtime-management',
+      'infrastructure',
+      'drivers',
       'opencode',
       'plugin',
       'aw-inventory-dump.mjs',

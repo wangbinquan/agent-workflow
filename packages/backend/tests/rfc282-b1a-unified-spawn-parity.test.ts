@@ -22,24 +22,24 @@ import {
   type Mcp,
   type Plugin,
 } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import type {
   AgentSpawnContext,
   BusinessNodeSpawnContext,
   SystemAgentSpawnContext,
-} from '../src/services/runtime/types'
+} from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { createLogger } from '../src/util/log'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import {
   assembleOpencodeBusinessSpawn,
   assembleOpencodePersonaSpawn,
   renderOpencodeInjection,
-} from '../src/services/runtime/opencode/driver'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
 import {
   assembleClaudeBusinessSpawn,
   assembleClaudePersonaSpawn,
   renderClaudeInjection,
-} from '../src/services/runtime/claudeCode/driver'
+} from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const log = createLogger('rfc282-b1a')
 

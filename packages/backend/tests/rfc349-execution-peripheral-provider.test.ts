@@ -55,7 +55,8 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
     // RFC-467：legacy 行为神谕（`legacyTaskExecutionInjectionResolver`）迁入用例树，它要的三个行映射器随之离开策略束；
     // 快照适配器与可见性判据都不再经这里注入，策略束不再取 resource-catalog 的任何内部文件。
     const dependencies = readFileSync(
-      resolve(import.meta.dir, '../src/services/execution/taskExecutionResourceDependencies.ts'),
+      // RFC-492: the policy bundle is assembled by bootstrap.
+      resolve(import.meta.dir, '../src/bootstrap/taskExecutionResourceDependencies.ts'),
       'utf8',
     )
     expect(dependencies).not.toMatch(/rowTo(?:WorkflowDetail|Workgroup)\b/)

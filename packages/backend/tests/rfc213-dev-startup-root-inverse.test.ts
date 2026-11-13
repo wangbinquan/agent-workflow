@@ -24,7 +24,7 @@ for (const path of [
         ? 294
         : path === 'bootstrap/developmentReload.ts'
           ? 64
-          : -86,
+          : -116,
     )
     expect(restore(original)).toBe(original)
     expect(inverseRfc213DevStartupRoot(parse(current, name.replaceAll('/', '\\'))).text).toBe(
@@ -38,10 +38,13 @@ for (const path of [
       expect(original).not.toContain('readonly developmentIntegrity:')
       expect(original).toContain('readonly daemonHost: DaemonHostLifecyclePort')
     } else {
-      expect(original).toContain("import { getRuntimeDriver } from '@/services/runtime'\n")
+      // RFC-492: the self-check comes from runtime-management's composition entry in one import.
+      expect(original).toContain(
+        "import { getRuntimeDriver } from '@/modules/runtime-management/composition/runtimeDrivers'\n",
+      )
       expect(
         original.split(
-          "const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')",
+          'const { assertRuntimeDeclarations, getRuntimeDriver, RUNTIME_KINDS } = await import(',
         ),
       ).toHaveLength(2)
       expect(() =>
@@ -74,7 +77,7 @@ for (const path of [
           ]
         : path === 'bootstrap/developmentReload.ts'
           ? ['readonly developmentIntegrity']
-          : ["import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'\n"]
+          : ['  assertRuntimeDeclarations,\n']
     for (const fragment of fragments) {
       expect(current.split(fragment)).toHaveLength(2)
       expect(() => restore(current.replace(fragment, ''))).toThrow(

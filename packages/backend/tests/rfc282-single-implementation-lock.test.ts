@@ -5,7 +5,8 @@
 //      its call sites live inside an explicit whitelist (adding a call site
 //      must edit this file — review-visible);
 //   2. forbidden token families: runtime wire/config knowledge must not appear
-//      outside services/runtime/** (and the two C3-pending opencode embed
+//      outside the driver directories (services/runtime/** until RFC-492 moved them to runtime-management
+//      `infrastructure/drivers/**`; and the two C3-pending opencode embed
 //      modules), and driver internals must not be laundered back out through
 //      `export … from`;
 //   3. the RFC282 exception ledgers themselves are STALE-RATCHETED (copied
@@ -21,7 +22,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
-import { RUNTIME_KINDS } from '@/services/runtime'
+import { RUNTIME_KINDS } from '@/modules/runtime-management/infrastructure/drivers'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -65,61 +66,61 @@ const CONVERSION_LOCKS: readonly ConversionLock[] = [
   {
     face: 'mcp-wire-opencode',
     fn: 'renderOpencodeMcpEntry',
-    definedIn: 'services/execution/agentInjection.ts',
+    definedIn: 'modules/runtime-management/infrastructure/drivers/agentInjection.ts',
     callers: [],
   },
   {
     face: 'mcp-wire-claude',
     fn: 'renderClaudeMcpServerEntry',
-    definedIn: 'services/execution/agentInjection.ts',
+    definedIn: 'modules/runtime-management/infrastructure/drivers/agentInjection.ts',
     callers: [],
   },
   {
     face: 'agent-entry-opencode',
     fn: 'renderOpencodeAgentEntry',
-    definedIn: 'services/execution/agentInjection.ts',
+    definedIn: 'modules/runtime-management/infrastructure/drivers/agentInjection.ts',
     callers: [
       'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
-      'services/runtime/opencode/inlineConfig.ts',
+      'modules/runtime-management/infrastructure/drivers/opencode/inlineConfig.ts',
     ],
   },
   {
     face: 'subagent-entries-claude',
     fn: 'renderClaudeSubagentEntries',
-    definedIn: 'services/execution/agentInjection.ts',
-    callers: ['services/runtime/claudeCode/inject.ts'],
+    definedIn: 'modules/runtime-management/infrastructure/drivers/agentInjection.ts',
+    callers: ['modules/runtime-management/infrastructure/drivers/claudeCode/inject.ts'],
   },
   {
     face: 'skill-staging',
     fn: 'stageSkills',
-    definedIn: 'services/runtime/stageSkills.ts',
+    definedIn: 'modules/runtime-management/infrastructure/drivers/stageSkills.ts',
     callers: [
       'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
-      'services/runtime/claudeCode/config.ts',
+      'modules/runtime-management/infrastructure/drivers/claudeCode/config.ts',
     ],
   },
   {
     face: 'plugin-spec',
     fn: 'buildPluginSpecArray',
-    definedIn: 'services/runtime/opencode/pluginSpec.ts',
-    callers: ['services/runtime/opencode/inlineConfig.ts'],
+    definedIn: 'modules/runtime-management/infrastructure/drivers/opencode/pluginSpec.ts',
+    callers: ['modules/runtime-management/infrastructure/drivers/opencode/inlineConfig.ts'],
   },
   {
     face: 'permission-map-claude',
     fn: 'mapAgentPermissionToClaudeTools',
-    definedIn: 'services/runtime/claudeCode/permissionMap.ts',
+    definedIn: 'modules/runtime-management/infrastructure/drivers/claudeCode/permissionMap.ts',
     callers: [],
   },
   {
     face: 'boundary-opencode',
     fn: 'composeOpencodeBoundary',
-    definedIn: 'services/runtime/opencode/boundary.ts',
-    callers: ['services/runtime/opencode/inlineConfig.ts'],
+    definedIn: 'modules/runtime-management/infrastructure/drivers/opencode/boundary.ts',
+    callers: ['modules/runtime-management/infrastructure/drivers/opencode/inlineConfig.ts'],
   },
   {
     face: 'boundary-claude',
     fn: 'composeClaudeBoundarySettings',
-    definedIn: 'services/runtime/claudeCode/boundary.ts',
+    definedIn: 'modules/runtime-management/infrastructure/drivers/claudeCode/boundary.ts',
     callers: [],
   },
 ]
@@ -156,7 +157,7 @@ describe('RFC-282 A2 — conversion definition points are unique', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 2. forbidden token families outside services/runtime/**
+// 2. forbidden token families outside the driver directories (runtime-management `infrastructure/drivers/**`)
 // ---------------------------------------------------------------------------
 
 /** C3-pending modules: the opencode embed production line still lives at src
@@ -173,7 +174,8 @@ const RUNTIME_TOKEN_EXCEPTIONS: readonly string[] = []
  * 守卫会安静地把一个真实驱动当成公共层（或把公共层当成驱动），两种都不会报错。
  */
 const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
-  (kind) => `services/runtime/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
+  (kind) =>
+    `modules/runtime-management/infrastructure/drivers/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
 )
 
 // The complete native assembly moved to these exact runtime owner files.
@@ -185,7 +187,7 @@ const RUNTIME_LOCAL_MATERIAL_FILES = RUNTIME_KINDS.map(
 const FORBIDDEN_TOKENS = ['OPENCODE_CONFIG_CONTENT', '--mcp-config', '.claude/'] as const
 
 describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
-  test('forbidden tokens appear only under services/runtime/ (+ C3-pending exceptions)', () => {
+  test('forbidden tokens appear only in the driver directories (+ C3-pending exceptions)', () => {
     const offenders: string[] = []
     /** RFC-317 T33 —— 正向控制：证明公共层**真的**进了扫描面（见下方断言）。 */
     const scannedRuntimeCommons: string[] = []
@@ -199,7 +201,8 @@ describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
       // ——两个驱动共同调用的共享内核——恰恰是唯一没有任何守卫看过的地方。
       if (RUNTIME_DRIVER_DIRS.some((dir) => f.rel.startsWith(dir))) continue
       if (RUNTIME_LOCAL_MATERIAL_FILES.includes(f.rel)) continue
-      if (f.rel.startsWith('services/runtime/')) scannedRuntimeCommons.push(f.rel)
+      if (f.rel.startsWith('modules/runtime-management/infrastructure/drivers/'))
+        scannedRuntimeCommons.push(f.rel)
       if (RUNTIME_TOKEN_EXCEPTIONS.includes(f.rel)) continue
       const code = stripComments(f.text)
       for (const token of FORBIDDEN_TOKENS) {
@@ -209,7 +212,7 @@ describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
     // RFC-317 T33 —— 见 rfc143 同名断言：少了它，把豁免放宽回整目录后一切照绿。
     expect(
       scannedRuntimeCommons.length,
-      'services/runtime 下的中立公共层一个都没进扫描面——豁免又变回整目录了',
+      '驱动一族（RFC-492 后在 runtime-management 的 infrastructure/drivers）下的中立公共层一个都没进扫描面——豁免又变回整目录了',
     ).toBeGreaterThanOrEqual(5)
     expect(offenders).toEqual([])
   })
@@ -233,7 +236,8 @@ describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
 // ---------------------------------------------------------------------------
 
 const REEXPORT_RE =
-  /^export\s+(?:\{[^}]*\}|\*)\s+from\s+['"][^'"]*runtime\/(?:opencode|claudeCode)\/[^'"]*['"]/m
+  // RFC-492: the driver directories moved from services/runtime to runtime-management `infrastructure/drivers`.
+  /^export\s+(?:\{[^}]*\}|\*)\s+from\s+['"][^'"]*(?:runtime|drivers)\/(?:opencode|claudeCode)\/[^'"]*['"]/m
 
 /** (file, next-line import text) tuples allowed to carry an eslint-disable for
  *  no-restricted-imports. Owning batch in the comment at the site. Ledger
@@ -250,7 +254,7 @@ describe('RFC-282 A2 — re-export laundering & the import-exception ledger', ()
     )
     const offenders: string[] = []
     for (const f of FILES) {
-      if (f.rel.startsWith('services/runtime/')) continue
+      if (f.rel.startsWith('modules/runtime-management/infrastructure/drivers/')) continue
       for (const line of stripComments(f.text).split('\n')) {
         if (REEXPORT_RE.test(line) && !ledgeredReexports.has(`${f.rel}::${line.trim()}`)) {
           offenders.push(`${f.rel} :: ${line.trim()}`)
@@ -315,8 +319,11 @@ export const RFC282_DEFINITION_EXCEPTIONS: readonly DuplicateEntry[] = [
     owning: 'B4',
     signature: /\((?:p|plugin)\) => (?:p|plugin)\.enabled !== false|if \(p\.enabled === false\)/,
     sites: [
-      { file: 'services/execution/agentInjection.ts', count: 1 },
-      { file: 'services/runtime/opencode/pluginSpec.ts', count: 1 },
+      { file: 'modules/runtime-management/infrastructure/drivers/agentInjection.ts', count: 1 },
+      {
+        file: 'modules/runtime-management/infrastructure/drivers/opencode/pluginSpec.ts',
+        count: 1,
+      },
     ],
   },
   {
@@ -400,6 +407,7 @@ describe('RFC-282 A2 — sanity: the matchers actually catch violations', () => 
   test('a smuggled re-export would be caught', () => {
     expect(REEXPORT_RE.test("export { x } from './runtime/opencode/spawn'")).toBe(true)
     expect(REEXPORT_RE.test("export * from '../runtime/claudeCode/events'")).toBe(true)
+    expect(REEXPORT_RE.test("export { x } from '../drivers/opencode/spawn'")).toBe(true)
     expect(REEXPORT_RE.test("import { x } from './runtime/opencode/spawn'")).toBe(false)
   })
 

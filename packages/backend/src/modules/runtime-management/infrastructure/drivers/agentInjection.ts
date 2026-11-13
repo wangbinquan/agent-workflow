@@ -23,10 +23,7 @@ import {
   type DeclaredInjectionManifest,
   type Mcp,
 } from '@agent-workflow/shared'
-import {
-  EMPTY_RUNTIME_PROFILE,
-  type RuntimeProfile,
-} from '@/modules/runtime-management/public/types'
+import { EMPTY_RUNTIME_PROFILE, type RuntimeProfile } from '../../public/types'
 import type { RuntimePlugin } from '@/modules/resource-catalog/public/types'
 
 /**

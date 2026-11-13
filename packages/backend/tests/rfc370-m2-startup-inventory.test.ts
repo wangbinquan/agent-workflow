@@ -13,7 +13,7 @@ import {
   verifyStartup,
   emptyDeclaredManifest,
 } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 
 const report = () => ({
   version: 1,

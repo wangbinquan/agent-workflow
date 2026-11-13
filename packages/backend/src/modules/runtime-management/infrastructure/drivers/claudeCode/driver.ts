@@ -20,12 +20,12 @@ import { randomUUID } from 'node:crypto'
 import { parseEvent, observeSystemEvent, parseResultError } from './events'
 import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
-import { claudeLocalAgentMaterial } from '@/modules/runtime-management/infrastructure/local/claudeAgentMaterial'
+import { claudeLocalAgentMaterial } from '../../local/claudeAgentMaterial'
 export {
   renderClaudeInjection,
   assembleClaudePersonaSpawn,
   assembleClaudeBusinessSpawn,
-} from '@/modules/runtime-management/infrastructure/local/claudeAgentMaterial'
+} from '../../local/claudeAgentMaterial'
 
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',

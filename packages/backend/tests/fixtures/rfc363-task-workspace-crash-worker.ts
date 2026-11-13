@@ -32,7 +32,7 @@ import { compensatePreMaterializedRepository } from '@/modules/task-execution/in
 import { compensateScratchWorkspace } from '@/modules/task-execution/infrastructure/scratchWorkspacePreparation'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 
 interface Input {
   root: string

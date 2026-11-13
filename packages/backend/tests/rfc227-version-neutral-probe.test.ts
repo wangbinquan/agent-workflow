@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { probeOpencode } from '../src/services/runtime/opencode/util'
+import { probeOpencode } from '../src/modules/runtime-management/infrastructure/drivers/opencode/util'
 
 const roots: string[] = []
 

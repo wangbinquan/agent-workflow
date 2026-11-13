@@ -26,7 +26,7 @@ import type {
   AgentLiveCaptureRequest,
   AgentLiveCaptureStats,
   AgentLiveCaptureHandle,
-} from '@/modules/runtime-management/application/ports/agentLiveCapture'
+} from '../../../application/ports/agentLiveCapture'
 import { createLogger } from '@/util/log'
 import {
   loadSiblingsCapturedSessionIds,

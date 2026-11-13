@@ -13,8 +13,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { buildRuntimeInventoryObservation, emptyDeclaredManifest } from '@agent-workflow/shared'
-import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
-import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
+import type { DeclaredManifestV1 } from '@/modules/runtime-management/infrastructure/drivers/agentInjection'
+import type { RuntimeDriverCapabilities } from '@/modules/runtime-management/infrastructure/drivers/types'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 
 const caps = (over: Partial<RuntimeDriverCapabilities> = {}): RuntimeDriverCapabilities =>

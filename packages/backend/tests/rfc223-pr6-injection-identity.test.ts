@@ -22,7 +22,7 @@ import { getAgentById } from '../src/modules/resource-catalog/infrastructure/leg
 import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,
-} from '../src/services/runtime/injectionIdentity'
+} from '../src/modules/runtime-management/infrastructure/drivers/injectionIdentity'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveInjection } from './helpers/legacyTaskExecutionInjectionResolver'

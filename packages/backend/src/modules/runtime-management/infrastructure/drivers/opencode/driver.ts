@@ -17,12 +17,12 @@ import type {
 import { observeSystemEvent, parseEvent } from './events'
 import { detectOpencodeSessionNotFound, probeOpencode } from './util'
 import { evictOpencodeModelsCache, listOpencodeModelsNatural } from './models'
-import { opencodeLocalAgentMaterial } from '@/modules/runtime-management/infrastructure/local/opencodeAgentMaterial'
+import { opencodeLocalAgentMaterial } from '../../local/opencodeAgentMaterial'
 export {
   renderOpencodeInjection,
   assembleOpencodePersonaSpawn,
   assembleOpencodeBusinessSpawn,
-} from '@/modules/runtime-management/infrastructure/local/opencodeAgentMaterial'
+} from '../../local/opencodeAgentMaterial'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',

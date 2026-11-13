@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
-import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const OWN = '/home/aw/iso/taskA/run1'
 const SIBLING_ROOT = '/home/aw/iso'

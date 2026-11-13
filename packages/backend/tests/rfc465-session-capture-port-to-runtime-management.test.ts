@@ -10,19 +10,21 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+// RFC-492: the capture request, the sweep request / outcome and the capture event are no longer offered by
+// runtime-management's public (only the driver family read them); read their declaration sites.
 import type {
   AgentSessionCaptureRequest,
-  RuntimeSessionCaptureEvent,
-  SystemAgentEventSinkV1,
   SystemAgentSessionSweepOutcome as RuntimeManagementSweepOutcome,
   SystemAgentSessionSweepRequest,
-} from '@/modules/runtime-management/public/participants'
+} from '@/modules/runtime-management/application/ports/agentMaterialEvidence'
+import type { RuntimeSessionCaptureEvent } from '@/modules/runtime-management/application/ports/runtimeSessionCapturePersistence'
+import type { SystemAgentEventSinkV1 } from '@/modules/runtime-management/public/participants'
 import type { NodeExecutionEventSnapshot } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import type {
   SessionCaptureContext,
   SystemAgentSessionSweepContext,
   SystemAgentSessionSweepOutcome,
-} from '@/services/runtime/types'
+} from '@/modules/runtime-management/infrastructure/drivers/types'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -83,7 +85,9 @@ describe('RFC-465 —— 持久化端口只在 runtime-management', () => {
         .map((name) => name.trim())
         .filter(Boolean)
         .sort(),
-    ).toEqual(['RuntimeSessionCaptureEvent', 'RuntimeSessionCapturePersistence'])
+      // RFC-492: the capture event's only reader outside the module was the driver family, which now lives in
+      // runtime-management's infrastructure and reads the port file directly; the event is no longer offered here.
+    ).toEqual(['RuntimeSessionCapturePersistence'])
   })
 })
 
@@ -113,10 +117,11 @@ describe('RFC-465 —— runtime-management 的业务层不再取 services/ 与 
 })
 
 describe('RFC-465 —— 驱动侧形状由 runtime-management 合同给出', () => {
-  const path = join(SRC, 'services/runtime/types.ts')
+  // RFC-492: the driver family moved into runtime-management's infrastructure.
+  const path = join(SRC, 'modules/runtime-management/infrastructure/drivers/types.ts')
   const text = readFileSync(path, 'utf8')
 
-  test('services/runtime/types 不取 task-execution，不再自定义捕获请求字段与清扫 sink', () => {
+  test('驱动的 types 不取 task-execution，不再自定义捕获请求字段与清扫 sink', () => {
     expect(specifiersOf(path).filter((s) => s.startsWith('@/modules/task-execution/'))).toEqual([])
     expect(text).toContain(
       'export interface SessionCaptureContext extends AgentSessionCaptureRequest {',

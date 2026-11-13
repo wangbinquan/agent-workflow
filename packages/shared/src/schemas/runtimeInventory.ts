@@ -25,7 +25,7 @@ import type { InventorySnapshotCaptured } from '../inventory'
 
 /**
  * 一个能力面/字段在某运行时上的状态。语义与 RFC-282 的同名类型一致，权威定义
- * 迁至 shared 以便前端按它选列；backend `services/runtime/types.ts` 再导出。
+ * 迁至 shared 以便前端按它选列；backend runtime-management 的 `infrastructure/drivers/types.ts` 再导出。
  */
 export const FaceSupportSchema = z.enum([
   'supported', // 该运行时有此概念，且能被观测到

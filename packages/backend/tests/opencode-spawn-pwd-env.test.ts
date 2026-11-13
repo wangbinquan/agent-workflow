@@ -36,7 +36,7 @@ import { resolve } from 'node:path'
 // cwd: worktreeDir, env: plan.env }) — asserted separately below.
 const ENV_PWD_SITES = [
   // (file, identifier PWD is set from in the env block)
-  ['src/services/runtime/opencode/spawn.ts', 'ctx.worktreePath'],
+  ['src/modules/runtime-management/infrastructure/drivers/opencode/spawn.ts', 'ctx.worktreePath'],
 ] as const
 const SPAWN_CWD_SITES = [
   // (file, identifier the Bun.spawn cwd is read from, env expression)

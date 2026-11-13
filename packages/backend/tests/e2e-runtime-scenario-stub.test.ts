@@ -10,8 +10,8 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { buildClaudeSpawn } from '../src/services/runtime/claudeCode/spawn'
-import { buildCommand } from '../src/services/runtime/opencode/spawn'
+import { buildClaudeSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn'
+import { buildCommand } from '../src/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 
 type Protocol = 'opencode' | 'claude-code'
 

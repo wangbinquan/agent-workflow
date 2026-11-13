@@ -12,9 +12,9 @@ import type {
   AgentProcessRequest,
   AgentProcessResult,
 } from '../src/platform/execution/local/agentProcess'
-import type { AgentSpawnPlan } from '../src/services/runtime/types'
-import { getRuntimeDriver } from '../src/services/runtime'
-import { NOOP_HANDLE } from '../src/services/runtime/opencode/subagentLiveCapture'
+import type { AgentSpawnPlan } from '../src/modules/runtime-management/infrastructure/drivers/types'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
+import { NOOP_HANDLE } from '../src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
 import type {
   AgentMaterialCompiler,

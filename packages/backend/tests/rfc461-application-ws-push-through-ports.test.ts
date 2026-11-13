@@ -67,7 +67,9 @@ describe('RFC-461 —— application 层不再直推 WS、不再经 services/ �
       expect([
         path,
         specifiersOf(path).filter(
-          (s) => s === '@/services/runtime/types' || s === '@/services/sessionEventSink',
+          (s) =>
+            s === '@/modules/runtime-management/infrastructure/drivers/types' ||
+            s === '@/services/sessionEventSink',
         ),
       ]).toEqual([path, []])
     expect(specifiersOf(AGENT_SESSION_EVENTS)).toContain('./agentObservations')

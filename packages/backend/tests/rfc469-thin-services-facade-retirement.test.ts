@@ -23,10 +23,15 @@ const RETIRED = [
   'services/execution/taskExecutionCallClosure',
 ]
 const RM_PARTICIPANTS = '@/modules/runtime-management/public/participants'
-const SERVICE_SINK_CONSUMERS = [
-  'services/runtime/opencode/sessionCapture.ts',
+// RFC-492: the opencode session capture moved into runtime-management's infrastructure with the driver family and
+// reads the sink type from its declaration site (`application/ports/agentSessionEvents`), not its own module's public.
+const SERVICE_SINK_CONSUMERS: ReadonlyArray<readonly [string, string]> = [
+  [
+    `modules/runtime-management/infrastructure/drivers/opencode/sessionCapture.ts`,
+    '../../../application/ports/agentSessionEvents',
+  ],
   // RFC-491: the native system-agent run moved into task-execution.
-  'modules/task-execution/infrastructure/local/nativeSystemAgentRun.ts',
+  ['modules/task-execution/infrastructure/local/nativeSystemAgentRun.ts', RM_PARTICIPANTS],
 ]
 const MEMORY_SINK_CONSUMERS = [
   'modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
@@ -111,8 +116,8 @@ describe('RFC-469 —— 会话 sink 类型经 runtime-management public', () =>
   })
 
   test('services/ 的两个消费方取 runtime-management public/participants', () => {
-    for (const path of SERVICE_SINK_CONSUMERS)
-      expect([path, specifiersOf(path).includes(RM_PARTICIPANTS)]).toEqual([path, true])
+    for (const [path, owner] of SERVICE_SINK_CONSUMERS)
+      expect([path, specifiersOf(path).includes(owner)]).toEqual([path, true])
   })
 
   test('memory 的两个 infrastructure 文件取 memory 自己的端口，端口从 runtime-management 转出三个类型', () => {

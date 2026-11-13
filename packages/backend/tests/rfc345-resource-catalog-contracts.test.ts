@@ -850,7 +850,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const dependencies = readFileSync(
-      resolve(sourceRoot, 'services/execution/taskExecutionResourceDependencies.ts'),
+      // RFC-492: the policy bundle is assembled by bootstrap.
+      resolve(sourceRoot, 'bootstrap/taskExecutionResourceDependencies.ts'),
       'utf8',
     )
     const resources = readFileSync(

@@ -197,6 +197,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker.start#setInterval#1',
     'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts#createCrewStationMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
+    'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture.ts#startLiveSubagentCapture.intervalHandle#setInterval#1',
     'packages/backend/src/modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts#runChildCallNode.obsTimer#setInterval#1',
     'packages/backend/src/modules/task-execution/infrastructure/childBudget.ts#ChildTaskBudget.ensureWarnTimer#setInterval#1',
     'packages/backend/src/modules/task-execution/infrastructure/executionWatch.ts#watchTaskTerminal.timer#setInterval#1',
@@ -208,7 +209,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/platform/background/maintenanceWorkerRuntime.ts#runMaintenanceWorker.initialise#setInterval#1',
     'packages/backend/src/platform/background/maintenanceWorkerRuntime.ts#runMaintenanceWorker.initialise#setInterval#2',
     'packages/backend/src/platform/background/providerBackupScheduler.ts#startBackupScheduler.handle#setInterval#1',
-    'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#startLiveSubagentCapture.intervalHandle#setInterval#1',
   ],
   'unreachable-production-files': [
     'packages/backend/src/modules/development-automation/infrastructure/actionWorkspace.ts',
@@ -221,6 +221,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/resource-catalog/composition/portableImportReferences.ts',
     'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts',
     'packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+    'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/plugin/aw-inventory-dump.mjs',
     'packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts',
     'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     'packages/backend/src/modules/task-execution/composition/systemAgentRun.ts',
@@ -229,9 +230,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // 删除（销账，6 个）。
     // RFC-491：只供 RFC-370 契约用例的本机兼容运行（`nativeTaskAgentRun`、`nativeTaskAgentRunOptions`）迁入 `tests/helpers/`
     // （销账，2 个）。
+    // RFC-492：RFC-108 的驱动租约兼容夹具（`services/driverLease.ts`）迁入 `tests/helpers/`（销账，1 个）；库存插件随一族换位置。
     'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-    'packages/backend/src/services/driverLease.ts',
-    'packages/backend/src/services/runtime/opencode/plugin/aw-inventory-dump.mjs',
   ],
 }
 // END COMMITTED BASELINES
@@ -276,12 +276,7 @@ const SUCCESSORS: Readonly<Record<string, { successor: string; reason: string }>
 }
 // RFC-375 section 4: these references are deliberately retained while the rest of the HEAD list is swept.
 const RETAINED_REACHABILITY_GROUPS = [
-  {
-    successor: 'RFC-375 section 4: user decision',
-    reason:
-      'RFC-108 historical contract retained for reproduction, as documented in its file header.',
-    files: ['services/driverLease.ts'],
-  },
+  // RFC-492: the RFC-108 driver-lease compatibility fixture left the production tree for `tests/helpers/` (retired).
   // RFC-467: the RFC-349/RFC-359 injection behaviour oracles left the production tree together — moved verbatim to
   // `tests/helpers/` (still the parity baseline, not retired; retiring them stays the RFC-375 section 3 user decision).
   {
@@ -338,7 +333,10 @@ const RETAINED_REACHABILITY_GROUPS = [
     successor: 'RFC-375 section 4 / RFC-029: retain embedded asset',
     reason:
       'Embedded opencode inventory plugin asset; shipped as data and therefore not dead code.',
-    files: ['services/runtime/opencode/plugin/aw-inventory-dump.mjs'],
+    // RFC-492: the driver family moved into runtime-management's infrastructure.
+    files: [
+      'modules/runtime-management/infrastructure/drivers/opencode/plugin/aw-inventory-dump.mjs',
+    ],
   },
 ] as const
 function exceptionMetadata(id: string, item: string): { successor: string; reason: string } {

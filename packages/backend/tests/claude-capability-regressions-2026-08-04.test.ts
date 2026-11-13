@@ -14,8 +14,8 @@
 //      all tools）——节点起得来、模型出话、一个工具都没有，且不产生任何 warning。
 
 import { describe, expect, test } from 'bun:test'
-import { claudeExplicitPermissionArgv } from '../src/services/runtime/claudeCode/spawn'
-import { mapAgentPermissionToClaudeTools } from '../src/services/runtime/claudeCode/permissionMap'
+import { claudeExplicitPermissionArgv } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn'
+import { mapAgentPermissionToClaudeTools } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/permissionMap'
 
 describe('显式 permission 不再附带平台 discovery fence', () => {
   test('只物化用户声明的工具集合', () => {

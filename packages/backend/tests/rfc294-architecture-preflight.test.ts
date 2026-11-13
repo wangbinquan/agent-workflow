@@ -380,7 +380,7 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type MappedType',
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type UnknownKeyword',
   'modules/runtime-management/domain/usageMeter.ts#JsonObject: unsafe/open type UnknownKeyword',
-  'modules/runtime-management/domain/usageMeter.ts#modelKey: unsafe/open type UnknownKeyword',
+  // RFC-492: `modelKey` is no longer offered by runtime-management's public (only the driver family read it).
   'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',
   'modules/source-control/composition/isolationWorkspaces.ts#requireIsolationWorkspaceScope: unsafe/open type UnknownKeyword',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/util/log#Logger',

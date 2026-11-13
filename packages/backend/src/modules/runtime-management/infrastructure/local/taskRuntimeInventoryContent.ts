@@ -2,7 +2,7 @@
 // run root's layout and the opencode inventory file are this module's knowledge; Task Execution owns the port
 // (`TaskRuntimeInventoryContent`) and bootstrap binds this implementation to it, so the shape is written out here.
 import type { InventorySnapshot } from '@agent-workflow/shared'
-import { readSnapshotFromRunDir, runRootFor } from '@/services/runtime'
+import { readSnapshotFromRunDir, runRootFor } from '../drivers'
 
 export function createLocalTaskRuntimeInventoryContent(): {
   readLive(input: {

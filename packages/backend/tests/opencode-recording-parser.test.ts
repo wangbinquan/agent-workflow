@@ -20,7 +20,7 @@ import {
   accumulateTokens,
   extractTextFromEvent,
   inferEventKind,
-} from '../src/services/runtime/opencode/events'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/events'
 import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
 
 const FIXTURE_DIR = resolve(import.meta.dir, 'fixtures', 'opencode-recordings')

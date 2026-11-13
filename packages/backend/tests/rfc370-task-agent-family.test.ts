@@ -17,7 +17,7 @@ import type { TaskAgentRunPurpose } from '../src/modules/task-execution/applicat
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
 import type { NodeRunRuntimePersistence } from '../src/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { RuntimeExecutionQueries } from '../src/modules/runtime-management/public/queries'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { createLogger } from '../src/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 

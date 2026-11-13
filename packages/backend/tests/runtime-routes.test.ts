@@ -11,7 +11,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { applyConfigPatch } from '../src/config'
-import { clearOpencodeModelsCache } from '../src/services/runtime/opencode/models'
+import { clearOpencodeModelsCache } from '../src/modules/runtime-management/infrastructure/drivers/opencode/models'
 import { createRuntime, seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
@@ -84,7 +84,7 @@ function writeBinary(
 ): void {
   const {
     // 1.14.25 is a verified-working version at/above MIN_OPENCODE_VERSION —
-    // there is no upper bound, see `packages/backend/src/services/runtime/opencode/util.ts`.
+    // there is no upper bound, see `packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/util.ts`.
     versionStdout = 'stub-opencode 1.14.25',
     versionExit = 0,
     modelsStdout = '',

@@ -9,7 +9,7 @@
 import { OPENCODE_PERMISSION_KEYS, type AgentPermission } from '@agent-workflow/shared'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { type BoundaryCtx, type ExternalDirRule } from '@/services/execution/workspaceBoundary'
+import { type BoundaryCtx, type ExternalDirRule } from '../workspaceBoundary'
 
 /**
  * opencode 的 XDG data 目录（`Global.Path.data`）。

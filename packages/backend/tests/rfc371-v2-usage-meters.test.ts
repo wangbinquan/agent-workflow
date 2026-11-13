@@ -17,14 +17,14 @@ import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createOpencodeUsageMeter } from '@/services/runtime/opencode/usage'
+import { createOpencodeUsageMeter } from '@/modules/runtime-management/infrastructure/drivers/opencode/usage'
 import {
   OPENCODE_TREE_MAX_SESSIONS,
   opencodeUsageDatabasePath,
   readOpencodeTreeUsage,
-} from '@/services/runtime/opencode/nativeUsage'
-import { usageMeter as claudeUsageMeter } from '@/services/runtime/claudeCode/usage'
-import { getRuntimeDriver } from '@/services/runtime'
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/nativeUsage'
+import { usageMeter as claudeUsageMeter } from '@/modules/runtime-management/infrastructure/drivers/claudeCode/usage'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const dirs: string[] = []

@@ -1,5 +1,5 @@
 import type { AgentInvocationProtocol } from '../../application/ports/agentProtocol'
-import type { RuntimeDriver } from '@/services/runtime/types'
+import type { RuntimeDriver } from '../drivers/types'
 import type { RuntimeUsageMeterInput } from '../../domain/usageMeter'
 
 /** Explicit compatibility projection of pure protocol members. Lookup stays

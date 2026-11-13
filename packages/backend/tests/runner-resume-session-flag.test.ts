@@ -20,7 +20,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
-import { buildCommand } from '../src/services/runtime/opencode/spawn'
+import { buildCommand } from '../src/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 import type { RunNodeOptions } from './helpers/runner'
 
 const AGENT: Agent = {
@@ -107,7 +107,17 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
     // RFC-111 PR-A: buildCommand moved out of runner.ts into the opencode
     // runtime driver — the argv-constructing module is now spawn.ts.
     const spawnSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'opencode',
+        'spawn.ts',
+      ),
       'utf8',
     )
     const schedulerSrc = readFileSync(

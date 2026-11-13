@@ -40,7 +40,7 @@ import { createChildExecutionLaunchOperations } from '@/modules/task-execution/i
 import type { ChildWorkflowLaunchRequest } from '@/modules/task-execution/application/ports/childExecutionLaunchOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { composeDeferredRepositoryPreparationStep } from '@/modules/task-execution/composition/deferredRepositoryPreparation'

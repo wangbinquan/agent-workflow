@@ -29,7 +29,7 @@ import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/co
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import type { TaskExecutionResourceAuthority } from '../../src/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
 import { createTaskExecutionResourceBinding } from '../../src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '../../src/bootstrap/taskExecutionResourceDependencies'
 import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import {

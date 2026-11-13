@@ -23,8 +23,8 @@ import {
   bindNativeAgentMaterialEvidence,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
-} from '@/services/runtime'
-import type { SpawnPlan } from '@/services/runtime/types'
+} from '@/modules/runtime-management/infrastructure/drivers'
+import type { SpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'
 import { createLogger, type Logger } from '@/util/log'
 import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'

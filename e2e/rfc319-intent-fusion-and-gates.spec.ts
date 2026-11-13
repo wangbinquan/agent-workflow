@@ -1340,7 +1340,7 @@ test('RFC-319 INTENT-20: 生成轮次预算耗尽 → 409 点名 intentBuilderMa
 // 临时目录里现写一个只服务这条用例的替身。
 //
 // 它的 CLI 契约照 `packages/system-mocks/src/runtime/skeleton.ts` 抄：
-//   * `--version` 退出 0（探测只要求这一点，见 services/runtime/opencode/util.ts:76-86）；
+//   * `--version` 退出 0（探测只要求这一点，见 runtime-management 的 infrastructure/drivers/opencode/util.ts:76-86）；
 //   * 提示词是 `--` 之后的那一个位置参数（skeleton.ts:63-70）；
 //   * nonce 取提示词里**最后**一次 `nonce="…"`（skeleton.ts:136-140）；
 //   * stdout 是一行 `{"type":"text",…}` 事件（skeleton.ts:173-177）。

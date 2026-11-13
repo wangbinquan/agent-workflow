@@ -103,13 +103,14 @@ describe('RFC-276 runtime hardening deprecation', () => {
       'packages/backend/src/services/containmentComposition.ts',
       'packages/backend/src/services/execution/containedSpawn.ts',
       'packages/backend/src/services/executionPolicy.ts',
-      'packages/backend/src/services/runtime/binarySnapshot.ts',
-      'packages/backend/src/services/runtime/netlessProjection.ts',
-      'packages/backend/src/services/runtime/opencode/containment.ts',
-      'packages/backend/src/services/runtime/opencode/hermetic.ts',
-      'packages/backend/src/services/runtime/opencode/verifiedLauncher.ts',
-      'packages/backend/src/services/runtime/opencode/verifiedManifest.ts',
-      'packages/backend/src/services/runtime/opencode/verifiedPlan.ts',
+      // RFC-492: the driver family (where these lived) moved from services/runtime into runtime-management's infrastructure.
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/binarySnapshot.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/netlessProjection.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/containment.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/hermetic.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/verifiedLauncher.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/verifiedManifest.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/verifiedPlan.ts',
       'packages/backend/src/services/sandbox/index.ts',
       'packages/frontend/src/components/settings/SandboxCard.tsx',
       'packages/shared/src/executionIdentity.ts',
@@ -139,11 +140,17 @@ describe('RFC-276 runtime hardening deprecation', () => {
 
   test('Claude keeps IS_SANDBOX as an opt-in compatibility toggle without spreading it to OpenCode', () => {
     const claude = readFileSync(
-      resolve(REPO_ROOT, 'packages/backend/src/services/runtime/claudeCode/spawn.ts'),
+      resolve(
+        REPO_ROOT,
+        'packages/backend/src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn.ts',
+      ),
       'utf8',
     )
     const opencode = readFileSync(
-      resolve(REPO_ROOT, 'packages/backend/src/services/runtime/opencode/spawn.ts'),
+      resolve(
+        REPO_ROOT,
+        'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/spawn.ts',
+      ),
       'utf8',
     )
     const reserved = readFileSync(

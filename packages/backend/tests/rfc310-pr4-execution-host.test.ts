@@ -34,7 +34,7 @@ import type { TaskExecutionPersistence } from '@/modules/task-execution/applicat
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'

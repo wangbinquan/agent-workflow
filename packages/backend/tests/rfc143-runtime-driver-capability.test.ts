@@ -19,12 +19,13 @@ import {
   isKnownRuntimeKind,
   RUNTIME_KINDS,
   type RuntimeDriver,
-} from '@/services/runtime'
+} from '@/modules/runtime-management/infrastructure/drivers'
 import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from './helpers/runtimeRegistryApplication'
 
-/** 驱动实现目录（从 runtime 注册表派生，见 rfc282-single-implementation-lock 同名常量）。 */
+/** 驱动实现目录（从 runtime 注册表派生，见 rfc282-single-implementation-lock 同名常量；RFC-492 起在 runtime-management 的 infrastructure/drivers）。 */
 const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
-  (kind) => `services/runtime/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
+  (kind) =>
+    `modules/runtime-management/infrastructure/drivers/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
 )
 // RFC-370: these two exact files own the relocated protocol implementations.
 // Neighboring compiler/application/common files remain in the original scan.
@@ -36,8 +37,8 @@ const RUNTIME_DRIVER_MATERIAL_FILES = new Set([
   'modules/task-execution/infrastructure/crewstation/nativeMaterial.ts',
 ])
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
-import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
-import type { AgentSpawnContext } from '../src/services/runtime/types'
+import { assembleOpencodePersonaSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
+import type { AgentSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
 
 const SRC = (rel: string) =>
   rel === 'bootstrap/daemonStart.ts'
@@ -80,7 +81,7 @@ describe('RFC-143 (A) 派生单源', () => {
   })
 
   it('resolveRuntime 半死代码已删除（flag-audit 旁路：硬编码三元 coerce 第三 runtime）', () => {
-    const src = SRC('services/runtime/index.ts')
+    const src = SRC('modules/runtime-management/infrastructure/drivers/index.ts')
     expect(src).not.toContain('export function resolveRuntime')
   })
 })
@@ -279,7 +280,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       // config schema 一起改（用户面 + 迁移），与本条「把整目录豁免收窄成驱动目录」
       // 不成比例。收窄扫描面后它第一次可见，先如实入账。
       // removeWhen: 配置项改为按 runtime kind 索引的那次 RFC。
-      'services/runtime/types.ts',
+      'modules/runtime-management/infrastructure/drivers/types.ts',
     ])
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
@@ -300,7 +301,8 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
         }
         if (!name.endsWith('.ts')) continue
         if (RUNTIME_DRIVER_MATERIAL_FILES.has(rp)) continue
-        if (rp.startsWith('services/runtime/')) scannedRuntimeCommons.push(rp)
+        if (rp.startsWith('modules/runtime-management/infrastructure/drivers/'))
+          scannedRuntimeCommons.push(rp)
         if (kindDiscriminationAllowlist.has(rp)) continue
         const src = readFileSync(p, 'utf8')
         if (KIND_DISCRIMINATION.test(src)) offenders.push(rp)
@@ -311,7 +313,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // 违规集为空与「整块没扫」在断言层面完全同形。实测过——收窄之前它就是这样绿着的。
     expect(
       scannedRuntimeCommons.length,
-      'services/runtime 下的**中立公共层**一个都没进扫描面。豁免只该覆盖驱动实现目录；' +
+      '驱动一族（RFC-492 后在 runtime-management 的 infrastructure/drivers）下的**中立公共层**一个都没进扫描面。豁免只该覆盖驱动实现目录；' +
         '整目录跳过会让两个驱动共用的那块内核成为唯一没有守卫看过的地方',
     ).toBeGreaterThanOrEqual(5)
     expect(offenders).toEqual([])
@@ -444,10 +446,12 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     }
     expect(SRC('bootstrap/daemonStart.ts')).toContain('configPath: Paths.config')
     expect(SRC('bootstrap/daemonStart.ts')).toContain('drive: runtime.driveHumanGateContinuation')
-    expect(SRC('services/runtime/opencode/util.ts')).not.toContain(
+    expect(SRC('modules/runtime-management/infrastructure/drivers/opencode/util.ts')).not.toContain(
       'export function resolveOpencodeCmd',
     )
-    expect(SRC('services/runtime/index.ts')).not.toContain('resolveOpencodeCmd,')
+    expect(SRC('modules/runtime-management/infrastructure/drivers/index.ts')).not.toContain(
+      'resolveOpencodeCmd,',
+    )
     expect(SRC('modules/task-execution/composition/runtimeConfigFreeze.ts')).toContain(
       'export function freezeBinaryConfig',
     )
@@ -477,13 +481,16 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     expect(semverSrc).toContain('export function extractVersion')
     expect(semverSrc).toContain('export function compareSemver')
     // 两个 probe 模块不再各自定义（import 使用不受限）。
-    for (const f of ['services/runtime/opencode/util.ts', 'services/runtime/claudeCode/probe.ts']) {
+    for (const f of [
+      'modules/runtime-management/infrastructure/drivers/opencode/util.ts',
+      'modules/runtime-management/infrastructure/drivers/claudeCode/probe.ts',
+    ]) {
       const src = SRC(f)
       expect(src).not.toContain('export function extractVersion')
       expect(src).not.toContain('export function compareSemver(')
     }
     // 搬迁后（RFC-282 C3）对既有 import 面保持 re-export（opencode-version.test.ts 锚定行为）。
-    expect(SRC('services/runtime/opencode/util.ts')).toContain(
+    expect(SRC('modules/runtime-management/infrastructure/drivers/opencode/util.ts')).toContain(
       "compareSemver, extractVersion } from '@/util/semver'",
     )
   })
@@ -514,7 +521,10 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
   const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
   // 与上面扫描用的是同一个集合语义；这里重新声明是因为原表声明在 it() 体内。
   // 两处一旦不一致，下面第一条断言会红。
-  const ALLOWLIST = ['bootstrap/standalone.ts', 'services/runtime/types.ts'] as const
+  const ALLOWLIST = [
+    'bootstrap/standalone.ts',
+    'modules/runtime-management/infrastructure/drivers/types.ts',
+  ] as const
 
   it('豁免表与扫描里用的那份一致（防两份各改各的）', () => {
     const source = readFileSync(

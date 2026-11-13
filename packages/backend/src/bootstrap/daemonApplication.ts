@@ -21,8 +21,11 @@ import { composeProviderAppComposition, type ProviderAppOwnerInput } from './dae
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { DEFAULT_DISTILL_POLICY, resolveDistillPolicy } from '@agent-workflow/shared'
 import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
-import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
-import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'
+import {
+  assertRuntimeDeclarations,
+  getRuntimeDriver,
+  RUNTIME_KINDS,
+} from '@/modules/runtime-management/composition/runtimeDrivers'
 import { initializeRuntimeRegistryBoot } from '@/modules/runtime-management/composition/runtimeRegistry'
 import {
   composeDaemonIntentModules,

@@ -1,7 +1,4 @@
-export type {
-  RuntimeUsageMeter,
-  RuntimeUsageSnapshot,
-} from '@/modules/runtime-management/public/participants'
+export type { RuntimeUsageMeter, RuntimeUsageSnapshot } from '../../domain/usageMeter'
 // RFC-111 PR-A — runtime driver registry + resolution.
 //
 // `getRuntimeDriver` is the factory (multica's Backend-factory pattern) that
@@ -17,7 +14,7 @@ export type {
 import type { RuntimeDriver, RuntimeKind } from './types'
 import { opencodeDriver } from './opencode/driver'
 import { claudeCodeDriver } from './claudeCode/driver'
-import { bindNativeAgentMaterialReference } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
+import { bindNativeAgentMaterialReference } from '../local/agentMaterialCompiler'
 
 /** Explicit native compatibility material, including wrap-only lifecycle plans. */
 export const getNativeAgentMaterialReference = bindNativeAgentMaterialReference
@@ -97,7 +94,7 @@ import {
   createLocalAgentMaterialEvidence,
   type NativeAgentMaterialEvidenceHooks,
   type NativeAgentMaterialEvidenceScope,
-} from '@/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
+} from '../local/agentMaterialEvidence'
 
 /** Existing native service APIs retain their compatibility scope here.
  * Normal selected material composition supplies the same neutral evidence
@@ -114,4 +111,4 @@ export {
   bindNativeAgentMaterialWorkspace,
   releaseSystemAgentScratch,
   assertSafeSeedPath,
-} from '@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace'
+} from '../local/agentMaterialWorkspace'

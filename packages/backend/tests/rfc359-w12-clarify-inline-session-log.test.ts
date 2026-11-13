@@ -11,7 +11,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DISTILLER_AGENT_NAME } from '@/modules/memory/domain/distillPrompt'
-import { buildCommand } from '@/services/runtime/opencode/spawn'
+import { buildCommand } from '@/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 
 const STUB = resolve(import.meta.dir, '../../system-mocks/src/runtime/dispatch.ts')
 const DESIGNER = 'e2e-rfc026-designer'

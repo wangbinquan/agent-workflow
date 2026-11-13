@@ -17,7 +17,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent, Plugin } from '@agent-workflow/shared'
-import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
+import { buildInlineConfig } from '../src/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
 
 function agent(name: string): Agent {
   return {
@@ -152,7 +152,17 @@ describe('runner source anchor — RFC-031 regression guards', () => {
     // lifted the plugin-spec encoding itself into pluginSpec.ts so the verified
     // path's controlled config shares one implementation.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'pluginSpec.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'opencode',
+        'pluginSpec.ts',
+      ),
       'utf-8',
     )
     // file:// prefix is the contract with opencode's resolvePathPluginTarget;
@@ -166,7 +176,17 @@ describe('runner source anchor — RFC-031 regression guards', () => {
     // RFC-251: if a future edit re-inlines the loop here, the two assemblers can
     // drift again and opencode would silently load a different plugin set.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'drivers',
+        'opencode',
+        'inlineConfig.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('buildPluginSpecArray')

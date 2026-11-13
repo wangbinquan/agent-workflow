@@ -93,20 +93,14 @@ export interface RuntimeSelectionParticipantInTx {
 /** Runtime-owned offered members consumed by task invocation composition. */
 export type {
   AgentInvocationProtocol,
-  DeclarationFace,
   RuntimeDriverCapabilities,
 } from '../application/ports/agentProtocol'
-export type {
-  AgentMaterialEvidence,
-  AgentSessionCaptureRequest,
-  SystemAgentSessionSweepRequest,
-  SystemAgentSessionSweepOutcome,
-} from '../application/ports/agentMaterialEvidence'
+export type { AgentMaterialEvidence } from '../application/ports/agentMaterialEvidence'
 /** RFC-465: the runtime drivers' capture write port; task-execution implements it. */
-export type {
-  RuntimeSessionCaptureEvent,
-  RuntimeSessionCapturePersistence,
-} from '../application/ports/runtimeSessionCapturePersistence'
+export type { RuntimeSessionCapturePersistence } from '../application/ports/runtimeSessionCapturePersistence'
+// RFC-492: the runtime driver family moved into this module's infrastructure and reads these from their declaration
+// sites; the fourteen members only it read are no longer offered here (DeclarationFace, the capture request and the
+// sweep request / outcome, the capture event, four observation members and the usage-meter internals).
 export type {
   AgentMaterialSeedFile,
   AgentMaterialWorkspace,
@@ -124,13 +118,9 @@ export type {
 export type {
   StartupInventory,
   SystemAgentOutputEvidence,
-  DeclaredRuntimeCapabilities,
-  NormalizedEventKind,
-  TerminalResultObservation,
   NormalizedTokenDelta,
   PersistedEventKind,
   NormalizedEvent,
-  NormalizedEventData,
   SystemEventObservation,
 } from '../application/ports/agentObservations'
 export type {
@@ -148,11 +138,5 @@ export type {
 export type { RuntimeDiagnosticTarget } from '../application/ports/runtimeManagement'
 
 /** RFC-371 v2: protocol-neutral usage metering, parsed by each RuntimeDriver. */
-export { UsageAccumulator, modelKey, objectOf, tokenCount } from '../domain/usageMeter'
-export type {
-  JsonObject,
-  RuntimeUsageMeter,
-  RuntimeUsageMeterInput,
-  RuntimeUsageModel,
-  RuntimeUsageSnapshot,
-} from '../domain/usageMeter'
+export { objectOf } from '../domain/usageMeter'
+export type { JsonObject, RuntimeUsageMeter, RuntimeUsageSnapshot } from '../domain/usageMeter'

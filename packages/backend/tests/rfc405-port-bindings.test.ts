@@ -25,7 +25,7 @@ import type { TaskMechanicsState } from '@/modules/task-execution/composition/ta
 import { continuesClarifyLineage } from '@/modules/task-execution/domain/clarifyRules'
 import { isClarifyRerunCause } from '@agent-workflow/shared'
 import { agentRefOfNode } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { decideResumeSessionId } from '@/modules/task-execution/domain/sessionModeFallback'
 import { sha256Hex } from '@/util/hash'
 

@@ -173,14 +173,14 @@
       "claimAudit": "Does NOT hold as a runtime-neutral commons: the generic core `renderMcpInjection(mcps, renderEntry)` is parameterized, but both per-runtime instantiations were hoisted into the shared module instead of staying behind the driver contract (see EK-02).",
       "core": true,
       "files": [
-        "packages/backend/src/services/execution/agentInjection.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/agentInjection.ts"
       ],
       "guards": [],
       "id": "execution-agentinjection",
-      "layer": "engine",
-      "owner": "task-execution",
+      "layer": "infrastructure",
+      "owner": "runtime-management",
       "singleSourceOf": "Declared as the ONE 'DB shape → injection intent / wire shape' implementation, absorbed from both drivers' inline-config builders.",
-      "title": "execution/agentInjection (A-layer injection assembly)"
+      "title": "drivers/agentInjection (A-layer injection assembly; RFC-492: services/execution → runtime-management infrastructure)"
     },
     {
       "auditedBy": "execution-kernel",
@@ -405,7 +405,7 @@
       "claimAudit": "Claims to be the single head-selection point. Holds — genuinely clean, no runtime literal, no per-caller flag.",
       "core": true,
       "files": [
-        "packages/backend/src/services/runtime/head.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/head.ts"
       ],
       "guards": [],
       "id": "pickruntimehead",
@@ -419,7 +419,7 @@
       "claimAudit": "Claims to be THE source for which runtime kinds exist and for execution dispatch. HOLDS for kind existence (RUNTIME_PROTOCOLS/BUILTIN_RUNTIMES/BUILTIN_NAMES at runtimeRegistry.ts:48-57 all derive). DOES NOT hold for 'which runtime is the default' — that is the bare literal 'opencode' in 15 production sites (see F6).",
       "core": true,
       "files": [
-        "packages/backend/src/services/runtime/index.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/index.ts"
       ],
       "guards": [],
       "id": "runtimedriver-port-drivers-registry",
@@ -433,7 +433,7 @@
       "claimAudit": "Claims to be the single enforcement of driver capability declarations. HOLDS for the 3 dimensions in RuntimeDriverCapabilities. Covers only 2 of the ~11 optional driver methods; acceptsExtraArgs / acceptsSandboxCompatibilityMarker / mcpTest* have no implication check here (F3, F12).",
       "core": true,
       "files": [
-        "packages/backend/src/services/runtime/selfCheck.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/selfCheck.ts"
       ],
       "guards": [],
       "id": "boot-declaration-self-check",
@@ -447,7 +447,7 @@
       "claimAudit": "Claims byte-for-byte-parity neutral translation. Mostly holds, but it forges an Agent via `as unknown as Agent` and its `head` parameter is typed as the union of two runtime-named knobs `{opencodeCmd?} | {runtimeCmd?}` (F13).",
       "core": true,
       "files": [
-        "packages/backend/src/services/runtime/spawnCtx.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/spawnCtx.ts"
       ],
       "guards": [],
       "id": "agentspawncontext-translation",
@@ -461,7 +461,7 @@
       "claimAudit": "Claims 'the ONE skill-staging loop, shared by both runtimes'. Definition-uniqueness HOLDS. Runtime-neutrality DOES NOT — it hardcodes a Claude-Code plugin-escalation exclusion and applies it to opencode (F1), and its header's per-caller failure-semantics claim is false in current source (F1).",
       "core": true,
       "files": [
-        "packages/backend/src/services/runtime/stageSkills.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/stageSkills.ts"
       ],
       "guards": [],
       "id": "stageskills",
@@ -903,7 +903,7 @@
       "core": true,
       "files": [
         "packages/shared/src/node-kind-behavior.ts",
-        "packages/backend/src/services/runtime/index.ts"
+        "packages/backend/src/modules/runtime-management/infrastructure/drivers/index.ts"
       ],
       "guards": [],
       "id": "node-kind-behaviors-drivers-registries",

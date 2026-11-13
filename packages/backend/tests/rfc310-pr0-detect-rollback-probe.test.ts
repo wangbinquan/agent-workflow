@@ -22,8 +22,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { assembleClaudeEnv } from '../src/services/runtime/claudeCode/spawn'
-import { buildOpencodeEnv } from '../src/services/runtime/opencode/spawn'
+import { assembleClaudeEnv } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn'
+import { buildOpencodeEnv } from '../src/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 import { runTestCommand } from './helpers/testCommand'
 import {
   diffProtectedRoots,

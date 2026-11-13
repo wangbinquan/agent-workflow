@@ -2,7 +2,8 @@
 //
 // 锁四件事：
 // ① resource-catalog 的全部生产文件不 import 运行时驱动一族（`services/runtime/**` 与 `services/execution/{agentInjection,
-//    workspaceBoundary,taskExecutionResourceDependencies}`、`services/{driverLease,runtimeSmoke,systemAgentRun}`）；相对路径、
+//    workspaceBoundary,taskExecutionResourceDependencies}`、`services/{driverLease,runtimeSmoke,systemAgentRun}`；RFC-492 起在
+//    runtime-management 的 `infrastructure/drivers/`，旧拼写照认）；相对路径、
 //    `@/` 别名、re-export 与动态 import 都认，带负对照。
 // ② 本机执行体只经端口做运行时相关的工作：文件里没有驱动、启动上下文、假运行与启动校验的标识符；依赖收必填的 `execution`、
 //    不收 `runFn`；`LocalMcpDiagnosticExecution` 只在 resource-catalog 的 `application/ports` 声明一次、经
@@ -45,8 +46,8 @@ import {
   verifyLocalMcpDiagnosticTurn,
   type LocalMcpDiagnosticRunRequest,
 } from '@/modules/task-execution/infrastructure/local/mcpDiagnosticRunner'
-import { getRuntimeDriver } from '@/services/runtime'
-import type { AgentSpawnPlan } from '@/services/runtime/types'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
+import type { AgentSpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'
 import type { SystemAgentRunResult } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { createLogger } from '@/util/log'
 
@@ -96,6 +97,9 @@ function specifiers(path: string, text: string): string[] {
   return out
 }
 
+// RFC-492: the family moved into runtime-management's infrastructure (`infrastructure/drivers/`); the retired services/
+// spellings stay recognised so a revived copy there is caught too.
+const DRIVERS = 'modules/runtime-management/infrastructure/drivers'
 const FAMILY_FILES = new Set([
   'services/execution/agentInjection',
   'services/execution/workspaceBoundary',
@@ -105,9 +109,14 @@ const FAMILY_FILES = new Set([
   'services/systemAgentRun',
 ])
 function inFamily(target: string): boolean {
-  const bare = target.replace(/\.[cm]?tsx?$/, '').replace(/\/index$/, '')
+  const bare = target.replace(/\.[cm]?tsx?$/, '')
+  const dir = bare.replace(/\/index$/, '')
   return (
-    bare === 'services/runtime' || bare.startsWith('services/runtime/') || FAMILY_FILES.has(bare)
+    dir === DRIVERS ||
+    bare.startsWith(DRIVERS + '/') ||
+    dir === 'services/runtime' ||
+    bare.startsWith('services/runtime/') ||
+    FAMILY_FILES.has(bare)
   )
 }
 function familyImports(path: string, text: string): string[] {
@@ -170,18 +179,20 @@ describe('RFC-488 ① resource-catalog 不取运行时驱动一族', () => {
   test('负对照：相对路径、别名、re-export 与动态 import 都会被认出', () => {
     const path = 'modules/resource-catalog/infrastructure/local/probe.ts'
     const fixture = [
-      "import { getRuntimeDriver } from '../../../../services/runtime'",
-      "import type { SpawnPlan } from '@/services/runtime/types'",
+      "import { getRuntimeDriver } from '../../../runtime-management/infrastructure/drivers'",
+      "import type { SpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'",
       "export { runSystemAgent } from '@/services/systemAgentRun'",
-      "const later = () => import('@/services/runtime/index')",
+      "const later = () => import('@/modules/runtime-management/infrastructure/drivers/index')",
+      "import { getRuntimeDriver as legacy } from '../../../../services/runtime'",
       "import type { McpDiagnosticObservation } from '../../application/ports/mcpDiagnosticExecution'",
       "import { notFamily } from '@/services/mergeAgent'",
     ].join('\n')
     expect(familyImports(path, fixture)).toEqual([
-      `${path} -> services/runtime`,
-      `${path} -> services/runtime/types`,
+      `${path} -> ${DRIVERS}`,
+      `${path} -> ${DRIVERS}/types`,
       `${path} -> services/systemAgentRun`,
-      `${path} -> services/runtime/index`,
+      `${path} -> ${DRIVERS}/index`,
+      `${path} -> services/runtime`,
     ])
   })
 })

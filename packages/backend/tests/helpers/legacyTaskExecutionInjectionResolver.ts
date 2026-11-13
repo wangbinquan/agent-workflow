@@ -45,13 +45,16 @@ import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,
   type ManagedInjectionIdentity,
-} from '@/services/runtime/injectionIdentity'
+} from '@/modules/runtime-management/infrastructure/drivers/injectionIdentity'
 import { isSkillInjectableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { PLUGIN_DISABLED_ERROR_CODE } from '@/modules/resource-catalog/domain/disabledResourcePolicy'
 import { mcpFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { pluginFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { skillFilesRel } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
-import type { AgentInjectionSpecV1, ResolvedSkill } from '@/services/runtime/types'
+import type {
+  AgentInjectionSpecV1,
+  ResolvedSkill,
+} from '@/modules/runtime-management/infrastructure/drivers/types'
 
 /** Advisory notes produced during resolution (reserved; the disabled-MCP skip
  *  is declared at the driver layer today — B3 may route table-sourced notes

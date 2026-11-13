@@ -50,11 +50,11 @@ import {
   validateConfigDirName,
 } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
-import { stageSkills } from '../src/services/runtime/stageSkills'
+import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
+import { stageSkills } from '../src/modules/runtime-management/infrastructure/drivers/stageSkills'
 import { createLogger } from '../src/util/log'
-import { assembleOpencodeBusinessSpawn } from '../src/services/runtime/opencode/driver'
-import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
+import { assembleOpencodeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const log = createLogger('rfc154-test')
 
@@ -514,11 +514,11 @@ describe('RFC-154 source guards — config-dir literals confined to the single s
       // RFC-454: the `services/runner` re-export is gone; the runner body is task-execution's native agent run.
       // RFC-491: that compatibility run (contract tests only) moved to tests/helpers.
       '../tests/helpers/nativeTaskAgentRun.ts',
-      'services/runtime/opencode/driver.ts',
-      'services/runtime/opencode/spawn.ts',
-      'services/runtime/claudeCode/driver.ts',
-      'services/runtime/claudeCode/spawn.ts',
-      'services/runtime/stageSkills.ts',
+      'modules/runtime-management/infrastructure/drivers/opencode/driver.ts',
+      'modules/runtime-management/infrastructure/drivers/opencode/spawn.ts',
+      'modules/runtime-management/infrastructure/drivers/claudeCode/driver.ts',
+      'modules/runtime-management/infrastructure/drivers/claudeCode/spawn.ts',
+      'modules/runtime-management/infrastructure/drivers/stageSkills.ts',
       'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
       'modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
     ]

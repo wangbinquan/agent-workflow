@@ -2,7 +2,8 @@
 //
 // 锁七件事：
 // ① task-execution 的全部生产文件不 import 运行时驱动一族（`services/runtime/**`、`services/execution/{agentInjection,
-//    workspaceBoundary,taskExecutionResourceDependencies}`、`services/{driverLease,runtimeSmoke,systemAgentRun}`）。相对路径、
+//    workspaceBoundary,taskExecutionResourceDependencies}`、`services/{driverLease,runtimeSmoke,systemAgentRun}`；RFC-492 起在
+//    runtime-management 的 `infrastructure/drivers/`，旧拼写照认）。相对路径、
 //    `@/` 别名、re-export、动态 import 与 type-only 都认，带负对照。
 // ② 一族的全部文件不 import task-execution；两个一族运行器与两个只供契约用例的本机任务运行文件不在 `src/`，在 `tests/helpers/`。
 // ③ 三个驱动静态事实只在 runtime-management 声明、经 `public/queries` 交出；task-execution 的四个使用方从那里取。
@@ -21,7 +22,7 @@ import ts from 'typescript'
 import {
   getRuntimeDriver,
   isKnownRuntimeKind as familyIsKnownRuntimeKind,
-} from '@/services/runtime'
+} from '@/modules/runtime-management/infrastructure/drivers'
 import {
   detectRuntimeSessionNotFound,
   isKnownRuntimeKind,
@@ -94,6 +95,9 @@ function specifiers(path: string, text: string): string[] {
   return out
 }
 
+// RFC-492: the family moved into runtime-management's infrastructure (`infrastructure/drivers/`); the retired services/
+// spellings stay recognised so a revived copy there is caught too.
+const DRIVERS = 'modules/runtime-management/infrastructure/drivers'
 const FAMILY_FILES = new Set([
   'services/execution/agentInjection',
   'services/execution/workspaceBoundary',
@@ -103,9 +107,14 @@ const FAMILY_FILES = new Set([
   'services/systemAgentRun',
 ])
 function inFamily(target: string): boolean {
-  const bare = target.replace(/\.[cm]?tsx?$/, '').replace(/\/index$/, '')
+  const bare = target.replace(/\.[cm]?tsx?$/, '')
+  const dir = bare.replace(/\/index$/, '')
   return (
-    bare === 'services/runtime' || bare.startsWith('services/runtime/') || FAMILY_FILES.has(bare)
+    dir === DRIVERS ||
+    bare.startsWith(DRIVERS + '/') ||
+    dir === 'services/runtime' ||
+    bare.startsWith('services/runtime/') ||
+    FAMILY_FILES.has(bare)
   )
 }
 const familyImports = (path: string, text: string) =>
@@ -152,15 +161,8 @@ function declarationsOf(name: string, files: readonly string[], root = SRC): str
 }
 
 const TASK_EXECUTION = filesOf('modules/task-execution')
-const FAMILY = [
-  ...filesOf('services/runtime'),
-  ...[
-    'services/execution/agentInjection.ts',
-    'services/execution/workspaceBoundary.ts',
-    'services/execution/taskExecutionResourceDependencies.ts',
-    'services/driverLease.ts',
-  ].filter((path) => existsSync(join(SRC, path))),
-]
+// RFC-492: the whole family now lives under runtime-management's `infrastructure/drivers/`.
+const FAMILY = filesOf(DRIVERS)
 const PRODUCTION = filesOf('.')
 const SHARED = walk(SHARED_SRC).map((path) => slash(relative(SHARED_SRC, path)))
 const BINDINGS = 'bootstrap/runFamilyProviders.ts'
@@ -177,20 +179,22 @@ describe('RFC-491 ① task-execution 不 import 运行时驱动一族', () => {
   test('负对照：相对路径、别名、re-export、动态 import 与 type-only 都会被认出，一族之外的 services 不算', () => {
     const path = 'modules/task-execution/infrastructure/local/probe.ts'
     const text = [
-      "import { getRuntimeDriver } from '../../../../services/runtime'",
-      "import type { SpawnPlan } from '@/services/runtime/types'",
-      "export { emptyDeclaredManifest } from '@/services/execution/agentInjection'",
+      "import { getRuntimeDriver } from '../../../runtime-management/infrastructure/drivers'",
+      "import type { SpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'",
+      "export { emptyDeclaredManifest } from '@/modules/runtime-management/infrastructure/drivers/agentInjection'",
       "const lazy = () => import('@/services/systemAgentRun')",
       "import type { SmokeOptions } from '../../../../services/runtimeSmoke'",
+      "import { getRuntimeDriver as legacy } from '../../../../services/runtime'",
       "import { createDemoSeed } from '@/services/demoSeed'",
       "import { isKnownRuntimeKind } from '@/modules/runtime-management/public/queries'",
     ].join('\n')
     expect(familyImports(path, text)).toEqual([
-      `${path} -> services/runtime`,
-      `${path} -> services/runtime/types`,
-      `${path} -> services/execution/agentInjection`,
+      `${path} -> ${DRIVERS}`,
+      `${path} -> ${DRIVERS}/types`,
+      `${path} -> ${DRIVERS}/agentInjection`,
       `${path} -> services/systemAgentRun`,
       `${path} -> services/runtimeSmoke`,
+      `${path} -> services/runtime`,
     ])
   })
 })
@@ -202,10 +206,10 @@ describe('RFC-491 ② 一族不 import task-execution；两个运行器与两个
   })
 
   test('负对照：一族文件取 task-execution 的别名与相对路径都会被认出', () => {
-    const path = 'services/runtime/probe.ts'
+    const path = `${DRIVERS}/probe.ts`
     const text = [
       "import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'",
-      "import { runRuntimeSmokeCore } from '../../modules/task-execution/application/runtimeSmoke'",
+      "import { runRuntimeSmokeCore } from '../../../task-execution/application/runtimeSmoke'",
       "import { RUNTIME_KINDS } from './index'",
     ].join('\n')
     expect(taskExecutionImports(path, text)).toEqual([

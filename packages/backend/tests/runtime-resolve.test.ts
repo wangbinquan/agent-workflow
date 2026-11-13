@@ -8,7 +8,7 @@
 // locks only the factory.
 
 import { describe, expect, it } from 'bun:test'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 
 describe('getRuntimeDriver — factory (RFC-111 PR-A)', () => {
   it('returns the opencode driver for opencode', () => {

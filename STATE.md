@@ -14,6 +14,33 @@
 - **不做**：驱动按部署形态拆分与驱动内部重构；`services/` 余下的 6 个文件；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
   2026-11-23：上次 2026-11-09，其后关闭 15 个后继（另一条件是满 20 个）。
+- **附带**：发布登记 `scripts/release-upgrade/registry.ts` 按后缀找每个 tag 的 OpenCode 探测、按旧路径读驱动，本 RFC 之后切出的 tag 会在
+  登记时停住（实现门自审查出）；布局表移入 `lib/model.ts` 并追加新布局，已登记的 80 个 tag 逐个比对结果不变（design §6 细化 6）。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 一族是 runtime-management 的适配器，落 `infrastructure/drivers/`；composition 只做转出
+  （`composition/runtimeDrivers.ts`）；不新增用例入口。C11 public 只减不增：撤下只供一族的 14 个出口，public surface 1,209 → 1,195；不导出
+  SQL 片段、行形状查询工厂或状态写原子。C12 RFC-492 用例覆盖全部生产文件（下限 3,000）与指定的 runtime-management、bootstrap、构建
+  脚本、eslint 配置、三份 workflow 与发布登记的布局表（另扫全仓的探测文件名），import 识别带负对照（相对路径、别名、re-export、动态
+  import、type-only），另有 bootstrap 转出与一族函数的引用相等对拍。C13 `counts.json` 60 项实测都在 `max` 内；触及的 4 项已收紧到实测
+  （legacy 横向文件 165 → 125、legacy 服务实现 46 → 6、不可达生产文件 16 → 15、public 类型偏差 57 → 56），其余与对照逐项相同。
+- **§14 不变量 / 运行时驱动一族第五步**：一族整族迁入 runtime-management 的 `infrastructure/drivers/`：`services/runtime/`、
+  `services/execution/` 清空，生产代码里只有 runtime-management 自己 import 一族，bootstrap 经 composition；`commons-debt.json` 的 inbound
+  边 9 → 0。跨 context import 7,620 → 7,503（删 166 增 49）；跨 context 内部文件对、越 DAG 的值边与 offered 文件对、未消费 public 符号
+  不变。`services/` 余 6 个文件（git 一族 3 个随 W5，`codeRoundContract.ts` 随 W4-E8，`digitalEmployeeAgentTemplates.ts` 随 W4-E9，
+  `demoSeed.ts` 归 bootstrap）。对 RFC-294 plan §4.7 表的偏离（`driverLease.ts` 移入 `tests/helpers/`）见 design §6 第 4 条。
+- **集中验证**（候选 1～4 基于 `f12a8c45b`，候选 5、6 基于另一会话只改文档的 `691cf408b`，与本 RFC 的路径无交集，详见 plan）：查出本 RFC
+  的问题都已修正（design §6 细化 1～6）：两个用例从 public 取撤下的类型（`tsc` 5 处）；新的 bootstrap 文件未登记为装配根；四条 provider
+  专属依赖债销账；插件入口的星号转出改具名；public 类型偏差收紧、预检清单删去 `modelKey`；发布登记的布局表（见附带）。backend、shared 与
+  发布脚本 `tsc` 0 错，eslint 与 promises 规则集无告警；首批 134 个文件 127 个通过，修复批全过；全量 SQLite 逐文件跑 2,935 个、2,923 个
+  通过，其余 12 个不归本 RFC（发布账本 1 个是导出仓库没有真实历史；11 个撞用例自带的时限、内部等待或看门狗，与对照同时 A/B 逐文件同形，
+  两个报告类用例只放宽时限的副本在最终候选上通过）。按 CI 的跑法（两种 provider 同进程、默认 5 秒）跑 132 个相关文件：候选 1,733 条里
+  1,692 条通过（本 RFC 用例 17 / 17），对照 1,709 条里 1,667 条；两边各红 9 个文件、8 个相同，只在候选红的两处（PostgreSQL 一侧撞 5 秒、
+  本机 git 服务在负载下的一次失败）两边各跑 3 轮，对照同样会红（`rfc223` 红同一条，`rfc363` 红另一条）。本 RFC 用例最慢一条 4.1 秒，改为
+  共用解析、读全部生产文件的三条给 30 秒。
+  架构报告在最终候选上重采：60 项实测都在 `max` 内（触及的 4 项已收紧），与 design §3 一致。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **下一步**：推送后按 exact SHA 跟 CI（含按路径触发的 integration-opencode、windows-platform、visual-regression-nightly 与
+  maintenance-soak-nightly），再转 Done，RFC-294 plan §1.2 与 §4.7 记运行时驱动一族收口。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的
+  其他 context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 15 个后继（另一条件是
+  满 20 个）。
 
 ## 2026-11-12 RFC-491 task-execution 与运行时驱动一族互不 import（Done；`design/RFC-491-te-runtime-family-decoupling/`）
 

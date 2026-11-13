@@ -12,8 +12,8 @@ import type {
   AgentSpawnPlan,
   BoundaryHostProbe,
   ResolvedSkill,
-} from '@/services/runtime/types'
-import type { RuntimePlugin } from '@/services/execution/agentInjection'
+} from '../drivers/types'
+import type { RuntimePlugin } from '../drivers/agentInjection'
 
 // Native compatibility plans keep the reference from their actual compilation.
 // A fixture/legacy raw plan gets an opaque binding to that explicit object;

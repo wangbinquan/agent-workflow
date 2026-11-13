@@ -15,7 +15,7 @@ import {
 import { bindNativeAgentProtocol } from './agentProtocol'
 import { buildOpencodeNativeMaterial } from './opencodeAgentMaterial'
 import { buildClaudeNativeMaterial } from './claudeAgentMaterial'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '../drivers'
 
 /** A native bootstrap selects this definition, then opens a compiler for one
  * owner-bound content scope. The compiler calls the existing material body;

@@ -8,7 +8,7 @@ import type {
   RuntimeDriver,
   SessionCaptureContext,
   SystemAgentSessionSweepContext,
-} from '@/services/runtime/types'
+} from '../drivers/types'
 
 /** Native API compatibility inputs; never an application or deployment port. */
 export type NativeAgentMaterialEvidenceHooks = Pick<

@@ -10,8 +10,8 @@ import {
   accumulateTokens,
   observeSystemEvent,
   parseEvent,
-} from '@/services/runtime/opencode/events'
-import type { RuntimeTokenUsage } from '@/services/runtime/types'
+} from '@/modules/runtime-management/infrastructure/drivers/opencode/events'
+import type { RuntimeTokenUsage } from '@/modules/runtime-management/infrastructure/drivers/types'
 
 describe('parseEvent — kind / text / session / timestamp (RFC-111 PR-A)', () => {
   it('extracts nested part.text and kind=text', () => {

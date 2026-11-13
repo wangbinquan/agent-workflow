@@ -15,7 +15,7 @@ import type {
   AgentMaterialWorkspace,
   PreparedAgentMaterial,
 } from '../src/modules/runtime-management/public/participants'
-import type { NormalizedEvent } from '../src/services/runtime/types'
+import type { NormalizedEvent } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '../src/util/log'
 

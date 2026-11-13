@@ -17,10 +17,10 @@ import type {
 } from '@agent-workflow/shared'
 import * as startupVerification from '../../shared/src/startupVerification'
 import * as inventoryObservation from '../../shared/src/inventoryObservation'
-import * as agentInjection from '@/services/execution/agentInjection'
+import * as agentInjection from '@/modules/runtime-management/infrastructure/drivers/agentInjection'
 import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
 import type { RuntimeDriverCapabilities } from '@/modules/runtime-management/public/participants'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

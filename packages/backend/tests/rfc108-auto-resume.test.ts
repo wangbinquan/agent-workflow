@@ -15,7 +15,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
-import { __clearDriverLeasesForTest } from '../src/services/driverLease'
+import { __clearDriverLeasesForTest } from './helpers/driverLease'
 import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import {

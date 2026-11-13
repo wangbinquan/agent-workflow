@@ -2,7 +2,7 @@
 // shape as `isRuntimeMcpTestEligible`): the kind registry's guard, a driver's static capability declaration and its
 // "resume target session not found" stderr judgment. Pure reads of this module's own registry; an unknown kind throws
 // from `getRuntimeDriver` exactly where the callers used to call it.
-import { getRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
+import { getRuntimeDriver, isKnownRuntimeKind } from './drivers'
 import type { RuntimeKind } from '../public/types'
 import type { RuntimeDriverCapabilities } from '../application/ports/agentProtocol'
 

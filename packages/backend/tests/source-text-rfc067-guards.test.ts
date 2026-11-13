@@ -28,7 +28,17 @@ const RUNNER_SRC = readTaskAgentSources()
 // into the opencode runtime driver. RunNodeOptions still declares the fields in
 // runner.ts; the env-key injection now lives in spawn.ts.
 const SPAWN_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'runtime-management',
+    'infrastructure',
+    'drivers',
+    'opencode',
+    'spawn.ts',
+  ),
   'utf-8',
 )
 // RFC-478：`services/task.ts` 已退役，原先读它的位置改读它的继任文件并集（判据不变）。

@@ -9,7 +9,7 @@
 // Leaf module: a shared type import only, so both assemblers can depend on it
 // without creating a runtime edge between them.
 
-import type { RuntimePlugin } from '@/services/execution/agentInjection'
+import type { RuntimePlugin } from '../agentInjection'
 
 /**
  * One element of opencode's `config.plugin`: either a bare `file://<path>`

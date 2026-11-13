@@ -9,8 +9,8 @@ import {
   evictOpencodeModelsCache,
   listOpencodeModels,
   parseModelsOutput,
-} from '../src/services/runtime/opencode/models'
-import { getRuntimeDriver } from '../src/services/runtime'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/models'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { fakeBinaryPath, writeFakeBinary } from './fixtures/fakeBinary'
 import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 

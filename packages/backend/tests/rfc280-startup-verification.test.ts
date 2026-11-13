@@ -171,7 +171,8 @@ describe('observationFromInventory (opencode)', () => {
 // init 也是真答案、非 init 行与坏 JSON 不产生载荷。
 describe('init 事件的清单载荷保留每服务器状态（落差①/P1-5）', () => {
   test('init event yields tools/agents/skills AND per-server status verbatim', async () => {
-    const { parseEvent } = await import('@/services/runtime/claudeCode/events')
+    const { parseEvent } =
+      await import('@/modules/runtime-management/infrastructure/drivers/claudeCode/events')
     const line = JSON.stringify({
       type: 'system',
       subtype: 'init',
@@ -195,7 +196,8 @@ describe('init 事件的清单载荷保留每服务器状态（落差①/P1-5）
   })
 
   test('an init with only mcp_servers is still a real answer (not undefined)', async () => {
-    const { parseEvent } = await import('@/services/runtime/claudeCode/events')
+    const { parseEvent } =
+      await import('@/modules/runtime-management/infrastructure/drivers/claudeCode/events')
     const line = JSON.stringify({
       type: 'system',
       subtype: 'init',
@@ -206,7 +208,8 @@ describe('init 事件的清单载荷保留每服务器状态（落差①/P1-5）
   })
 
   test('non-init lines and malformed JSON carry no inventory payload', async () => {
-    const { parseEvent } = await import('@/services/runtime/claudeCode/events')
+    const { parseEvent } =
+      await import('@/modules/runtime-management/infrastructure/drivers/claudeCode/events')
     expect(parseEvent('{"type":"assistant"}')?.data).toBeUndefined()
     expect(parseEvent('not json')).toBeNull()
   })

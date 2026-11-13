@@ -1,5 +1,5 @@
-import { getRuntimeDriver } from '@/services/runtime'
-import type { RuntimeBinaryConfig, RuntimeProbe } from '@/services/runtime/types'
+import { getRuntimeDriver } from '../drivers'
+import type { RuntimeBinaryConfig, RuntimeProbe } from '../drivers/types'
 import type { RuntimeKind } from '../../public/types'
 
 /**

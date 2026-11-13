@@ -70,7 +70,7 @@ const IDENTITY_REGISTRIES: ReadonlyArray<{ file: string; symbol: string; why: st
     why: '代理角色（normal / aggregator）——fanout 聚合按它判定。',
   },
   {
-    file: 'packages/backend/src/services/runtime/index.ts',
+    file: 'packages/backend/src/modules/runtime-management/infrastructure/drivers/index.ts',
     symbol: 'DRIVERS',
     why: 'runtime 驱动注册表，键即 runtime kind（opencode / claude-code）——G-08 点名的形态。',
   },

@@ -786,7 +786,7 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
     // Import-level anchors, not prose: the file's own comments legitimately
     // mention the retired driver walk, and a bare substring check cannot tell
     // a comment from code.
-    expect(src).not.toContain("from '@/services/runtime'")
+    expect(src).not.toContain("from '@/modules/runtime-management/infrastructure/drivers'")
     expect(src).not.toContain("from '@/platform/execution/local/agentProcess'")
     // RFC-280 T4（落差⑤）：throwaway cwd 由 appHome scratch 分配（原 mkdtemp/tmpdir）。
     expect(src).toContain("systemAgents.workspaces.capture({ namespace: 'shared' })")

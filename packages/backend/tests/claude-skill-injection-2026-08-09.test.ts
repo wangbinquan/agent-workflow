@@ -11,11 +11,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
-import { renderClaudeManagedSkillAttachments } from '../src/services/runtime/claudeCode/config'
-import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
+import { renderClaudeManagedSkillAttachments } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/config'
+import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import { createLogger } from '../src/util/log'
-import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const roots: string[] = []
 const log = createLogger('claude-skill-attachment-test')

@@ -57,7 +57,9 @@ describe('RFC-048 source-layout guards', () => {
   })
 
   test('subagentLiveCapture.ts emits each failure log tag exactly once', () => {
-    const src = read('packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts')
+    const src = read(
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture.ts',
+    )
     const errCount = (src.match(/'subagent-live-poll-error'/g) ?? []).length
     const disCount = (src.match(/'subagent-live-poll-disabled'/g) ?? []).length
     expect(errCount).toBe(1)
@@ -65,13 +67,17 @@ describe('RFC-048 source-layout guards', () => {
   })
 
   test('subagentLiveCapture.ts opens the external opencode store through the readonly adapter', () => {
-    const src = read('packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts')
+    const src = read(
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture.ts',
+    )
     expect(src).toContain('openReadonlySqliteDatabase(dbPath)')
     expect(src).not.toContain('new Database(')
   })
 
   test('sessionCapture.ts captureChildSessions exposes alreadyInsertedPartIds + still loads sibling sessionIds', () => {
-    const src = read('packages/backend/src/services/runtime/opencode/sessionCapture.ts')
+    const src = read(
+      'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/sessionCapture.ts',
+    )
     expect(src).toContain('alreadyInsertedPartIds?: ReadonlyMap<string, ReadonlySet<string>>')
     expect(src).toContain('export async function loadSiblingsCapturedSessionIds(')
   })

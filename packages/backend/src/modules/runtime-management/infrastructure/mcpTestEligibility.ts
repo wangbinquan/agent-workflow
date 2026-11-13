@@ -1,4 +1,4 @@
-import { tryGetRuntimeDriver } from '@/services/runtime'
+import { tryGetRuntimeDriver } from './drivers'
 import type { RuntimeMcpTestEligibilityInput } from '../public/types'
 export function isRuntimeMcpTestEligible(row: RuntimeMcpTestEligibilityInput): boolean {
   // RFC-280 T6: playground support = the driver implements the session

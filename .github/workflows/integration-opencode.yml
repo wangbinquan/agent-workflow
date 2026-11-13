@@ -54,9 +54,11 @@ on:
       # 6adf3ea1: the whole opencode compat surface — driver/spawn/events + the
       # version-registry/flag utils + the shell stubs — a CLI-flag rename here
       # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
-      - 'packages/backend/src/services/runtime/opencode/**'
-      # Process lifecycle changes can alter the live CLI integration path.
-      - 'packages/backend/src/services/execution/**'
+      # RFC-492: the driver family moved into runtime-management's infrastructure.
+      - 'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/**'
+      # The injection wire shapes and the workspace boundary both drivers share (formerly services/execution/**).
+      - 'packages/backend/src/modules/runtime-management/infrastructure/drivers/agentInjection.ts'
+      - 'packages/backend/src/modules/runtime-management/infrastructure/drivers/workspaceBoundary.ts'
       - 'packages/backend/tests/integration-opencode/**'
       - 'packages/system-mocks/src/runtime/**'
       - '.github/workflows/integration-opencode.yml'
@@ -75,9 +77,11 @@ on:
       # 6adf3ea1: the whole opencode compat surface — driver/spawn/events + the
       # version-registry/flag utils + the shell stubs — a CLI-flag rename here
       # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
-      - 'packages/backend/src/services/runtime/opencode/**'
-      # Process lifecycle changes can alter the live CLI integration path.
-      - 'packages/backend/src/services/execution/**'
+      # RFC-492: the driver family moved into runtime-management's infrastructure.
+      - 'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/**'
+      # The injection wire shapes and the workspace boundary both drivers share (formerly services/execution/**).
+      - 'packages/backend/src/modules/runtime-management/infrastructure/drivers/agentInjection.ts'
+      - 'packages/backend/src/modules/runtime-management/infrastructure/drivers/workspaceBoundary.ts'
       - 'packages/backend/tests/integration-opencode/**'
       - 'packages/system-mocks/src/runtime/**'
       - '.github/workflows/integration-opencode.yml'

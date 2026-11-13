@@ -25,7 +25,7 @@ import type { AgentExecutionParticipants } from '@/modules/task-execution/applic
 import type { HostedStartupInventory } from '@/platform/crewstation/startupInventory'
 import { hostedEventRecord } from '@/modules/task-execution/infrastructure/crewstation/runtimeEvents'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { createLogger } from '@/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 

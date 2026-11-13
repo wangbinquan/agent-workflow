@@ -18,7 +18,7 @@ import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpSe
 import { collectMcpIdsFromClosure, loadMcpsByIds } from './helpers/mcpClosure'
 import { resolveDependsClosure } from './helpers/agentDeps'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
+import { buildInlineConfig } from '../src/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
 import { createAgent } from './helpers/model/resourceWrites'
 

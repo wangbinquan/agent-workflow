@@ -13,7 +13,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Plugin } from '@agent-workflow/shared'
-import { buildPluginSpecArray } from '@/services/runtime/opencode/pluginSpec'
+import { buildPluginSpecArray } from '@/modules/runtime-management/infrastructure/drivers/opencode/pluginSpec'
 
 function plugin(name: string, partial: Partial<Plugin> = {}): Plugin {
   const base: Plugin = {

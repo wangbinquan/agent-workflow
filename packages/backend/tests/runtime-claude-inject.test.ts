@@ -4,8 +4,8 @@
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
 import { describe, expect, it } from 'bun:test'
-import { toClaudeAgents } from '@/services/runtime/claudeCode/inject'
-import { renderClaudeMcpInjection } from '@/services/execution/agentInjection'
+import { toClaudeAgents } from '@/modules/runtime-management/infrastructure/drivers/claudeCode/inject'
+import { renderClaudeMcpInjection } from '@/modules/runtime-management/infrastructure/drivers/agentInjection'
 
 // RFC-282 B4 — the src wrapper was deleted (dead outside tests); its exact
 // shape is re-expressed here so every assertion below is unchanged.

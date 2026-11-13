@@ -17,8 +17,8 @@ import { join } from 'node:path'
 import {
   claudeToolsValue,
   mapAgentPermissionToClaudeTools,
-} from '../src/services/runtime/claudeCode/permissionMap'
-import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
+} from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/permissionMap'
+import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const gate = (permission: Record<string, unknown>) =>
   mapAgentPermissionToClaudeTools(permission as never)

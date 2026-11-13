@@ -17,14 +17,14 @@ import type {
   SessionCaptureContext,
   SpawnPlan,
   SystemAgentSpawnContext,
-} from '@/services/runtime/types'
+} from '../drivers/types'
 import {
   declarePlugins,
   declareSubagents,
   deriveClaudeDroppedParams,
   renderClaudeMcpInjection,
   weaveMemoryBlock,
-} from '@/services/execution/agentInjection'
+} from '../drivers/agentInjection'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
@@ -33,26 +33,23 @@ import {
   emptyDeclaredManifest,
   managedSkillsOf,
 } from '@agent-workflow/shared'
-import { buildClaudeSpawn } from '@/services/runtime/claudeCode/spawn'
-import { toClaudeAgents } from '@/services/runtime/claudeCode/inject'
-import { pickRuntimeHead } from '@/services/runtime/head'
-import { toBusinessCtx, toSystemCtx } from '@/services/runtime/spawnCtx'
-import {
-  captureClaudeSessions,
-  claudeUserConfigRoots,
-} from '@/services/runtime/claudeCode/sessionCapture'
-import { claudeBusinessGate, claudeToolsValue } from '@/services/runtime/claudeCode/permissionMap'
+import { buildClaudeSpawn } from '../drivers/claudeCode/spawn'
+import { toClaudeAgents } from '../drivers/claudeCode/inject'
+import { pickRuntimeHead } from '../drivers/head'
+import { toBusinessCtx, toSystemCtx } from '../drivers/spawnCtx'
+import { captureClaudeSessions, claudeUserConfigRoots } from '../drivers/claudeCode/sessionCapture'
+import { claudeBusinessGate, claudeToolsValue } from '../drivers/claudeCode/permissionMap'
 import { gitMetaDirsFor } from '@/util/git'
-import { scanSiblingTaskRoots, toolchainCacheDirs } from '@/services/execution/workspaceBoundary'
+import { scanSiblingTaskRoots, toolchainCacheDirs } from '../drivers/workspaceBoundary'
 import {
   claudeExpressibleAuthorDirs,
   claudeWriteBoundaryAvailability,
-} from '@/services/runtime/claudeCode/boundary'
+} from '../drivers/claudeCode/boundary'
 import {
   renderClaudeManagedSkillAttachments,
   stageClaudeWorktreeAgents,
   stageClaudeWorktreeSkills,
-} from '@/services/runtime/claudeCode/config'
+} from '../drivers/claudeCode/config'
 
 /** RFC-280 §7.1 / RFC-282 B4 — THE mcp-config write (was two inline copies:
  *  business without a dir mode, system with 0o700). Unified on 0o700 — the

@@ -19,14 +19,14 @@ import type {
   SpawnPlan,
   SystemAgentSessionSweepContext,
   SystemAgentSpawnContext,
-} from '@/services/runtime/types'
+} from '../drivers/types'
 import {
   declarePlugins,
   declareSubagents,
   renderOpencodeAgentEntry,
   renderOpencodeMcpInjection,
   weaveMemoryBlock,
-} from '@/services/execution/agentInjection'
+} from '../drivers/agentInjection'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 import {
   inventoryFacesFromSnapshot,
@@ -34,30 +34,27 @@ import {
   declareSkills,
   emptyDeclaredManifest,
 } from '@agent-workflow/shared'
-import type {
-  LivePollOptions,
-  LivePollerHandle,
-} from '@/services/runtime/opencode/subagentLiveCapture'
+import type { LivePollOptions, LivePollerHandle } from '../drivers/opencode/subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { buildOpencodeSpawn } from '@/services/runtime/opencode/spawn'
-import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
-import { selectShippedPlugins } from '@/services/runtime/opencode/pluginSpec'
-import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
-import { machineSkillRoots, opencodeDataDir } from '@/services/runtime/opencode/boundary'
-import { pickRuntimeHead } from '@/services/runtime/head'
-import { toBusinessCtx, toSystemCtx } from '@/services/runtime/spawnCtx'
-import { stageSkills } from '@/services/runtime/stageSkills'
+import { buildOpencodeSpawn } from '../drivers/opencode/spawn'
+import { buildInlineConfig } from '../drivers/opencode/inlineConfig'
+import { selectShippedPlugins } from '../drivers/opencode/pluginSpec'
+import type { BoundaryCtx } from '../drivers/workspaceBoundary'
+import { machineSkillRoots, opencodeDataDir } from '../drivers/opencode/boundary'
+import { pickRuntimeHead } from '../drivers/head'
+import { toBusinessCtx, toSystemCtx } from '../drivers/spawnCtx'
+import { stageSkills } from '../drivers/stageSkills'
 import { gitMetaDirsFor } from '@/util/git'
-import { getOpencodeBinaryVersion } from '@/services/runtime/opencode/versionRegistry'
+import { getOpencodeBinaryVersion } from '../drivers/opencode/versionRegistry'
 import {
   captureChildSessions,
   captureOpencodeSessionsToSink,
-} from '@/services/runtime/opencode/sessionCapture'
-import { readSnapshotFromRunDir } from '@/services/runtime/opencode/inventory'
-import { startLiveSubagentCapture } from '@/services/runtime/opencode/subagentLiveCapture'
-import { materializeInventoryPlugin } from '@/services/runtime/opencode/plugin'
+} from '../drivers/opencode/sessionCapture'
+import { readSnapshotFromRunDir } from '../drivers/opencode/inventory'
+import { startLiveSubagentCapture } from '../drivers/opencode/subagentLiveCapture'
+import { materializeInventoryPlugin } from '../drivers/opencode/plugin'
 
 /** RFC-282 — the declaration render, driver-internal assembly (was the
  * RuntimeDriver.renderInjection contract method; the contract now has ONE

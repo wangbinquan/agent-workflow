@@ -18,7 +18,7 @@
 import { copyFileSync, existsSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PLUGIN_FILES } from '../../../../embed.generated'
+import { PLUGIN_FILES } from '@/embed.generated'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_BASENAME = 'aw-inventory-dump.mjs'
@@ -75,4 +75,5 @@ export async function materializeInventoryPlugin(runRoot: string): Promise<strin
   )
 }
 
-export * from './transcoder'
+// RFC-492: named, not `export *` — inside runtime-management a star re-export is an export-star barrel (RFC-376).
+export { transcodeAgent, transcodeMcp, transcodePluginOrigin, transcodeSkill } from './transcoder'

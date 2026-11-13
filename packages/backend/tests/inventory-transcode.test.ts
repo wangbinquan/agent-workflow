@@ -10,7 +10,7 @@ import {
   transcodeMcp,
   transcodePluginOrigin,
   transcodeSkill,
-} from '../src/services/runtime/opencode/plugin/transcoder'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/plugin/transcoder'
 
 describe('transcodeAgent', () => {
   test('extracts model.providerID / model.modelID and source.type', () => {

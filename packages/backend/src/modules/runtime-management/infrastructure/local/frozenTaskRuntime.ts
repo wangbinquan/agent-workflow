@@ -2,8 +2,8 @@
 // RFC-113 / RFC-154 / RFC-282 C1-2). Its only production caller is this directory's task runtime bindings; the
 // persistence it reads and freezes through is Runtime Management's own narrow port, which Task Execution's NodeRun
 // runtime persistence satisfies (handed in by composition).
-import type { RuntimeKind } from '@/services/runtime'
-import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
+import type { RuntimeKind } from '../drivers'
+import { tryGetRuntimeDriver, isKnownRuntimeKind } from '../drivers'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type { RuntimeProfile, RuntimeObservationIdentity } from '../../public/types'

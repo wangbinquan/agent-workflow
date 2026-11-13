@@ -19,8 +19,8 @@ import {
   captureClaudeSessions,
   claudeUserConfigRoots,
   cwdSlug,
-} from '../src/services/runtime/claudeCode/sessionCapture'
-import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
+} from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/sessionCapture'
+import { claudeCodeDriver } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 import { createLogger, type Logger } from '../src/util/log'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 

@@ -23,25 +23,35 @@ const backendCrossPackagePatterns = [
   },
 ]
 
-// RFC-282 §4.2 — per-runtime internals are reachable only through
-// @/services/runtime (index/types). Relative forms are listed explicitly:
-// minimatch treats `.`/`..` as dotfile segments, so `**/` alone does not cover
-// `./runtime/opencode/x` (the existing violation shape — runner.ts).
+// RFC-282 §4.2 — per-runtime internals are reachable only through the driver
+// registry and types (runtime-management `infrastructure/drivers`, index/types;
+// RFC-492 moved the family there from services/runtime). Relative forms are
+// listed explicitly: minimatch treats `.`/`..` as dotfile segments, so `**/`
+// alone does not cover `../drivers/opencode/x` — one entry per depth a
+// runtime-management file (or another module) reaches the drivers from. The
+// drivers' own `./opencode/x` / `../claudeCode/x` imports stay allowed.
 const backendRuntimeFencePatterns = [
   {
     group: [
-      '@/services/runtime/opencode/*',
-      '@/services/runtime/claudeCode/*',
-      '**/runtime/opencode/*',
-      '**/runtime/claudeCode/*',
-      './runtime/opencode/*',
-      './runtime/claudeCode/*',
-      '../runtime/opencode/*',
-      '../runtime/claudeCode/*',
-      '../../services/runtime/opencode/*',
-      '../../services/runtime/claudeCode/*',
+      '@/modules/runtime-management/infrastructure/drivers/opencode/*',
+      '@/modules/runtime-management/infrastructure/drivers/claudeCode/*',
+      '**/drivers/opencode/*',
+      '**/drivers/claudeCode/*',
+      './drivers/opencode/*',
+      './drivers/claudeCode/*',
+      '../drivers/opencode/*',
+      '../drivers/claudeCode/*',
+      '../infrastructure/drivers/opencode/*',
+      '../infrastructure/drivers/claudeCode/*',
+      '../../infrastructure/drivers/opencode/*',
+      '../../infrastructure/drivers/claudeCode/*',
+      '../../runtime-management/infrastructure/drivers/opencode/*',
+      '../../runtime-management/infrastructure/drivers/claudeCode/*',
+      '../../../runtime-management/infrastructure/drivers/opencode/*',
+      '../../../runtime-management/infrastructure/drivers/claudeCode/*',
     ],
-    message: 'per-runtime 代码只能经 @/services/runtime（index/types）访问 —— RFC-282 §4.2',
+    message:
+      'per-runtime 代码只能经驱动注册表与类型（runtime-management 的 infrastructure/drivers 的 index / types）访问 —— RFC-282 §4.2',
   },
 ]
 

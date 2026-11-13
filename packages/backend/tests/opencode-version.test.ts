@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { compareSemver, extractVersion, probeOpencode } from '../src/services/runtime/opencode/util'
+import {
+  compareSemver,
+  extractVersion,
+  probeOpencode,
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/util'
 
 describe('semver helpers', () => {
   test('extractVersion grabs first X.Y.Z in output', () => {

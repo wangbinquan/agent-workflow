@@ -43,11 +43,17 @@ const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
     ]),
   ],
   [
-    'packages/backend/src/services/runtime/opencode/sessionCapture.ts',
+    'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/sessionCapture.ts',
     new Set(['captureChildSessions', 'markCaptureFailed']),
   ],
-  ['packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts', new Set(['tickOnce'])],
-  ['packages/backend/src/services/runtime/claudeCode/sessionCapture.ts', new Set(['persistRows'])],
+  [
+    'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture.ts',
+    new Set(['tickOnce']),
+  ],
+  [
+    'packages/backend/src/modules/runtime-management/infrastructure/drivers/claudeCode/sessionCapture.ts',
+    new Set(['persistRows']),
+  ],
   [
     'packages/backend/src/modules/task-execution/infrastructure/taskPreparationParticipant.ts',
     new Set(['writeWorkspace']),
@@ -491,10 +497,9 @@ function rfc328GuardViolations(units: readonly GuardUnit[]): string[] {
     const path = unit.path
     const text = unit.text
     violations.push(...taskEffectBoundaryViolations(unit))
-    if (
-      path !== 'packages/backend/src/services/driverLease.ts' &&
-      /from\s+['"]@\/services\/driverLease['"]/.test(text)
-    ) {
+    // RFC-492: the retired driver-lease fixture lives in `tests/helpers/`; no production spelling may reach it (the old
+    // `@/services/driverLease` alias and any relative path ending in `/driverLease` alike).
+    if (/from\s+['"][^'"]*\/driverLease['"]/.test(text)) {
       violations.push(`legacy driverLease production consumer: ${path}`)
     }
     if (
@@ -828,11 +833,21 @@ describe('RFC-328 architecture guards', () => {
       rfc328GuardViolations(
         fixture(
           'packages/backend/src/services/newAutoDriver.ts',
-          `import { withDriverLease } from '@/services/driverLease'`,
+          `import { withDriverLease } from '../../tests/helpers/driverLease'`,
         ),
       ),
     ).toContain(
       'legacy driverLease production consumer: packages/backend/src/services/newAutoDriver.ts',
+    )
+    expect(
+      rfc328GuardViolations(
+        fixture(
+          'packages/backend/src/services/oldAutoDriver.ts',
+          `import { withDriverLease } from '@/services/driverLease'`,
+        ),
+      ),
+    ).toContain(
+      'legacy driverLease production consumer: packages/backend/src/services/oldAutoDriver.ts',
     )
     expect(
       rfc328GuardViolations(

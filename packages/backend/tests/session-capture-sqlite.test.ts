@@ -19,7 +19,7 @@ import {
   captureChildSessions,
   captureOpencodeSessionsToSink,
   resolveOpencodeDbPath,
-} from '../src/services/runtime/opencode/sessionCapture'
+} from '../src/modules/runtime-management/infrastructure/drivers/opencode/sessionCapture'
 import type { Logger } from '../src/util/log'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 

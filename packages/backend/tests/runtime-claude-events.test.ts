@@ -7,7 +7,7 @@ import {
   observeSystemEvent,
   parseEvent,
   parseResultError,
-} from '@/services/runtime/claudeCode/events'
+} from '@/modules/runtime-management/infrastructure/drivers/claudeCode/events'
 
 describe('claude parseEvent (RFC-111 PR-B)', () => {
   it('system/init → step_start + session id', () => {

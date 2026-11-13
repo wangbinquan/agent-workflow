@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { probeClaudeCode } from '../src/services/runtime/claudeCode/probe'
+import { probeClaudeCode } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/probe'
 import { fakeBinaryPath, writeFakeBinary } from './fixtures/fakeBinary'
 
 const roots: string[] = []

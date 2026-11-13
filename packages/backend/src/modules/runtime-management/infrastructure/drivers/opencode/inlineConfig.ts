@@ -8,7 +8,7 @@
 //
 // RFC-280 T1: the per-entry transforms (`buildInlineAgentEntry` /
 // `buildInlineMcpEntry`) and the enabled/duplicate partition now live in the
-// unified injection layer (`services/execution/agentInjection.ts`) — single
+// unified injection layer (`../agentInjection.ts`) — single
 // implementation for every spawn path. This module keeps the opencode
 // inline-config COMPOSITION (agent map + mcp record + plugin array) and
 // re-exports the old names so existing import sites keep resolving.
@@ -21,19 +21,16 @@
 // leaf) → no runtime edge back into runner/runtimeRegistry.
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
-import type { RuntimePlugin } from '@/services/execution/agentInjection'
-import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
-import {
-  renderOpencodeAgentEntry,
-  renderOpencodeMcpInjection,
-} from '@/services/execution/agentInjection'
+import type { RuntimePlugin } from '../agentInjection'
+import type { RuntimeProfile } from '../../../public/types'
+import { renderOpencodeAgentEntry, renderOpencodeMcpInjection } from '../agentInjection'
 import { buildPluginSpecArray } from './pluginSpec'
-import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import type { BoundaryCtx } from '../workspaceBoundary'
 import { composeOpencodeBoundary } from './boundary'
 
 // (RFC-282 实现门 P3-3：`buildInlineMcpEntry` 别名 re-export 已删——零消费方，
 //  且正是 A2 新增 import-specifier 锁要抓的别名逃逸形态。)
-export { renderOpencodeAgentEntry as buildInlineAgentEntry } from '@/services/execution/agentInjection'
+export { renderOpencodeAgentEntry as buildInlineAgentEntry } from '../agentInjection'
 
 export function buildInlineConfig(
   agent: Agent,

@@ -14,7 +14,7 @@ import {
   isDriverLeaseHeld,
   releaseDriverLease,
   withDriverLease,
-} from '../src/services/driverLease'
+} from './helpers/driverLease'
 
 afterEach(() => __clearDriverLeasesForTest())
 

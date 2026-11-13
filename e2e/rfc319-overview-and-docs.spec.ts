@@ -64,8 +64,8 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/components/Onboarding.tsx:38-56              computeIsFirstRun：demo 行不算「已配置」
 //   packages/backend/src/routes/runtimes.ts:181                        默认运行时 fail-safe 回 opencode
 //   packages/backend/src/routes/runtimes.ts:195-211                    ready / not-found / protocol-incompatible 三态
-//   packages/backend/src/services/runtime/opencode/util.ts:95          probe: compatible = ran（所以第三态今天出不来）
-//   packages/backend/src/services/runtime/claudeCode/probe.ts:79       同上
+//   packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/util.ts:95          probe: compatible = ran（所以第三态今天出不来）
+//   packages/backend/src/modules/runtime-management/infrastructure/drivers/claudeCode/probe.ts:79       同上
 //   packages/shared/src/schemas/runtime.ts:17                          第三态仍是契约上的合法取值
 //   packages/backend/src/platform/operations/apiDocs.ts:85-99                     端点按「账号能不能持有这些点」裁剪
 //   packages/backend/src/platform/operations/apiDocs.ts:101-107                   工具的 grantable 标记

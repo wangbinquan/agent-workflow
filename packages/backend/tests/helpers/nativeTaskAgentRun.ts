@@ -18,8 +18,11 @@ import { resolveNativePortContentDetailed } from '@/modules/task-execution/infra
 import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import type { NativeMaterialDefinitions } from '@/modules/task-execution/infrastructure/local/nativeRunFamilyProviders'
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
-import { bindNativeAgentMaterialWorkspace, getRuntimeDriver } from '@/services/runtime'
-import type { AgentSpawnPlan } from '@/services/runtime/types'
+import {
+  bindNativeAgentMaterialWorkspace,
+  getRuntimeDriver,
+} from '@/modules/runtime-management/infrastructure/drivers'
+import type { AgentSpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'
 import { resolveBoundaryMounts } from '@/modules/source-control/domain/taskAgentMounts'
 
 /** RFC-489: the runtime-management providers the compatibility run receives (the caller binds them). */

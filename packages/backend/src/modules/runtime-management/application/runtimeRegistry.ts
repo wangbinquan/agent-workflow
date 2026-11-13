@@ -303,7 +303,7 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
    * acceptsExtraArgs 的 driver 才会消费它」。这句话对 probe 路径不成立。
    *
    * 今天这条缺口是**惰性**的：opencode 的 spawn 既不读 extraArgs 也不写 IS_SANDBOX
-   * （`services/runtime/opencode/spawn.ts`），只有 claudeCode 会（`claudeCode/spawn.ts`）。
+   * （`infrastructure/drivers/opencode/spawn.ts`），只有 claudeCode 会（`claudeCode/spawn.ts`）。
    * 但一个未来的 driver 只要开始读这两个字段，任何 `settings:write` 调用方就立刻拿到
    * 一条**未经校验的 argv / env 通道**——所以这里不等到那一天再补。
    *

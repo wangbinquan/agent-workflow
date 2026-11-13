@@ -1,4 +1,4 @@
-import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver, tryGetRuntimeDriver } from '../drivers'
 import { createRuntimeRegistryApplication } from '../../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../runtimeRegistryEffects'
 import type { RuntimeKind, RuntimeSmokeResult } from '../../public/types'

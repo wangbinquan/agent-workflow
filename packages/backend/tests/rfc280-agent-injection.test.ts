@@ -1,4 +1,4 @@
-// RFC-280 T1 — unified injection layer (services/execution/agentInjection.ts).
+// RFC-280 T1 — unified injection layer (modules/runtime-management/infrastructure/drivers/agentInjection.ts; services/execution/ before RFC-492).
 //
 // Why this file exists: two same-symptom production incidents ("agent says the
 // MCP does not exist" — one from the retired pre-RFC-276 launcher gate, one
@@ -23,13 +23,13 @@ import {
   renderClaudeMcpServerEntry,
   renderOpencodeMcpEntry,
   renderOpencodeMcpInjection,
-} from '@/services/execution/agentInjection'
+} from '@/modules/runtime-management/infrastructure/drivers/agentInjection'
 import {
   AgentInjectionError,
   declareSkills,
   partitionMcpsForInjection,
 } from '@agent-workflow/shared'
-import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
+import { buildInlineConfig } from '@/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig'
 // RFC-282 B4 — the src wrapper was deleted (dead outside tests); its exact
 // shape is re-expressed here so every assertion below is unchanged.
 function toClaudeMcpConfig(
@@ -39,8 +39,8 @@ function toClaudeMcpConfig(
   return entries === null ? null : { mcpServers: entries }
 }
 import type { Agent } from '@agent-workflow/shared'
-import { renderOpencodeInjection } from '../src/services/runtime/opencode/driver'
-import { renderClaudeInjection } from '../src/services/runtime/claudeCode/driver'
+import { renderOpencodeInjection } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
+import { renderClaudeInjection } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 function localMcp(name: string, extra: Partial<Mcp> = {}): Mcp {
   return {

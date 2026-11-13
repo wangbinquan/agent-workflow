@@ -38,7 +38,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { buildCommand } from '../src/services/runtime/opencode/spawn'
+import { buildCommand } from '../src/modules/runtime-management/infrastructure/drivers/opencode/spawn'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const STUB = resolve(REPO_ROOT, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')

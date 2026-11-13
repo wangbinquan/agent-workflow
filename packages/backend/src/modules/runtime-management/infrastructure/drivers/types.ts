@@ -1,8 +1,8 @@
 import type {
   NormalizedEvent,
-  RuntimeDriverCapabilities,
   SystemEventObservation,
-} from '@/modules/runtime-management/public/participants'
+} from '../../application/ports/agentObservations'
+import type { RuntimeDriverCapabilities } from '../../application/ports/agentProtocol'
 import type { NativeSkillContent } from '@/modules/resource-catalog/public/types'
 // RFC-462 (RFC-294 W9-D): the observation vocabulary (normalized events, system-event observation, the driver's
 // static capability declaration) lives in runtime-management; re-exported so the drivers' imports stay put.
@@ -17,19 +17,18 @@ export type {
   NormalizedEvent,
   NormalizedEventData,
   SystemEventObservation,
+} from '../../application/ports/agentObservations'
+export type {
   DeclarationFace,
   RuntimeDriverCapabilities,
-} from '@/modules/runtime-management/public/participants'
+} from '../../application/ports/agentProtocol'
 
-import type {
-  RuntimeUsageMeter,
-  RuntimeUsageMeterInput,
-} from '@/modules/runtime-management/public/participants'
+import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from '../../domain/usageMeter'
 import type {
   AgentSessionCaptureRequest,
   SystemAgentSessionSweepOutcome,
   SystemAgentSessionSweepRequest,
-} from '@/modules/runtime-management/public/participants'
+} from '../../application/ports/agentMaterialEvidence'
 // RFC-465 (RFC-294 W9-D): the capture request and the system-agent sweep contract are runtime-management's
 // (application/ports/agentMaterialEvidence); the driver context below adds the native location fields.
 export type { SystemAgentSessionSweepOutcome }
@@ -63,10 +62,10 @@ import type { LivePollOptions, LivePollerHandle } from './opencode/subagentLiveC
 // Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
-import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
+import type { RuntimeProfile } from '../../public/types'
 // RFC-280 T1 — unified injection layer shapes (type-only; agentInjection is a
 // leaf module, see its header).
-import type { DeclaredManifestV1, RuntimePlugin } from '@/services/execution/agentInjection'
+import type { DeclaredManifestV1, RuntimePlugin } from './agentInjection'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
 
@@ -547,7 +546,7 @@ export interface BusinessNodeSpawnContext {
 /**
  * RFC-297 T1 — the authoritative definition moved to shared so the frontend can
  * pick columns off a driver's declaration; re-exported here so every existing
- * `from '@/services/runtime/types'` import site keeps resolving. Semantics are
+ * import site of the driver types keeps resolving. Semantics are
  * unchanged: supported = the runtime has this face and it can be observed;
  * unsupported = the runtime has no such concept (e.g. claude × plugin);
  * unobservable = injected, but no observation channel (e.g. opencode × plugin).

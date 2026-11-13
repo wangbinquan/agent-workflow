@@ -93,7 +93,7 @@ OpenCode 将 MCP 工具权限名表示为 `<mcp-name>_<tool-name>`。Agent 的 p
 Claude Code 侧同一份 MCP 闭包渲染为 `--mcp-config` 指向的 JSON 文件（RFC-280
 §7.1 起写 `runRoot/mcp-config.json`、`0600`、路径传参而非内联 argv——remote MCP
 的 header 可能带 token，内联 JSON 会进 `/proc/<pid>/cmdline`）。两条链路的
-「DB 行 → wire 形状」转换是同一实现（`services/execution/agentInjection.ts`）。
+「DB 行 → wire 形状」转换是同一实现（`modules/runtime-management/infrastructure/drivers/agentInjection.ts`）。
 
 ### 3.4 声明注入清单与启动验证（RFC-280）
 

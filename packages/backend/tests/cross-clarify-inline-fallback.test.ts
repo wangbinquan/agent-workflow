@@ -40,7 +40,7 @@ import {
   decideResumeSessionId,
   type ClarifyInlineFallbackReason,
 } from '../src/modules/task-execution/domain/sessionModeFallback'
-import { getRuntimeDriver } from '../src/services/runtime'
+import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 
 function ccNode(overrides: Partial<ClarifyCrossAgentNode> = {}): ClarifyCrossAgentNode {
   return {

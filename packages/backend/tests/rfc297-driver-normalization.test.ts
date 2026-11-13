@@ -15,8 +15,8 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getRuntimeDriver } from '@/services/runtime'
-import { parseEvent } from '@/services/runtime/claudeCode/events'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
+import { parseEvent } from '@/modules/runtime-management/infrastructure/drivers/claudeCode/events'
 import type { InventorySnapshotCaptured } from '@agent-workflow/shared'
 
 const INIT_LINE = JSON.stringify({

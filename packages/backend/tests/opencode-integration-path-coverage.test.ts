@@ -45,9 +45,11 @@ const CANONICAL = [
   // RFC-458: the workflow-output envelope parser moved from services/envelope.ts to shared.
   'packages/shared/src/workflowOutputEnvelope.ts',
   'packages/shared/src/prompt.ts',
-  'packages/backend/src/services/runtime/opencode/**',
-  // Process lifecycle changes can alter the live runtime path.
-  'packages/backend/src/services/execution/**',
+  // RFC-492: the driver family moved into runtime-management's infrastructure; services/execution/** held only the two
+  // files both drivers share.
+  'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/**',
+  'packages/backend/src/modules/runtime-management/infrastructure/drivers/agentInjection.ts',
+  'packages/backend/src/modules/runtime-management/infrastructure/drivers/workspaceBoundary.ts',
   'packages/backend/tests/integration-opencode/**',
   'packages/system-mocks/src/runtime/**',
   '.github/workflows/integration-opencode.yml',

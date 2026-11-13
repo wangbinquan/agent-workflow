@@ -11,18 +11,22 @@ import type {
   NativeAgentMaterialEvidenceHooks,
   NativeAgentMaterialEvidenceScope,
 } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
+// RFC-492: the capture event is no longer offered by runtime-management's public (only the driver family read it).
 import type {
   RuntimeSessionCaptureEvent,
   RuntimeSessionCapturePersistence,
-} from '../src/modules/runtime-management/public/participants'
-import { getRuntimeDriver, bindNativeAgentMaterialEvidence } from '../src/services/runtime'
-import { cwdSlug } from '../src/services/runtime/claudeCode/sessionCapture'
-import { NOOP_HANDLE } from '../src/services/runtime/opencode/subagentLiveCapture'
+} from '../src/modules/runtime-management/application/ports/runtimeSessionCapturePersistence'
+import {
+  getRuntimeDriver,
+  bindNativeAgentMaterialEvidence,
+} from '../src/modules/runtime-management/infrastructure/drivers'
+import { cwdSlug } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/sessionCapture'
+import { NOOP_HANDLE } from '../src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture'
 import type {
   AgentSpawnPlan,
   SessionCaptureContext,
   SystemAgentSessionSweepContext,
-} from '../src/services/runtime/types'
+} from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { createLogger } from '../src/util/log'
 
 const log = createLogger('rfc370-material-evidence')

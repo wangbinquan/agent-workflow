@@ -5,7 +5,7 @@
 // regression early.
 
 import { describe, expect, test } from 'bun:test'
-import { transcodeOpencodeRowsToEvents } from '../src/services/runtime/opencode/sessionCapture'
+import { transcodeOpencodeRowsToEvents } from '../src/modules/runtime-management/infrastructure/drivers/opencode/sessionCapture'
 
 describe('transcodeOpencodeRowsToEvents', () => {
   test('assistant text part becomes a `text` event', () => {

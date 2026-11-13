@@ -49,7 +49,8 @@ describe('RFC-099 prompt isolation — runtime', () => {
 
 describe('RFC-099 prompt isolation — opencode injection', () => {
   test('buildInlineAgentEntry never serializes ownerUserId / visibility into OPENCODE_CONFIG_CONTENT', async () => {
-    const { buildInlineAgentEntry } = await import('../src/services/runtime/opencode/inlineConfig')
+    const { buildInlineAgentEntry } =
+      await import('../src/modules/runtime-management/infrastructure/drivers/opencode/inlineConfig')
     const entry = buildInlineAgentEntry({
       id: 'a1',
       name: 'leaky',

@@ -12,7 +12,7 @@ import type {
   HostProbeInput,
 } from '@/bootstrap/deploymentProfile'
 import * as git from '@/platform/workspace/local/gitVersion'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import * as hosted from '@/modules/system-operations/composition/crewstationDeployment'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'

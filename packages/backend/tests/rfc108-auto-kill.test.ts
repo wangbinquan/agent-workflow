@@ -19,7 +19,7 @@ import {
   runHeartbeatKillOnce,
   type StalledRun,
 } from '../src/modules/task-execution/application/recovery/heartbeatKill'
-import { __clearDriverLeasesForTest } from '../src/services/driverLease'
+import { __clearDriverLeasesForTest } from './helpers/driverLease'
 import { listRecoveryEventsForTask } from '../src/modules/task-execution/application/recovery/recoveryEvents'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import { recordAutoRecoveryAttempt } from '../src/modules/task-execution/application/recovery/autoRecoveryBreaker'

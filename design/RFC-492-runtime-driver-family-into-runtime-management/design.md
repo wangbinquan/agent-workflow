@@ -111,6 +111,10 @@ public 符号（减速带 `max=1`）。
 - `commons-debt.json` 的 inbound 边 9 → 0。
 - runtime-management 的未消费 public 符号保持 1；public surface 1,209 → 1,195；public 类型偏差 57 → 56（`modelKey` 的开放类型随出口撤下）。
 - 跨 context 内部文件对、越 DAG 的值边与 offered 文件对、直接 `setInterval` 点（一处换路径）不变。
+- 实测（最终候选对 `691cf408b` 的架构报告）：以上各项与预计一致；`export-star-barrels` 保持 1（§6 细化 1）。跨 context import
+  7,620 → 7,503（删 166：runtime-management 取一族的 98 条与一族取 runtime-management 的 61 条成了模块内的边，一族取 resource-catalog
+  public 的 7 条改记在 runtime-management 名下；增 49：这 7 条、一族取 `util/`、`platform/` 与嵌入表的 37 条改记在 runtime-management
+  名下，bootstrap 取 composition 的 5 条）。
 
 ## 4. 用例
 
@@ -125,7 +129,8 @@ public 符号（减速带 `max=1`）。
 - ⑤ bootstrap：`composition/runtimeDrivers.ts` 只有转出；启动自检取它；策略束 3 个字段、与 runtime-management 和 shared 的函数引用
   相等；`daemonModules/taskExecution.ts` 取 bootstrap 的策略束。
 - ⑥ 构建与配置：`build-binary.ts` 的插件目录指向新位置且目录里有 `aw-inventory-dump.mjs`；插件入口取 `@/embed.generated`；eslint 配置
-  里的围栏模式指向新位置、不再出现旧位置；三份 workflow 的路径过滤登记新位置、不再出现旧位置。
+  里的围栏模式指向新位置、不再出现旧位置；三份 workflow 的路径过滤登记新位置、不再出现旧位置；发布登记的布局表在这棵树上找到新位置
+  的 OpenCode 探测与驱动，`releases.json` 已登记的探测位置照旧认得（§6 细化 6）。
 
 另外依赖现有用例：RFC-282 的 eslint 围栏用例（对合成文件跑 eslint，新位置的别名与相对写法都被拦、注册表入口可用）、
 `opencode-integration-path-coverage`（两份触发器的清单逐条相等）、RFC-317 的账本用例（清单文件存在、债务账本与实算相等）。
@@ -138,6 +143,8 @@ public 符号（减速带 `max=1`）。
 - 路径过滤没跟上：改驱动不触发真实 opencode 与 Windows 套件。用例 ⑥ 与 `opencode-integration-path-coverage` 钉住。
 - 未消费 public 符号上升：D2 撤下出口；用例 ④ 与架构门（减速带 `max=1`）双重钉住。
 - 旧路径的否定断言变空：`not.toContain('@/services/runtime')` 一类在迁移后恒真。逐条改指新位置（D6），用例 ③ 另从生产侧锁住。
+- 发布登记认不出新布局：之后切出的 tag 在发布后的 `--write` 与下一次发布的 `--check` 停住（§6 细化 6）。布局表追加新布局，用例 ⑥
+  钉住。
 
 ## 6. 取舍（可推翻）
 
@@ -150,12 +157,37 @@ public 符号（减速带 `max=1`）。
 5. **模块内取声明处**：一族迁入后取本模块 `public/` 会让 14 个出口失去模块外读者、成为未消费符号；改取声明处并撤下出口，public 只留
    有外部读者的部分。
 
+实施中的细化（集中验证查出，都在本 RFC 范围内修正）：
+
+1. **插件入口的转出改为具名**：`opencode/plugin/index.ts` 原有 `export * from './transcoder'`。在 `services/` 时它不进
+   `export-star-barrels` 的统计（只数模块内的文件），迁入后成了第二个星号转出、越过上限 1。没有任何文件经这个入口取 transcoder，
+   但删掉转出会让 `transcoder.ts` 变成不可达生产文件，所以改成四个函数的具名转出，行为与可达性都不变。
+2. **新的 bootstrap 文件登记为装配根**：R1（遗留层不得取模块内部或 composition）按 `census.ts` 的 `BOOTSTRAP_FILES` 认装配根；
+   `bootstrap/taskExecutionResourceDependencies.ts` 取 runtime-management 的 composition，与 RFC-489 的 `runFamilyProviders.ts` 一样
+   登记进去。
+3. **RFC-349 的四条 provider 专属依赖债销账**：opencode 的 `nativeUsage`、`sessionCapture`、`sessionWalk`、`subagentLiveCapture` 取只读
+   SQLite 适配器，在 `services/` 时算业务 / 传输层的债；迁入 runtime-management 的 `infrastructure/` 后是适配层，`rfc349-provider-cutover`
+   的债务清单删去这四条。
+4. **public 类型偏差 57 → 56**：撤下的 `modelKey` 带一条开放类型的偏差，随之消失；`counts.json` 收紧到 56，`rfc294-architecture-preflight`
+   的逐条清单删去这一条。
+5. **用例里的取处**：`rfc370-agent-material-evidence`、`rfc465` 从 public 取撤下的类型，改取声明处；`rfc465` 锁的「public 交出的就是
+   持久化端口」改为只剩持久化端口一项。机械改写 import 时连带改到了三处测试夹具里的字符串（RFC-328 的负对照、RFC-462 的负对照、
+   RFC-213 的启动根逆变换），逐处改回或按新位置重写，断言意图不变。
+6. **发布登记的布局表**（实现门自审查出）：`scripts/release-upgrade/registry.ts` 在每个 tag 的全部文件里按后缀找 OpenCode 探测
+   （`/util/opencode.ts`、`/runtime/opencode/util.ts`、`/opencodeProbe.ts`），找不到就拒绝登记；L2 的支持判定读
+   `services/runtime/opencode/driver.ts`。从本 RFC 之后的树切出的 tag，探测在 `drivers/opencode/util.ts`，三个后缀都不命中，发布后的
+   `--write` 会停在「inspect the new runtime probe layout」，下一次发布的 `--check` 同样停住。按路径全文扫旧位置扫不到按后缀认文件的
+   写法，所以集中验证前的扫描漏了它。布局表移进 `lib/model.ts`（`opencodeProbePath`、`opencodeDriverPath`，纯函数），末尾追加
+   runtime-management 的布局，已有三个后缀的次序不变；驱动按两种布局取存在的那一个（旧布局的 tag 仍读旧位置，原因字符串与 L2 批准
+   清单不变）。RFC-492 用例 ⑥ 加一条：这棵树上找到新位置的探测与驱动，`releases.json` 已登记的探测位置逐个照旧认得，布局表外的
+   位置仍拒绝。
+
 ## 7. 对 RFC-294 刷新后规则的对账
 
 - **C10**：一族是 runtime-management 的适配器，落 infrastructure；composition 只做转出；不新增用例入口。
 - **C11**：public 只减不增（撤下 14 个只供一族的出口）；不导出 SQL 片段、行形状查询工厂或状态写原子。
-- **C12**：RFC-492 用例覆盖全部生产文件（下限在 guard-manifest 写明）与指定的 runtime-management、bootstrap、构建脚本、eslint 配置与
-  workflow 文件；只对这些范围宣告退出门。
+- **C12**：RFC-492 用例覆盖全部生产文件（下限在 guard-manifest 写明）与指定的 runtime-management、bootstrap、构建脚本、eslint 配置、
+  workflow 文件与发布登记的布局表（另扫全仓的探测文件名）；只对这些范围宣告退出门。
 - **C13**：触及的计数收紧到实测。
 - **§4.7**：运行时驱动一族收口；`services/` 余 6 个文件（W5 的 git 一族 3 个，`codeRoundContract.ts` 随 W4-E8，
   `digitalEmployeeAgentTemplates.ts` 随 W4-E9，`demoSeed.ts` 归 bootstrap）。

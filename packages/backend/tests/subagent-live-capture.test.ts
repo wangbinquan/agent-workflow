@@ -22,7 +22,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { startLiveSubagentCapture } from '../src/services/runtime/opencode/subagentLiveCapture'
+import { startLiveSubagentCapture } from '../src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
 const capturePersistence = (db: PersistenceDb) => createRuntimeSessionCapturePersistence(db)

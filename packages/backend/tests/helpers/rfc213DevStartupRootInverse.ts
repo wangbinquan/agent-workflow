@@ -35,13 +35,20 @@ const overlayPreparation: readonly Change[] = [
       'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n}\n',
   },
 ]
+// RFC-492: the driver family moved into runtime-management's infrastructure; bootstrap takes the self-check from its
+// composition entry in one import. The inverse keeps the same shape: a static import of the registry lookup alone and
+// a lazy import inside the lifecycle step.
+const RUNTIME_DRIVERS = '@/modules/runtime-management/composition/runtimeDrivers'
 const declarationCheck: readonly Change[] = [
   {
     current:
-      "import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'\n" +
-      "import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'\n",
-    previous: "import { getRuntimeDriver } from '@/services/runtime'\n",
-    uniqueMarker: "import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'\n",
+      'import {\n' +
+      '  assertRuntimeDeclarations,\n' +
+      '  getRuntimeDriver,\n' +
+      '  RUNTIME_KINDS,\n' +
+      `} from '${RUNTIME_DRIVERS}'\n`,
+    previous: `import { getRuntimeDriver } from '${RUNTIME_DRIVERS}'\n`,
+    uniqueMarker: '  assertRuntimeDeclarations,\n',
   },
   {
     occurrences: 1,
@@ -50,8 +57,9 @@ const declarationCheck: readonly Change[] = [
       '      const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
     previous:
       "    'runtime-declarations': async () => {\n" +
-      "      const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
-      "      const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
+      '      const { assertRuntimeDeclarations, getRuntimeDriver, RUNTIME_KINDS } = await import(\n' +
+      `        '${RUNTIME_DRIVERS}'\n` +
+      '      )\n' +
       '      const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
   },
 ]

@@ -33,7 +33,7 @@ import { createIdentityAccessRuntime } from '@/modules/identity-access/compositi
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   developmentEmployeeRuntimeCodec,
