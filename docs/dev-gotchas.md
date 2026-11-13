@@ -115,6 +115,41 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
 - 排查：编译产物里的 worker 或子进程「静默不动」时，在探针里给 `new Worker(...)` 挂 `error` 监听，拿到真实异常；用
   `Bun.build({ outdir })` 打出产物后 grep `__esm(async`，能看出哪些模块变成了异步。
 
+## 改共享 schema 前，先查它有没有被印进**不可变内置资源**的文本（RFC-490 实撞，2026-11-12）
+
+- 图研发的内置代理把输出 schema 原样印在提示词里：`graphOutputInstructions` 取 `toInputJsonSchema(graphToolResultSchema(item))`
+  拼进 `bodyMd`（`development-automation/application/graph-development/builtinResources.ts`）。内置代理一经发布不可变，启动时
+  `builtinCatalog` 把已安装副本的 `bodyMd` 与当前生成的文本逐字节比对，不一致就抛 `graph-builtin-agent-content-conflict` 并中止启动。
+- 所以给 shared 里某个 schema 加一个枚举取值、加一个字段，只要它在 `GraphDesignDocumentSchema` 的闭包里，就会改写已发布的提示词：
+  代码没人碰过内置代理，tsc / lint / 单测全绿，但装过上一版的实例升级后起不来。RFC-490 给 `ClarifyDecisionSchema.status` 加了两个取值，
+  设计门与作者都判成「图研发只透传，无影响」，是写实现的子代理读到 `builtinCatalog` 才发现的。
+- 判法：改 shared schema 前 grep 它的名字在 `packages/shared/src/schemas/graphDesign.ts` 与 `toInputJsonSchema(` 调用点的闭包里出不出现。
+  `packages/backend/tests/rfc490-published-graph-prompts.test.ts` 锁了四个内置代理提示词的 sha256（取自 v0.19.3 的干净导出）；它红了
+  **不要改摘要**，那正是「已安装实例会起不来」的信号。
+- 修法二选一：让印进提示词的文本保持已发布的样子、校验照常放宽（RFC-490 的做法，两者只差那处枚举，用例断言了这一点）；或者发布新的
+  不可变版本并保留旧版本可解析（实现代理 v2 的做法，`3f487ddda`）。按请求现拼的提示词（`viewPlanning.ts` 的辅助提示词）不在此列。
+
+## 渲染函数返回的元素带 `key` 时，别让它和另一个同样以该值为 `key` 的元素做兄弟（RFC-490 实撞，2026-11-12）
+
+- 脑图面板里 `props.renderQuestion(question, index)` 返回的是路由给的 `<div key={q.id}>`，紧挨着又放了一个
+  `<DecisionDetails key={question.id}>`（为了切题时重置它的本地状态）。两个兄弟 `key` 相同，React 只在控制台告警，行为未定义：
+  实际表现是**切到下一题后，上一题的表单留在页面上**，两个表单同时可见、可操作。
+- tsc、eslint 都不报；是集中验证里 `getByLabelText` 报 `Found multiple elements` 才暴露的（三个用例文件同时红）。
+- 规矩：渲染函数 / 插槽的产物放进自己的父元素里（一个无 `key` 的包裹元素即可），不要和本组件里带 `key` 的元素共用一个子列表。
+  回归用例断言「切换题目后面板里只有一个 `.clarify-question`」（`rfc490-question-pane.test.tsx`）。
+
+## 共享工作树里有别人的在制改动时，把「HEAD + 本次路径」导出到临时目录再做集中验证（2026-11-12，RFC-490）
+
+- 本仓禁用开发用 worktree / stash，而多个会话共用一棵树：集中验证那一刻树里可能躺着别人上百个文件的在制改动，测试红了无法归因。
+- 做法（不动任何 ref、分支、stash，也不碰共享 index）：用私有 index（`GIT_INDEX_FILE` 指向临时文件）`read-tree HEAD`，把本次路径逐个
+  `hash-object -w` + `update-index --cacheinfo` 写进去，`write-tree` → `commit-tree` 得到一个不挂在任何 ref 上的提交，再
+  `git archive <commit> | tar -x -C <临时目录>`、`bun install --frozen-lockfile`。得到的就是「只提交这些路径会长什么样」，
+  e2e 二进制也从这里构建（与「e2e 用共享工作树的构建验绿，等于没验」同一道理）。
+- 导出目录里**没有 `.git`**：依赖 git 的用例在那里必红，与改动无关，要回仓库里单独跑——`rfc064-source-grep-guards`（`git grep`）、
+  `rfc321` 的发布账本（要可达历史）。别把这两类红算到候选头上，也别因此改用例。
+- 提交前逐个 `cmp` 工作树与导出里的本次路径，确认验过的就是要提交的；`STATE.md`、`docs/*.md` 这类别人也有未提交改动的共享文件，
+  用「HEAD 的内容 + 自己的改动行」另备一份提交（同样经私有 index），工作树里那份照常就地改，别人的行不进提交也不丢。
+
 ## 测试 / CI
 
 - **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。
