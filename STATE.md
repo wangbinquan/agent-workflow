@@ -178,6 +178,10 @@
   1442 / 1442（新用例 6 / 6）。未绿的三格都不在这次改动的路径上：`shard 43/44` 一条调度扇出用例 [postgresql] 停顿约 5 秒撞缺省超时
   （前一个提交 `1e732c7cc` 的同一分片有同形态的超时，登记为 `docs/audit-backlog.md` 第十四条，未定位）；`Playwright e2e (macos-latest
   shard 1/4)` 没分到 runner、`shard 3/4` 撞 20 分钟作业上限（第九条补记）；汇总格 `CI required` 写本条时还在排队、尚无结果。未以重跑追绿。
+- **该 run 的最终结论与后继证据**：run 43467559383 结束时 70 个 job 为 66 个成功、2 个失败（`shard 43/44` 与随之不通过的汇总格
+  `CI required`）、2 个取消。后继 `13467cea0`（run 43476107982；相对修复提交除文档外只多另一会话给
+  `scheduler-clarify-dispatch` 一例加的显式时限，不是重跑）70 个 job 全部通过，含 `shard 20/44`（L6 [postgresql] 396 ms）、`shard 43/44`、
+  `shard 44/44`（新用例 6 / 6）与四个 macOS e2e 分片。
 
 ## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（Done；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
 
