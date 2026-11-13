@@ -2154,6 +2154,11 @@ opencode 集成用例（`packages/backend/tests/integration-opencode/`，只在 
 再搜一遍（`grep -rn "runtime/opencode" scripts .github`），连带看 `endsWith(` / `includes(` 的判定；这类布局表要追加新布局，不要改掉旧的
 （已登记的旧 tag 仍按旧布局认）。
 
+`design/` 也不能当历史记录整个排除（RFC-492，2026-11-13）：已完工 RFC 文档里指向源码的 **markdown 链接**（`[…](../../packages/…)`）由主 CI
+的「Markdown link check (design/)」逐条检查，文件搬走就红。RFC-492 扫旧路径时排除了 `design/`，`RFC-370 evidence.md` 一条指向
+`services/runtime/types.ts` 的链接漏网，实现提交的这一格随之红。搬文件后按链接语法扫一遍
+（`grep -rnE "\]\([^)]*<旧路径>" design docs`），改指新位置；正文与代码块里的旧路径属于历史记录，照旧不改。
+
 ②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
 它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。
 
