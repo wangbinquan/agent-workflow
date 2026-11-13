@@ -37,11 +37,11 @@ import {
   type MaintenanceServiceOptions,
 } from '@/platform/background/maintenanceService'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '@/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { createUser } from './helpers/userFixture'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'

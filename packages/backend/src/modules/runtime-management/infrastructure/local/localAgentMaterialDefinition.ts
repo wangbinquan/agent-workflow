@@ -24,8 +24,9 @@ export interface LocalAgentMaterialDefinition {
   readonly protocol: AgentInvocationProtocol
   /** RFC-489: the run's evidence over this protocol's driver hooks; the caller gives the run's scope. */
   evidence(scope: NativeAgentMaterialEvidenceScope): AgentMaterialEvidence
-  /** RFC-489: the material reference of one native plan (the compiler's own reference when it compiled the plan). */
-  materialReference(plan: object): string
+  /** RFC-489: the material reference of one native plan (the compiler's own reference when it compiled the plan).
+   * RFC-491: a wrapped plan given its source plan takes the source's reference. */
+  materialReference(plan: object, sourcePlan?: object): string
   createCompiler(
     contents: NativeAgentMaterialContents,
     fixture?: NativeAgentMaterialFixture,
@@ -52,7 +53,7 @@ export function selectLocalAgentMaterialDefinition(
   return {
     protocol: bindNativeAgentProtocol(driver),
     evidence: (scope) => createLocalAgentMaterialEvidence({ hooks: driver, scope }),
-    materialReference: (plan) => bindNativeAgentMaterialReference(plan),
+    materialReference: (plan, sourcePlan) => bindNativeAgentMaterialReference(plan, sourcePlan),
     createCompiler(contents, fixture) {
       const evidenceCapabilities: AgentMaterialEvidenceCapabilities = {
         usageMeter: driver.usageMeter !== undefined,

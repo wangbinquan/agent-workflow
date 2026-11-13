@@ -1,4 +1,7 @@
-import type { TaskMemorySnapshotPort } from '../../application/ports/taskMemorySnapshots'
+// RFC-491: moved from `src/modules/task-execution/infrastructure/local/` — only the RFC-370 contract tests use this
+// native compatibility run (RFC-375 retained it for them; the architecture gate listed it as unreachable production
+// code). Unchanged, with the relative imports written as aliases.
+import type { TaskMemorySnapshotPort } from '@/modules/task-execution/application/ports/taskMemorySnapshots'
 import type { ClarifyMindmapConfig } from '@agent-workflow/shared'
 // Runner: spawn ONE opencode subprocess for one node_run, stream its output
 // into the DB, persist the parsed envelope, and clean up.
@@ -89,7 +92,7 @@ import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 
-import { type RuntimeSessionLeaseOperations } from '../../application/runtimeSessionLease'
+import { type RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/runtimeSessionLease'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.

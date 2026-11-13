@@ -99,8 +99,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 22,
-      "reason": "max=22: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); no growth authorized."
+      "max": 21,
+      "reason": "max=21: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); RFC-491 moves the contract-test-only native task agent run out of production (22 -> 21: its source-control git observation pair); no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,
@@ -119,12 +119,12 @@
       "reason": "max=1: RFC-479 (RFC-294 S11) tightens every max to the measured census (21 -> 1); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "legacy-horizontal-files": {
-      "max": 167,
-      "reason": "max=167: RFC-478 closes with the measured census per RFC-294 C13 (168 -> 167: services/task.ts moved into task-execution by layer); no growth authorized."
+      "max": 165,
+      "reason": "max=165: RFC-478 closes with the measured census per RFC-294 C13 (168 -> 167: services/task.ts moved into task-execution by layer); RFC-491 (RFC-294 C13): services/systemAgentRun.ts moved into task-execution and services/runtimeSmoke.ts to tests/helpers (167 -> 165); no growth authorized."
     },
     "legacy-service-implementations": {
-      "max": 48,
-      "reason": "max=48: RFC-478 closes with the measured census per RFC-294 C13 (49 -> 48: services/task.ts moved into task-execution by layer); no growth authorized."
+      "max": 46,
+      "reason": "max=46: RFC-478 closes with the measured census per RFC-294 C13 (49 -> 48: services/task.ts moved into task-execution by layer); RFC-491 (RFC-294 C13): services/systemAgentRun.ts moved into task-execution and services/runtimeSmoke.ts to tests/helpers (48 -> 46); no growth authorized."
     },
     "legacy-thin-facades": {
       "max": 0,
@@ -139,8 +139,8 @@
       "reason": "max=1: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "off-dag-offered-file-context-pairs": {
-      "max": 46,
-      "reason": "max=46: RFC-434 reclassifies two pre-existing dependencies (system-operations overview -> memory, task-execution launch operations -> integration) that reached non-exact public files and were counted as internal pairs; with exact entrypoints they are off-DAG offered pairs (54 -> 55 while internal pairs drop 56 -> 48); RFC-481 settles the 8 task-execution -> collaboration pairs (55 -> 47: the human-gate ports are declared by task-execution and implemented by collaboration); RFC-486 settles the task-execution launch -> integration pair (47 -> 46: the launch guard is declared by task-execution and extended by integration); no new coupling."
+      "max": 45,
+      "reason": "max=45: RFC-434 reclassifies two pre-existing dependencies (system-operations overview -> memory, task-execution launch operations -> integration) that reached non-exact public files and were counted as internal pairs; with exact entrypoints they are off-DAG offered pairs (54 -> 55 while internal pairs drop 56 -> 48); RFC-481 settles the 8 task-execution -> collaboration pairs (55 -> 47: the human-gate ports are declared by task-execution and implemented by collaboration); RFC-486 settles the task-execution launch -> integration pair (47 -> 46: the launch guard is declared by task-execution and extended by integration); RFC-491 moves the contract-test-only native task agent run options out of production (46 -> 45: its task-execution -> memory pair); no new coupling."
     },
     "platform-to-modules-file-pairs": {
       "max": 0,
@@ -239,8 +239,8 @@
       "reason": "max=0: public symbols of workspace-insight that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
     },
     "unreachable-production-files": {
-      "max": 18,
-      "reason": "max=18: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; no growth authorized."
+      "max": 16,
+      "reason": "max=16: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; RFC-491 moves the two contract-test-only native task agent run files to tests/helpers (18 -> 16); no growth authorized."
     }
   }
 }

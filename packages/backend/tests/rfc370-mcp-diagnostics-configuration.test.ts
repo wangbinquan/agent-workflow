@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { createMcpDiagnosticsEffects } from '@/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects'
 import type { McpDiagnosticsEffectDependencies } from '@/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects'
 import type { McpDiagnosticRuntime } from '@/modules/resource-catalog/application/mcps/runtimeDiagnosticsEffects'
-import { createLocalMcpDiagnosticRunner } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import { composeLocalMcpDiagnosticRunnerSelection } from '@/bootstrap/runFamilyProviders'
 
 // RFC-370: diagnostics must use the injected, current configuration. A hosted
 // configuration read may finish later or fail; neither case may select a stale
@@ -37,7 +37,7 @@ function effects(
       appHome: '/unused/rfc370-mcp-configuration',
       isRuntimeEligible: () => true,
       // RFC-488: driver facts (session support, default executable) come from Task Execution's local runner.
-      execution: createLocalMcpDiagnosticRunner(),
+      execution: composeLocalMcpDiagnosticRunnerSelection({}),
     },
     {
       persistence: {

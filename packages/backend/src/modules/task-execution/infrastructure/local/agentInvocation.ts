@@ -1,6 +1,7 @@
 // RFC-421: moved verbatim from composition/agentInvocation.ts — the local (native) agent invocation adapter.
 // RFC-489: the material reference and the run's evidence arrive with the binding (the runtime's material definition
 // builds them); no runtime-management infrastructure is imported here.
+// RFC-491: the compiled native plan is typed by the members read here (`NativeAgentPlan`), not by the driver family.
 import type { AgentInvocationBinding } from '../../application/ports/agentInvocation'
 import type { AgentExecutionRecord } from '../../application/ports/agentExecution'
 import type {
@@ -18,7 +19,24 @@ import type {
   AgentMaterialEvidence,
   AgentMaterialWorkspace,
 } from '@/modules/runtime-management/public/participants'
-import type { AgentSpawnPlan, SpawnPlan } from '@/services/runtime/types'
+import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
+
+/** RFC-491: a compiled native plan as task execution reads it — command, environment, stdin, the two lifecycle hooks,
+ * the platform-supplied MCP names and the assembly diagnostics (runtime-management's compiler produces it). */
+export interface NativeAgentPlan {
+  cmd: string[]
+  env: Record<string, string>
+  stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
+  beforeSpawn?: () => void | Promise<void>
+  cleanup?: () => void | Promise<void>
+  declaredMcpServers?: readonly string[]
+  diagnostics?: Record<string, unknown>
+}
+
+/** RFC-491: a native plan with the declaration from the same assembly. */
+export interface NativeAgentCompiledPlan extends NativeAgentPlan {
+  readonly declared: DeclaredInjectionManifest
+}
 
 /** RFC-489: what one run's evidence reads — its final environment, run content and session locations. */
 export interface NativeAgentEvidenceScope {
@@ -37,7 +55,7 @@ export interface NativeAgentEvidenceScope {
  * All members close over that exact plan and explicit native scope. It never
  * rebuilds a declaration, chooses a driver or reads global paths. */
 export function bindNativeAgentInvocation(input: {
-  readonly plan: SpawnPlan
+  readonly plan: NativeAgentPlan
   readonly protocol: AgentInvocationProtocol
   readonly workspace: AgentMaterialWorkspace
   /** The run's evidence (built by the runtime's material definition over the run's scope). */
@@ -69,7 +87,7 @@ export function bindNativeAgentInvocation(input: {
       return materialRef()
     },
     get declared() {
-      return (input.plan as Partial<AgentSpawnPlan>).declared
+      return (input.plan as Partial<NativeAgentCompiledPlan>).declared
     },
     protocol: input.protocol,
     workspace: input.workspace,

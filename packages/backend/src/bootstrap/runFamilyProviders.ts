@@ -3,9 +3,13 @@
 // references; source-control's workspace contents and git observation), and pairs runtime-management's own
 // runtime-management assembly with Task Execution's smoke run families (native and hosted). The run-family roots keep
 // their Task Execution logic; no module's composition imports another module's composition or infrastructure for this.
+// RFC-491: also the native system-agent run's providers for the local MCP diagnostic (runtime-management's driver,
+// material workspace and definition) and runtime-management's plugin-load failure judgment for the task agent family.
 import {
   bindNativeAgentMaterialWorkspace,
+  detectPluginLoadFailure,
   selectLocalAgentMaterialDefinition,
+  selectNativeRuntimeDriver,
 } from '@/modules/runtime-management/composition/localAgentMaterial'
 import {
   createLocalSystemAgentRetainedContents,
@@ -32,6 +36,11 @@ import {
 import { createCrewStationSystemAgentRunFamily } from '@/modules/task-execution/composition/crewstationSystemAgentRunFamily'
 import type { LocalTaskAgentRunProviders } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { createHostedRuntimeSmokeProbe } from '@/modules/task-execution/composition/crewstationRuntimeSmoke'
+import {
+  createLocalMcpDiagnosticRunner,
+  type LocalMcpDiagnosticRunnerInput,
+  type NativeSystemAgentRunProviders,
+} from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 
 /** The native smoke run family's providers (runtime-management). */
 export const localRuntimeSmokeRunProviders: LocalRuntimeSmokeRunProviders = Object.freeze({
@@ -56,7 +65,21 @@ export const localTaskAgentRunProviders: LocalTaskAgentRunProviders = Object.fre
   gitControlObservation: bindNativeAgentWorkspaceGitControlObservation,
   materialWorkspaces: bindNativeAgentMaterialWorkspace,
   materialDefinitions: selectLocalAgentMaterialDefinition,
+  pluginLoadFailures: detectPluginLoadFailure,
 })
+
+/** RFC-491: the native system-agent run's providers (runtime-management): the driver, the material workspace and the
+ * material definition. The local MCP diagnostic runs its turns on this run. */
+export const localNativeSystemAgentRunProviders: NativeSystemAgentRunProviders = Object.freeze({
+  drivers: selectNativeRuntimeDriver,
+  materialWorkspaces: bindNativeAgentMaterialWorkspace,
+  materialDefinitions: selectLocalAgentMaterialDefinition,
+})
+
+/** RFC-491: the local MCP diagnostic execution over the native system-agent run's providers. */
+export function composeLocalMcpDiagnosticRunnerSelection(input: LocalMcpDiagnosticRunnerInput) {
+  return createLocalMcpDiagnosticRunner(input, localNativeSystemAgentRunProviders)
+}
 
 /** The native system agent run family selection: one family per call. */
 export function composeLocalSystemAgentRunFamilySelection(

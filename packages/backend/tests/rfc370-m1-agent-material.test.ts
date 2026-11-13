@@ -14,7 +14,7 @@ import type {
   CreateBusinessMaterial,
 } from '@/platform/crewstation/businessExecution'
 import { createLogger } from '@/util/log'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createHostedGitAgentEnvironment } from '@/modules/source-control/composition/crewstationGitCredentials'
 
 const unavailable = (): never => {

@@ -35,7 +35,7 @@ import { composeNodeRunPromptOperations } from '@/modules/task-execution/composi
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
-import { createLocalTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
+import { createLocalTaskRuntimeInventoryContent } from '@/modules/runtime-management/composition/taskRuntimeInventoryContent'
 import { createLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { createLocalScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
 import { localActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionEnvironment'

@@ -32,11 +32,11 @@ import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '../src/ws/broadcaster'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 
 const DAEMON_TOKEN = 'rfc355-callsites-daemon-token'
 

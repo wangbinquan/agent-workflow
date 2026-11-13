@@ -29,8 +29,11 @@ import { rowToDistillJob } from '../src/modules/memory/application/distill/memor
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { appHome } from '../src/util/paths'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'

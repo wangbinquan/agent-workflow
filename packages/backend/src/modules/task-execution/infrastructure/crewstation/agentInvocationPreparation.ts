@@ -21,9 +21,12 @@ import {
   hostedEventRecord,
   readHostedEvent,
 } from './runtimeEvents'
-import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
-import { declareSkills, emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import {
+  DAEMON_SHUTDOWN_ABORT_REASON,
+  declareSkills,
+  emptyDeclaredManifest,
+} from '@agent-workflow/shared'
+import { runtimeDriverCapabilities } from '@/modules/runtime-management/public/queries'
 import { freezeHostedAgentContext, hostedAgentNodeContext } from './agentContext'
 import type { AgentExecutionParticipants } from '../../application/ports/agentExecutionBinding'
 import type { TaskAgentExecutionParticipantInput } from '../../application/ports/taskAgentMaterial'
@@ -259,11 +262,11 @@ export function createHostedAgentInvocationPreparation(
       const declared = agentContext.declared
       const observedProtocol =
         existing !== null && originalContext === undefined ? undefined : agentContext.protocol
-      const native = getRuntimeDriver(intent.protocol)
+      const nativeCapabilities = runtimeDriverCapabilities(intent.protocol)
       const protocol: AgentInvocationProtocol = {
         kind: intent.protocol,
         capabilities: {
-          ...native.capabilities,
+          ...nativeCapabilities,
           startupObservation: startupInventoryAvailable ? 'init-event' : 'none',
           observationRequiresFreshRun: false,
         },

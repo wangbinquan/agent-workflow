@@ -121,6 +121,8 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   ['task-execution', 'resource-catalog', 'LocalMcpDiagnosticExecution'],
   ['task-execution', 'runtime-management', 'RuntimeManagementSmoke'],
   ['runtime-management', 'task-execution', 'NativeRunFamilyProviders'],
+  // RFC-491: bootstrap binds runtime-management's in-flight inventory read to Task Execution's port.
+  ['runtime-management', 'task-execution', 'TaskRuntimeInventoryContent'],
   ['resource-catalog', 'task-execution', 'NativeTaskAgentMaterialReferences'],
   [
     'source-control',

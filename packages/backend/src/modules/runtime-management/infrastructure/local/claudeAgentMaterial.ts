@@ -20,17 +20,19 @@ import type {
 } from '@/services/runtime/types'
 import {
   declarePlugins,
-  declareSkills,
   declareSubagents,
   deriveClaudeDroppedParams,
-  emptyDeclaredManifest,
-  managedSkillsOf,
   renderClaudeMcpInjection,
   weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
+import {
+  DEFAULT_CONFIG_DIR_PROFILE,
+  declareSkills,
+  emptyDeclaredManifest,
+  managedSkillsOf,
+} from '@agent-workflow/shared'
 import { buildClaudeSpawn } from '@/services/runtime/claudeCode/spawn'
 import { toClaudeAgents } from '@/services/runtime/claudeCode/inject'
 import { pickRuntimeHead } from '@/services/runtime/head'

@@ -152,7 +152,12 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
 
   test('runSystemAgent keeps the system-agent cwd and the plan env in lock-step', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src/services/systemAgentRun.ts'),
+      // RFC-491: the native system-agent run moved into task-execution.
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/task-execution/infrastructure/local/nativeSystemAgentRun.ts',
+      ),
       'utf-8',
     )
     // The isolated worktree under the caller's scratch is the ONE cwd handed to

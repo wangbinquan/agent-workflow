@@ -13,7 +13,7 @@ import {
   declareSkills,
   emptyDeclaredManifest,
   partitionMcpsForInjection,
-} from '@/services/execution/agentInjection'
+} from '@agent-workflow/shared'
 
 export interface HostedNativeMaterialContent {
   readonly dependentAgentProfile?: (model: string, name: string) => Promise<string>

@@ -52,8 +52,11 @@ import { createIntentSession, insertUserTurnAndReserve } from '@/modules/intent/
 import { cancelIntentTurn } from '@/modules/intent/application/turnEngine'
 import { submitIntentWorkingSetChange } from '@/modules/intent/application/workingSet'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
-import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import {
   intentGraphValidationForTest,
   intentResourceCatalogBinding,

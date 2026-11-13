@@ -16,17 +16,19 @@
 import { describe, expect, test } from 'bun:test'
 import type { Mcp } from '@agent-workflow/shared'
 import {
-  AgentInjectionError,
   declarePlugins,
-  declareSkills,
   declareSubagents,
   deriveClaudeDroppedParams,
-  partitionMcpsForInjection,
   renderClaudeMcpInjection,
   renderClaudeMcpServerEntry,
   renderOpencodeMcpEntry,
   renderOpencodeMcpInjection,
 } from '@/services/execution/agentInjection'
+import {
+  AgentInjectionError,
+  declareSkills,
+  partitionMcpsForInjection,
+} from '@agent-workflow/shared'
 import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
 // RFC-282 B4 — the src wrapper was deleted (dead outside tests); its exact
 // shape is re-expressed here so every assertion below is unchanged.

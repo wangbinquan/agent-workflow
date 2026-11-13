@@ -338,7 +338,7 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
   'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
   // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
-  'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts -> packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts',
+  // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers — its source-control pair settled.
   'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',

@@ -5,7 +5,10 @@ import {
   triggerChangeNarrative as triggerSelectedNarrative,
   type ChangeNarrativeDeps as SelectedChangeNarrativeDeps,
 } from '@/modules/workspace-insight/application/changeNarrative'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 
 export type NativeChangeNarrativeDeps = Omit<

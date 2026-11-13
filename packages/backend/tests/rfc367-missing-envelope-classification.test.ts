@@ -14,7 +14,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   classifyMissingEnvelope,
   emptySystemAgentOutputEvidence,
-} from '../src/services/systemAgentRun'
+} from '@/modules/task-execution/application/systemAgentRun'
 
 describe('RFC-273 missing-envelope evidence classification', () => {
   const evidence = (over: Partial<ReturnType<typeof emptySystemAgentOutputEvidence>> = {}) => ({

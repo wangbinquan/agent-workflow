@@ -15,7 +15,7 @@
 // 所以这里锁两面：真状态码仍须命中，任意位置的三连数字不得命中。
 
 import { describe, expect, test } from 'bun:test'
-import { MODEL_FAIL_SIGNATURES } from '@/services/runtimeSmoke'
+import { MODEL_FAIL_SIGNATURES } from '@/modules/task-execution/application/runtimeSmoke'
 
 describe('runtimeSmoke 分类器 — 裸状态码必须带 HTTP 语境', () => {
   // 直接用生产那一条。早先版本试图从源码文本里抠正则，被转义层数骗了一次

@@ -2,12 +2,15 @@
 // the application's two-phase preparation and the local invocation adapter.
 import type { AgentInvocationPreparation } from '../../application/ports/agentInvocationPreparation'
 import { createAgentInvocationPreparation } from '../../application/agentInvocationPreparation'
-import { bindNativeAgentInvocation, type NativeAgentEvidenceScope } from './agentInvocation'
+import {
+  bindNativeAgentInvocation,
+  type NativeAgentCompiledPlan,
+  type NativeAgentEvidenceScope,
+} from './agentInvocation'
 import type {
   AgentMaterialCompiler,
   AgentMaterialEvidence,
 } from '@/modules/runtime-management/public/participants'
-import type { AgentSpawnPlan } from '@/services/runtime/types'
 
 /** Native composition retains the original compiled plan privately. Normal
  * consumers receive only the two-phase preparation and neutral invocation.
@@ -15,7 +18,7 @@ import type { AgentSpawnPlan } from '@/services/runtime/types'
 export function createLocalAgentInvocationPreparation(input: {
   readonly material: {
     readonly compiler: AgentMaterialCompiler
-    nativePlan(materialRef: string): AgentSpawnPlan
+    nativePlan(materialRef: string): NativeAgentCompiledPlan
   }
   readonly binding: Omit<
     Parameters<typeof bindNativeAgentInvocation>[0],

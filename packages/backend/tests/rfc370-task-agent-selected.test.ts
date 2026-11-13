@@ -34,7 +34,7 @@ import type {
   AgentMaterialWorkspace,
 } from '../src/modules/runtime-management/public/participants'
 import type { RuntimeKind } from '../src/modules/runtime-management/public/types'
-import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '../src/services/runtime'
 import { createLogger } from '../src/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'

@@ -12,7 +12,7 @@ import {
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
 import { createUser } from './helpers/userFixture'
-import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
+import type { SmokeOptions, SmokeResult } from './helpers/nativeRuntimeSmoke'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'

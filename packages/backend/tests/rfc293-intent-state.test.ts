@@ -40,8 +40,11 @@ import type {
   IntentContextResourceAuthorization,
   IntentPersistence,
 } from '../src/modules/intent/application/ports/intentPersistence'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
-import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
 import {
   intentGraphValidationForTest,
   intentResourceCatalogBinding,

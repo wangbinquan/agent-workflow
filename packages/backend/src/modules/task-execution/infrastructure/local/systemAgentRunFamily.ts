@@ -4,7 +4,7 @@
 // from the composition through the native provider ports.
 import { ulid } from 'ulid'
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from './nativeSystemAgentRun'
 import type {
   SystemAgentInvocationFamily,
   SystemAgentRunFamily,

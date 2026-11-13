@@ -8,12 +8,12 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { InventorySnapshot } from '@agent-workflow/shared'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import {
   declaredHasContent,
   observationFromClaudeInit,
   observationFromInventory,
   verifyStartup,
+  emptyDeclaredManifest,
 } from '@agent-workflow/shared'
 
 function declaredWith(

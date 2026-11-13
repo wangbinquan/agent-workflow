@@ -12,7 +12,7 @@ type LocalTaskAgentRunFamilyProviders = Parameters<typeof createLocalTaskAgentRu
 
 /** RFC-489: the other modules' implementations the native task agent run family receives (bootstrap passes them in):
  * runtime-management's runtime bindings, material workspaces and definitions, resource-catalog's material references,
- * source-control's workspace contents and git observation. */
+ * source-control's workspace contents and git observation. RFC-491: runtime-management's plugin-load failure judgment. */
 export interface LocalTaskAgentRunProviders {
   runtimes(input: {
     readonly persistence: NodeRunRuntimePersistence
@@ -24,6 +24,7 @@ export interface LocalTaskAgentRunProviders {
   readonly gitControlObservation: LocalTaskAgentRunFamilyProviders['gitControlObservation']
   readonly materialWorkspaces: LocalTaskAgentRunFamilyProviders['materialWorkspaces']
   readonly materialDefinitions: LocalTaskAgentRunFamilyProviders['materialDefinitions']
+  readonly pluginLoadFailures: LocalTaskAgentRunFamilyProviders['pluginLoadFailures']
 }
 
 /** Binding input used only at bootstrap's native composition boundary. */
@@ -98,6 +99,7 @@ export function composeLocalTaskAgentRunFamily(
     gitControlObservation: providers.gitControlObservation,
     materialWorkspaces: providers.materialWorkspaces,
     materialDefinitions: providers.materialDefinitions,
+    pluginLoadFailures: providers.pluginLoadFailures,
     outputValidation: composePortOutputContentValidation,
   })
 }

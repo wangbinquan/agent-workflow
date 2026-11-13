@@ -12,8 +12,7 @@
 // 「每个 followup 都报无法验证」噪音。
 
 import { describe, expect, test } from 'bun:test'
-import { buildRuntimeInventoryObservation } from '@agent-workflow/shared'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { buildRuntimeInventoryObservation, emptyDeclaredManifest } from '@agent-workflow/shared'
 import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
 import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
 import type { InventorySnapshot } from '@agent-workflow/shared'

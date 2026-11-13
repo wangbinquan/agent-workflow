@@ -512,7 +512,8 @@ describe('RFC-154 source guards — config-dir literals confined to the single s
     //   claudeCode/config.ts (credentials bridge source)
     const files = [
       // RFC-454: the `services/runner` re-export is gone; the runner body is task-execution's native agent run.
-      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+      // RFC-491: that compatibility run (contract tests only) moved to tests/helpers.
+      '../tests/helpers/nativeTaskAgentRun.ts',
       'services/runtime/opencode/driver.ts',
       'services/runtime/opencode/spawn.ts',
       'services/runtime/claudeCode/driver.ts',

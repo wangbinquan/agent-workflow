@@ -335,7 +335,7 @@ const CONNECT_FAILED_ERROR_CODES = new Set([
  * and puts the HTTP status — not an errno — on `.code`, so the underlying
  * wording can only be matched as a substring. Kept in sync in spirit with the
  * network signatures RFC-116 already learned for runtime smoke
- * (`services/runtimeSmoke.ts`), but deliberately narrower: no 403/region
+ * (task-execution `application/runtimeSmoke.ts`), but deliberately narrower: no 403/region
  * phrases here, those belong to `auth-required` for a probe.
  */
 const CONNECT_FAILED_MESSAGE_RE =

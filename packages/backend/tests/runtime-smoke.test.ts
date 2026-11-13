@@ -11,7 +11,7 @@ import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { smokeRuntime } from '../src/services/runtimeSmoke'
+import { smokeRuntime } from './helpers/nativeRuntimeSmoke'
 
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

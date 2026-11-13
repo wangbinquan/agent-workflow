@@ -54,7 +54,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
   test('the readInventory proxy predicate is gone from both consumers', () => {
     for (const rel of [
       'modules/task-execution/application/taskAgentRun.ts',
-      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+      // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers.
+      '../tests/helpers/nativeTaskAgentRun.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
       // RFC-488: the MCP test bench's startup observation now lives in Task Execution's local runner.
       'modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts',
@@ -81,7 +82,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
     // 两个消费方都不得再自己判——包括「换个写法判同一件事」。
     for (const rel of [
       'modules/task-execution/application/taskAgentRun.ts',
-      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+      // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers.
+      '../tests/helpers/nativeTaskAgentRun.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
       // RFC-488: the MCP test bench's startup observation now lives in Task Execution's local runner.
       'modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts',

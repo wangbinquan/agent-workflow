@@ -11,11 +11,11 @@ import {
 import { eq } from 'drizzle-orm'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 
 const TOKEN = 'rfc238-http-token'
 const tempDirs: string[] = []

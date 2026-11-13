@@ -20,27 +20,39 @@
 //    `scratchRetained` for the caller to persist.
 //  - stderr tails pass through maskDiagnosticsText before leaving this module
 //    (design §8 — diagnostics are a secret egress surface too).
+//
+// RFC-491 (RFC-294 §4.7): moved from `services/systemAgentRun.ts` — it binds Task Execution's native invocation and
+// runs the application's system-agent core, so it is Task Execution's native adapter, not part of the runtime driver
+// family. The runtime's driver (assembly), material workspace and material definition (protocol, run evidence,
+// material reference) arrive as providers; bootstrap binds runtime-management's. Same driver, workspace layout,
+// protocol view, evidence and reference table as before.
 
-import {
-  getRuntimeDriver,
-  getNativeAgentMaterialReference,
-  bindNativeAgentMaterialEvidence,
-  bindNativeAgentMaterialWorkspace,
-  type RuntimeKind,
-} from '@/services/runtime'
-import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
-import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
-import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
-import type {
-  RuntimeDriver,
-  SpawnPlan,
-  StartupInventory,
-  SystemAgentOutputEvidence,
-} from '@/services/runtime/types'
+import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import { createLogger, type Logger } from '@/util/log'
 import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
-import type { SystemAgentEventSinkV1 } from '@/modules/runtime-management/public/participants'
-import type { SystemAgentObservationRun } from '@/modules/task-execution/public/participants'
+import type {
+  StartupInventory,
+  SystemAgentEventSinkV1,
+  SystemAgentOutputEvidence,
+} from '@/modules/runtime-management/public/participants'
+import type { SystemAgentObservationRun } from '../../application/ports/systemAgentObservation'
+import {
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_MAX_EVENT_TEXT_BYTES,
+  runSystemAgentCore,
+} from '../../application/systemAgentRun'
+import {
+  bindNativeAgentInvocation,
+  type NativeAgentCompiledPlan,
+  type NativeAgentPlan,
+} from './agentInvocation'
+import type {
+  NativeMaterialDefinitions,
+  NativeMaterialWorkspaces,
+  NativeRuntimeDriver,
+  NativeRuntimeDrivers,
+  NativeSpawnRequest,
+} from './nativeRunFamilyProviders'
 
 export interface SystemAgentSeedFile {
   /** Relative path under the scratch worktree; `..` and absolute are rejected. */
@@ -100,32 +112,32 @@ export interface SystemAgentRunOptions {
    * `buildPlan` could return an arbitrary plan and dodge all four guards.
    */
   buildCtx?: (args: {
-    driver: RuntimeDriver
+    driver: NativeRuntimeDriver
     worktreePath: string
     runDir: string
     log: Logger
-  }) => AgentSpawnContext
+  }) => NativeSpawnRequest
   /**
    * §2.1b — wrap-only hook (实现门 P2-2: replacement is now TYPE-inexpressible):
    * the adapter returns ONLY the two wrappable slots; cmd/env/stdin/declared
    * never leave the driver's plan. runSystemAgent composes the result.
    */
   wrapPlan?: (
-    basePlan: AgentSpawnPlan,
-    args: { driver: RuntimeDriver; worktreePath: string; runDir: string; log: Logger },
+    basePlan: NativeAgentCompiledPlan,
+    args: { driver: NativeRuntimeDriver; worktreePath: string; runDir: string; log: Logger },
   ) =>
-    | Pick<AgentSpawnPlan, 'beforeSpawn' | 'cleanup'>
-    | Promise<Pick<AgentSpawnPlan, 'beforeSpawn' | 'cleanup'>>
+    | Pick<NativeAgentCompiledPlan, 'beforeSpawn' | 'cleanup'>
+    | Promise<Pick<NativeAgentCompiledPlan, 'beforeSpawn' | 'cleanup'>>
   /**
    * TEST-ONLY (§2.1b) — wholesale plan replacement for in-process fake runs
    * (fixture runFn doubles). Production adapters use buildCtx/wrapPlan.
    */
   testPlanOverride?: (args: {
-    driver: RuntimeDriver
+    driver: NativeRuntimeDriver
     worktreePath: string
     runDir: string
     log: Logger
-  }) => SpawnPlan | Promise<SpawnPlan>
+  }) => NativeAgentPlan | Promise<NativeAgentPlan>
   /**
    * Called after spawn and before piped stdin is delivered. A failure triggers
    * the normal TERM→KILL→reap barrier and no successful result is returned.
@@ -188,31 +200,36 @@ export interface SystemAgentRunResult {
   /** RFC-282 B1b (§2.1b-2) — the declared manifest from THIS run's unified
    *  assembly. Absent on testPlanOverride fixture runs. Settle-time
    *  verification consumes this instead of re-rendering (same computation). */
-  declared?: AgentSpawnPlan['declared']
+  declared?: NativeAgentCompiledPlan['declared']
 }
 
-export {
-  classifyMissingEnvelope,
-  emptySystemAgentOutputEvidence,
-  type MissingEnvelopeReason,
-} from '@/modules/task-execution/application/systemAgentRun'
-import {
-  DEFAULT_TIMEOUT_MS,
-  DEFAULT_MAX_EVENT_TEXT_BYTES,
-  runSystemAgentCore,
-} from '@/modules/task-execution/application/systemAgentRun'
+/** RFC-491: what the native system-agent run reads from runtime-management (bootstrap binds them). */
+export interface NativeSystemAgentRunProviders {
+  readonly drivers: NativeRuntimeDrivers
+  readonly materialWorkspaces: NativeMaterialWorkspaces
+  readonly materialDefinitions: NativeMaterialDefinitions
+}
 
-// Native compatibility names keep the original implementation and results.
-export { releaseSystemAgentScratch, assertSafeSeedPath } from '@/services/runtime'
+/** RFC-491: the native system-agent run over the given providers — the original `runSystemAgent(opts)`. */
+export function createNativeSystemAgentRun(
+  providers: NativeSystemAgentRunProviders,
+): (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult> {
+  return (opts) => runNativeSystemAgent(opts, providers)
+}
 
-export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> {
+async function runNativeSystemAgent(
+  opts: SystemAgentRunOptions,
+  providers: NativeSystemAgentRunProviders,
+): Promise<SystemAgentRunResult> {
   const log = opts.log ?? createLogger('systemAgentRun')
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const maxEventTextBytes = opts.maxEventTextBytes ?? DEFAULT_MAX_EVENT_TEXT_BYTES
   const startedAt = Date.now()
-  const driver = getRuntimeDriver(opts.protocol)
+  const driver = providers.drivers(opts.protocol)
+  // RFC-491: the protocol, the run's evidence and the material reference over the same driver.
+  const definition = providers.materialDefinitions(opts.protocol)
 
-  const materialWorkspace = bindNativeAgentMaterialWorkspace({
+  const materialWorkspace = providers.materialWorkspaces({
     kind: 'system',
     parent: () => opts.scratchParent,
     feature: () => opts.feature,
@@ -273,10 +290,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
                     : {}),
                   ...(wrapped.cleanup !== undefined ? { cleanup: wrapped.cleanup } : {}),
                 }
-                getNativeAgentMaterialReference(composed, base)
+                definition.materialReference(composed, base)
                 return composed
               })()
-        function defaultUnifiedCtx(): AgentSpawnContext {
+        function defaultUnifiedCtx(): NativeSpawnRequest {
           return {
             // RFC-282 B1b — persona-only unified assembly: empty injection
             // set, no boundary (taskMounts omitted), declared manifest is
@@ -329,20 +346,20 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           bind() {
             return bindNativeAgentInvocation({
               plan: prepared,
-              protocol: bindNativeAgentProtocol(driver),
+              protocol: definition.protocol,
               workspace: materialWorkspace.workspace,
               workingDirectory: () => worktreeDir,
               nativeStartOwner: opts,
               cleanupReceiver: 'material',
-              // RFC-489: the family's own evidence and reference wrappers over the same driver and scope.
+              // RFC-491: the material definition's evidence and reference over the same driver and scope.
               get evidence() {
-                return bindNativeAgentMaterialEvidence(driver, {
+                return definition.evidence({
                   environment: () => prepared.env,
                   runContent: () => runDir,
                   sessionLocation: () => ({ worktreePath: worktreeDir }),
                 })
               },
-              materialReference: () => getNativeAgentMaterialReference(prepared),
+              materialReference: () => definition.materialReference(prepared),
             })
           },
           cleanup: () => prepared.cleanup?.(),

@@ -1,23 +1,26 @@
+// RFC-491: moved from `src/modules/task-execution/infrastructure/local/` — only the RFC-370 contract tests use this
+// native compatibility run (RFC-375 retained it for them; the architecture gate listed it as unreachable production
+// code). Unchanged, with the relative imports written as aliases.
 import { join } from 'node:path'
-import { runNode as runTaskAgentCore } from '../../application/taskAgentRun'
-import type { RunResult } from '../../application/ports/taskAgentRun'
+import { runNode as runTaskAgentCore } from '@/modules/task-execution/application/taskAgentRun'
+import type { RunResult } from '@/modules/task-execution/application/ports/taskAgentRun'
 import type {
   TaskAgentRunPurpose,
   TaskCompiledAgentInvocation,
-} from '../../application/ports/taskAgentMaterial'
+} from '@/modules/task-execution/application/ports/taskAgentMaterial'
 import type { RunNodeOptions } from './nativeTaskAgentRunOptions'
-import { bindLocalAgentExecutionParticipants } from './agentExecutionEffect'
-import { broadcastNodeStatus } from '../nodeStatusEvents'
-import { detectPluginLoadFailure } from './nativeTaskAgentPluginLoadDiagnostics'
-import { selectNodeRunPromptOperations } from '../../composition/nodeRunPrompts'
-import { selectPortArtifactOperations } from '../../composition/portArtifacts'
-import { resolveNativePortContentDetailed } from './filePortOutputValidation'
-import { bindNativeAgentInvocation } from './agentInvocation'
-import type { NativeMaterialDefinitions } from './nativeRunFamilyProviders'
+import { bindLocalAgentExecutionParticipants } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
+import { detectPluginLoadFailure } from '@/modules/runtime-management/infrastructure/local/pluginLoadDiagnostics'
+import { selectNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { selectPortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import { resolveNativePortContentDetailed } from '@/modules/task-execution/infrastructure/local/filePortOutputValidation'
+import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
+import type { NativeMaterialDefinitions } from '@/modules/task-execution/infrastructure/local/nativeRunFamilyProviders'
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
 import { bindNativeAgentMaterialWorkspace, getRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnPlan } from '@/services/runtime/types'
-import { resolveBoundaryMounts } from '@/modules/source-control/public/queries'
+import { resolveBoundaryMounts } from '@/modules/source-control/domain/taskAgentMounts'
 
 /** RFC-489: the runtime-management providers the compatibility run receives (the caller binds them). */
 export interface NativeTaskAgentRunProviders {

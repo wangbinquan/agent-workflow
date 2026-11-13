@@ -43,8 +43,11 @@ on:
     paths:
       - 'packages/backend/src/main.ts'
       # RFC-454: the runner and protocol re-exports in services/ are deleted; their bodies live here.
+      # RFC-491: the native compatibility run (contract tests only) moved to tests/helpers, its plugin-load judgment to
+      # runtime-management.
       - 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts'
-      - 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgent*.ts'
+      - 'packages/backend/tests/helpers/nativeTaskAgent*.ts'
+      - 'packages/backend/src/modules/runtime-management/infrastructure/local/pluginLoadDiagnostics.ts'
       # RFC-458: the workflow-output envelope parser moved from services/envelope.ts to shared.
       - 'packages/shared/src/workflowOutputEnvelope.ts'
       - 'packages/shared/src/prompt.ts'
@@ -61,8 +64,11 @@ on:
     paths:
       - 'packages/backend/src/main.ts'
       # RFC-454: the runner and protocol re-exports in services/ are deleted; their bodies live here.
+      # RFC-491: the native compatibility run (contract tests only) moved to tests/helpers, its plugin-load judgment to
+      # runtime-management.
       - 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts'
-      - 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgent*.ts'
+      - 'packages/backend/tests/helpers/nativeTaskAgent*.ts'
+      - 'packages/backend/src/modules/runtime-management/infrastructure/local/pluginLoadDiagnostics.ts'
       # RFC-458: the workflow-output envelope parser moved from services/envelope.ts to shared.
       - 'packages/shared/src/workflowOutputEnvelope.ts'
       - 'packages/shared/src/prompt.ts'

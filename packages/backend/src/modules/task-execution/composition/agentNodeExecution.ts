@@ -11,7 +11,7 @@ import { parsePortValidationFailuresJson } from '../application/portOutputValida
 import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecutionResources'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import { agentRefOfNode, fanoutInnerAgentRefKey } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
+import { detectRuntimeSessionNotFound } from '@/modules/runtime-management/public/queries'
 import { sha256Hex } from '@/util/hash'
 import { decideResumeSessionId } from '../domain/sessionModeFallback'
 import * as agentRunHistory from '../application/agentRunHistory'
@@ -251,8 +251,7 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
         const { opts } = state
         return runTaskAgentWithFamily(opts.taskAgentRuns, withTaskRunFields(opts, request), launch)
       },
-      detectSessionNotFound: (protocol, stderr) =>
-        getRuntimeDriver(protocol).detectSessionNotFound?.(stderr),
+      detectSessionNotFound: (protocol, stderr) => detectRuntimeSessionNotFound(protocol, stderr),
     },
     workspace: {
       createIsoUnderLock: (isoKeyRunId, log) =>

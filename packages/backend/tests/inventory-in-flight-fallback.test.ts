@@ -406,7 +406,8 @@ describe('RFC-062 grep guard', () => {
         '..',
         'src',
         'modules',
-        'task-execution',
+        // RFC-491: the in-flight read moved to runtime-management.
+        'runtime-management',
         'infrastructure',
         'local',
         'taskRuntimeInventoryContent.ts',

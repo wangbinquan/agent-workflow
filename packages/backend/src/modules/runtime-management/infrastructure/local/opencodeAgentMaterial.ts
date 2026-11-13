@@ -22,15 +22,18 @@ import type {
 } from '@/services/runtime/types'
 import {
   declarePlugins,
-  declareSkills,
   declareSubagents,
-  emptyDeclaredManifest,
   renderOpencodeAgentEntry,
   renderOpencodeMcpInjection,
   weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import type { InventorySnapshot } from '@agent-workflow/shared'
-import { inventoryFacesFromSnapshot, isAgentNodeKind } from '@agent-workflow/shared'
+import {
+  inventoryFacesFromSnapshot,
+  isAgentNodeKind,
+  declareSkills,
+  emptyDeclaredManifest,
+} from '@agent-workflow/shared'
 import type {
   LivePollOptions,
   LivePollerHandle,

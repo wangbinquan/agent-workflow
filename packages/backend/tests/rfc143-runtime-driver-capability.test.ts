@@ -35,7 +35,7 @@ const RUNTIME_DRIVER_MATERIAL_FILES = new Set([
   // same frozen material into each protocol's CrewStation nativeConfig shape.
   'modules/task-execution/infrastructure/crewstation/nativeMaterial.ts',
 ])
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
 import type { AgentSpawnContext } from '../src/services/runtime/types'
 
@@ -352,7 +352,8 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   })
 
   it('smoke 复用 driver.buildSpawn（RFC-282 B1b；buildSmokePlan 无 protocol 分支、无手搭 spawn）', () => {
-    const src = SRC('services/runtimeSmoke.ts')
+    // RFC-491: the native smoke (fixture seam only) moved to tests/helpers.
+    const src = SRC('../tests/helpers/nativeRuntimeSmoke.ts')
     expect(src).toContain('.buildSpawn(')
     expect(src).not.toContain('buildOpencodeSpawn')
     expect(src).not.toContain('buildClaudeSpawn')

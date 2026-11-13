@@ -25,7 +25,7 @@ import { sha256Hex } from '../src/modules/task-execution/domain/digest'
 import type { AgentProcessRequest } from '../src/platform/execution/local/agentProcess'
 import type { AgentSpawnPlan, RuntimeDriver } from '../src/services/runtime/types'
 import { getRuntimeDriver } from '../src/services/runtime'
-import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 const unavailable = () => {
   throw new Error('unselected physical scope read')
 }

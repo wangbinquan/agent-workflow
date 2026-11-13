@@ -22,7 +22,7 @@ import type {
   PreparedAgentMaterial,
 } from '../src/modules/runtime-management/application/ports/agentMaterial'
 import type { AgentMaterialWorkspace } from '../src/modules/runtime-management/application/ports/agentMaterialWorkspace'
-import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '../src/util/log'
 
 function unavailable(): never {

@@ -27,8 +27,8 @@ import {
   DISTILLER_OUTPUT_LANG_DIRECTIVE,
   DISTILLER_SYSTEM_PROMPT,
 } from '../src/modules/memory/application/distill/memoryDistiller'
-import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
-import type { SystemAgentRunOptions } from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type { SystemAgentRunOptions } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'

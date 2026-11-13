@@ -1,7 +1,7 @@
 import type { TaskRuntimeInventoryContent } from '../application/ports/taskRuntimeInventoryContent'
 
-/** RFC-431: the standalone selection reads the run directory's inventory files. */
-export { createLocalTaskRuntimeInventoryContent } from '../infrastructure/local/taskRuntimeInventoryContent'
+// RFC-491: the standalone selection's run-directory read moved to runtime-management
+// (`composition/taskRuntimeInventoryContent.ts`); bootstrap binds it to this port.
 
 /** Stream adapters persist their observations in the existing node-run column.
  * Before the first report, there is no legacy file to probe on this host. */

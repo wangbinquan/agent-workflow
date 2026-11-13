@@ -23,7 +23,7 @@ import { assertWriteAncestorInside, safeJoin } from '@/util/safePath'
 import { stringify as stringifyYaml } from 'yaml'
 import { stageSkills, type StagedSkill } from '../stageSkills'
 import type { ClaudeAgentEntry } from './inject'
-import { managedSkillsOf } from '@/services/execution/agentInjection'
+import { managedSkillsOf } from '@agent-workflow/shared'
 
 export type ClaudeSkillInjection = StagedSkill
 

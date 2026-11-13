@@ -18,13 +18,18 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { createNativeSystemAgentRun } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
+import { localNativeSystemAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import {
   assertSafeSeedPath,
   releaseSystemAgentScratch,
-  runSystemAgent,
-} from '../src/services/systemAgentRun'
+} from '@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace'
 import type { SystemAgentEventSinkV1 } from '../src/modules/runtime-management/public/participants'
 import type { Logger } from '../src/util/log'
+
+// RFC-491: the native system-agent run over bootstrap's providers (runtime-management's driver, material
+// workspace and material definition) — the original `runSystemAgent`.
+const runSystemAgent = createNativeSystemAgentRun(localNativeSystemAgentRunProviders)
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')

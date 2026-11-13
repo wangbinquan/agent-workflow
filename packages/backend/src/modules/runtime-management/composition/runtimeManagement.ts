@@ -5,7 +5,10 @@ import type { RuntimeRegistryOperations } from '@/modules/runtime-management/app
 import { createRuntimeManagement } from '../application/runtimeManagement'
 import { createRuntimeObservationQueries } from '../application/runtimeObservationQueries'
 
-export type { RuntimeDiagnosticDependencies } from '../infrastructure/runtimeManagementEffects'
+export type {
+  RuntimeDiagnosticDependencies,
+  RuntimeSmokeFixtureOptions,
+} from '../infrastructure/runtimeManagementEffects'
 
 /** Pure binding exposes the actual application context only to explicit
  * bootstrap compatibility projections; ordinary effects keep their receiver. */

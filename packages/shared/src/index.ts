@@ -29,6 +29,7 @@ export * from './schemas/startupVerification' // RFC-280
 export * from './schemas/runtimeInventory' // RFC-297
 export * from './startupVerification' // RFC-463: RFC-280 的启动核验判定
 export * from './inventoryObservation' // RFC-463: RFC-297 的清单观测构造
+export * from './declaredInjection' // RFC-491: RFC-280 的声明清单构造
 export * from './schemas/importRef'
 export * from './schemas/humanGate'
 export * from './schemas/review'

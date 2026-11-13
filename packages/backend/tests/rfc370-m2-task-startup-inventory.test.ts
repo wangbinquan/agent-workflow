@@ -24,7 +24,7 @@ import type { AgentInvocationBinding } from '@/modules/task-execution/applicatio
 import type { AgentExecutionParticipants } from '@/modules/task-execution/application/ports/agentExecutionBinding'
 import type { HostedStartupInventory } from '@/platform/crewstation/startupInventory'
 import { hostedEventRecord } from '@/modules/task-execution/infrastructure/crewstation/runtimeEvents'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'
 import { createLogger } from '@/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'

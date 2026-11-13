@@ -1,7 +1,7 @@
 import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
 import { createRuntimeRegistryApplication } from '../../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../runtimeRegistryEffects'
-import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
+import type { RuntimeKind, RuntimeSmokeResult } from '../../public/types'
 import type { McpRuntimeTestReconciliationParticipant } from '@/modules/resource-catalog/public/participants'
 import { isRuntimeMcpTestEligible } from '../mcpTestEligibility'
 import type {
@@ -12,8 +12,22 @@ import type {
 } from '../../application/ports/runtimeManagement'
 import type { createLocalRuntimeDiagnosticTargets } from './runtimeDiagnosticTargets'
 
+/** RFC-491: what the smoke fixture seam receives — the fields this effect builds from the smoke request (the
+ * executable or test command head instead of the diagnostic target). The result is the public smoke wire. */
+export interface RuntimeSmokeFixtureOptions {
+  readonly protocol: RuntimeKind
+  readonly binaryPath: string | readonly string[]
+  readonly config?: {
+    readonly opencodePath?: string | null
+    readonly claudeCodePath?: string | null
+  }
+  readonly model?: string
+  readonly extraArgs?: readonly string[]
+  readonly isSandbox?: boolean
+}
+
 export interface RuntimeDiagnosticDependencies {
-  smokeRuntime(options: SmokeOptions): Promise<SmokeResult>
+  smokeRuntime(options: RuntimeSmokeFixtureOptions): Promise<RuntimeSmokeResult>
   beforeRuntimeProbeCache?(): void | Promise<void>
   probeTimeoutMsForTest?: number
 }
@@ -53,7 +67,7 @@ export function createLocalRuntimeManagementEffects(input: {
           ? (request: RuntimeSmokeRequest) => input.smoke.run(request)
           : function (this: RuntimeDriverManagementPort, request: RuntimeSmokeRequest) {
               // Preserve the original drivers receiver and optional key absence.
-              const native: SmokeOptions = {
+              const native: RuntimeSmokeFixtureOptions = {
                 get protocol() {
                   return request.protocol
                 },

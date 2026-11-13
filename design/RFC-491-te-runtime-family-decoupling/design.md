@@ -142,7 +142,8 @@ runtime-management 与用例的导入改指 shared，不留转出。`declarePlug
   污染（57）与未消费 public 符号不升（三个新查询都有 task-execution 消费）。
 - design §3.1 与 `rfc294Target.ts` 增一条虚线（目标边 104 → 105），`rfc294-design-parity` 随之。本机驱动窗口、插件加载失败识别、
   系统工作区与来源计划都在既有的「runtime-management 实现 `NativeRunFamilyProviders`」虚线之内。
-- `architectureReport.ts` 的遗留路径目标表删去两个已不存在的文件。
+- `architectureReport.ts` 的遗留路径目标表不改：表里保留已删文件的历史归属（现有 28 条先例，`rfc376-report` 用例也读其中的
+  `systemAgentRun.ts` 一条），两个文件的条目照留（§6 细化 1）。
 - `windows-platform.yml`、`integration-opencode.yml` 的路径过滤改指新位置；按 `git ls-files` 扫全仓旧路径。
 
 ## 4. 用例
@@ -160,7 +161,8 @@ runtime-management 与用例的导入改指 shared，不留转出。`declarePlug
   插件加载失败识别、启动清单读取与原实现一致。
 
 既有用例：import 改指新出处；构造 MCP 诊断执行体与调用 `runSystemAgent` 的用例改取 bootstrap 的提供者；本机任务代理族的假提供者补
-`pluginLoadFailures`；RFC-487、RFC-488 用例里对两个已迁走文件的引用改指新位置。
+`pluginLoadFailures`；RFC-488 用例里对迁走的运行器的 import 改指新位置（RFC-487、RFC-488 的一族路径集合与合成负对照保留原路径：它们写的
+是一族的旧形状，照样能认出）。
 
 ## 5. 失败模式
 
@@ -183,6 +185,29 @@ runtime-management 与用例的导入改指 shared，不留转出。`declarePlug
    `systemAgentRun.ts` 记为 task-execution。
 5. **只供用例的运行器移出生产，不改经提供者**：它们没有生产调用方（架构门的不可达清单与夹具缝的取值都印证），改经提供者只会给不可达的
    生产文件加装配；迁入 `tests/helpers/` 后契约用例照用（RFC-466、RFC-467 同一做法）。
+
+实施中的细化：
+
+1. **遗留路径目标表不改**：`architectureReport.ts` 的目标表保留已删文件的历史归属（现有 28 条先例），`rfc376-report` 用例也读其中的
+   `systemAgentRun.ts` 一条；两个文件的条目照留。
+2. **多销一对越 DAG 的 offered 文件对**：只供契约用例的本机任务运行入参（`nativeTaskAgentRunOptions.ts`）取 memory 的 public，在
+   task-execution → memory 这一越 DAG 的 offered 文件对里登记着；随文件移出生产销账，`rfc376-structural-guards` 与
+   `rfc294-review-offered-edge-dag` 的精确清单各删一条（46 → 45）。它取的两个 memory 符号另有生产消费方，未消费 public 符号不变。
+3. **材料工作区交回的位置带 `root`**：runtime-management 的实现对三种请求都交回 `root`，task-execution 的类型如实写成必填；本机系统代理
+   运行以它为 scratch 目录。
+4. **RFC-488 用例随新装配改指**：本机执行体收提供者，观测模块改取 bootstrap 的选择（`composeLocalMcpDiagnosticRunnerSelection`）；用例里
+   构造执行体与调用两个纯函数的地方改取 bootstrap 的提供者，断言意图不变。
+5. **单一拼写锁跟到 shared**：`rfc282-single-implementation-lock` 的「managed 技能判据」原登记在 `agentInjection.ts`，随
+   `managedSkillsOf` 迁入 shared；backend 的登记删去这一处，另加一条读 shared 文件、钉住唯一拼写的用例。
+6. **读源码的锁跟到新位置**：读本机任务运行、本机系统代理运行、探测运行器与启动清单读取源码的用例（`rfc154`、`rfc282-c0c2`、
+   `rfc143`、`opencode-spawn-pwd-env`、`rfc469`、`inventory-in-flight-fallback`、`tests/helpers/taskAgentSource.ts`）改读新位置，断言不变；
+   `rfc476`、`rfc477` 的负对照里「仍在 `services/` 的兄弟文件」改用 `services/demoSeed.ts`；`rfc328` 的工人写入文件清单删去本机任务运行，
+   负对照改用仍在的 `scriptRun.ts`。
+7. **两个 public 符号随唯一的生产读者撤下**（集中验证查出）：source-control `public/queries` 的 `resolveBoundaryMounts` 只被只供契约
+   用例的本机任务运行读，task-execution `public/participants` 的 `SystemAgentObservationRun` 只被 `services/systemAgentRun.ts` 读；两者
+   移走后成了未消费 public 符号（source-control 9 → 10、task-execution 0 → 1，越过上限）。按 RFC-294 design §3.3「没有生产 consumer 的
+   symbol 不公开」撤下这两个出口：前者的读者改取 source-control 的 domain 声明（`rfc281` 用例与测试 helper），RFC-487 用例 ④ 改为钉住
+   「只在 domain 声明、不再经 public 交出」；后者在 task-execution 内部本就取端口声明。public 出口净增 1（三个查询减两个出口）。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 

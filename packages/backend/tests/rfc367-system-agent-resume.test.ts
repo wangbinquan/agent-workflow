@@ -18,7 +18,12 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runSystemAgent } from '../src/services/systemAgentRun'
+import { createNativeSystemAgentRun } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
+import { localNativeSystemAgentRunProviders } from '@/bootstrap/runFamilyProviders'
+
+// RFC-491: the native system-agent run over bootstrap's providers (runtime-management's driver, material
+// workspace and material definition) — the original `runSystemAgent`.
+const runSystemAgent = createNativeSystemAgentRun(localNativeSystemAgentRunProviders)
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const SET_ENV_KEYS = [

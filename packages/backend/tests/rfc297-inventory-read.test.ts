@@ -14,7 +14,7 @@ import {
   facesFromStartupObservation,
   assembleFaces,
 } from '@/modules/task-execution/infrastructure/runtimeInventoryRead'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import type { InventorySnapshotCaptured, StartupObservation } from '@agent-workflow/shared'
 
 const opencodeSnapshot = (): InventorySnapshotCaptured => ({

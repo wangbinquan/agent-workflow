@@ -5,7 +5,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 
 import { describe, expect, test } from 'bun:test'
 import type { Plugin } from '@agent-workflow/shared'
-import { detectPluginLoadFailure } from '../src/modules/task-execution/infrastructure/local/nativeTaskAgentPluginLoadDiagnostics'
+import { detectPluginLoadFailure } from '../src/modules/runtime-management/infrastructure/local/pluginLoadDiagnostics'
 
 function plugin(name: string, cachedPath: string): Plugin {
   return {

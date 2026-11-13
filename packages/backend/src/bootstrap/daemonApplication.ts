@@ -125,8 +125,11 @@ import type { createLogger } from '@/util/log'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
-import type { LocalMcpDiagnosticRunFixture } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import type {
+  LocalMcpDiagnosticRunFixture,
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
 import { batchOwnerUserId } from '@/modules/source-control/composition'
 import { redactEventPayload } from '@/auth/tokenRedaction'
 import {

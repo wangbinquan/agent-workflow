@@ -23,7 +23,7 @@ import {
   getRuntime,
   seedBuiltinRuntimes,
 } from './helpers/runtimeRegistryApplication'
-import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
+import type { SmokeOptions, SmokeResult } from './helpers/nativeRuntimeSmoke'
 import { ulid } from 'ulid'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'

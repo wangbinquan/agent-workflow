@@ -1,14 +1,11 @@
 import { expect, spyOn, test } from 'bun:test'
-import {
-  bindNativeTaskAgentRunPurpose,
-  runNativeTaskAgent,
-} from '../src/modules/task-execution/infrastructure/local/nativeTaskAgentRun'
+import { bindNativeTaskAgentRunPurpose, runNativeTaskAgent } from './helpers/nativeTaskAgentRun'
 import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
-import type { RunNodeOptions } from '../src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions'
+import type { RunNodeOptions } from './helpers/nativeTaskAgentRunOptions'
 import type { TaskAgentMaterialDeclaration } from '../src/modules/task-execution/application/ports/taskAgentMaterial'
 import type { AgentSpawnPlan } from '../src/services/runtime/types'
 import { getRuntimeDriver } from '../src/services/runtime'
-import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '../src/util/log'
 
 function noRead(): never {

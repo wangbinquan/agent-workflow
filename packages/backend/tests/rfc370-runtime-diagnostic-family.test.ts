@@ -24,7 +24,7 @@ import type {
   RuntimeKind,
   RuntimeSmokeResult,
 } from '../src/modules/runtime-management/public/types'
-import type { SmokeOptions } from '../src/services/runtimeSmoke'
+import type { SmokeOptions } from './helpers/nativeRuntimeSmoke'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { describeEachProvider } from './helpers/eachProvider'
 

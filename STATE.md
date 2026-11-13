@@ -16,7 +16,39 @@
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
   2026-11-23：上次 2026-11-09，其后关闭 14 个后继（另一条件是满 20 个）。
 - **附带**：RFC-489 两处把 RFC-294 plan 的「S9 第 5 项」误记成「§4.6 第 5 项」（RFC-489 proposal 的母 RFC 一行与 STATE 本条的来由），一并改正。
-  RFC-489 的 Done 文档提交 `87cd1228f` 的 CI 结果随本 RFC 的实现提交补记。
+  RFC-489 的 Done 文档提交 `87cd1228f`（只改文档）：exact SHA 主 CI run 43357041695 里 `Playwright e2e (macos-latest shard 1/4)` 跑到
+  作业 20 分钟上限被取消（其间 `focus-ring-clip` 用完自己的 240 秒预算），「CI required」随之红，其余 68 个 job 通过；同一分片在它之前
+  的两个提交上通过，耗时 2.1m → 9.2m → 超过 18m，是 runner 变慢的形态；后继 `33661e100`（本 RFC 的落档，run 43360935953）70 个 job
+  全部通过，作为后继证据，记入 `docs/audit-backlog.md`。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁入 task-execution 的本机系统代理运行是适配器，落 `infrastructure/local/`（用例
+  核心仍在 application）；runtime-management 新落位的四个文件（三个静态事实、本机驱动的选择、插件加载失败识别、启动清单读取）在
+  `infrastructure/`，经 `public/queries` 或 composition 交出；不新增用例入口。C11 public 只增三个纯查询（种类判定、驱动能力、续会话
+  目标不存在的判据），撤下两个已无生产读者的出口，public surface 1,208 → 1,209；不导出 SQL 片段、行形状查询工厂或状态写原子；
+  consumer 自有端口登记 1 条虚线（runtime-management 实现 task-execution 的 `TaskRuntimeInventoryContent`，RFC-294 design §3.1 与
+  `rfc294Target.ts`，目标边 104 → 105）。C12 RFC-491 用例覆盖 task-execution 全部生产文件（下限 700）与一族全部文件（下限 30），
+  import 识别带负对照（相对路径、别名、re-export、动态 import、type-only），以及指定的 runtime-management、shared、bootstrap 与
+  workflow 文件和行为对拍（三个查询、材料引用的来源计划形式、提供者与 runtime-management 的函数引用相等）。C13 `counts.json` 60 项
+  实测都在 `max` 内；触及的 5 项已收紧到实测（跨 context 内部文件对 22 → 21、不可达生产文件 18 → 16、越 DAG 的 offered 文件对
+  46 → 45、legacy 横向文件 167 → 165、legacy 服务实现 48 → 46），其余与对照逐项相同。
+- **§14 不变量 / 运行时驱动一族第四步**：task-execution 与一族互不 import：task-execution import 一族的生产文件 16 → 0，一族指向
+  task-execution 的文件 2 → 0；一族之外 import 它的生产文件 30 → 18，只剩 runtime-management（12 → 16，新落位的四个文件）与
+  bootstrap（2）。跨 context 内部文件对 22 → 21，`commons-debt.json` 的 inbound 边 18 → 9。未消费 public 符号 91、public 类型偏差
+  57 不变；跨 context import 7,656 → 7,620（删 71 增 35）。对 RFC-294 plan §4.7 表的偏离（`runtimeSmoke.ts` 迁入 `tests/helpers/`、
+  `systemAgentRun.ts` 归 task-execution）见 design §6 第 4 条。下一步：整族迁入 runtime-management infrastructure（另立）。
+- **集中验证**（候选 1～5 基于 `33661e100`；验证末尾 HEAD 前进三次，都是另一会话的 RFC-490：实现 `aff2c86e3` 与本 RFC 的路径无交集，
+  最终候选落在它之上；之后的 `cf948fd5c`、`65e57fab7` 只改文档，与本 RFC 共用的三个文件段落互不重叠，详见 plan）：集中验证查出本 RFC 的一处问题：source-control 的 `resolveBoundaryMounts`、task-execution 的
+  `SystemAgentObservationRun` 随唯一的生产读者移走成了未消费 public 符号、越过上限（首批 `rfc376-structural-guards` 即红），撤下两个出口
+  后修复批全过（design §6 细化 7；教训补进 `docs/dev-gotchas.md`）。另把本 RFC 用例 ④ 的逐名重读改为共用文本缓存（负载下 3.1 秒，按
+  CI 的跑法 0.6 秒）。backend 与 shared `tsc` 0 错，eslint 与 promises 规则集无告警；RFC-491 用例 18 / 18（结构副本对 HEAD 红 10 条、负
+  对照绿）；首批 168 个文件 165 个通过；修复批 5 个文件全过；全量 SQLite 逐文件跑 2,932 个、2,908 个通过，其余 24 个不归本 RFC（发布账本
+  1 个是导出仓库没有真实历史；23 个撞用例自带的时限或看门狗，与 HEAD 同时 A/B 形状相同，`rfc135` 一处差别经两边各跑 4 轮确认 HEAD 同样
+  会红）。PostgreSQL lane 52 个文件 1,046 条里 1,004 条通过，红的都撞时限或连接在负载下中断，与 HEAD 同时 A/B 两边各 326 条、候选 285 条
+  与 HEAD 284 条通过、逐文件同形。按 CI 的跑法（默认 5 秒）跑 86 个相关文件，1,458 条里 1,371 条通过，红的 87 条都在 PostgreSQL 一侧，
+  与 HEAD 同时 A/B 形状相同（HEAD 1,439 条里 1,351 条）。架构报告 60 项实测都在 `max` 内（触及的 5 项已收紧），在 `aff2c86e3` 上重采
+  变化逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **下一步**（运行时驱动一族，RFC-294 plan §4.7）：整族迁入 runtime-management infrastructure（另立）——一族之外只剩
+  runtime-management 与 bootstrap 用它。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的其他 context 对按对另立；成员表一族另立。
+  独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 14 个后继（另一条件是满 20 个）。
 
 ## 2026-11-12 RFC-490 脑图澄清的思考引导与全景交互重整（Done；`design/RFC-490-mindmap-guided-thinking-and-panorama/`）
 

@@ -99,7 +99,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
     'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
     // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
-    'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts -> packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts',
+    // RFC-491：只供契约用例的本机兼容运行迁入 tests/helpers，它指向 source-control 的一对销账。
     'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
     'packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
     'packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',
@@ -151,7 +151,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskInputFiles.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts -> knowledge-evolution',
     'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts -> memory',
+    // RFC-491：本机兼容运行的入参迁入 tests/helpers，它指向 memory 的一对销账。
     'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> memory',
   ],
   'platform-to-modules-file-pairs': [],
@@ -227,8 +227,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-466：`legacyCallClosure.ts`（RFC-349 冻结行走预言）迁入 `tests/helpers/`，`services/workgroups.ts` 删除（销账）。
     // RFC-467：RFC-349 注入预言与只有它在用的 `agentDeps` / `mcpClosure` / `pluginClosure` 迁入 `tests/helpers/`，两个技能转出
     // 删除（销账，6 个）。
-    'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
+    // RFC-491：只供 RFC-370 契约用例的本机兼容运行（`nativeTaskAgentRun`、`nativeTaskAgentRunOptions`）迁入 `tests/helpers/`
+    // （销账，2 个）。
     'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
     'packages/backend/src/services/driverLease.ts',
     'packages/backend/src/services/runtime/opencode/plugin/aw-inventory-dump.mjs',
@@ -312,8 +312,6 @@ const RETAINED_REACHABILITY_GROUPS = [
     reason:
       'Retained hosted compatibility address or implementation used by RFC-370 contract tests.',
     files: [
-      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
-      'modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
       'modules/event-center/infrastructure/customEventObserverProgram.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
       'modules/task-execution/composition/systemAgentRun.ts',

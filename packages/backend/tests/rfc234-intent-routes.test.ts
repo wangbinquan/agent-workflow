@@ -22,11 +22,11 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

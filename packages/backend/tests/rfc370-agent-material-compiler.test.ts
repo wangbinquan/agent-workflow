@@ -9,7 +9,12 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_CONFIG_DIR_PROFILE, type Agent, type Mcp } from '@agent-workflow/shared'
+import {
+  DEFAULT_CONFIG_DIR_PROFILE,
+  type Agent,
+  type Mcp,
+  emptyDeclaredManifest,
+} from '@agent-workflow/shared'
 import type {
   AgentMaterialEvidenceCapabilities,
   AgentMaterialIntent,
@@ -24,7 +29,7 @@ import {
   compileLegacyNativeAgentMaterial,
 } from '../src/modules/runtime-management/infrastructure/local/legacyAgentMaterialBinding'
 import type { RuntimeProfile } from '../src/modules/runtime-management/public/types'
-import { emptyDeclaredManifest, type RuntimePlugin } from '../src/services/execution/agentInjection'
+import { type RuntimePlugin } from '../src/services/execution/agentInjection'
 import { getRuntimeDriver } from '../src/services/runtime'
 import { selectLocalAgentMaterialDefinition } from '../src/modules/runtime-management/infrastructure/local/localAgentMaterialDefinition'
 import { createLocalAgentMaterialEvidence } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'

@@ -21,7 +21,10 @@ import {
 } from '@/modules/memory/application/distill/schedule'
 import type { NativeMemoryDistillRuntimeResolver } from '@/modules/memory/application/ports/distillWorkStore'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 type NativeRunFixture = (options: SystemAgentRunOptions) => Promise<SystemAgentRunResult>

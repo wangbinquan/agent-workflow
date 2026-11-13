@@ -2,19 +2,25 @@
 // source-control, resource-catalog). Each port lists only the members the openers use; the composition passes the
 // modules' implementations, which satisfy them structurally. No other module's composition or infrastructure is
 // imported here.
-import type { RuntimeKind } from '@/modules/runtime-management/public/types'
+// RFC-491: the native system-agent run and the local MCP diagnostic read the runtime's driver through
+// `NativeRuntimeDriver`; the local task agent family reads plugin-load failures through `NativePluginLoadFailures`. No
+// runtime driver family module is imported here.
+import type { InventorySnapshot, Mcp, RuntimeConfigDirProfile } from '@agent-workflow/shared'
+import type { Logger } from '@/util/log'
+import type { RuntimeKind, RuntimeProfile } from '@/modules/runtime-management/public/types'
 import type {
   AgentMaterialContentReference,
   AgentMaterialIntent,
   AgentMaterialSeedFile,
   AgentMaterialWorkspace,
   RuntimeDiagnosticTarget,
+  RuntimeDriverCapabilities,
   SystemAgentRetainedContents,
   SystemAgentWorkspaceScope,
   SystemAgentWorkspaceScopes,
 } from '@/modules/runtime-management/public/participants'
-import type { RuntimePlugin } from '@/services/execution/agentInjection'
-import type { ResolvedSkill } from '@/services/runtime/types'
+import type { NativeSkillContent, RuntimePlugin } from '@/modules/resource-catalog/public/types'
+import type { NativeAgentCompiledPlan } from './agentInvocation'
 import type { createLocalAgentInvocationPreparation } from './agentInvocationPreparation'
 import type { TaskAgentRunFamily } from '../../application/ports/taskAgentRunFamily'
 import type { TaskAgentRunPurpose } from '../../application/ports/taskAgentMaterial'
@@ -29,7 +35,7 @@ export interface NativeMaterialContents {
   workspace(reference: AgentMaterialContentReference): string
   runContent(reference: AgentMaterialContentReference): string
   runtimeBinary(reference: AgentMaterialContentReference): string
-  skill(reference: NativeMaterialSkill): ResolvedSkill
+  skill(reference: NativeMaterialSkill): NativeSkillContent
   plugin(reference: NativeMaterialPlugin): RuntimePlugin
 }
 
@@ -38,8 +44,8 @@ export interface NativeMaterialDefinition {
   readonly protocol: LocalPreparationInput['binding']['protocol']
   /** RFC-489: a run's evidence over the runtime's own hooks (the run gives its scope). */
   readonly evidence: LocalPreparationInput['binding']['evidence']
-  /** RFC-489: a native plan's material reference. */
-  readonly materialReference: LocalPreparationInput['binding']['materialReference']
+  /** RFC-489: a native plan's material reference. RFC-491: a wrapped plan given its source plan takes the source's. */
+  readonly materialReference: (plan: object, sourcePlan?: object) => string
   createCompiler(
     contents: NativeMaterialContents,
     fixture?: { readonly binaryOverride?: readonly string[] },
@@ -70,7 +76,7 @@ export interface NativeSystemAgentContents {
   bindFixtureRetainedResult(reference: string, root: string): void
 }
 
-/** The native material workspace a smoke or a task run binds (runtime-management). */
+/** The native material workspace a smoke, a task run or (RFC-491) a native system agent run binds (runtime-management). */
 export type NativeMaterialWorkspaceRequest =
   | {
       readonly kind: 'task'
@@ -80,13 +86,25 @@ export type NativeMaterialWorkspaceRequest =
       readonly workingDirectory: () => string
     }
   | {
+      readonly kind: 'system'
+      readonly parent: () => string
+      readonly feature: () => string
+      readonly scratchName: () => string | undefined
+      readonly seedFiles?: () => readonly AgentMaterialSeedFile[] | undefined
+    }
+  | {
       readonly kind: 'smoke'
       readonly appHome: string
     }
 
 export interface NativeMaterialWorkspace {
   readonly workspace: AgentMaterialWorkspace
-  readonly locations: { readonly workingDirectory: string; readonly runDirectory: string }
+  readonly locations: {
+    /** RFC-491: the workspace root (a native system agent run's scratch directory). */
+    readonly root: string
+    readonly workingDirectory: string
+    readonly runDirectory: string
+  }
 }
 
 export type NativeMaterialWorkspaces = (
@@ -126,3 +144,49 @@ export type NativeTaskAgentWorkspaceContentsFactory = (input: {
 export type NativeGitControlObservation = (input: {
   readonly workingDirectory: () => string
 }) => TaskAgentRunPurpose['gitControlObservation']
+
+/** RFC-491: one native assembly request as the native system-agent run and the local MCP diagnostic write it (the
+ * runtime driver's spawn context accepts it). */
+export interface NativeSpawnRequest {
+  readonly injection: { readonly mcps: readonly Mcp[] }
+  readonly prompt: string
+  readonly agentName: string
+  readonly systemPrompt: string
+  readonly resolvedParamsByAgent: ReadonlyMap<string, RuntimeProfile>
+  readonly cwd: string
+  readonly runRoot: string
+  readonly configDir?: RuntimeConfigDirProfile
+  readonly freshAgentRun: boolean
+  readonly nativeSessionId?: string | null
+  readonly resumeSessionId?: string | null
+  readonly runtimeBinary?: string | null
+  readonly binaryOverride?: readonly string[]
+  readonly nodeRunId: string
+  readonly log: Logger
+}
+
+/** RFC-491: the members of a runtime's native driver the native system-agent run and the local MCP diagnostic read
+ * (runtime-management's registered driver, selected by bootstrap's binding). */
+export interface NativeRuntimeDriver {
+  readonly capabilities: RuntimeDriverCapabilities
+  buildSpawn(request: NativeSpawnRequest): Promise<NativeAgentCompiledPlan>
+  defaultBinary(config: {
+    readonly opencodePath?: string | null
+    readonly claudeCodePath?: string | null
+  }): string[]
+  readInventory?(input: { runRoot: string; nodeKind: string }): Promise<InventorySnapshot | null>
+  createMcpTestNativeSessionId?(): string | null
+  mcpTestSessionReference?(input: { turnSeq: number; nativeSessionId: string | null }): {
+    nativeSessionId?: string
+    resumeSessionId?: string
+  }
+}
+
+/** RFC-491: selects one runtime kind's native driver. */
+export type NativeRuntimeDrivers = (kind: RuntimeKind) => NativeRuntimeDriver
+
+/** RFC-491: one stderr line's plugin-load failure, mapped back to a plugin of the run (runtime-management's knowledge). */
+export type NativePluginLoadFailures = (
+  line: string,
+  plugins: readonly RuntimePlugin[],
+) => { pluginName: string; message: string } | null

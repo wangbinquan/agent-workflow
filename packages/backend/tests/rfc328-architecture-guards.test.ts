@@ -23,7 +23,7 @@ const WORKER_MUTATION_FILES = new Set([
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
   // RFC-468: `services/nodeRunMint.ts` is deleted (it never wrote rows itself; `mintNodeRunTx` retired with RFC-359).
   // RFC-454: the runner body (the `services/runner.ts` re-export it was listed under is deleted).
-  'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+  // RFC-491: the native compatibility run left production for tests/helpers (contract tests only).
   'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts',
 ])
 const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
@@ -284,9 +284,8 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
   // runtime-management, resource-catalog or source-control internals — bootstrap binds the providers and
-  // runtime-management assembles its own runtime management (21 bridges retired). The native compatibility run still
-  // binds source-control's git observation (unreachable production file, kept for the RFC-370 contract tests).
-  'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+  // runtime-management assembles its own runtime management (21 bridges retired). RFC-491: the native compatibility run
+  // (contract tests only) moved to tests/helpers, retiring its source-control git observation bridge.
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-370 H3: standalone binds the neutral SC presence query at this composition.
@@ -874,7 +873,8 @@ describe('RFC-328 architecture guards', () => {
     expect(
       rfc328GuardViolations(
         fixture(
-          'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+          // RFC-491: a remaining worker mutation file (the native compatibility run left production).
+          'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts',
           'function staleWriter(db: any) { db.update(nodeRuns).set({ status: "done" }).run() }',
         ),
       ).some((violation) => violation.startsWith('raw worker mutation nodeRuns:')),

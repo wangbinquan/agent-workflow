@@ -30,7 +30,7 @@ import { createLogger } from '../src/util/log'
 import { createLocalAgentMaterialCompiler } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { AgentMaterialIntent } from '../src/modules/runtime-management/application/ports/agentMaterial'
 import { getNativeAgentMaterialReference } from '../src/services/runtime'
-import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import type { AgentSpawnPlan } from '../src/services/runtime/types'
 
 const roots: string[] = []

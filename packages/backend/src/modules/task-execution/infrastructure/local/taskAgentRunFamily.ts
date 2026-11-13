@@ -17,12 +17,12 @@ import { createLocalAgentInvocationPreparation } from './agentInvocationPreparat
 import { bindLocalAgentExecutionParticipants } from './agentExecutionEffect'
 import { broadcastNodeStatus } from '../nodeStatusEvents'
 import { createFilePortOutputValidationContent } from './filePortOutputValidation'
-import { detectPluginLoadFailure } from './nativeTaskAgentPluginLoadDiagnostics'
 import type {
   NativeGitControlObservation,
   NativeMaterialDefinitions,
   NativeMaterialWorkspace,
   NativeMaterialWorkspaces,
+  NativePluginLoadFailures,
   NativeTaskAgentMaterialReferences,
   NativeTaskAgentRuntimes,
   NativeTaskAgentWorkspaceContentsFactory,
@@ -47,6 +47,8 @@ export function createLocalTaskAgentRunFamily(
     readonly gitControlObservation: NativeGitControlObservation
     readonly materialWorkspaces: NativeMaterialWorkspaces
     readonly materialDefinitions: NativeMaterialDefinitions
+    /** RFC-491: the runtime's plugin-load failure judgment (runtime-management). */
+    readonly pluginLoadFailures: NativePluginLoadFailures
     readonly outputValidation: (content: PortOutputValidationContent) => PortOutputContentValidation
   },
 ): TaskAgentRunFamily {
@@ -181,7 +183,7 @@ export function createLocalTaskAgentRunFamily(
                 })
               },
               detectPluginLoadFailure(_compiled, line) {
-                return detectPluginLoadFailure(
+                return providers.pluginLoadFailures(
                   line,
                   scope.material.plugins.map((plugin) => resources.contents.plugin(plugin)),
                 )

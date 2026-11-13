@@ -15,7 +15,7 @@ import type {
   TaskExecutionPluginSnapshot,
   TaskExecutionResourceRequest,
 } from '@/modules/resource-catalog/public/types'
-import type { ResolvedSkill } from '@/services/runtime/types'
+import type { NativeSkillContent } from '@/modules/resource-catalog/public/types'
 import type {
   TaskAgentMaterialReferences,
   TaskAgentResourceMaterial,
@@ -44,7 +44,7 @@ export async function loadTaskExecutionResourceSnapshot<
 export interface TaskExecutionResolvedInjectionSpec {
   readonly agent: TaskExecutionAgentSnapshot
   readonly dependents: readonly TaskExecutionAgentSnapshot[]
-  readonly skills: readonly ResolvedSkill[]
+  readonly skills: readonly NativeSkillContent[]
   readonly mcps: readonly TaskExecutionMcpSnapshot[]
   readonly plugins: readonly TaskExecutionPluginSnapshot[]
 }
@@ -101,7 +101,7 @@ export async function resolveTaskExecutionInjection(
       kind: 'agent-injection',
       agentId,
     })
-    const skills: ResolvedSkill[] = snapshot.skills.map((skill) =>
+    const skills: NativeSkillContent[] = snapshot.skills.map((skill) =>
       skill.kind === 'project'
         ? { name: skill.name, sourceKind: 'project' }
         : {

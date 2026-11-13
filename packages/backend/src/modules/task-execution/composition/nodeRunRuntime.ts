@@ -1,4 +1,4 @@
-import { isKnownRuntimeKind } from '@/services/runtime'
+import { isKnownRuntimeKind } from '@/modules/runtime-management/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeSelectionParticipantInTx } from '@/modules/runtime-management/public/participants'
 import type {

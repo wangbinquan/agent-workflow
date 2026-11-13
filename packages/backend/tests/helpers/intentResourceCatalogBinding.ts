@@ -34,7 +34,10 @@ import {
   type RunIntentTurnDeps,
 } from '@/modules/intent/application/turnEngine'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import {
   dispatchIntentTurn,
   resumeQueuedIntentWorkingSets,

@@ -26,7 +26,8 @@ import {
   type BoundaryCtx,
 } from '../src/services/execution/workspaceBoundary'
 // RFC-487: the mount rule moved into source-control's domain and is offered through its public queries.
-import { resolveBoundaryMounts } from '@/modules/source-control/public/queries'
+// RFC-491: the rule is read at its source-control domain declaration (no longer offered by the public queries).
+import { resolveBoundaryMounts } from '@/modules/source-control/domain/taskAgentMounts'
 import {
   composeOpencodeBoundary,
   machineSkillRoots,

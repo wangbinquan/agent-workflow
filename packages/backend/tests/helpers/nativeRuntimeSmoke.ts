@@ -1,3 +1,6 @@
+// RFC-491: moved from `src/services/runtimeSmoke.ts` — no production caller remains (the native smoke runs on Task
+// Execution's smoke run family); tests pass it into runtime-management's smoke fixture seam. Unchanged otherwise.
+//
 // RFC-112 PR-B — deep-smoke conformance probe. Given a (protocol, binaryPath),
 // run ONE minimal real call through that protocol's driver against the binary
 // and verify it speaks the protocol end-to-end: emits a parseable stream of the
@@ -30,7 +33,6 @@ import {
   DEFAULT_TIMEOUT_MS,
   runRuntimeSmokeCore,
 } from '@/modules/task-execution/application/runtimeSmoke'
-export { MODEL_FAIL_SIGNATURES } from '@/modules/task-execution/application/runtimeSmoke'
 
 export type SmokeOutcome =
   | 'conforms'

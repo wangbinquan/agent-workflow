@@ -8,9 +8,10 @@ import ts from 'typescript'
 export function readTaskAgentSources(): string {
   return [
     'modules/task-execution/application/taskAgentRun.ts',
-    'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
-    'modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
-    'modules/task-execution/infrastructure/local/nativeTaskAgentPluginLoadDiagnostics.ts',
+    // RFC-491: the native compatibility run moved to tests/helpers; the plugin-load judgment to runtime-management.
+    '../tests/helpers/nativeTaskAgentRun.ts',
+    '../tests/helpers/nativeTaskAgentRunOptions.ts',
+    'modules/runtime-management/infrastructure/local/pluginLoadDiagnostics.ts',
   ]
     .map((file) => readFileSync(resolve(import.meta.dir, '../../src', file), 'utf8'))
     .join('\n')

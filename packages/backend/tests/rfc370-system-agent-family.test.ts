@@ -6,8 +6,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { createSystemAgentRunFamily } from '../src/modules/task-execution/application/systemAgentRun'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
-import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
 import type { SystemAgentRunRequest } from '../src/modules/task-execution/application/ports/systemAgentRunFamily'
 import type {
   SystemAgentRetainedContents,

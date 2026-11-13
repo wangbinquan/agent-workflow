@@ -80,3 +80,9 @@ export interface RuntimeExecutionQueries {
 }
 
 export { isRuntimeMcpTestEligible } from '../infrastructure/mcpTestEligibility'
+/** RFC-491: the kind guard, the driver's static capabilities and its missing-resume-session judgment. */
+export {
+  isKnownRuntimeKind,
+  runtimeDriverCapabilities,
+  detectRuntimeSessionNotFound,
+} from '../infrastructure/runtimeProtocolFacts'

@@ -16,7 +16,7 @@ import {
   notModeledDisabledKinds,
   type DisableableResourceKind,
 } from '@/modules/resource-catalog/public/types'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import type { DeclarationFace, RuntimeDriver } from './types'
 
 const LEGAL_OBSERVATIONS = new Set(['inventory-file', 'init-event', 'none'])

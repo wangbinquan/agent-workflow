@@ -699,6 +699,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   就涨（intent 的 `canAuditIntentSessions` 只有 facade 转出，`callEdgeKey` 只有迁走的预言在取）——按 RFC-294 design §3.3 当场收回。
   只把值挪走、留下一个只剩 `export type` 的 public 文件，它没有值 import，会变成**新增的不可达生产文件**（type-only import 不算可达边）；
   没有 importer 就整个删掉。删前后各采一次架构报告，比对 `unconsumedPublicSymbols` 与 `unreachable-production-files` 两张清单。
+  RFC-491 再撞（迁走的是读者，不是转出）：只供契约用例的本机任务运行与 `services/systemAgentRun.ts` 移出生产后，source-control 的
+  `resolveBoundaryMounts`、task-execution 的 `SystemAgentObservationRun` 各成未消费、越过上限，到首批的 `rfc376-structural-guards` 才红。
+  迁出前对被迁文件 import 的每个 `public/` 符号全仓查一遍其余生产读者；没有就同批撤下出口，读者改取声明处。
 - **钉调用行原文的源码兜底**（RFC-466 实撞）：把直调改成端口注入之前，按被改那一行的**原文**全仓搜用例——`rfc359-w58` 钉着
   `canViewResource(dependencies.db, actor, 'workflow', workflow)`，改成 `dependencies.canViewWorkflow(...)` 后 1 ms 内红；兜底改成同时锁
   注入的调用与实现处的那一条，等价于原来那一行。

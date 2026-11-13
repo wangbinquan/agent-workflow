@@ -11,7 +11,7 @@
 // ③ 本机 doctor 经注入的 `DoctorRuntimeBinaryProbe` 探测；bootstrap 的 doctor 工厂与 standalone 的软探测都取 runtime-management 的
 //    `composeDefaultRuntimeBinaryProbe`。探测链换了文件，`windows-platform.yml` 的两份路径过滤都登记新位置（bootstrap 的绑定与
 //    默认二进制探测），改动它们仍会触发 Windows 上的 doctor 用例（同 RFC-473 的登记做法）。
-// ④ `resolveBoundaryMounts` 只在 source-control 的 domain 声明、经 `public/queries` 交出；`SkillSource`、`NativeSkillContent`、
+// ④ `resolveBoundaryMounts` 只在 source-control 的 domain 声明（RFC-491 起不再经 `public/queries` 交出）；`SkillSource`、`NativeSkillContent`、
 //    `RuntimePlugin` 只在 resource-catalog 的 domain 声明、经 `public/types` 交出；一族的 `ResolvedSkill` 只在一族声明一次，扩展
 //    `NativeSkillContent`、只加驱动侧的 `readContentVersion`（public 合同只放数据，不放函数）；一族的其余原位置只剩类型转出。
 // ⑤ 行为（两种 provider）：memory 经 bootstrap 形状的绑定解析四种输入，结果与此前 memory 自己的解析一致；doctor 的 `probeRuntime`
@@ -304,13 +304,15 @@ describe('RFC-487 ③ doctor 的运行时探测经 system-operations 自有端�
 })
 
 describe('RFC-487 ④ 挂载规则与原生内容记录的类型各在 owner 声明一次', () => {
-  test('resolveBoundaryMounts 只在 source-control 的 domain 声明，经 public/queries 交出', () => {
+  test('resolveBoundaryMounts 只在 source-control 的 domain 声明，不再经 public/queries 交出', () => {
     expect(declarationsOf('resolveBoundaryMounts', PRODUCTION)).toEqual([
       'modules/source-control/domain/taskAgentMounts.ts',
     ])
+    // RFC-491: its one production reader (the native compatibility run) left production, so the public queries stop
+    // offering it (RFC-294 design §3.3: no production consumer, no public symbol).
     expect(
       reExportsFrom('modules/source-control/public/queries.ts', '../domain/taskAgentMounts'),
-    ).toEqual(['resolveBoundaryMounts'])
+    ).toEqual([])
   })
 
   test('原生内容记录只在 resource-catalog 的 domain 声明；一族的 ResolvedSkill 扩展它、只加驱动侧的重读', () => {

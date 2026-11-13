@@ -30,7 +30,7 @@ import type {
   AgentMaterialContentReference,
   SystemAgentWorkspaceScope,
 } from '@/modules/runtime-management/public/participants'
-import { emptySystemAgentOutputEvidence } from '@/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
 import { createUser } from './helpers/userFixture'
 import { errorHandler } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'

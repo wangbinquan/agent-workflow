@@ -212,8 +212,9 @@ export type {
 
 export type { TaskExecutionPermits } from '../application/ports/taskExecutionPermits'
 
+// RFC-491: `SystemAgentObservationRun` is no longer offered here — its one outside reader, `services/systemAgentRun.ts`,
+// moved into task-execution (`infrastructure/local/nativeSystemAgentRun.ts` reads the port declaration).
 /** The execution demand owns the joint invocation consumed by system runs. */
-export type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'
 export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
 export type {
   SystemAgentRunFamily,

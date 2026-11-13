@@ -33,7 +33,7 @@ import { ResourceOperationCoordinator } from '@/modules/resource-catalog/infrast
 import { mcpOperationConfigHashOf } from '@/modules/resource-catalog/domain/mcpOperationRevision'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
-import { createLocalMcpDiagnosticRunner } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import { composeLocalMcpDiagnosticRunnerSelection } from '@/bootstrap/runFamilyProviders'
 
 const actor = buildActor({
   user: {
@@ -535,7 +535,7 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
         receivers: unknown[] = []
       const native = createLocalMcpDiagnosticsApplication({
         ...h.provider,
-        execution: createLocalMcpDiagnosticRunner(),
+        execution: composeLocalMcpDiagnosticRunnerSelection({}),
         loadMcp: async () => h.mcp,
         loadRuntime: async () => h.row,
         isRuntimeEligible: () => true,
@@ -588,7 +588,7 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
         {
           configuration: { read: () => ({}) },
           appHome: '/unused/native-mcp',
-          execution: createLocalMcpDiagnosticRunner(),
+          execution: composeLocalMcpDiagnosticRunnerSelection({}),
           loadRuntime: async () => h.row,
           isRuntimeEligible: () => true,
           killStaleRunProcessTree: async function (this: unknown, run, options) {

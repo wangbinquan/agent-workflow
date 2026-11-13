@@ -28,17 +28,15 @@ import {
   createLocalMcpDiagnosticsApplication,
   type LocalMcpDiagnosticsApplicationInput,
 } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import {
-  createLocalMcpDiagnosticRunner,
-  type LocalMcpDiagnosticRunFixture,
-} from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import { type LocalMcpDiagnosticRunFixture } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import { composeLocalMcpDiagnosticRunnerSelection } from '@/bootstrap/runFamilyProviders'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { getRuntimeDriver } from '../src/services/runtime'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import {
   getMcpByIdForTest as getMcpById,
   type McpCatalogTestBinding as McpServiceBinding,
@@ -90,7 +88,9 @@ function createMcpDiagnosticsApplication(input: McpDiagnosticsApplicationInput) 
   const { runFn, ...dependencies } = input
   return createLocalMcpDiagnosticsApplication({
     ...dependencies,
-    execution: createLocalMcpDiagnosticRunner(runFn === undefined ? {} : { fixture: { runFn } }),
+    execution: composeLocalMcpDiagnosticRunnerSelection(
+      runFn === undefined ? {} : { fixture: { runFn } },
+    ),
   })
 }
 

@@ -7,8 +7,7 @@
 // settles the binding as an explicit unknown so it never blocks a volume.
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { DAEMON_SHUTDOWN_ABORT_REASON, emptyDeclaredManifest } from '@agent-workflow/shared'
 import type {
   BusinessEvent,
   BusinessEventPage,

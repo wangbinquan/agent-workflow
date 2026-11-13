@@ -536,12 +536,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 v3 V5：托管数据库恢复在导入事务内调用各 owner 的恢复后归一参与者（HostedRestoreNormalizationParticipant 由 system-operations public participants 声明）；task-execution 实现该参与者的 offered 边尚未进入目标 DAG，精确登记，随 RestoreParticipant 物理恢复协议（W9-E）收敛。',
     removeAfterWave: 'W9-E（物理恢复协议）',
   },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
-    to: 'memory',
-    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
+  // RFC-491: `local/nativeTaskAgentRunOptions.ts` (contract tests only) moved to tests/helpers — its memory edge settled.
 
   {
     from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',

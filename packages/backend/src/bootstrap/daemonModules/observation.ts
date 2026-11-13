@@ -7,10 +7,8 @@ import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/qu
 import { type ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import {
-  createLocalMcpDiagnosticRunner,
-  type LocalMcpDiagnosticRunFixture,
-} from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import { type LocalMcpDiagnosticRunFixture } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+import { composeLocalMcpDiagnosticRunnerSelection } from '../runFamilyProviders'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mcpOperationCoordinator } from '@/modules/resource-catalog/composition'
 import type { DeploymentSelections } from '../deploymentProfile'
@@ -107,7 +105,7 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
     },
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
     configuration: input.configuration,
-    execution: createLocalMcpDiagnosticRunner(
+    execution: composeLocalMcpDiagnosticRunnerSelection(
       mcpRunFixture === undefined ? {} : { fixture: { runFn: mcpRunFixture } },
     ),
     ...mcpRuntimeTestDependencies,

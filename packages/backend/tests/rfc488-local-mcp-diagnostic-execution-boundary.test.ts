@@ -38,6 +38,8 @@ import {
 } from '@agent-workflow/shared'
 import type { LocalMcpDiagnosticExecution } from '@/modules/resource-catalog/composition/required-ports'
 import { createLocalMcpDiagnosticRunner } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
+// RFC-491: the runner and its two pure halves read the driver through bootstrap's native system-agent run providers.
+import { localNativeSystemAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import {
   localMcpDiagnosticRunOptions,
   verifyLocalMcpDiagnosticTurn,
@@ -45,7 +47,7 @@ import {
 } from '@/modules/task-execution/infrastructure/local/mcpDiagnosticRunner'
 import { getRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnPlan } from '@/services/runtime/types'
-import type { SystemAgentRunResult } from '@/services/systemAgentRun'
+import type { SystemAgentRunResult } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { createLogger } from '@/util/log'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -253,13 +255,21 @@ describe('RFC-488 ③ task-execution 实现端口，bootstrap 绑定', () => {
       "} from '../infrastructure/local/mcpDiagnosticRunner'",
     )
     // Type-level: the runner is Resource Catalog's port.
-    const execution: LocalMcpDiagnosticExecution = createLocalMcpDiagnosticRunner()
+    const execution: LocalMcpDiagnosticExecution = createLocalMcpDiagnosticRunner(
+      {},
+      localNativeSystemAgentRunProviders,
+    )
     expect(typeof execution.run).toBe('function')
   })
 
   test('bootstrap 的观测模块建本机实现，守护进程阶段给了夹具时选本机装配；resource-catalog 里不再出现 runFn', () => {
     const observation = read('bootstrap/daemonModules/observation.ts')
-    expect(observation).toContain('execution: createLocalMcpDiagnosticRunner(')
+    // RFC-491: the observation module takes bootstrap's selection, which builds the runner over the native system-agent
+    // run providers.
+    expect(observation).toContain('execution: composeLocalMcpDiagnosticRunnerSelection(')
+    expect(read('bootstrap/runFamilyProviders.ts')).toContain(
+      'return createLocalMcpDiagnosticRunner(input, localNativeSystemAgentRunProviders)',
+    )
     expect(observation).toContain('{ fixture: { runFn: mcpRunFixture } }')
     // One diagnostics family per composition, the adapter's selection; a test fixture selects the local family in the
     // daemon phase, and the unstarted scope keeps composing (and tracking) its own local family.
@@ -375,10 +385,12 @@ function result(overrides: Partial<SystemAgentRunResult> = {}): SystemAgentRunRe
   } as SystemAgentRunResult
 }
 
+const drivers = localNativeSystemAgentRunProviders.drivers
+
 describe('RFC-488 ④ 本机实现的行为与原本机执行体一致', () => {
   test('真运行：选项、观测与续会话、启动上下文逐字段等于原组装', () => {
     const req = request()
-    const opts = localMcpDiagnosticRunOptions(req, { fixture: false, log })
+    const opts = localMcpDiagnosticRunOptions(req, { fixture: false, log }, drivers)
     expect(opts).toMatchObject({
       feature: 'mcp-runtime-test',
       agentName: 'aw-mcp-runtime-test',
@@ -445,6 +457,7 @@ describe('RFC-488 ④ 本机实现的行为与原本机执行体一致', () => {
     const opts = localMcpDiagnosticRunOptions(
       request({ beforeSpawn: async () => void order.push('diagnostic-gate') }),
       { fixture: false, log },
+      drivers,
     )
     const runDir = mkdtempSync(join(tmpdir(), 'rfc488-'))
     try {
@@ -478,11 +491,12 @@ describe('RFC-488 ④ 本机实现的行为与原本机执行体一致', () => {
     const plain = localMcpDiagnosticRunOptions(
       request({ observe: undefined, resumeSessionId: undefined }),
       { fixture: false, log },
+      drivers,
     )
     expect('observe' in plain).toBe(false)
     expect('resumeSessionId' in plain).toBe(false)
     const req = request()
-    const fixture = localMcpDiagnosticRunOptions(req, { fixture: true, log })
+    const fixture = localMcpDiagnosticRunOptions(req, { fixture: true, log }, drivers)
     expect('observe' in fixture).toBe(false)
     expect('resumeSessionId' in fixture).toBe(false)
     expect(fixture.buildCtx).toBeUndefined()
@@ -504,13 +518,20 @@ describe('RFC-488 ④ 本机实现的行为与原本机执行体一致', () => {
 
   test('启动校验只对真运行的成功轮次做；声明清单缺失时报错；结果与 shared 的判据一致', async () => {
     const req = request()
-    expect(await verifyLocalMcpDiagnosticTurn(req, result(), { fixture: true })).toBeUndefined()
     expect(
-      await verifyLocalMcpDiagnosticTurn(req, result({ status: 'timeout' }), { fixture: false }),
+      await verifyLocalMcpDiagnosticTurn(req, result(), { fixture: true }, drivers),
     ).toBeUndefined()
-    await expect(verifyLocalMcpDiagnosticTurn(req, result(), { fixture: false })).rejects.toThrow(
-      'mcp-test declared manifest missing from run result (assembly seam broken)',
-    )
+    expect(
+      await verifyLocalMcpDiagnosticTurn(
+        req,
+        result({ status: 'timeout' }),
+        { fixture: false },
+        drivers,
+      ),
+    ).toBeUndefined()
+    await expect(
+      verifyLocalMcpDiagnosticTurn(req, result(), { fixture: false }, drivers),
+    ).rejects.toThrow('mcp-test declared manifest missing from run result (assembly seam broken)')
     const driver = getRuntimeDriver('claude-code')
     const expected = verifyStartup(
       DECLARED,
@@ -520,12 +541,17 @@ describe('RFC-488 ④ 本机实现的行为与原本机执行体一致', () => {
       }),
     )
     expect(
-      await verifyLocalMcpDiagnosticTurn(req, result({ declared: DECLARED }), { fixture: false }),
+      await verifyLocalMcpDiagnosticTurn(
+        req,
+        result({ declared: DECLARED }),
+        { fixture: false },
+        drivers,
+      ),
     ).toEqual(expected)
   })
 
   test('跨轮会话支持、原生会话号与可执行文件取驱动，登记的可执行文件优先', () => {
-    const runner = createLocalMcpDiagnosticRunner()
+    const runner = createLocalMcpDiagnosticRunner({}, localNativeSystemAgentRunProviders)
     for (const protocol of ['opencode', 'claude-code'] as const) {
       const driver = getRuntimeDriver(protocol)
       expect(runner.supportsSession(protocol)).toBe(driver.mcpTestSessionReference !== undefined)

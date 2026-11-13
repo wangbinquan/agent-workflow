@@ -13,26 +13,21 @@
 //   - disabled 行不参与冲突判定，进入 declared.skippedDisabledMcps（落差③：
 //     不再静默丢弃，T3 起在节点告警面可见）。
 //
-// Leaf module：只 type-import shared 与 RuntimeProfile，值只取零 import 的 runtime-management
-// `public/types` 里的 EMPTY_RUNTIME_PROFILE（RFC-463）—— 不得引入对 driver / runner / scheduler
+// Leaf module：值只取 shared 的 `partitionMcpsForInjection`（RFC-491 迁入 shared）与零 import 的 runtime-management
+// `public/types` 里的 EMPTY_RUNTIME_PROFILE（RFC-463），其余只 type-import —— 不得引入对 driver / runner / scheduler
 // 的运行时依赖（会成环）。
 
-import type { Agent, DeclaredInjectionManifest, Mcp } from '@agent-workflow/shared'
+import {
+  partitionMcpsForInjection,
+  type Agent,
+  type DeclaredInjectionManifest,
+  type Mcp,
+} from '@agent-workflow/shared'
 import {
   EMPTY_RUNTIME_PROFILE,
   type RuntimeProfile,
 } from '@/modules/runtime-management/public/types'
 import type { RuntimePlugin } from '@/modules/resource-catalog/public/types'
-
-export class AgentInjectionError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-  ) {
-    super(message)
-    this.name = 'AgentInjectionError'
-  }
-}
 
 /**
  * design.md §2.1 的声明清单。T1 落 MCP 面；T2 扩其余资源面；T3 起持久化形状由
@@ -45,67 +40,8 @@ export type DeclaredManifestV1 = DeclaredInjectionManifest
 // injection renderers' importers stay put until the family moves into runtime-management.
 export type { RuntimePlugin } from '@/modules/resource-catalog/public/types'
 
-/** 全空 manifest —— 各渲染路径在此之上按面填充。 */
-export function emptyDeclaredManifest(): DeclaredManifestV1 {
-  return {
-    mcpServers: [],
-    skippedDisabledMcps: [],
-    skills: [],
-    subagents: [],
-    plugins: [],
-    tools: null,
-    droppedParams: [],
-    unsupported: [],
-    unobservable: [],
-  }
-}
-
-export interface McpInjectionPartition {
-  /** enabled ∩ 同 id 去重后的注入集，first-seen 顺序。 */
-  injected: Mcp[]
-  declared: DeclaredManifestV1
-}
-
-/**
- * 分拣一个 MCP 引用集合为「注入集 + 声明清单」。
- *
- * 与被收敛的两处旧循环（inlineConfig.ts / inject.ts 各自的
- * `enabled === false → continue; Object.hasOwn(map, name) → continue`）对合法
- * 输入字节等价；唯一的行为差异是防御分支——不同 id 同 enabled name 从
- * 「静默 first-wins」变为抛错（P1-1，见文件头）。
- */
-export function partitionMcpsForInjection(mcps: readonly Mcp[]): McpInjectionPartition {
-  const injected: Mcp[] = []
-  const skippedDisabledMcps: string[] = []
-  // Map keys avoid the Object-prototype trap: `constructor` is a valid MCP name.
-  const seenByName = new Map<string, Mcp>()
-  for (const m of mcps) {
-    if (m.enabled === false) {
-      skippedDisabledMcps.push(m.name)
-      continue
-    }
-    const seen = seenByName.get(m.name)
-    if (seen !== undefined) {
-      if (seen.id === m.id) continue // closure union 的同 id 重复引用
-      throw new AgentInjectionError(
-        'agent-injection-duplicate-mcp-name',
-        `two different MCP resources share the runtime name '${m.name}' ` +
-          `(ids: ${String(seen.id)}, ${String(m.id)}); injecting either would ` +
-          `silently substitute the other — refusing to spawn`,
-      )
-    }
-    seenByName.set(m.name, m)
-    injected.push(m)
-  }
-  return {
-    injected,
-    declared: {
-      ...emptyDeclaredManifest(),
-      mcpServers: injected.map((m) => m.name),
-      skippedDisabledMcps,
-    },
-  }
-}
+// RFC-491: `emptyDeclaredManifest`、`McpInjectionPartition`、`partitionMcpsForInjection`（与它抛的 `AgentInjectionError`）
+// 迁入 shared 的 `declaredInjection.ts`（与清单类型、启动核验同包）。
 
 /**
  * Translate one DB-shape Mcp into the opencode-wire shape consumed by
@@ -224,15 +160,7 @@ export function renderOpencodeAgentEntry(
 // RFC-280 T2 — declaration helpers（纯函数；物理 staging / 文件物化留在 driver 渲染侧）
 // ---------------------------------------------------------------------------
 
-/** 平台实际 stage 的 skill 名单（managed only —— project 由 CLI 自发现）。 */
-/** RFC-282 B4 — THE managed-skill predicate (was inlined 4× across drivers). */
-export function managedSkillsOf<T extends { sourceKind: string }>(skills: readonly T[]): T[] {
-  return skills.filter((s) => s.sourceKind === 'managed')
-}
-
-export function declareSkills(skills: readonly { name: string; sourceKind: string }[]): string[] {
-  return managedSkillsOf(skills).map((s) => s.name)
-}
+// RFC-491: `managedSkillsOf` 与 `declareSkills` 迁入 shared 的 `declaredInjection.ts`。
 
 /** dependsOn 闭包注入的 subagent 名单（root 除外、first-seen 去重）——两个 runtime 同一声明。 */
 export function declareSubagents(rootName: string, dependents: readonly Agent[]): string[] {

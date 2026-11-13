@@ -25,7 +25,8 @@ const RETIRED = [
 const RM_PARTICIPANTS = '@/modules/runtime-management/public/participants'
 const SERVICE_SINK_CONSUMERS = [
   'services/runtime/opencode/sessionCapture.ts',
-  'services/systemAgentRun.ts',
+  // RFC-491: the native system-agent run moved into task-execution.
+  'modules/task-execution/infrastructure/local/nativeSystemAgentRun.ts',
 ]
 const MEMORY_SINK_CONSUMERS = [
   'modules/memory/infrastructure/memoryDistillSessionEventSink.ts',

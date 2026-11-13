@@ -17,7 +17,7 @@ import type {
   PreparedAgentMaterial,
   SystemAgentEventSinkV1,
 } from '../src/modules/runtime-management/public/participants'
-import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
+import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '../src/util/log'
 
 function unused(): never {

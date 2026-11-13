@@ -41,7 +41,11 @@ import type {
 } from '../public/types'
 // RFC-282 §4.2：per-runtime 模块只能经 `@/services/runtime` 索引访问——本读端
 // 是运行时无关层，直接 import opencode 内部会把它重新钉死在一个运行时上。
-import { getRuntimeDriver, isKnownRuntimeKind, type RuntimeKind } from '@/services/runtime'
+import {
+  isKnownRuntimeKind,
+  runtimeDriverCapabilities,
+} from '@/modules/runtime-management/public/queries'
+import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import { DomainError, NotFoundError } from '@/util/errors'
 
 /** RFC-029 快照 → 统一观测形状。字段 1:1 搬运，一个都不许丢（AC-2）。 */
@@ -140,7 +144,7 @@ export async function getRuntimeInventory(
 
   // NULL runtime = 早于 RFC-111 的行，那时只有 opencode（schema 注释同此）。
   const kind: RuntimeKind = isKnownRuntimeKind(run.runtime) ? run.runtime : 'opencode'
-  const caps = getRuntimeDriver(kind).capabilities
+  const caps = runtimeDriverCapabilities(kind)
   const declaration = caps.inventory
 
   const verification = parseVerification(run.startupVerificationJson)

@@ -320,11 +320,11 @@ export const RFC282_DEFINITION_EXCEPTIONS: readonly DuplicateEntry[] = [
     ],
   },
   {
+    // RFC-491: `managedSkillsOf` moved to shared (`declaredInjection.ts`, checked below); the backend keeps only the boot gate.
     what: "managed-skill predicate — managedSkillsOf (+ skillBootVerify's distinct boot gate)",
     owning: 'B4',
     signature: /sourceKind === 'managed'/,
     sites: [
-      { file: 'services/execution/agentInjection.ts', count: 1 },
       {
         file: 'modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
         count: 1,
@@ -349,6 +349,15 @@ describe('RFC-282 A2 — inline-duplicate ledger (counts pinned, both directions
       }
     })
   }
+})
+
+// RFC-491: the managed-skill predicate's single spelling moved with the declared-manifest builders into shared.
+test('the managed-skill predicate is spelled once in shared (managedSkillsOf)', () => {
+  const shared = stripComments(
+    readFileSync(resolve(SRC, '..', '..', 'shared', 'src', 'declaredInjection.ts'), 'utf8'),
+  )
+  expect(shared.split('\n').filter((line) => /sourceKind === 'managed'/.test(line))).toHaveLength(1)
+  expect(shared).toContain('export function managedSkillsOf<')
 })
 
 // ---------------------------------------------------------------------------

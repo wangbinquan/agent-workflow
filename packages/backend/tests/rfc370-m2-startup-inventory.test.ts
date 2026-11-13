@@ -11,8 +11,8 @@ import {
   buildRuntimeInventoryObservation,
   observationForVerification,
   verifyStartup,
+  emptyDeclaredManifest,
 } from '@agent-workflow/shared'
-import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { getRuntimeDriver } from '@/services/runtime'
 
 const report = () => ({

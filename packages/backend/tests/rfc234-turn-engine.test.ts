@@ -26,11 +26,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { createRuntime, setRuntimeEnabled } from './helpers/runtimeRegistryApplication'
 import { RUNTIME_INVENTORY_RULE } from '@/modules/intent/application/dumpBuilder'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import {
   abortIntentTurn,
   cancelIntentTurn,

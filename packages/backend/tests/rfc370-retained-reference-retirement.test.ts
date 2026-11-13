@@ -1,7 +1,10 @@
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rowToDistillJob, runDistill } from '@/modules/memory/application/distill/memoryDistiller'
-import { createSystemAgentRunFamily } from '@/modules/task-execution/application/systemAgentRun'
+import {
+  createSystemAgentRunFamily,
+  emptySystemAgentOutputEvidence,
+} from '@/modules/task-execution/application/systemAgentRun'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 import { afterEach, expect, test } from 'bun:test'
@@ -24,7 +27,6 @@ import type { IntentSystemAgentRunFamily } from '@/modules/intent/application/po
 import { createFileIntentScratchStore } from '@/modules/intent/infrastructure/local/fileIntentScratchStore'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { createLocalSystemAgentRetainedContents } from '@/modules/runtime-management/composition/systemAgentMaterial'
-import { emptySystemAgentOutputEvidence } from '@/services/systemAgentRun'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

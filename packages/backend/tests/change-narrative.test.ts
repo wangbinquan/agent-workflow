@@ -50,10 +50,8 @@ import {
 import { composeLocalCodeReviewArtifacts } from '../src/modules/workspace-insight/composition/codeReviewArtifacts'
 import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { computeContentDigest } from '../src/modules/workspace-insight/domain/structuralDiff/digest'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunResult,
-} from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type { SystemAgentRunResult } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { requireTaskMember } from '@/modules/collaboration/infrastructure/taskCollab'
 import { parseNumstatZ, runGit } from '../src/util/git'

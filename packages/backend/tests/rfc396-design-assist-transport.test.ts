@@ -2,10 +2,8 @@
 import { expect, test } from 'bun:test'
 import { createDesignAssistGeneration } from '@/modules/task-execution/infrastructure/designAssistGeneration'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
-import {
-  emptySystemAgentOutputEvidence,
-  type SystemAgentRunOptions,
-} from '@/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type { SystemAgentRunOptions } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 
 test('design assist reads the live configured runtime and preserves its selected binary and model', async () => {
   const calls: SystemAgentRunOptions[] = []

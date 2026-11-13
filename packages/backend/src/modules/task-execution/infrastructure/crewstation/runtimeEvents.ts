@@ -1,5 +1,8 @@
 import type { BusinessEvent } from '@/platform/crewstation/businessExecution'
-import type { NormalizedEvent, NormalizedTokenDelta } from '@/services/runtime/types'
+import type {
+  NormalizedEvent,
+  NormalizedTokenDelta,
+} from '@/modules/runtime-management/public/participants'
 import {
   readHostedStartupInventory,
   hostedStartupObservation,

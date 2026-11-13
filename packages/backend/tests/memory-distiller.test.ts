@@ -19,8 +19,11 @@ import { ulid } from 'ulid'
 import type { Agent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
+import type {
+  SystemAgentRunOptions,
+  SystemAgentRunResult,
+} from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import {
   DISTILLER_SYSTEM_PROMPT,
   buildDistillerUserPrompt,

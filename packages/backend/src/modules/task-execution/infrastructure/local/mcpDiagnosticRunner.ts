@@ -3,6 +3,8 @@
 // local diagnostic effects: the driver knowledge (session reference, native session ids, the default executable,
 // startup observation), the spawn context and its wrap, the in-process fixture plan and the native system-agent run.
 // Resource Catalog keeps leases, pid receipts and reaping, the workspace layout and cleanup, UI events and timers.
+// RFC-491: the driver knowledge is read through Task Execution's driver window and the turn runs on the native
+// system-agent run, both from the providers bootstrap binds (runtime-management's driver, workspace and definition).
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -14,14 +16,15 @@ import {
   type StartupObservation,
   type StartupVerificationResult,
 } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '@/services/runtime'
-import type { AgentSpawnContext, AgentSpawnPlan, SpawnPlan } from '@/services/runtime/types'
+import { createLogger, type Logger } from '@/util/log'
+import type { NativeAgentCompiledPlan, NativeAgentPlan } from './agentInvocation'
 import {
-  runSystemAgent,
+  createNativeSystemAgentRun,
+  type NativeSystemAgentRunProviders,
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
-} from '@/services/systemAgentRun'
-import { createLogger, type Logger } from '@/util/log'
+} from './nativeSystemAgentRun'
+import type { NativeRuntimeDrivers, NativeSpawnRequest } from './nativeRunFamilyProviders'
 
 type Protocol = SystemAgentRunOptions['protocol']
 
@@ -76,8 +79,9 @@ export interface LocalMcpDiagnosticRunRequest {
 export function localMcpDiagnosticRunOptions(
   request: LocalMcpDiagnosticRunRequest,
   mode: { readonly fixture: boolean; readonly log: Logger },
+  drivers: NativeRuntimeDrivers,
 ): SystemAgentRunOptions {
-  const driver = getRuntimeDriver(request.runtime.protocol)
+  const driver = drivers(request.runtime.protocol)
   return {
     feature: request.feature,
     agentName: request.agentName,
@@ -112,7 +116,7 @@ export function localMcpDiagnosticRunOptions(
     ...(mode.fixture
       ? {
           // In-process fake runs (fixture runFn): no real assembly.
-          testPlanOverride: (): SpawnPlan => {
+          testPlanOverride: (): NativeAgentPlan => {
             return {
               cmd: [request.binary],
               env: {},
@@ -128,7 +132,7 @@ export function localMcpDiagnosticRunOptions(
           }: {
             worktreePath: string
             runDir: string
-          }): AgentSpawnContext => {
+          }): NativeSpawnRequest => {
             const turnRunRoot = join(runDir, 'turns', request.turn.id)
             // RFC-284 T13（审计 N4）：手写二元 cast 会绕开 shared 的
             // RuntimeKind 完备性设计——改走 runtimeRegistry 的穷尽访问器。
@@ -174,7 +178,7 @@ export function localMcpDiagnosticRunOptions(
           },
           // §2.1b（实现门 P2-2）— wrap-only: return just the two slots;
           // the plan itself never passes through adapter hands.
-          wrapPlan: (basePlan: AgentSpawnPlan, { runDir }: { runDir: string }) => ({
+          wrapPlan: (basePlan: NativeAgentCompiledPlan, { runDir }: { runDir: string }) => ({
             // P1-7: secret material must not outlive the turn — the claude
             // mcp-config.json goes here; inventory.json is kept for the
             // post-run observation read (the session scratch owns the dir).
@@ -199,10 +203,11 @@ export async function verifyLocalMcpDiagnosticTurn(
   request: LocalMcpDiagnosticRunRequest,
   result: SystemAgentRunResult,
   mode: { readonly fixture: boolean },
+  drivers: NativeRuntimeDrivers,
 ): Promise<StartupVerificationResult | undefined> {
   let verification: StartupVerificationResult | undefined
   if (result.status === 'ok' && !mode.fixture) {
-    const driver = getRuntimeDriver(request.protocol)
+    const driver = drivers(request.protocol)
     const turnRunRootForRead = join(request.scratch.root, 'run', 'turns', request.turn.id)
     // RFC-282 C2 — observation source from the driver's static declaration
     // (the presence-proxy sent a third runtime down the claude branch).
@@ -224,22 +229,27 @@ export async function verifyLocalMcpDiagnosticTurn(
   return verification
 }
 
-export function createLocalMcpDiagnosticRunner(input: LocalMcpDiagnosticRunnerInput = {}) {
+/** RFC-491: the runner reads the runtime's driver window and runs on the native system-agent run (both providers). */
+export function createLocalMcpDiagnosticRunner(
+  input: LocalMcpDiagnosticRunnerInput,
+  providers: NativeSystemAgentRunProviders,
+) {
   const fixture = input.fixture
-  const runFn = fixture?.runFn ?? runSystemAgent
+  const drivers = providers.drivers
+  const runFn = fixture?.runFn ?? createNativeSystemAgentRun(providers)
   const mode = { fixture: fixture !== undefined, log: createLogger('mcp-runtime-test') }
   return {
     supportsSession: (protocol: Protocol) =>
-      getRuntimeDriver(protocol).mcpTestSessionReference !== undefined,
+      drivers(protocol).mcpTestSessionReference !== undefined,
     createNativeSessionId: (protocol: Protocol) =>
-      getRuntimeDriver(protocol).createMcpTestNativeSessionId?.() ?? null,
+      drivers(protocol).createMcpTestNativeSessionId?.() ?? null,
     executable: (
       protocol: Protocol,
       registered: string | null,
       configuration: Pick<Config, 'opencodePath' | 'claudeCodePath'>,
-    ) => registered ?? getRuntimeDriver(protocol).defaultBinary(configuration)[0],
+    ) => registered ?? drivers(protocol).defaultBinary(configuration)[0],
     async run(request: LocalMcpDiagnosticRunRequest) {
-      const result = await runFn(localMcpDiagnosticRunOptions(request, mode))
+      const result = await runFn(localMcpDiagnosticRunOptions(request, mode, drivers))
       return {
         status: result.status,
         exitCode: result.exitCode,
@@ -251,7 +261,7 @@ export function createLocalMcpDiagnosticRunner(input: LocalMcpDiagnosticRunnerIn
         ...(result.nativeSessionIntegrityFailed === undefined
           ? {}
           : { nativeSessionIntegrityFailed: result.nativeSessionIntegrityFailed }),
-        verifyAfterCapture: () => verifyLocalMcpDiagnosticTurn(request, result, mode),
+        verifyAfterCapture: () => verifyLocalMcpDiagnosticTurn(request, result, mode, drivers),
       }
     },
   }

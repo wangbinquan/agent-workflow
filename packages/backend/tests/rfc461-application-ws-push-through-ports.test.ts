@@ -21,9 +21,9 @@ import {
   taskBroadcaster,
 } from '@/ws/broadcaster'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
-import { bindNativeTaskAgentRunPurpose } from '@/modules/task-execution/infrastructure/local/nativeTaskAgentRun'
+import { bindNativeTaskAgentRunPurpose } from './helpers/nativeTaskAgentRun'
 import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
-import type { RunNodeOptions } from '@/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions'
+import type { RunNodeOptions } from './helpers/nativeTaskAgentRunOptions'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'

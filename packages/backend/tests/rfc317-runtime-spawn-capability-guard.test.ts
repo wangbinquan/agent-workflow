@@ -29,7 +29,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
+import type { SmokeOptions, SmokeResult } from './helpers/nativeRuntimeSmoke'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
