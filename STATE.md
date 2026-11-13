@@ -141,6 +141,14 @@
 - **那格红的归因补证（2026-11-13）**：后继 `cf948fd5c`、`65e57fab7` 相对 `aff2c86e3` 只改文档，两轮 CI 各 70 个 job 全绿（后端 44 片与真实
   PostgreSQL，含分片 20/44）。本机同条件对照：L6 [postgresql] 在实现提交之前的 `33661e100` 上 40 次失败 13 次、在 `aff2c86e3` 上 40 次
   失败 11 次，失败处相同（`waitForQueued` 等不到写锁排队），该用例在没有本次改动的代码上同样不稳定；证据记在 `docs/audit-backlog.md` 第十二条。
+- **那格红的根因与修复（2026-11-13；用户当日授权「修这条偶发用例」，按 bug 修复直接改、不另立 RFC）**：那次 run 的数据库日志显示
+  同一条认领推进语句 79 ms 内连败 10 次，正好用尽重放预算。`transition` 只推进一行认领却走 SERIALIZABLE：索引页粒度的 predicate lock
+  （成员行的外键检查也读认领表主键索引那一页）加上推进语句按状态索引的扫描，让两笔互不相干的认领互判读写依赖；对方过了提交检查、还没
+  提交完的那段时间里重放必败。改为 `DatabaseSession.transaction` + 认领行的聚合根锁 + 原有 CAS（`terminalMaintenancePersistence.ts`）；
+  新增 `terminal-maintenance-transition-isolation.test.ts`（双引擎各 3 条，未修复的代码上 PostgreSQL 两条红）；L6 的 `waitForQueued`
+  改为等事件本身并接住未 await 的删除。本机用 `PREPARE TRANSACTION` 复现：修复前 10 / 10 次失败并漏出 40001，修复后一次成功；L6
+  [postgresql] 同条件对照：修复后 40 / 40，同时跑的未修复基线 20 次里 19 次红。`claim` 仍是可串行化，重放预算相对慢提交偏短的问题未改，
+  记在 `docs/audit-backlog.md` 第十二条（已结案）；通用部分在 `docs/dev-gotchas.md`。
 
 ## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（Done；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
 

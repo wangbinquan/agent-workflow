@@ -629,6 +629,39 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   计数要用事务外建的 sequence（`nextval` 不随回滚复原，普通表标记会随回滚复原、导致每次重放都再报错）；「UPDATE 命中 0 行」的触发器
   PostgreSQL 写 `BEFORE UPDATE … RETURN NULL`，SQLite 写 `BEFORE UPDATE … BEGIN SELECT RAISE(IGNORE); END`。
 
+## PostgreSQL：对方事务「已过提交检查、还没提交完」时，40001 的重放必败；单行 CAS 别放进 SERIALIZABLE（2026-11-13 实撞，终态维护认领）
+
+- 现象：并发删同一个父任务下的两个子任务，其中一笔删除在推进维护认领（`transition`）时以裸 40001 失败（CI run 43391298633，
+  `rfc359-w8-t28-lost-update` L6；同一签名 2026-11-02 已出现过一次）。`transition` 当时走 `DatabaseSession.serializable`，有 10 次重放。
+- 先分清「重放用尽」还是「没重放」：后端分片的 job 日志末尾带着 PostgreSQL 容器日志（`ci-postgresql-service.sh stop` 打出来的）。按失败
+  用例的时间窗数同一条语句的 `ERROR`：这次是 1 条 `COMMIT`（`Canceled on identification as a pivot, during commit attempt`）加 9 条同一
+  UPDATE（`… during write`），79 ms 内落在 10 个不同后端上——正好是 `postgresqlSerializationRetry.ts` 的预算，是重放用尽。
+- 为什么 10 次都败：SSI 在 `COMMIT` 开头做完提交前检查就把事务标成 prepared，提交完成之前它在别人的快照里仍是「进行中」。这段
+  时间里别的事务读到它写的行就记一条对它的读写依赖，再写到它读过的索引页就被判成环上的枢纽、当场 40001
+  （`Canceled on identification as a pivot, during write`）——重放多少次都一样，直到它提交完。重放退避上限 16 ms、10 次最坏累计约
+  126 ms。按这条判定规则，那次 CI 里对方（另一笔删除的 `claim` 及其后的 `transition`）停在这个状态的时间合计盖住了全部 10 次尝试
+  （约 79 ms）；CI 的库是缺省配置、开着 fsync。这一条是由报文与判定规则推出来的，CI 上没有直接量到对方那次提交的耗时；本机用
+  下面的 `PREPARE TRANSACTION` 把同一状态摆出来，10 / 10 次失败、放行后一次成功。
+- 两笔认领本来互不相干，被绑到一起有两个原因：
+  - predicate lock 是索引页粒度（本文件「SERIALIZABLE 的 predicate lock 是索引页粒度，不是行」那一条）。成员行的外键检查
+    （`SELECT 1 FROM ONLY … FOR KEY SHARE`）在 SERIALIZABLE 下同样给父表主键索引的叶子页上 SIREAD 锁（`pg_locks` 实测：
+    `SIReadLock | page | …_pkey | 1`）；主键是 ULID，同一时段新建的行相邻、落在同一个叶子页，表大了也一样。
+  - 规划器不一定走主键。`update … where id = $5 and revision = $6 and state = $7` 在没有统计信息的新库上被排成
+    `Index Scan using idx_…_state_updated … Index Cond: (state = $7)`，`id` 只是 Filter——它扫过所有同状态的行，包括别人刚插入、
+    未提交的那一行。要看真实计划，给一次性库加 `-c shared_preload_libraries=auto_explain -c auto_explain.log_min_duration=0`。
+- 处置：只动一行的读—改—写（状态机推进、版本自增）用 `session.transaction` + `lockAggregateRoot` + 那一行上的 CAS，不要因为
+  「先查后写」就放进 `serializable`；SERIALIZABLE 留给真正的跨行判据（这里的 `claim` / `snapshotTree`）。改完后同一场景 0 次 40001。
+- 怎么把这个窗口确定性摆出来：`PREPARE TRANSACTION` 之后的事务正处在「已过提交检查、未提交」（需要
+  `-c max_prepared_transactions=…`）。在同一个 `session.serializable(...)` 体里调被测的写入（会话重入会复用外层事务），最后
+  `prepare transaction '<gid>'`，再从体外调另一笔操作，结束后 `commit prepared '<gid>'`。CI 的库没开两阶段提交，这个办法只用于本机
+  定位；回归用例要锁成因（见 `tests/terminal-maintenance-transition-isolation.test.ts`：用行锁把一笔事务停在半路，让另一笔在这期间
+  提交，断言没有任何语句以 40001 失败、也没有事务体被重放）。
+- 等「另一笔操作停到某处」的测试屏障：等可观测的事件本身，并把那笔没 await 的操作接住——它先失败时由等待方抛出它的真实原因。
+  按 tick 数留预算仍是在赌时间（这条用例的 500 tick 在本机高负载下 80 次里红了 24 次）；操作没人接时，失败会变成未处理的拒绝把
+  用例判死，而等待循环还在空转，到点再在两条用例之间补一条误导人的「等不到」。
+- 顺带：`test('…', async () => { … }, 60_000)` 的第三个实参写成**数字字面量**，prettier 才保持紧凑排版；换成具名常量，整个用例体会被
+  重新缩进一层，diff 里全是无关行。
+
 ## 装 Playwright 浏览器的 job 别跑在 `ubuntu-latest` 上：镜像一升级就装不上，浏览器缓存还会把它藏起来（2026-11-03 实撞）
 
 - GitHub 2026-11-03 起把 `ubuntu-latest` 换成 ubuntu-26.04；`bun.lock` 里的 Playwright 1.60.0 不支持这个系统（26.04 从 1.61.0 起才支持），

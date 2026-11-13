@@ -67,3 +67,4 @@
 - 实现提交 `aff2c86e3` 的 exact SHA 主 CI run 43391298633：70 个 job 里 68 个成功；`Backend tests (ubuntu-latest shard 20/44)` 失败于 `rfc359-w8-t28-lost-update` L6 [postgresql] 的 40001 序列化冲突，即 `docs/audit-backlog.md` 第十二条登记的既有偶发，本提交不触及其代码路径；未以重跑追绿。
 - 后端全量由后继 CI 验证：`cf948fd5c`（run 43396166831）与 `65e57fab7`（run 43396518679）相对 `aff2c86e3` 只改 5 个文档文件（`packages/`、`e2e/`、`scripts/`、`.github/` 无差异），两轮各 70 个 job 全部通过，后端 44 片与真实 PostgreSQL 全绿，含上面那一格。
 - 同条件对照（2026-11-13，本机一次性 PostgreSQL，负载 55～85）：只跑 L6 [postgresql]，在实现提交之前的 `33661e100` 与 `aff2c86e3` 的干净导出上交替各 40 次——前者失败 13 次，后者失败 11 次，失败处相同（用例的 `waitForQueued` 等不到并发删除排到写锁上）。该用例在没有本次改动的代码上同样不稳定。
+- 那格红的处置（2026-11-13，用户当日授权修这条用例）：根因是终态维护认领的 `transition` 走 SERIALIZABLE——两笔互不相干的认领互判读写依赖，对方提交未完成期间 10 次重放全败（那次 run 的数据库日志：1 次 COMMIT + 9 次 UPDATE，79 ms）。改为普通事务 + 认领行的聚合根锁 + 原有 CAS，并新增双引擎回归用例、收紧 L6 的等待屏障。与 RFC-490 的实现无关，按 bug 修复单独提交；细节与验证见 `docs/audit-backlog.md` 第十二条。

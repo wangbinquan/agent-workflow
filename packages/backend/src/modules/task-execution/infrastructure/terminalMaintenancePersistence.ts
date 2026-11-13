@@ -17,9 +17,20 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 //      增删，认领据以成立的成员集合与树的真实形状就此不一致。这里只留 PG 的单事务形态；子树枚举改成
 //      迭代 BFS（`inArray(parentTaskId, frontier)`），因为 SQLite 的 `WITH RECURSIVE` 与 PG 的写法不通用。
 //
-// 隔离级别逐方法保留合一前 PG 侧的取值——五个方法都是「先查后写」的跨行判据，全部走
-// `DatabaseSession.serializable`（PG：SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001 重放整笔；
-// SQLite：`BEGIN IMMEDIATE` 本就全库独占，与合一前 `dbTxSync` 是同一条边界）。
+// 隔离级别：`snapshotMembers` / `snapshotTree` / `claim` / `listRecoverable` 是「先查后写」的跨行判据
+// （成员集合与执行账本要在同一个视图里成立），保留合一前 PG 侧的取值，走 `DatabaseSession.serializable`
+// （PG：SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001 重放整笔；SQLite：`BEGIN IMMEDIATE`
+// 本就全库独占，与合一前 `dbTxSync` 是同一条边界）。
+//
+// `transition` / `complete` **不是**跨行判据：它只推进一行认领（外加释放这笔认领自己的成员行），
+// 判据全在这一行上。它走 `DatabaseSession.transaction` + 认领行的聚合根锁（PG：READ COMMITTED +
+// `FOR UPDATE`；SQLite 上与原先是同一条路）。合一时它也被留在 SERIALIZABLE，后果是两笔**互不相干**
+// 的认领互判读写依赖：predicate lock 是索引页粒度，推进的 UPDATE 还会按 `state` 索引扫到别人的
+// 认领行；对方那笔事务过了提交检查、还没提交完的那段时间里，这边每次重放都必败，对方提交一慢就把
+// 重试预算耗尽、把 40001 原样漏给调用方（2026-11-13 CI 实撞：并发删两个兄弟任务，其中一笔删除以
+// 裸 40001 失败，走 HTTP 就是一次 500。过程与回归用例见
+// `tests/terminal-maintenance-transition-isolation.test.ts`）。处置按 `docs/dev-gotchas.md`
+// 「SERIALIZABLE 的 predicate lock 是索引页粒度」那一条：单聚合的读—改—写用行锁，不用隔离级别。
 //
 // 认领行本身的 CAS 不在这里重写：事务内参与者 `terminalMaintenanceClaim.ts` 已经是中立的一份实现
 // （删除恢复 / 归档都挂在它上面），`transition` / `complete` 直接复用它，同一张状态转移表只此一份。
@@ -432,15 +443,23 @@ export class DrizzleTerminalMaintenancePersistence implements TerminalMaintenanc
   ): Promise<TerminalMaintenanceClaim> {
     assertTerminalMaintenanceClaim(input.claim)
     const now = input.now ?? Date.now()
-    return await databaseSessionFor(this.db).serializable(
-      async (tx) =>
-        await transitionTerminalMaintenanceClaimTx(tx, {
-          claim: input.claim,
-          to: input.to,
-          now,
-          releaseMembers: input.releaseMembers,
-        }),
-    )
+    const session = databaseSessionFor(this.db)
+    // 单聚合的读—改—写：先锁认领行，再在这一行上判状态转移并 CAS 写回（理由见文件头「隔离级别」）。
+    return await session.transaction(async (tx) => {
+      const { taskExecutionMaintenanceClaims } = tablesOf(tx)
+      await session.engine.lockAggregateRoot(
+        tx,
+        taskExecutionMaintenanceClaims,
+        taskExecutionMaintenanceClaims.id,
+        input.claim.claimId,
+      )
+      return await transitionTerminalMaintenanceClaimTx(tx, {
+        claim: input.claim,
+        to: input.to,
+        now,
+        releaseMembers: input.releaseMembers,
+      })
+    })
   }
 
   async complete(input: Parameters<TerminalMaintenanceStore['complete']>[0]): Promise<void> {

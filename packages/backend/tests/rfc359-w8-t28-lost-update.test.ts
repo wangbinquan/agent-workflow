@@ -200,6 +200,37 @@ async function waitForReads(
   // 在查清之前不要顺手把它改成抛错——会把六条用例一起推红。
 }
 
+type Outcome =
+  | { readonly state: 'pending' }
+  | { readonly state: 'fulfilled' }
+  | { readonly state: 'rejected'; readonly reason: unknown }
+
+interface Observed<T> {
+  /** 原 promise：结果与拒绝原样保留，交给用例最后 await。 */
+  readonly result: Promise<T>
+  readonly outcome: () => Outcome
+}
+
+/**
+ * 给一笔还没 await 的操作挂上观测：它的拒绝从此有人接（不会变成「未处理的拒绝」），
+ * 等待方随时能看到它是否已经结束、因何结束。
+ */
+function observe<T>(result: Promise<T>): Observed<T> {
+  let outcome: Outcome = { state: 'pending' }
+  void result.then(
+    () => {
+      outcome = { state: 'fulfilled' }
+    },
+    (reason: unknown) => {
+      outcome = { state: 'rejected', reason }
+    },
+  )
+  return { result, outcome: () => outcome }
+}
+
+/** 写锁等待的兜底时限：只为在操作真卡死时给一句可读的失败；远小于 L6 用例自己的超时（60 s）。 */
+const QUEUE_WAIT_MS = 20_000
+
 /**
  * 等到 `count` 个调用方**确实**卡在这把信号量上。
  *
@@ -207,15 +238,43 @@ async function waitForReads(
  * 删除各自走完认领链、停到自己的每任务写锁上」；在 8 分片挤一台 runner 的 CI 上赌输了
  * （2026-09-12 ubuntu shard 1/8 实撞，本机 3/3 全绿）。`Semaphore.queueLength` 就是
  * 「有几个调用方正卡着」的直接可观测量，等它而不是等时间。
+ *
+ * 2026-11-13 再收紧两处（CI run 43391298633 实撞；成因与生产侧的修法见
+ * `terminal-maintenance-transition-isolation.test.ts` 头注释）：
+ *   · 上一版仍给这次等待留了 500 个 tick 的预算——还是在赌时间。认领链是二十几次数据库往返，
+ *     机器一忙就超过它（本机高负载下 40 次里有 11～13 次这样红）。现在只要 `operation` 还活着
+ *     就等事件本身；时限只是它真卡死时的兜底。
+ *   · `operation` 此前没人接：它在停到写锁之前失败时，拒绝成了「未处理的拒绝」把用例判死，
+ *     这里却还在空等，到点再在两条用例之间补抛一条误导人的「等不到」。现在由这里当场抛出
+ *     那笔操作真实的失败原因。
  */
-async function waitForQueued(sem: Semaphore, count: number, what: string): Promise<void> {
-  for (let attempt = 0; attempt < 500; attempt += 1) {
+async function waitForQueued(
+  sem: Semaphore,
+  count: number,
+  what: string,
+  operation: Observed<unknown>,
+): Promise<void> {
+  const deadline = performance.now() + QUEUE_WAIT_MS
+  for (;;) {
     if (sem.queueLength >= count) return
+    const outcome = operation.outcome()
+    if (outcome.state === 'rejected') {
+      const reason = outcome.reason
+      throw new Error(
+        `${what}：还没停到写锁上就失败了——${reason instanceof Error ? reason.message : String(reason)}`,
+        { cause: reason },
+      )
+    }
+    if (outcome.state === 'fulfilled') {
+      throw new Error(`${what}：没有停在写锁上就结束了`)
+    }
+    if (performance.now() >= deadline) {
+      throw new Error(
+        `${what}：等不到 ${String(count)} 个调用方卡在写锁上（queueLength=${String(sem.queueLength)}）`,
+      )
+    }
     await settle(1)
   }
-  throw new Error(
-    `${what}：等不到 ${String(count)} 个调用方卡在写锁上（queueLength=${String(sem.queueLength)}）`,
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -655,20 +714,29 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     // 它们之间没有任何串行化），让认领链先走完，之后才进事务。
     const releaseFirst = await getTaskWriteSem(firstChild).acquire()
     const releaseSecond = await getTaskWriteSem(secondChild).acquire()
-    const deletingFirst = deleteTask(legacy(db), firstChild, {
-      executionPermits: testExecutionPermits,
-      collaboration: createTaskDeletionCollaborationParticipantInTx,
-      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
-    })
-    const deletingSecond = deleteTask(legacy(db), secondChild, {
-      executionPermits: testExecutionPermits,
-      collaboration: createTaskDeletionCollaborationParticipantInTx,
-      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
-    })
+    const deletingFirst = observe(
+      deleteTask(legacy(db), firstChild, {
+        executionPermits: testExecutionPermits,
+        collaboration: createTaskDeletionCollaborationParticipantInTx,
+        activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      }),
+    )
+    const deletingSecond = observe(
+      deleteTask(legacy(db), secondChild, {
+        executionPermits: testExecutionPermits,
+        collaboration: createTaskDeletionCollaborationParticipantInTx,
+        activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      }),
+    )
     // 两笔删除各自走完认领链之后会停在自己的每任务写锁上——等**那件事**发生，
     // 而不是等 20 个 tick（见 `waitForQueued` 的注释）。
-    await waitForQueued(getTaskWriteSem(firstChild), 1, '第一笔删除停到自己的写锁上')
-    await waitForQueued(getTaskWriteSem(secondChild), 1, '第二笔删除停到自己的写锁上')
+    await waitForQueued(getTaskWriteSem(firstChild), 1, '第一笔删除停到自己的写锁上', deletingFirst)
+    await waitForQueued(
+      getTaskWriteSem(secondChild),
+      1,
+      '第二笔删除停到自己的写锁上',
+      deletingSecond,
+    )
 
     const recording = recorderFor(harness)
     const { tasks } = tablesOf(db)
@@ -678,7 +746,7 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     await waitForReads(recording, CHILD_MAX_READ, 2)
     await brake.release()
 
-    await Promise.all([deletingFirst, deletingSecond])
+    await Promise.all([deletingFirst.result, deletingSecond.result])
 
     const parent = (
       await readTaskFixtures(db, { id: parentId }).then((rows) =>
@@ -690,5 +758,5 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
       '两个子任务都删光之后，父行的物化列必须退回它自己的 started_at——' +
         '停在已删子树的时间戳上会让默认任务列表与任何过滤视图永远排出两种顺序',
     ).toBe(NOW - 30_000)
-  })
+  }, 60_000)
 })
