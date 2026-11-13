@@ -15,7 +15,7 @@
   RFC-372 的「开关不改画布尺寸与相机」，列为 C11）；「跳过状态加选项」以真实回答为准，服务端草稿保存与封存两个共同入口归一；列数公式
   为换行竖线预留宽度并逐层下传可用宽度；空分类提示与补题限定首轮；回车由面板统一处理；看板条目显示跳过的封存题。
 
-## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（In Progress；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
+## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（Done；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族整族迁入 runtime-management 之前，先重画 task-execution ↔ runtime-management 的驱动接缝；
   §4.6 第 5 项把 task-execution → runtime-management 的 18 个跨 context 内部文件对归给这一族。RFC-487、RFC-488 已把 DAG 外四个 context
@@ -61,6 +61,17 @@
   条撞 `task-execution-stale-owner`，不经本 RFC 改动的代码，同一副本随后在候选与 HEAD 上都 17 / 17，登记 `docs/audit-backlog.md` 第十三条。按
   CI 的跑法（默认 5 秒）跑 48 个相关文件，730 条里 721 条通过，红的 9 条都撞时限，与 HEAD 的代码同时 A/B 分布相同（候选 17 条、HEAD 16 条）。
   架构报告 60 项实测都在 `max` 内（触及的一项已收紧），其余与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`3c9da0a0c`（72 个文件；父提交是另一会话只改前端的 `0df2df21e`，与本 RFC 的路径无交集）。
+- **CI**：`3c9da0a0c`：exact SHA 主 CI run 43347409380 的 70 个 job 全部通过。同一推送按路径触发的 windows-platform run 43347409455 通过（运行
+  时管理链新登记的位置在 Windows 上跑过）；integration-opencode run 43347409608 通过，但两个 job 各 15 条里只有 5 条门控用例真跑，10 条要调真
+  实 opencode 的用例因为 run 里没有模型凭据按门控跳过（夜间 run 同样如此），不算真实 opencode 的证据。落档提交 `ccc856852`：主 CI run
+  43303412362 的 70 个 job 全部通过。
+- **下一步**（运行时驱动一族，RFC-294 plan §4.7）：1. task-execution 对一族的其余 16 处使用（驱动知识：`getRuntimeDriver`、
+  `isKnownRuntimeKind` 与运行时类型）与一族指回 task-execution 的两条边。`services/systemAgentRun.ts`、`services/runtimeSmoke.ts` 是
+  task-execution 的本机运行器（取它的本机调用与 application），按 RFC-294 design §3.1「runtime-management 不反向依赖上层业务 context」拟归
+  task-execution 的 infrastructure，而不是 §4.7 表里的 runtime-management，偏离在该 RFC 的 design 写明；探测结果类型现有三处声明，拟并到
+  runtime-management 的 public。2. 整族迁入 runtime-management infrastructure（另立）。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的其他
+  context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 14 个后继（另一条件是满 20 个）。
 
 ## 2026-11-12 RFC-488 resource-catalog 本机 MCP 诊断的运行时工作改经自有端口（Done；`design/RFC-488-local-mcp-diagnostic-execution-port/`）
 

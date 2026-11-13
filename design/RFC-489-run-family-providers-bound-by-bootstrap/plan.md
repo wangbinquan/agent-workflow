@@ -21,7 +21,8 @@
 - [x] AC-2 同样输入下行为一致（运行时管理装配与探测回执钩子、探测族的协议与运行证据、各运行族的提供者、本机调用的材料引用与运行证据、
       夹具）；协议未知这一走不到的输入除外（design §6 细化 5）
 - [x] AC-3 跨 context 内部文件对 43 → 22；越 DAG 的值边与 offered 文件对不升；public surface 不增；减速带不升、触及的收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`3c9da0a0c` 主 CI run 43347409380 的 70 个 job 全部通过，同一推送按路径触发的
+      windows-platform 与 integration-opencode 通过（见 §CI）
 
 ## 集中验证（2026-11-12，候选基于 `ccc856852`）
 
@@ -126,6 +127,17 @@
   - 这五个文件与 HEAD 的代码同时、同样跑法 A/B：候选红 17 条（`change-narrative` 10、`rfc294-architecture-preflight` 2、`rfc359-w8` 1、
     `rfc370-task-agent-family-drive` 2、`rfc384` 2），HEAD 红 16 条（9、2、1、2、2）。分布相同，不归本 RFC。
   - 导出仓库与 HEAD 加 72 个候选路径逐字相同（同步后逐个路径核对，0 处不符）。
+
+## CI（AC-4）
+
+- `3c9da0a0c`（实现，父提交是另一会话只改前端的 `0df2df21e`）：exact SHA 主 CI run 43347409380 的 70 个 job 全部通过。同一推送按路径
+  触发的两个 run 也通过：
+  - windows-platform run 43347409455（`Windows platform surface`）：两份路径过滤改指的运行时管理链新位置在 Windows 上跑过。
+  - integration-opencode run 43347409608（`opencode latest (ubuntu)`、`opencode 1.18.3 (ubuntu)`）：本 RFC 改了只供契约用例的本机任务运行
+    `infrastructure/local/nativeTaskAgentRun.ts`，按 `nativeTaskAgent*.ts` 的路径过滤触发。两个 job 各 15 条：5 条门控用例通过，10 条
+    要调真实 opencode 的用例因为 run 里没有模型凭据按门控跳过（夜间 run 43255071606 同样 5 过 10 跳）。所以它只说明门控用例过了，不算
+    真实 opencode 的运行证据；本机任务运行的行为由集中验证里的契约用例与 RFC-489 用例 ⑥ 覆盖。
+- 本 RFC 的落档提交 `ccc856852`（只改文档）：exact SHA 主 CI run 43303412362 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
