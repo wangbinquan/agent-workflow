@@ -1,3 +1,17 @@
+## 2026-11-13 RFC-493 纯逻辑归位：工作流静态校验与评审的锚点、决定策略迁出 infrastructure（In Progress；`design/RFC-493-pure-logic-out-of-infrastructure/`）
+
+- **来由**：RFC-294 plan §3 S13 与 proposal D14——不做 IO 的规则 / 校验 / 策略从 infrastructure 整块迁到 domain；清单必含 resource-catalog
+  `infrastructure/legacy/workflow.validator.ts` 的 `validateWorkflowDef` 与 collaboration `infrastructure/review.ts` 的决定策略表、锚点规范化。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的
+  设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`workflow.validator.ts` 第 133～186 行的两个类型与第 453 行起的纯函数部分（约 3,090 行）原样迁入 resource-catalog
+  `domain/workflowValidator.ts`，读库的加载器留在原文件；`review.ts` 的锚点规范化、决定策略表与轮次规则迁入 collaboration 的
+  `domain/reviewAnchor.ts`、`domain/reviewDecisionPolicy.ts`、`domain/reviewRounds.ts`；原位置不留转出（`review.ts` 也不再转出 shared 的
+  `findAllOccurrences`）。清单共 31 个名字（design §3），看过但不进清单的项与理由见 design §5。
+- **不做**：拆分 `validateWorkflowDef`；清单以外的规则归位（与异步编排交织的随 S9 与功能 RFC）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。与 S9 共用 `review.ts`，串行（S9 当前
+  没有在制步骤）。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 16 个后继（另一条件是满 20 个）。
+
 ## 2026-11-13 RFC-492 运行时驱动一族整族迁入 runtime-management infrastructure（Done；`design/RFC-492-runtime-driver-family-into-runtime-management/`）
 
 - **来由**：RFC-294 plan §4.7——RFC-487～RFC-491 之后，一族之外只剩 runtime-management（16 个生产文件）与 bootstrap（2 个）用它，一族自己
