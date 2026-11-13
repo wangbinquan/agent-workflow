@@ -173,6 +173,11 @@
   改为等事件本身并接住未 await 的删除。本机用 `PREPARE TRANSACTION` 复现：修复前 10 / 10 次失败并漏出 40001，修复后一次成功；L6
   [postgresql] 同条件对照：修复后 40 / 40，同时跑的未修复基线 20 次里 19 次红。`claim` 仍是可串行化，重放预算相对慢提交偏短的问题未改，
   记在 `docs/audit-backlog.md` 第十二条（已结案）；通用部分在 `docs/dev-gotchas.md`。
+- **修复提交的 CI**：`008794d3d` 的 exact SHA 主 CI run 43467559383：70 个 job 里 66 个成功。L6 所在的
+  `Backend tests (ubuntu-latest shard 20/44)` 1306 / 1306（L6 [postgresql] 494 ms，认领语句不再有序列化失败），新用例所在的 `shard 44/44`
+  1442 / 1442（新用例 6 / 6）。未绿的三格都不在这次改动的路径上：`shard 43/44` 一条调度扇出用例 [postgresql] 停顿约 5 秒撞缺省超时
+  （前一个提交 `1e732c7cc` 的同一分片有同形态的超时，登记为 `docs/audit-backlog.md` 第十四条，未定位）；`Playwright e2e (macos-latest
+  shard 1/4)` 没分到 runner、`shard 3/4` 撞 20 分钟作业上限（第九条补记）；汇总格 `CI required` 写本条时还在排队、尚无结果。未以重跑追绿。
 
 ## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（Done；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
 
