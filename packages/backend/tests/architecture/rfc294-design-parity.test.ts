@@ -108,8 +108,9 @@ describe('RFC-376 G11 design parity', () => {
   })
   test('design corpus has the complete offered, required and authority denominator', () => {
     // RFC-395 O adds 4 SC, 8 O2 closure and 1 Doctor required-SPI edges; RFC-488 adds the local MCP diagnostic
-    // execution required-SPI edge (99 -> 100).
-    expect(designEdges(DESIGN)).toHaveLength(100)
+    // execution required-SPI edge (99 -> 100); RFC-489 adds the four run-family binding edges bootstrap now binds
+    // (smoke into runtime management, native providers, task agent material references, workspace contents) (-> 104).
+    expect(designEdges(DESIGN)).toHaveLength(104)
     expect(designPublicContexts(DESIGN)).toHaveLength(18)
   })
   test('in-memory design mutations add and remove edges, rename a context, or delete the IA row', () => {

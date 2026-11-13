@@ -3,6 +3,7 @@ import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import { runNativeTaskAgent as runNodeWithProvider } from '../../src/modules/task-execution/infrastructure/local/nativeTaskAgentRun'
+import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
 import { type RunNodeOptions as ProviderRunNodeOptions } from '../../src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
@@ -36,18 +37,21 @@ export type RunNodeOptions = Omit<
 
 export async function runNode(options: RunNodeOptions) {
   const { db, ...providerOptions } = options
-  return await runNodeWithProvider({
-    ...providerOptions,
-    observationInvocations: options.observationInvocations ?? composeRunObservationCalls(db),
-    memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
-    runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
-    persistence:
-      options.persistence ??
-      createTaskExecutionPersistence(db, {
-        humanGateOpen: composeHumanGateOpenParticipantFactory(),
-        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
-        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
-      }),
-    runtimeRegistry: options.runtimeRegistry ?? composeRuntimeRegistryOperations(db),
-  })
+  return await runNodeWithProvider(
+    {
+      ...providerOptions,
+      observationInvocations: options.observationInvocations ?? composeRunObservationCalls(db),
+      memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
+      runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
+      persistence:
+        options.persistence ??
+        createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }),
+      runtimeRegistry: options.runtimeRegistry ?? composeRuntimeRegistryOperations(db),
+    },
+    { materialDefinitions: selectLocalAgentMaterialDefinition },
+  )
 }

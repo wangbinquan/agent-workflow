@@ -1,12 +1,17 @@
 import type { RuntimeKind } from '../../public/types'
 import type { AgentInvocationProtocol } from '../../application/ports/agentProtocol'
 import type { AgentMaterialEvidenceCapabilities } from '../../application/ports/agentMaterial'
+import type { AgentMaterialEvidence } from '../../application/ports/agentMaterialEvidence'
 import {
+  bindNativeAgentMaterialReference,
   createLocalAgentMaterialCompiler,
   type NativeAgentMaterialContents,
   type NativeAgentMaterialFixture,
 } from './agentMaterialCompiler'
-import type { NativeAgentMaterialEvidenceHooks } from './agentMaterialEvidence'
+import {
+  createLocalAgentMaterialEvidence,
+  type NativeAgentMaterialEvidenceScope,
+} from './agentMaterialEvidence'
 import { bindNativeAgentProtocol } from './agentProtocol'
 import { buildOpencodeNativeMaterial } from './opencodeAgentMaterial'
 import { buildClaudeNativeMaterial } from './claudeAgentMaterial'
@@ -17,7 +22,10 @@ import { getRuntimeDriver } from '@/services/runtime'
  * the legacy buildSpawn compilation facade is never called again. */
 export interface LocalAgentMaterialDefinition {
   readonly protocol: AgentInvocationProtocol
-  readonly evidenceHooks: NativeAgentMaterialEvidenceHooks
+  /** RFC-489: the run's evidence over this protocol's driver hooks; the caller gives the run's scope. */
+  evidence(scope: NativeAgentMaterialEvidenceScope): AgentMaterialEvidence
+  /** RFC-489: the material reference of one native plan (the compiler's own reference when it compiled the plan). */
+  materialReference(plan: object): string
   createCompiler(
     contents: NativeAgentMaterialContents,
     fixture?: NativeAgentMaterialFixture,
@@ -43,7 +51,8 @@ export function selectLocalAgentMaterialDefinition(
   const driver = getRuntimeDriver(kind)
   return {
     protocol: bindNativeAgentProtocol(driver),
-    evidenceHooks: driver,
+    evidence: (scope) => createLocalAgentMaterialEvidence({ hooks: driver, scope }),
+    materialReference: (plan) => bindNativeAgentMaterialReference(plan),
     createCompiler(contents, fixture) {
       const evidenceCapabilities: AgentMaterialEvidenceCapabilities = {
         usageMeter: driver.usageMeter !== undefined,

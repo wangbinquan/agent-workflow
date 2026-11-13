@@ -22,7 +22,7 @@ import type { Actor } from '@/auth/actor'
 import { runIntentTurn } from '@/modules/intent/application/turnEngine'
 import type { IntentSystemAgentRunFamily } from '@/modules/intent/application/ports/intentSystemAgent'
 import { createFileIntentScratchStore } from '@/modules/intent/infrastructure/local/fileIntentScratchStore'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { createLocalSystemAgentRetainedContents } from '@/modules/runtime-management/composition/systemAgentMaterial'
 import { emptySystemAgentOutputEvidence } from '@/services/systemAgentRun'
 import { createLogger } from '@/util/log'
@@ -151,7 +151,7 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
         { message: 'Choose a workflow' },
         root,
       )
-      const native = composeLocalSystemAgentRunFamily({
+      const native = composeLocalSystemAgentRunFamilySelection({
         appHome: () => root,
       })
       let directory = '',
@@ -363,7 +363,7 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
       source: 'session',
       permissions: new Set(),
     }
-    const native = composeLocalSystemAgentRunFamily({ appHome: () => root })
+    const native = composeLocalSystemAgentRunFamilySelection({ appHome: () => root })
     let runs = 0
     const selected = native.withFixture(async (request) => {
       runs++
@@ -502,7 +502,7 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
       let directory = '',
         mtime = 0,
         round = 0
-      const binding = composeLocalSystemAgentRunFamily({ appHome: () => root })
+      const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => root })
       const native = binding.withFixture(async (request) => {
         round += 1
         directory = join(request.scratchParent, request.scratchName ?? 'missing')

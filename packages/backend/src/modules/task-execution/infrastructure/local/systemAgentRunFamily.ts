@@ -80,7 +80,8 @@ export function createLocalSystemAgentRunFamily<Bind>(
           workingDirectory: () => selected.locations.workingDirectory,
           requireSpawnReceipt: true,
           cleanupReceiver: 'material',
-          evidenceHooks: definition.evidenceHooks,
+          evidence: definition.evidence,
+          materialReference: definition.materialReference,
         },
         evidenceScope: {
           runContent: () => selected.locations.runDirectory,

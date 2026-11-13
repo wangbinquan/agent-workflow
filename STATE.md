@@ -15,6 +15,35 @@
 - **附带**：RFC-488 的 Done 文档提交 `ca08a9365`（6 个文档文件）：exact SHA 主 CI run 43294932125 的 70 个 job 全部通过。其中
   `Backend tests (ubuntu-latest shard 41/44)` 里 `rfc398-start-auto-upgrade-takeover` 三例全过（「…acquires before takeover」22.7 秒）；
   它与 `9ff1274b0` 相比不改 `packages/`，作为 RFC-488 实现提交那格偶发红的后继证据。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 运行时管理（本机、托管）的装配在 runtime-management 的 composition
+  （`localRuntimeManagement.ts`、`crewstationRuntimeManagement.ts`），task-execution 的探测族经效果自有的探测端口注入；运行族的根仍在
+  task-execution 的 composition、只装自己（绑定适配、配置冻结、产出校验、夹具选择）；runtime-management、resource-catalog、
+  source-control 的实现作为提供者由 `bootstrap/runFamilyProviders.ts` 交入；本机调用只用 runtime-management `public/` 的类型。C11 public
+  surface 不增（1,208）；consumer 自有端口登记 4 条虚线（RFC-294 design §3.1 与 `rfc294Target.ts`，目标边 100 → 104）。C12 RFC-489 用例
+  覆盖 task-execution 全部 815 个生产文件（下限 700，import 识别带负对照：相对路径、别名、re-export、动态 import、type-only）、运行时
+  管理两个装配的唯一声明、本机探测族与本机调用、bootstrap 的绑定与 `windows-platform.yml` 两份路径过滤，以及行为对拍（材料定义的运行
+  证据、材料引用与协议，运行时管理装配把诊断目标交给探测族、只交一次）。C13 `counts.json` 60 项实测都在 `max` 内；
+  `cross-context-internal-file-pairs` 43 → 22，已收紧到实测，其余与对照逐项相同。
+- **§14 不变量 / 运行时驱动一族第三步**：task-execution → runtime-management 的 18 个跨 context 内部文件对与本机任务代理根指向
+  resource-catalog、source-control 的 3 对销账（跨 context 内部文件对 43 → 22）；task-execution 的生产文件对 runtime-management 只取
+  `public/`（实现 runtime-management 自有端口的 adapter 取 `composition/required-ports` 除外）。一族之外 import 它的生产文件 31 → 30：
+  task-execution 17 → 16（本机探测族不再取驱动），runtime-management 12、bootstrap 2 不变。越 DAG 的 offered 文件对 46、context 值级
+  越 DAG 对 0、public 类型偏差 57、未消费 public 符号 91、`module-layer` 1、application 直接副作用 2、legacy 横向文件 167、legacy 服务
+  实现 48 不变；跨 context import 7,668 → 7,656（删 33 增 21）。下一步：task-execution 对一族的其余 16 处使用与一族指回 task-execution
+  的两条边（`services/systemAgentRun.ts`、`services/runtimeSmoke.ts` → task-execution 的本机调用与 application）；整族迁入
+  runtime-management infrastructure。
+- **集中验证**（候选基于 `ccc856852`；验证末尾 HEAD 前进到另一会话只改前端的 `0df2df21e`，与本 RFC 的路径无交集，详见 plan）：集中验证与实现门
+  查出本 RFC 的两处问题。新的 bootstrap 装配文件没登记进 census 的 `BOOTSTRAP_FILES`，`rfc317-module-boundary` 的 R1 多出 17 条边（首批即红，
+  登记后全过；教训记入 `docs/dev-gotchas.md`）。实现门自审发现本机探测族不再在打开时取驱动：协议未知时原来打开即抛错，现在编译时收成
+  `spawn-failed`；这条路走不到（`runtimes.protocol` 有 epoch 2 的 CHECK，入站 schema 先解码协议），`rfc422-port-bindings` 又钉住编译前不选材料，
+  不改代码（design §6 细化 5），并删去该用例里已删提供者的夹具。backend `tsc` 0 错、eslint 无告警；RFC-489 用例候选 10 / 10（①～⑤ 的结构副本对
+  HEAD 红 6 条）；首批 636 个文件 626 个通过；修复批 11 个文件全过；全量 SQLite 逐文件跑 2,931 个、2,917 个通过，其余 14 个都不归本 RFC（发布
+  账本 1 个是导出仓库没有真实历史，HEAD 的对照上同样红；12 个撞用例自带的时限或内部等待；`rfc310` 给 system mock 播种时连接被重置一次，原样重
+  跑 2 / 2）；只放宽时限的 12 个副本全过。PostgreSQL 接库跑 102 个相关文件，1,873 条里 1,859 条通过：红的 14 条都在 PostgreSQL 一侧、撞用例自
+  带的时限或 200 毫秒余量，与 HEAD 的代码同时 A/B 分布相同（候选 15 条、HEAD 14 条）；三个 scheduler 文件放宽时限后 37 条里 36 条通过，余下一
+  条撞 `task-execution-stale-owner`，不经本 RFC 改动的代码，同一副本随后在候选与 HEAD 上都 17 / 17，登记 `docs/audit-backlog.md` 第十三条。按
+  CI 的跑法（默认 5 秒）跑 48 个相关文件，730 条里 721 条通过，红的 9 条都撞时限，与 HEAD 的代码同时 A/B 分布相同（候选 17 条、HEAD 16 条）。
+  架构报告 60 项实测都在 `max` 内（触及的一项已收紧），其余与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-12 RFC-488 resource-catalog 本机 MCP 诊断的运行时工作改经自有端口（Done；`design/RFC-488-local-mcp-diagnostic-execution-port/`）
 

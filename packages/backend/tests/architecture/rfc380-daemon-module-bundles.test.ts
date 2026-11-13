@@ -136,6 +136,9 @@ const FACTORIES = new Set([
   'composeLocalSystemAgentRunFamily',
   'composeLocalMcpDiagnostics',
   'composeLocalRuntimeManagement',
+  // RFC-489: bootstrap's run-family selections are deployment adapters too; roots take them through the profile.
+  'composeLocalSystemAgentRunFamilySelection',
+  'composeLocalRuntimeManagementSelection',
   'createFileWorkspacePresenceQueries',
   'createRuntimeSessionLeaseOperations',
   'composeMemoryOperationsFor',

@@ -16,6 +16,7 @@ import {
 import {
   composeLocalTaskAgentRunFamilyFor,
   type LocalTaskAgentRunFamilyBinding,
+  type LocalTaskAgentRunProviders,
 } from './localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from './localTaskScriptRunFamily'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
@@ -94,9 +95,12 @@ function localConfigurationBridge(
 export function composeLocalTaskRunSelection(input: {
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
+  /** RFC-489: the other modules' implementations of the native task agent run family (bootstrap passes them in). */
+  readonly taskAgentProviders: LocalTaskAgentRunProviders
 }): TaskRunRootSelection {
   const bridge = localConfigurationBridge({
-    taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+    taskAgentRunsFor: (binding) =>
+      composeLocalTaskAgentRunFamilyFor(binding, input.taskAgentProviders),
     taskScriptRunsFor: composeLocalTaskScriptRunFamily,
   })
   return {

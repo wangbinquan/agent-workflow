@@ -14,7 +14,7 @@ import type {
   SystemAgentWorkspaceScopes,
 } from '@/modules/runtime-management/public/participants'
 import type { RuntimePlugin } from '@/services/execution/agentInjection'
-import type { ResolvedSkill, RuntimeDriver } from '@/services/runtime/types'
+import type { ResolvedSkill } from '@/services/runtime/types'
 import type { createLocalAgentInvocationPreparation } from './agentInvocationPreparation'
 import type { TaskAgentRunFamily } from '../../application/ports/taskAgentRunFamily'
 import type { TaskAgentRunPurpose } from '../../application/ports/taskAgentMaterial'
@@ -36,7 +36,10 @@ export interface NativeMaterialContents {
 /** A runtime's native material definition (runtime-management's local material selection). */
 export interface NativeMaterialDefinition {
   readonly protocol: LocalPreparationInput['binding']['protocol']
-  readonly evidenceHooks: LocalPreparationInput['binding']['evidenceHooks']
+  /** RFC-489: a run's evidence over the runtime's own hooks (the run gives its scope). */
+  readonly evidence: LocalPreparationInput['binding']['evidence']
+  /** RFC-489: a native plan's material reference. */
+  readonly materialReference: LocalPreparationInput['binding']['materialReference']
   createCompiler(
     contents: NativeMaterialContents,
     fixture?: { readonly binaryOverride?: readonly string[] },
@@ -94,9 +97,6 @@ export type NativeMaterialWorkspaces = (
 export interface NativeDiagnosticTargets extends NativeRuntimeContents {
   runtimeBinding(target: RuntimeDiagnosticTarget): AgentMaterialContentReference
 }
-
-/** Binds a runtime driver's protocol for the local invocation adapter. */
-export type NativeProtocolBinding = (driver: RuntimeDriver) => NativeMaterialDefinition['protocol']
 
 /** The task agent runtime bindings (runtime-management): the bindings the family exposes and the binary reader. */
 export interface NativeTaskAgentRuntimes extends NativeRuntimeContents {

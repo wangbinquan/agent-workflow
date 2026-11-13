@@ -22,6 +22,7 @@ import {
 } from '@/ws/broadcaster'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import { bindNativeTaskAgentRunPurpose } from '@/modules/task-execution/infrastructure/local/nativeTaskAgentRun'
+import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
 import type { RunNodeOptions } from '@/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -106,7 +107,10 @@ describe('RFC-461 —— agent 运行的 node.status 经端口包', () => {
     const noRead = (): never => {
       throw new Error('premature native options read')
     }
-    const purpose = bindNativeTaskAgentRunPurpose(new Proxy({} as RunNodeOptions, { get: noRead }))
+    const purpose = bindNativeTaskAgentRunPurpose(
+      new Proxy({} as RunNodeOptions, { get: noRead }),
+      { materialDefinitions: selectLocalAgentMaterialDefinition },
+    )
     expect(purpose.status.broadcastNodeStatus).toBe(broadcastNodeStatus)
   })
 

@@ -1,7 +1,7 @@
 // RFC-396 Windows CI: preserve configured runtime and send large design requests as invocation files.
 import { expect, test } from 'bun:test'
 import { createDesignAssistGeneration } from '@/modules/task-execution/infrastructure/designAssistGeneration'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
@@ -11,7 +11,7 @@ test('design assist reads the live configured runtime and preserves its selected
   const calls: SystemAgentRunOptions[] = []
   let responseText = '{}'
   let truncated = false
-  const binding = composeLocalSystemAgentRunFamily({
+  const binding = composeLocalSystemAgentRunFamilySelection({
     appHome: () => '/tmp/rfc396-runtime-fixture',
     fixture: {
       runFn: async (request) => {

@@ -23,7 +23,7 @@ import {
   type HostedRuntimeCapabilities,
 } from '@/modules/runtime-management/composition/crewstationRuntimeManagement'
 import { composeRuntimeManagement } from '@/modules/runtime-management/composition/runtimeManagement'
-import { HOSTED_RUNTIME_PROBE_BUDGET_MS } from '@/modules/task-execution/composition/crewstationRuntimeManagement'
+import { HOSTED_RUNTIME_PROBE_BUDGET_MS } from '@/modules/task-execution/composition/crewstationRuntimeSmoke'
 import { DEFAULT_TIMEOUT_MS } from '@/modules/task-execution/application/runtimeSmoke'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { describeEachProvider } from './helpers/eachProvider'

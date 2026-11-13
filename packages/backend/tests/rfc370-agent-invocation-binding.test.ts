@@ -4,7 +4,11 @@ import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infra
 import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { AgentInvocationProtocol } from '../src/modules/runtime-management/application/ports/agentProtocol'
 import type { AgentMaterialWorkspace } from '../src/modules/runtime-management/application/ports/agentMaterialWorkspace'
-import type { NativeAgentMaterialEvidenceHooks } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
+import {
+  createLocalAgentMaterialEvidence,
+  type NativeAgentMaterialEvidenceHooks,
+  type NativeAgentMaterialEvidenceScope,
+} from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import type { AgentExecutionParticipants } from '../src/modules/task-execution/application/ports/agentExecutionBinding'
 import type {
   AgentExecutionRecord,
@@ -42,22 +46,32 @@ function plan(): AgentSpawnPlan {
 }
 function makeBinding(
   material: AgentSpawnPlan,
-  options: Partial<Parameters<typeof bindNativeAgentInvocation>[0]> = {},
+  options: Partial<Parameters<typeof bindNativeAgentInvocation>[0]> & {
+    readonly evidenceHooks?: NativeAgentMaterialEvidenceHooks
+    readonly evidenceScope?: NativeAgentMaterialEvidenceScope
+  } = {},
 ) {
   const driver = getRuntimeDriver('opencode')
+  const {
+    evidenceHooks = driver,
+    evidenceScope = {
+      environment: () => material.env,
+      runContent: () => '/selected-run',
+      sessionLocation: () => ({ worktreePath: '/selected-working' }),
+    },
+    ...rest
+  } = options
+  // RFC-489: the binding receives what the runtime's material definition builds — the evidence over the hooks and the
+  // run's scope, and the plan's material reference.
   return bindNativeAgentInvocation({
     plan: material,
     protocol: bindNativeAgentProtocol(driver),
     workspace,
     cleanupReceiver: 'material',
     workingDirectory: () => '/selected-working',
-    evidenceHooks: driver,
-    evidenceScope: {
-      environment: () => material.env,
-      runContent: () => '/selected-run',
-      sessionLocation: () => ({ worktreePath: '/selected-working' }),
-    },
-    ...options,
+    evidence: createLocalAgentMaterialEvidence({ hooks: evidenceHooks, scope: evidenceScope }),
+    materialReference: () => bindNativeAgentMaterialReference(material),
+    ...rest,
   })
 }
 function quietSink(): AgentExecutionSink {

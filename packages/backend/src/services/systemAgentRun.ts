@@ -24,6 +24,7 @@
 import {
   getRuntimeDriver,
   getNativeAgentMaterialReference,
+  bindNativeAgentMaterialEvidence,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from '@/services/runtime'
@@ -333,12 +334,15 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
               workingDirectory: () => worktreeDir,
               nativeStartOwner: opts,
               cleanupReceiver: 'material',
-              evidenceHooks: driver,
-              evidenceScope: {
-                environment: () => prepared.env,
-                runContent: () => runDir,
-                sessionLocation: () => ({ worktreePath: worktreeDir }),
+              // RFC-489: the family's own evidence and reference wrappers over the same driver and scope.
+              get evidence() {
+                return bindNativeAgentMaterialEvidence(driver, {
+                  environment: () => prepared.env,
+                  runContent: () => runDir,
+                  sessionLocation: () => ({ worktreePath: worktreeDir }),
+                })
               },
+              materialReference: () => getNativeAgentMaterialReference(prepared),
             })
           },
           cleanup: () => prepared.cleanup?.(),

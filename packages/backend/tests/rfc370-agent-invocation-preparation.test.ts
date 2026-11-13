@@ -3,7 +3,10 @@ import { createAgentInvocationPreparation } from '../src/modules/task-execution/
 import { createLocalAgentInvocationPreparation } from '../src/modules/task-execution/infrastructure/local/agentInvocationPreparation'
 import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
-import type { NativeAgentMaterialEvidenceHooks } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
+import {
+  createLocalAgentMaterialEvidence,
+  type NativeAgentMaterialEvidenceHooks,
+} from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import type { RuntimeSessionCapturePersistence } from '../src/modules/runtime-management/public/participants'
 import type {
   AgentProcessRequest,
@@ -186,9 +189,13 @@ describe('RFC-370 selected invocation preparation', () => {
         calls.push('workspace')
         return workspace
       }
-      get evidenceHooks() {
+      // RFC-489: the runtime's material definition builds the evidence over its hooks at the old hooks read.
+      evidence(scope: Parameters<typeof createLocalAgentMaterialEvidence>[0]['scope']) {
         calls.push('hooks')
-        return hooks
+        return createLocalAgentMaterialEvidence({ hooks, scope })
+      }
+      materialReference(plan: object) {
+        return bindNativeAgentMaterialReference(plan)
       }
       get cleanupReceiver(): 'material' {
         calls.push('cleanupReceiver')
@@ -348,7 +355,8 @@ describe('RFC-370 selected invocation preparation', () => {
       binding: {
         protocol: bindNativeAgentProtocol(getRuntimeDriver('opencode')),
         workspace,
-        evidenceHooks: hooks,
+        evidence: (scope) => createLocalAgentMaterialEvidence({ hooks, scope }),
+        materialReference: (plan) => bindNativeAgentMaterialReference(plan),
         workingDirectory: unavailable,
         cleanupReceiver: 'material',
         runNative: unavailable,

@@ -39,8 +39,11 @@ import { createLocalTaskRuntimeInventoryContent } from '@/modules/task-execution
 import { createLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { createLocalScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
 import { localActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionEnvironment'
-import { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import {
+  composeLocalRuntimeManagementSelection,
+  composeLocalSystemAgentRunFamilySelection,
+  localTaskAgentRunProviders,
+} from './runFamilyProviders'
 import { composeLocalWorkspaceRollbackSnapshots } from '@/modules/collaboration/composition'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
@@ -112,6 +115,7 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     taskRunSelection: composeLocalTaskRunSelection({
       nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
       portArtifacts: composePortArtifactOperations(undefined, appHome),
+      taskAgentProviders: localTaskAgentRunProviders,
     }),
     taskArchive: { content: createFileTaskArchiveContent() },
     taskDeletionEffects: composeLocalTaskDeletionEffects(),
@@ -123,8 +127,8 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     actionWorkspaceEntries: localActionWorkspaceEntries,
     recoveredExecutionTaskIds: () => [],
     hostedBackgroundOwners: [],
-    runtimeManagement: composeLocalRuntimeManagement,
-    systemAgentRunFamily: composeLocalSystemAgentRunFamily,
+    runtimeManagement: composeLocalRuntimeManagementSelection,
+    systemAgentRunFamily: composeLocalSystemAgentRunFamilySelection,
     mcpDiagnostics: composeLocalMcpDiagnostics,
     credentials: composeLocalCredentialAdapters,
     customObserverPrograms: createLocalCustomObserverProgramFactory(),

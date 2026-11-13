@@ -2,7 +2,7 @@
 // databases. Native fixtures keep their original observation and receiver.
 import { expect, test } from 'bun:test'
 import { composeRuntimeManagement } from '../src/modules/runtime-management/composition/runtimeManagement'
-import { composeLocalRuntimeManagement } from '../src/modules/task-execution/composition/localRuntimeManagement'
+import { composeLocalRuntimeManagementSelection } from '@/bootstrap/runFamilyProviders'
 import { createLocalRuntimeManagementEffects } from '../src/modules/runtime-management/infrastructure/local/runtimeManagementEffects'
 import { createLocalRuntimeDiagnosticTargets } from '../src/modules/runtime-management/composition/runtimeDiagnosticTargets'
 import type {
@@ -279,7 +279,7 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
       ])
       receipts++
     }
-    const management = composeLocalRuntimeManagement({
+    const management = composeLocalRuntimeManagementSelection({
       runtimeRegistry: h.registry,
       configuration: h.effects.config,
       runtimeTests: { async reconcileDurableIntents() {} },
@@ -317,7 +317,7 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
     expect(calls).toEqual(['registry'])
     calls.length = 0
     expect(() =>
-      composeLocalRuntimeManagement({
+      composeLocalRuntimeManagementSelection({
         get runtimeRegistry(): RuntimeRegistryOperations {
           calls.push('registry')
           throw failure

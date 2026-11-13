@@ -142,7 +142,8 @@ export function createLocalTaskAgentRunFamily(
               workingDirectory: () => scope.workspaceRef,
               requireSpawnReceipt: true,
               cleanupReceiver: 'material',
-              evidenceHooks: definition.evidenceHooks,
+              evidence: definition.evidence,
+              materialReference: definition.materialReference,
             },
             evidenceScope: {
               runContent: () => materialWorkspace.locations.runDirectory,

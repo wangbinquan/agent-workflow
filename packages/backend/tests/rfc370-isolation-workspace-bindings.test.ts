@@ -60,6 +60,7 @@ import {
 import { buildMergeAgent } from '@/services/mergeAgent'
 import { resolveSyntheticTaskAgentInjection } from '@/modules/task-execution/infrastructure/taskExecutionResources'
 import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import type { Logger } from '@/util/log'
 import { Semaphore } from '@/platform/contracts/semaphore'
@@ -206,14 +207,17 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
   const unselectedContent = (): never => {
     throw new Error('isolation fixture unexpectedly reached agent content')
   }
-  const taskAgentRuns = composeLocalTaskAgentRunFamily({
-    appHome: runOptions.appHome,
-    nodeRunRuntime: runOptions.nodeRunRuntime,
-    operationConfiguration: runOptions.operationConfiguration,
-    runtimeRegistry: composeRuntimeRegistryOperations(db),
-    nodeRunPrompts: { store: unselectedContent, read: unselectedContent },
-    portArtifacts: { archive: unselectedContent, read: unselectedContent },
-  })
+  const taskAgentRuns = composeLocalTaskAgentRunFamily(
+    {
+      appHome: runOptions.appHome,
+      nodeRunRuntime: runOptions.nodeRunRuntime,
+      operationConfiguration: runOptions.operationConfiguration,
+      runtimeRegistry: composeRuntimeRegistryOperations(db),
+      nodeRunPrompts: { store: unselectedContent, read: unselectedContent },
+      portArtifacts: { archive: unselectedContent, read: unselectedContent },
+    },
+    localTaskAgentRunProviders,
+  )
   const state = {
     taskId,
     task: {

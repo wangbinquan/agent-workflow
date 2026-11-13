@@ -8,6 +8,7 @@ import type {
 import type { HostedRuntimeCapabilities, RuntimeKind } from '../public/types'
 import type { McpRuntimeTestReconciliationParticipant } from '@/modules/resource-catalog/public/participants'
 import { sha256Hex } from '@/util/hash'
+import { composeRuntimeManagement } from './runtimeManagement'
 
 export const HostedRuntimeCapabilitiesSchema = z.object({
   protocolVersion: z.literal(3),
@@ -168,4 +169,16 @@ export function createCrewStationRuntimeManagementEffects(input: {
       reconcile: () => input.runtimeTests.reconcileDurableIntents(),
     },
   }
+}
+
+/** RFC-489: Runtime Management assembles its hosted runtime management itself (moved from Task Execution's root); the
+ * hosted smoke probe is Task Execution's and arrives inside the effects input (bound by bootstrap). */
+export function composeCrewStationRuntimeManagement(input: {
+  readonly runtimeRegistry: Parameters<typeof composeRuntimeManagement>[0]['runtimeRegistry']
+  readonly effects: Parameters<typeof createCrewStationRuntimeManagementEffects>[0]
+}) {
+  return composeRuntimeManagement({
+    runtimeRegistry: input.runtimeRegistry,
+    effects: createCrewStationRuntimeManagementEffects(input.effects),
+  })
 }

@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
 import { composeLocalTaskAgentMaterialReferences } from '../src/modules/resource-catalog/composition/taskAgentMaterialReferences'
 import type { TaskAgentInjectionSnapshot } from '../src/modules/resource-catalog/application/ports/taskAgentMaterialReferences'
 import { composeLocalTaskAgentRunFamily } from '../src/modules/task-execution/composition/localTaskAgentRunFamily'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { runTaskAgentWithFamily } from '../src/modules/task-execution/composition/taskAgentRunFamily'
 import type {
   TaskAgentRunFamily,
@@ -193,14 +194,17 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
     const legacy = spyOn(getRuntimeDriver(protocol), 'buildSpawn').mockImplementation(noRead)
     let invocation: AgentInvocationBinding | undefined
     try {
-      const family = composeLocalTaskAgentRunFamily({
-        appHome: home,
-        nodeRunRuntime: new Proxy({} as NodeRunRuntimePersistence, { get: noRead }),
-        runtimeRegistry: new Proxy({} as RuntimeExecutionQueries, { get: noRead }),
-        nodeRunPrompts: { store: noRead, read: noRead },
-        portArtifacts: { archive: noRead, read: noRead },
-        binaryOverride: [process.execPath, '-e', 'process.exit(0)'],
-      })
+      const family = composeLocalTaskAgentRunFamily(
+        {
+          appHome: home,
+          nodeRunRuntime: new Proxy({} as NodeRunRuntimePersistence, { get: noRead }),
+          runtimeRegistry: new Proxy({} as RuntimeExecutionQueries, { get: noRead }),
+          nodeRunPrompts: { store: noRead, read: noRead },
+          portArtifacts: { archive: noRead, read: noRead },
+          binaryOverride: [process.execPath, '-e', 'process.exit(0)'],
+        },
+        localTaskAgentRunProviders,
+      )
       const purpose = family.open({
         taskId: 'task',
         nodeRunId: 'run',

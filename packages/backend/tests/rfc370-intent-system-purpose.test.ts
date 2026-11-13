@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { IntentSystemAgentRunFamily } from '../src/modules/intent/application/ports/intentSystemAgent'
-import { composeLocalSystemAgentRunFamily } from '../src/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import type { SystemAgentRunOptions } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import { classifyMissingEnvelope as coreClassifier } from '../src/modules/task-execution/application/systemAgentRun'
@@ -14,7 +14,7 @@ import { classifyMissingEnvelope as sharedClassifier } from '@agent-workflow/sha
 test('Intent accepts the same complete System family and preserves its runtime and retained-content owner', async () => {
   const home = mkdtempSync(join(tmpdir(), 'aw-intent-system-purpose-'))
   try {
-    const native = composeLocalSystemAgentRunFamily({ appHome: () => home })
+    const native = composeLocalSystemAgentRunFamilySelection({ appHome: () => home })
     let received: SystemAgentRunOptions | undefined
     const selected = native.withFixture(async (request) => {
       received = request

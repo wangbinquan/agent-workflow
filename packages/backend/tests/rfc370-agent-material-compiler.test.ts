@@ -15,6 +15,7 @@ import type {
   AgentMaterialIntent,
 } from '../src/modules/runtime-management/application/ports/agentMaterial'
 import {
+  bindNativeAgentMaterialReference,
   createLocalAgentMaterialCompiler,
   type NativeAgentMaterialContents,
 } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
@@ -26,6 +27,7 @@ import type { RuntimeProfile } from '../src/modules/runtime-management/public/ty
 import { emptyDeclaredManifest, type RuntimePlugin } from '../src/services/execution/agentInjection'
 import { getRuntimeDriver } from '../src/services/runtime'
 import { selectLocalAgentMaterialDefinition } from '../src/modules/runtime-management/infrastructure/local/localAgentMaterialDefinition'
+import { createLocalAgentMaterialEvidence } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import type {
   AgentSpawnContext,
   AgentSpawnPlan,
@@ -642,7 +644,27 @@ describe('RFC-370 selected material compiler', () => {
         })
         const definition = selectLocalAgentMaterialDefinition(kind)
         expect(definition.protocol.kind).toBe(kind)
-        expect(definition.evidenceHooks).toBe(driver)
+        // RFC-489: the definition builds a run's evidence over this driver's own hooks (as the hooks did) and the
+        // plan's material reference.
+        const scope = {
+          environment: () => ({}),
+          runContent: () => '/selected-run',
+          sessionLocation: () => ({ worktreePath: '/selected-working' }),
+        }
+        const evidence = definition.evidence(scope)
+        const expected = createLocalAgentMaterialEvidence({ hooks: driver, scope })
+        for (const member of [
+          'prepareUsageMeter',
+          'readInventory',
+          'drainFinalEvents',
+          'startLiveCapture',
+          'captureSessionsToSink',
+        ] as const)
+          expect([member, typeof evidence[member]]).toEqual([member, typeof expected[member]])
+        const referenced = {}
+        expect(definition.materialReference(referenced)).toBe(
+          bindNativeAgentMaterialReference(referenced),
+        )
         const rootSelected = definition.createCompiler(bound.contents, bound.fixture)
         const preparations = [
           () => driver.buildSpawn(original),

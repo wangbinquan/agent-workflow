@@ -1,4 +1,5 @@
 import { createNodeRunQueries } from '@/modules/task-execution/composition'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -146,7 +147,11 @@ export function taskBundleInput(
     },
     selection: {
       taskRunBinding: bindTaskRunRootSelection(
-        composeLocalTaskRunSelection({ nodeRunPrompts, portArtifacts }),
+        composeLocalTaskRunSelection({
+          nodeRunPrompts,
+          portArtifacts,
+          taskAgentProviders: localTaskAgentRunProviders,
+        }),
       ).drive,
       workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
       nodeRunPrompts,

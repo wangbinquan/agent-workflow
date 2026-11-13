@@ -219,6 +219,10 @@ flowchart LR
   TE -. "implements McpDiagnosticExecution" .-> RC
   TE -. "implements McpDiagnosticExecutionFactory" .-> RC
   TE -. "implements LocalMcpDiagnosticExecution" .-> RC
+  TE -. "implements RuntimeManagementSmoke" .-> RM
+  RM -. "implements NativeRunFamilyProviders" .-> TE
+  RC -. "implements NativeTaskAgentMaterialReferences" .-> TE
+  SC -. "implements NativeTaskAgentWorkspaceContents/NativeGitControlObservation" .-> TE
   COL -. "implements GateWorkspaceRollbackExecutor" .-> TE
   COL -. "implements TaskClarifyContinuationPort" .-> TE
   COL -. "implements CollaborationRepairPorts" .-> TE

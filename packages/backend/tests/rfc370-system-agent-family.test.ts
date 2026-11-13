@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { composeLocalSystemAgentRunFamily } from '../src/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { createSystemAgentRunFamily } from '../src/modules/task-execution/application/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
@@ -103,7 +103,7 @@ describe('RFC-370 complete System family binding', () => {
       }
     }
     const profile = new Profile()
-    const binding = composeLocalSystemAgentRunFamily({
+    const binding = composeLocalSystemAgentRunFamilySelection({
       appHome: () => {
         events.push('home')
         return '/fixture/home'
@@ -164,7 +164,7 @@ describe('RFC-370 complete System family binding', () => {
       }
     }
     const nativeResult = new NativeResult()
-    const selected = composeLocalSystemAgentRunFamily({
+    const selected = composeLocalSystemAgentRunFamilySelection({
       appHome: () => '/fixture/home',
       fixture: { runFn: async () => nativeResult },
     })
@@ -187,8 +187,8 @@ describe('RFC-370 complete System family binding', () => {
   })
 
   test('an explicit fixture cannot interpret another root runtime reference', async () => {
-    const first = composeLocalSystemAgentRunFamily({ appHome: () => '/first' })
-    const second = composeLocalSystemAgentRunFamily({ appHome: () => '/second' })
+    const first = composeLocalSystemAgentRunFamilySelection({ appHome: () => '/first' })
+    const second = composeLocalSystemAgentRunFamilySelection({ appHome: () => '/second' })
     let calls = 0
     const selected = second.withFixture(async () => {
       calls++
@@ -212,7 +212,7 @@ describe('RFC-370 complete System family binding', () => {
     test(`${protocol} native selection compiles persona and seeds before a failed launch`, async () => {
       const home = mkdtempSync(join(tmpdir(), 'aw-system-native-family-'))
       try {
-        const selected = composeLocalSystemAgentRunFamily({ appHome: () => home })
+        const selected = composeLocalSystemAgentRunFamilySelection({ appHome: () => home })
         const scope = selected.family.workspaces.capture({ namespace: 'shared', name: 'native' })
         const runtime = selected.bindRuntime({ binaryPath: join(home, 'missing-runtime.exe') })
         const completed = await selected.family.run({
@@ -254,7 +254,7 @@ describe('RFC-370 complete System family binding', () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-system-family-'))
     let selectedHome = home
     try {
-      const binding = composeLocalSystemAgentRunFamily({ appHome: () => selectedHome })
+      const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => selectedHome })
       const parent = binding.family.workspaces.capture({ namespace: 'shared' })
       selectedHome = join(home, 'later')
       const named = binding.family.workspaces.withName(parent, 'chain')

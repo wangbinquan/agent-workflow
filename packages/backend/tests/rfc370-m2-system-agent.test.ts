@@ -1,4 +1,8 @@
-import { createCrewStationRuntimeManagement } from '@/modules/task-execution/composition/crewstationRuntimeManagement'
+import {
+  composeCrewStationRunFamilySelections,
+  localSystemAgentRunProviders,
+} from '@/bootstrap/runFamilyProviders'
+import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition/crewstationSystemAgentMaterial'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/application/ports/runtimeRegistry'
 import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
 import { expect, test } from 'bun:test'
@@ -171,7 +175,10 @@ function fixture() {
     ],
     workspaces: { ensure: async () => ({ businessTaskId: 'parent' }) },
   }
-  const factory = createCrewStationSystemAgentRunFamily(inputs)
+  const factory = createCrewStationSystemAgentRunFamily(inputs, {
+    contents: composeCrewStationSystemAgentContents,
+    local: localSystemAgentRunProviders,
+  })
   const open = () =>
     factory({
       appHome: () => {
@@ -345,11 +352,11 @@ for (const failure of [false, true])
       ],
     }
     try {
-      const management = createCrewStationRuntimeManagement({
+      const management = composeCrewStationRunFamilySelections({
         ...f.inputs,
         initialCapabilities: capabilities,
         capabilities: async () => capabilities,
-      })({
+      }).runtimeManagement({
         appHome: () => {
           throw new Error('native runtime path must not be read')
         },

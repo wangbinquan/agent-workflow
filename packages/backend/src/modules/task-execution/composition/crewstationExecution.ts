@@ -27,8 +27,6 @@ import { createHostedTaskDeletionContent } from '../infrastructure/crewstation/t
 import { createHostedVolumeActivity } from '../infrastructure/crewstation/volumeActivity'
 import { createHostedWorkspaceCommandReconciliation } from '../infrastructure/crewstation/workspaceCommandReconciliation'
 import { createDaemonRecoveryAuthorityProof } from './bootRecovery'
-import { createCrewStationRuntimeManagement } from './crewstationRuntimeManagement'
-import { createCrewStationSystemAgentRunFamily } from './crewstationSystemAgentRunFamily'
 import { composeCrewStationTaskRunSelection } from './crewstationTaskRunSelection'
 import { composePortArtifactOperations } from './portArtifacts'
 
@@ -122,7 +120,8 @@ export function composeCrewStationExecutionOwner(
     /** Volume-use facts for Source Control's hosted parent lifecycle (§9.2 V3). */
     volumeActivity: createHostedVolumeActivity({ db: input.db, store }),
     /** Inputs every hosted Agent family (System Agent, MCP diagnostics,
-     * runtime smoke) shares; assembled by bootstrap. */
+     * runtime smoke) shares; assembled by bootstrap. RFC-489: bootstrap also pairs the hosted System Agent family and
+     * runtime management with runtime-management's hosted contents and management. */
     hostedAgents: { ...hostedAgents, capabilities, initialCapabilities: input.initialCapabilities },
     backgroundOwners: [
       {
@@ -140,12 +139,6 @@ export function composeCrewStationExecutionOwner(
         }),
         repositories: input.taskDeletionRepositories(),
       },
-      systemAgentRunFamily: createCrewStationSystemAgentRunFamily(hostedAgents),
-      runtimeManagement: createCrewStationRuntimeManagement({
-        ...hostedAgents,
-        initialCapabilities: input.initialCapabilities,
-        capabilities,
-      }),
       bootExecutionRecovery: recovery.factory,
       recoveredExecutionTaskIds: recovery.recoveredTaskIds,
       taskRunSelection: composeCrewStationTaskRunSelection({

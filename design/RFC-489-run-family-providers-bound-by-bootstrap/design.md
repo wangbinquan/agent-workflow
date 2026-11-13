@@ -81,6 +81,7 @@ task-execution → runtime-management 的 18 个内部文件对（三份精确�
 - 跨 context import：task-execution 指向 RM、RC、SC composition 与 infrastructure 的边删去；bootstrap 指向各模块 composition 的边增加
   （装配根的允许形状）；runtime-management 的新装配是模块内边。
 - public surface 不增（RM 的新导出在 `composition/`）；越 DAG 的值边与 offered 文件对不升；`R1`、`R2` 不增（一族改用自己已有的包装）。
+- consumer 自有端口登记 4 条虚线（细化 1）：design §3.1 的边 100 → 104，`rfc294Target.ts` 的 `REQUIRED_CONTEXT_EDGES` 同增。
 - 减速带 60 项不升；task-execution composition 的控制流计数随根的形状核对。
 
 ## 4. 用例
@@ -109,7 +110,26 @@ task-execution → runtime-management 的 18 个内部文件对（三份精确�
 
 ## 6. 取舍（可推翻）与实施中的细化
 
-细化：（实施中补。）
+细化（实施中查出，已改）：
+
+1. **四条绑定登记为虚线**：bootstrap 交入的提供者就是 consumer 自有端口。RFC-422 起它们由 task-execution 的 composition 直接取各模块实现，
+   未登记。现在登记 4 条（RFC-294 design §3.1 与 `rfc294Target.ts`）：
+   - `TE -. "implements RuntimeManagementSmoke" .-> RM`：探测族实现 runtime-management 效果的探测端口；
+   - `RM -. "implements NativeRunFamilyProviders" .-> TE`：材料定义与工作区、系统代理与任务代理的运行时绑定、留存内容与托管内容；
+   - `RC -. "implements NativeTaskAgentMaterialReferences" .-> TE`；
+   - `SC -. "implements NativeTaskAgentWorkspaceContents/NativeGitControlObservation" .-> TE`。
+2. **系统代理族的运行时绑定类型随提供者走**：入口 `createLocalSystemAgentRunFamily<Bind>` 对运行时绑定泛型，提供者类型若取
+   `Parameters<…>` 会把它擦成 `unknown`。两个系统代理根与提供者类型都带上 `Bind`，由 bootstrap 的提供者推断出 runtime-management 的具体
+   类型。
+3. **只供契约用例的本机任务运行收材料定义**：`bindNativeTaskAgentRunPurpose(opts, providers)`、`runNativeTaskAgent(opts, providers)`，协议、
+   运行证据与材料引用取自材料定义；用例的 `helpers/runner.ts` 交 runtime-management 的。它取 source-control git 观测的那一对不在本 RFC
+   范围，保留。
+4. **CrewStation 两项选择的输入与原来逐字相同**：托管系统代理族原来收的输入不含能力读取（`capabilities`、`initialCapabilities`），托管
+   运行时管理收的含。bootstrap 配对时照此分开；托管探测与托管效果仍收完整的输入。
+5. **本机探测族不再在打开时取驱动**（实现门自审查出）：原来打开时取一次驱动，编译时再按协议选材料定义；现在只在编译时选一次。RFC-422
+   起材料定义就在编译时选，`rfc422-port-bindings` 钉住「编译前不选」，所以不挪回打开时。差别只在协议未知时：原来打开即抛错；现在编译时
+   抛同一条错，探测核心丢弃工作区后收成 `spawn-failed`。这条路走不到：已登记运行时的 `protocol` 列有 epoch 2 的 CHECK，只允许两个
+   协议；未保存的探测与新建运行时由入站 schema 先解码协议；请求的类型是两个协议的联合。
 
 取舍：
 
@@ -123,6 +143,6 @@ task-execution → runtime-management 的 18 个内部文件对（三份精确�
 
 - **C10**：运行时管理的装配在 runtime-management 的 composition；运行族的根在 task-execution 的 composition、只装自己；跨模块的提供者绑定
   在 bootstrap；本机调用只用 RM `public/` 的类型。
-- **C11**：public surface 不增。
+- **C11**：public surface 不增；consumer 自有端口登记 4 条虚线（细化 1）。
 - **C12**：RFC-489 用例覆盖 task-execution 全部生产文件（≥700）、RM 的两个装配、本机探测族与本机调用、bootstrap 的绑定，以及对拍。
 - **C13**：`cross-context-internal-file-pairs` 收紧到实测；触及的减速带收紧到实测。

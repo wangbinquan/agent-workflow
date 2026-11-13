@@ -1,5 +1,6 @@
-// RFC-421: moved verbatim from composition/agentInvocation.ts — the local (native) agent invocation adapter. Its
-// runtime-management local material reference and evidence factories are recorded provider bridges.
+// RFC-421: moved verbatim from composition/agentInvocation.ts — the local (native) agent invocation adapter.
+// RFC-489: the material reference and the run's evidence arrive with the binding (the runtime's material definition
+// builds them); no runtime-management infrastructure is imported here.
 import type { AgentInvocationBinding } from '../../application/ports/agentInvocation'
 import type { AgentExecutionRecord } from '../../application/ports/agentExecution'
 import type {
@@ -14,15 +15,23 @@ import {
 } from './agentExecutionEffect'
 import type {
   AgentInvocationProtocol,
+  AgentMaterialEvidence,
   AgentMaterialWorkspace,
 } from '@/modules/runtime-management/public/participants'
-import { bindNativeAgentMaterialReference } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
-import {
-  createLocalAgentMaterialEvidence,
-  type NativeAgentMaterialEvidenceHooks,
-  type NativeAgentMaterialEvidenceScope,
-} from '@/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import type { AgentSpawnPlan, SpawnPlan } from '@/services/runtime/types'
+
+/** RFC-489: what one run's evidence reads — its final environment, run content and session locations. */
+export interface NativeAgentEvidenceScope {
+  environment(): Readonly<Record<string, string | undefined>>
+  runContent(): string
+  sessionLocation(): {
+    readonly worktreePath: string
+    readonly configDirEnv?: string
+    readonly configDirName?: string
+    readonly opencodeDbPath?: string
+  }
+  liveLocation?(): { readonly opencodeDbPath?: string }
+}
 
 /** This native compatibility factory receives an already compiled material.
  * All members close over that exact plan and explicit native scope. It never
@@ -31,8 +40,10 @@ export function bindNativeAgentInvocation(input: {
   readonly plan: SpawnPlan
   readonly protocol: AgentInvocationProtocol
   readonly workspace: AgentMaterialWorkspace
-  readonly evidenceHooks: NativeAgentMaterialEvidenceHooks
-  readonly evidenceScope: NativeAgentMaterialEvidenceScope
+  /** The run's evidence (built by the runtime's material definition over the run's scope). */
+  readonly evidence: AgentMaterialEvidence
+  /** The plan's material reference, read on every access as before. */
+  readonly materialReference: () => string
   readonly workingDirectory: () => string
   /** Task keeps the original early cmd/env snapshot for its execution. */
   readonly taskSnapshot?: {
@@ -48,11 +59,8 @@ export function bindNativeAgentInvocation(input: {
 }): AgentInvocationBinding {
   // Raw fixture references are first minted at the original execution-binding
   // point; already compiled material retains its existing reference.
-  const materialRef = () => bindNativeAgentMaterialReference(input.plan)
-  const evidence = createLocalAgentMaterialEvidence({
-    hooks: input.evidenceHooks,
-    scope: input.evidenceScope,
-  })
+  const materialRef = () => input.materialReference()
+  const evidence = input.evidence
   const command = () => input.taskSnapshot?.command ?? input.plan.cmd
   const environment = () => input.taskSnapshot?.environment ?? input.plan.env
   let executionBound = false

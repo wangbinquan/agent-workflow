@@ -14,7 +14,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 //  - extractJsonObject / parseNumstatZ / computeContentDigest unit matrices
 
 import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import type {
   SystemAgentRunFamily,
   SystemAgentRunRequest,
@@ -610,7 +610,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       const db = harness.db,
         world = await seedWorld(db),
         original = deps(db, undefined)
-      const binding = composeLocalSystemAgentRunFamily({ appHome: () => home })
+      const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => home })
       let directory = '',
         mtime = 0,
         reference = ''

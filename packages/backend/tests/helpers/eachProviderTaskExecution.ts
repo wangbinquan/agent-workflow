@@ -24,6 +24,7 @@ import {
 
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import type { LegacyTaskRunComposition } from '@/modules/task-execution/composition/localTaskRunSelection'
 import { composeTaskWorkspaceExcludeProfilesFor } from '@/modules/task-execution/composition/localTaskRunSelection'
@@ -164,7 +165,9 @@ export async function createEachProviderTaskExecution(
     readonly completionMode?: TaskDriveCompletionMode
     readonly workspacePresence?: WorkspacePresenceQueries
     /** Complete explicit family replacement exercised by actual provider drives. */
-    readonly taskAgentRunsFor?: typeof composeLocalTaskAgentRunFamilyFor
+    readonly taskAgentRunsFor?: (
+      binding: Parameters<typeof composeLocalTaskAgentRunFamilyFor>[0],
+    ) => ReturnType<typeof composeLocalTaskAgentRunFamilyFor>
     readonly taskScriptRunsFor?: LegacyTaskRunComposition['taskScriptRunsFor']
     readonly nodeRunPromptsFor?: LegacyTaskRunComposition['nodeRunPromptsFor']
     readonly portArtifactsFor?: LegacyTaskRunComposition['portArtifactsFor']
@@ -187,7 +190,9 @@ export async function createEachProviderTaskExecution(
   const runBinding =
     taskRunRoot === undefined
       ? {
-          taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
+          taskAgentRunsFor:
+            options.taskAgentRunsFor ??
+            ((binding) => composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders)),
           taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
           ...(options.nodeRunPromptsFor === undefined
             ? {}

@@ -31,7 +31,7 @@ import { createIntentSession, insertUserTurnAndReserve } from '@/modules/intent/
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { submitIntentWorkingSetChange } from '@/modules/intent/application/workingSet'
 import { cancelIntentTurn } from '@/modules/intent/application/turnEngine'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import {
   createMaintenanceService,
   type MaintenanceServiceOptions,
@@ -89,7 +89,7 @@ function fixture(harness: ProviderDatabaseHarness) {
     http: [] as SystemAgentRunOptions[],
     unselected: 0,
   }
-  const worker = composeLocalSystemAgentRunFamily({
+  const worker = composeLocalSystemAgentRunFamilySelection({
     appHome: () => appHome,
     fixture: {
       runFn: async (opts) => {
@@ -98,7 +98,7 @@ function fixture(harness: ProviderDatabaseHarness) {
       },
     },
   })
-  const http = composeLocalSystemAgentRunFamily({
+  const http = composeLocalSystemAgentRunFamilySelection({
     appHome: () => appHome,
     fixture: {
       runFn: async (opts) => {

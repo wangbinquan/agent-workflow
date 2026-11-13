@@ -47,7 +47,9 @@ test('the local system agent opener checks content references and offers no pers
     },
     materialDefinitions: () => ({
       protocol: { sentinel: 'protocol' },
-      evidenceHooks: {},
+      // RFC-489: a definition gives the run's evidence and the plan's material reference.
+      evidence: () => ({}),
+      materialReference: () => 'material-ref',
       createCompiler(contents: NativeMaterialContents) {
         captured.contents = contents
         return { compiler: { compile: async () => ({}) }, nativePlan: () => ({}) }
@@ -94,7 +96,6 @@ test('the local smoke opener binds the smoke workspace at materialize, from the 
       materialDefinitions: () => {
         throw new Error('material not selected before compile')
       },
-      bindProtocol: () => ({}),
     } as never,
   )
   await expect(family.run({ protocol: 'opencode', target: {}, log } as never)).rejects.toThrow(

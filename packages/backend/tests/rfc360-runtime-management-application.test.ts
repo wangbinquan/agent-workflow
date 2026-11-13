@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createRuntimeProfileConfigurationCommands } from '../src/modules/runtime-management/application/runtimeConfiguration'
 import { createRuntimeManagement } from '../src/modules/runtime-management/application/runtimeManagement'
-import { composeLocalRuntimeManagement as composeRuntimeManagement } from '../src/modules/task-execution/composition/localRuntimeManagement'
+import { composeLocalRuntimeManagementSelection as composeRuntimeManagement } from '@/bootstrap/runFamilyProviders'
 import { createLocalRuntimeDiagnosticTargets } from '../src/modules/runtime-management/composition/runtimeDiagnosticTargets'
 import type {
   RuntimeManagementConfig,

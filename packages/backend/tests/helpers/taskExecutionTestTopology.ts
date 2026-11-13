@@ -10,6 +10,7 @@ import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import { join } from 'node:path'
 import {
@@ -172,7 +173,8 @@ export function composeTaskExecutionTestRuntime(
       memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
-        taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+        taskAgentRunsFor: (binding) =>
+          composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders),
         taskScriptRunsFor: composeLocalTaskScriptRunFamily,
         nodeRunPromptsFor: (appHome) =>
           composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
@@ -330,13 +332,16 @@ export function runTaskWithRealTestTopology(
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const taskAgentRuns =
     options.taskAgentRuns ??
-    composeLocalTaskAgentRunFamilyFor({
-      request: options,
-      nodeRunRuntime,
-      runtimeRegistry,
-      nodeRunPrompts,
-      portArtifacts,
-    })
+    composeLocalTaskAgentRunFamilyFor(
+      {
+        request: options,
+        nodeRunRuntime,
+        runtimeRegistry,
+        nodeRunPrompts,
+        portArtifacts,
+      },
+      localTaskAgentRunProviders,
+    )
   const taskScriptRuns = options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(options)
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
     options.workspaceExcludeProfiles,
@@ -361,7 +366,8 @@ export function runTaskWithRealTestTopology(
       historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: (binding) =>
-          options.taskAgentRuns ?? composeLocalTaskAgentRunFamilyFor(binding),
+          options.taskAgentRuns ??
+          composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders),
         taskScriptRunsFor: (request) =>
           options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(request),
         nodeRunPromptsFor: () => nodeRunPrompts,

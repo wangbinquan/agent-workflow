@@ -25,6 +25,7 @@ import { join } from 'node:path'
 import { createRuntimeSmokeRunFamily } from '../src/modules/task-execution/application/runtimeSmoke'
 import { MIN_TURN_TIMEOUT_MS } from '../src/modules/task-execution/application/runtimeSmoke'
 import { composeLocalRuntimeSmokeRunFamily } from '../src/modules/task-execution/composition/localRuntimeSmokeRunFamily'
+import { localRuntimeSmokeRunProviders } from '@/bootstrap/runFamilyProviders'
 import { createLocalRuntimeDiagnosticTargets } from '../src/modules/runtime-management/composition/runtimeDiagnosticTargets'
 import type {
   RuntimeSmokeInvocationFamily,
@@ -310,13 +311,16 @@ describe('RFC-370 complete Runtime smoke family', () => {
       homes.add(home)
       const targets = createLocalRuntimeDiagnosticTargets()
       let homeReads = 0
-      const family = composeLocalRuntimeSmokeRunFamily({
-        targets,
-        appHome() {
-          homeReads++
-          return home
+      const family = composeLocalRuntimeSmokeRunFamily(
+        {
+          targets,
+          appHome() {
+            homeReads++
+            return home
+          },
         },
-      })
+        localRuntimeSmokeRunProviders,
+      )
       const target = targets.capture({
         protocol: () => protocol,
         binaryPath: join(home, 'missing-runtime'),

@@ -138,6 +138,9 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/bootstrap/deploymentProfile.ts',
   'packages/backend/src/bootstrap/deploymentSelections.ts',
   'packages/backend/src/bootstrap/standalone.ts',
+  // RFC-489: bootstrap binds the run-family providers (runtime-management, resource-catalog, source-control) into
+  // Task Execution's run families and pairs Runtime Management's assembly with the smoke run families.
+  'packages/backend/src/bootstrap/runFamilyProviders.ts',
   'packages/backend/src/server.ts',
 ] as const
 

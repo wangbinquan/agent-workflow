@@ -13,16 +13,25 @@ import { selectNodeRunPromptOperations } from '../../composition/nodeRunPrompts'
 import { selectPortArtifactOperations } from '../../composition/portArtifacts'
 import { resolveNativePortContentDetailed } from './filePortOutputValidation'
 import { bindNativeAgentInvocation } from './agentInvocation'
-import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
+import type { NativeMaterialDefinitions } from './nativeRunFamilyProviders'
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
 import { bindNativeAgentMaterialWorkspace, getRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnPlan } from '@/services/runtime/types'
 import { resolveBoundaryMounts } from '@/modules/source-control/public/queries'
 
+/** RFC-489: the runtime-management providers the compatibility run receives (the caller binds them). */
+export interface NativeTaskAgentRunProviders {
+  /** The runtime's protocol, the run's evidence and the plan's material reference. */
+  readonly materialDefinitions: NativeMaterialDefinitions
+}
+
 /** Explicit compatibility binding. Getters retain the original options reads
  * at their original core boundaries; creating the purpose performs no IO,
  * content selection, runtime lookup, compilation or command interpretation. */
-export function bindNativeTaskAgentRunPurpose(opts: RunNodeOptions): TaskAgentRunPurpose {
+export function bindNativeTaskAgentRunPurpose(
+  opts: RunNodeOptions,
+  providers: NativeTaskAgentRunProviders,
+): TaskAgentRunPurpose {
   let materialWorkspace: ReturnType<typeof bindNativeAgentMaterialWorkspace>
   let runRoot: string
   return {
@@ -60,6 +69,7 @@ export function bindNativeTaskAgentRunPurpose(opts: RunNodeOptions): TaskAgentRu
     },
     selectMaterial(runtime) {
       const driver = getRuntimeDriver(runtime)
+      const definition = providers.materialDefinitions(runtime)
       let boundaryMounts: string[]
       return {
         prepareMounts() {
@@ -105,22 +115,25 @@ export function bindNativeTaskAgentRunPurpose(opts: RunNodeOptions): TaskAgentRu
               commandSnapshot = cmd
               const invocation = bindNativeAgentInvocation({
                 plan,
-                protocol: bindNativeAgentProtocol(driver),
+                protocol: definition.protocol,
                 workspace: materialWorkspace.workspace,
                 workingDirectory: () => opts.worktreePath,
                 taskSnapshot: { command: cmd, environment: env },
                 requireSpawnReceipt: true,
                 cleanupReceiver: 'material',
-                evidenceHooks: driver,
-                evidenceScope: {
-                  environment: () => plan.env,
-                  runContent: () => runRoot,
-                  sessionLocation: () => ({
-                    worktreePath: opts.worktreePath,
-                    configDirEnv: declaration.configDir!.env,
-                    configDirName: declaration.configDir!.name,
-                  }),
+                // RFC-489: the evidence the invocation used to build from the driver hooks, over the same scope.
+                get evidence() {
+                  return definition.evidence({
+                    environment: () => plan.env,
+                    runContent: () => runRoot,
+                    sessionLocation: () => ({
+                      worktreePath: opts.worktreePath,
+                      configDirEnv: declaration.configDir!.env,
+                      configDirName: declaration.configDir!.name,
+                    }),
+                  })
                 },
+                materialReference: () => definition.materialReference(plan),
               })
               return invocation
             },
@@ -153,6 +166,9 @@ export function bindNativeTaskAgentRunPurpose(opts: RunNodeOptions): TaskAgentRu
 }
 
 /** Every legacy caller uses the complete original Task algorithm. */
-export async function runNativeTaskAgent(opts: RunNodeOptions): Promise<RunResult> {
-  return runTaskAgentCore(opts, bindNativeTaskAgentRunPurpose(opts))
+export async function runNativeTaskAgent(
+  opts: RunNodeOptions,
+  providers: NativeTaskAgentRunProviders,
+): Promise<RunResult> {
+  return runTaskAgentCore(opts, bindNativeTaskAgentRunPurpose(opts, providers))
 }

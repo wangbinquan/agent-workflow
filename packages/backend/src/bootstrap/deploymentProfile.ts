@@ -9,7 +9,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
 import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
-import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { createRepositoryPublicationTransport } from '@/modules/source-control/composition'
 import type {
@@ -19,7 +18,10 @@ import type {
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import type { DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
-import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import type {
+  composeLocalRuntimeManagementSelection,
+  composeLocalSystemAgentRunFamilySelection,
+} from './runFamilyProviders'
 import type { TaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
@@ -158,8 +160,10 @@ export interface DeploymentSelections {
   readonly recoveredExecutionTaskIds: () => readonly string[]
   /** RFC-370 §9.2 V1 — deployment workers started with execution authority (standalone: none). */
   readonly hostedBackgroundOwners: readonly SignalledDaemonRuntimeOwner[]
-  readonly runtimeManagement: typeof composeLocalRuntimeManagement
-  readonly systemAgentRunFamily: typeof composeLocalSystemAgentRunFamily
+  /** RFC-489: Runtime Management's assembly with the smoke run family bootstrap pairs in. */
+  readonly runtimeManagement: typeof composeLocalRuntimeManagementSelection
+  /** RFC-489: Task Execution's System Agent run family over the providers bootstrap binds. */
+  readonly systemAgentRunFamily: typeof composeLocalSystemAgentRunFamilySelection
   readonly mcpDiagnostics: typeof composeLocalMcpDiagnostics
   /** RFC-370 v2 §3.6 — the deployment's credential mechanism. */
   credentials: CredentialAdapterSelection

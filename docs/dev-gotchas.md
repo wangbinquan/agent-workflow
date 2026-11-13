@@ -93,6 +93,10 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   退回本机装配。第一版把这个选择挪到观测模块、直接调本机装配；但 unstarted 阶段观测模块拿到的是 scope 的 `createMcpRuntimeTests`，它
   组装本机装配之外还把实例登记给 scope，应用释放时一并释放。直接调就漏了登记，`tsc` 与既有用例都看不出（两者签名相同）。选择放在
   按阶段选装配的地方（`daemonApplication.ts`），只在守护进程阶段生效；挪之前先看原调用点在各阶段实际拿到的是谁。
+- **在 `bootstrap/` 下新建装配文件，同批登记进 census 的 `BOOTSTRAP_FILES`**（RFC-489 首批实撞）：`tests/architecture/census.ts`
+  的 `BOOTSTRAP_FILES` 是允许 import 模块 composition 的 bootstrap 文件清单，不在清单里的文件取各模块 composition 的边全记进 `R1`
+  「legacy → module composition」。新建的 `bootstrap/runFamilyProviders.ts` 没登记，`rfc317-module-boundary` 多出 17 条边；`tsc`、
+  eslint 与本 RFC 自己的用例都看不出。
 
 ## 被 import 的模块不要写 top-level await：Bun 1.4.3 打包器会漏输出 `__promiseAll`（2026-10-31 RFC-400 实撞）
 

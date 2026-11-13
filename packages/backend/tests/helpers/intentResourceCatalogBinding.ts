@@ -33,7 +33,7 @@ import {
   type SelectedIntentTurnConfig,
   type RunIntentTurnDeps,
 } from '@/modules/intent/application/turnEngine'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import {
   dispatchIntentTurn,
@@ -224,7 +224,7 @@ export function runIntentTurnForTest(
 ): ReturnType<typeof runIntentTurn> {
   const persistence = deps.persistence ?? intentPersistenceForTest(deps.db)
   let home: string
-  const binding = composeLocalSystemAgentRunFamily({ appHome: () => home })
+  const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => home })
   function selectedConfig(config: IntentTurnConfig): SelectedIntentTurnConfig {
     const descriptors: PropertyDescriptorMap = {}
     for (const field of [
@@ -323,7 +323,7 @@ export function intentSystemAgentBindingForTest(
   persistence: IntentPersistence,
   appHome: string = Paths.root,
 ) {
-  const binding = composeLocalSystemAgentRunFamily({ appHome: () => appHome })
+  const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => appHome })
   return {
     systemAgents: binding.family,
     runtimeResolver: composeIntentTurnRuntimeResolver(persistence, binding.bindRuntime),
@@ -342,7 +342,7 @@ export function dispatchIntentTurnForTest(
     : never
 ): ReturnType<typeof dispatchIntentTurn> {
   const native = { ...deps }
-  const binding = composeLocalSystemAgentRunFamily({ appHome: () => native.appHome })
+  const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => native.appHome })
   return dispatchIntentTurn(
     {
       ...native,
@@ -374,7 +374,7 @@ export function resumeQueuedIntentWorkingSetsForTest(
     }>,
 ): ReturnType<typeof resumeQueuedIntentWorkingSets> {
   const native = { ...deps }
-  const binding = composeLocalSystemAgentRunFamily({ appHome: () => native.appHome })
+  const binding = composeLocalSystemAgentRunFamilySelection({ appHome: () => native.appHome })
   return resumeQueuedIntentWorkingSets({
     ...native,
     runtimeResolver: {

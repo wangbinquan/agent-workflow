@@ -19,6 +19,7 @@ import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflo
 import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
 import { createWorkerIdentity } from '../src/modules/task-execution/domain/ownership'
 import { composeLocalTaskAgentRunFamilyFor } from '../src/modules/task-execution/composition/localTaskAgentRunFamily'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import type {
   TaskAgentRunFamily,
   TaskAgentRunScope,
@@ -117,7 +118,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
             isolationWorkspaces: new MemoryIsolationFactory(isolation),
             taskAgentRunsFor(binding) {
               selections++
-              const local = composeLocalTaskAgentRunFamilyFor(binding)
+              const local = composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders)
               const family: TaskAgentRunFamily = {
                 runtimeBindings: local.runtimeBindings,
                 materialReferences: local.materialReferences,

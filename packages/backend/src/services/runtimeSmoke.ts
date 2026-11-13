@@ -16,6 +16,8 @@
 import { randomBytes } from 'node:crypto'
 import {
   getRuntimeDriver,
+  getNativeAgentMaterialReference,
+  bindNativeAgentMaterialEvidence,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from '@/services/runtime'
@@ -169,12 +171,15 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
               workspace: materialWorkspace.workspace,
               workingDirectory: () => worktreeDir,
               cleanupReceiver: 'executor',
-              evidenceHooks: driver,
-              evidenceScope: {
-                environment: () => plan.env,
-                runContent: () => runDir,
-                sessionLocation: () => ({ worktreePath: worktreeDir }),
+              // RFC-489: the family's own evidence and reference wrappers over the same driver and scope.
+              get evidence() {
+                return bindNativeAgentMaterialEvidence(driver, {
+                  environment: () => plan.env,
+                  runContent: () => runDir,
+                  sessionLocation: () => ({ worktreePath: worktreeDir }),
+                })
               },
+              materialReference: () => getNativeAgentMaterialReference(plan),
             })
           },
         }

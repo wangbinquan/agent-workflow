@@ -2,8 +2,11 @@
 // the application's two-phase preparation and the local invocation adapter.
 import type { AgentInvocationPreparation } from '../../application/ports/agentInvocationPreparation'
 import { createAgentInvocationPreparation } from '../../application/agentInvocationPreparation'
-import { bindNativeAgentInvocation } from './agentInvocation'
-import type { AgentMaterialCompiler } from '@/modules/runtime-management/public/participants'
+import { bindNativeAgentInvocation, type NativeAgentEvidenceScope } from './agentInvocation'
+import type {
+  AgentMaterialCompiler,
+  AgentMaterialEvidence,
+} from '@/modules/runtime-management/public/participants'
 import type { AgentSpawnPlan } from '@/services/runtime/types'
 
 /** Native composition retains the original compiled plan privately. Normal
@@ -16,12 +19,14 @@ export function createLocalAgentInvocationPreparation(input: {
   }
   readonly binding: Omit<
     Parameters<typeof bindNativeAgentInvocation>[0],
-    'plan' | 'taskSnapshot' | 'evidenceScope'
-  >
-  readonly evidenceScope: Omit<
-    Parameters<typeof bindNativeAgentInvocation>[0]['evidenceScope'],
-    'environment'
-  >
+    'plan' | 'taskSnapshot' | 'evidence' | 'materialReference'
+  > & {
+    /** RFC-489: the run's evidence over its scope (the runtime's material definition). */
+    evidence(scope: NativeAgentEvidenceScope): AgentMaterialEvidence
+    /** RFC-489: a native plan's material reference (the runtime's material definition). */
+    materialReference(plan: object): string
+  }
+  readonly evidenceScope: Omit<NativeAgentEvidenceScope, 'environment'>
   readonly taskSnapshot?: true
   readonly onTaskSnapshot?: (
     snapshot: NonNullable<Parameters<typeof bindNativeAgentInvocation>[0]['taskSnapshot']>,
@@ -50,9 +55,19 @@ export function createLocalAgentInvocationPreparation(input: {
         get workspace() {
           return binding.workspace
         },
-        get evidenceHooks() {
-          return binding.evidenceHooks
+        // RFC-489: evidence is built where the invocation used to build it from the hooks, over the same scope.
+        get evidence() {
+          return binding.evidence({
+            environment: () => plan.env,
+            runContent: () => evidenceScope.runContent(),
+            sessionLocation: () => evidenceScope.sessionLocation(),
+            get liveLocation() {
+              const liveLocation = evidenceScope.liveLocation
+              return liveLocation === undefined ? undefined : () => liveLocation.call(evidenceScope)
+            },
+          })
         },
+        materialReference: () => binding.materialReference(plan),
         workingDirectory: () => binding.workingDirectory(),
         get requireSpawnReceipt() {
           return binding.requireSpawnReceipt
@@ -81,15 +96,6 @@ export function createLocalAgentInvocationPreparation(input: {
               })(),
             }
           : {}),
-        evidenceScope: {
-          environment: () => plan.env,
-          runContent: () => evidenceScope.runContent(),
-          sessionLocation: () => evidenceScope.sessionLocation(),
-          get liveLocation() {
-            const liveLocation = evidenceScope.liveLocation
-            return liveLocation === undefined ? undefined : () => liveLocation.call(evidenceScope)
-          },
-        },
       })
     },
   })

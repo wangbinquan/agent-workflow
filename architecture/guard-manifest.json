@@ -3588,6 +3588,18 @@
       "minCorpusFiles": 350,
       "negativeFixture": true,
       "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc489-run-family-providers-boundary.test.ts",
+      "id": "rfc489-run-family-providers-boundary",
+      "lines": 416,
+      "mechanism": "ast",
+      "minCorpusFiles": 700,
+      "negativeFixture": true,
+      "runner": "bun"
     }
   ],
   "note": "RFC-395 II-b T18 Q-2: live census via tests/architecture/census.ts. Exact file set, corpus floors, absence checks and negative-fixture facts; no debt exemptions added. RFC-398 design §7.3 / §7.5: register the exact release matrix scanner, 41-file floor and synthetic missing/duplicate invocation controls per RFC-317 T13/T14; no floor reduced.",

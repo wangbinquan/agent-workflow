@@ -6,7 +6,7 @@ import {
   type ChangeNarrativeDeps as SelectedChangeNarrativeDeps,
 } from '@/modules/workspace-insight/application/changeNarrative'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 
 export type NativeChangeNarrativeDeps = Omit<
   SelectedChangeNarrativeDeps,
@@ -31,7 +31,7 @@ export async function triggerChangeNarrative(
   task: Task,
   actor: Actor,
 ): ReturnType<typeof triggerSelectedNarrative> {
-  const binding = composeLocalSystemAgentRunFamily({ appHome })
+  const binding = composeLocalSystemAgentRunFamilySelection({ appHome })
   const descriptors: PropertyDescriptorMap = {}
   for (const field of ['workspace', 'runtimeName', 'defaultRuntime', 'now', 'log'] as const) {
     descriptors[field] = { enumerable: true, get: () => deps[field] }

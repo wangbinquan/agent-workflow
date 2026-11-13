@@ -1,8 +1,8 @@
-// RFC-422 — the local runtime smoke run family's opener, moved from composition/localRuntimeSmokeRunFamily.ts: the driver
-// read at open, the smoke workspace bound at materialize, and the compile (material contents with their reference
-// checks, the local preparation and the smoke declaration). The runtime-management providers arrive from the
-// composition through the native provider ports.
-import { getRuntimeDriver } from '@/services/runtime'
+// RFC-422 — the local runtime smoke run family's opener, moved from composition/localRuntimeSmokeRunFamily.ts: the smoke
+// workspace bound at materialize, and the compile (material contents with their reference checks, the local preparation
+// and the smoke declaration). The runtime-management providers arrive from the composition through the native provider
+// ports. RFC-489: like the system and task agent families, the protocol, evidence and material reference come from the
+// runtime's material definition (the same driver binding the opener used to build by hand).
 import type { RuntimeSmokeInvocationFamily } from '../../application/ports/runtimeSmoke'
 import type { SystemAgentObservationFactory } from '../../application/ports/systemAgentObservation'
 import {
@@ -14,7 +14,6 @@ import type {
   NativeDiagnosticTargets,
   NativeMaterialDefinitions,
   NativeMaterialWorkspaces,
-  NativeProtocolBinding,
 } from './nativeRunFamilyProviders'
 
 /** The explicit root's selection: the app home, the diagnostic targets and optional observations. */
@@ -31,12 +30,10 @@ export function createLocalRuntimeSmokeRunFamily(
   providers: {
     readonly materialWorkspaces: NativeMaterialWorkspaces
     readonly materialDefinitions: NativeMaterialDefinitions
-    readonly bindProtocol: NativeProtocolBinding
   },
 ) {
   const invocations: RuntimeSmokeInvocationFamily = {
     open(request, log) {
-      const driver = getRuntimeDriver(request.protocol)
       return {
         materialize() {
           const selected = providers.materialWorkspaces({
@@ -71,7 +68,7 @@ export function createLocalRuntimeSmokeRunFamily(
             prepareWorkspace: () => selected.workspace.prepare(),
             async compile(prompt) {
               // These request reads retain the native buildSmokePlan argument
-              // order. The second driver/material selection remains in compile.
+              // order. The driver/material selection is made here (RFC-489: the only one).
               const protocol = request.protocol
               const runtimeBinding = input.targets.runtimeBinding(request.target)
               const model = request.model
@@ -100,11 +97,12 @@ export function createLocalRuntimeSmokeRunFamily(
               const preparation = createLocalAgentInvocationPreparation({
                 material,
                 binding: {
-                  protocol: providers.bindProtocol(driver),
+                  protocol: definition.protocol,
                   workspace: selected.workspace,
                   workingDirectory: () => worktreeDir,
                   cleanupReceiver: 'executor',
-                  evidenceHooks: driver,
+                  evidence: definition.evidence,
+                  materialReference: definition.materialReference,
                 },
                 evidenceScope: {
                   runContent: () => runDir,

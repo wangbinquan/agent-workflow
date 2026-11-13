@@ -20,7 +20,7 @@ import {
   type DistillTickOptions,
 } from '@/modules/memory/application/distill/schedule'
 import type { NativeMemoryDistillRuntimeResolver } from '@/modules/memory/application/ports/distillWorkStore'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
@@ -28,7 +28,7 @@ type NativeRunFixture = (options: SystemAgentRunOptions) => Promise<SystemAgentR
 
 /** Complete native composition for tests that exercise only persistence/query capabilities. */
 export function memorySystemAgentBindingForTest() {
-  return composeLocalSystemAgentRunFamily({ appHome })
+  return composeLocalSystemAgentRunFamilySelection({ appHome })
 }
 
 /** Explicit native test projection; normal Memory callers require a complete family. */
@@ -69,7 +69,7 @@ function forwardOptions<T>(
 
 function nativeMemoryFixtureBinding(source: { readonly runFn?: NativeRunFixture }) {
   // Construction does not read appHome or profile data; capture stays at the caller's original point.
-  const binding = composeLocalSystemAgentRunFamily({ appHome })
+  const binding = composeLocalSystemAgentRunFamilySelection({ appHome })
   return {
     binding,
     family() {

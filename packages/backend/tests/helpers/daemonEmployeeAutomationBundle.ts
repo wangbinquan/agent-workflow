@@ -20,7 +20,7 @@ import { createEventAutomationDelegatedContextBinding } from '@/modules/identity
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { standaloneSelections } from '@/bootstrap/standalone'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { taskBundleInput } from './daemonTaskExecutionBundle'
 import type { ProviderDatabaseHarness } from './eachProvider'
 
@@ -127,7 +127,7 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     graphAssist: {
       registry: core.runtimeRegistry,
       getDefaultRuntime: async () => DEFAULT_CONFIG.defaultRuntime,
-      binding: composeLocalSystemAgentRunFamily({ appHome: () => appHome }),
+      binding: composeLocalSystemAgentRunFamilySelection({ appHome: () => appHome }),
     },
     db,
     appHome,

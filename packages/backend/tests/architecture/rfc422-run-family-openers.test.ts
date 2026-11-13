@@ -1,8 +1,8 @@
 // RFC-422: the run family openers left task-execution composition — the local system agent / runtime smoke / task
 // agent openers are infrastructure/local, the hosted system agent opener and runtime probe are
 // infrastructure/crewstation, and other modules' implementations reach them through task-execution's own provider
-// ports. The five composition files only select providers and inject them. Reads the production sources without
-// importing them.
+// ports. The four composition files only select providers and inject them (RFC-489: the providers themselves come from
+// bootstrap). Reads the production sources without importing them.
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -36,7 +36,7 @@ const BINDINGS = [
   'localRuntimeSmokeRunFamily',
   'localTaskAgentRunFamily',
   'crewstationSystemAgentRunFamily',
-  'crewstationRuntimeManagement',
+  // RFC-489: the hosted runtime-management root is gone — runtime-management assembles it, bootstrap pairs the probe.
 ].map((name) => TE + 'composition/' + name + '.ts')
 /** Every moved symbol (and the composition entries that stay) and its one owner. */
 const OWNERS = new Map([
@@ -57,9 +57,8 @@ const OWNERS = new Map([
   ['composeLocalRuntimeSmokeRunFamily', BINDINGS[1]!],
   ['composeLocalTaskAgentRunFamily', BINDINGS[2]!],
   ['createCrewStationSystemAgentRunFamily', BINDINGS[3]!],
-  ['createCrewStationRuntimeManagement', BINDINGS[4]!],
 ])
-/** Steps of the openers the five composition files no longer contain. */
+/** Steps of the openers the four composition files no longer contain. */
 const OPENER_TOKENS = [
   '-content-reference-unavailable',
   'persona-skill-content-unavailable',
@@ -114,7 +113,7 @@ function ownershipViolations(units: readonly SourceUnit[]): string[] {
   return found.sort()
 }
 
-/** An opener step written in one of the five composition files. */
+/** An opener step written in one of the four composition files. */
 function shapeViolations(units: readonly SourceUnit[]): string[] {
   const found: string[] = []
   for (const unit of units)

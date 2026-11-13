@@ -58,6 +58,7 @@ import {
   createHostedGitAgentEnvironment,
 } from '@/modules/source-control/composition/crewstationGitCredentials'
 import { composeCrewStationExecutionOwner } from '@/modules/task-execution/composition/crewstationExecution'
+import { composeCrewStationRunFamilySelections } from './runFamilyProviders'
 import { composeCrewStationMaterialObjects } from '@/modules/task-execution/composition/crewstationMaterialObjects'
 import { createHostedNativePluginReader } from '@/modules/resource-catalog/composition/crewstationNativePlugin'
 import { composeLocalTaskAgentRuntimeBindings } from '@/modules/runtime-management/composition/taskAgentRuntimeBindings'
@@ -306,6 +307,9 @@ export async function composeCrewStationProfile(
       executionAuthority: initialized.authority,
       initializeExecution: initialized.initialize,
       ...execution.selections,
+      // RFC-489: the hosted System Agent family and runtime management pair Task Execution's hosted openers with
+      // runtime-management's hosted contents and management; bootstrap is the only place both meet.
+      ...composeCrewStationRunFamilySelections(execution.hostedAgents),
       // MCP diagnostics are a Resource Catalog capability running on the shared
       // hosted Agent execution; bootstrap is the only place both meet.
       mcpDiagnostics: createCrewStationMcpDiagnostics({

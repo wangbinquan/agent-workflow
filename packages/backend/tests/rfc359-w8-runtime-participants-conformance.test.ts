@@ -22,6 +22,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import {
   composeLegacyTaskRunDriveBinding,
@@ -170,7 +171,8 @@ function sharedInput(
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     db,
     taskRunBinding: composeLegacyTaskRunDriveBinding({
-      taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+      taskAgentRunsFor: (binding) =>
+        composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders),
       taskScriptRunsFor: composeLocalTaskScriptRunFamily,
       nodeRunPromptsFor: (appHome) =>
         composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),

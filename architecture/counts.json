@@ -99,8 +99,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 43,
-      "reason": "max=43: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; no growth authorized."
+      "max": 22,
+      "reason": "max=22: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,

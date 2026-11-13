@@ -282,36 +282,11 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // 认不出定时 / webhook 的委派 actor，PostgreSQL 上定时启动代理 / 工作组任务当场 500。
   'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
-  // RFC-370 A-T5: the unchanged native pairing moved from RM into TE
-  // composition. These two actual compatibility addresses are already recorded
-  // in matching cross-context imports; retire with the selected A-T7 roots.
-  'runtime-management/infrastructure/local/agentMaterialCompiler: packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts',
-  'runtime-management/infrastructure/local/agentMaterialEvidence: packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts',
-  'runtime-management/infrastructure/local/agentProtocol: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
-  // RFC-370: exact native complete-family root addresses; retire in A-T7.
-  'resource-catalog/composition/taskAgentMaterialReferences: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
-  'runtime-management/composition/localAgentMaterial: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
-  'runtime-management/composition/localAgentMaterial: packages/backend/src/modules/task-execution/composition/localSystemAgentRunFamily.ts',
-  'runtime-management/composition/systemAgentMaterial: packages/backend/src/modules/task-execution/composition/localSystemAgentRunFamily.ts',
-  'runtime-management/composition/taskAgentRuntimeBindings: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
-  'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
-  'source-control/composition/taskAgentWorkspaceContents: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
+  // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
+  // runtime-management, resource-catalog or source-control internals — bootstrap binds the providers and
+  // runtime-management assembles its own runtime management (21 bridges retired). The native compatibility run still
+  // binds source-control's git observation (unreachable production file, kept for the RFC-370 contract tests).
   'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
-  // RFC-370: six actual native Runtime diagnostic pairings; retire in A-T7.
-  'runtime-management/infrastructure/local/agentProtocol: packages/backend/src/modules/task-execution/composition/localRuntimeSmokeRunFamily.ts',
-  'runtime-management/composition/localAgentMaterial: packages/backend/src/modules/task-execution/composition/localRuntimeSmokeRunFamily.ts',
-  'runtime-management/composition/runtimeDiagnosticTargets: packages/backend/src/modules/task-execution/composition/localRuntimeSmokeRunFamily.ts',
-  'runtime-management/composition/runtimeDiagnosticTargets: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
-  'runtime-management/infrastructure/local/runtimeManagementEffects: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
-  'runtime-management/composition/runtimeManagement: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
-  // RFC-370 M2: the hosted Runtime Management and System Agent families pair
-  // the same RM compositions as their local counterparts above (CS material and
-  // contents instead of native files); retire together with them in A-T7.
-  'runtime-management/composition/crewstationRuntimeManagement: packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
-  'runtime-management/composition/crewstationSystemAgentMaterial: packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
-  'runtime-management/composition/crewstationSystemAgentMaterial: packages/backend/src/modules/task-execution/composition/crewstationSystemAgentRunFamily.ts',
-  'runtime-management/composition/runtimeManagement: packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
-  'runtime-management/composition/systemAgentMaterial: packages/backend/src/modules/task-execution/composition/crewstationSystemAgentRunFamily.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-370 H3: standalone binds the neutral SC presence query at this composition.

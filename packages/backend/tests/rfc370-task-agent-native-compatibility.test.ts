@@ -3,6 +3,7 @@ import {
   bindNativeTaskAgentRunPurpose,
   runNativeTaskAgent,
 } from '../src/modules/task-execution/infrastructure/local/nativeTaskAgentRun'
+import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
 import type { RunNodeOptions } from '../src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions'
 import type { TaskAgentMaterialDeclaration } from '../src/modules/task-execution/application/ports/taskAgentMaterial'
 import type { AgentSpawnPlan } from '../src/services/runtime/types'
@@ -16,7 +17,9 @@ function noRead(): never {
 
 test('native Task purpose construction reads no option, registry, workspace or content', () => {
   const options = new Proxy({} as RunNodeOptions, { get: noRead })
-  const purpose = bindNativeTaskAgentRunPurpose(options)
+  const purpose = bindNativeTaskAgentRunPurpose(options, {
+    materialDefinitions: selectLocalAgentMaterialDefinition,
+  })
   expect(typeof purpose.selectMaterial).toBe('function')
   expect(typeof purpose.bindExecutionParticipants).toBe('function')
 })
@@ -48,7 +51,9 @@ test('native runtime lookup remains after envelope nonce acknowledgement and out
       return 'unsupported-fixture-protocol'
     },
   } as unknown as RunNodeOptions
-  const pending = runNativeTaskAgent(options)
+  const pending = runNativeTaskAgent(options, {
+    materialDefinitions: selectLocalAgentMaterialDefinition,
+  })
   expect(reads).toEqual(['nonce'])
   acknowledge('')
   await expect(pending).rejects.toThrow("unknown runtime kind 'unsupported-fixture-protocol'")
@@ -115,7 +120,9 @@ test('native material keeps fixture presence, early command, late evidence/diagn
         return undefined
       },
     } as unknown as RunNodeOptions
-    const purpose = bindNativeTaskAgentRunPurpose(options),
+    const purpose = bindNativeTaskAgentRunPurpose(options, {
+        materialDefinitions: selectLocalAgentMaterialDefinition,
+      }),
       workspace = purpose.workspace
     const preparation = purpose.selectMaterial('opencode', workspace)
     preparation.prepareMounts()
