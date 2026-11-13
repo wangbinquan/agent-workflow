@@ -53,6 +53,7 @@ import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   validateClarifyMindmap,
+  withoutStaleClarifySkip,
   CLARIFY_INPUT_PORT_NAME,
   CLARIFY_SOURCE_PORT_NAME,
   CROSS_CLARIFY_INPUT_PORT_NAME,
@@ -783,14 +784,19 @@ export function sealAnswersServerSide(
     }
     const indices = a.selectedOptionIndices.filter((i) => i >= 0 && i < q.options.length)
     const labels = indices.map((i) => q.options[i]?.label ?? '').filter((s) => s.length > 0)
-    sealed.push({
-      questionId: a.questionId,
-      selectedOptionIndices: indices,
-      selectedOptionLabels: labels,
-      customText: a.customText,
-      ...(a.decision ? { decision: a.decision } : {}),
-      ...(a.confirmedBasis ? { confirmedBasis: a.confirmedBasis } : {}),
-    })
+    // RFC-490 design §2.2: whole-round submit, per-question seal and re-answer all seal
+    // through here. An answer that carries a real choice next to a skip status is sealed
+    // as that choice; it is judged on the indices that survived the range filter above.
+    sealed.push(
+      withoutStaleClarifySkip({
+        questionId: a.questionId,
+        selectedOptionIndices: indices,
+        selectedOptionLabels: labels,
+        customText: a.customText,
+        ...(a.decision ? { decision: a.decision } : {}),
+        ...(a.confirmedBasis ? { confirmedBasis: a.confirmedBasis } : {}),
+      }),
+    )
   }
   return sealed
 }

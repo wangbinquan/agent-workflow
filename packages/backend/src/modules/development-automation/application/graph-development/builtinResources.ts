@@ -22,10 +22,33 @@ export const GRAPH_BUILTIN_IDS = {
   designWorkflow: '00000000000000GRAPHWFDS1',
   reviewWorkflow: '00000000000000GRAPHWFRV1',
 } as const
+/**
+ * RFC-490 added "deferred" and "not-applicable" to the clarify decision status. The
+ * published built-in agents are immutable: an installed copy is compared with this text
+ * byte for byte at boot (`builtinCatalog`), so the schema printed in their prompts keeps
+ * the two maturity values it was published with. Nothing depends on the prompt listing
+ * the new ones: these agents never author a human decision, they carry an imported
+ * source through unchanged, and validation (`graphToolResultSchema`) accepts all four.
+ */
+const PUBLISHED_DECISION_STATUSES = ['decided', 'provisional']
+function publishedPromptSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(publishedPromptSchema)
+  if (value === null || typeof value !== 'object') return value
+  const node = value as Record<string, unknown>
+  const statuses = node.enum
+  const narrowed =
+    Array.isArray(statuses) && PUBLISHED_DECISION_STATUSES.every((s) => statuses.includes(s))
+  return Object.fromEntries(
+    Object.entries(node).map(([key, child]) => [
+      key,
+      key === 'enum' && narrowed ? PUBLISHED_DECISION_STATUSES : publishedPromptSchema(child),
+    ]),
+  )
+}
 export function graphOutputInstructions(
   item: 'design-and-clarify' | 'implement-change' | 'review-design',
 ) {
-  return `Business output JSON schema:\n${JSON.stringify(toInputJsonSchema(graphToolResultSchema(item)))}`
+  return `Business output JSON schema:\n${JSON.stringify(publishedPromptSchema(toInputJsonSchema(graphToolResultSchema(item))))}`
 }
 const base = {
   permission: {},

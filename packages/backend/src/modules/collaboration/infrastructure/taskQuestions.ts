@@ -45,10 +45,12 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { TASK_QUESTION_CONFLICT } from '../domain/taskQuestionConflicts'
 import {
   canReassign,
+  clarifySkipStatus,
   deriveQuestionPhase,
   isTerminalTaskStatus,
   reconcileDesiredEntries,
   type ClarifyQuestion,
+  type ClarifySkipStatus,
   type HandlerRunView,
   type RunLineageView,
   type TaskQuestionPhase,
@@ -100,6 +102,11 @@ export interface TaskQuestionDTO {
    *  per-question independent of the round's `status` (RFC-128 F3): a sealed question in
    *  a still-awaiting_human (partial) round still shows its answer. */
   answerSummary: string | null
+  /** RFC-490 design §2.5 — the sealed answer is a deliberate skip ("decide later" or "not
+   *  applicable"), not a choice. `answerSummary` is then the note the user left with it
+   *  (null without one). Absent on every other entry. Board DTO only: it never enters an
+   *  agent prompt. */
+  answerSkip?: ClarifySkipStatus
   createdAt: number
   updatedAt: number
 }
@@ -439,7 +446,7 @@ export async function listTaskQuestions(
         e.autoDispatchDeferredAt !== null && e.dispatchedAt === null && e.stagedAt !== null,
       sealed,
       reopenCount: 0,
-      answerSummary: summarizeAnswer(answersByRound.get(round.id)!, e.questionId, sealed),
+      ...summarizeAnswer(answersByRound.get(round.id)!, e.questionId, sealed),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     })
@@ -452,20 +459,26 @@ export async function listTaskQuestions(
  *  question in a still-awaiting_human (partial) round must still show its answer, and an
  *  unsealed question must not (even after the round flips, an unsealed sibling has no
  *  answer). For a pre-RFC-128 answered round every question is sealed, so this is
- *  byte-for-byte the old `round.status !== 'answered' → null` behavior (golden-lock). */
+ *  byte-for-byte the old `round.status !== 'answered' → null` behavior (golden-lock).
+ *
+ *  RFC-490 design §2.5: a sealed skip has neither labels nor custom text, so the board
+ *  showed nothing for it. It now carries `answerSkip`, with the user's note as the summary. */
 function summarizeAnswer(
   answers: Awaited<ReturnType<typeof readClarifyAnswerProjection>>,
   questionId: string,
   sealed: boolean,
-): string | null {
-  if (!sealed) return null
+): Pick<TaskQuestionDTO, 'answerSummary' | 'answerSkip'> {
+  if (!sealed) return { answerSummary: null }
   const ans = answers.firstAnswer(questionId)
-  if (!ans) return null
+  if (!ans) return { answerSummary: null }
+  const brief = (s: string): string | null => (s.length > 200 ? `${s.slice(0, 200)}…` : s || null)
+  const answerSkip = clarifySkipStatus(ans)
+  if (answerSkip !== undefined)
+    return { answerSummary: brief(ans.decision?.rationale?.trim() ?? ''), answerSkip }
   const parts: string[] = []
   if (ans.selectedOptionLabels.length > 0) parts.push(ans.selectedOptionLabels.join(', '))
   if (ans.customText.trim()) parts.push(ans.customText.trim())
-  const s = parts.join(' · ')
-  return s.length > 200 ? `${s.slice(0, 200)}…` : s || null
+  return { answerSummary: brief(parts.join(' · ')) }
 }
 
 // ---------------------------------------------------------------------------

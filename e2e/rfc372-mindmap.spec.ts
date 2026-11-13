@@ -46,6 +46,30 @@ async function openClarify(page: Page, nodeRunId: string): Promise<void> {
   await page.goto(`${daemon.baseUrl}/clarify/${encodeURIComponent(nodeRunId)}`)
 }
 
+const SEARCH = 'Search categories, questions, options or answers'
+const questionPanel = (page: Page) =>
+  page.getByRole('region', { name: 'Answer and confirm', exact: true })
+
+/**
+ * RFC-490 (C1): a node selected in the panorama opens in the workspace's own panel, never
+ * in a modal. The measured stage decides its form (design §4.1): wider than 760 px it
+ * sits beside the canvas, otherwise it takes the canvas's place.
+ */
+async function expectPanelInStage(page: Page): Promise<void> {
+  await expect(questionPanel(page)).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  const stage = (await page.locator('.mindmap-workspace__stage').boundingBox())!
+  const panes = page.locator('.mindmap-workspace__panes')
+  const canvas = page.getByRole('img', { name: 'Clarification mindmap' })
+  if (stage.width > 760) {
+    await expect(panes).toHaveAttribute('data-split', 'side')
+    await expect(canvas).toBeVisible()
+  } else {
+    await expect(panes).toHaveAttribute('data-split', 'full')
+    await expect(canvas).toBeHidden()
+  }
+}
+
 function seedAuth(page: Page): Promise<void> {
   return page.addInitScript(
     ({ baseUrl, token }) => {
@@ -173,12 +197,23 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
   const workspace = page.getByRole('region', { name: 'Clarify workspace' })
   await expect(workspace).toBeVisible()
   await page.getByRole('treeitem', { name: /Which database should we use/ }).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: 'Open in focused answers' }).click()
-  await page.getByLabel('Postgres', { exact: false }).first().check()
-  await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
-  await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
-  await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
+  const panel = questionPanel(page)
+  await expectPanelInStage(page)
+  await expect(
+    panel.getByRole('heading', { name: 'Which database should we use?', exact: true }),
+  ).toBeVisible()
+  // The question is answered where it opened.
+  await panel.getByLabel('Postgres', { exact: false }).first().check()
+  await panel.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
+  await expect(panel.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
+  // RFC-490: follow-ups have one name and one row of entries under the question.
+  await expect(
+    page.getByRole('button', { name: /Deepen this question|Ask follow-up/ }),
+  ).toHaveCount(0)
+  await expect(panel.getByText('Follow up:', { exact: true })).toBeVisible()
+  await panel.getByRole('button', { name: 'Write my own…', exact: true }).click()
+  await expect(panel.getByRole('heading', { name: 'Follow up on Q1', exact: true })).toBeVisible()
+  await panel.getByRole('button', { name: 'Generate follow-ups', exact: true }).click()
   await expect(page.getByRole('treeitem', { name: /Which consistency guarantee/ })).toBeVisible({
     timeout: 180_000,
   })
@@ -191,19 +226,30 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
   expect(fresh.questions[2]!.mindmap.parentQuestionId).toBe('q-db')
   await page.reload()
   await page.getByRole('treeitem', { name: /Which database should we use/ }).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: 'Open in focused answers' }).click()
+  await expectPanelInStage(page)
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
+  // The parent lists the question that was asked from it.
+  await expect(
+    panel.getByRole('heading', { name: 'Follow-up questions (1)', exact: true }),
+  ).toBeVisible()
+  // The focused view is the same panel given the whole stage, with the same confirmation.
   await page
     .getByRole('radiogroup', { name: 'View', exact: true })
     .getByRole('radio', { name: 'Focused answers' })
     .click()
+  await expect(page.locator('.mindmap-workspace__panes[data-split]')).toHaveCount(0)
+  await expect(
+    panel.getByRole('heading', { name: 'Which database should we use?', exact: true }),
+  ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
   await page
     .getByRole('radiogroup', { name: 'View', exact: true })
     .getByRole('radio', { name: 'Panorama' })
     .click()
+  // Back in the panorama the panel is put away and the canvas has the stage again.
+  await expect(panel).toHaveCount(0)
   const surface = page.getByRole('img', { name: 'Clarification mindmap' })
+  await expect(surface).toBeVisible()
   await surface.focus()
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('0')
@@ -303,14 +349,12 @@ test('large projection keeps the canvas and virtual outline bounded at depth 100
     .getByRole('radiogroup', { name: 'View', exact: true })
     .getByRole('radio', { name: 'Focused answers' })
     .click()
-  await page
-    .getByRole('textbox', { name: 'Search categories or questions' })
-    .fill('Load question 4999')
+  const search = page.getByRole('textbox', { name: SEARCH })
+  await search.fill('Load question 4999')
   await page.getByRole('option', { name: /Load question 4999/ }).click()
   await expect(
     workspace.getByRole('heading', { name: 'Load question 4999', exact: true }),
   ).toBeVisible()
-  const search = page.getByRole('textbox', { name: 'Search categories or questions' })
   // A query change may leave the selected result at the same distant index.
   // The actual Tab stop must still be mounted after the virtual list resets.
   await search.fill('Load')

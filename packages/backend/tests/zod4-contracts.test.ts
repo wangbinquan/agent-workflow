@@ -90,6 +90,14 @@ describe('Zod 4 API and schema contracts', () => {
       // RFC-396 H5 adds this tool after the Zod migration; all 75 historical digests stay intact.
       'tool/review_graph_limitations':
         '29772ea84af016441b4347043d9e816b4bbb4215e6e11516800e46cedfb38026',
+      // RFC-490 (proposal C9): `decision.status` gains "deferred" and "not-applicable", and the
+      // field now describes them. The Zod 3 digest of this tool is superseded on purpose.
+      'tool/save_clarify_draft': 'd0f51cd3196360d92afb8a80ef5b6b595648f6f89a225edb7d3b5c1c66b0b777',
+      // RFC-490: the assist prompt is built per request, so it lists the two new statuses a
+      // document may now carry on an imported answer. `graph/design-and-clarify` is the
+      // schema printed in the published built-in prompts and keeps its recorded digest
+      // (see rfc490-published-graph-prompts.test.ts).
+      'graph/assist': '0f05d3f5e1c38780b0b22ddc4128f1d3a2c5581db0636543219c1db62a490678',
     })
     expect(JSON.stringify(schemas)).not.toContain('"format":"starts_with"')
   })

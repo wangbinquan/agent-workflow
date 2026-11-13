@@ -43,6 +43,11 @@ export const ClarifyQuestionMindmapSchema = z.object({
   // Set by the append operation, so accepted retries recover from the original questions JSON.
   requestId: z.string().check(utf16MaxLength(64)).optional(),
   requestBasis: z.string().check(utf16MaxLength(128)).optional(),
+  // RFC-490: where a generated question came from — what the user pointed at (a question,
+  // a category, or the whole map) and the direction they gave, exactly as it was requested.
+  // Absent on questions the asking agent raised itself and on questions generated earlier.
+  requestTarget: z.enum(['question', 'category', 'root']).optional(),
+  requestInstruction: z.string().check(utf16MaxLength(2000)).optional(),
 })
 export const ClarifyFollowupSchema = z
   .object({

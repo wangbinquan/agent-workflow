@@ -5,6 +5,7 @@ import type {
   ClarifyDraftValue,
   ClarifyRound,
   ClarifyRoundSummary,
+  ClarifySkipStatus,
   DocVersion,
   DocVersionWithBodyAndComments,
   PatPurpose,
@@ -80,6 +81,8 @@ export interface CollaborationTaskQuestionView {
   readonly sealed: boolean
   readonly reopenCount: number
   readonly answerSummary: string | null
+  /** RFC-490: the sealed answer is a skip; `answerSummary` is then the user's note, if any. */
+  readonly answerSkip?: ClarifySkipStatus
   readonly createdAt: number
   readonly updatedAt: number
 }

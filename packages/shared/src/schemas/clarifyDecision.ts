@@ -1,10 +1,21 @@
 import { z } from 'zod'
 import { utf16MaxLength } from './utf16Length'
 
+/**
+ * RFC-490: the two statuses that skip a question instead of answering it. `deferred` is
+ * deliberately left undecided for now; `not-applicable` needs no decision. They share the
+ * status axis with the two maturity values, so "decided and not applicable" cannot exist.
+ */
+export type ClarifySkipStatus = 'deferred' | 'not-applicable'
+
+export function isClarifySkipStatus(status: unknown): status is ClarifySkipStatus {
+  return status === 'deferred' || status === 'not-applicable'
+}
+
 /** User-authored context, not evidence verification, assignment or a scheduled task. */
 export const ClarifyDecisionSchema = z
   .object({
-    status: z.enum(['decided', 'provisional']).optional(),
+    status: z.enum(['decided', 'provisional', 'deferred', 'not-applicable']).optional(),
     rationale: z.string().check(utf16MaxLength(2000)).optional(),
     tradeoff: z.string().check(utf16MaxLength(2000)).optional(),
     uncertainty: z.string().check(utf16MaxLength(2000)).optional(),
@@ -14,7 +25,7 @@ export const ClarifyDecisionSchema = z
   .transform(normalizeClarifyDecision)
 
 export interface ClarifyDecision {
-  status?: 'decided' | 'provisional'
+  status?: 'decided' | 'provisional' | ClarifySkipStatus
   rationale?: string
   tradeoff?: string
   uncertainty?: string
@@ -73,7 +84,9 @@ export function summariseClarifyDecision(
 
 export const CLARIFY_DECISION_OUTPUT_GUIDANCE = [
   'Produce the requested deliverable now. For a decision document use: a brief supplied context, then ONE entry per answer containing its maturity, original choice and original decision notes. Keep the notes under their own labels (rationale, accepted cost, unknowns, validation owner, review condition). This readback is sufficient; do not add a second scope list, implementation checklist or repeated summary of the same choices. For another requested deliverable, apply the same evidence rules in its appropriate format.',
-  "The actual Answer and decision fields are authoritative. Preserve the user's original wording. A custom answer replaces offered alternatives. Missing, unselected and explicitly rejected are three different states. Unmarked answers remain unmarked; only the user-marked decided or provisional value sets maturity, including any later reference.",
+  // RFC-490: the last sentence covers the two skip statuses. It sits with the other answer
+  // states so the closing "Finish …" instruction below stays the final one.
+  "The actual Answer and decision fields are authoritative. Preserve the user's original wording. A custom answer replaces offered alternatives. Missing, unselected and explicitly rejected are three different states. Unmarked answers remain unmarked; only the user-marked decided or provisional value sets maturity, including any later reference. A question marked not applicable is out of scope; a deferred question is an open item; neither is a choice, so never pick an option for the user.",
   'Keep model-inferred consequences separately from accepted costs and make unresolved premises conditional. Unknown is not no: "reminders are undecided" must not become "no reminders". Not enabling one mechanism does not decide any other mechanism; retain choices already made elsewhere. Do not invent evidence, an unnamed owner, or a scheduled task; retain TBD owners and timing as open arrangements. Review triggers do not activate a policy.',
   'Maturity labels and validation arrangements are optional. Do not invent a requirement to mark every choice, settle unknowns or assign owners before proceeding. Describe any open consequence for the user to judge, without adding an approval gate. Finish the requested output envelope after this straightforward readback; do not repeatedly reformulate or expand it.',
 ].join('\n')

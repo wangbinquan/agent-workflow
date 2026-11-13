@@ -6,6 +6,11 @@
 //   - the digit badges on options did nothing, because focus never reached the form;
 //   - the review listed an unanswered question as "needs confirmation";
 //   - the root "guide questions" form described itself as a category.
+//
+// RFC-490: the panorama reader these cases open is now a panel beside the canvas (the
+// region "Answer and confirm"), not a dialog, and the outline keeps the keyboard when a
+// row opens it. Focus reaches the answer form from a pick on the map or from "next
+// pending", so the two focus cases below enter through the map.
 import { useState } from 'react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,7 +23,12 @@ import { QuestionForm } from '../src/components/clarify/QuestionForm'
 import { SELECTION_CONTROL, placeSelectionControl } from '../src/lib/clarify/mindmap/selection'
 
 vi.mock('../src/components/clarify/mindmap/MindmapCanvas', () => ({
-  MindmapCanvas: () => <div role="img" aria-label="Test map" />,
+  MindmapCanvas: (props: { onSelect(id: string): void }) => (
+    <>
+      <div role="img" aria-label="Test map" />
+      <button onClick={() => props.onSelect('q:q0')}>Pick Q1 on the map</button>
+    </>
+  ),
 }))
 
 const questions = ['Recovery target', 'Replica lag'].map((title, i) =>
@@ -78,6 +88,9 @@ function Harness({ status = 'awaiting_human' }: { status?: string }) {
 }
 const focused = () => fireEvent.click(screen.getByRole('radio', { name: 'Focused answers' }))
 const row = (name: RegExp) => screen.getByRole('treeitem', { name })
+/** RFC-490: the reader beside the canvas. */
+const pane = () => screen.getByRole('region', { name: 'Answer and confirm' })
+const pickOnMap = () => fireEvent.click(screen.getByRole('button', { name: 'Pick Q1 on the map' }))
 function selectText(node: Node) {
   const range = document.createRange()
   range.selectNodeContents(node)
@@ -187,38 +200,40 @@ test('digit hotkeys keep working when focus rests on an option after a mouse pic
   expect(onChange).not.toHaveBeenCalled()
 })
 
+// RFC-490: the entry is a pick on the map. Enter on an outline row used to land here
+// too, through the dialog's initial focus; the outline now keeps the keyboard (covered
+// in rfc490-workspace-panel), so the map is the route by which focus reaches the form.
 test('opening a question from the panorama focuses its answer form so a digit answers it', async () => {
   render(<Harness />)
-  fireEvent.keyDown(row(/Recovery target/), { key: 'Enter' })
-  const dialog = screen.getByRole('dialog')
-  await waitFor(() =>
-    expect(document.activeElement).toBe(dialog.querySelector('.clarify-question')),
-  )
+  pickOnMap()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const form = () => pane().querySelector<HTMLElement>('.clarify-question')
+  await waitFor(() => expect(document.activeElement).toBe(form()))
+  expect(form()).not.toBeNull()
   fireEvent.keyDown(document.activeElement!, { key: '2' })
-  expect((within(dialog).getByLabelText(/Nightly backup only/) as HTMLInputElement).checked).toBe(
+  expect((within(pane()).getByLabelText(/Nightly backup only/) as HTMLInputElement).checked).toBe(
     true,
   )
   // Confirming disables its own button; the keyboard stays on the same question.
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm this answer' }))
-  await waitFor(() =>
-    expect(document.activeElement).toBe(dialog.querySelector('.clarify-question')),
-  )
+  fireEvent.click(within(pane()).getByRole('button', { name: 'Confirm this answer' }))
+  await waitFor(() => expect(document.activeElement).toBe(form()))
+  expect(within(pane()).getByRole('heading', { name: 'Recovery target' })).toBeTruthy()
   // Moving on from inside the reader lands on the next question's form.
-  fireEvent.click(within(dialog).getByRole('button', { name: /Next pending/ }))
+  fireEvent.click(within(pane()).getByRole('button', { name: /Next pending/ }))
   await waitFor(() =>
     expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label')).toBe(
       'Replica lag',
     ),
   )
+  expect(document.activeElement).toBe(form())
 })
 
 test('a read-only question keeps initial focus on its heading', async () => {
   render(<Harness status="answered" />)
-  fireEvent.keyDown(row(/Recovery target/), { key: 'Enter' })
-  const dialog = screen.getByRole('dialog')
+  pickOnMap()
   await waitFor(() =>
     expect(document.activeElement).toBe(
-      within(dialog).getByRole('heading', { name: 'Recovery target' }),
+      within(pane()).getByRole('heading', { name: 'Recovery target' }),
     ),
   )
 })
@@ -236,14 +251,15 @@ test('outline keyboard navigation in the focused view keeps focus on the tree', 
 test('the root guidance form describes the whole round, not one category', () => {
   render(<Harness />)
   fireEvent.click(screen.getByRole('button', { name: 'Question outline' }))
-  const root = screen.getByRole('dialog')
-  expect(within(root).getByText(/every question and answer in this round/)).toBeTruthy()
-  expect(within(root).queryByText(/adds missing topics directly under it/)).toBeNull()
-  fireEvent.keyDown(window, { key: 'Escape' })
+  // RFC-490: read from the panel beside the canvas; the next node replaces its content
+  // without closing anything first.
+  expect(within(pane()).getByRole('heading', { name: 'Report service' })).toBeTruthy()
+  expect(within(pane()).getByText(/every question and answer in this round/)).toBeTruthy()
+  expect(within(pane()).queryByText(/adds missing topics directly under it/)).toBeNull()
   fireEvent.click(row(/^Reliability/))
-  expect(
-    within(screen.getByRole('dialog')).getByText(/adds missing topics directly under it/),
-  ).toBeTruthy()
+  expect(within(pane()).getByRole('heading', { name: 'Reliability' })).toBeTruthy()
+  expect(within(pane()).getByText(/adds missing topics directly under it/)).toBeTruthy()
+  expect(within(pane()).queryByText(/every question and answer in this round/)).toBeNull()
 })
 
 const reviewProps = {

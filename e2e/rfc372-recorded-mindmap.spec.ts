@@ -11,7 +11,11 @@ import { startDaemon, type DaemonHandle } from './harness'
 test.setTimeout(300_000)
 let daemon: DaemonHandle
 let state: string
-const detail = (page: Page) => page.locator('.mindmap-workspace__detail')
+// RFC-490: the reading pane is a region of the workspace — the panel beside (or in place
+// of) the canvas in the panorama, the whole stage in the focused view. Never a modal.
+const detail = (page: Page) => page.getByRole('region', { name: 'Answer and confirm', exact: true })
+const panes = (page: Page) => page.locator('.mindmap-workspace__panes')
+const SEARCH = 'Search categories, questions, options or answers'
 interface Round {
   intermediaryNodeRunId: string
   kind: 'self' | 'cross'
@@ -50,11 +54,10 @@ async function waitRound(taskId: string, kind: Round['kind']): Promise<Round> {
   return api(`/api/clarify/${row!.intermediaryNodeRunId}`)
 }
 async function select(page: Page, title: string) {
-  if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape')
   // A newly entered round may still be loading. Wait for the workspace before
   // deciding whether its directory is hidden by the mobile layout.
   await expect(page.getByRole('region', { name: 'Clarify workspace', exact: true })).toBeVisible()
-  const search = page.getByRole('textbox', { name: 'Search categories or questions' })
+  const search = page.getByRole('textbox', { name: SEARCH })
   if (!(await search.isVisible()))
     await page
       .getByRole('radiogroup', { name: 'Clarify workspace', exact: true })
@@ -62,9 +65,32 @@ async function select(page: Page, title: string) {
       .click()
   await search.fill(title)
   await page.getByRole('option').filter({ hasText: title }).click()
-  if (!(await page.getByRole('dialog').isVisible()) && (await search.isVisible()))
-    await search.fill('')
+  // The panel is no layer over the outline: the search stays in reach wherever the
+  // outline is shown (on a phone-wide workspace the answer tab has replaced it).
+  if (await search.isVisible()) await search.fill('')
   await expect(detail(page).getByRole('heading', { name: title, exact: true })).toBeVisible()
+  // RFC-490 (C1): a selected node is read in the workspace's own panel, never in a modal.
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+}
+/**
+ * The full-width reader. From a panel beside the canvas it is the panel's own button;
+ * where the panel already has the whole stage it is the view switch — the "Answer and
+ * confirm" tab, entered from the map, on a phone-wide workspace.
+ */
+async function focusedAnswers(page: Page) {
+  const fromPanel = detail(page).getByRole('button', { name: 'Open in focused answers' })
+  const viewSwitch = page
+    .getByRole('radiogroup', { name: 'View', exact: true })
+    .getByRole('radio', { name: 'Focused answers' })
+  if (await fromPanel.isVisible()) await fromPanel.click()
+  else if (await viewSwitch.isVisible()) await viewSwitch.click()
+  else {
+    const tabs = page.getByRole('radiogroup', { name: 'Clarify workspace', exact: true })
+    await tabs.getByRole('radio', { name: 'Panorama', exact: true }).click()
+    await tabs.getByRole('radio', { name: 'Answer and confirm', exact: true }).click()
+  }
+  await expect(page.locator('.mindmap-workspace__panes[data-split]')).toHaveCount(0)
+  await expect(detail(page)).toBeVisible()
 }
 async function answer(page: Page, round: 'self' | 'cross', index: number) {
   const question = recording[round].questions[index]!
@@ -79,18 +105,21 @@ async function answer(page: Page, round: 'self' | 'cross', index: number) {
   await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
 }
+/** RFC-490: one row under the question asks a follow-up; "Write my own…" opens the empty form. */
 async function deepen(page: Page, hint: string) {
-  const toggle = page.getByRole('button', { name: 'Deepen this question', exact: true })
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
-  await detail(page).getByRole('textbox', { name: 'What needs more detail? (optional)' }).fill(hint)
+  const direction = detail(page).getByRole('textbox', {
+    name: 'What needs more detail? (optional)',
+  })
+  if (!(await direction.isVisible()))
+    await detail(page).getByRole('button', { name: 'Write my own…', exact: true }).click()
+  await direction.fill(hint)
   const response = page.waitForResponse(
     (res) => res.request().method() === 'POST' && res.url().endsWith('/followup'),
   )
-  await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
+  await detail(page).getByRole('button', { name: 'Generate follow-ups', exact: true }).click()
   return { response }
 }
 async function stop(page: Page, id: string) {
-  if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape')
   await expect(
     page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
   ).toBeVisible()
@@ -200,23 +229,59 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
     '体验与验收',
   ])
   await page.goto(`${daemon.baseUrl}/clarify/${self.intermediaryNodeRunId}`)
-  // Mindmap requires explicit confirmation; it must not promise the normal
-  // questionnaire's Enter-to-advance shortcut, which would skip confirmation.
+  // Mindmap requires explicit confirmation, so the normal questionnaire's keyboard hint
+  // ("Enter jumps to next / submits") stays out of it. The mindmap has its own Enter
+  // (RFC-490): the panel's primary action, which confirms the open answer and only then
+  // moves on — it never carries an unconfirmed answer forward, and it never submits.
   await expect(page.getByTestId('clarify-keyboard-hint')).toHaveCount(0)
   await expect(page.getByLabel('Zoom level')).toHaveText(/^\d+(?:\.\d+)?%$/)
   expect(parseFloat((await page.getByLabel('Zoom level').textContent())!)).toBeGreaterThanOrEqual(
     80,
   )
-  const mapBounds = await page.getByRole('img', { name: 'Clarification mindmap' }).boundingBox()
-  await select(page, recording.self.questions[0]!.title)
-  // One heading, complete long option text, stable canvas size behind the reader.
-  await expect(
-    detail(page).getByRole('heading', { name: recording.self.questions[0]!.title }),
-  ).toHaveCount(1)
-  expect(await page.getByRole('img', { name: 'Clarification mindmap' }).boundingBox()).toEqual(
-    mapBounds,
-  )
+  const firstTitle = recording.self.questions[0]!.title
+  const surface = page.getByRole('img', { name: 'Clarification mindmap' })
+  // The canvas root reports its camera as "x,y,zoom" (RFC-490 design §5.5). Take it once
+  // late layout has stopped moving it: the same value on two reads.
+  const map = page.locator('.mindmap-canvas')
+  let mapCamera = ''
+  await expect
+    .poll(async () => {
+      const camera = (await map.getAttribute('data-camera')) ?? ''
+      const settled = /^-?[\d.]+,-?[\d.]+,[\d.]+$/.test(camera) && camera === mapCamera
+      mapCamera = camera
+      return settled
+    })
+    .toBe(true)
+  const mapBounds = (await surface.boundingBox())!
+  // RFC-490 (C1, C11): a node picked in the panorama opens in a panel beside the canvas.
+  // Picked from its outline row, nothing asks the map to move to it.
+  await page.getByRole('treeitem').filter({ hasText: firstTitle }).click()
+  // One heading, complete long option text, and the canvas still there to the left.
+  await expect(detail(page).getByRole('heading', { name: firstTitle })).toHaveCount(1)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(panes(page)).toHaveAttribute('data-split', 'side')
+  await expect(surface).toBeVisible()
+  const mapBeside = (await surface.boundingBox())!
+  const panelBeside = (await detail(page).boundingBox())!
+  expect(mapBeside.x).toBe(mapBounds.x)
+  expect(mapBeside.width).toBeLessThan(mapBounds.width)
+  expect(mapBeside.x + mapBeside.width).toBeLessThanOrEqual(panelBeside.x + 1)
   await readingFits(page)
+  // The panel names its own keys.
+  await expect(
+    detail(page).getByText('Digits pick an option · Enter confirms and moves on'),
+  ).toBeVisible()
+  // Putting the panel away gives the canvas its size and its camera back.
+  await detail(page)
+    .getByRole('button', { name: /Back to mindmap/ })
+    .click()
+  await expect(detail(page)).toHaveCount(0)
+  await expect.poll(() => surface.boundingBox()).toEqual(mapBounds)
+  await expect(map).toHaveAttribute('data-camera', mapCamera)
+  await select(page, firstTitle)
+  await expect(panes(page)).toHaveAttribute('data-split', 'side')
+  // RFC-490 (C8): the free-text box only exists once the custom row is chosen.
+  await expect(page.getByTestId('clarify-custom-textarea')).toHaveCount(0)
   await detail(page).locator('input[data-option-idx="1"]').check()
   await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
   await page.getByTestId('clarify-custom-radio').check()
@@ -264,30 +329,46 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
   // Full reading remains available at laptop and phone widths in both themes.
   for (const width of [1440, 1024, 390, 320]) {
-    await page.setViewportSize({ width, height: width <= 390 ? 844 : 1000 })
-    if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape')
-    else if (await page.getByRole('button', { name: /Back to mindmap/ }).isVisible())
-      await page.getByRole('button', { name: /Back to mindmap/ }).click()
-    await select(page, recording.self.questions[0]!.title)
+    const height = width <= 390 ? 844 : 1000
+    await page.setViewportSize({ width, height })
+    const back = page.getByRole('button', { name: /Back to mindmap/ })
+    if (await back.isVisible()) await back.click()
+    await select(page, firstTitle)
     await readingFits(page)
-    const modal = page.getByRole('dialog')
-    await expect(modal).toHaveAttribute('aria-modal', 'true')
-    const modalBox = (await modal.boundingBox())!
-    expect(modalBox.x).toBeGreaterThanOrEqual(0)
-    expect(modalBox.x + modalBox.width).toBeLessThanOrEqual(width)
-    expect(modalBox.y + modalBox.height).toBeLessThanOrEqual(width <= 390 ? 844 : 1000)
-    expect(Math.abs(modalBox.x - (width - modalBox.width) / 2)).toBeLessThanOrEqual(1)
-    expect(
-      Math.abs(modalBox.y - ((width <= 390 ? 844 : 1000) - modalBox.height) / 2),
-    ).toBeLessThanOrEqual(1)
-    await modal.getByRole('button', { name: 'Close', exact: true }).focus()
-    await page.keyboard.press('Tab')
-    expect(await modal.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+    // RFC-490 (C1): the reader is a panel of the workspace, not a modal. The measured
+    // stage decides its form (design §4.1): wider than 760 px it sits beside the canvas,
+    // otherwise it takes the canvas's place. Either way it stays inside the viewport.
+    const panel = detail(page)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    const stage = (await page.locator('.mindmap-workspace__stage').boundingBox())!
+    const split = stage.width > 760 ? 'side' : 'full'
+    if (width === 1440) expect(split).toBe('side')
+    if (width <= 390) expect(split).toBe('full')
+    await expect(panes(page)).toHaveAttribute('data-split', split)
+    const panelBox = (await panel.boundingBox())!
+    expect(panelBox.x).toBeGreaterThanOrEqual(0)
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(width)
+    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(height)
+    if (split === 'side') {
+      await expect(surface).toBeVisible()
+      const canvasBox = (await surface.boundingBox())!
+      expect(canvasBox.x + canvasBox.width).toBeLessThanOrEqual(panelBox.x + 1)
+      expect(panelBox.width).toBeGreaterThanOrEqual(420)
+    } else {
+      await expect(surface).toBeHidden()
+      expect(Math.abs(panelBox.x - stage.x)).toBeLessThanOrEqual(1)
+      expect(Math.abs(panelBox.width - stage.width)).toBeLessThanOrEqual(1)
+    }
+    // It is no layer over the page: it claims no modality, and a control outside it
+    // (the footer's review button) is still the pointer's target while it is open.
+    expect(await panel.getAttribute('aria-modal')).toBeNull()
+    await page.getByTestId('mindmap-review-open').click({ trial: true })
     await page.screenshot({
-      path: testInfo.outputPath(`recorded-modal-${width}.png`),
+      path: testInfo.outputPath(`recorded-panel-${width}.png`),
       fullPage: true,
     })
-    await page.getByRole('button', { name: 'Open in focused answers' }).click()
+    await focusedAnswers(page)
+    await expect(detail(page).getByRole('heading', { name: firstTitle })).toHaveCount(1)
     await readingFits(page)
     if (width <= 390) {
       // Mobile reading must get the viewport, without a redundant desktop
@@ -307,11 +388,13 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
   }
   await api('/api/config', { theme: 'dark' }, 'PUT')
   await page.reload()
-  await select(page, recording.self.questions[0]!.title)
+  await select(page, firstTitle)
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await readingFits(page)
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('recorded-modal-dark.png'), fullPage: true })
+  // Still the phone-wide workspace: the panel has the whole stage.
+  await expect(detail(page)).toBeVisible()
+  await expect(panes(page)).toHaveAttribute('data-split', 'full')
+  await page.screenshot({ path: testInfo.outputPath('recorded-panel-dark.png'), fullPage: true })
   await api('/api/config', { theme: 'light' }, 'PUT')
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.reload()
@@ -339,12 +422,25 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
   await expect(
     page.getByText('This round was submitted. Confirmed answers are available to read.'),
   ).toBeVisible()
-  await select(page, recording.self.questions[0]!.title)
+  await select(page, firstTitle)
   await expect(page.getByTestId('clarify-custom-textarea')).toHaveValue(
     recording.self.answers[0]!.customText,
   )
   await expect(page.getByTestId('clarify-custom-textarea')).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Deepen this question' })).toHaveCount(0)
+  // A sealed question is only read: no follow-up row, no skip, nothing to confirm.
+  await expect(detail(page).getByText('Follow up:', { exact: true })).toHaveCount(0)
+  await expect(
+    detail(page).getByRole('button', {
+      name: /Write my own|Generate follow-ups|Not applicable|Decide later|Confirm/,
+    }),
+  ).toHaveCount(0)
+  // RFC-490 (P6): the sealed round's footer leads to its summary and to the task result.
+  await expect(page.getByTestId('mindmap-review-open')).toHaveText('View decision summary')
+  await expect(page.getByTestId('clarify-view-task')).toHaveText('View task result')
+  await expect(page.getByTestId('clarify-view-task')).toHaveAttribute(
+    'href',
+    new RegExp(`/tasks/${task.id}$`),
+  )
   const log = readFileSync(join(state, 'recorded-mindmap.ndjson'), 'utf8')
     .trim()
     .split('\n')

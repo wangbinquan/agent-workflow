@@ -59,11 +59,24 @@ export function createClarifyFollowupStore(
         'Follow-up is only available in mindmap mode.',
       )
     if (!task) throw new NotFoundError('task-not-found', 'Task not found.')
+    const definition = JSON.parse(task.workflowSnapshot) as WorkflowDefinition
+    const gate = definition.nodes.find((n) => n.id === round.intermediaryNodeId)
+    const config = ClarifyMindmapConfigSchema.safeParse(gate?.mindmap)
+    const categoryPaths = config.success ? clarifyCategoryPaths(config.data.categories) : []
     const targetIds =
       typeof target === 'string'
         ? [target]
         : clarifyFollowupContext(questions, {}, target).map(({ question }) => question.id)
-    if (!targetIds.length || !questions.some((q) => q.id === targetIds[0]))
+    // RFC-490 design §3: a configured category nobody has asked about yet is a gap the first
+    // round can fill in place. Later rounds are separate maps, where "no question here" may
+    // only mean the category was covered earlier, so there it stays an unknown target.
+    const emptyCategory =
+      typeof target !== 'string' &&
+      target.length > 0 &&
+      targetIds.length === 0 &&
+      round.iteration === 0 &&
+      categoryPaths.some((path) => target.every((name, index) => path[index] === name))
+    if (!emptyCategory && (!targetIds.length || !questions.some((q) => q.id === targetIds[0])))
       throw new NotFoundError('clarify-question-not-found', 'Question or category not found.')
     const sealed = await reader
       .select({ questionId: taskQuestions.questionId })
@@ -71,20 +84,21 @@ export function createClarifyFollowupStore(
       .where(and(eq(taskQuestions.originNodeRunId, nodeRunId), isNotNull(taskQuestions.sealedAt)))
     const sealedIds = new Set(sealed.map((row) => row.questionId))
 
-    const definition = JSON.parse(task.workflowSnapshot) as WorkflowDefinition
-    const gate = definition.nodes.find((n) => n.id === round.intermediaryNodeId)
-    const config = ClarifyMindmapConfigSchema.safeParse(gate?.mindmap)
     return {
       canAppend:
         round.status === 'awaiting_human' &&
         task.status !== 'done' &&
         task.status !== 'canceled' &&
-        targetIds.some((id) => !sealedIds.has(id)),
+        // An empty category has no question of its own to be sealed, so it follows the
+        // map as a whole: open while any question of the round is still unsealed.
+        (emptyCategory ? questions : targetIds.map((id) => ({ id }))).some(
+          (question) => !sealedIds.has(question.id),
+        ),
       roundId: round.id,
       taskId: round.taskId,
       askingNodeRunId: round.askingNodeRunId!,
       questions,
-      categoryPaths: config.success ? clarifyCategoryPaths(config.data.categories) : [],
+      categoryPaths,
       drafts: (await readClarifyAnswerProjection(reader, round)).requireEffectiveAnswers(),
       instruction:
         typeof gate?.mindmap === 'object' && gate.mindmap

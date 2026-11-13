@@ -196,6 +196,9 @@ describe('RFC-372 canvas geometry', () => {
   })
 })
 
+// RFC-490 (C2): one row for as long as the siblings fit the column budget — three
+// here, which is also the default. More siblings than columns wrap into further rows;
+// that case, and the budget itself, are covered in tests/rfc490-mindmap-layout.test.ts.
 it('same-parent questions occupy one horizontal row while descendants use the next row', () => {
   const layout = layoutMindmap(
     [

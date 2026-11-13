@@ -143,10 +143,12 @@ test('a generation reported by the round shows its branch and can be canceled', 
     'Generating questions',
   )
   fireEvent.click(screen.getByRole('button', { name: 'View generating branch' }))
-  const dialog = screen.getByRole('dialog')
-  within(dialog).getByRole('heading', { name: 'Scope' })
-  expect(within(dialog).getByRole('status').textContent).toContain('Generating questions')
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel follow-up' }))
+  // RFC-490: the branch opens in the panel beside the canvas, not in a dialog.
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const panel = screen.getByRole('region', { name: 'Answer and confirm' })
+  within(panel).getByRole('heading', { name: 'Scope' })
+  expect(within(panel).getByRole('status').textContent).toContain('Generating questions')
+  fireEvent.click(within(panel).getByRole('button', { name: 'Cancel follow-up' }))
   expect(cancel).toHaveBeenCalledTimes(1)
 })
 
@@ -159,12 +161,15 @@ test('a failure reported by the round is shown on its branch once nothing genera
   expect(screen.queryByRole('button', { name: 'View failed follow-up' })).toBeNull()
   rerender(<Workspace failure={failure} />)
   fireEvent.click(screen.getByRole('button', { name: 'View failed follow-up' }))
-  const dialog = within(screen.getByRole('dialog'))
+  // RFC-490: shown on its branch in the panel beside the canvas, not in a dialog.
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const panel = within(screen.getByRole('region', { name: 'Answer and confirm' }))
+  panel.getByRole('heading', { name: 'Main decision' })
   expect(
-    dialog
+    panel
       .getByText(/The follow-up did not finish\. Existing answers are kept/)
       .getAttribute('role'),
   ).toBe('alert')
-  fireEvent.click(dialog.getByText('Technical details', { exact: true }))
-  expect(dialog.getByText('missing mindmap category', { exact: true })).toBeTruthy()
+  fireEvent.click(panel.getByText('Technical details', { exact: true }))
+  expect(panel.getByText('missing mindmap category', { exact: true })).toBeTruthy()
 })

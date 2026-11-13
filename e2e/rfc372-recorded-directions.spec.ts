@@ -39,30 +39,42 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
           mindmap: { categoryPath: string[]; parentQuestionId?: string }
         }>
       }
+      // RFC-490 (C1): a selected node is read in a panel of the workspace, beside the
+      // canvas at this width. It is put away, not dismissed, and it is never a modal.
+      const panel = (page: Page) =>
+        page.getByRole('region', { name: 'Answer and confirm', exact: true })
       const dialog = (page: Page) => page.getByRole('dialog')
+      const search = (page: Page) =>
+        page.getByRole('textbox', { name: 'Search categories, questions, options or answers' })
       async function close(page: Page) {
-        if (await dialog(page).isVisible())
-          await dialog(page).getByRole('button', { name: 'Close', exact: true }).click()
+        const back = panel(page).getByRole('button', { name: /Back to mindmap/ })
+        if (await back.isVisible()) await back.click()
+        await expect(panel(page)).toHaveCount(0)
       }
+      /** Another node can be picked while the panel is open: it simply switches. */
       async function select(page: Page, title: string) {
-        await close(page)
-        await page.getByRole('textbox', { name: 'Search categories or questions' }).fill(title)
+        await search(page).fill(title)
         await page.getByRole('option').filter({ hasText: title }).click()
-        await expect(dialog(page).getByRole('heading', { name: title, exact: true })).toBeVisible()
+        await expect(panel(page).getByRole('heading', { name: title, exact: true })).toBeVisible()
+        await expect(dialog(page)).toHaveCount(0)
+        await expect(page.locator('.mindmap-workspace__panes')).toHaveAttribute(
+          'data-split',
+          'side',
+        )
       }
       async function answer(page: Page, id: string) {
         const question = recording.questions.find((q) => q.id === id)!
         const value = recording.answers.find((a) => a.questionId === id)!
         await select(page, question.title)
         for (const index of value.selectedOptionIndices)
-          await dialog(page).locator(`input[data-option-idx="${index}"]`).check()
+          await panel(page).locator(`input[data-option-idx="${index}"]`).check()
         if (value.customText) {
           await page.getByTestId('clarify-custom-radio').check()
           await page.getByTestId('clarify-custom-textarea').fill(value.customText)
         }
-        await dialog(page).getByRole('button', { name: 'Confirm this answer', exact: true }).click()
+        await panel(page).getByRole('button', { name: 'Confirm this answer', exact: true }).click()
         await expect(
-          dialog(page).getByRole('button', { name: 'Confirmed', exact: true }),
+          panel(page).getByRole('button', { name: 'Confirmed', exact: true }),
         ).toBeDisabled()
       }
       test.beforeAll(async () => {
@@ -84,7 +96,7 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
       })
       // WebKit nightly 40991904663 (Ubuntu): a follow-up was accepted (202) but its question did not
       // land within 30 s, then the retry passed. Open in docs/audit-backlog.md (2026-10-30).
-      test('real recorded directions: category peers, question child, root category, modal recovery and final document', async ({
+      test('real recorded directions: category peers, question child, root category, panel recovery and final document', async ({
         page,
       }, testInfo) => {
         const agent = await api<{ id: string }>('/api/agents', {
@@ -134,15 +146,17 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
           await answer(page, question.id)
         for (const stage of recording.stages) {
           await close(page)
-          const search = page.getByRole('textbox', { name: 'Search categories or questions' })
-          await search.fill('')
+          await search(page).fill('')
           if (stage.kind === 'deep') {
             await select(
               page,
               recording.questions.find((q) => q.id === stage.contextQuestionIds.at(-1))!.title,
             )
-            await dialog(page).getByRole('button', { name: 'Deepen this question' }).click()
-            await dialog(page)
+            // RFC-490: one "Follow up:" row under the question; "Write my own…" opens the
+            // empty form, and the request is sent under the one name follow-ups have.
+            await expect(panel(page).getByRole('button', { name: /Deepen/ })).toHaveCount(0)
+            await panel(page).getByRole('button', { name: 'Write my own…', exact: true }).click()
+            await panel(page)
               .getByLabel('What needs more detail? (optional)')
               .fill(stage.instruction)
           } else {
@@ -153,22 +167,26 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
                 .getByRole('treeitem')
                 .filter({ has: page.getByText(stage.categoryPath!.at(-1)!, { exact: true }) })
                 .click()
-            await dialog(page)
+            await expect(dialog(page)).toHaveCount(0)
+            await panel(page)
               .getByLabel('What else should AI consider? (optional)')
               .fill(stage.instruction)
           }
           const response = page.waitForResponse(
             (res) => res.request().method() === 'POST' && res.url().endsWith('/followup'),
           )
-          await dialog(page)
+          await panel(page)
             .getByRole('button', {
-              name: stage.kind === 'deep' ? 'Ask follow-up' : 'Add questions in this direction',
+              name: stage.kind === 'deep' ? 'Generate follow-ups' : 'Generate questions',
               exact: true,
             })
             .click()
+          // The panel can be put away while the model works; the workspace still leads
+          // back to the generating branch, where the request can be canceled.
           await close(page)
           await page.getByRole('button', { name: 'View generating branch' }).click()
-          await expect(dialog(page).getByRole('button', { name: 'Cancel follow-up' })).toBeVisible()
+          await expect(panel(page).getByRole('button', { name: 'Cancel follow-up' })).toBeVisible()
+          await expect(dialog(page)).toHaveCount(0)
           const result = await response
           // RFC-372 O8: accepted at once; the questions land when generation settles.
           expect(result.status()).toBe(202)
@@ -211,6 +229,19 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
         // questions needed scrolling. Keep the real recorded tree dense and readable.
         const tree = page.getByRole('tree', { name: 'Question outline' })
         await expect(tree.getByRole('treeitem')).toHaveCount(expectedRows)
+        // RFC-490 AC08: at this width, with the outline open and nothing folded, the whole
+        // recorded map fits the canvas at the readable scale (0.85) — no row needs a
+        // horizontal pan to be read.
+        const map = page.locator('.mindmap-canvas')
+        await expect(map).toHaveAttribute('data-world-width', /^\d+$/)
+        const columns = Number(await map.getAttribute('data-columns'))
+        expect(columns).toBeGreaterThanOrEqual(2)
+        const canvas = (await page
+          .getByRole('img', { name: 'Clarification mindmap' })
+          .boundingBox())!
+        expect(Number(await map.getAttribute('data-world-width')) * 0.85).toBeLessThanOrEqual(
+          canvas.width,
+        )
         const density = await tree.getByRole('treeitem').evaluateAll((rows) =>
           rows.map((row) => ({
             group: row.classList.contains('mindmap-outline__row--group'),
@@ -239,16 +270,30 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
         await expect(category).toBeFocused()
         await expect(category).toHaveAttribute('tabindex', '0')
         await expect(category).toHaveAttribute('aria-expanded', 'false')
-        await expect(dialog(page)).toHaveCount(0)
+        // Folding and unfolding a branch never opens the panel.
+        await expect(panel(page)).toHaveCount(0)
         await category.press('ArrowRight')
         await expect(tree.getByRole('treeitem')).toHaveCount(expectedRows)
-        await expect(dialog(page)).toHaveCount(0)
+        await expect(panel(page)).toHaveCount(0)
         await page.getByRole('button', { name: 'Fit all', exact: true }).click()
         await page.screenshot({
           path: testInfo.outputPath('recorded-directions-reviewed.png'),
           fullPage: true,
         })
+        // ... and a phone-wide stage lays the same map out in a single column.
+        await page.setViewportSize({ width: 390, height: 844 })
+        await expect(map).toHaveAttribute('data-columns', '1')
+        await page.setViewportSize({ width: 1440, height: 1000 })
+        await expect(map).toHaveAttribute('data-columns', String(columns))
         await page.getByTestId('mindmap-review-open').click()
+        // RFC-490 AC07: the review counts every question, and however long the list is the
+        // next-step choice stays in view above the submit button.
+        await expect(page.getByTestId('mindmap-review-summary')).toContainText(
+          `${recording.questions.length} questions`,
+        )
+        await expect(
+          page.getByRole('radiogroup', { name: 'After this submission', exact: true }),
+        ).toBeInViewport()
         await page.getByTestId('mindmap-review-submit').click()
         await expect
           .poll(async () => (await api<{ status: string }>(`/api/tasks/${task.id}`)).status, {

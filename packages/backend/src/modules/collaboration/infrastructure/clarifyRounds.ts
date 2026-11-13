@@ -15,6 +15,7 @@ import {
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   isMindmapRound,
+  withoutStaleClarifySkip,
   TERMINAL_TASK_STATUSES,
   type ClarifyDirective,
   type ClarifyDraftValue,
@@ -524,11 +525,17 @@ export interface SaveClarifyDraftResult {
  * Per-question last-write-wins draft save. The target adapter updates only that
  * question's draft and attribution, under a shared round hold. Same-question
  * races resolve to the later writer; sealing and follow-ups take the round fence.
+ *
+ * RFC-490 design §2.2: HTTP and MCP drafts both arrive here. A draft that carries a real
+ * answer next to a skip status is stored as that answer, without the status.
  */
 export async function saveClarifyDraft(
   args: SaveClarifyDraftArgs,
 ): Promise<SaveClarifyDraftResult> {
-  const { taskId, updatedAt: now } = await createClarifyAnswerWritePort(args.db).saveDraft(args)
+  const { taskId, updatedAt: now } = await createClarifyAnswerWritePort(args.db).saveDraft({
+    ...args,
+    value: withoutStaleClarifySkip(args.value),
+  })
   // Live-sync other members' open forms ("X just edited question N").
   if (args.draftEvents !== undefined) {
     await args.draftEvents.publish({

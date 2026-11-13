@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { isMindmapRound } from '@agent-workflow/shared'
+import { isMindmapRound, withoutStaleClarifySkip } from '@agent-workflow/shared'
 import type {
   ClarifyAnswer,
   ClarifyRound,
@@ -826,7 +826,8 @@ function RoundAnswerBlock({
   // and single-flight per question. RFC-136 re-answer questions retain their established
   // committed-answer baseline and remain excluded from drafts.
   const updateAnswer = (questionId: string, nextAnswer: ClarifyAnswer): void => {
-    const next = { ...answersRef.current, [questionId]: nextAnswer }
+    // RFC-490 (design §2.2): re-answering a skipped question drops the skip mark.
+    const next = { ...answersRef.current, [questionId]: withoutStaleClarifySkip(nextAnswer) }
     answersRef.current = next
     setAnswers(next)
     durabilityRef.current?.recordChange(

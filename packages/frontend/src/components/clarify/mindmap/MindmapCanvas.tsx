@@ -7,12 +7,14 @@ import {
   fitMindmap,
   readableMindmapCamera,
   moveMindmapGesture,
+  panelResizeCamera,
   preserveMindmapAnchor,
   resizeMindmapCamera,
   revealMindmapPoint,
   screenToWorld,
   zoomMindmapAt,
   type MindmapCamera,
+  type MindmapPanelSession,
   type MindmapPointerGesture,
   type MindmapViewport,
 } from '@/lib/clarify/mindmap/geometry'
@@ -37,6 +39,10 @@ interface Props {
   /** Only explicit search/navigation requests reveal a node; ordinary selection never pans. */
   revealRequest: { id: string; sequence: number } | null
   onRevealHandled: () => void
+  /** RFC-490: cards per row at the readable scale; a change lays the map out again. */
+  columns: number
+  /** RFC-490: the question panel is open beside the canvas (design §4.2). */
+  panelOpen?: boolean
 }
 
 export function MindmapCanvas(props: Props) {
@@ -59,14 +65,18 @@ export function MindmapCanvas(props: Props) {
   cameraRef.current = props.camera
   const layoutRef = useRef(layout)
   layoutRef.current = layout
+  const panelAtResize = useRef(props.panelOpen === true)
+  const panelSession = useRef<MindmapPanelSession | null>(null)
   const [dragging, setDragging] = useState(false)
   const [themeVersion, setThemeVersion] = useState(0)
-  const topologyKey = `${props.rootId}:${props.topologyRevision}`
+  const topologyKey = `${props.rootId}:${props.topologyRevision}:${props.columns}`
   const nodes = useMemo(() => new Map(props.nodes.map((node) => [node.id, node])), [props.nodes])
   const positions = useMemo(
     () => new Map(layout?.nodes.map((node) => [node.id, node]) ?? []),
     [layout],
   )
+  const positionsRef = useRef(positions)
+  positionsRef.current = positions
   const spatial = useMemo(() => (layout ? indexMindmapLayout(layout) : null), [layout])
 
   useEffect(() => {
@@ -107,6 +117,7 @@ export function MindmapCanvas(props: Props) {
         revision: props.topologyRevision,
         rootId: props.rootId,
         nodes: props.nodes.map(({ id, parentId, order, kind }) => ({ id, parentId, order, kind })),
+        columns: props.columns,
       })
     } catch {
       setLayoutError(true)
@@ -127,8 +138,30 @@ export function MindmapCanvas(props: Props) {
       if (!rect || !rect.width || !rect.height) return
       const next = { width: rect.width, height: rect.height }
       const previous = viewportRef.current
-      if (cameraRef.current && previous.width)
-        latest.current.onCameraChange(resizeMindmapCamera(cameraRef.current, previous, next))
+      const camera = cameraRef.current
+      const panel = latest.current.panelOpen === true
+      if (camera && previous.width) {
+        if (panel !== panelAtResize.current && next.width !== previous.width) {
+          // The panel took (or gave back) room on the right; the map keeps its place.
+          const id = latest.current.selectedId
+          const result = panelResizeCamera({
+            camera,
+            previous,
+            next,
+            opening: panel,
+            node: id ? positionsRef.current.get(id) : undefined,
+            session: panelSession.current,
+          })
+          panelSession.current = result.session
+          if (result.camera !== camera) {
+            cameraRef.current = result.camera
+            latest.current.onCameraChange(result.camera)
+          }
+        } else latest.current.onCameraChange(resizeMindmapCamera(camera, previous, next))
+      }
+      panelAtResize.current = panel
+      // An explicit reveal in the same turn must already see the new width.
+      viewportRef.current = next
       setViewport(next)
     })
     observer.observe(element)
@@ -154,15 +187,19 @@ export function MindmapCanvas(props: Props) {
     const request = props.revealRequest
     const position = request ? positions.get(request.id) : undefined
     if (position && cameraRef.current) {
-      latest.current.onCameraChange(
-        revealMindmapPoint(cameraRef.current, position, viewportRef.current),
-      )
+      // Kept in the ref at once: a panel that opens in the same turn resizes the canvas
+      // before the next render, and its camera rule must start from this position.
+      cameraRef.current = revealMindmapPoint(cameraRef.current, position, viewportRef.current)
+      if (panelSession.current) panelSession.current.located = true
+      latest.current.onCameraChange(cameraRef.current)
       latest.current.onRevealHandled()
     }
   }, [props.revealRequest, positions])
 
+  /** Every move the reader makes themselves: pan, zoom, fit, the minimap, the keys. */
   const setCamera = (value: MindmapCamera) => {
     cameraRef.current = value
+    if (panelSession.current) panelSession.current.manual = true
     latest.current.onCameraChange(value)
   }
   const minimumZoom = () =>
@@ -265,8 +302,11 @@ export function MindmapCanvas(props: Props) {
           decision: {
             decided: t('mindmap.decision.decided'),
             provisional: t('mindmap.decision.provisional'),
+            deferred: t('mindmap.decision.deferred'),
+            'not-applicable': t('mindmap.decision.not-applicable'),
             unmarked: t('mindmap.decision.unmarked'),
           },
+          empty: t('mindmap.emptyCategory'),
         },
       }).hits
       const mini = minimap.current
@@ -282,7 +322,10 @@ export function MindmapCanvas(props: Props) {
       const x = 75 - ((left + right) * scale) / 2,
         y = 46 - ((top + bottom) * scale) / 2
       for (const point of layout.nodes) {
-        miniCtx.fillStyle = palette.status[nodes.get(point.id)?.status ?? 'needs_detail']
+        const summary = nodes.get(point.id)
+        miniCtx.fillStyle = summary?.empty
+          ? palette.muted
+          : palette.status[summary?.status ?? 'needs_detail']
         miniCtx.fillRect(x + point.x * scale, y + point.y * scale, 2, 2)
       }
       const a = screenToWorld({ x: 0, y: 0 }, props.camera!)
@@ -313,8 +356,21 @@ export function MindmapCanvas(props: Props) {
     const rect = event.currentTarget.getBoundingClientRect()
     return { x: event.clientX - rect.left, y: event.clientY - rect.top }
   }
+  const rounded = (value: number, digits: number) => Math.round(value * digits) / digits
   return (
-    <div className="mindmap-canvas" ref={surface}>
+    // The data attributes are read-only observations for in-browser checks (design §5.5).
+    <div
+      className="mindmap-canvas"
+      ref={surface}
+      data-columns={props.columns}
+      data-world-width={layout ? Math.round(layout.bounds.right - layout.bounds.left) : undefined}
+      data-world-height={layout ? Math.round(layout.bounds.bottom - layout.bounds.top) : undefined}
+      data-camera={
+        props.camera
+          ? `${rounded(props.camera.x, 10)},${rounded(props.camera.y, 10)},${rounded(props.camera.zoom, 1000)}`
+          : undefined
+      }
+    >
       {layoutError && (
         <div className="mindmap-canvas__notice">
           <NoticeBanner tone="warning">
@@ -393,7 +449,9 @@ export function MindmapCanvas(props: Props) {
             const id = hitMindmap(hits.current, point.x, point.y)
             const hovered = id ? nodes.get(id) : undefined
             event.currentTarget.title = hovered
-              ? `${hovered.title} · ${t(`mindmap.status.${hovered.status}`)}`
+              ? `${hovered.title} · ${
+                  hovered.empty ? t('mindmap.emptyCategory') : t(`mindmap.status.${hovered.status}`)
+                }`
               : ''
             event.currentTarget.style.cursor = id ? 'pointer' : 'grab'
           }

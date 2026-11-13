@@ -184,15 +184,21 @@ test('specific prompts stay editable and failed follow-up retries the same branc
   fireEvent.click(screen.getByRole('button', { name: 'Select question' }))
   fireEvent.click(screen.getByRole('button', { name: 'Check the evidence' }))
   expect(followup).not.toHaveBeenCalled()
-  const instruction = screen.getByLabelText('What needs more detail? (optional)')
+  // The prompt only fills the direction in; it stays the user's text to edit.
+  const instruction = screen.getByLabelText(
+    'What needs more detail? (optional)',
+  ) as HTMLTextAreaElement
+  expect(instruction.value).toContain('Which assumptions behind this choice remain unverified?')
   fireEvent.change(instruction, { target: { value: 'Check the missing baseline' } })
+  // RFC-490: one name for the action — "Generate follow-ups", retried with
+  // "Generate again" (they were "Ask follow-up" and "Retry follow-up").
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Ask follow-up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate follow-ups' }))
   })
   expect(followup).toHaveBeenLastCalledWith('q', 'Check the missing baseline')
   expect(screen.getByDisplayValue('Check the missing baseline')).toBeTruthy()
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Retry follow-up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate again' }))
   })
   expect(followup).toHaveBeenCalledTimes(2)
   expect(followup).toHaveBeenLastCalledWith('q', 'Check the missing baseline')
@@ -257,7 +263,7 @@ test('a real DOM selection becomes a removable quote on the same follow-up targe
     target: { value: 'What supports this?' },
   })
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Ask follow-up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate follow-ups' }))
   })
   expect(followup).toHaveBeenCalledWith(
     'q',
@@ -295,7 +301,7 @@ test('refresh restores the failed request quote and direction; a legacy failure 
       .getAttribute('role'),
   ).toBe('alert')
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Retry follow-up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate again' }))
   })
   expect(followup).toHaveBeenLastCalledWith('q', original)
   view.unmount()
@@ -307,7 +313,7 @@ test('refresh restores the failed request quote and direction; a legacy failure 
     />,
   )
   fireEvent.click(screen.getByRole('button', { name: 'Select question' }))
-  expect(screen.queryByRole('button', { name: 'Retry follow-up' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Generate again' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Review follow-up direction' }))
   expect(followup).not.toHaveBeenCalled()
   expect(screen.getByLabelText('What needs more detail? (optional)')).toBeTruthy()

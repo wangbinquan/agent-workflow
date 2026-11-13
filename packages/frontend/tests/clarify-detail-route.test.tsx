@@ -787,7 +787,15 @@ describe('RFC-378 mindmap decision review uses the original submission', () => {
         expect(post).not.toHaveBeenCalled()
         fireEvent.click(screen.getByRole('button', { name: 'Locate / edit' }))
         expect(screen.queryByTestId('mindmap-review')).toBeNull()
-        fireEvent.click(screen.getByText(/Decision context/))
+        // RFC-490 (C13): the "Decision context" fold that had to be opened first is
+        // gone from the mindmap. The rationale and the maturity sit under the answer,
+        // and because this decision is provisional its remaining notes are already
+        // unfolded, so the located question is edited in place.
+        expect(screen.queryByText(/Decision context/)).toBeNull()
+        expect(screen.getByLabelText('My rationale (optional)')).toBeTruthy()
+        expect(
+          document.querySelector<HTMLDetailsElement>('details.mindmap-decision__more')?.open,
+        ).toBe(true)
         fireEvent.change(screen.getByLabelText('Accepted tradeoff'), {
           target: { value: 'My revised cost' },
         })

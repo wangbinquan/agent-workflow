@@ -53,6 +53,14 @@ export interface QuestionFormProps {
   disabled?: boolean
   /** Mindmap's reading pane already owns the full question heading. */
   hideHeading?: boolean
+  /** RFC-490: leave the free-text box out until the custom row is picked (single) or
+   *  ticked (multi). Off by default: the ordinary questionnaire keeps it in view. */
+  hideInactiveCustom?: boolean
+  /** RFC-490: when this value changes to a non-empty one, a pending "Other" pick with
+   *  nothing typed yet is dropped. The mindmap passes the answer's skip mark, so a
+   *  question marked as skipped does not keep showing "Other" as chosen. Going back to
+   *  empty (the skip was undone, perhaps by typing into "Other") drops nothing. */
+  intentResetToken?: string
   /**
    * Called when the reviewer signals "advance to next question": pressing
    * Enter (outside the custom textarea), or — for single-choice — picking
@@ -69,7 +77,17 @@ export interface QuestionFormHandle {
 }
 
 export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(function QuestionForm(
-  { question, value, index, onChange, disabled, hideHeading, onAdvance },
+  {
+    question,
+    value,
+    index,
+    onChange,
+    disabled,
+    hideHeading,
+    hideInactiveCustom,
+    intentResetToken,
+    onAdvance,
+  },
   forwardedRef,
 ) {
   const { t } = useTranslation()
@@ -127,6 +145,14 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
   // sealed history answers (with text but no intent flag) still render
   // checked when the page mounts.
   const [multiCustomIntent, setMultiCustomIntent] = useState<boolean>(value.customText.length > 0)
+  const intentToken = useRef(intentResetToken)
+  useEffect(() => {
+    if (intentToken.current === intentResetToken) return
+    intentToken.current = intentResetToken
+    if (!intentResetToken) return
+    setOtherIntent(false)
+    setMultiCustomIntent(false)
+  }, [intentResetToken])
 
   /** Convert a digit key (1..N+1) to the option index it targets. */
   const digitToOptionIdx = useCallback(
@@ -294,6 +320,7 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
   // state where neither index nor text exists.
   const singleCustomRowActive =
     isSingle && singleSelectedIdx === null && (otherIntent || value.customText.length > 0)
+  const customActive = isSingle ? singleCustomRowActive : multiCustomEnabled
 
   return (
     <div
@@ -426,30 +453,27 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
       {/* Custom textarea — disabled until the user picked the custom row (single)
           or checked the "also include" box (multi). Hard-capped to CLARIFY_MAX_CUSTOM_TEXT_LEN.
           Visually attached to the custom option card above via CSS when active. */}
-      <div
-        className={
-          'clarify-question__custom' +
-          ((isSingle ? singleCustomRowActive : multiCustomEnabled) ? ' is-active' : '')
-        }
-      >
-        <TextArea
-          textareaRef={customTextareaRef}
-          className="clarify-custom-input"
-          value={value.customText}
-          disabled={disabled === true || (isSingle ? !singleCustomRowActive : !multiCustomEnabled)}
-          maxLength={CLARIFY_MAX_CUSTOM_TEXT_LEN}
-          placeholder={t('clarify.question.multi.customPlaceholder')}
-          rows={3}
-          onChange={onCustomTextChange}
-          data-testid="clarify-custom-textarea"
-        />
-        <p className="muted clarify-question__custom-hint">
-          {t('clarify.question.custom.lengthHint', {
-            count: value.customText.length,
-            max: CLARIFY_MAX_CUSTOM_TEXT_LEN,
-          })}
-        </p>
-      </div>
+      {(!hideInactiveCustom || customActive) && (
+        <div className={'clarify-question__custom' + (customActive ? ' is-active' : '')}>
+          <TextArea
+            textareaRef={customTextareaRef}
+            className="clarify-custom-input"
+            value={value.customText}
+            disabled={disabled === true || !customActive}
+            maxLength={CLARIFY_MAX_CUSTOM_TEXT_LEN}
+            placeholder={t('clarify.question.multi.customPlaceholder')}
+            rows={3}
+            onChange={onCustomTextChange}
+            data-testid="clarify-custom-textarea"
+          />
+          <p className="muted clarify-question__custom-hint">
+            {t('clarify.question.custom.lengthHint', {
+              count: value.customText.length,
+              max: CLARIFY_MAX_CUSTOM_TEXT_LEN,
+            })}
+          </p>
+        </div>
+      )}
     </div>
   )
 })

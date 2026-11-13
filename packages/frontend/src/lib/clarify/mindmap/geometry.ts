@@ -89,6 +89,56 @@ export function resizeMindmapCamera(
     y: camera.y + (next.height - previous.height) / 2,
   }
 }
+/** RFC-490: the question panel opens beside the canvas and narrows it. This is what the
+ *  canvas remembers while the panel is open, so closing can put the map back. */
+export interface MindmapPanelSession {
+  /** Where the map was when the panel opened. */
+  before: MindmapCamera
+  /** The reader panned or zoomed the map themselves since. */
+  manual: boolean
+  /** A node was located (search, "next pending", "confirm and next") since. */
+  located: boolean
+}
+export const MINDMAP_PANEL_MARGIN = 16
+/**
+ * A width change caused by the panel leaves the camera alone: the canvas keeps its left
+ * edge, so nothing jumps. Opening moves the map only when the selected card was in view
+ * and the panel would push it out. Closing puts the map back where it was when the
+ * panel opened, unless the reader moved it themselves in between; if a node was located
+ * meanwhile, that locate is applied to the full width, as it would have been without a
+ * panel (it only moves a map whose located card is out of view).
+ */
+export function panelResizeCamera(input: {
+  camera: MindmapCamera
+  previous: MindmapViewport
+  next: MindmapViewport
+  opening: boolean
+  /** World centre and size of the selected card, when it has a position. */
+  node?: { x: number; y: number; width: number; height: number }
+  session: MindmapPanelSession | null
+}): { camera: MindmapCamera; session: MindmapPanelSession | null } {
+  const { camera, previous, next, node, session } = input
+  if (!input.opening) {
+    if (!session || session.manual) return { camera, session: null }
+    return {
+      camera:
+        session.located && node ? revealMindmapPoint(session.before, node, next) : session.before,
+      session: null,
+    }
+  }
+  const opened: MindmapPanelSession = { before: camera, manual: false, located: false }
+  if (!node) return { camera, session: opened }
+  const left = (node.x - node.width / 2) * camera.zoom + camera.x
+  const right = (node.x + node.width / 2) * camera.zoom + camera.x
+  const top = (node.y - node.height / 2) * camera.zoom + camera.y
+  const bottom = (node.y + node.height / 2) * camera.zoom + camera.y
+  const wasInView = right > 0 && left < previous.width && bottom > 0 && top < previous.height
+  const overflow = right - (next.width - MINDMAP_PANEL_MARGIN)
+  // Never trade the card's left edge for its right one.
+  const shift = Math.min(overflow, Math.max(0, left - MINDMAP_PANEL_MARGIN))
+  if (!wasInView || shift <= 0) return { camera, session: opened }
+  return { camera: { ...camera, x: camera.x - shift }, session: opened }
+}
 export function preserveMindmapAnchor(
   camera: MindmapCamera,
   before: MindmapPoint | undefined,

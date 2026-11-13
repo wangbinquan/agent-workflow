@@ -917,7 +917,13 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       questionId: z.string().min(1),
       selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).optional(),
       customText: z.string().check(utf16MaxLength(65536)).optional(),
-      decision: ClarifyDecisionSchema.optional(),
+      // RFC-490 — the two skip statuses are reachable from here too, so say what they do.
+      decision: ClarifyDecisionSchema.optional().describe(
+        'Optional notes on the answer. `status` marks it "decided" or "provisional", or skips the ' +
+          'question: "deferred" (deliberately left undecided for now) or "not-applicable". A skip ' +
+          'counts only with no selected option and empty customText; sent together with an answer, ' +
+          'the answer is saved and the skip status is dropped.',
+      ),
     },
     audit: (args) => ({ kind: 'clarify-draft', id: String(args.nodeRunId) }),
     handler: async (args, ctx) =>

@@ -2,6 +2,7 @@ import {
   isClarifyAnswerConfirmed,
   isClarifyAnswerValid,
   type ClarifyAnswer,
+  type ClarifyDecision,
   type ClarifyQuestion,
 } from '@agent-workflow/shared'
 
@@ -15,10 +16,16 @@ export interface MindmapNodeSummary {
   kind: 'group' | 'question'
   questionId?: string
   answerSummary?: string
-  decisionStatus?: 'decided' | 'provisional'
+  decisionStatus?: ClarifyDecision['status']
   ownStatus?: MindmapNodeStatus
   status: MindmapNodeStatus
   counts: MindmapStatusCounts
+  /** RFC-490: a configured category with no question under it yet. It carries no
+   *  status of its own and never counts towards any total. */
+  empty?: boolean
+  /** RFC-490: wording the outline search matches beyond the title: option labels,
+   *  descriptions and recommendation reasons, the custom answer and the rationale. */
+  searchText?: string
 }
 const emptyCounts = (): MindmapStatusCounts => ({ done: 0, needs_detail: 0, needs_confirmation: 0 })
 /** The node a follow-up target names: a question, a category, or the root. */
@@ -32,6 +39,7 @@ export function projectClarifyMindmap(
   answers: Readonly<Record<string, ClarifyAnswer>>,
   locked: ReadonlySet<string>,
   title: string,
+  categoryPaths: readonly (readonly string[])[] = [],
 ): MindmapNodeSummary[] {
   const nodes: MindmapNodeSummary[] = [
     {
@@ -45,27 +53,32 @@ export function projectClarifyMindmap(
     },
   ]
   const groups = new Set(['root'])
-  for (const [order, q] of questions.entries()) {
+  /** Creates every missing category on the path and returns the deepest one. */
+  const category = (categoryPath: readonly string[]): string => {
     let parentId = 'root'
-    if (q.mindmap?.parentQuestionId) parentId = `q:${q.mindmap.parentQuestionId}`
-    else
-      for (let i = 0; i < (q.mindmap?.categoryPath.length ?? 0); i++) {
-        const path = q.mindmap!.categoryPath.slice(0, i + 1)
-        const id = `g:${JSON.stringify(path)}`
-        if (!groups.has(id)) {
-          groups.add(id)
-          nodes.push({
-            id,
-            parentId,
-            order: nodes.length,
-            title: path[i]!,
-            kind: 'group',
-            status: 'needs_detail',
-            counts: emptyCounts(),
-          })
-        }
-        parentId = id
+    for (let i = 0; i < categoryPath.length; i++) {
+      const path = categoryPath.slice(0, i + 1)
+      const id = `g:${JSON.stringify(path)}`
+      if (!groups.has(id)) {
+        groups.add(id)
+        nodes.push({
+          id,
+          parentId,
+          order: nodes.length,
+          title: path[i]!,
+          kind: 'group',
+          status: 'needs_detail',
+          counts: emptyCounts(),
+        })
       }
+      parentId = id
+    }
+    return parentId
+  }
+  for (const [order, q] of questions.entries()) {
+    const parentId = q.mindmap?.parentQuestionId
+      ? `q:${q.mindmap.parentQuestionId}`
+      : category(q.mindmap?.categoryPath ?? [])
     const answer = answers[q.id]
     const ownStatus: MindmapNodeStatus =
       locked.has(q.id) || isClarifyAnswerConfirmed(q, answer)
@@ -85,8 +98,21 @@ export function projectClarifyMindmap(
       ownStatus,
       status: ownStatus,
       counts: { ...emptyCounts(), [ownStatus]: 1 },
+      searchText: [
+        ...q.options.flatMap((option) => [
+          option.label,
+          option.description,
+          option.recommendationReason,
+        ]),
+        answer?.customText,
+        answer?.decision?.rationale,
+      ]
+        .filter(Boolean)
+        .join('\n'),
     })
   }
+  // Configured categories nobody asked about come last, after the model's own order.
+  for (const path of categoryPaths) category(path)
   const children = new Map<string, MindmapNodeSummary[]>()
   for (const node of nodes) {
     if (node.parentId === null) continue
@@ -111,6 +137,12 @@ export function projectClarifyMindmap(
       : node.counts.needs_confirmation
         ? 'needs_confirmation'
         : 'done'
+    if (
+      node.kind === 'group' &&
+      node.id !== 'root' &&
+      node.counts.done + node.counts.needs_detail + node.counts.needs_confirmation === 0
+    )
+      node.empty = true
     const parent = node.parentId ? byId.get(node.parentId) : undefined
     if (parent)
       for (const key of Object.keys(node.counts) as MindmapNodeStatus[])
@@ -144,6 +176,19 @@ export function clarifyAnswerPreview(
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/** RFC-490: the words around a search hit that is not in the title, for the result row. */
+export function mindmapSearchSnippet(text: string, query: string, radius = 18): string {
+  const at = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase())
+  if (at < 0 || !query) return ''
+  const start = Math.max(0, at - radius)
+  const end = Math.min(text.length, at + query.length + radius)
+  return (
+    (start > 0 ? '…' : '') +
+    text.slice(start, end).replace(/\s+/g, ' ') +
+    (end < text.length ? '…' : '')
+  )
 }
 
 /** Compress decorative category chains on the canvas only. Outline and target IDs stay canonical. */

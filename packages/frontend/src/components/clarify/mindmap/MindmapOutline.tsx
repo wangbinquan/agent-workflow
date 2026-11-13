@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { TextInput } from '@/components/Form'
 import { TreeDisclosure } from '@/components/TreeDisclosure'
 import { VirtualList } from '@/components/VirtualList'
-import type { MindmapNodeSummary } from '@/lib/clarify/mindmap/projection'
+import { mindmapSearchSnippet, type MindmapNodeSummary } from '@/lib/clarify/mindmap/projection'
 import {
   indexMindmapNavigation,
   mindmapAncestorPath,
   pendingMindmapDescendants,
 } from '@/lib/clarify/mindmap/navigation'
-import { MindmapStatus } from './MindmapStatus'
+import { MindmapEmptyMark, MindmapStatus } from './MindmapStatus'
 
 interface Props {
   nodes: readonly MindmapNodeSummary[]
@@ -35,7 +35,12 @@ export function MindmapOutline(props: Props) {
     const hidden = new Set<string>()
     return navigation.rows.filter(({ node }) => {
       if (node.id === 'root') return false
-      if (query) return node.title.toLocaleLowerCase().includes(query)
+      // RFC-490: options, recommendation reasons and the reader's own answer match too.
+      if (query)
+        return (
+          node.title.toLocaleLowerCase().includes(query) ||
+          (node.searchText?.toLocaleLowerCase().includes(query) ?? false)
+        )
       if (node.parentId && (props.collapsed.has(node.parentId) || hidden.has(node.parentId))) {
         hidden.add(node.id)
         return false
@@ -87,6 +92,12 @@ export function MindmapOutline(props: Props) {
           onChange={props.onSearch}
           placeholder={t('mindmap.search')}
           aria-label={t('mindmap.search')}
+          onKeyDown={(event) => {
+            // The first Escape clears the search; only an empty box lets it through.
+            if (event.key !== 'Escape' || !props.search) return
+            event.preventDefault()
+            props.onSearch('')
+          }}
         />
         {query && <span className="muted">{t('mindmap.searchCount', { count: rows.length })}</span>}
       </div>
@@ -107,6 +118,11 @@ export function MindmapOutline(props: Props) {
           const pending = pendingMindmapDescendants(node)
           const total = node.counts.done + node.counts.needs_confirmation + node.counts.needs_detail
           const path = query ? mindmapAncestorPath(node.id, navigation.byId).slice(1) : []
+          // Why this row matched, when the title alone does not show it.
+          const snippet =
+            query && !node.title.toLocaleLowerCase().includes(query)
+              ? mindmapSearchSnippet(node.searchText ?? '', query)
+              : ''
           return (
             <div
               ref={(element) => {
@@ -202,7 +218,8 @@ export function MindmapOutline(props: Props) {
                   </span>
                 </span>
                 <span className="mindmap-outline__meta">
-                  {node.kind === 'group' && (
+                  {node.empty && <MindmapEmptyMark />}
+                  {node.kind === 'group' && !node.empty && (
                     <span
                       className="mindmap-outline__count"
                       title={`${node.counts.done} / ${total} ${t('mindmap.confirmed')}`}
@@ -237,10 +254,12 @@ export function MindmapOutline(props: Props) {
                       </span>
                     </span>
                   )}
-                  <MindmapStatus
-                    status={node.kind === 'group' ? node.status : node.ownStatus!}
-                    compact
-                  />
+                  {!node.empty && (
+                    <MindmapStatus
+                      status={node.kind === 'group' ? node.status : node.ownStatus!}
+                      compact
+                    />
+                  )}
                 </span>
               </div>
               {row.depth > 6 && !query && (
@@ -256,6 +275,11 @@ export function MindmapOutline(props: Props) {
                   {path
                     .map((n) => (n.kind === 'question' ? `Q${n.order + 1}` : n.title))
                     .join(' / ')}
+                </span>
+              )}
+              {snippet && (
+                <span className="mindmap-outline__path mindmap-outline__match">
+                  {t('mindmap.searchMatch', { text: snippet })}
                 </span>
               )}
             </div>

@@ -98,8 +98,12 @@ export function createClarifyFollowupOperations(
       taskContext = await generator
         .context({ askingNodeRunId: snapshot.askingNodeRunId, taskId: snapshot.taskId })
         .catch(() => null)
+    // RFC-490 design §3: the store rejects every other target that has no question, so an
+    // empty branch under a category path is a configured category nobody asked about yet.
+    // Its request names what the rest of the map already asks; the basis stays the branch.
+    const emptyCategory = typeof target !== 'string' && context.length === 0
     const prompt = [
-      'Ask 1–4 consequential follow-up questions about the selected branch, in the same language as the user. Do not repeat resolved questions. Do not execute the task or produce deliverables.',
+      'Ask 1–4 consequential follow-up questions about the selected branch, in the same language as the user. Do not repeat resolved questions. Never ask again a question the user marked not applicable. Do not execute the task or produce deliverables.',
       'Return exactly one <workflow-clarify> envelope. Every question needs 2–4 options; do not include a free-text option. Choose single or multi according to whether the actual alternatives are mutually exclusive or compatible. The framework assigns attachment to the selected question or category. No text outside the envelope.',
       clarifyFormatExample(undefined, true),
       typeof target === 'string'
@@ -118,6 +122,9 @@ export function createClarifyFollowupOperations(
         branch: context,
         configuredCategoryPaths: snapshot.categoryPaths ?? [],
         ...(typeof target === 'string' ? {} : { categoryPath: target }),
+        ...(emptyCategory
+          ? { existingQuestionTitles: snapshot.questions.map((q) => q.title) }
+          : {}),
         guidance: snapshot.instruction,
         userRequest: request.instruction,
       }),
@@ -162,6 +169,13 @@ export function createClarifyFollowupOperations(
         parsed?.errors[0]?.detail ?? 'Expected 1–4 valid classified questions.',
       )
     const parent = snapshot.questions.find((q) => q.id === request.parentQuestionId)
+    // RFC-490 design §2.4: each generated question keeps what the user pointed at and the
+    // direction they gave, as requested, so the map can show where it came from.
+    const requestTarget: 'question' | 'category' | 'root' = parent
+      ? 'question'
+      : request.categoryPath!.length
+        ? 'category'
+        : 'root'
     const questions = parsed.body.questions.map((q, i) => ({
       ...q,
       id: `fq-${request.requestId}-${i}`,
@@ -174,6 +188,8 @@ export function createClarifyFollowupOperations(
         ...(parent ? { parentQuestionId: parent.id } : {}),
         requestId: request.requestId,
         requestBasis: inFlight.requestKey,
+        requestTarget,
+        ...(request.instruction.trim() ? { requestInstruction: request.instruction } : {}),
       },
     }))
     await store.append(nodeRunId, request, questions, abort.signal, editor)

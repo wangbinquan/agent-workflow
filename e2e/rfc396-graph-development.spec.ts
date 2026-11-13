@@ -267,32 +267,39 @@ async function answerOriginalQuestionsThroughUi(
   await expect(page).toHaveURL((url) => url.pathname === `/clarify/${roundId}`)
   await expect(page.getByRole('img', { name: 'Clarification mindmap', exact: true })).toBeVisible()
   const question = round.questions.find((entry) => entry.id === answer.questionId)!
-  await page.getByRole('textbox', { name: 'Search categories or questions' }).fill(question.title)
+  await page
+    .getByRole('textbox', { name: 'Search categories, questions, options or answers' })
+    .fill(question.title)
   await page.getByRole('option').filter({ hasText: question.title }).click()
-  const questionDialog = page.getByRole('dialog')
+  // RFC-490: the question opens in the workspace's own panel, never in a modal.
+  const questionPanel = page.getByRole('region', { name: 'Answer and confirm', exact: true })
   await expect(
-    questionDialog.getByRole('heading', { name: question.title, exact: true }),
+    questionPanel.getByRole('heading', { name: question.title, exact: true }),
   ).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await test.info().attach('graph-booking-original-questions', {
-    body: await questionDialog.screenshot(),
+    body: await questionPanel.screenshot(),
     contentType: 'image/png',
   })
-  await questionDialog.getByTestId('clarify-custom-radio').check()
-  await questionDialog.getByTestId('clarify-custom-textarea').fill(answer.customText)
-  await questionDialog.locator('summary').filter({ hasText: 'Decision context' }).click()
-  await questionDialog.getByRole('radio', { name: 'Provisional', exact: true }).click()
-  await questionDialog
+  await questionPanel.getByTestId('clarify-custom-radio').check()
+  await questionPanel.getByTestId('clarify-custom-textarea').fill(answer.customText)
+  // RFC-490: the maturity sits right under the answer, and a provisional choice opens the
+  // remaining notes by itself — there is no "Decision context" fold to open first.
+  await expect(
+    questionPanel.locator('summary').filter({ hasText: 'Decision context' }),
+  ).toHaveCount(0)
+  await questionPanel.getByRole('radio', { name: 'Provisional', exact: true }).click()
+  await questionPanel
     .getByRole('textbox', { name: 'Still unverified', exact: true })
     .fill(answer.decision!.uncertainty!)
-  await expect(questionDialog.getByRole('textbox', { name: 'Who will validate' })).toHaveValue('')
+  await expect(questionPanel.getByRole('textbox', { name: 'Who will validate' })).toHaveValue('')
   await expect(
-    questionDialog.getByRole('textbox', { name: 'When or under what conditions to revisit' }),
+    questionPanel.getByRole('textbox', { name: 'When or under what conditions to revisit' }),
   ).toHaveValue('')
-  await questionDialog.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
-  await expect(
-    questionDialog.getByRole('button', { name: 'Confirmed', exact: true }),
-  ).toBeDisabled()
-  await questionDialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await questionPanel.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
+  await expect(questionPanel.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
+  await questionPanel.getByRole('button', { name: /Back to mindmap/ }).click()
+  await expect(questionPanel).toHaveCount(0)
   await expect(
     page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
   ).toBeVisible()

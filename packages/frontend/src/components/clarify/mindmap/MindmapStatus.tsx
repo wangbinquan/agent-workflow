@@ -49,6 +49,11 @@ export function MindmapStatus({
     </span>
   )
 }
+/** RFC-490: a configured category without questions has no status; it is a gap. */
+export function MindmapEmptyMark() {
+  const { t } = useTranslation()
+  return <span className="mindmap-status mindmap-status--empty">{t('mindmap.emptyCategory')}</span>
+}
 export function MindmapCounts({ counts }: { counts: MindmapStatusCounts }) {
   return (
     <span className="mindmap-counts">

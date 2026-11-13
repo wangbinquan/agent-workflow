@@ -14,7 +14,7 @@ import {
 // keep working; only the import path changed.
 
 import { z } from 'zod'
-import { validateClarifyMindmap } from './clarifyMindmap'
+import { clarifySkipStatus, validateClarifyMindmap } from './clarifyMindmap'
 
 import type {
   ClarifyCrossAgentNode,
@@ -267,7 +267,11 @@ export function renderClarifyDirectiveTrailer(
  *   - multi, ≥1 idx, no custom:        `User selected: "A", "B"`
  *   - multi, idx + custom:             `User selected: "A", "B" with additional note: "<text>"`
  *   - multi, custom only:              `User selected only the custom answer: "<text>"`
- *   - empty:                           `User did not answer this question.` */
+ *   - empty:                           `User did not answer this question.`
+ *  RFC-490 — a skipped question (nothing chosen or written, and a skip status in effect)
+ *  reads as its own state instead of "empty":
+ *   - not applicable:                  `User marked this question as not applicable.`
+ *   - decide later:                    `User deliberately left this question undecided for now.` */
 export function summariseClarifyAnswer(question: ClarifyQuestion, answer: ClarifyAnswer): string {
   const decision = summariseClarifyDecision(answer.decision, question.mindmap !== undefined)
   const answerText = summariseClarifyChoice(question, answer)
@@ -278,6 +282,10 @@ function summariseClarifyChoice(question: ClarifyQuestion, answer: ClarifyAnswer
   const labels = answer.selectedOptionLabels
   const custom = answer.customText.trim()
   if (labels.length === 0 && custom.length === 0) {
+    // RFC-490: the agent must tell a deliberate skip from a question nobody answered.
+    const skip = clarifySkipStatus(answer)
+    if (skip === 'not-applicable') return 'User marked this question as not applicable.'
+    if (skip === 'deferred') return 'User deliberately left this question undecided for now.'
     return 'User did not answer this question.'
   }
   if (question.kind === 'single') {

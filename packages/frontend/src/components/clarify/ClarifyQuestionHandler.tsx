@@ -30,12 +30,16 @@ export interface ClarifyQuestionHandlerProps {
    *  could show/mutate a SIBLING round's entry. Optional for back-compat — omitted ⇒ match by
    *  questionId across the task (legacy). */
   originNodeRunId?: string
+  /** RFC-490: with a single candidate node there is nothing to choose, so the mindmap
+   *  leaves the row out. The ordinary questionnaire keeps showing who handles it. */
+  hideSingleChoice?: boolean
 }
 
 export function ClarifyQuestionHandler({
   taskId,
   questionId,
   originNodeRunId,
+  hideSingleChoice,
 }: ClarifyQuestionHandlerProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -84,6 +88,7 @@ export function ClarifyQuestionHandler({
   // card on the board (dispatching it reruns the asker via the normal cascade). Only a
   // confirmed-done question is closed to edits.
   const editable = asker.phase !== 'done' && agentNodes.length > 0
+  if (hideSingleChoice && agentNodes.length <= 1) return null
 
   return (
     <div className="clarify-handler" data-testid={`clarify-handler-${questionId}`}>

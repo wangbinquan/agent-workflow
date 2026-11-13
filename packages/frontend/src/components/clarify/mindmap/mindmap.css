@@ -248,14 +248,34 @@
   min-width: 0;
   min-height: 0;
   position: relative;
-  container: mindmap-stage / inline-size;
 }
+/* RFC-490: the canvas and the question panel share the stage. `data-split` comes from
+   the measured stage width (MindmapWorkspace), so layout and behaviour never disagree. */
+.mindmap-workspace__panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.mindmap-workspace__panes[data-split='side'] {
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 46%, 620px);
+}
+.mindmap-workspace__panes[data-split='side'] > .mindmap-workspace__detail {
+  border-left: 1px solid var(--border);
+}
+.mindmap-workspace__panes[data-split='full'] > .mindmap-workspace__map {
+  display: none;
+}
+/* The minimap rules below follow the canvas's own width, which the panel narrows. */
 .mindmap-workspace__map {
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  container: mindmap-stage / inline-size;
 }
 .mindmap-workspace__detail {
   display: flex;
@@ -496,10 +516,14 @@
 }
 .mindmap-canvas__help {
   position: absolute;
-  left: 16px;
-  top: 12px;
-  right: 16px;
+  left: 12px;
+  top: 10px;
+  max-width: calc(100% - 24px);
   margin: 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  /* Cards pass underneath while panning; the hint stays readable. */
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
   font-size: var(--font-xs);
   line-height: 1.6;
   color: var(--muted);
@@ -623,64 +647,6 @@
   font-size: var(--font-xs);
 }
 
-/* The panorama reader is a shared modal. Keep a single inner scroll region,
-   with the title/actions reachable even on a 320px phone. */
-.dialog__overlay.mindmap-question-dialog-overlay {
-  padding: 24px;
-  align-items: center;
-  justify-content: center;
-}
-.dialog__overlay .dialog__panel.mindmap-question-dialog {
-  width: min(860px, 100%);
-  max-width: 860px;
-  height: min(900px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
-}
-.mindmap-question-dialog > .dialog__body {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-}
-.mindmap-question-dialog .mindmap-workspace__detail {
-  flex: 1;
-}
-.mindmap-question-dialog .mindmap-question__toolbar {
-  justify-content: flex-start;
-}
-.mindmap-question-dialog .mindmap-question__toolbar > :last-child {
-  margin-left: auto;
-}
-@media (max-width: 650px) {
-  .dialog__overlay.mindmap-question-dialog-overlay {
-    padding: 8px;
-  }
-  .dialog__overlay .dialog__panel.mindmap-question-dialog {
-    height: calc(100dvh - 16px);
-    max-height: calc(100dvh - 16px);
-  }
-  .mindmap-question-dialog .dialog__header {
-    padding: 12px 16px;
-  }
-  .mindmap-question-dialog .mindmap-question__toolbar,
-  .mindmap-question-dialog .mindmap-question__actions {
-    padding: 10px 12px;
-    gap: 6px;
-  }
-  .mindmap-question-dialog .mindmap-question__actions .btn {
-    white-space: normal;
-    min-height: 40px;
-  }
-  .mindmap-question-dialog .mindmap-question__content {
-    padding: 16px;
-  }
-  .mindmap-question-dialog .mindmap-question__title {
-    font-size: 18px;
-    margin-bottom: 16px;
-  }
-}
-
 .mindmap-workspace__detail .clarify-handler > .muted {
   flex-shrink: 0;
   white-space: nowrap;
@@ -782,7 +748,7 @@
   padding: var(--space-4);
   min-width: 0;
 }
-.mindmap-review__heading h4 {
+.mindmap-review__heading h5 {
   flex: 1;
   min-width: 140px;
   margin: 0;
@@ -812,5 +778,210 @@
   }
   .page--mindmap .clarify-detail__footer > .btn {
     width: 100%;
+  }
+}
+
+/* RFC-490: answering with the reasons in view. */
+.mindmap-question__answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.mindmap-question__form {
+  min-width: 0;
+}
+/* The action bar: the reason for the answer first, then the buttons that confirm it.
+   It does not scroll with the options, so the reason is always in reach. */
+.mindmap-question__actions {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+.mindmap-question__buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.mindmap-decision--essentials {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2) var(--space-3);
+  align-items: end;
+  min-width: 0;
+}
+.mindmap-decision--essentials .form-field {
+  margin: 0;
+  min-width: 0;
+}
+.mindmap-question__skip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+}
+.mindmap-decision--inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+  min-width: 0;
+}
+.mindmap-decision__more > summary {
+  cursor: pointer;
+  padding-block: var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.mindmap-origin {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--bg);
+  overflow-wrap: anywhere;
+}
+.mindmap-origin p {
+  margin: 0;
+}
+.mindmap-origin__source {
+  font-weight: 600;
+}
+.mindmap-origin__label {
+  color: var(--muted);
+}
+.mindmap-origin .btn {
+  align-self: flex-start;
+}
+.mindmap-question__children-list,
+.mindmap-suggestions {
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+/* What the task was launched with: the first thing in the root panel. */
+.mindmap-task-inputs {
+  margin-bottom: var(--space-3);
+  min-width: 0;
+}
+.mindmap-question__children-list h3,
+.mindmap-suggestions h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-sm);
+}
+.mindmap-question__children-list ul,
+.mindmap-suggestions ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mindmap-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.mindmap-suggestions li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mindmap-suggestions li > .btn {
+  flex-shrink: 0;
+}
+.mindmap-task-inputs summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.mindmap-task-inputs dl {
+  margin: var(--space-2) 0 0;
+}
+.mindmap-task-inputs dt {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+.mindmap-task-inputs dd {
+  margin: 2px 0 var(--space-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mindmap-question__followup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.mindmap-question__keys {
+  margin-left: auto;
+  font-size: var(--font-xs);
+}
+/* A configured category nobody asked about yet: a gap, not a state of progress. */
+.mindmap-status--empty {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  white-space: nowrap;
+}
+/* Why a search result matched, when its title does not show it. */
+.mindmap-outline__match {
+  color: var(--text);
+}
+/* RFC-490: the review reads by category, with what needs a second look up front. */
+.mindmap-review__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--font-sm);
+}
+.mindmap-review__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.mindmap-review__group-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.mindmap-review__item[data-depth='1'] {
+  margin-left: 16px;
+}
+.mindmap-review__item[data-depth='2'] {
+  margin-left: 32px;
+}
+.mindmap-review__item[data-depth='3'] {
+  margin-left: 48px;
+}
+/* The submit choice stays in reach however long the list is. */
+.mindmap-review__next {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.mindmap-review__next p {
+  margin: 0;
+}
+@media (max-width: 650px) {
+  .mindmap-review__item[data-depth] {
+    margin-left: 0;
+  }
+  .mindmap-question__keys {
+    display: none;
   }
 }

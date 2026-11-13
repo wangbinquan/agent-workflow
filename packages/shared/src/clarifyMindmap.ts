@@ -1,4 +1,8 @@
-import { normalizeClarifyDecision } from './schemas/clarifyDecision'
+import {
+  isClarifySkipStatus,
+  normalizeClarifyDecision,
+  type ClarifySkipStatus,
+} from './schemas/clarifyDecision'
 import type { ClarifyAnswer, ClarifyQuestion } from './schemas/clarify'
 import type { ClarifyDraftValue } from './schemas/resourceAcl'
 import type { ClarifyFollowupTarget } from './schemas/clarifyMindmap'
@@ -43,8 +47,38 @@ export function canonicalClarifyJson(value: unknown): string {
 export function clarifyQuestionSetKey(questions: readonly ClarifyQuestion[]): string {
   return clarifyContentKey(questions)
 }
+/** A real answer: any selected option, or custom text that is not blank. */
+function hasClarifyChoice(answer: ClarifyDraftValue): boolean {
+  return answer.selectedOptionIndices.length > 0 || answer.customText.trim().length > 0
+}
+/**
+ * RFC-490 design §2.2 — the one ruling for an answer that carries both a skip status and a
+ * real answer: the real answer wins and the skip status is stale. Only `status` is dropped;
+ * the user's notes stay, and a decision with nothing left in it is absent, as everywhere
+ * else. An answer that needs no change is returned as the same reference.
+ */
+export function withoutStaleClarifySkip<T extends ClarifyDraftValue>(answer: T): T {
+  const decision = answer.decision
+  if (!decision || !isClarifySkipStatus(decision.status) || !hasClarifyChoice(answer)) return answer
+  const { status: _status, ...notes } = decision
+  const kept = normalizeClarifyDecision(notes)
+  if (kept) return { ...answer, decision: kept }
+  const { decision: _decision, ...rest } = answer
+  return rest as T
+}
+/** The skip status in effect: set, and not overridden by a real answer (RFC-490 §2.2). */
+export function clarifySkipStatus(
+  answer: ClarifyDraftValue | undefined,
+): ClarifySkipStatus | undefined {
+  const status = answer?.decision?.status
+  return answer !== undefined && isClarifySkipStatus(status) && !hasClarifyChoice(answer)
+    ? status
+    : undefined
+}
 export function clarifyAnswerBasis(question: ClarifyQuestion, answer: ClarifyDraftValue): string {
-  const decision = normalizeClarifyDecision(answer.decision)
+  // Taken over the canonical answer, so a writer that has not dropped a stale skip status
+  // yet confirms the same content as one that has. Answers without a decision hash as before.
+  const decision = normalizeClarifyDecision(withoutStaleClarifySkip(answer).decision)
   return clarifyContentKey([
     question,
     [...answer.selectedOptionIndices].sort((a, b) => a - b),
@@ -66,6 +100,9 @@ export function isClarifyAnswerValid(
   question: ClarifyQuestion,
   answer: ClarifyDraftValue,
 ): boolean {
+  // RFC-490: a skip in effect is a complete answer. A skip status next to a real answer
+  // is not in effect, so that answer is judged by the ordinary rule below.
+  if (clarifySkipStatus(answer) !== undefined) return true
   const indices = answer.selectedOptionIndices
   return (
     (indices.length > 0 || answer.customText.trim().length > 0) &&

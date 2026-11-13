@@ -2,12 +2,16 @@ import { DecisionReviewDialog } from '@/components/clarify/mindmap/DecisionRevie
 import { DecisionDetails } from '@/components/clarify/mindmap/DecisionDetails'
 import {
   clarifyAnswerBasis,
+  clarifyCategoryPaths,
   clarifyContentKey,
   clarifyFollowupContext,
+  ClarifyMindmapConfigSchema,
+  clarifySkipStatus,
   effectiveClarifyAnswers,
   clarifyQuestionSetKey,
   isClarifyAnswerConfirmed,
   isMindmapRound,
+  withoutStaleClarifySkip,
   type ClarifyQuestion,
   type ClarifyDraftValue,
 } from '@agent-workflow/shared'
@@ -134,6 +138,7 @@ export function ClarifyDetailPage() {
   const taskQuery = useQuery<{
     name: string
     status?: string
+    inputs?: Record<string, string>
     workflowSnapshot?: WorkflowDefinition
   }>({
     queryKey: [...TASK_QUERY_KEYS.detail(session.data?.taskId ?? null), 'snapshot'],
@@ -141,6 +146,7 @@ export function ClarifyDetailPage() {
       api.get(`/api/tasks/${session.data?.taskId}`, undefined, signal) as Promise<{
         name: string
         status?: string
+        inputs?: Record<string, string>
         workflowSnapshot?: WorkflowDefinition
       }>,
     enabled: typeof session.data?.taskId === 'string',
@@ -149,6 +155,30 @@ export function ClarifyDetailPage() {
   // 节点名解析（title → agentName → id 回退）；快照未载/查无节点时回退原 id。
   const workflowSnapshot = taskQuery.data?.workflowSnapshot
   const nodeName = (id: string) => resolveNodeNameFromSnapshot(workflowSnapshot, id) ?? id
+  // RFC-490: the categories configured on the frozen clarify node, so one nobody asked
+  // about yet still shows. First round only: every round is its own map, and a category
+  // without questions in a later round may simply have been covered before.
+  const roundIteration = session.data?.iteration
+  const gateNodeId = session.data?.intermediaryNodeId
+  const mindmapCategoryPaths = useMemo(() => {
+    if (roundIteration !== 0) return []
+    const gate = (workflowSnapshot?.nodes ?? []).find((node) => node.id === gateNodeId)
+    const config = ClarifyMindmapConfigSchema.safeParse(
+      (gate as { mindmap?: unknown } | undefined)?.mindmap,
+    )
+    return config.success ? clarifyCategoryPaths(config.data.categories) : []
+  }, [roundIteration, gateNodeId, workflowSnapshot])
+  // RFC-490: what the task was launched with, readable from the map's root.
+  const launchInputs = taskQuery.data?.inputs
+  const mindmapTaskInputs = useMemo(() => {
+    if (!launchInputs) return []
+    const declared = workflowSnapshot?.inputs ?? []
+    const labels = new Map(declared.map((input) => [input.key, input.label]))
+    const keys = new Set([...declared.map((input) => input.key), ...Object.keys(launchInputs)])
+    return [...keys]
+      .filter((key) => launchInputs[key]?.trim())
+      .map((key) => ({ label: labels.get(key) ?? key, value: launchInputs[key]! }))
+  }, [launchInputs, workflowSnapshot])
 
   // RFC-128 P4 (T10) — coordination grey-out. Read the task's per-question seal /
   // dispatch state so this page can render any question already sealed/dispatched via
@@ -432,6 +462,8 @@ export function ClarifyDetailPage() {
   const updateAnswer = (questionId: string, nextAnswer: ClarifyAnswer): void => {
     const s = session.data
     if (s === undefined || s.status !== 'awaiting_human') return
+    // RFC-490 (design §2.2): a real answer wins over a skip mark left on it.
+    nextAnswer = withoutStaleClarifySkip(nextAnswer)
     const question = s.questions.find((q) => q.id === questionId)
     if (
       nextAnswer.confirmedBasis &&
@@ -844,6 +876,7 @@ export function ClarifyDetailPage() {
           taskId={s.taskId}
           questionId={q.id}
           originNodeRunId={s.intermediaryNodeRunId}
+          hideSingleChoice={mindmapMode}
         />
         {/* RFC-128 P4 (T10): coordination notice for an already-handled question. */}
         {locked && (
@@ -861,6 +894,8 @@ export function ClarifyDetailPage() {
           value={a}
           index={idx + 1}
           hideHeading={mindmapMode}
+          hideInactiveCustom={mindmapMode}
+          intentResetToken={mindmapMode ? (clarifySkipStatus(a) ?? '') : undefined}
           disabled={readonly || submitMut.isPending || locked}
           onChange={(next) => updateAnswer(q.id, next)}
           onAdvance={mindmapMode ? undefined : () => advanceFromQuestion(q.id)}
@@ -1174,6 +1209,8 @@ export function ClarifyDetailPage() {
             followupPending={followupPending}
             followupRunning={followup.running?.target}
             followupFailure={followup.failure}
+            categoryPaths={mindmapCategoryPaths}
+            taskInputs={mindmapTaskInputs}
             onChange={updateAnswer}
             onFollowup={startFollowup}
             onCancelFollowup={cancelFollowup}
@@ -1197,16 +1234,29 @@ export function ClarifyDetailPage() {
         {mindmapMode ? (
           // A sealed or fully handled round has nothing to submit: the same
           // dialog is then only its decision summary, and says so.
-          <button
-            ref={submitContinueRef}
-            type="button"
-            className={readonly || allLocked ? 'btn' : 'btn btn--primary'}
-            disabled={submitMut.isPending || !draftLoaded}
-            onClick={() => setReviewOpen(true)}
-            data-testid="mindmap-review-open"
-          >
-            {t(readonly || allLocked ? 'mindmap.review.openReadonly' : 'mindmap.review.open')}
-          </button>
+          <>
+            <button
+              ref={submitContinueRef}
+              type="button"
+              className={readonly || allLocked ? 'btn' : 'btn btn--primary'}
+              disabled={submitMut.isPending || !draftLoaded}
+              onClick={() => setReviewOpen(true)}
+              data-testid="mindmap-review-open"
+            >
+              {t(readonly || allLocked ? 'mindmap.review.openReadonly' : 'mindmap.review.open')}
+            </button>
+            {/* RFC-490: where the answers went. The result lives on the task page. */}
+            {(readonly || allLocked) && (
+              <Link
+                to="/tasks/$id"
+                params={{ id: s.taskId }}
+                className="btn"
+                data-testid="clarify-view-task"
+              >
+                {t('mindmap.review.viewResult')}
+              </Link>
+            )}
+          </>
         ) : (
           <div className="clarify-detail__submit-group" data-testid="clarify-submit-group">
             <button

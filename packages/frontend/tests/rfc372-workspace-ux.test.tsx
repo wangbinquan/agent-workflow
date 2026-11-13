@@ -1,5 +1,14 @@
 // RFC-372 UX regressions found with the daily AW real-model task: false hierarchy,
 // duplicated/truncated reading, shared follow-up text and misleading completion.
+//
+// RFC-490 rewrote the interactions these cases go through, not what they protect:
+//   - the panorama reader is a panel beside the canvas (a region named "Answer and
+//     confirm"), no longer a modal dialog, so cases that looked inside `role="dialog"`
+//     look inside that region and Escape is pressed inside the workspace;
+//   - a follow-up is opened from the single "Follow up:" row ("Write my own…" opens
+//     the empty form) and sent with "Generate follow-ups" / "Generate questions";
+//     the "Deepen this question" toggle and its `aria-expanded` are gone;
+//   - the outline search also matches options and answers, hence its new label.
 import { useState } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
@@ -100,6 +109,29 @@ function renderFocused(element: Parameters<typeof render>[0]) {
 }
 const select = (name: string) =>
   fireEvent.click(screen.getByRole('treeitem', { name: new RegExp(name) }))
+/** RFC-490: the reader, beside the canvas in the panorama and full width when focused. */
+const pane = () => screen.getByRole('region', { name: 'Answer and confirm' })
+const noPane = () => expect(screen.queryByRole('region', { name: 'Answer and confirm' })).toBeNull()
+const SEARCH = 'Search categories, questions, options or answers'
+/** RFC-490: every way the reader can change a question. A sealed or submitted one
+ *  offers none of them (before RFC-490 the pair was "Deepen this question" + confirm). */
+function expectNoWriteEntry() {
+  for (const name of [
+    'Confirm this answer',
+    /Confirm and next/,
+    'Write my own…',
+    'Check the evidence',
+    'Consider the cost',
+    'Compare alternatives',
+    'Generate follow-ups',
+    'Not applicable',
+    'Decide later',
+    'Answer instead',
+  ])
+    expect(screen.queryByRole('button', { name })).toBeNull()
+  expect(screen.queryByText('Follow up:')).toBeNull()
+  expect(screen.queryByLabelText('My rationale (optional)')).toBeNull()
+}
 
 // Dense rows must keep the actual multi-level category/question tree and usable
 // disclosure focus, instead of trading correctness for a smaller screenshot.
@@ -133,7 +165,8 @@ test('SVG disclosure folds without opening or selecting a question and leaves a 
   const selection = document.querySelector('[role="treeitem"][aria-selected="true"]')
   expect(toggle.querySelector('svg')).toBeTruthy()
   fireEvent.click(toggle)
-  expect(screen.queryByRole('dialog')).toBeNull()
+  // RFC-490: "nothing opened" is now "no reader panel" (it used to be "no dialog").
+  noPane()
   expect(screen.queryByRole('treeitem', { name: /Network timeout recovery/ })).toBeNull()
   expect(document.querySelector('[role="treeitem"][aria-selected="true"]')).toBe(selection)
   expect(document.activeElement).toBe(parent)
@@ -141,11 +174,13 @@ test('SVG disclosure folds without opening or selecting a question and leaves a 
   expect(document.querySelectorAll('[role="treeitem"][tabindex="0"]')).toHaveLength(1)
   fireEvent.keyDown(parent, { key: 'ArrowRight' })
   expect(screen.getByRole('treeitem', { name: /Network timeout recovery/ })).toBeTruthy()
-  expect(screen.queryByRole('dialog')).toBeNull()
+  noPane()
   fireEvent.keyDown(parent, { key: 'Enter' })
-  expect(
-    within(screen.getByRole('dialog')).getByRole('heading', { name: 'Main decision' }),
-  ).toBeTruthy()
+  expect(within(pane()).getByRole('heading', { name: 'Main decision' })).toBeTruthy()
+  // RFC-490: Enter opens the reader beside the map; it is not a dialog, and the row
+  // that opened it keeps the keyboard.
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(parent)
 })
 
 test('compact row preserves full titles, category progress and separate own versus descendant status', () => {
@@ -193,18 +228,26 @@ test('outline retains category and question ancestry, distinct own status and ex
 test('search reveals a folded descendant with its real ancestry and restores tree navigation', () => {
   renderFocused(<Harness />)
   fireEvent.click(screen.getByRole('button', { name: 'Collapse children Main decision' }))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search categories or questions' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: SEARCH }), {
     target: { value: 'retention' },
   })
   const result = screen.getByRole('option', { name: /Idempotency retention/ })
   expect(within(result).getByText('Data consistency / Concurrency / Q1 / Q2')).toBeTruthy()
   fireEvent.click(result)
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search categories or questions' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: SEARCH }), {
     target: { value: '' },
   })
   expect(screen.getByRole('treeitem', { name: /Network timeout recovery/ })).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Idempotency retention' })).toBeTruthy()
-  expect(screen.getByText(/Follow-up to Q2/)).toBeTruthy()
+  // RFC-490: the ancestry is read from the origin card. It names the question this
+  // one was asked from (it used to be a "Follow-up to Q2 · Show full path" fold) and
+  // keeps the older ancestors one step away.
+  const origin = within(
+    screen.getByRole('complementary', { name: 'Where this question came from' }),
+  )
+  expect(origin.getByText('Follow-up to Q2 · Network timeout recovery')).toBeTruthy()
+  expect(origin.getByText('Show full path')).toBeTruthy()
+  expect(origin.getByText('Q1 · Main decision')).toBeTruthy()
 })
 
 test('reading owns one full heading; changing question resets only its scroll, not edits', () => {
@@ -240,17 +283,21 @@ test('follow-up text and errors belong to the originating question while another
   )
   renderFocused(<Harness followup={followup} />)
   select('Main decision')
-  fireEvent.click(screen.getByRole('button', { name: 'Deepen this question' }))
+  // RFC-490: "Write my own…" in the follow-up row opens the empty form (it used to be
+  // the "Deepen this question" toggle); "Generate follow-ups" sends it.
+  fireEvent.click(screen.getByRole('button', { name: 'Write my own…' }))
   const hint = screen.getByLabelText('What needs more detail? (optional)')
   fireEvent.change(hint, { target: { value: 'Retain this branch guidance' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Ask follow-up' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Generate follow-ups' }))
   select('Network timeout recovery')
   fireEvent.click(screen.getByLabelText(/Create another booking/))
-  fireEvent.click(screen.getByRole('button', { name: 'Deepen this question' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Write my own…' }))
   expect(
     (screen.getByLabelText('What needs more detail? (optional)') as HTMLTextAreaElement).value,
   ).toBe('')
-  expect(screen.getByRole('button', { name: 'Ask follow-up' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Generate follow-ups' }).hasAttribute('disabled')).toBe(
+    true,
+  )
   await act(async () => {
     reject(new Error('missing mindmap category: q1'))
   })
@@ -276,20 +323,19 @@ test('submitted history states submission and keeps all answer/follow-up mutatio
     screen.getByText('This round was submitted. Confirmed answers are available to read.'),
   ).toBeTruthy()
   select('Main decision')
-  expect(screen.queryByRole('button', { name: 'Deepen this question' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Confirm this answer' })).toBeNull()
+  expectNoWriteEntry()
   expect((screen.getByLabelText(/Create another booking/) as HTMLInputElement).disabled).toBe(true)
 })
 
 test('filtering out a selected question and collapsing its ancestor retain a keyboard entry point', () => {
   renderFocused(<Harness />)
   select('Idempotency retention')
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search categories or questions' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: SEARCH }), {
     target: { value: 'Main decision' },
   })
   expect(screen.getByRole('option', { name: /Main decision/ }).tabIndex).toBe(0)
   expect(screen.getByRole('heading', { name: 'Idempotency retention' })).toBeTruthy()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search categories or questions' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: SEARCH }), {
     target: { value: '' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Collapse children Main decision' }))
@@ -309,14 +355,15 @@ test('returning to a question with its follow-up expanded starts at the title, n
   try {
     const { container } = renderFocused(<Harness />)
     select('Main decision')
-    fireEvent.click(screen.getByRole('button', { name: 'Deepen this question' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Write my own…' }))
     const reading = container.querySelector('.mindmap-question__reading')!
     expect(reading.scrollTop).toBe(450)
     select('Network timeout recovery')
     select('Main decision')
-    expect(
-      screen.getByRole('button', { name: 'Deepen this question' }).getAttribute('aria-expanded'),
-    ).toBe('true')
+    // RFC-490: there is no toggle to read `aria-expanded` from any more; the form
+    // itself being back, under its own heading, is what "still expanded" means.
+    expect(screen.getByRole('heading', { name: 'Follow up on Q1' })).toBeTruthy()
+    expect(screen.getByLabelText('What needs more detail? (optional)')).toBeTruthy()
     expect(reading.scrollTop).toBe(0)
   } finally {
     rect.mockRestore()
@@ -358,34 +405,55 @@ test('centralized answers already sealed in an awaiting round do not advertise a
     screen.queryByText('This round was submitted. Confirmed answers are available to read.'),
   ).toBeNull()
   select('Main decision')
-  expect(screen.queryByRole('button', { name: 'Confirm this answer' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Deepen this question' })).toBeNull()
+  expectNoWriteEntry()
 })
 
-test('panorama opens a modal, retains edits on Escape, restores focus and shares answers with focus view', async () => {
-  render(<Harness />)
+// RFC-490 (C1) replaces "panorama opens a modal": a node now opens in a panel that
+// shares the stage with the canvas. What this case protected is unchanged — edits and
+// the follow-up direction survive closing with Escape, the keyboard goes back to where
+// it came from, and the focused view reads the same answers — and it now also holds
+// that the reader is not modal.
+test('panorama opens a panel beside the map, retains edits on Escape, restores focus and shares answers with focus view', async () => {
+  const { container } = render(<Harness />)
   const row = screen.getByRole('treeitem', { name: /Main decision/ })
   fireEvent.keyDown(row, { key: 'ArrowDown' })
-  expect(screen.queryByRole('dialog')).toBeNull()
+  noPane()
   row.focus()
   fireEvent.keyDown(row, { key: 'Enter' })
-  const dialog = screen.getByRole('dialog')
-  expect(dialog.getAttribute('aria-modal')).toBe('true')
-  fireEvent.click(within(dialog).getByLabelText(/Create another booking/))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Deepen this question' }))
-  fireEvent.change(within(dialog).getByLabelText('What needs more detail? (optional)'), {
+  const panel = pane()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(panel.hasAttribute('aria-modal')).toBe(false)
+  // The map is still there: same stage, shared with the panel, nothing hidden.
+  const panes = container.querySelector('.mindmap-workspace__panes')!
+  expect(panes.getAttribute('data-split')).toBe('side')
+  expect(panes.contains(panel)).toBe(true)
+  expect(panes.contains(screen.getByRole('img', { name: 'Test map' }))).toBe(true)
+  expect(container.querySelector('.mindmap-workspace__map')!.hasAttribute('hidden')).toBe(false)
+  // Opening from the outline leaves the keyboard on the row.
+  expect(document.activeElement).toBe(row)
+  fireEvent.click(within(panel).getByLabelText(/Create another booking/))
+  fireEvent.click(within(panel).getByRole('button', { name: 'Write my own…' }))
+  fireEvent.change(within(panel).getByLabelText('What needs more detail? (optional)'), {
     target: { value: 'Keep this instruction' },
   })
-  fireEvent.keyDown(window, { key: 'Escape' })
-  expect(screen.queryByRole('dialog')).toBeNull()
+  // Escape is no longer caught on `window` by a dialog. From inside the panel it
+  // closes the panel and hands the keyboard back to the row that opened it.
+  const form = panel.querySelector<HTMLElement>('.clarify-question')!
+  form.focus()
+  expect(document.activeElement).toBe(form)
+  fireEvent.keyDown(form, { key: 'Escape' })
+  noPane()
   expect(document.activeElement).toBe(row)
   select('Main decision')
   expect((screen.getByLabelText(/Create another booking/) as HTMLInputElement).checked).toBe(true)
   expect(screen.getByDisplayValue('Keep this instruction')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Open in focused answers' }))
-  expect(screen.queryByRole('dialog')).toBeNull()
+  // The focused view is the same reader without the split.
+  expect(panes.hasAttribute('data-split')).toBe(false)
+  expect(container.querySelector('.mindmap-workspace__map')!.hasAttribute('hidden')).toBe(true)
   expect(screen.getAllByRole('heading', { name: 'Main decision' })).toHaveLength(1)
   expect((screen.getByLabelText(/Create another booking/) as HTMLInputElement).checked).toBe(true)
+  expect(screen.getByDisplayValue('Keep this instruction')).toBeTruthy()
 })
 
 test('category guidance sends a category target, can close while generating and cancel on return', async () => {
@@ -402,33 +470,36 @@ test('category guidance sends a category target, can close while generating and 
   render(<Harness followup={followup} cancel={cancel} />)
   const category = screen.getByRole('treeitem', { name: /^Data consistency/ })
   fireEvent.click(category)
-  const dialog = screen.getByRole('dialog')
-  fireEvent.change(within(dialog).getByLabelText('What else should AI consider? (optional)'), {
+  fireEvent.change(within(pane()).getByLabelText('What else should AI consider? (optional)'), {
     target: { value: 'Also consider database performance' },
   })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Add questions in this direction' }))
+  // RFC-490: the category submit reads "Generate questions".
+  fireEvent.click(within(pane()).getByRole('button', { name: 'Generate questions' }))
   expect(followup).toHaveBeenCalledWith(['Data consistency'], 'Also consider database performance')
-  fireEvent.keyDown(window, { key: 'Escape' })
+  // Closing the reader (Escape inside the workspace; it used to be the dialog's
+  // Escape on `window`) leaves the generation running.
+  fireEvent.keyDown(within(pane()).getByRole('heading', { name: 'Data consistency' }), {
+    key: 'Escape',
+  })
+  noPane()
   expect(cancel).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'View generating branch' }))
-  expect(screen.getByDisplayValue('Also consider database performance')).toBeTruthy()
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Concurrency/ }))
-  expect(
-    within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel follow-up' }),
-  ).toBeTruthy()
+  expect(within(pane()).getByDisplayValue('Also consider database performance')).toBeTruthy()
+  // RFC-490: the generating branch offers the cancel inside its own form. From any
+  // other branch it is the one in the workspace's progress row, which a side panel
+  // no longer covers (the modal had to repeat it in its toolbar).
+  expect(within(pane()).getByRole('button', { name: 'Cancel follow-up' })).toBeTruthy()
+  fireEvent.click(within(pane()).getByRole('button', { name: /^Concurrency/ }))
+  expect(within(pane()).getByRole('heading', { name: 'Concurrency' })).toBeTruthy()
+  expect(within(pane()).queryByRole('button', { name: 'Cancel follow-up' })).toBeNull()
   await act(async () => {
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel follow-up' }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel follow-up' }))
   })
   expect(cancel).toHaveBeenCalledOnce()
-  fireEvent.keyDown(window, { key: 'Escape' })
+  // No modal to leave first: the outline is reachable with the panel open.
   fireEvent.click(screen.getByRole('button', { name: 'Question outline' }))
-  fireEvent.click(
-    within(screen.getByRole('dialog')).getByRole('button', {
-      name: 'Add questions in this direction',
-    }),
-  )
+  expect(within(pane()).getByRole('heading', { name: 'Room booking' })).toBeTruthy()
+  fireEvent.click(within(pane()).getByRole('button', { name: 'Generate questions' }))
   expect(followup).toHaveBeenLastCalledWith([], '')
   await act(async () => {
     resolve()
@@ -436,27 +507,40 @@ test('category guidance sends a category target, can close while generating and 
 })
 
 test('sealed category and submitted history do not expose category generation', () => {
-  render(<Harness sealed />)
-  fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
-  expect(screen.queryByRole('button', { name: 'Add questions in this direction' })).toBeNull()
+  for (const props of [{ sealed: true }, { status: 'answered' }]) {
+    const { unmount } = render(<Harness {...props} />)
+    fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
+    // The branch is open and readable; only the way to add to it is missing.
+    expect(within(pane()).getByRole('heading', { name: 'Data consistency' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Generate questions' })).toBeNull()
+    expect(screen.queryByLabelText('What else should AI consider? (optional)')).toBeNull()
+    unmount()
+  }
 })
 
-// RFC-372 review follow-up O6: "Guide questions in this branch" names a dialog that
+// RFC-372 review follow-up O6: "Guide questions in this branch" names a surface that
 // can still guide; a sealed branch or submitted round is only read under its own name.
-test('category dialogs are named by the guidance they offer, or by the branch when read-only', () => {
+// RFC-490: that surface was the modal's title. The panel is always the region "Answer
+// and confirm", so the same rule is now carried by its headings: the branch name heads
+// the panel, and the guidance heading appears only where guidance can be given.
+test('a category panel is headed by its branch, and by the guidance it offers only while it can guide', () => {
   const { unmount } = render(<Harness />)
   fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
-  expect(screen.getByRole('dialog', { name: 'Guide questions in this branch' })).toBeTruthy()
+  expect(within(pane()).getByRole('heading', { name: 'Data consistency' })).toBeTruthy()
+  expect(
+    within(pane()).getByRole('heading', { name: 'Guide questions in this branch' }),
+  ).toBeTruthy()
   unmount()
 
   for (const props of [{ sealed: true }, { status: 'answered' }]) {
     const { unmount: close } = render(<Harness {...props} />)
     fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
-    expect(screen.getByRole('dialog', { name: 'Data consistency' })).toBeTruthy()
-    expect(screen.queryByRole('dialog', { name: 'Guide questions in this branch' })).toBeNull()
-    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(within(pane()).getByRole('heading', { name: 'Data consistency' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Guide questions in this branch' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Question outline' }))
-    expect(screen.getByRole('dialog', { name: 'Room booking' })).toBeTruthy()
+    expect(within(pane()).getByRole('heading', { name: 'Room booking' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Data consistency' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Guide questions in this branch' })).toBeNull()
     close()
   }
 })

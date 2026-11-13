@@ -56,17 +56,30 @@ async function waitRound(taskId: string, kind: Round['kind']): Promise<Round> {
     .toBe(true)
   return api(`/api/clarify/${selected!.intermediaryNodeRunId}`)
 }
-const detail = (page: Page) => page.locator('.mindmap-workspace__detail')
+// RFC-490: the reading pane is a region of the workspace — the panel beside (or in place
+// of) the canvas in the panorama, the whole stage in the focused view. Never a modal.
+const detail = (page: Page) => page.getByRole('region', { name: 'Answer and confirm', exact: true })
+const search = (page: Page) =>
+  page.getByRole('textbox', { name: 'Search categories, questions, options or answers' })
+/** The follow-up direction of the open question; its form is opened from the "Follow up:" row. */
+const direction = (page: Page) =>
+  detail(page).getByRole('textbox', { name: 'What needs more detail? (optional)' })
+const generate = (page: Page) =>
+  detail(page).getByRole('button', { name: 'Generate follow-ups', exact: true })
+async function openFollowupForm(page: Page) {
+  if (await direction(page).isVisible()) return
+  await detail(page).getByRole('button', { name: 'Write my own…', exact: true }).click()
+  await expect(direction(page)).toBeVisible()
+}
 async function select(page: Page, title: string) {
-  if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape')
   await page
     .getByRole('treeitem', { name: new RegExp(title) })
     .or(page.getByRole('option', { name: new RegExp(title) }))
     .first()
     .click()
   await expect(detail(page).getByRole('heading', { name: title, exact: true })).toBeVisible()
-  if (await page.getByRole('dialog').isVisible())
-    await page.getByRole('button', { name: 'Open in focused answers' }).click()
+  // Selecting never raises a dialog: the question is read and answered in the panel.
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 }
 async function answer(page: Page, title: string, options: string[], custom?: string) {
   await select(page, title)
@@ -80,10 +93,9 @@ async function answer(page: Page, title: string, options: string[], custom?: str
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
 }
 async function followup(page: Page, hint: string, title: string) {
-  const deepen = page.getByRole('button', { name: 'Deepen this question', exact: true })
-  if ((await deepen.getAttribute('aria-expanded')) !== 'true') await deepen.click()
-  await detail(page).getByRole('textbox').last().fill(hint)
-  await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
+  await openFollowupForm(page)
+  await direction(page).fill(hint)
+  await generate(page).click()
   await expect(
     page
       .getByRole('treeitem', { name: new RegExp(title) })
@@ -282,11 +294,17 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
     page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
   ).toHaveCount(0)
   await answer(page, '首期服务哪些预约场景？', ['会议室和工位预约'])
-  await detail(page).locator('summary').filter({ hasText: 'Decision context' }).click()
+  // RFC-490 (C13): the rationale and the maturity sit right under the answer, with nothing
+  // to unfold first; the remaining notes open by themselves for a provisional choice.
+  await expect(detail(page).locator('summary').filter({ hasText: 'Decision context' })).toHaveCount(
+    0,
+  )
+  await expect(detail(page).getByLabel('Accepted tradeoff', { exact: true })).toBeHidden()
   await detail(page).getByRole('radio', { name: 'Provisional', exact: true }).click()
   await detail(page)
-    .getByLabel('My rationale', { exact: true })
+    .getByLabel('My rationale (optional)', { exact: true })
     .fill('没有冲突与爽约基线，先观察。')
+  await expect(detail(page).getByLabel('Accepted tradeoff', { exact: true })).toBeVisible()
   await detail(page)
     .getByLabel('Accepted tradeoff', { exact: true })
     .fill('接受首周可能出现的临时协调成本。')
@@ -328,10 +346,18 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
     page.waitForResponse(
       (response) => response.request().method() === 'POST' && response.url().endsWith('/followup'),
     )
-  await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
-  await detail(page).getByRole('textbox').last().fill('验证取消恢复')
+  // RFC-490: follow-ups have one name and one row of entries under the question.
+  await expect(
+    page.getByRole('button', { name: /Deepen this question|Ask follow-up/ }),
+  ).toHaveCount(0)
+  await expect(detail(page).getByText('Follow up:', { exact: true })).toBeVisible()
+  await openFollowupForm(page)
+  await expect(
+    detail(page).getByRole('heading', { name: 'Follow up on Q2', exact: true }),
+  ).toBeVisible()
+  await direction(page).fill('验证取消恢复')
   const generating = accepted()
-  await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
+  await generate(page).click()
   expect((await generating).status()).toBe(202)
   await expect
     .poll(() => runtimeEvents().some((event) => event.request?.userRequest === '验证取消恢复'), {
@@ -340,33 +366,42 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
     .toBe(true)
   expect((await followupState())?.state).toBe('running')
   // A refresh keeps the generation: the round reports it, its branch and its cancel.
+  // RFC-490: the branch opens in the panel, which is not a modal, so the workspace's
+  // progress row — and the cancel in it — stays in reach beside the branch.
   await page.reload()
-  await expect(page.locator('.mindmap-workspace__progress')).toContainText('Generating questions')
+  const progress = page.locator('.mindmap-workspace__progress')
+  await expect(progress).toContainText('Generating questions')
   await page.getByRole('button', { name: 'View generating branch', exact: true }).click()
-  const generatingBranch = page.getByRole('dialog')
+  const generatingBranch = detail(page)
   await expect(
     generatingBranch.getByRole('heading', { name: '预约数据采用哪种一致性？', exact: true }),
   ).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(generatingBranch.getByRole('status')).toContainText('Generating questions')
   const canceled = page.waitForResponse(
     (response) => response.request().method() === 'DELETE' && response.url().includes('/followup/'),
   )
-  await generatingBranch.getByRole('button', { name: 'Cancel follow-up', exact: true }).click()
+  await progress.getByRole('button', { name: 'Cancel follow-up', exact: true }).click()
   expect((await canceled).ok()).toBe(true)
   await expect
     .poll(async () => (await followupState())?.error?.code)
     .toBe('clarify-followup-canceled')
   await select(page, '预约数据采用哪种一致性？')
-  await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Ask follow-up', exact: true })).toBeEnabled()
+  await openFollowupForm(page)
+  await expect(generate(page)).toBeEnabled()
   expect((await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).questions).toHaveLength(3)
-  await detail(page).getByRole('textbox').last().fill('验证失败重试')
+  await direction(page).fill('验证失败重试')
   const failing = accepted()
-  await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
+  await generate(page).click()
   expect((await failing).status()).toBe(202)
   await expect
     .poll(async () => (await followupState())?.error?.code, { timeout: 30_000 })
     .toBe('clarify-followup-invalid')
   await expect(page.getByRole('alert').last()).toContainText('Existing answers are kept')
+  // The failed request can be sent again as it was, under the one name follow-ups have.
+  await expect(
+    detail(page).getByRole('button', { name: 'Generate again', exact: true }),
+  ).toBeEnabled()
   await followup(page, '深入并发预约与冲突恢复', '并发预约如何裁决？')
   let expanded = await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)
   expect(expanded.iteration).toBe(self.iteration)
@@ -380,14 +415,20 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
     detail(page).locator('.mindmap-question__eyebrow .mindmap-status--done'),
   ).toBeVisible()
   await expect(detail(page).getByText('2 child questions pending', { exact: true })).toBeVisible()
+  // RFC-490: the parent itself lists the questions that were asked from it.
+  await expect(
+    detail(page).getByRole('heading', { name: 'Follow-up questions (2)', exact: true }),
+  ).toBeVisible()
   await expect(
     page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
   ).toHaveCount(0)
-  await page
-    .getByRole('textbox', { name: 'Search categories or questions' })
-    .fill('并发预约如何裁决')
+  await search(page).fill('并发预约如何裁决')
   await select(page, '并发预约如何裁决？')
-  await page.getByRole('textbox', { name: 'Search categories or questions' }).fill('')
+  await search(page).fill('')
+  // A follow-up says which question it was asked from, and my answer to that one.
+  const origin = detail(page).getByRole('complementary', { name: 'Where this question came from' })
+  await expect(origin).toContainText('Follow-up to Q2 · 预约数据采用哪种一致性？')
+  await expect(origin).toContainText('Your answer: 事务强一致')
   await answer(page, '并发预约如何裁决？', ['先提交者成功'])
   await followup(page, '深入重复提交的幂等性', '重复提交如何识别？')
   await answer(page, '重复提交如何识别？', ['幂等请求键'])
@@ -407,7 +448,11 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await page.reload()
   await select(page, '首期服务哪些预约场景？')
   await expect(detail(page).getByLabel('仅会议室预约', { exact: false })).toBeChecked()
-  await detail(page).locator('summary').filter({ hasText: 'Decision context' }).click()
+  // RFC-490 (C13): the rationale is restored in view under the answer, and a provisional
+  // decision comes back with its remaining notes already open — nothing to unfold.
+  await expect(
+    detail(page).getByRole('textbox', { name: 'My rationale (optional)', exact: true }),
+  ).toHaveValue('没有冲突与爽约基线，先观察。')
   // The restored textarea has its initial value in textContent. The implicit
   // label text query includes it; the textbox accessible name remains the
   // visible field label (as confirmed by the failed run's ARIA snapshot).

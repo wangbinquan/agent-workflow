@@ -225,14 +225,13 @@ const OVERLAY_CALLSITES = {
     family: 'review-and-clarify',
     count: 1,
   },
-  // RFC-372: the panorama question dialog shares the focused workspace state.
-  // rfc372-workspace-ux owns close/reopen and pending-request behavior;
-  // e2e/rfc372-recorded-mindmap owns responsive sizing, focus and long content.
-  'components/clarify/mindmap/MindmapWorkspace.tsx': {
-    family: 'review-and-clarify',
-    count: 1,
-  },
+  // RFC-490: `components/clarify/mindmap/MindmapWorkspace.tsx` left this inventory.
+  // The panorama reader is a panel beside the canvas (a named <section>, no overlay,
+  // no scroll lock, no focus trap), so the workspace renders no shared Dialog any
+  // more; rfc490-workspace-panel and rfc372-workspace-ux own its open/close, focus
+  // and Escape behavior.
   // RFC-378: route and decision tests own locate/edit, blocking and single-submit.
+  // RFC-490: rfc490-decision-review owns its summary, filter, grouping and readonly form.
   'components/clarify/mindmap/DecisionReviewDialog.tsx': {
     family: 'review-and-clarify',
     count: 1,

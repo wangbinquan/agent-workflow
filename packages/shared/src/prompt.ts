@@ -1076,13 +1076,14 @@ ${clarifyOpenTag(nonce)}
 export const CLARIFY_FORMAT_EXAMPLE = clarifyFormatExample()
 
 /** RFC-023 — the structural clarify rules shared by both directive modes
- *  (question/option caps, labels, legacy form, Q&A echo semantics). */
+ *  (question/option caps, labels, legacy form, Q&A echo semantics).
+ *  RFC-490 — the mindmap branch ends with how to read the two skip statuses. */
 function buildClarifyStructuralRules(mindmap = false): string {
   return `- Limits: at most 5 questions, each question 2–4 options — any option beyond the 4th is silently dropped, so cap each question at 4. Do NOT add a "free text / other" option — the framework appends a user-input row automatically.
 - Each option needs a non-empty "label". The other three fields are optional but strongly recommended: "description" (always render an explanation of what picking this option means), and — when "recommended" is true — "recommendationReason" (why this is your pick).
 - Mark at most a couple of options across the whole envelope as "recommended": true. Recommended options sort to the top of the picker for the user.
 - Legacy form is also accepted: \`"options": ["a", "b", "c"]\` — strings are lifted into \`{label, description:"", recommended:false, recommendationReason:""}\`. Prefer the structured form for new emissions.
-- Once the user submits answers, you will receive every question answered so far in the next prompt under "## Clarify Q&A" — a single flat list where each question is an equal peer with the user's answer (a deterministic synthesis line). ${mindmap ? 'Respect each current user choice and its explicit decision maturity. Confirmed answers may still be provisional or unmarked; do not treat them as settled or validated facts. Follow up on unresolved evidence or consequences without silently changing the user choice.' : 'Treat every listed answer as an already-resolved decision.'}`
+- Once the user submits answers, you will receive every question answered so far in the next prompt under "## Clarify Q&A" — a single flat list where each question is an equal peer with the user's answer (a deterministic synthesis line). ${mindmap ? 'Respect each current user choice and its explicit decision maturity. Confirmed answers may still be provisional or unmarked; do not treat them as settled or validated facts. Follow up on unresolved evidence or consequences without silently changing the user choice. A question answered as not applicable is closed: never ask it again; a deferred question stays open and is not yet decided.' : 'Treat every listed answer as an already-resolved decision.'}`
 }
 
 export const CLARIFY_STRUCTURAL_RULES = buildClarifyStructuralRules()

@@ -65,6 +65,9 @@ export interface TaskQuestionEntry {
    *  (Codex design gate F3). */
   sealed: boolean
   answerSummary: string | null
+  /** RFC-490 — the sealed answer is a deliberate skip, not a choice. `answerSummary` is
+   *  then the note the user left with it, if any. */
+  answerSkip?: 'deferred' | 'not-applicable'
 }
 
 export interface TaskQuestionListProps {
@@ -484,8 +487,14 @@ export function TaskQuestionList({
                       )}
                     </div>
                     {/* RFC-120 lock: 答案紧贴问题、排在 meta 之前（节点信息不得插在问与答之间）。 */}
-                    {rep.answerSummary && (
-                      <div className="task-questions__answer">{rep.answerSummary}</div>
+                    {(rep.answerSkip || rep.answerSummary) && (
+                      <div className="task-questions__answer" data-answer-skip={rep.answerSkip}>
+                        {rep.answerSkip
+                          ? [t(`mindmap.decision.${rep.answerSkip}`), rep.answerSummary]
+                              .filter(Boolean)
+                              .join(' · ')
+                          : rep.answerSummary}
+                      </div>
                     )}
                     {/* RFC-163 — 分组卡的处理节点行：提问节点（自己续跑）+ 增派的修订 handler。
                         改派＝下方 Select 增/删/改这里的行，卡数不变。 */}

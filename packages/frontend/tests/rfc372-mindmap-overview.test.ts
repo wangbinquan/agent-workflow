@@ -52,9 +52,24 @@ test('overview keeps each nested category readable and selectable at 40%', () =>
       status: { done: '#080', needs_detail: '#880', needs_confirmation: '#08c' },
     },
   })
-  expect(fillText.mock.calls.map((call) => call[0])).toEqual(
-    expect.arrayContaining(['设计', '性能', '数据库', '慢查询', '查询策略']),
+  const drawn = fillText.mock.calls as [string, number, number][]
+  // Every category of the chain keeps its whole name.
+  expect(drawn.map((call) => call[0])).toEqual(
+    expect.arrayContaining(['设计', '性能', '数据库', '慢查询']),
   )
+  // RFC-490: a question's overview label leads with its number, drawn on its own; the
+  // title follows on the same line in whatever room is left. This fake font charges
+  // 12 px for every character, the Latin "Q1 " included, so nothing but the ellipsis of
+  // 查询策略 fits: the number, not a cut-off title, is what identifies the card here.
+  // (Before RFC-490 the label was the bare title, and this asserted 查询策略 in full.)
+  const number = drawn.findIndex((call) => call[0] === 'Q1 ')
+  expect(number).toBeGreaterThanOrEqual(0)
+  const [prefix, prefixX, prefixY] = drawn[number]!
+  const [title, titleX, titleY] = drawn[number + 1]!
+  expect(title).toBe('…')
+  expect(titleY).toBe(prefixY)
+  expect(titleX).toBe(prefixX + [...prefix].length * 12)
+  expect(drawn.filter((call) => call[0].startsWith('Q'))).toHaveLength(1)
   for (const node of layout.nodes) {
     expect(hitMindmap(result.hits, 400 + node.x * 0.4, 100 + node.y * 0.4)).toBe(node.id)
   }
