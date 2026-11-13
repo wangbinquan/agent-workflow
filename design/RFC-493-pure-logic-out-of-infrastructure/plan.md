@@ -21,7 +21,8 @@
 - [x] AC-1 清单里每一项只在新的 domain 文件声明一次；旧位置不声明、不转出（含 `findAllOccurrences`）；没有文件从旧位置取
 - [x] AC-2 同样输入下校验、锚点规范化、决定策略与轮次分组的结果与此前一致
 - [x] AC-3 新文件不取 infrastructure、IO 包与进程全局；跨 context 边、public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`489b30bf6` 主 CI run 43508101368 的 70 个 job 全部通过，同一推送按路径触发的
+      windows-platform 与 visual-regression-nightly 通过（见 §CI）
 
 ## 集中验证（2026-11-13，候选 1～3）
 
@@ -89,6 +90,15 @@ CI 补记，改了 `STATE.md`、RFC-490 的 plan 与 `docs/audit-backlog.md`）�
   `windows-platform.yml` 的路径过滤登记着 `review.ts`，那一组是人工门生命周期的两条用例（`rfc333-human-gate-source-locks`、
   `rfc359-w4-d25-adapters`），读的是留在 `review.ts` 的门代码；迁出的纯规则与 Windows 无关，不加新文件。`design/` 里指向两个旧文件的
   markdown 链接文件仍在，链接有效。
+
+## CI（AC-4）
+
+- `489b30bf6`（实现，父提交是另一会话只改文档的 `2f65372c8`）：exact SHA 主 CI run 43508101368 的 70 个 job 全部通过。同一推送按路径触发的
+  windows-platform run 43508101508（本 RFC 改了它路径过滤里登记的 `review.ts`，Windows 上跑人工门生命周期的两条用例）与
+  visual-regression-nightly run 43508101206 也通过。
+- 本 RFC 的落档提交 `e9d2400cd`（只改文档）：主 CI run 43473583663 里 Playwright e2e（macos-latest shard 3/4）没分到 runner 被取消（GitHub 注记
+  「The job was not acquired by Runner of type hosted even after multiple attempts」，macOS arm64 容量受限，一步都没跑），「CI required」随之红，
+  其余 job 通过；不归本 RFC，后继 `489b30bf6` 的主 CI 全部通过。
 
 ## 实现门（本会话自审，只审功能）
 

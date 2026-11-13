@@ -1,4 +1,4 @@
-## 2026-11-13 RFC-493 纯逻辑归位：工作流静态校验与评审的锚点、决定策略迁出 infrastructure（In Progress；`design/RFC-493-pure-logic-out-of-infrastructure/`）
+## 2026-11-13 RFC-493 纯逻辑归位：工作流静态校验与评审的锚点、决定策略迁出 infrastructure（Done；`design/RFC-493-pure-logic-out-of-infrastructure/`）
 
 - **来由**：RFC-294 plan §3 S13 与 proposal D14——不做 IO 的规则 / 校验 / 策略从 infrastructure 整块迁到 domain；清单必含 resource-catalog
   `infrastructure/legacy/workflow.validator.ts` 的 `validateWorkflowDef` 与 collaboration `infrastructure/review.ts` 的决定策略表、锚点规范化。
@@ -28,9 +28,12 @@
   文件 2,925 个通过，其余 12 个：本 RFC 的 1 个已修，发布账本 1 个是导出仓库没有历史，10 个撞自带时限或检查点，与对照 A/B 同形；
   `rfc363-preparation-process-recovery` 候选两次红在不同阶段、两边各跑 3 轮全过；三个报告类用例只放宽时限的副本在候选 3 上全过。架构报告
   60 项与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **下一步**：推送后按 exact SHA 跟 CI，再转 Done（RFC-294 plan §1.2 增 S13 一行、§3 S13 记关闭）。之后按刷新后的后继顺序做 S10、S12；S9
-  余下的其他 context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 16 个后继（另一
-  条件是满 20 个）。
+- **落地**：`489b30bf6`（79 个文件；父提交是另一会话只改文档的 `2f65372c8`）。
+- **CI**：`489b30bf6` 主 CI run 43508101368 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43508101508 与
+  visual-regression-nightly run 43508101206 通过。落档提交 `e9d2400cd`：主 CI run 43473583663 里 macOS e2e 3/4 没分到 runner 被取消（容量受限，
+  一步都没跑），「CI required」随之红，其余通过；不归本 RFC，后继 `489b30bf6` 全绿。
+- **下一步**：RFC-294 S13 已关闭（plan §1.2 增一行、§3 S13 记后继）。按刷新后的后继顺序做 S10、S12；S9 余下的其他 context 对按对另立；成员表
+  一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 17 个后继（另一条件是满 20 个）。
 
 ## 2026-11-13 RFC-492 运行时驱动一族整族迁入 runtime-management infrastructure（Done；`design/RFC-492-runtime-driver-family-into-runtime-management/`）
 
