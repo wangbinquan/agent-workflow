@@ -1,3 +1,17 @@
+## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码归 domain（In Progress；`design/RFC-494-development-employee-type-package-into-domain/`）
+
+- **来由**：RFC-294 plan §3 S10（`composition/` 只装配：全模块收口）——development-automation 的 composition 最重（32 个文件、1.53 万行，组合层
+  控制流实测 660），plan 写明可单独立 RFC 先做；其中最大的 `employeeTypePackage.ts`（5,478 行）几乎全是开发员工类型包的合同与编解码（10-16 review
+  F1 已点名）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前
+  RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`employeeTypePackage.ts` 除登记对象 `developmentEmployeeTypePackage` 以外的内容原样迁入 `domain/employeeTypePackage.ts`；它依赖的
+  三个纯文件（工具合同登记改名 `domain/digitalEmployeeToolContractRegistrationsV2.ts`、工具结果投影由 application 迁入、旧程序升级）一起迁入
+  domain；composition 只留登记对象；原位置不留转出。清单见 design §3。
+- **不做**：development-automation composition 的其余文件（S10 后继步骤）与其他模块；S10 的全模块门与各模块上限（S10 收口时定）；拆分合同文件；
+  任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 17 个后继（另一条件是满 20 个）。
+
 ## 2026-11-13 RFC-493 纯逻辑归位：工作流静态校验与评审的锚点、决定策略迁出 infrastructure（Done；`design/RFC-493-pure-logic-out-of-infrastructure/`）
 
 - **来由**：RFC-294 plan §3 S13 与 proposal D14——不做 IO 的规则 / 校验 / 策略从 infrastructure 整块迁到 domain；清单必含 resource-catalog
@@ -32,6 +46,7 @@
 - **CI**：`489b30bf6` 主 CI run 43508101368 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43508101508 与
   visual-regression-nightly run 43508101206 通过。落档提交 `e9d2400cd`：主 CI run 43473583663 里 macOS e2e 3/4 没分到 runner 被取消（容量受限，
   一步都没跑），「CI required」随之红，其余通过；不归本 RFC，后继 `489b30bf6` 全绿。
+  转 Done 的提交 `4df065e73`（只改文档）：主 CI run 43513615533 的 70 个 job 全部通过。
 - **下一步**：RFC-294 S13 已关闭（plan §1.2 增一行、§3 S13 记后继）。按刷新后的后继顺序做 S10、S12；S9 余下的其他 context 对按对另立；成员表
   一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 17 个后继（另一条件是满 20 个）。
 
