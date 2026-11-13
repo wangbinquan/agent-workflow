@@ -22,7 +22,8 @@
       探测夹具缝）
 - [x] AC-3 跨 context 内部文件对 22 → 21；R1 18 → 9；不可达生产文件 18 → 16；越 DAG 的值边与 offered 文件对不升；public 类型污染不升；
       减速带不升、触及的收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`18189b794` 主 CI run 43401605475 的 70 个 job 全部通过，同一推送按路径触发的
+      windows-platform、integration-opencode 与 maintenance-soak-nightly 通过（见 §CI）
 
 ## 集中验证（2026-11-12～13，候选 1～5 基于 `33661e100`，最终候选基于 `aff2c86e3`）
 
@@ -139,6 +140,21 @@ shared 的澄清 schema 等）与本 RFC 的路径无交集，也不引用本 RF
   - HEAD 随后前进到只改文档的 `cf948fd5c`、`65e57fab7`。导出仓库同步为 `65e57fab7` 加 146 个候选路径（0 处不符）后，按同样跑法重跑
     文档对账用例（`docs-implementation-parity`、`rfc-index-status-drift`、`test-suite-policy`、`rfc294-design-parity`）与本 RFC 用例，
     全过。
+
+## CI（AC-4）
+
+- `18189b794`（实现，父提交是另一会话只改文档的 `65e57fab7`）：exact SHA 主 CI run 43401605475 的 70 个 job 全部通过。同一推送按
+  路径触发的三个 run 也通过：
+  - windows-platform run 43401605446（`Windows platform surface`）：本 RFC 改了两份路径过滤登记的位置。这个 job 在 Windows 上跑的用例
+    里，`rfc370-system-agent-family`、`rfc370-task-agent-native-compatibility`、`rfc238-mcp-runtime-test-service` 读本 RFC 迁动的本机
+    系统代理运行、本机兼容运行与 MCP 诊断的本机执行体。
+  - integration-opencode run 43401605420（`opencode latest (ubuntu)`、`opencode 1.18.3 (ubuntu)`）：本 RFC 改了它的路径过滤（两个本机
+    任务运行文件迁入 `tests/helpers/`、插件加载失败识别迁入 runtime-management）。两个 job 各 15 条：5 条门控用例通过，10 条要调
+    真实 opencode 的用例因为 run 里没有模型凭据按门控跳过（与 RFC-489 时相同）。所以它只说明门控用例过了，不算真实 opencode 的
+    运行证据；本机任务运行的行为由集中验证里的契约用例覆盖。
+  - maintenance-soak-nightly run 43401605543（`Maintenance large-seed gate`）：按 `bootstrap/daemonApplication.ts` 的路径过滤触发（本
+    RFC 只改了那里两个类型的出处）。
+- 本 RFC 的落档提交 `33661e100`（只改文档）：exact SHA 主 CI run 43360935953 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
 

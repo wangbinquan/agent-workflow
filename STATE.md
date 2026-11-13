@@ -1,4 +1,4 @@
-## 2026-11-12 RFC-491 task-execution 与运行时驱动一族互不 import（In Progress；`design/RFC-491-te-runtime-family-decoupling/`）
+## 2026-11-12 RFC-491 task-execution 与运行时驱动一族互不 import（Done；`design/RFC-491-te-runtime-family-decoupling/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族整族迁入 runtime-management 之前，先让一族之外只剩 runtime-management 与 bootstrap 用它。
   RFC-487～RFC-489 之后，task-execution 还有 16 个生产文件直接 import 一族，一族里的 `services/systemAgentRun.ts`、
@@ -46,9 +46,15 @@
   与 HEAD 284 条通过、逐文件同形。按 CI 的跑法（默认 5 秒）跑 86 个相关文件，1,458 条里 1,371 条通过，红的 87 条都在 PostgreSQL 一侧，
   与 HEAD 同时 A/B 形状相同（HEAD 1,439 条里 1,351 条）。架构报告 60 项实测都在 `max` 内（触及的 5 项已收紧），在 `aff2c86e3` 上重采
   变化逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`18189b794`（146 个文件；父提交是另一会话只改文档的 `65e57fab7`）。
+- **CI**：`18189b794`：exact SHA 主 CI run 43401605475 的 70 个 job 全部通过。同一推送按路径触发的三个 run 通过：windows-platform run
+  43401605446（Windows 上跑过读本 RFC 迁动文件的系统代理运行、本机兼容运行与 MCP 诊断契约用例）、maintenance-soak-nightly run
+  43401605543（本 RFC 在 `bootstrap/daemonApplication.ts` 只改了两个类型的出处）；integration-opencode run 43401605420 通过，但两个 job 各
+  15 条里只有 5 条门控用例真跑，10 条要调真实 opencode 的用例因为 run 里没有模型凭据按门控跳过，不算真实 opencode 的证据。落档提交
+  `33661e100`：主 CI run 43360935953 的 70 个 job 全部通过。
 - **下一步**（运行时驱动一族，RFC-294 plan §4.7）：整族迁入 runtime-management infrastructure（另立）——一族之外只剩
   runtime-management 与 bootstrap 用它。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的其他 context 对按对另立；成员表一族另立。
-  独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 14 个后继（另一条件是满 20 个）。
+  独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 15 个后继（另一条件是满 20 个）。
 
 ## 2026-11-12 RFC-490 脑图澄清的思考引导与全景交互重整（Done；`design/RFC-490-mindmap-guided-thinking-and-panorama/`）
 
