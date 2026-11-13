@@ -1,3 +1,20 @@
+## 2026-11-13 RFC-492 运行时驱动一族整族迁入 runtime-management infrastructure（In Progress；`design/RFC-492-runtime-driver-family-into-runtime-management/`）
+
+- **来由**：RFC-294 plan §4.7——RFC-487～RFC-491 之后，一族之外只剩 runtime-management（16 个生产文件）与 bootstrap（2 个）用它，一族自己
+  只取 shared、`util/`、`platform/persistence`、runtime-management 自己与 resource-catalog 的 `public/`（在目标 DAG 上），可以整族迁入。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已
+  经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`services/runtime/**`（36 个文件）与 `services/execution/{agentInjection,workspaceBoundary}.ts` 原样迁入
+  `modules/runtime-management/infrastructure/drivers/`；一族迁入后取本模块的改取声明处，`public/participants` 撤下只供一族的 14 个出口（否则
+  成为未消费 public 符号）；bootstrap 经 `composition/runtimeDrivers.ts` 取启动自检，资源策略束改由 bootstrap 组装；RFC-108 的驱动租约兼容
+  夹具 `services/driverLease.ts` 移入 `tests/helpers/`。eslint 围栏、单二进制的插件目录、三份 workflow 的路径过滤、架构账本与用例跟随。预计
+  legacy 服务实现 46 → 6、legacy 横向文件 165 → 125、不可达生产文件 16 → 15、inbound 边 9 → 0。
+- **偏离 RFC-294 plan §4.7 的表**：表把 `driverLease.ts` 列在一族里归 runtime-management；它是没有生产使用方的兼容夹具，移入
+  `tests/helpers/`（design §6 第 4 条，可推翻）。
+- **不做**：驱动按部署形态拆分与驱动内部重构；`services/` 余下的 6 个文件；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 15 个后继（另一条件是满 20 个）。
+
 ## 2026-11-12 RFC-491 task-execution 与运行时驱动一族互不 import（Done；`design/RFC-491-te-runtime-family-decoupling/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族整族迁入 runtime-management 之前，先让一族之外只剩 runtime-management 与 bootstrap 用它。
