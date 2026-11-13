@@ -1,6 +1,6 @@
 # RFC-490 执行计划
 
-> In Progress（2026-11-12）。批准依据见 proposal 页首。按本计划一次完成全部实现与用例，再集中验证。
+> Done（2026-11-13）。批准依据见 proposal 页首。按本计划一次完成全部实现与用例，再集中验证。
 
 ## 任务
 
@@ -35,9 +35,33 @@
 
 ## 验收清单
 
-- [ ] AC01～AC15（proposal §5）逐项有用例或实测记录
-- [ ] 能力影响清单 C1～C13（proposal §4）交付时逐项回报
-- [ ] 普通问答相关既有用例未改动且通过
-- [ ] 提示词预算用例通过（未放宽预算）
-- [ ] 干净导出构建的 e2e 实际运行通过
-- [ ] 确切提交的 GitHub Actions 结果如实记录
+- [x] AC01～AC15（proposal §5）逐项有用例或实测记录（见下表）
+- [x] 能力影响清单 C1～C13（proposal §4）交付时逐项回报（2026-11-13 交付说明）
+- [x] 普通问答相关既有用例未改动且通过
+- [x] 提示词预算用例通过（未放宽预算）
+- [x] 干净导出构建的 e2e 实际运行通过（7 份 spec、12 个用例）
+- [x] 确切提交的 GitHub Actions 结果如实记录（见「验证与 CI 记录」）
+
+| 验收项 | 证据 |
+| --- | --- |
+| AC01 就地依据与成熟度 | 前端 `rfc490-question-pane`、`rfc490-decision-details`、`rfc490-workspace-panel`（摆放随面板高宽）；e2e 新旅程 |
+| AC02 跳过与恢复 | 前端 `rfc490-mindmap-guidance`（纯函数）、`rfc490-question-pane`、`rfc490-workspace-panel`；后端整轮提交接受已确认的跳过；e2e 新旅程 |
+| AC03 跳过状态不丢、真实回答优先 | shared `rfc490-skip-and-origin`；后端 `rfc490-mindmap-followup-targets`（草稿与封存归一、看板）；前端 `rfc490-centralized-reanswer`、`rfc490-clarify-route`、`rfc490-task-question-board`；e2e 新旅程（刷新后保留、最终提示词两种文案） |
+| AC04 来源与子题 | 前端 `rfc490-question-pane`；后端保存来源目标与指引；e2e 新旅程与 RFC-372 旅程 |
+| AC05 首轮空分类 | 后端 `rfc490-mindmap-followup-targets`（首轮可补、非首轮与未配置仍 404、随整张图关闭）；前端 `rfc490-mindmap-guidance`、`rfc490-workspace-panel`、`rfc490-clarify-route`、`rfc490-mindmap-draw`；e2e 新旅程 |
+| AC06 下一步建议 | 前端 `rfc490-mindmap-guidance`、`rfc490-next-steps`、`rfc490-workspace-panel`；e2e 新旅程 |
+| AC07 复核汇总、筛选、分组 | 前端 `rfc490-mindmap-guidance`、`rfc490-decision-review`；e2e 新旅程与 `rfc372-recorded-directions` |
+| AC08 不需横向平移、窄屏单列 | 前端 `rfc490-mindmap-layout`；e2e `rfc372-recorded-directions` 与新旅程（`data-world-width` × 0.85 不超过画布宽、390 宽为 1 列）；浏览器实测 1440 下 3 列、总宽 808 ≤ 812 |
+| AC09 大图与不重排 | 前端 `rfc490-mindmap-layout`（5000 节点、300 同级、100 层）、`rfc372-mindmap-canvas`（布局只随拓扑与列数变化）；e2e `rfc372-mindmap` 大图 |
+| AC10 面板与视口 | 前端 `rfc490-mindmap-layout`（相机规则）、`rfc372-mindmap-canvas`、`rfc490-workspace-panel`；e2e 新旅程（并排、Esc、焦点、相机复原、1024 宽占满时焦点交还）与 `rfc372-recorded-mindmap` |
+| AC11 一个说法、确认并下一题、回车 | 前端 `rfc490-question-pane`、`rfc372-workspace-ux`、`rfc378-decision`；e2e 全部脑图旅程 |
+| AC12 搜索选项与回答 | 前端 `rfc490-mindmap-guidance`、`rfc490-workspace-panel` |
+| AC13 已封存页脚入口 | 前端 `rfc490-clarify-route`；e2e 新旅程与 `rfc372-recorded-mindmap` |
+| AC14 普通问答不变 | shared 普通模式提示词逐字不变；前端 `rfc490-question-form`、`rfc490-question-handler`、`rfc490-decision-details` 的默认行为用例；普通问答既有用例未改动且通过 |
+| AC15 e2e 旅程 | 五份 RFC-372 旅程、RFC-396 四个用例与新旅程在干净导出构建的二进制上通过 |
+
+## 验证与 CI 记录
+
+- 集中验证在「HEAD + 本次路径」的干净导出上进行：类型检查、lint、格式、依赖检查通过；shared 2362 / 2362；前端全量 7536 / 7536（其后只调整依据的摆放条件，受影响的 28 个文件 318 个用例复跑通过）；与本次改动相关的后端 151 个文件 1425 个用例里 1422 通过，另 3 个与本次改动无关并已单独复核；e2e 12 / 12；四种视口的真实浏览器实测无控制台报错。
+- 后端全量本机因负载未能得出结论（四个分片均撞到 45 分钟上限），以 CI 为准。
+- 实现提交 `aff2c86e3` 的 exact SHA 主 CI run 43391298633：70 个 job 里 68 个成功；`Backend tests (ubuntu-latest shard 20/44)` 失败于 `rfc359-w8-t28-lost-update` L6 [postgresql] 的 40001 序列化冲突，即 `docs/audit-backlog.md` 第十二条登记的既有偶发，本提交不触及其代码路径；未以重跑追绿。
