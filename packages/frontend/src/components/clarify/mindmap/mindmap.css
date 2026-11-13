@@ -288,6 +288,7 @@
   background: var(--panel);
 }
 .mindmap-question__reading {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -691,9 +692,39 @@
 
 /* RFC-378: original answers and optional decision context share the reader. */
 .mindmap-decision,
-.mindmap-question__prompts,
-.mindmap-question__selection {
+.mindmap-question__prompts {
   margin-top: var(--space-4);
+}
+/* RFC-378 §3.3: option wording can be quoted, so it must be selectable here. The
+   questionnaire keeps the whole row as one click target (styles.css). */
+.mindmap-workspace__detail .clarify-option {
+  user-select: text;
+}
+/* Reading text: selecting or clicking it never chooses the option (the radio,
+   the title row and the card padding do). */
+.mindmap-workspace__detail .clarify-option__description,
+.mindmap-workspace__detail .clarify-option__reason {
+  cursor: text;
+}
+/* Sits in the reader's scrolling content, right under the selected words. */
+.mindmap-question__selection {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--text) 14%, transparent);
+}
+.mindmap-question__selection p {
+  margin: 0;
+  font-size: var(--font-xs);
 }
 .mindmap-decision > summary {
   cursor: pointer;

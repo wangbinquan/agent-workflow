@@ -223,10 +223,14 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
       // Ignore typing inside text inputs / textareas so the user doesn't
       // accidentally trigger an option while filling custom text. Enter
       // inside the textarea still inserts a newline (browser default).
+      // An option's own radio / checkbox takes no text: after a mouse pick the
+      // focus rests there, and the hotkeys must keep working.
       const target = e.target as HTMLElement | null
       if (target !== null) {
         const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+        const choice =
+          tag === 'INPUT' && ['radio', 'checkbox'].includes((target as HTMLInputElement).type)
+        if ((tag === 'INPUT' && !choice) || tag === 'TEXTAREA' || target.isContentEditable) return
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return
       // Enter → advance to next question / submit. Works on both single and

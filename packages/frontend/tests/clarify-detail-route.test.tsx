@@ -913,3 +913,51 @@ test('RFC-378 review reads sealed decisions and submits only the remaining quest
     expect.objectContaining({ answers: [expect.objectContaining({ questionId: 'q2' })] }),
   )
 })
+
+// 2026-11-12 hands-on review: a sealed mindmap round kept the primary "Review
+// decisions and submit" button although nothing could be submitted any more.
+describe('mindmap round footer says what the review dialog will do', () => {
+  function mindmapSession(overrides: Partial<ClarifyRound> = {}): ClarifyRound {
+    const session = mkSession(overrides)
+    session.questions = [{ ...session.questions[0]!, mindmap: { categoryPath: ['Scope'] } }]
+    return session
+  }
+
+  test('an open round offers review and submission as the primary action', async () => {
+    mockApi(mindmapSession())
+    renderRoute()
+    const open = await screen.findByTestId('mindmap-review-open')
+    expect(open.textContent).toBe('Review decisions and submit')
+    expect(open.className).toContain('btn--primary')
+  })
+
+  test('a sealed round offers its decision summary and no submission', async () => {
+    mockApi(
+      mindmapSession({
+        status: 'answered',
+        answeredAt: 1_700_000_100_000,
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: ['Postgres'],
+            customText: '',
+            decision: { status: 'decided', rationale: 'Already operated by the team' },
+          },
+        ],
+      }),
+    )
+    renderRoute()
+    const open = await screen.findByTestId('mindmap-review-open')
+    await waitFor(() => expect(open.hasAttribute('disabled')).toBe(false))
+    expect(open.textContent).toBe('View decision summary')
+    expect(open.className).not.toContain('btn--primary')
+    fireEvent.click(open)
+    expect(screen.getByRole('dialog', { name: 'Decision summary for this round' })).toBeTruthy()
+    const summary = screen.getByTestId('mindmap-review')
+    expect(summary.textContent).toContain('Postgres')
+    expect(summary.textContent).toContain('Already operated by the team')
+    expect(screen.queryByTestId('mindmap-review-submit')).toBeNull()
+    expect(within(summary).queryByRole('radio', { name: 'Keep clarifying' })).toBeNull()
+  })
+})

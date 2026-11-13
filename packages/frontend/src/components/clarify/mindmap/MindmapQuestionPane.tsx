@@ -1,6 +1,18 @@
 import { DecisionDetails } from './DecisionDetails'
 import { mindmapFollowupLimit } from '@/lib/clarify/mindmap/followup'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  placeSelectionControl,
+  optionClickIsReading,
+  type SelectionBox,
+} from '@/lib/clarify/mindmap/selection'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   clarifyAnswerBasis,
@@ -27,6 +39,9 @@ interface Props {
   disabled: boolean
   locked: boolean
   modal: boolean
+  /** Where keyboard focus belongs for this node: the answer form of an answerable
+   *  question (its digit hotkeys live there), otherwise the heading. */
+  focusTargetRef?: MutableRefObject<HTMLElement | null>
   onFocusWorkspace(): void
   onCancelFollowup(): void
   pending: boolean
@@ -57,32 +72,85 @@ export function MindmapQuestionPane(props: Props) {
   const heading = useRef<HTMLHeadingElement>(null)
   const reading = useRef<HTMLDivElement>(null)
   const followup = useRef<HTMLDivElement>(null)
-  const [selection, setSelection] = useState('')
+  const [selection, setSelection] = useState<{ text: string; top: number; left: number } | null>(
+    null,
+  )
+  const editable = !!props.question && !props.disabled && !props.locked
+  // Digit hotkeys belong to the answer form, so that is where focus goes.
+  const answerForm = () =>
+    editable ? (reading.current?.querySelector<HTMLElement>('.clarify-question') ?? null) : null
+  const showSelection = (text: string, box: SelectionBox) => {
+    const reader = reading.current
+    if (!reader || !text.trim()) return setSelection(null)
+    const rect = reader.getBoundingClientRect()
+    setSelection({
+      text,
+      ...placeSelectionControl(box, {
+        left: rect.left,
+        top: rect.top,
+        scrollLeft: reader.scrollLeft,
+        scrollTop: reader.scrollTop,
+        clientWidth: reader.clientWidth,
+      }),
+    })
+  }
+  // The user's own wording in a field is quotable; the follow-up direction is not.
+  const captureField = (field: EventTarget) => {
+    if (!(field instanceof HTMLTextAreaElement)) return
+    if (field.closest('.mindmap-question__followup')) return
+    const start = field.selectionStart ?? 0
+    const end = field.selectionEnd ?? 0
+    if (end > start) showSelection(field.value.slice(start, end), field.getBoundingClientRect())
+    else setSelection(null)
+  }
   useEffect(() => {
-    setSelection('')
+    setSelection(null)
     const capture = () => {
+      const reader = reading.current
+      if (!reader) return
+      // A focused field reports its own selection through captureField.
+      const active = document.activeElement
+      if (active instanceof HTMLTextAreaElement && reader.contains(active)) return
       const value = document.getSelection()
       if (
-        value?.anchorNode &&
-        value.focusNode &&
-        reading.current?.contains(value.anchorNode) &&
-        reading.current.contains(value.focusNode)
+        !value ||
+        value.isCollapsed ||
+        value.rangeCount === 0 ||
+        !value.anchorNode ||
+        !value.focusNode ||
+        !reader.contains(value.anchorNode) ||
+        !reader.contains(value.focusNode)
       )
-        setSelection(value.toString())
+        return setSelection(null)
+      const range = value.getRangeAt(0)
+      showSelection(
+        value.toString(),
+        typeof range.getBoundingClientRect === 'function'
+          ? range.getBoundingClientRect()
+          : (range.startContainer.parentElement ?? reader).getBoundingClientRect(),
+      )
     }
     document.addEventListener('selectionchange', capture)
     return () => document.removeEventListener('selectionchange', capture)
   }, [props.node.id])
   const limit = mindmapFollowupLimit(props.quote, props.instruction)
+  const { focusTargetRef } = props
+  useLayoutEffect(() => {
+    if (focusTargetRef) focusTargetRef.current = answerForm() ?? heading.current
+  })
   const previous = useRef({ id: props.node.id, open: props.followupOpen })
   useLayoutEffect(() => {
     if (previous.current.id !== props.node.id && reading.current) {
+      // Moving on from inside the pane keeps the keyboard there; outline navigation keeps its row.
+      const inside = reading.current.parentElement?.contains(document.activeElement) ?? false
       reading.current.scrollTop = 0
-      if (props.modal) heading.current?.focus({ preventScroll: true })
+      if (props.modal || inside) (answerForm() ?? heading.current)?.focus({ preventScroll: true })
     } else if (props.followupOpen && !previous.current.open && followup.current && reading.current)
       reading.current.scrollTop +=
         followup.current.getBoundingClientRect().top - reading.current.getBoundingClientRect().top
     previous.current = { id: props.node.id, open: props.followupOpen }
+    // answerForm only reads refs and the editable flag of this render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.node.id, props.followupOpen, props.modal])
   const confirmed = props.question && isClarifyAnswerConfirmed(props.question, props.answer)
   const pendingChildren = pendingMindmapDescendants(props.node)
@@ -95,7 +163,13 @@ export function MindmapQuestionPane(props: Props) {
         })}
       </h3>
       <p className="muted">
-        {t(props.question ? 'mindmap.followupContext' : 'mindmap.categoryContext')}
+        {t(
+          props.question
+            ? 'mindmap.followupContext'
+            : props.node.id === 'root'
+              ? 'mindmap.rootContext'
+              : 'mindmap.categoryContext',
+        )}
       </p>
       {props.quote && (
         <div className="mindmap-quote">
@@ -168,10 +242,14 @@ export function MindmapQuestionPane(props: Props) {
       <div
         className="mindmap-question__reading"
         ref={reading}
-        onSelect={(event) => {
-          const field = event.target
-          if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)
-            setSelection(field.value.slice(field.selectionStart ?? 0, field.selectionEnd ?? 0))
+        onSelect={(event) => captureField(event.target)}
+        onKeyUp={(event) => captureField(event.target)}
+        onMouseUp={(event) => captureField(event.target)}
+        onClickCapture={(event) => {
+          if (optionClickIsReading(event.target)) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
         }}
       >
         <div className="mindmap-question__content">
@@ -289,23 +367,6 @@ export function MindmapQuestionPane(props: Props) {
               </div>
             </>
           )}
-          {!props.disabled && !props.locked && selection && (
-            <div className="mindmap-question__selection">
-              <button
-                className="btn btn--sm"
-                type="button"
-                disabled={props.pendingHere || selection.length > 500}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  props.onQuote(selection)
-                  setSelection('')
-                }}
-              >
-                {t('mindmap.quote.ask')}
-              </button>
-              {selection.length > 500 && <p role="alert">{t('mindmap.quote.quoteLimit')}</p>}
-            </div>
-          )}
           {props.question && directionForm}
           {props.error != null && (
             <div className="mindmap-question__error">
@@ -332,6 +393,28 @@ export function MindmapQuestionPane(props: Props) {
             </div>
           )}
         </div>
+        {!props.disabled && !props.locked && selection && (
+          <div
+            className="mindmap-question__selection"
+            style={{ top: selection.top, left: selection.left }}
+          >
+            <button
+              className="btn btn--sm btn--primary"
+              type="button"
+              disabled={props.pendingHere || selection.text.length > 500}
+              // Keep the selection (and a field's focus) while the control is pressed.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                props.onQuote(selection.text)
+                setSelection(null)
+                document.getSelection()?.removeAllRanges()
+              }}
+            >
+              {t('mindmap.quote.ask')}
+            </button>
+            {selection.text.length > 500 && <p role="alert">{t('mindmap.quote.quoteLimit')}</p>}
+          </div>
+        )}
       </div>
       {props.question && ((!props.disabled && !props.locked) || props.canAdvance) && (
         <div className="mindmap-question__actions">
@@ -341,12 +424,14 @@ export function MindmapQuestionPane(props: Props) {
                 type="button"
                 className="btn btn--primary"
                 disabled={!isClarifyAnswerValid(props.question, props.answer) || confirmed}
-                onClick={() =>
+                onClick={() => {
                   props.onChange({
                     ...props.answer!,
                     confirmedBasis: clarifyAnswerBasis(props.question!, props.answer!),
                   })
-                }
+                  // The button disables itself; keep the keyboard on this question.
+                  answerForm()?.focus({ preventScroll: true })
+                }}
               >
                 {t(confirmed ? 'mindmap.confirmed' : 'mindmap.confirm')}
               </button>

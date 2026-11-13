@@ -1195,15 +1195,17 @@ export function ClarifyDetailPage() {
         </span>
         {/* RFC-162: scope-distribution submit hint removed (scope deleted). */}
         {mindmapMode ? (
+          // A sealed or fully handled round has nothing to submit: the same
+          // dialog is then only its decision summary, and says so.
           <button
             ref={submitContinueRef}
             type="button"
-            className="btn btn--primary"
+            className={readonly || allLocked ? 'btn' : 'btn btn--primary'}
             disabled={submitMut.isPending || !draftLoaded}
             onClick={() => setReviewOpen(true)}
             data-testid="mindmap-review-open"
           >
-            {t('mindmap.review.open')}
+            {t(readonly || allLocked ? 'mindmap.review.openReadonly' : 'mindmap.review.open')}
           </button>
         ) : (
           <div className="clarify-detail__submit-group" data-testid="clarify-submit-group">
@@ -1300,6 +1302,7 @@ export function ClarifyDetailPage() {
             setFocusRequest({ questionId, sequence: Date.now() })
           }}
           onSubmit={submitReviewed}
+          readonly={readonly || allLocked}
           disabled={
             readonly ||
             allLocked ||

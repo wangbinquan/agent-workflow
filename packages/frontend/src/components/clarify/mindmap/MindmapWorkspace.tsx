@@ -52,6 +52,8 @@ export function MindmapWorkspace(props: Props) {
   const { t } = useTranslation()
   const workspace = useRef<HTMLElement>(null)
   const trigger = useRef<HTMLElement | null>(null)
+  // Kept current by the pane: the answer form of an answerable question, else its heading.
+  const paneFocus = useRef<HTMLElement | null>(null)
   const [view, setView] = useState<'panorama' | 'focus'>('panorama')
   const [mobile, setMobile] = useState<'map' | 'outline' | 'detail'>('map')
   const [outlineOpen, setOutlineOpen] = useState(true)
@@ -245,6 +247,7 @@ export function MindmapWorkspace(props: Props) {
       disabled={props.disabled}
       locked={locked}
       modal={view === 'panorama'}
+      focusTargetRef={paneFocus}
       onFocusWorkspace={() => {
         setPanelOpen(false)
         setView('focus')
@@ -458,6 +461,7 @@ export function MindmapWorkspace(props: Props) {
         size="lg"
         panelClassName="mindmap-question-dialog"
         overlayClassName="mindmap-question-dialog-overlay"
+        initialFocusRef={paneFocus}
         triggerRef={trigger}
         restoreFocusFallbackRef={workspace}
       >

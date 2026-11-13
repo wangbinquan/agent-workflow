@@ -41,7 +41,12 @@ export const mindmapZh = {
   },
   review: {
     open: '复核决定并提交',
+    openReadonly: '查看决定摘要',
     title: '复核这轮决定',
+    readonlyTitle: '这轮决定摘要',
+    readonlyHint: '以下是这轮已提交或已处理的原始内容，仅供查看。',
+    done: '知道了',
+    locateReadonly: '定位查看',
     hint: '以下是你填写的原始内容。请确认愿意按这些取舍推进，未知和暂定项会随结果保留。',
     back: '返回作答',
     locate: '定位查看 / 修改',
@@ -113,6 +118,8 @@ export const mindmapZh = {
   categoryGuidance: '补充提问方向',
   categoryContext:
     'AI 会参考这个分类下的全部问题和回答，补充尚未覆盖的方向。新问题直接放在此分类下，已有回答保持不变。',
+  rootContext:
+    'AI 会参考本轮全部问题和回答，补充尚未覆盖的方向，并为每道新问题安排合适的分类。已有回答保持不变。',
   categoryHint: '还需要考虑哪些方向？（选填）',
   categoryPlaceholder: '例如：除了服务性能，也请考虑数据库慢查询、索引、连接池和容量。',
   askCategory: '按此方向补充问题',
@@ -201,7 +208,13 @@ export const mindmapEn: typeof mindmapZh = {
   },
   review: {
     open: 'Review decisions and submit',
+    openReadonly: 'View decision summary',
     title: 'Review this round’s decisions',
+    readonlyTitle: 'Decision summary for this round',
+    readonlyHint:
+      'These are the original answers already submitted or handled in this round. They are read-only.',
+    done: 'Done',
+    locateReadonly: 'Locate',
     hint: 'These are your original answers. Confirm the tradeoffs you accept; unknowns and provisional choices will remain explicit in the result.',
     back: 'Back to answers',
     locate: 'Locate / edit',
@@ -282,6 +295,8 @@ export const mindmapEn: typeof mindmapZh = {
   categoryGuidance: 'Guide questions in this branch',
   categoryContext:
     'AI considers all questions and answers in this category and adds missing topics directly under it. Existing answers stay unchanged.',
+  rootContext:
+    'AI considers every question and answer in this round, adds missing topics and files each new question under a fitting category. Existing answers stay unchanged.',
   categoryHint: 'What else should AI consider? (optional)',
   categoryPlaceholder:
     'For example: also consider database queries, indexes, connection pools and capacity.',
