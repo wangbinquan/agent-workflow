@@ -1,3 +1,23 @@
+## 2026-11-12 RFC-491 task-execution 与运行时驱动一族互不 import（In Progress；`design/RFC-491-te-runtime-family-decoupling/`）
+
+- **来由**：RFC-294 plan §4.7——运行时驱动一族整族迁入 runtime-management 之前，先让一族之外只剩 runtime-management 与 bootstrap 用它。
+  RFC-487～RFC-489 之后，task-execution 还有 16 个生产文件直接 import 一族，一族里的 `services/systemAgentRun.ts`、
+  `services/runtimeSmoke.ts` 反过来取 task-execution 的本机调用与 application。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设
+  计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：类型改取 owner 的出处与 task-execution 自有类型；种类判定、驱动能力与续会话目标不存在的判据经 runtime-management 的 public 查询；
+  声明清单的纯构造归 shared；启动清单读取与插件加载失败识别归 runtime-management，由 bootstrap 绑定；`services/systemAgentRun.ts` 迁为
+  task-execution 的本机系统代理运行，驱动、材料工作区与材料定义作为提供者交入，MCP 诊断的本机执行体收同一组提供者；只供用例的
+  `services/runtimeSmoke.ts` 与两个本机任务运行文件迁入 `tests/helpers/`。预计跨 context 内部文件对 22 → 21、R1 18 → 9、不可达生产文件 18 → 16。
+- **偏离 RFC-294 plan §4.7 的表**：表把 `runtimeSmoke.ts` 列在一族里归 runtime-management、`systemAgentRun.ts` 列为随一族；两者都取
+  task-execution，而 runtime-management 不反向依赖上层 context（RFC-294 design §3.1），分别迁入 `tests/helpers/` 与 task-execution（design §6
+  第 4 条，可推翻）。
+- **不做**：整族迁入（下一步，另立）；bootstrap 与 runtime-management 自己对一族的使用；其余跨 context 内部文件对；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 14 个后继（另一条件是满 20 个）。
+- **附带**：RFC-489 两处把 RFC-294 plan 的「S9 第 5 项」误记成「§4.6 第 5 项」（RFC-489 proposal 的母 RFC 一行与 STATE 本条的来由），一并改正。
+  RFC-489 的 Done 文档提交 `87cd1228f` 的 CI 结果随本 RFC 的实现提交补记。
+
 ## 2026-11-12 RFC-490 脑图澄清的思考引导与全景交互重整（In Progress；`design/RFC-490-mindmap-guided-thinking-and-panorama/`）
 
 - **来由**：用户 2026-11-12 要求审视脑图设计功能（预期功能是否完成、能否激发思考并引导逐步输出、交互是否便捷）。本会话读完
@@ -18,7 +38,7 @@
 ## 2026-11-12 RFC-489 task-execution 的运行族不再取 runtime-management 内部（Done；`design/RFC-489-run-family-providers-bound-by-bootstrap/`）
 
 - **来由**：RFC-294 plan §4.7——运行时驱动一族整族迁入 runtime-management 之前，先重画 task-execution ↔ runtime-management 的驱动接缝；
-  §4.6 第 5 项把 task-execution → runtime-management 的 18 个跨 context 内部文件对归给这一族。RFC-487、RFC-488 已把 DAG 外四个 context
+  S9 第 5 项把 task-execution → runtime-management 的 18 个跨 context 内部文件对归给这一族。RFC-487、RFC-488 已把 DAG 外四个 context
   对一族的 import 清零。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、
   2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
 - **范围**：运行时管理（本机、托管）的装配迁入 runtime-management 的 composition，task-execution 的探测族经它效果自有的探测端口注入；本机

@@ -5,7 +5,7 @@
   设计、实施与集中验证，按授权记为已批准（取舍见 design §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径
   限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.7（运行时驱动一族归 runtime-management
-  infrastructure；整族迁入之前先重画 task-execution ↔ runtime-management 的驱动接缝）、§4.6 第 5 项（task-execution → runtime-management
+  infrastructure；整族迁入之前先重画 task-execution ↔ runtime-management 的驱动接缝）、S9 第 5 项（task-execution → runtime-management
   的 18 个跨 context 内部文件对随运行时驱动一族清偿）与 design §3.1（context DAG、consumer 自有端口、bootstrap 唯一装配）。
 - **前序**：[RFC-487](../RFC-487-runtime-family-forbidden-consumers/proposal.md)、[RFC-488](../RFC-488-local-mcp-diagnostic-execution-port/proposal.md)
   （Done）——DAG 外四个 context 对运行时驱动一族的 import 已归零。
