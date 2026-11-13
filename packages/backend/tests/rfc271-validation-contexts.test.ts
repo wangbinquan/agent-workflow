@@ -18,10 +18,8 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { callEdgeKey } from '../src/modules/resource-catalog/domain/callClosure'
-import {
-  loadWorkflowValidationContext,
-  validateWorkflowDef,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { loadWorkflowValidationContext } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 type Node = WorkflowDefinition['nodes'][number]
 const node = (f: Record<string, unknown>): Node => f as unknown as Node

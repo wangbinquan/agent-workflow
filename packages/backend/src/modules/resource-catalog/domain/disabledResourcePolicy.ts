@@ -62,8 +62,9 @@ export const PLUGIN_DISABLED_ERROR_CODE = 'plugin-disabled' as const
 /** The real `plugin-disabled` emitters (all preserved verbatim — v2 has zero
  *  product behavior change; four upstream launch gates consume them). */
 export const PLUGIN_DISABLED_SITES: readonly string[] = [
-  // RFC-470: the `services/workflow.validator.ts` re-export is gone; the emitter is its declaration site.
-  'modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+  // RFC-470: the `services/workflow.validator.ts` re-export is gone; the emitter is its declaration site. RFC-493: the
+  // validator moved into the domain (RFC-294 S13); its context loaders stay in `infrastructure/legacy/workflow.validator.ts`.
+  'modules/resource-catalog/domain/workflowValidator.ts',
   'modules/resource-catalog/infrastructure/legacy/agent.ts',
   'modules/resource-catalog/application/agents/agentResourceIntegrity.ts',
   // RFC-467: the task-execution emitter is the resource-catalog task-execution resource snapshot (the RFC-349 oracle

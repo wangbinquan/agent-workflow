@@ -22,10 +22,8 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { dwCallNodeRejections } from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
-import {
-  loadWorkflowValidationContext,
-  validateWorkflowDef,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { loadWorkflowValidationContext } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 type Node = WorkflowDefinition['nodes'][number]
 type Edge = WorkflowDefinition['edges'][number]
@@ -442,7 +440,7 @@ describe('RFC-243 §5.4(7) — dw generated definitions reject call nodes', () =
 })
 
 // RFC-243 PR-4 —— 4g call-workgroup 规则（fanout 内层拒绝 / advisory 存在性）。
-import { validateWorkflowDef as validateDef4g } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef as validateDef4g } from '../src/modules/resource-catalog/domain/workflowValidator'
 describe('RFC-243 4g — call-workgroup rules', () => {
   const baseCtx = { agents: [], skills: [], mcps: [], plugins: [] }
   const wgNode = (over: Record<string, unknown> = {}) => ({

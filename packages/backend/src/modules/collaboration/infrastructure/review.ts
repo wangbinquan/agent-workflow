@@ -72,30 +72,6 @@ import type { ReviewArtifactSelection } from '../application/ports/reviewArtifac
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
 
-// SQLite review persistence and decision mechanics (RFC-005 / RFC-349).
-//
-// This module owns the review feature's state transitions outside the
-// scheduler / runner / REST layer:
-//
-//   - Pure anchor helpers: recomputeOccurrenceIndex, canonicalizeAnchor.
-//     Server recomputes the occurrence_index from canonical doc body so a
-//     client cannot inflate a forged index to point at a different
-//     selection (RFC-005 design.md §6 + plan T10).
-//   - Scheduler-side dispatchReviewNode: invoked from scheduler.runOneNode
-//     when it lands on a review node. Reads the upstream port content,
-//     archives v(n+1) to doc_versions (file + DB row), parks the node_run
-//     in status=awaiting_review, broadcasts review.created on /ws/tasks/.
-//   - REST-side handlers: submitReviewDecision (approve / reject / iterate),
-//     addReviewComment, deleteReviewComment, listReviewSummaries,
-//     countPendingReviews, getReviewDetail, listDocVersionsForReview,
-//     getDocVersionBody.
-//   - Helpers: createDocVersion, archiveCommentsForVersion,
-//     cascadeSiblingReviews (sibling reviews of a rejected upstream),
-//     rollbackUpstreamNodeRuns (for reject/iterate worktree restoration).
-//
-// `resumeTask` is invoked by REST decision handlers to re-enter the
-// scheduler after a decision lands.
-
 import { join } from 'node:path'
 import {
   and,
@@ -134,7 +110,6 @@ import {
   type ReviewAnchorWarning,
   type TaskActorRole,
   buildWorkflowScopeParentMap,
-  findAllOccurrences,
   isMultiMarkdownUpstream,
   migrateWorkflowDefinitionToLatest,
   resolveWorkflowSourceRef,
@@ -177,7 +152,6 @@ import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
   resolveReviewAnchor,
-  type ReviewAnchorFailure,
 } from '@/modules/collaboration/domain/reviewAnchor'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
@@ -187,11 +161,7 @@ import type { ReviewGateOpenDocumentDraft } from '@/modules/collaboration/applic
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { chunkedAll } from '@/util/sqlChunk'
 
-// RFC-480: the source-termination admission rule is a platform persistence predicate; take it from its definition site
-// (task-execution's retired `public/operations` only re-exported it).
 import { assertNodeRunSourceTerminationAdmission } from '@/platform/persistence/nodeRunLifecycleCore'
-// RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
-// （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import type { NodeRunWorkspaceRollbackScope } from '../application/ports/nodeRunWorkspaceRollback'
 import {
@@ -222,249 +192,21 @@ import {
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from './humanGateDecisionE2eBarrier'
+import {
+  canonicalizeAnchor,
+  anchorResolutionError,
+  assertResolvedAnchorConsistent,
+  resolveCommentAnchor,
+} from '../domain/reviewCommentAnchor'
+import { REVIEW_DECISION_POLICY } from '../domain/reviewDecisionPolicy'
+import type { ReviewRerunPolicy, ReviewDecisionPolicy } from '../domain/reviewDecisionPolicy'
+import { resolveReviewRoundMode, groupDocVersionRounds } from '../domain/reviewRounds'
 
 /** RFC-145: human-readable supersede breadcrumb prefix (message builder only —
  *  the machine contract is the superseded_by_review / rolled_back columns). */
 const REVIEW_SUPERSEDE_MARKER_PREFIX = 'superseded-by-review-'
 
 const log = createLogger('review')
-
-// ---------------------------------------------------------------------------
-// Anchor — pure functions.
-// ---------------------------------------------------------------------------
-
-// RFC-326: the occurrence math is ONE shared implementation
-// (packages/shared/src/textOccurrences.ts) used by this canonicaliser, the
-// collaboration anchor resolver and the web highlighter — the number stored in
-// `occurrence_index` and the number the page counts must be the same number.
-// Re-exported so existing import sites and tests keep working.
-export { findAllOccurrences }
-
-export interface OccurrenceRecomputeResult {
-  /** 1-based occurrence index in the full document body. */
-  occurrenceIndex: number
-  /** Absolute char offset of the chosen occurrence in the doc body. */
-  absoluteOffset: number
-  /** True when context disambiguated (contextBefore / After matched). */
-  contextMatched: boolean
-}
-
-/**
- * Recompute the 1-based occurrence index of `anchor.selectedText` inside
- * `docBody`, choosing the occurrence whose immediate ±context best matches
- * `anchor.contextBefore` / `anchor.contextAfter`.
- *
- * Selection criteria (in order):
- *   1. The occurrence whose (contextBefore endsWith && contextAfter startsWith)
- *      pair fully matches the doc body's surrounding chars.
- *   2. Else: the occurrence whose Levenshtein distance on the context windows
- *      is minimal (longest common prefix on contextBefore + suffix on
- *      contextAfter as a cheap proxy — we avoid pulling in a full edit-distance
- *      lib for one screen of code).
- *   3. Else: fall back to the client-claimed occurrenceIndex if it's a valid
- *      1..N index against the actual occurrence count.
- *
- * Throws ValidationError when `selectedText` is empty or not present at all.
- */
-export class AnchorValidationError extends ValidationError {
-  constructor(code: string, message: string) {
-    // RFC-326 (P6): was a bare Error → the route surfaced a 500 for a made-up
-    // selectedText although the docstring above promised a ValidationError.
-    super(code, message)
-    this.name = 'AnchorValidationError'
-  }
-}
-
-export function recomputeOccurrenceIndex(
-  docBody: string,
-  anchor: ReviewCommentAnchor,
-): OccurrenceRecomputeResult {
-  if (anchor.selectedText.length === 0) {
-    throw new AnchorValidationError(
-      'anchor-empty-selection',
-      'anchor.selectedText must be non-empty',
-    )
-  }
-  const offsets = findAllOccurrences(docBody, anchor.selectedText)
-  if (offsets.length === 0) {
-    throw new AnchorValidationError(
-      'anchor-selection-not-found',
-      `anchor.selectedText '${truncate(anchor.selectedText, 40)}' not present in document`,
-    )
-  }
-
-  // RFC-326 strategy 0 — a self-consistent anchor is taken as-is: `offsetStart`
-  // IS an occurrence (so the slice equals selectedText) and every non-empty
-  // context side matches there. Server-resolved anchors always satisfy this;
-  // web anchors do whenever the proportional heuristic landed on the right
-  // occurrence. Without it two occurrences with identical ±30-char contexts
-  // (repeated table rows) were both "resolved" to the first one, overriding
-  // the caller's explicit choice — the design-gate reproduction of RFC-326.
-  const exactIdx = offsets.indexOf(anchor.offsetStart)
-  if (exactIdx >= 0 && contextMatchesAt(docBody, anchor, anchor.offsetStart)) {
-    return {
-      occurrenceIndex: exactIdx + 1,
-      absoluteOffset: anchor.offsetStart,
-      contextMatched: true,
-    }
-  }
-
-  // Strategy 1: exact context match. Only applies if AT LEAST ONE context
-  // side is non-empty — otherwise every occurrence trivially "matches" and
-  // we'd skip strategies 2/3 wrongly.
-  const hasContext = anchor.contextBefore.length > 0 || anchor.contextAfter.length > 0
-  if (hasContext) {
-    let bestExact = -1
-    for (let i = 0; i < offsets.length; i++) {
-      const off = offsets[i]!
-      const before = docBody.slice(Math.max(0, off - anchor.contextBefore.length), off)
-      const after = docBody.slice(
-        off + anchor.selectedText.length,
-        off + anchor.selectedText.length + anchor.contextAfter.length,
-      )
-      if (
-        (anchor.contextBefore.length === 0 || before === anchor.contextBefore) &&
-        (anchor.contextAfter.length === 0 || after === anchor.contextAfter)
-      ) {
-        bestExact = i
-        break
-      }
-    }
-    if (bestExact >= 0) {
-      return {
-        occurrenceIndex: bestExact + 1,
-        absoluteOffset: offsets[bestExact]!,
-        contextMatched: true,
-      }
-    }
-  }
-
-  // Strategy 2: cheap proxy — longest common suffix on contextBefore + longest
-  // common prefix on contextAfter. Picks the candidate with the highest sum.
-  let bestIdx = 0
-  let bestScore = -1
-  for (let i = 0; i < offsets.length; i++) {
-    const off = offsets[i]!
-    const before = docBody.slice(Math.max(0, off - anchor.contextBefore.length), off)
-    const after = docBody.slice(
-      off + anchor.selectedText.length,
-      off + anchor.selectedText.length + anchor.contextAfter.length,
-    )
-    const beforeScore = commonSuffixLength(before, anchor.contextBefore)
-    const afterScore = commonPrefixLength(after, anchor.contextAfter)
-    const score = beforeScore + afterScore
-    if (score > bestScore) {
-      bestScore = score
-      bestIdx = i
-    }
-  }
-  if (bestScore > 0) {
-    return {
-      occurrenceIndex: bestIdx + 1,
-      absoluteOffset: offsets[bestIdx]!,
-      contextMatched: false,
-    }
-  }
-
-  // Strategy 3: fall back to the client's claim, clamped to 1..N.
-  const claimed = anchor.occurrenceIndex
-  if (Number.isInteger(claimed) && claimed >= 1 && claimed <= offsets.length) {
-    return {
-      occurrenceIndex: claimed,
-      absoluteOffset: offsets[claimed - 1]!,
-      contextMatched: false,
-    }
-  }
-  // Last resort: pick the first occurrence. Server still owns the index.
-  return {
-    occurrenceIndex: 1,
-    absoluteOffset: offsets[0]!,
-    contextMatched: false,
-  }
-}
-
-/**
- * Server-side fixup applied before persisting a review_comment row: the
- * client-supplied anchor is replaced with one whose `occurrenceIndex` reflects
- * what the canonical document actually says AND whose `offsetStart/End` point at
- * that same occurrence (RFC-326 P5 — before, only the index was rewritten and
- * the offsets stayed at the client's heuristic guess, so a stored row could
- * name occurrence 3 while its offsets sat on occurrence 2; the web highlighter
- * now locates comments by offset, which needs the row to be self-consistent).
- * `sectionPath` / `paragraphIdx` / contexts stay as posted.
- */
-export function canonicalizeAnchor(
-  docBody: string,
-  anchor: ReviewCommentAnchor,
-): ReviewCommentAnchor {
-  const recomputed = recomputeOccurrenceIndex(docBody, anchor)
-  return {
-    ...anchor,
-    occurrenceIndex: recomputed.occurrenceIndex,
-    offsetStart: recomputed.absoluteOffset,
-    offsetEnd: recomputed.absoluteOffset + anchor.selectedText.length,
-  }
-}
-
-function contextMatchesAt(docBody: string, anchor: ReviewCommentAnchor, offset: number): boolean {
-  const before = docBody.slice(Math.max(0, offset - anchor.contextBefore.length), offset)
-  const end = offset + anchor.selectedText.length
-  const after = docBody.slice(end, end + anchor.contextAfter.length)
-  return (
-    (anchor.contextBefore.length === 0 || before === anchor.contextBefore) &&
-    (anchor.contextAfter.length === 0 || after === anchor.contextAfter)
-  )
-}
-
-/**
- * RFC-326 — translate a resolver refusal into the 422 the route returns. The
- * candidate keys ride in `message` (the MCP channel forwards only the message)
- * and the structured lists in `details` (REST callers read them as-is).
- */
-export function anchorResolutionError(failure: ReviewAnchorFailure): ValidationError {
-  return new ValidationError(failure.code, failure.message, {
-    candidates: failure.candidates,
-    total: failure.total,
-    truncated: failure.truncated,
-    suggestions: failure.suggestions,
-  })
-}
-
-/**
- * RFC-326 AC-9 — a server-resolved anchor is persisted verbatim; the only check
- * is that it still describes the body it was resolved against. A mismatch is a
- * programming error (the resolver and this service disagree about the body),
- * not a client error, hence a bare Error (500).
- */
-export function assertResolvedAnchorConsistent(docBody: string, anchor: ReviewCommentAnchor): void {
-  if (docBody.slice(anchor.offsetStart, anchor.offsetEnd) !== anchor.selectedText) {
-    throw new Error(
-      `resolved review anchor is inconsistent with the document body at ${anchor.offsetStart}-${anchor.offsetEnd}`,
-    )
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function commonPrefixLength(a: string, b: string): number {
-  const n = Math.min(a.length, b.length)
-  let i = 0
-  while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) i++
-  return i
-}
-
-function commonSuffixLength(a: string, b: string): number {
-  const n = Math.min(a.length, b.length)
-  let i = 0
-  while (i < n && a.charCodeAt(a.length - 1 - i) === b.charCodeAt(b.length - 1 - i)) i++
-  return i
-}
-
-function truncate(s: string, n: number): string {
-  return s.length <= n ? s : s.slice(0, n) + '…'
-}
 
 // ---------------------------------------------------------------------------
 // Path conventions for doc_version body files on disk.
@@ -1793,37 +1535,6 @@ export async function readDocVersionBody(
 }
 
 // ---------------------------------------------------------------------------
-// RFC-149: review round mode — decision-side single source of truth.
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve a review round's mode from its doc_versions rows (RFC-149 §2).
- * DECISION-side oracle only: dispatch (dispatchReviewNode) derives the mode
- * from the upstream port KIND — it is the producer of these rows and stays
- * kind-driven — while every reader that used to re-derive the mode from the
- * archived data shape (item_index / item_path NULL sentinels) goes through
- * here instead of hand-rolling the sentinels.
- *
- *   - 'single'       — no member carries item_index (single-document round)
- *   - 'multi-inline' — multi-document, items are INLINE markdown bodies
- *                      (list<markdown>: item_path NULL on every member)
- *   - 'multi-path'   — multi-document, items are worktree paths
- *                      (list<path<md>>: item_path set)
- *
- * Empty array ⇒ 'single' (`some` over [] is false — callers reject empty
- * rounds before the mode matters; the grid is locked in
- * rfc149-decision-policy.test.ts).
- */
-export function resolveReviewRoundMode(
-  dvs: ReadonlyArray<{ itemIndex?: number | null; itemPath?: string | null }>,
-): 'single' | 'multi-inline' | 'multi-path' {
-  const isMultiDoc = dvs.some((d) => d.itemIndex !== null && d.itemIndex !== undefined)
-  if (!isMultiDoc) return 'single'
-  const itemsInline = dvs.length > 0 && dvs.every((d) => (d.itemPath ?? null) === null)
-  return itemsInline ? 'multi-inline' : 'multi-path'
-}
-
-// ---------------------------------------------------------------------------
 // REST helpers — list / detail / counters.
 // ---------------------------------------------------------------------------
 
@@ -2413,121 +2124,6 @@ async function buildRoundMember(
 }
 
 /**
- * Minimal doc_versions row slice `groupDocVersionRounds` needs. Structurally
- * satisfied by drizzle's full row; tests can hand-build these (pure, no IO).
- */
-export interface RoundGroupRow {
-  id: string
-  reviewIteration: number
-  roundGeneration: number | null
-  itemIndex: number | null
-  decision: string
-  decisionReason: string | null
-  decidedAt: number | null
-  decidedBy: string | null
-  decidedByRole: string | null
-  createdAt: number
-}
-
-export interface DocVersionRound<R extends RoundGroupRow> {
-  roundKey: string
-  reviewIteration: number
-  roundGeneration: number | null
-  decision: DocVersionDecision
-  decisionReason: string | null
-  decidedAt: number | null
-  decidedBy: string | null
-  decidedByRole: TaskActorRole | null
-  createdAt: number
-  isCurrent: boolean
-  /** item_index ascending. */
-  members: R[]
-  /** Diagnostics only: members disagree on decision (writer stamps a whole round at once). */
-  hasMixedDecisions: boolean
-}
-
-/**
- * RFC-142: group a review's doc_versions rows into rounds (pure, exported for
- * unit tests).
- *
- * Grouping key: rows with a round_generation group by it (`g{n}`); legacy
- * NULL-generation rows (pre-migration-0070) group by review_iteration
- * (`i{n}-legacy`). Order: legacy rounds first by iteration — every post-0070
- * mint stamps a generation, so legacy rows are necessarily older — then
- * generation rounds in generation order (strictly monotonic per mint,
- * loadPriorRound's counter).
- *
- * Round-level fields (design D4): decision = first non-pending member (the
- * decision writer stamps a whole round at once — heterogeneity is surfaced
- * via hasMixedDecisions for the caller to warn on); decisionReason only for
- * rejected (shared reject reason) and superseded ('upstream-refreshed'
- * system marker) — iterated feedback lives in each member's frozen comments;
- * decided* from the member with the newest decidedAt; createdAt =
- * min(member.createdAt); isCurrent = the pending round, else the newest —
- * matching what getReviewDetail renders (G4-fixed selection).
- */
-export function groupDocVersionRounds<R extends RoundGroupRow>(
-  rows: readonly R[],
-): DocVersionRound<R>[] {
-  const items = rows.filter((r) => r.itemIndex !== null)
-  if (items.length === 0) return []
-  const byKey = new Map<string, R[]>()
-  for (const r of items) {
-    const key =
-      r.roundGeneration !== null ? `g${r.roundGeneration}` : `i${r.reviewIteration}-legacy`
-    const list = byKey.get(key)
-    if (list === undefined) byKey.set(key, [r])
-    else list.push(r)
-  }
-  const groups: DocVersionRound<R>[] = [...byKey.entries()].map(([roundKey, members]) => {
-    members.sort((a, b) =>
-      (a.itemIndex ?? 0) !== (b.itemIndex ?? 0)
-        ? (a.itemIndex ?? 0) - (b.itemIndex ?? 0)
-        : a.id < b.id
-          ? -1
-          : 1,
-    )
-    const decision = (members.find((m) => m.decision !== 'pending')?.decision ??
-      'pending') as DocVersionDecision
-    const decisionReason =
-      decision === 'rejected' || decision === 'superseded'
-        ? (members.find((m) => m.decisionReason !== null && m.decisionReason !== '')
-            ?.decisionReason ?? null)
-        : null
-    let decider: R | undefined
-    for (const m of members) {
-      if (m.decidedAt === null) continue
-      if (decider === undefined || (decider.decidedAt ?? 0) < m.decidedAt) decider = m
-    }
-    const first = members[0]!
-    return {
-      roundKey,
-      reviewIteration: first.reviewIteration,
-      roundGeneration: first.roundGeneration,
-      decision,
-      decisionReason,
-      decidedAt: decider?.decidedAt ?? null,
-      decidedBy: decider?.decidedBy ?? null,
-      decidedByRole: (decider?.decidedByRole ?? null) as DocVersionRound<R>['decidedByRole'],
-      createdAt: Math.min(...members.map((m) => m.createdAt)),
-      isCurrent: false,
-      members,
-      hasMixedDecisions: new Set(members.map((m) => m.decision)).size > 1,
-    }
-  })
-  groups.sort((a, b) => {
-    const aLegacy = a.roundGeneration === null
-    const bLegacy = b.roundGeneration === null
-    if (aLegacy !== bLegacy) return aLegacy ? -1 : 1
-    if (aLegacy) return a.reviewIteration - b.reviewIteration
-    return (a.roundGeneration as number) - (b.roundGeneration as number)
-  })
-  const pendingIdx = groups.findIndex((g) => g.decision === 'pending')
-  ;(pendingIdx >= 0 ? groups[pendingIdx]! : groups[groups.length - 1]!).isCurrent = true
-  return groups
-}
-
-/**
  * RFC-142: list a multi-document review's rounds (ascending, oldest → newest)
  * for the /reviews list expand and the read-only historical-round view
  * (`?round=<roundKey>`). Returns [] for single-document reviews (no
@@ -2693,28 +2289,6 @@ export async function selectPendingDocVersion(
     )
   }
   return rowToDocVersion(pendingRows[0]!)
-}
-
-/**
- * RFC-326 — resolve whichever anchor form the caller gave against `body`.
- * Web anchors are canonicalised (strategy 0 first, then the legacy context
- * strategies); simplified locators go through the collaboration resolver and
- * are persisted verbatim.
- */
-export function resolveCommentAnchor(
-  body: string,
-  input: { anchor?: ReviewCommentAnchor; anchorRequest?: ReviewAnchorRequest },
-): { anchor: ReviewCommentAnchor; warnings: ReviewAnchorWarning[] } {
-  if ((input.anchor === undefined) === (input.anchorRequest === undefined)) {
-    throw new Error('addReviewComment: pass exactly one of `anchor` / `anchorRequest`')
-  }
-  if (input.anchorRequest !== undefined) {
-    const resolution = resolveReviewAnchor(buildReviewAnchorDocument(body), input.anchorRequest)
-    if (!resolution.ok) throw anchorResolutionError(resolution)
-    assertResolvedAnchorConsistent(body, resolution.anchor)
-    return { anchor: resolution.anchor, warnings: resolution.warnings }
-  }
-  return { anchor: canonicalizeAnchor(body, input.anchor!), warnings: [] }
 }
 
 async function addReviewCommentUnlocked(
@@ -3056,89 +2630,6 @@ async function deleteReviewCommentUnlocked(
 // ---------------------------------------------------------------------------
 // Decision (approve / reject / iterate).
 // ---------------------------------------------------------------------------
-
-// RFC-149: review decision policy table.
-//
-// `submitReviewDecision` used to branch on `args.decision` at ≥13 independent
-// points (iteration bump, decisionReason derivation, rerun/rollback key pairs,
-// supersede column value + marker, mint cause, cascade semantics, lifecycle
-// event). Each policy dimension now lives in ONE row per decision below and
-// the function keeps only the path-shape skeleton (approve early-return +
-// multi-doc approve gate — D2). Adding a decision kind = adding a row: the
-// mapped `satisfies` makes a missing/extra row a compile error.
-
-/**
- * The rerun/rollback/supersede/cascade half of a decision policy. Only
- * rejected/iterated carry it — approve early-returns before the rerun block.
- * All six fields are REQUIRED (design-gate revision): an optional slot would
- * let a new row compile while silently dropping the reject/iterate asymmetry.
- */
-export interface ReviewRerunPolicy {
-  /** Review-node config key listing which upstream nodes re-run. */
-  rerunnableKey: 'rerunnableOnReject' | 'rerunnableOnIterate'
-  /** Review-node config key gating the upstream worktree rollback. */
-  rollbackKey: 'rollbackFilesOnReject' | 'rollbackFilesOnIterate'
-  /** Config-absent default — reject rolls files back, iterate keeps them. */
-  rollbackDefault: boolean
-  /** `node_runs.superseded_by_review` column value (the human-breadcrumb
-   *  supersede marker derives from it byte-for-byte). */
-  supersededByReview: 'rejected' | 'iterated'
-  /** `rerun_cause` stamped on the freshly minted upstream retry row. */
-  mintCause: 'review-reject' | 'review-iterate'
-  /** Sibling-review cascade rule: reject always cascades (RFC-005 A2);
-   *  iterate only when the upstream opted into sibling sync (RFC-014). */
-  cascade: 'always' | 'sibling-sync-conditional'
-}
-
-export interface ReviewDecisionPolicyBase {
-  /** Whether the decision bumps review_iteration (approve keeps it). */
-  bumpsIteration: boolean
-  /** transitionNodeRunStatus event kind closing / re-opening the review row. */
-  lifecycleEvent: 'approve-review' | 'reject-review' | 'iterate-review'
-  /** How doc_versions.decision_reason is derived at archive time. */
-  decisionReason: 'reject-reason' | 'render-comments' | 'none'
-}
-
-/** approved FORBIDS the rerun slot; rejected/iterated must carry it in full. */
-export type ReviewDecisionPolicyOf<K extends ReviewDecisionKind> = ReviewDecisionPolicyBase &
-  (K extends 'approved' ? { rerun?: never } : { rerun: ReviewRerunPolicy })
-
-/** Widened view for lookup sites indexing by a runtime ReviewDecisionKind. */
-export type ReviewDecisionPolicy = ReviewDecisionPolicyOf<ReviewDecisionKind>
-
-export const REVIEW_DECISION_POLICY = {
-  approved: {
-    bumpsIteration: false,
-    lifecycleEvent: 'approve-review',
-    decisionReason: 'none',
-  },
-  rejected: {
-    bumpsIteration: true,
-    lifecycleEvent: 'reject-review',
-    decisionReason: 'reject-reason',
-    rerun: {
-      rerunnableKey: 'rerunnableOnReject',
-      rollbackKey: 'rollbackFilesOnReject',
-      rollbackDefault: true,
-      supersededByReview: 'rejected',
-      mintCause: 'review-reject',
-      cascade: 'always',
-    },
-  },
-  iterated: {
-    bumpsIteration: true,
-    lifecycleEvent: 'iterate-review',
-    decisionReason: 'render-comments',
-    rerun: {
-      rerunnableKey: 'rerunnableOnIterate',
-      rollbackKey: 'rollbackFilesOnIterate',
-      rollbackDefault: false,
-      supersededByReview: 'iterated',
-      mintCause: 'review-iterate',
-      cascade: 'sibling-sync-conditional',
-    },
-  },
-} as const satisfies { [K in ReviewDecisionKind]: ReviewDecisionPolicyOf<K> }
 
 export interface SubmitReviewDecisionArgs {
   readonly taskExecutionParticipants: TaskExecutionParticipantBindings

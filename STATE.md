@@ -6,11 +6,31 @@
   设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
 - **范围**：`workflow.validator.ts` 第 133～186 行的两个类型与第 453 行起的纯函数部分（约 3,090 行）原样迁入 resource-catalog
   `domain/workflowValidator.ts`，读库的加载器留在原文件；`review.ts` 的锚点规范化、决定策略表与轮次规则迁入 collaboration 的
-  `domain/reviewAnchor.ts`、`domain/reviewDecisionPolicy.ts`、`domain/reviewRounds.ts`；原位置不留转出（`review.ts` 也不再转出 shared 的
+  `domain/reviewCommentAnchor.ts`、`domain/reviewDecisionPolicy.ts`、`domain/reviewRounds.ts`；原位置不留转出（`review.ts` 也不再转出 shared 的
   `findAllOccurrences`）。清单共 31 个名字（design §3），看过但不进清单的项与理由见 design §5。
 - **不做**：拆分 `validateWorkflowDef`；清单以外的规则归位（与异步编排交织的随 S9 与功能 RFC）；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。与 S9 共用 `review.ts`，串行（S9 当前
   没有在制步骤）。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 16 个后继（另一条件是满 20 个）。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是规则判定，落 domain；infrastructure 只留读库的加载器与评审服务的读写；不新增
+  用例入口。C11 public 不变（不增不撤）；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-493 用例覆盖全部生产文件（下限 3,000）
+  与全部用例（下限 2,500）里的同名声明与 import（import / export-from / type-only / 动态 import 的解构，带负对照），另读两个旧文件与
+  四个新文件。C13 `counts.json` 60 项实测与对照逐项相同，都在 `max` 内；本 RFC 不改任何 `max`。
+- **§14 不变量 / S13**：清单（design §3）的 31 个名字只在 resource-catalog `domain/workflowValidator.ts` 与 collaboration
+  `domain/{reviewCommentAnchor,reviewDecisionPolicy,reviewRounds}.ts` 声明，旧位置不声明不转出、没有文件从旧位置取；新文件不取
+  infrastructure、IO 包与进程全局。生产文件 4,086 → 4,090，跨 context import 7,503 → 7,504（domain 取 `@/util/hash`、`@/util/errors`）。
+  看过但不进清单的项与理由见 design §5（适配器的本分、依赖 infrastructure 自有的类型或机制、与异步编排交织的局部规则）。
+- **集中验证**（候选 1～3，基于另一会话只改文档的 `13467cea0` / `2f65372c8`，详见 plan）：查出本 RFC 的问题都已修正（design §6 细化 1～4）：
+  两个调用闭包选择函数起初留在原文件（eslint 查出）；读校验器源码的锁与登记随内容改指——首批红的 `cross-clarify-validator-rules`，按文件名
+  本身再扫出的 `multiplicity-prepass-singleton` 与前端 `rfc203-validation-copy`，全量红的 intent 教学登记（`intent-teaching-registry`），以及
+  按代码里的字符串字面量（AST）再扫出的两条会静默变空的否定锁；本 RFC 用例 ① 对一个早有的同名类型过严。backend `tsc` 0 错，eslint 无告警；
+  首批按 CI 的跑法跑 274 个文件、与对照 A/B，候选多红的只有上述本 RFC 的问题，其余两边都在 PostgreSQL 一侧撞 5 秒或撞自带时限、逐文件只差
+  ±1～4 条；修复批全过，时限形态的几个文件与对照同形（`retry-node-no-review-cascade` 两边各跑 3 轮，平均耗时相当）。全量 SQLite 2,937 个
+  文件 2,925 个通过，其余 12 个：本 RFC 的 1 个已修，发布账本 1 个是导出仓库没有历史，10 个撞自带时限或检查点，与对照 A/B 同形；
+  `rfc363-preparation-process-recovery` 候选两次红在不同阶段、两边各跑 3 轮全过；三个报告类用例只放宽时限的副本在候选 3 上全过。架构报告
+  60 项与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **下一步**：推送后按 exact SHA 跟 CI，再转 Done（RFC-294 plan §1.2 增 S13 一行、§3 S13 记关闭）。之后按刷新后的后继顺序做 S10、S12；S9
+  余下的其他 context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 16 个后继（另一
+  条件是满 20 个）。
 
 ## 2026-11-13 RFC-492 运行时驱动一族整族迁入 runtime-management infrastructure（Done；`design/RFC-492-runtime-driver-family-into-runtime-management/`）
 

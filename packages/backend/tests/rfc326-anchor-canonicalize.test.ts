@@ -28,10 +28,10 @@ import {
   AnchorValidationError,
   assertResolvedAnchorConsistent,
   canonicalizeAnchor,
-  findAllOccurrences,
   recomputeOccurrenceIndex,
   resolveCommentAnchor,
-} from '@/modules/collaboration/infrastructure/review'
+} from '@/modules/collaboration/domain/reviewCommentAnchor'
+import { findAllOccurrences } from '@agent-workflow/shared'
 import { DomainError, ValidationError } from '../src/util/errors'
 
 // Design-gate F2 document: a heading, then four byte-identical 53-char table

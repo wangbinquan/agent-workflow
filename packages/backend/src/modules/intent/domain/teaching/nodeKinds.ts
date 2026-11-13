@@ -34,8 +34,8 @@ import {
 } from '@agent-workflow/shared'
 import type { NodeTeachingOf } from './types'
 
-const VALIDATOR =
-  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts'
+// RFC-493: the workflow validator (and every field it reads) moved into resource-catalog's domain.
+const VALIDATOR = 'packages/backend/src/modules/resource-catalog/domain/workflowValidator.ts'
 const RESOLVE_SEAM = 'packages/backend/src/modules/intent/application/resolveChangeset.ts'
 
 const LIMITS_TEACHING = {

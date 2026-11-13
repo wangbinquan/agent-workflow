@@ -51,7 +51,8 @@ describe('RFC-103 T5 — 源码层断言（校验器复用共享集，无本地�
   const validatorSrc = readFileSync(
     join(
       import.meta.dir,
-      '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+      // RFC-493: the validator moved into resource-catalog's domain.
+      '../src/modules/resource-catalog/domain/workflowValidator.ts',
     ),
     'utf8',
   )

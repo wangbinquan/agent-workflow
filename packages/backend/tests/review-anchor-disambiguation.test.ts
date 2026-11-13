@@ -11,9 +11,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   AnchorValidationError,
   canonicalizeAnchor,
-  findAllOccurrences,
   recomputeOccurrenceIndex,
-} from '@/modules/collaboration/infrastructure/review'
+} from '@/modules/collaboration/domain/reviewCommentAnchor'
+import { findAllOccurrences } from '@agent-workflow/shared'
 
 const DOC = `# Order Service Design
 

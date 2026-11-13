@@ -27,15 +27,15 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+// RFC-493: the validator (and its multiplicity pre-pass) moved into resource-catalog's domain.
 const VALIDATOR_TS = resolve(
   import.meta.dir,
   '..',
   'src',
   'modules',
   'resource-catalog',
-  'infrastructure',
-  'legacy',
-  'workflow.validator.ts',
+  'domain',
+  'workflowValidator.ts',
 )
 
 describe('RFC-069 C3 — pre-pass single source of truth grep guard', () => {

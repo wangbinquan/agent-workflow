@@ -8,7 +8,7 @@ import {
 } from '@agent-workflow/shared'
 import { executeCodeHostCall } from '../src/modules/integration/infrastructure/codeHost/call'
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
-import { validateWorkflowDefinition } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDefinition } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function call(extra: Record<string, unknown> = {}): WorkflowNode {
   return {

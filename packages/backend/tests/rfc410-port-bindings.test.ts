@@ -14,10 +14,8 @@ import { createExecutionScopeIndex } from '@/modules/task-execution/domain/execu
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { composeDynamicWorkflowLayerOneValidation } from '@/modules/resource-catalog/composition/workflowOperations'
-import {
-  loadWorkflowValidationContext,
-  validateWorkflowDef,
-} from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { loadWorkflowValidationContext } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '@/modules/resource-catalog/domain/workflowValidator'
 import { describeEachProvider } from './helpers/eachProvider'
 
 type Calls = Record<string, unknown[]>

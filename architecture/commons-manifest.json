@@ -914,7 +914,7 @@
     },
     {
       "auditedBy": "node-kind-ports-sharding",
-      "claimAudit": "Claims to be the single declared-port authority. Verified: all five named forks now call `declaredPorts` (WorkflowCanvas.tsx:3584, workflow.validator.ts:1004, wrapperCandidates.ts:56, controlFlowEdge.ts:86, dropTarget.ts:42). Exhaustiveness is real. One residual leak: wrapperCandidates re-adds a phantom `'out'` port outside the table (F12). RFC-354 D6 closes RFC-147's F6 by construction: the clarify NODE-side `questions` / `answers` system ports live in the same table and simply carry no `channel`.",
+      "claimAudit": "Claims to be the single declared-port authority. Verified: all five named forks now call `declaredPorts` (WorkflowCanvas.tsx:3584, domain/workflowValidator.ts:854 (RFC-493), wrapperCandidates.ts:56, controlFlowEdge.ts:86, dropTarget.ts:42). Exhaustiveness is real. One residual leak: wrapperCandidates re-adds a phantom `'out'` port outside the table (F12). RFC-354 D6 closes RFC-147's F6 by construction: the clarify NODE-side `questions` / `answers` system ports live in the same table and simply carry no `channel`.",
       "core": true,
       "files": [
         "packages/shared/src/nodePorts.ts"
@@ -1096,7 +1096,7 @@
     },
     {
       "auditedBy": "node-kind-ports-sharding",
-      "claimAudit": "All three are clean. `canonicalJson` has one implementation; `wrapperAncestryOf` / `inboundEdgeSignature` are consumed by both author gates (scriptNode.ts:576-577, codeHost/authorProjection.ts:57-58) AND the canvas drag guard (WorkflowCanvas.tsx:3044) with no second copy; `readContinueOnMaxIterations` is the only reader in scheduler.ts:7316, workflow.validator.ts:838 and the Inspector.",
+      "claimAudit": "All three are clean. `canonicalJson` has one implementation; `wrapperAncestryOf` / `inboundEdgeSignature` are consumed by both author gates (scriptNode.ts:576-577, codeHost/authorProjection.ts:57-58) AND the canvas drag guard (WorkflowCanvas.tsx:3044) with no second copy; `readContinueOnMaxIterations` is the only reader in scheduler.ts:7316, domain/workflowValidator.ts:706 (RFC-493) and the Inspector.",
       "core": false,
       "files": [
         "packages/shared/src/workflow-canonical.ts"

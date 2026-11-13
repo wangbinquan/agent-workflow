@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { serializeCodeHostSensitiveProjectionV1 } from '@agent-workflow/shared'
-import { validateWorkflowDefinition } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDefinition } from '@/modules/resource-catalog/domain/workflowValidator'
 import { assertCodeHostAuthorAllowed } from '@/modules/resource-catalog/domain/codeHostAuthorGate'
 import type { Actor } from '@/auth/actor'
 

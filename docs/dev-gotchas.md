@@ -48,6 +48,9 @@
 >
 > 因此本文件下面凡是把「push 前跑一遍 `gate:local` / 跑到全绿再推 / 先 `git add -N` 再跑门禁 /
 > 推之前补跑 `RUN_GIT_NETWORK=1 …`」写成**定式**的段落，其**处方部分作废**——不必为了推代码去跑它们。
+> `git add -N` 还另有害处：它把 intent-to-add 条目写进**共享 index**（2026-11-13 RFC-492 为看搬迁后的 rename diff 用了一次，
+> 38 个空条目进了别人也在用的 index，随即在共享发布锁下 `git reset -q -- <目录>` 撤回）。要看搬迁前后的差异，用
+> `git show HEAD:<旧路径>` 与工作树文件对比，或在导出仓库里看。
 >
 > 这些条目**保留**的价值在于它们记录的**失败模式**依然真实，只是暴露点从「本地门禁」挪到了 CI：
 > `git ls-files` 型守卫看不见 untracked 文件、e2e / gitleaks / system-mock / `RUN_GIT_NETWORK`
@@ -760,6 +763,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   （`rfc345-provider-neutral-classic-facades`）。拆段前除了按文件名搜，还要按被拆走的声明文本搜（`export function X`、`export const X`）。
   同一轮的另一个坑：违规样本被**生产侧**先拒了——`util/zip` 的 `encodeZip` 自己就拒绝 `../` 路径，用它造穿越样本，抛错的是编码器，
   被测的 `decodeZip` 根本没跑到。负样本要绕开同侧校验（这里用 fflate `zipSync` 直接打包），并断言被测方的错误码，不断言消息片段。
+  RFC-493 再撞（2026-11-13）：工作流校验本体从 `legacy/workflow.validator.ts` 拆进 domain，原文件还在，读它找规则码的三条锁
+  （`cross-clarify-validator-rules`、`multiplicity-prepass-singleton` 与**前端**的 `rfc203-validation-copy`）不报 ENOENT，只是找不到内容。
+  它们都用分段拼路径（`'legacy', 'workflow.validator.ts'`），按整段路径搜漏掉；拆段后按文件名本身扫一遍全仓（含 `packages/frontend`）。
+  全量又撞到两类：生产代码里的登记数据把文件路径当读点（intent 教学登记的 `VALIDATOR`），以及迁移后**静默变空**的否定锁（“这个文件不含
+  X”——内容搬走后照样绿）。最稳的扫法是 AST 取代码里的字符串字面量（排除注释），对全部包、`e2e`、`scripts` 各扫一遍，逐条看它断言的是
+  留下的内容还是搬走的内容。
 - **给 `services/` 文件挑落点前先量两本账（RFC-456 实撞，2026-11-06）**：`R1`（census `inboundBoundaryEdges`）数的是**一切非模块文件**
   取模块内部的边，`cli/` 也算——`stop` CLI 用的停机控制通道若进 system-operations 的 `infrastructure/`，`R1` 就多一条；装配根取模块的
   composition 只对 `BOOTSTRAP_FILES` 豁免，取 `infrastructure/` 一律记账（装配根至今零条，进程级钩子经模块的 `composition.ts` 给）。

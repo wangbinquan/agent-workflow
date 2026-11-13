@@ -7,7 +7,8 @@ import type { Agent, WorkflowDefinition, WorkflowDetail } from '@agent-workflow/
 import type { Actor } from '@/auth/actor'
 import { getAgentById } from './legacy/agent'
 import { getWorkflow } from './legacy/workflow'
-import { loadWorkflowValidationContext, validateWorkflowDef } from './legacy/workflow.validator'
+import { loadWorkflowValidationContext } from './legacy/workflow.validator'
+import { validateWorkflowDef } from '../domain/workflowValidator'
 import { canViewResource } from '../composition/resourceAcl'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 

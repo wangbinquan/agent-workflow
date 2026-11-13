@@ -21,7 +21,7 @@ import {
   validateWorkflowDefinition,
   workflowValidationContextHashOf,
   type ValidatorContext,
-} from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+} from '@/modules/resource-catalog/domain/workflowValidator'
 import {
   skillFromPersistenceRow,
   type SkillPersistenceRow,

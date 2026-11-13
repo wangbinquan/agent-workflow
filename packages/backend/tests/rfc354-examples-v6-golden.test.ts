@@ -24,7 +24,7 @@ import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 const EXAMPLES_ROOT = resolve(import.meta.dir, '..', '..', '..', 'examples', 'workflows')
 

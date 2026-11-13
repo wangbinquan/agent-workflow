@@ -24,7 +24,7 @@ RFC-294 的 2026-11-09 审视（R9）指出：分层只规定了“禁止 import
 
 - **G1 工作流静态校验归 resource-catalog 的 domain**：`workflow.validator.ts` 的纯函数部分原样迁入 `domain/workflowValidator.ts`；读库的
   加载器（`loadWorkflowValidationContext`、`buildWorkflowValidationContext`、`validateWorkflowById`）留在 infrastructure，改取 domain。
-- **G2 评审的纯规则归 collaboration 的 domain**：锚点规范化迁入 `domain/reviewAnchor.ts`，决定策略表迁入 `domain/reviewDecisionPolicy.ts`，
+- **G2 评审的纯规则归 collaboration 的 domain**：锚点规范化迁入 `domain/reviewCommentAnchor.ts`，决定策略表迁入 `domain/reviewDecisionPolicy.ts`，
   轮次判定与按轮分组迁入 `domain/reviewRounds.ts`。
 - **G3 原位置不留转出**：生产代码与用例改从新位置取；`review.ts` 不再转出 shared 的 `findAllOccurrences`。
 - **G4 锁**：新增 RFC-493 用例，钉住清单里每一项只在新位置声明、旧位置不声明也不转出、没有文件从旧位置取。

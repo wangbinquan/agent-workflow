@@ -7,7 +7,7 @@ import {
   projectWorkflowValidationContext,
   workflowValidationContextHashOf,
   type ValidatorContext,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+} from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function agent(name = 'coder'): Agent {
   return {

@@ -27,10 +27,8 @@ import {
   reviewApprovedPortName,
   SYSTEM_DECIDER,
 } from '@agent-workflow/shared'
-import {
-  REVIEW_DECISION_POLICY,
-  resolveReviewRoundMode,
-} from '@/modules/collaboration/infrastructure/review'
+import { REVIEW_DECISION_POLICY } from '@/modules/collaboration/domain/reviewDecisionPolicy'
+import { resolveReviewRoundMode } from '@/modules/collaboration/domain/reviewRounds'
 
 // ---------------------------------------------------------------------------
 // 1. 策略表值锁

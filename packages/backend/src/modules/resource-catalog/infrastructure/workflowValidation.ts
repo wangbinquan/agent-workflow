@@ -29,7 +29,7 @@ import {
   workflowValidationContextHashOf,
   type ValidatorContext,
   type ValidatorWorkflowRef,
-} from './legacy/workflow.validator'
+} from '../domain/workflowValidator'
 
 interface WorkflowSelector {
   readonly name: string

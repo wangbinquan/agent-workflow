@@ -43,7 +43,7 @@ import { validateDraftChangeset } from '@/modules/intent/application/resolveChan
 import {
   validateWorkflowDef,
   type ValidatorContext,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+} from '../src/modules/resource-catalog/domain/workflowValidator'
 import { assertScriptAuthorAllowed } from '../src/modules/resource-catalog/domain/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '../src/modules/resource-catalog/domain/codeHostAuthorGate'
 

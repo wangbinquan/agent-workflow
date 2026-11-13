@@ -11,7 +11,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   validateAgentClarifyMultiplicity,
   validateWorkflowDef,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+} from '../src/modules/resource-catalog/domain/workflowValidator'
 
 const EMPTY_CONTEXT = { agents: [], skills: [] }
 
@@ -193,9 +193,9 @@ describe('RFC-199 strict workflow validation targets', () => {
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workflow.validator.ts',
+        // RFC-493: the validator (and every issue emission) moved into the domain.
+        'domain',
+        'workflowValidator.ts',
       ),
       'utf8',
     )

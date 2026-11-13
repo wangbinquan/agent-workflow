@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   extractTemplateVars,
   validateWorkflowDef,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+} from '../src/modules/resource-catalog/domain/workflowValidator'
 
 // RFC-223 (PR-1): agent refs are stored BY ID. This helper takes skill /
 // dependsOn NAMES and maps them to the `skill-<name>` / `agent-<name>` id

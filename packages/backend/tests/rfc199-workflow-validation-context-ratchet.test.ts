@@ -15,12 +15,13 @@ import ts from 'typescript'
 import {
   projectWorkflowValidationContext,
   type ValidatorContext,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+} from '../src/modules/resource-catalog/domain/workflowValidator'
 
 type InventoryFamily = 'agent' | 'skill' | 'mcp' | 'plugin'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_TSCONFIG = resolve(REPO_ROOT, 'packages', 'backend', 'tsconfig.json')
+// RFC-493: the validator moved into resource-catalog's domain (its context loaders stay in infrastructure).
 const VALIDATOR_SOURCE = resolve(
   REPO_ROOT,
   'packages',
@@ -28,9 +29,8 @@ const VALIDATOR_SOURCE = resolve(
   'src',
   'modules',
   'resource-catalog',
-  'infrastructure',
-  'legacy',
-  'workflow.validator.ts',
+  'domain',
+  'workflowValidator.ts',
 )
 const LOCAL_SOURCE_ROOTS = [
   resolve(REPO_ROOT, 'packages', 'backend', 'src') + sep,
@@ -283,7 +283,7 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
       sources.map((source) => relative(REPO_ROOT, source.fileName)),
       'A new helper receiving inventory resources needs explicit source-boundary review',
     ).toEqual([
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+      'packages/backend/src/modules/resource-catalog/domain/workflowValidator.ts',
       'packages/shared/src/nodePorts.ts',
       // RFC-395 II-a A5: the shared collector reads the same authored reference fields.
       'packages/shared/src/resourceReferences.ts',

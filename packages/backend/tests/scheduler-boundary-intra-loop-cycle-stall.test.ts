@@ -42,7 +42,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 

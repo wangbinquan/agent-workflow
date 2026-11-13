@@ -56,10 +56,8 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { createUser } from './helpers/userFixture'
-import {
-  buildWorkflowValidationContext,
-  validateWorkflowDef,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { buildWorkflowValidationContext } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createAgent } from './helpers/model/resourceWrites'
 

@@ -55,11 +55,13 @@ import { type DbClient, createInMemoryDb } from '../src/db/client'
 import {
   dispatchReviewNode,
   getReviewDetail,
-  groupDocVersionRounds,
   listReviewRounds,
   submitReviewDecision,
-  type RoundGroupRow,
 } from '@/modules/collaboration/infrastructure/review'
+import {
+  groupDocVersionRounds,
+  type RoundGroupRow,
+} from '@/modules/collaboration/domain/reviewRounds'
 import { createUser } from './helpers/userFixture'
 import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

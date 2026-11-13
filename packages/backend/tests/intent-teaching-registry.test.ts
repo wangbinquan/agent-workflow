@@ -441,11 +441,10 @@ function taughtInputFieldNames(): Set<string> {
 }
 
 describe('RFC-348 — read sites name nothing the registries do not teach (AST reverse check)', () => {
-  test('workflow.validator.ts read* helpers', () => {
+  // RFC-493: the validator's read* helpers moved with it into resource-catalog's domain.
+  test('workflowValidator.ts read* helpers', () => {
     const found = helperArgNames(
-      parseFile(
-        'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
-      ),
+      parseFile('packages/backend/src/modules/resource-catalog/domain/workflowValidator.ts'),
       VALIDATOR_READ_HELPERS,
     )
     expect([...found].sort()).toEqual(VALIDATOR_BASELINE)

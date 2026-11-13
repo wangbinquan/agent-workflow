@@ -49,8 +49,9 @@ describe('WRAPPER_NODE_KINDS 单源（flag-audit W0）', () => {
       'packages/backend/src/modules/task-execution/engine/wrapper/fanoutStrategy.ts',
       'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
       // RFC-470 deleted the `services/workflow.validator.ts` re-export (RFC-345 had already reduced it to one
-      // `export *` line, which left this entry vacuous); the lock reads the validator's definition site.
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+      // `export *` line, which left this entry vacuous); the lock reads the validator's definition site — since RFC-493
+      // resource-catalog's domain (the legacy file keeps only the context loaders).
+      'packages/backend/src/modules/resource-catalog/domain/workflowValidator.ts',
       'packages/frontend/src/components/canvas/WorkflowCanvas.tsx',
       'packages/frontend/src/components/canvas/coordProjection.ts',
       'packages/frontend/src/components/canvas/wrapperOps.ts',

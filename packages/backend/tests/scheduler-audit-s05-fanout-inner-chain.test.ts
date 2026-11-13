@@ -49,7 +49,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 import { createLogger } from '../src/util/log'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 

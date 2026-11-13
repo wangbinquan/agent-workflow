@@ -11,7 +11,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, DwTokenMap } from '@agent-workflow/shared'
 import { dwGeneratedToWorkflowDef } from '@agent-workflow/shared'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function agent(name: string, outputs: string[] = []): Agent {
   return {

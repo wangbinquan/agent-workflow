@@ -92,10 +92,8 @@ import { createAgentRouteLaunch } from '@/modules/task-execution/application/lau
 import { composeAgentLaunchResourceOperations } from '../src/modules/resource-catalog/composition/agentLaunchResources'
 import { autoResumeInterruptedTasks } from '../src/modules/task-execution/application/recovery/autoResume'
 import { createUser } from './helpers/userFixture'
-import {
-  buildWorkflowValidationContext,
-  validateWorkflowDef,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { buildWorkflowValidationContext } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

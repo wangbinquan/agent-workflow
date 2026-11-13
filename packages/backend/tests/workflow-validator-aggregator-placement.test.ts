@@ -9,7 +9,7 @@
 
 import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function agent(name: string, role: Agent['role'] = undefined): Agent {
   const a: Agent = {

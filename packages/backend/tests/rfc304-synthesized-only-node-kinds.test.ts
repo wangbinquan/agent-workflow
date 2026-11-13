@@ -25,7 +25,7 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { SYNTHESIZED_ONLY_NODE_KINDS, isSynthesizedOnlyNodeKind } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 const CTX = { agents: [], skills: [] }
 

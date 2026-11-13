@@ -1,7 +1,7 @@
 import type { Agent } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { planWorkflowStarter } from '../../frontend/src/lib/workflow-starters'
-import { validateWorkflowDefinition } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDefinition } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function agent(
   name: string,

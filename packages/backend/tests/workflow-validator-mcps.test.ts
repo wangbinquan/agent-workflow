@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent, Mcp, WorkflowDefinition } from '@agent-workflow/shared'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function agent(name: string, opts: { dependsOn?: string[]; mcp?: string[] } = {}): Agent {
   return {

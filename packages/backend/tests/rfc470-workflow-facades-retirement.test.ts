@@ -211,7 +211,8 @@ describe('RFC-470 —— 同步预览与同步门经端口读、经注入的校�
     for (const site of PLUGIN_DISABLED_SITES)
       expect([site, existsSync(join(SRC, site))]).toEqual([site, true])
     expect(PLUGIN_DISABLED_SITES).toContain(
-      'modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+      // RFC-493: the validator (the emitter) moved into resource-catalog's domain.
+      'modules/resource-catalog/domain/workflowValidator.ts',
     )
   })
 })

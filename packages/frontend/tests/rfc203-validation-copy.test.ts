@@ -98,7 +98,8 @@ describe('validation 词条完整性', () => {
     const validator = readFileSync(
       resolve(
         __dirname,
-        '../../backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+        // RFC-493: the validator (every issue code) moved into resource-catalog's domain.
+        '../../backend/src/modules/resource-catalog/domain/workflowValidator.ts',
       ),
       'utf8',
     )

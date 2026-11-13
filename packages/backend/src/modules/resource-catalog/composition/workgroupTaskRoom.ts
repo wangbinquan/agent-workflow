@@ -6,10 +6,7 @@ import {
 import { assertTriggerPreflight } from '../domain/triggerPreflight'
 import { ConflictError } from '@/util/errors'
 import { createWorkgroupTaskRoomApplication } from '../application/workgroups/workgroupTaskRoom'
-import {
-  validateWorkflowDef,
-  type ValidatorContext,
-} from '../infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef, type ValidatorContext } from '../domain/workflowValidator'
 import {
   createWorkgroupTaskRoomTransactionRunner,
   type WorkgroupTaskRoomActiveUserDirectory,

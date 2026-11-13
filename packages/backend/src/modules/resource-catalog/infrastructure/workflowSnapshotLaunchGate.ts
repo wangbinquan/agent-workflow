@@ -11,7 +11,8 @@
 // static validation of its own snapshot; the assembly root takes it through `composition/agentLaunchResources.ts`.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
-import { loadWorkflowValidationContext, validateWorkflowDef } from './legacy/workflow.validator'
+import { loadWorkflowValidationContext } from './legacy/workflow.validator'
+import { validateWorkflowDef } from '../domain/workflowValidator'
 import type { TaskExecutionWorkflowSnapshot } from '@/modules/resource-catalog/public/types'
 
 /**

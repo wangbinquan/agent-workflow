@@ -6,7 +6,8 @@
 
 - 第 187～452 行是读库组装校验上下文的加载器：`loadWorkflowValidationContext`（异步，读代理、技能、插件、MCP、调用闭包）、它的别名
   `buildWorkflowValidationContext`、`validateWorkflowById`（读工作流再校验），以及只服务于加载的辅助（`FROZEN_ROOT_PLACEHOLDER`、
-  `closureFromFrozen`、`loadCallWorkgroupNames`、`pickCallWorkflowRow`、`resolverOverClosure`、`loadCallWorkflowClosure`）。文件里取
+  `closureFromFrozen`、`loadCallWorkgroupNames`、`loadCallWorkflowClosure`）。这一段里夹着的 `pickCallWorkflowRow`、`resolverOverClosure`
+  只有校验本体用（按选择器在调用闭包里取子工作流），归纯函数部分（§6 细化 4）。文件里取
   `drizzle-orm`、`tablesOf`、`PersistenceDb`、`listAgents`、`listSkills`、`getWorkflow`、`createPluginRepository`、
   `workflowCatalogPredicate`、`workflowReferenceFromPersistenceRow` 与 `NotFoundError` 的地方都在这一段（第 1870 行的 `listAgents` 是注释）。
 - 其余是同步纯函数，没有 `await`，不取库、文件系统与进程：
@@ -49,10 +50,10 @@ domain 取 `../public/types` 与 `@/util/hash` 都有先例（runtime-management
 `public/types`；collaboration、code-capability 的 domain 取 `@/util/hash`），不触 RFC-294 的模块分层门（domain 不取 fs / 进程、
 hono / drizzle / sqlite、`src/{db,ws,routes,server}` 与任何 infrastructure）。
 
-### D2 评审的锚点规范化 → collaboration `domain/reviewAnchor.ts`
+### D2 评审的锚点规范化 → collaboration `domain/reviewCommentAnchor.ts`
 
 锚点一段与 `resolveCommentAnchor` 原样迁入。`findAllOccurrences` 不再转出：用例改从 `@agent-workflow/shared` 取（shared 才是它的定义处）。
-`review.ts` 从 `../domain/reviewAnchor` 取它用到的函数与错误类。
+`review.ts` 从 `../domain/reviewCommentAnchor` 取它用到的函数与错误类。（落位的文件名见 §6 细化 1。）
 
 ### D3 决定策略表 → collaboration `domain/reviewDecisionPolicy.ts`
 
@@ -76,7 +77,7 @@ hono / drizzle / sqlite、`src/{db,ws,routes,server}` 与任何 infrastructure�
   `ValidatorMcpResource`、`ValidatorContext`、`WorkflowValidationOverlayError`、`withValidationOverlays`、`WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1`、
   `projectWorkflowValidationContext`、`workflowValidationContextHashOf`、`workflowDefinitionCandidateHashOf`、`validateWorkflowDefinition`、
   `validateWorkflowDef`、`extractTemplateVars`、`validateAgentClarifyMultiplicity`（15 个）。
-- collaboration `domain/reviewAnchor.ts`：`OccurrenceRecomputeResult`、`AnchorValidationError`、`recomputeOccurrenceIndex`、
+- collaboration `domain/reviewCommentAnchor.ts`：`OccurrenceRecomputeResult`、`AnchorValidationError`、`recomputeOccurrenceIndex`、
   `canonicalizeAnchor`、`anchorResolutionError`、`assertResolvedAnchorConsistent`、`resolveCommentAnchor`（7 个）。
 - collaboration `domain/reviewDecisionPolicy.ts`：`ReviewRerunPolicy`、`ReviewDecisionPolicyBase`、`ReviewDecisionPolicyOf`、
   `ReviewDecisionPolicy`、`REVIEW_DECISION_POLICY`（5 个）。
@@ -88,7 +89,8 @@ hono / drizzle / sqlite、`src/{db,ws,routes,server}` 与任何 infrastructure�
 
 新增 `rfc493-pure-logic-out-of-infrastructure-boundary`（AST，带负对照，登记 guard-manifest）：
 
-- ① 清单里每个名字在全部生产文件里只声明一次，就在表里的新文件。
+- ① 清单里每个名字在全部生产文件里只在表里的新文件声明（resource-catalog 的 application 端口里早有一个同名的不同类型
+  `WorkflowValidationCandidate`，逐个钉住）。
 - ② `legacy/workflow.validator.ts` 与 `review.ts` 不声明、不转出这些名字，`review.ts` 不转出 `findAllOccurrences`；`legacy/workflow.validator.ts`
   只声明三个加载器入口与它们的辅助。
 - ③ 全部生产文件与用例都不从旧位置取这些名字（import 与 re-export、type-only 都认，带负对照）。
@@ -121,6 +123,28 @@ RFC-294 的模块分层门（`rfc294-review-module-layer-rules`）覆盖新文�
 2. **`legacy/workflow.validator.ts` 不改名**：它仍承载 `validateWorkflowById`，改名只增加使用方改动面；头注写明校验本体的位置。
 3. **决定策略表单独成文件**：不并进 `domain/reviewDecision.ts`（那里是操作日志的编解码）。
 4. **清单只收两处必含项及其同类纯规则**：§5 的项不进清单；它们是否另立波次整体归位由用户决定（RFC-294 review §9）。
+
+实施中的细化（都在本 RFC 范围内）：
+
+1. **锚点规范化落 `domain/reviewCommentAnchor.ts`**：collaboration 已有 `domain/reviewAnchor.ts`——RFC-326 的锚点解析器（引文 + 第几处 +
+   章节 → 复合锚点），头注写明只取 shared 的原语。迁出的规范化建立在它之上（取 `buildReviewAnchorDocument`、`resolveReviewAnchor`），且
+   `AnchorValidationError` 取 `@/util/errors`，并进去会改变那个文件的依赖面，所以另立文件，按它处理的对象（评论锚点）命名。
+2. **源码锁与登记随内容改指新文件**：插件禁用码的发射点清单（resource-catalog `domain/disabledResourcePolicy.ts` 的
+   `PLUGIN_DISABLED_SITES`，生产数据，RFC-470 用例逐个查文件在）改指 `domain/workflowValidator.ts`；读校验器源码的锁
+   （`rfc199-workflow-validation-targets` 的发射点棘轮、`rfc199-workflow-validation-context-ratchet` 的编译入口与语义源清单、`rfc103` 的
+   单源断言、`cross-clarify-validator-rules` 的规则码枚举、`multiplicity-prepass-singleton` 的单源 grep，以及前端
+   `rfc203-validation-copy` 收集全部校验码的那一条）与 `rfc148` 的动态 import 改指新文件，断言意图不变；其中后三处是集中验证首批
+   红了一条之后，按文件名本身（含 `'workflow.validator.ts'` 这种路径片段）全仓再扫查出的。全量又查出一处生产数据：intent 的教学
+   登记（`intent/domain/teaching/nodeKinds.ts` 的 `VALIDATOR`）把校验器文件记为节点字段的读点，`intent-teaching-registry` 按它做 AST
+   正反向核对，改指新文件（读点只供这条用例核对，不进任何提示词）。随后按代码里的字符串字面量（AST，排除注释）把全部包、`e2e`、
+   `scripts` 再扫一遍，又查出两条迁移后会**静默变空**的否定锁——`rfc271-impl-gate-fixes`（校验器源码不含控制字符）与 shared 的
+   `wrapper-kind-single-source`（校验器不再手写 wrapper 三联判断）——一并改指新文件（前者保留原文件）。`commons-manifest.json` 两段
+   核验文字里的校验器行号改指新文件。
+3. **`review.ts` 的分节标题**：随纯规则整段迁出的分节标题（“Anchor — pure functions.”、“Internal helpers”、RFC-149 的轮次判定）一起
+   迁出；“Decision (approve / reject / iterate).”下面还有留在原处的决定事务代码，留在 `review.ts`。
+4. **调用闭包的两个选择函数随校验迁入**：`pickCallWorkflowRow` 与 `resolverOverClosure` 写在加载器一段的中间，但只有
+   `validateWorkflowDef` 调用（加载器不用）；按行号切分时它们留在了原文件，静态自查（eslint 报原文件里未使用、domain 里未声明）查出，
+   连同注释原样移入 domain，紧跟在两个输入类型之后。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 

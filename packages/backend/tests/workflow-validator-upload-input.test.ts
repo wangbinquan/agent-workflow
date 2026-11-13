@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { validateWorkflowDef } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 
 function defWithUpload(overrides: Record<string, unknown>): WorkflowDefinition {
   return {

@@ -15,11 +15,8 @@ import type {
   WorkflowRepository,
   WorkflowValidationPort,
 } from '../application/workflows/ports'
-import {
-  loadWorkflowValidationContext,
-  validateWorkflowDef,
-  type ValidatorContext,
-} from '../infrastructure/legacy/workflow.validator'
+import { loadWorkflowValidationContext } from '../infrastructure/legacy/workflow.validator'
+import { validateWorkflowDef, type ValidatorContext } from '../domain/workflowValidator'
 import {
   createWorkflowRepository,
   type WorkflowPersistenceSemantics,
