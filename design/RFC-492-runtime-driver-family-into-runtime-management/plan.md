@@ -28,7 +28,9 @@
 - [x] AC-2 同样输入下行为一致（插件嵌入、启动自检、资源策略束、按运行时围栏、workflow 触发）
 - [x] AC-3 legacy 服务实现 46 → 6；legacy 横向文件 165 → 125；不可达生产文件 16 → 15；inbound 边 9 → 0；跨 context 内部文件对、越 DAG 的
       值边与 offered 文件对不升；public surface 不增；减速带不升、触及的收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`1e732c7cc` 主 CI run 43457865029 的 70 个 job 里 65 个通过，红的四格逐格归因（链接检查归本
+      RFC，`45735edf2` 修复；分片 43/44 一条 runner 时序、两个 macOS e2e 分片没分到 runner），后继 run 43459006078 补齐这四格；按路径触发的
+      integration-opencode、windows-platform、visual-regression-nightly、maintenance-soak-nightly 通过（见 §CI）
 
 ## 集中验证（2026-11-13，候选 1～4 基于 `f12a8c45b`，候选 5、6 基于 `691cf408b`）
 
@@ -117,6 +119,36 @@
   与本 RFC 用例里的一族集合和负对照夹具，以及发布账本与 L2 批准清单里已发布 tag 的原因字符串（描述的是那些 tag 的布局）。开发期
   第一轮扫描漏了分段拼接（9 个文件），实现门自审查出按后缀认文件的发布登记（细化 6）。改动文档里的相对链接都有效（`dev-gotchas`
   里三处形似链接的代码文本 HEAD 上就有）。
+
+## CI（AC-4）
+
+- `1e732c7cc`（实现，父提交是另一会话只改文档的 `691cf408b`）：exact SHA 主 CI run 43457865029 的 70 个 job 里 65 个通过，「CI required」
+  随下面四格红：
+  - 「Markdown link check (design/)」红，归本 RFC：`design/RFC-370-crewstation-hosted-deployment/evidence.md` 第 14 行的 markdown 链接仍指
+    迁走的 `services/runtime/types.ts`（Lychee：File not found，全部链接里唯一一处）。集中验证的旧路径扫描把 `design/` 当历史记录整个
+    排除，漏了这条链接。`45735edf2`（只改文档）把它改指新文件的 `RuntimeDriver` 接口，教训写进 `docs/dev-gotchas.md`；后继 run
+    43459006078 的这一格通过。
+  - Backend tests（ubuntu-latest shard 43/44）红一条：`scheduler-clarify-dispatch` 的 PostgreSQL 一例「clarify rerun (retry=0,
+    clarifyIter=N+1) beats a stale higher-retryIndex done row」撞默认 5 秒（5581 ms，第一轮任务停在澄清门之后、第二轮还没启动）。不归
+    本 RFC：用例与它走的调度器澄清重跑路径本 RFC 都没改；父提交 `691cf408b` 与 `f12a8c45b` 的主 CI 同一分片同一例 1.1 秒、1.7 秒；本机按
+    CI 的跑法与对照同时各跑 3 轮，这一例两边都红（负载下全文件两边各红 8～10 条），逐条平均耗时两边相同（合计 100.5 秒对 101.1 秒）；
+    这个文件在这一分片上此前六次以同样形态到点（RFC-401、RFC-422、RFC-429、RFC-445、RFC-450、RFC-474 的 CI），其中三次随后给到点的那
+    一例加了 20 秒显式预算（RFC-423、RFC-430、RFC-446）。未重跑；本 RFC 转 Done 时照先例给这一例加 20 秒显式预算。后继 run 43459006078
+    的这一分片通过。
+  - Playwright e2e（macos-latest shard 1/4、3/4）被取消：GitHub 注记「The job was not acquired by Runner of type hosted even after multiple
+    attempts」与 macOS arm64 runner 容量受限，作业没有分到 runner、一步都没跑，不归本 RFC。同一 run 里 macOS 2/4、4/4，ubuntu 3 个与
+    windows 4 个 e2e 分片都通过（e2e 跑在单二进制上，库存插件从新位置嵌入）；后继 run 43459006078 的 macOS 1/4、3/4 通过。
+- 同一推送按路径触发的四个 run 都通过：
+  - integration-opencode run 43457865369（`opencode latest (ubuntu)`、`opencode 1.18.3 (ubuntu)`）：本 RFC 改了它的路径过滤（一族整个
+    换了位置）。两个 job 各 15 条：5 条门控用例通过，10 条要调真实 opencode 的用例因为 run 里没有模型凭据按门控跳过（与 RFC-491 相同），
+    不算真实 opencode 的运行证据。
+  - windows-platform run 43457865095：本 RFC 改了它的 14 处路径过滤，这个 job 在 Windows 上跑读一族的契约用例。
+  - visual-regression-nightly run 43457865152：本 RFC 改了它的路径过滤（`opencode/util.ts`）。
+  - maintenance-soak-nightly run 43457865137：按 `bootstrap/daemonApplication.ts` 的路径过滤触发（本 RFC 只改了那里启动自检的取处）。
+- `45735edf2`（链接修复，只改文档）：主 CI run 43459006078 的 70 个 job 里 68 个通过，含实现的 run 里红的链接检查、backend 分片 43/44 与
+  macOS e2e 1/4、3/4；Playwright e2e（macos-latest shard 4/4）同样因 runner 容量被取消（没有分到 runner，一步都没跑），这一格在实现的
+  run 里通过；「CI required」随之红。
+- 本 RFC 的落档提交 `f12a8c45b`（只改文档）：主 CI run 43413966880 通过。
 
 ## 实现门（本会话自审，只审功能）
 

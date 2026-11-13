@@ -1,4 +1,4 @@
-## 2026-11-13 RFC-492 运行时驱动一族整族迁入 runtime-management infrastructure（In Progress；`design/RFC-492-runtime-driver-family-into-runtime-management/`）
+## 2026-11-13 RFC-492 运行时驱动一族整族迁入 runtime-management infrastructure（Done；`design/RFC-492-runtime-driver-family-into-runtime-management/`）
 
 - **来由**：RFC-294 plan §4.7——RFC-487～RFC-491 之后，一族之外只剩 runtime-management（16 个生产文件）与 bootstrap（2 个）用它，一族自己
   只取 shared、`util/`、`platform/persistence`、runtime-management 自己与 resource-catalog 的 `public/`（在目标 DAG 上），可以整族迁入。用户
@@ -37,10 +37,20 @@
   本机 git 服务在负载下的一次失败）两边各跑 3 轮，对照同样会红（`rfc223` 红同一条，`rfc363` 红另一条）。本 RFC 用例最慢一条 4.1 秒，改为
   共用解析、读全部生产文件的三条给 30 秒。
   架构报告在最终候选上重采：60 项实测都在 `max` 内（触及的 4 项已收紧），与 design §3 一致。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **下一步**：推送后按 exact SHA 跟 CI（含按路径触发的 integration-opencode、windows-platform、visual-regression-nightly 与
-  maintenance-soak-nightly），再转 Done，RFC-294 plan §1.2 与 §4.7 记运行时驱动一族收口。之后按刷新后的后继顺序做 S13、S10、S12；S9 余下的
-  其他 context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 15 个后继（另一条件是
-  满 20 个）。
+- **落地**：`1e732c7cc`（260 个文件；父提交是另一会话只改文档的 `691cf408b`）。链接修复 `45735edf2`（只改文档，见 CI）。
+- **CI**：`1e732c7cc` 主 CI run 43457865029 的 70 个 job 里 65 个通过，红的四格逐格归因：「Markdown link check (design/)」归本 RFC——
+  `design/RFC-370-crewstation-hosted-deployment/evidence.md` 一条 markdown 链接仍指迁走的 `services/runtime/types.ts`（旧路径扫描把 `design/`
+  当历史记录排除，漏了它），`45735edf2` 改指新位置并补进 `docs/dev-gotchas.md`；Backend tests（ubuntu-latest shard 43/44）一条
+  `scheduler-clarify-dispatch` PostgreSQL 用例撞默认 5 秒（5581 ms；父提交两次 1.1 秒、1.7 秒；本机与对照同时各跑 3 轮两边同红、平均耗时
+  相同；该文件此前六次在这一分片同样到点），不归本 RFC，未重跑，本 RFC 转 Done 时照先例给这一例 20 秒显式预算；Playwright e2e（macos-latest
+  shard 1/4、3/4）没分到 runner 被取消（GitHub 注记 macOS arm64 容量受限，一步都没跑）。后继 `45735edf2` 的主 CI run 43459006078 里这四格都
+  通过，70 个 job 里 68 个通过，macOS e2e 4/4 同样没分到 runner 被取消（这一格在实现的 run 里通过）。同一推送按路径触发的
+  integration-opencode run 43457865369、windows-platform run 43457865095、visual-regression-nightly run 43457865152 与
+  maintenance-soak-nightly run 43457865137 都通过；integration-opencode 两个 job 各 15 条里只有 5 条门控用例真跑，10 条要调真实 opencode 的
+  用例因为 run 里没有模型凭据按门控跳过，不算真实 opencode 的证据。落档提交 `f12a8c45b`：主 CI run 43413966880 通过。
+- **下一步**：RFC-294 plan §4.7 的运行时驱动一族已关闭（§1.1 W9 行、§1.2、§4.6 与 §4.7 已记）。按刷新后的后继顺序做 S13（纯逻辑归位）、
+  S10、S12；S9 余下的其他 context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭
+  16 个后继（另一条件是满 20 个）。
 
 ## 2026-11-12 RFC-491 task-execution 与运行时驱动一族互不 import（Done；`design/RFC-491-te-runtime-family-decoupling/`）
 

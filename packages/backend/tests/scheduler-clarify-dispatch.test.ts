@@ -743,7 +743,10 @@ function registerCases(provider: ProviderHarness) {
     // the stale retry=6 done row.
     const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(finalTask.status).toBe('done')
-  })
+    // Explicit budget, as for the other cases in this file: two task runs plus fixture writes. PostgreSQL CI took
+    // 1.7 s on f12a8c45b and 1.1 s on 691cf408b but 5581 ms on 1e732c7cc (shard 43/44, stalled before the rerun
+    // spawned), past bun's default 5 s.
+  }, 20_000)
 
   // Regression: when a daemon restart sweeps a clarify-driven rerun row to
   // 'interrupted' (RFC-024 P-4-07 path), resume / scheduler re-entry used to
