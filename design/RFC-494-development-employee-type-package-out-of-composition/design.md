@@ -66,8 +66,8 @@ composition 进入模块（R1），它要接线的三个值（`developmentEmploy
 - 迁出名字的 import 逐个改到新位置（别名与相对写法保持原样）；同时取登记对象与迁出名字的拆成两条。
 - 读这几个文件源码的锁随内容改指（按 RFC-493 的教训：按文件名本身、路径片段与代码里的字符串字面量全仓扫，含 e2e 与其他包）；e2e 注释里
   指向旧文件的两处引用一并更正。
-- `composition-control-flow-development-automation` 收紧到实测；`commons-debt.json` 里指向 `employeeTypePackage.ts:1412-1436` 的锚点按内容在新
-  文件里重新定位。
+- `composition-control-flow-development-automation` 收紧到实测；`commons-debt.json` 里指向 `employeeTypePackage.ts` 的两个锚点（DE-13 的
+  `1412-1436`、CC-08 的 `2631-2668`）按内容在新文件里重新定位（迁入的正文随文件头整体下移 2 行：`1414-1438`、`2633-2670`）。
 - RFC-310 的 OS 依赖清单（`design/RFC-310-rule-driven-development-digital-employee/os-architecture-manifest.json`）逐条登记了取
   digital-employee 与 execution-contract 的外部文件：取 execution-contract `public/types` 的两条随文件改指 application；composition 的登记对象
   仍取 digital-employee 的 `public/types`，application 的新文件再添一条。
@@ -133,7 +133,8 @@ development-automation 的 `rfc310-architecture-lock` 覆盖新文件的落层�
    bootstrap 的文件恢复原样（D4）。
 3. **读源码的登记与锁改指新文件**：架构报告的受管字段面（`catalogVisibility: 'internal'` 的落点）、RFC-284 进程启动点棘轮里旧程序
    升级的条目（生成的包装器源码里有 `spawnSync`）、RFC-317 平台工作项 slotRef 的类型包一侧、RFC-323 的否定锁（类型包不含
-   `purpose: 'requirement-source'`，内容迁走后会静默变空）；`commons-debt.json` 的锚点按内容重新定位（行号恰好不变）；e2e
+   `purpose: 'requirement-source'`，内容迁走后会静默变空）；`commons-debt.json` 的两个锚点按内容重新定位（实现提交只改了 DE-13 的路径、
+   行号照旧，CC-08 漏改，转 Done 后补正，见 plan §收口后补正）；e2e
    `rfc319-de-case-and-wizard.spec.ts` 注释里指向旧文件名与旧行号的两处引用改指新文件。
 4. **早已存在的同名项**：`mergeRequestContextSchema`（`composition/digitalEmployeeWorkspace.ts` 里另有一份，S10 后继步骤处理）与
    `WorkContract`、`ToolImplementation`（digital-employee 的 domain 模型里各有一个同名类型）在 RFC-494 用例 ① 里逐个钉住。

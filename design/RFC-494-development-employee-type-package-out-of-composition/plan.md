@@ -98,6 +98,14 @@
   触发其他 workflow。
 - 本 RFC 的落档提交 `3254d1b2d`（只改文档）：主 CI run 43519338266 通过。
 
+## 收口后补正（2026-11-13）
+
+- `architecture/commons-debt.json` 里指向类型包的两个锚点：实现提交 `e11313b6b` 只把 DE-13 的路径改到 application、行号照旧
+  （`1412-1436`，design 当时写成“行号恰好不变”），CC-08 的锚点漏改、仍指 composition 的 `2631-2668`（composition 文件现只有 43 行）。
+  脚本逐行比对原文件与 `application/employeeTypePackage.ts`：迁入的正文整体下移 2 行（只差三处加上的 `export`），两段原文逐字对应
+  `1414-1438` 与 `2633-2670`，按此改正。RFC-317 的账本用例不校验锚点的行号与内容，`e11313b6b` 的 CI 不受影响；改正后
+  `rfc317-architecture-ledgers` 与文档对账用例重跑通过。
+
 ## 实现门（本会话自审，只审功能）
 
 按路径限定在本 RFC 的改动，只审功能。查出两处并已修正（落点从 domain 改为 application、bootstrap 的取处，design §6 细化 1、2），其余

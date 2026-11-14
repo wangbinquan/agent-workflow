@@ -35,6 +35,9 @@
 - **落地**：`e11313b6b`（48 个文件；父提交是本 RFC 的落档提交 `3254d1b2d`）。
 - **CI**：`e11313b6b` 主 CI run 43561287620 的 70 个 job 全部通过（这次推送没有按路径触发其他 workflow）。落档提交 `3254d1b2d`（只改文档）：
   主 CI run 43519338266 通过。
+- **收口后补正**：`commons-debt.json` 指向类型包的两个锚点按内容改正——DE-13 由 `1412-1436` 改为 `1414-1438`（实现提交只改了路径），
+  CC-08 漏改的 `composition/employeeTypePackage.ts:2631-2668` 改为 `application/employeeTypePackage.ts:2633-2670`（迁入的正文整体下移 2 行，
+  逐行核对）。账本用例不校验锚点行号，CI 不受影响（plan §收口后补正）。
 - **下一步**：RFC-294 S10 第一步已关闭（plan §1.2 增一行、§3 S10 记后继）。S10 在 development-automation 的下一步是
   `digitalEmployeePlatformWorkItems.ts` 的工作项用例归 application，随后 S10 的其余范围与 S12；S9 余下的其他 context 对按对另立；成员表一族
   另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 18 个后继（另一条件是满 20 个）。

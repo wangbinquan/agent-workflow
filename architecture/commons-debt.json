@@ -908,7 +908,7 @@
         "packages/backend/src/modules/execution-contract/composition.ts:13-15",
         "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts:24",
         "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts:82-106",
-        "packages/backend/src/modules/development-automation/application/employeeTypePackage.ts:1412-1436",
+        "packages/backend/src/modules/development-automation/application/employeeTypePackage.ts:1414-1438",
         "packages/backend/src/modules/execution-contract/public/commands.ts:5-22",
         "packages/backend/src/modules/execution-contract/domain/model.ts:105-116",
         "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts:230",
@@ -1099,7 +1099,7 @@
       "anchors": [
         "packages/backend/src/util/safePath.ts:14-41",
         "packages/backend/src/modules/development-automation/domain/requirementManifest.ts:13-27",
-        "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts:2631-2668",
+        "packages/backend/src/modules/development-automation/application/employeeTypePackage.ts:2633-2670",
         "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:57-70",
         "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:323-327",
         "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts:59-63"
