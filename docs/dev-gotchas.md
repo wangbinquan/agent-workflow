@@ -783,6 +783,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   extinction / interlock）认守卫。名字里没有这些词、却在 `guard-manifest.json` 登了，RFC-317 的三本守卫账本（`rfc317-architecture-ledgers`、
   `rfc317-guard-corpus-floor`、`rfc317-guard-negative-fixture`）一起报“账本比磁盘多一条”。RFC 改名时连带改用例文件名最容易丢掉后缀；
   按 RFC-488～493 的写法以 `-boundary.test.ts` 结尾。
+- **迁移文件后，账本里的 `路径:起-止` 锚点要按内容逐行重定位，不能只改路径**（RFC-494 实撞，2026-11-13）：`architecture/commons-debt.json`
+  的锚点写的是行号，RFC-317 的账本用例不校验行号与内容，改错、漏改都不会红（RFC-494 只改了一个锚点的路径、行号照旧，另一个锚点
+  漏改，转 Done 后才补正）。迁移时把被迁文件的路径（含 `路径:` 形式）在 `architecture/*.json` 与各 RFC 的清单里全部 grep 出来，用脚本把原文件
+  的锚点行段与新文件逐行比对，取逐字对应的新行号——新文件头的 import 块变了、加了 `export` 都会让正文整体平移；同一个文件有几个锚点
+  就核几个。
 - **给 `services/` 文件挑落点前先量两本账（RFC-456 实撞，2026-11-06）**：`R1`（census `inboundBoundaryEdges`）数的是**一切非模块文件**
   取模块内部的边，`cli/` 也算——`stop` CLI 用的停机控制通道若进 system-operations 的 `infrastructure/`，`R1` 就多一条；装配根取模块的
   composition 只对 `BOOTSTRAP_FILES` 豁免，取 `infrastructure/` 一律记账（装配根至今零条，进程级钩子经模块的 `composition.ts` 给）。

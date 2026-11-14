@@ -1,3 +1,16 @@
+## 2026-11-13 RFC-495 开发自动化的平台工作项用例迁出 composition（In Progress；`design/RFC-495-development-platform-work-items-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 点名“`digitalEmployeePlatformWorkItems.ts` 的工作项用例归 application”；RFC-494 之后 development-automation
+  组合层控制流实测 491 行，这个文件（2,324 行）占 120 行、是最多的一个。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行
+  判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、
+  实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：工作项用例（按 `plan.workItemRef` 分派的 `execute`）、它的 schema 与辅助函数、用例的输入接口原样迁入
+  `application/employeePlatformWorkItems.ts`；四处 infrastructure（选定工作区效果、懒建证据存储、业务树摘要、基线读取）与默认时钟改由
+  composition 注入；composition 只留组合输入类型（形状不变）与两个装配函数，使用方不改。清单见 design §3。
+- **不做**：development-automation composition 的其余文件（S10 后继步骤）与其他模块；按工作项拆分用例；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 18 个后继（另一条件是满 20 个）。
+
 ## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码迁出 composition（Done；`design/RFC-494-development-employee-type-package-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10（`composition/` 只装配：全模块收口）——development-automation 的 composition 最重（32 个文件、1.53 万行，组合层
