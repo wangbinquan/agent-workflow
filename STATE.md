@@ -1,4 +1,4 @@
-## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码迁出 composition（In Progress；`design/RFC-494-development-employee-type-package-out-of-composition/`）
+## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码迁出 composition（Done；`design/RFC-494-development-employee-type-package-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10（`composition/` 只装配：全模块收口）——development-automation 的 composition 最重（32 个文件、1.53 万行，组合层
   控制流实测 660），plan 写明可单独立 RFC 先做；其中最大的 `employeeTypePackage.ts`（5,478 行）几乎全是开发员工类型包的合同与编解码（10-16 review
@@ -32,6 +32,12 @@
   8 个两边红在同样的用例（发布账本是导出仓库没有历史，其余撞时限）、2 个候选多红一条撞看门狗或启动等待（import 闭包不含本 RFC 的路径、与
   对照逐字相同，两边各跑 3 轮同形）；四个报告类用例只放宽时限的副本两边全过。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定
   自审，只审功能）。
+- **落地**：`e11313b6b`（48 个文件；父提交是本 RFC 的落档提交 `3254d1b2d`）。
+- **CI**：`e11313b6b` 主 CI run 43561287620 的 70 个 job 全部通过（这次推送没有按路径触发其他 workflow）。落档提交 `3254d1b2d`（只改文档）：
+  主 CI run 43519338266 通过。
+- **下一步**：RFC-294 S10 第一步已关闭（plan §1.2 增一行、§3 S10 记后继）。S10 在 development-automation 的下一步是
+  `digitalEmployeePlatformWorkItems.ts` 的工作项用例归 application，随后 S10 的其余范围与 S12；S9 余下的其他 context 对按对另立；成员表一族
+  另立。独立对账（plan §0 第 10 条）不晚于 2026-11-23：上次 2026-11-09，其后关闭 18 个后继（另一条件是满 20 个）。
 
 ## 2026-11-13 RFC-493 纯逻辑归位：工作流静态校验与评审的锚点、决定策略迁出 infrastructure（Done；`design/RFC-493-pure-logic-out-of-infrastructure/`）
 

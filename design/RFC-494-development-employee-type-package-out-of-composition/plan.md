@@ -24,7 +24,7 @@
 - [x] AC-2 同样输入下包语义、执行合同登记、上下文 schema、两个运行时编解码器与旧程序升级的结果与此前一致
 - [x] AC-3 新文件的依赖面是闭集（不取 infrastructure、composition、IO 包与进程全局）；跨 context 边、public surface 不升；组合层控制流
       收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`e11313b6b` 主 CI run 43561287620 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证（2026-11-13，候选 1～4）
 
@@ -91,6 +91,12 @@
 - **收口文档**：plan、`STATE.md` 与 `docs/dev-gotchas.md` 定稿后重新同步到候选导出仓库，读这几处文档与 RFC 索引的 6 个用例
   （`docs-implementation-parity`、`docs-runbook-command-guard`、`rfc-index-status-drift`、`rfc310-ac-evidence-index`、
   `review-iterate-sibling-cascade`、`rfc317-stale-assertion-invariants`）重跑全过（33 / 33）。
+
+## CI（AC-4）
+
+- `e11313b6b`（实现，父提交是本 RFC 的落档提交 `3254d1b2d`）：exact SHA 主 CI run 43561287620 的 70 个 job 全部通过；这次推送没有按路径
+  触发其他 workflow。
+- 本 RFC 的落档提交 `3254d1b2d`（只改文档）：主 CI run 43519338266 通过。
 
 ## 实现门（本会话自审，只审功能）
 
