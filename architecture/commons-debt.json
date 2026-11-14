@@ -1102,7 +1102,7 @@
         "packages/backend/src/modules/development-automation/application/employeeTypePackage.ts:2633-2670",
         "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:57-70",
         "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:323-327",
-        "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts:59-63"
+        "packages/backend/src/modules/development-automation/application/employeePlatformWorkItems.ts:49-53"
       ],
       "findingId": "CC-08",
       "kind": "boundary-blur",

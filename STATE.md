@@ -10,6 +10,23 @@
 - **不做**：development-automation composition 的其余文件（S10 后继步骤）与其他模块；按工作项拆分用例；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
   2026-11-23：上次 2026-11-09，其后关闭 18 个后继（另一条件是满 20 个）。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是工作项用例与它的规则，落 application；composition 只留装配（选定实现、绑定端口、
+  默认值）；不新增用例入口（用例本来就经 digital-employee 的平台工作项端口调用）。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写
+  原子。C12 RFC-495 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import（命名 import、type-only、
+  re-export、命名空间成员与动态 import 的解构，带负对照），另读 composition 文件与新文件。C13 `composition-control-flow-development-automation`
+  491 → 371（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第二步**：清单（design §3）的名字只在 development-automation `application/employeePlatformWorkItems.ts` 声明（早已存在的
+  两个同名声明逐个钉住）；composition 文件只声明组合输入类型、bootstrap 输入类型与两个装配函数，只交出其中三个，没有控制流语句；没有文件从
+  composition 取迁出的名字；新文件只取 zod、shared、`@/util/hash`、`@/util/gitRef`、digital-employee 的 `public/types` 与本模块 domain /
+  application，不用进程全局。生产文件 4,091 → 4,092，跨 context import 7,504 → 7,504（3 条随文件迁到 application，context 对与符号相同）。
+  S10 的其余范围（工作区策略、mission / config 操作、交付桥）由后继步骤承接。
+- **集中验证**（候选 1，基于 `89d0a8087`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 442 个
+  文件、与对照 A/B，候选多出的失败都是撞时限（8 个文件的 import 闭包不含本 RFC 的路径；另一个起整个应用的用例撞自带的 20 秒，对照同一例
+  21.5 秒通过）；任一边红的 55 个文件放宽默认时限复跑，候选没有对照之外的失败名。全量 SQLite 2,939 个文件 2,924 个通过，其余 15 个：三个
+  报告类撞自带时限，12 个与对照 A/B——2 个两边都过、7 个两边红在同样的用例、1 个只有对照红、2 个候选多红一条撞检查点或启动等待（import
+  闭包不含本 RFC 的路径、与对照逐字相同，两边各跑 3 轮同形）；平台工作项相关的用例全过。系统模拟 E2E、文档写入根绑定与三个报告类用例只
+  放宽时限的副本候选全过（系统模拟 E2E 的 PostgreSQL 两例 380 / 434 秒，超出自带的 180 秒）。架构报告 60 项只差上述一项。实现门 PASS
+  （本会话按路径限定自审，只审功能）。
 
 ## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码迁出 composition（Done；`design/RFC-494-development-employee-type-package-out-of-composition/`）
 
@@ -47,7 +64,8 @@
   自审，只审功能）。
 - **落地**：`e11313b6b`（48 个文件；父提交是本 RFC 的落档提交 `3254d1b2d`）。
 - **CI**：`e11313b6b` 主 CI run 43561287620 的 70 个 job 全部通过（这次推送没有按路径触发其他 workflow）。落档提交 `3254d1b2d`（只改文档）：
-  主 CI run 43519338266 通过。
+  主 CI run 43519338266 通过。收口的 Done 提交 `0c0bcffdd` 与锚点补正 `152fdcf4c`：主 CI run 43564806053、43565497565 各自 70 个 job 全部
+  通过（补记于 RFC-495 的实现提交）。
 - **收口后补正**：`commons-debt.json` 指向类型包的两个锚点按内容改正——DE-13 由 `1412-1436` 改为 `1414-1438`（实现提交只改了路径），
   CC-08 漏改的 `composition/employeeTypePackage.ts:2631-2668` 改为 `application/employeeTypePackage.ts:2633-2670`（迁入的正文整体下移 2 行，
   逐行核对）。账本用例不校验锚点行号，CI 不受影响（plan §收口后补正）。

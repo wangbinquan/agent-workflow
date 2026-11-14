@@ -10,12 +10,13 @@ import { join, relative, resolve } from 'node:path'
 const repoRoot = resolve(import.meta.dir, '..', '..', '..')
 const backendRoot = join(repoRoot, 'packages', 'backend', 'src')
 const employeeRoot = join(backendRoot, 'modules', 'digital-employee')
+// RFC-495: the platform work-item use cases moved to development-automation's application layer.
 const platformParticipant = join(
   backendRoot,
   'modules',
   'development-automation',
-  'composition',
-  'digitalEmployeePlatformWorkItems.ts',
+  'application',
+  'employeePlatformWorkItems.ts',
 )
 const workspaceParticipant = join(
   backendRoot,

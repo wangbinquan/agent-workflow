@@ -22,7 +22,8 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 /** 写侧边界：这两处的 `targetPath` 最终会拼进 workspace 根并落盘。 */
 const BOUNDARY_FILES = [
   'packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts',
-  'packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
+  // RFC-495: the platform work-item use cases (and their upload schema) moved to development-automation's application layer.
+  'packages/backend/src/modules/development-automation/application/employeePlatformWorkItems.ts',
 ] as const
 
 /** 产出侧拒绝、写侧也必须拒绝的逃逸形态。 */

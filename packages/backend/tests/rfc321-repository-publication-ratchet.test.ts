@@ -257,8 +257,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const employeeWorkspace = read(
       'packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts',
     )
+    // RFC-495: the platform work-item use cases moved to development-automation's application layer.
     const platformWorkItems = read(
-      'packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
+      'packages/backend/src/modules/development-automation/application/employeePlatformWorkItems.ts',
     )
     const employeeRuntime = read(
       'packages/backend/src/modules/digital-employee/application/runtimeService.ts',

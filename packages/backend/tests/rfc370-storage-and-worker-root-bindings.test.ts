@@ -136,9 +136,10 @@ test('three original baseline policies receive the same selected factory at thei
       ['persistence.repositories', 'deps.repositoryBaselines'],
     ],
     [
+      // RFC-495: the use case receives a bound reader; the binding (and its selected factory) stays in composition.
       'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
       'createGitBaselineReader',
-      ['input.baselineRepoPath', 'input.baselineSha', 'input.repositoryBaselines'],
+      ['baselineRepoPath', 'baselineSha', 'input.repositoryBaselines'],
     ],
   ] as const) {
     const source = load(path)
@@ -302,7 +303,8 @@ test('all three original checkpoint consumers await the selected receipt before 
       2,
     ],
     [
-      'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
+      // RFC-495: the platform work-item use cases moved to development-automation's application layer.
+      'modules/development-automation/application/employeePlatformWorkItems.ts',
       'workspaceOps.checkpoint',
       1,
     ],

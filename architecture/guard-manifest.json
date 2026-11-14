@@ -3648,6 +3648,18 @@
       "minCorpusFiles": 3000,
       "negativeFixture": true,
       "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc495-development-platform-work-items-out-of-composition-boundary.test.ts",
+      "id": "rfc495-development-platform-work-items-out-of-composition-boundary",
+      "lines": 424,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
     }
   ],
   "note": "RFC-395 II-b T18 Q-2: live census via tests/architecture/census.ts. Exact file set, corpus floors, absence checks and negative-fixture facts; no debt exemptions added. RFC-398 design §7.3 / §7.5: register the exact release matrix scanner, 41-file floor and synthetic missing/duplicate invocation controls per RFC-317 T13/T14; no floor reduced.",
