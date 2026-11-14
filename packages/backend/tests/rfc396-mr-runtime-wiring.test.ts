@@ -18,12 +18,12 @@ import {
   graphEmployeeTypePackage,
 } from '@/modules/development-automation/application/graph-development/employeeType'
 import { graphExecutionContractRegistrations } from '@/modules/development-automation/application/graph-development/toolContracts'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
-  developmentEmployeeTypePackage,
   issueHandlingContextSchema,
   changeCandidateContextSchema,
   mergeRequestLifecycleDescriptor,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import {
   composeGraphDeliveryLifecycleRuntimeCodec,
   composeGraphDeliveryLifecycleTypePackage,

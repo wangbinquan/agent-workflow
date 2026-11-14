@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { developmentEmployeeRuntimeCodec } from '@/modules/development-automation/composition/employeeTypePackage'
+import { developmentEmployeeRuntimeCodec } from '@/modules/development-automation/application/employeeTypePackage'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   bindCandidateDeliveryParticipant,

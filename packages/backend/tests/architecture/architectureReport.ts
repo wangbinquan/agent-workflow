@@ -1947,7 +1947,8 @@ const INTERNAL_CATALOG_VISIBILITY_WRITERS: readonly SourceAnchorSpec[] = [
     sourceToken: "catalogVisibility: 'internal'",
   },
   {
-    file: 'packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts',
+    // RFC-494: the development employee type package's contracts moved out of composition into development-automation's application layer.
+    file: 'packages/backend/src/modules/development-automation/application/employeeTypePackage.ts',
     symbol: '$file',
     sourceToken: "catalogVisibility: 'internal'",
   },

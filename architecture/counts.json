@@ -19,8 +19,8 @@
       "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/collaboration/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-development-automation": {
-      "max": 660,
-      "reason": "max=660: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/development-automation/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 491,
+      "reason": "max=491: RFC-494 (RFC-294 S10 step 1) moved the development employee type package contracts and codecs out of composition into the application layer (660 -> 491, measured). RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/development-automation/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-digital-employee": {
       "max": 19,

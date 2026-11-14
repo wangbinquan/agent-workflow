@@ -10,11 +10,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { composeEventCenter } from './helpers/eventCenter'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'

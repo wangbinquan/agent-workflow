@@ -1,16 +1,37 @@
-## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码归 domain（In Progress；`design/RFC-494-development-employee-type-package-into-domain/`）
+## 2026-11-13 RFC-494 开发自动化的员工类型包合同与编解码迁出 composition（In Progress；`design/RFC-494-development-employee-type-package-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10（`composition/` 只装配：全模块收口）——development-automation 的 composition 最重（32 个文件、1.53 万行，组合层
   控制流实测 660），plan 写明可单独立 RFC 先做；其中最大的 `employeeTypePackage.ts`（5,478 行）几乎全是开发员工类型包的合同与编解码（10-16 review
   F1 已点名）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前
   RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
-- **范围**：`employeeTypePackage.ts` 除登记对象 `developmentEmployeeTypePackage` 以外的内容原样迁入 `domain/employeeTypePackage.ts`；它依赖的
-  三个纯文件（工具合同登记改名 `domain/digitalEmployeeToolContractRegistrationsV2.ts`、工具结果投影由 application 迁入、旧程序升级）一起迁入
-  domain；composition 只留登记对象；原位置不留转出。清单见 design §3。
+- **范围**：`employeeTypePackage.ts` 除登记对象 `developmentEmployeeTypePackage` 以外的内容原样迁入 `application/employeeTypePackage.ts`；它依赖的
+  两个 composition 文件（工具合同登记改名 `application/digitalEmployeeToolContractRegistrationsV2.ts`、旧程序升级）一起迁入 application，工具结果
+  投影本在 application、不动；composition 只留登记对象与给 bootstrap 的三个转出；原位置不留转出。清单见 design §3。
+- **落点修订**：落档时按 S10 的字面写“归 domain”；集中验证时 development-automation 的 `rfc310-architecture-lock` 报 domain 不纯——这批内容按
+  execution-contract 与 digital-employee 的 public 合同定型，RFC-294 design §3 的矩阵只许 application 取其他模块的 public 精确入口。改落
+  application，RFC 目录名由 `…-into-domain` 更正为 `…-out-of-composition`（design §6 取舍 1、细化 1）。
 - **不做**：development-automation composition 的其余文件（S10 后继步骤）与其他模块；S10 的全模块门与各模块上限（S10 收口时定）；拆分合同文件；
   任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
   2026-11-23：上次 2026-11-09，其后关闭 17 个后继（另一条件是满 20 个）。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是合同、规则与编解码，落 application（矩阵许 application 取其他模块 public 的精确
+  入口，domain 不许）；composition 只留登记对象与给 bootstrap 的三个转出；不新增用例入口。C11 public 不变（不增不撤）；不导出 SQL 片段、
+  行形状查询工厂或状态写原子。C12 RFC-494 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import（import /
+  export-from / type-only / 动态 import 的解构，带负对照），另读 composition 的登记文件与三个新文件。C13
+  `composition-control-flow-development-automation` 660 → 491（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第一步**：清单（design §3）的名字只在 development-automation
+  `application/{employeeTypePackage,digitalEmployeeToolContractRegistrationsV2,legacyDevelopmentProgramUpgrade}.ts` 声明；composition 只交出登记
+  对象 `developmentEmployeeTypePackage` 与三个转出，迁走的两个 composition 文件不在，没有文件从旧位置取迁出的名字；新文件只取 zod、shared、
+  `@/util/gitRef`、其他模块 public 的精确入口与本模块 domain / application。生产文件 4,090 → 4,091，跨 context import 7,504 → 7,504（15 条随
+  文件迁到 application，context 对与符号相同）。S10 的其余范围（工作项用例、工作区策略、mission / config 操作、交付桥）由后继步骤承接。
+- **集中验证**（候选 1～4，基于 `3254d1b2d`，详见 plan）：查出本 RFC 的问题都已修正（design §6 细化 1、5）：落 domain 时 development-automation
+  的 `rfc310-architecture-lock` 报 domain 不纯，改落 application；用例文件名不带守卫普查认的词，RFC-317 的三本守卫账本报 guard-manifest
+  多一条，改名 `…-boundary.test.ts`；RFC-310 的 OS 依赖清单差三条边，按 D5 改指。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 327
+  个文件、与对照 A/B，候选多红的只有上述本 RFC 的问题与 `rfc376-structural-guards` 计数用例撞自带的 20 秒（全量里 4.6 秒通过）；两边都红的
+  33 个文件放宽默认时限复跑两边相同。全量 SQLite 2,938 个文件 2,919 个通过，其余 19 个：三个报告类撞自带时限，16 个与对照 A/B——6 个两边都过、
+  8 个两边红在同样的用例（发布账本是导出仓库没有历史，其余撞时限）、2 个候选多红一条撞看门狗或启动等待（import 闭包不含本 RFC 的路径、与
+  对照逐字相同，两边各跑 3 轮同形）；四个报告类用例只放宽时限的副本两边全过。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定
+  自审，只审功能）。
 
 ## 2026-11-13 RFC-493 纯逻辑归位：工作流静态校验与评审的锚点、决定策略迁出 infrastructure（Done；`design/RFC-493-pure-logic-out-of-infrastructure/`）
 

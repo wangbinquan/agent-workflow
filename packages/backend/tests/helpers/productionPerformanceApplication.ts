@@ -28,11 +28,11 @@ import {
 } from '@/modules/collaboration/composition/decisionCommands'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import {
   composeDigitalEmployee,
   composeDigitalEmployeeTaskCatalogSource,

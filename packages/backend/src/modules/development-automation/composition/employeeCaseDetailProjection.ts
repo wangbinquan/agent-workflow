@@ -12,7 +12,7 @@ import {
   changeCandidateContextSchema,
   issueHandlingContextSchema,
   mergeRequestContextSchema,
-} from './employeeTypePackage'
+} from '../application/employeeTypePackage'
 
 type DetailContext = EmployeeCaseDetailProjectionInputV1['contexts'][number]
 

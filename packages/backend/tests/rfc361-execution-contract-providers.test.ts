@@ -10,7 +10,7 @@ import {
   type ExecutionContractGuide,
   type ExecutionContractImplementation,
 } from '@/modules/execution-contract/domain/model'
-import { developmentExecutionContractRegistrations } from '@/modules/development-automation/composition/employeeTypePackage'
+import { developmentExecutionContractRegistrations } from '@/modules/development-automation/application/employeeTypePackage'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createProgramArtifactStore } from '@/modules/digital-employee/infrastructure/programArtifactStore'
 import { sha256Hex } from '@/util/hash'

@@ -38,7 +38,7 @@ import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/a
 import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,

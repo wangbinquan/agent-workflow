@@ -23,7 +23,7 @@ import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
   developmentImplicitAgentContractDeclarations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'

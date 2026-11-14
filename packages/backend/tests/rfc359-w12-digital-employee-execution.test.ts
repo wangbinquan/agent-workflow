@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { developmentExecutionContractRegistrations } from '@/modules/development-automation/composition/employeeTypePackage'
+import { developmentExecutionContractRegistrations } from '@/modules/development-automation/application/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'

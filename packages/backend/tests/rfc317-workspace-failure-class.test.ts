@@ -119,7 +119,8 @@ const SLOT_REF_SITES = [
     why: 'OS 侧：判定这一轮是否走平台工作项、从而跳过两条工具绑定不变量。',
   },
   {
-    file: 'packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts',
+    // RFC-494: the type package's contracts moved out of composition into development-automation's application layer.
+    file: 'packages/backend/src/modules/development-automation/application/employeeTypePackage.ts',
     why: '类型包侧：intake 不是 external-id 时，把工作项路由到平台工作项。',
   },
 ] as const

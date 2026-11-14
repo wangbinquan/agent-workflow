@@ -32,7 +32,7 @@ import {
   pipelineContextSchema,
   problemSetContextSchema,
   reviewResolutionContextSchema,
-} from './employeeTypePackage'
+} from '../application/employeeTypePackage'
 import { sha256Hex } from '@/util/hash'
 import { stableIdentityComponent } from '@/util/gitRef'
 import { createGitBaselineReader } from '../infrastructure/gitBaselineReader'

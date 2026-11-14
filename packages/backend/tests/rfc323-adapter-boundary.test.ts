@@ -24,11 +24,12 @@ const workspaceParticipant = join(
   'composition',
   'digitalEmployeeWorkspace.ts',
 )
+// RFC-494: the type package's contracts moved out of composition into development-automation's application layer.
 const employeeTypePackage = join(
   backendRoot,
   'modules',
   'development-automation',
-  'composition',
+  'application',
   'employeeTypePackage.ts',
 )
 const connectionPort = join(employeeRoot, 'composition', 'required-ports.ts')

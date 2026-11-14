@@ -1,3 +1,6 @@
+// RFC-494 (RFC-294 S10): moved verbatim from `composition/` — it only generates the compatibility wrapper's source text
+// (the `node:fs` / `node:child_process` imports below are inside that template, not imports of this file).
+
 interface ProgramContractRef {
   readonly contractId: string
   readonly version: number

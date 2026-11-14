@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { mergeRequestContextSchema } from '@/modules/development-automation/composition/employeeTypePackage'
+import { mergeRequestContextSchema } from '@/modules/development-automation/application/employeeTypePackage'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const roots: string[] = []

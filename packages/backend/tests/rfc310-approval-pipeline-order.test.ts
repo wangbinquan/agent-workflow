@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { developmentEmployeeRuntimeCodec } from '../src/modules/development-automation/composition/employeeTypePackage'
+import { developmentEmployeeRuntimeCodec } from '../src/modules/development-automation/application/employeeTypePackage'
 
 const headSha = 'a'.repeat(40)
 const targetSha = 'b'.repeat(40)

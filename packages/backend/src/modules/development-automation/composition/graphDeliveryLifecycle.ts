@@ -6,12 +6,12 @@ import type {
   EmployeeTypeReactionCodec,
 } from '@/modules/digital-employee/public/types'
 import { isMergeRequestLifecycleWorkItem } from '../domain/mergeRequestLifecycle'
+import { developmentEmployeeTypePackage } from './employeeTypePackage'
 import {
-  developmentEmployeeTypePackage,
   issueHandlingContextSchema,
   mergeRequestLifecycleDescriptor,
   mergeRequestLifecycleRuntimeCodec,
-} from './employeeTypePackage'
+} from '../application/employeeTypePackage'
 
 type RuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &

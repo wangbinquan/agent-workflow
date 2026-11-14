@@ -56,11 +56,11 @@ import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import {
   createDevelopmentAdapter,

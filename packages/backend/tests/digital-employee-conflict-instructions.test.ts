@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
-} from '../src/modules/development-automation/composition/employeeTypePackage'
+} from '../src/modules/development-automation/application/employeeTypePackage'
 import { ExecutionContractService } from '../src/modules/execution-contract/application/executionContractService'
 
 describe('digital employee conflict repair instructions', () => {

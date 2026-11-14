@@ -1,3 +1,7 @@
+// RFC-494 (RFC-294 S10): moved verbatim from `composition/digitalEmployeeToolContractsV2.ts` (renamed: the domain already has
+// `digitalEmployeeToolContractsV2.ts` with the contract ids and schemas; this file holds their execution-contract registrations,
+// typed against execution-contract's public contract, which only application may take — RFC-294 design §3).
+
 import type {
   ExecutionContractField,
   ExecutionContractRegistration,
@@ -7,7 +11,7 @@ import {
   EXECUTION_CONTRACT_SCRIPT_INPUT_ENV,
   EXECUTION_CONTRACT_SCRIPT_INPUT_FILE_ENV,
 } from '@/modules/execution-contract/public/types'
-import { projectDevelopmentToolInputV2 } from '../application/digitalEmployeeToolContractProjectionV2'
+import { projectDevelopmentToolInputV2 } from './digitalEmployeeToolContractProjectionV2'
 import {
   validateDevelopmentToolOutputV2,
   type DevelopmentToolContractIdV2,

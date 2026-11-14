@@ -168,7 +168,8 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       'stdout/stderr 直连文件（管道会被脚本的长命孙进程钉住不闭合）、timeout TERM→KILL、' +
       '空 env（PATH/HOME/TMPDIR）+ platformSpawnOptionsForHost；receipt 只信 exit code。',
   },
-  'modules/development-automation/composition/legacyDevelopmentProgramUpgrade.ts': {
+  // RFC-494: moved out of composition into development-automation's application layer (it only generates the wrapper's source text).
+  'modules/development-automation/application/legacyDevelopmentProgramUpgrade.ts': {
     governance: 'short-lived',
     count: 2,
     why:

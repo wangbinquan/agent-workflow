@@ -12,11 +12,11 @@ import { join } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { and, eq } from 'drizzle-orm'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import { createDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'

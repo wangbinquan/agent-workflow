@@ -12,11 +12,11 @@ import {
   composeGraphDeliveryLifecycleTypePackage,
   GRAPH_DELIVERY_EMPLOYEE_TYPE,
 } from '@/modules/development-automation/composition/graphDeliveryLifecycle'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
   mergeRequestLifecycleDescriptor,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import {
   composeDevelopmentEmployeePlatformWorkItemsFromPersistence,
   type DevelopmentEmployeePlatformWorkItemsCompositionInput,

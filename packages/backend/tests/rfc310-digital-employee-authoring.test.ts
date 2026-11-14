@@ -10,11 +10,11 @@ import { join, resolve } from 'node:path'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import {
   composeDigitalEmployee,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,

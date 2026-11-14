@@ -28,7 +28,7 @@ import {
 } from '@/modules/development-automation/composition/graphDeliveryBridge'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphDigest } from '@/modules/development-automation/domain/graph-development/model'
-import { issueHandlingContextSchema } from '@/modules/development-automation/composition/employeeTypePackage'
+import { issueHandlingContextSchema } from '@/modules/development-automation/application/employeeTypePackage'
 import {
   createGraphVerification,
   type GraphVerificationWorkspace,

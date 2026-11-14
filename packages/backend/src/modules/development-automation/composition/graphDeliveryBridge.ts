@@ -24,7 +24,7 @@ import {
 } from '../application/graph-development/mrCare'
 import { graphDigest } from '../domain/graph-development/model'
 import { withAutomationWorkspaceEffects } from '../infrastructure/automationWorkspaceEffects'
-import { issueHandlingContextSchema } from './employeeTypePackage'
+import { issueHandlingContextSchema } from '../application/employeeTypePackage'
 
 type Candidate = Extract<
   Awaited<ReturnType<ChangeCandidateParticipant['derive']>>,

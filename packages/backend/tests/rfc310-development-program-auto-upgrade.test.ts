@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { upgradeLegacyDevelopmentProgram } from '@/modules/development-automation/composition/legacyDevelopmentProgramUpgrade'
+import { upgradeLegacyDevelopmentProgram } from '@/modules/development-automation/application/legacyDevelopmentProgramUpgrade'
 
 const executionEnv = (input: unknown, taskId = 'real-digital-employee-task') =>
   Object.fromEntries(

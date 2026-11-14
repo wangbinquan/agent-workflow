@@ -769,6 +769,20 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   全量又撞到两类：生产代码里的登记数据把文件路径当读点（intent 教学登记的 `VALIDATOR`），以及迁移后**静默变空**的否定锁（“这个文件不含
   X”——内容搬走后照样绿）。最稳的扫法是 AST 取代码里的字符串字面量（排除注释），对全部包、`e2e`、`scripts` 各扫一遍，逐条看它断言的是
   留下的内容还是搬走的内容。
+- **把 composition 里的内容迁出时，bootstrap 取的名字仍要经 composition**（RFC-494 实撞，2026-11-13）：按名字批量改 import 会把
+  bootstrap 也改成直取 `modules/<ctx>/application/…`（或 `domain/…`），那是 R1 的越界边（bootstrap 只经模块的 composition 进入模块）。迁移后
+  grep `src/bootstrap` 里指向 `domain/`、`application/`、`infrastructure/` 的 import；bootstrap 要的名字由 composition 转出（与 RFC-492 的
+  `composition/runtimeDrivers.ts` 同形），模块内代码与用例改取新位置。
+- **落 domain 还是 application，按被迁文件的依赖面定，不按 plan 里的名目**（RFC-494 实撞，2026-11-13）：RFC-294 design §3 的矩阵里 domain
+  只能取 shared 中性值对象与本模块 domain，**其他模块的任何文件（含 `public/types`）都不行**；development-automation 另有更严的
+  `rfc310-architecture-lock`（domain 只许 `zod`、`@/util/hash`、shared 与本模块 domain，且按正则认边，模板字符串里的
+  `import … from 'node:fs'` 也算）。总纲 plan 里“合同 schema 与 codec 归 domain”一类的话只是范围指引：内容若按其他模块的合同定型（实现对方的
+  codec 接口、登记成对方的 registration 类型），就落 application。写 design 前先列出被迁文件的全部 import，逐条对矩阵与该模块自己的锁。
+- **新守卫用例放在 `tests/` 根下时，文件名要带守卫普查认的词**（RFC-494 实撞，2026-11-13）：`tests/architecture/` 以外，
+  `architecture/census.ts` 只按 `GUARD_FILE_NAME_PATTERN`（architecture / boundary / ratchet / lock / guard / invariants / preflight / callsite /
+  extinction / interlock）认守卫。名字里没有这些词、却在 `guard-manifest.json` 登了，RFC-317 的三本守卫账本（`rfc317-architecture-ledgers`、
+  `rfc317-guard-corpus-floor`、`rfc317-guard-negative-fixture`）一起报“账本比磁盘多一条”。RFC 改名时连带改用例文件名最容易丢掉后缀；
+  按 RFC-488～493 的写法以 `-boundary.test.ts` 结尾。
 - **给 `services/` 文件挑落点前先量两本账（RFC-456 实撞，2026-11-06）**：`R1`（census `inboundBoundaryEdges`）数的是**一切非模块文件**
   取模块内部的边，`cli/` 也算——`stop` CLI 用的停机控制通道若进 system-operations 的 `infrastructure/`，`R1` 就多一条；装配根取模块的
   composition 只对 `BOOTSTRAP_FILES` 豁免，取 `infrastructure/` 一律记账（装配根至今零条，进程级钩子经模块的 `composition.ts` 给）。

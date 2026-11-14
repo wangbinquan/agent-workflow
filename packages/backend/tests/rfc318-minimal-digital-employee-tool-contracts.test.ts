@@ -8,12 +8,12 @@ import {
 import {
   developmentExecutionContractRegistrationsV2,
   developmentWorkContractsV2,
-} from '@/modules/development-automation/composition/digitalEmployeeToolContractsV2'
+} from '@/modules/development-automation/application/digitalEmployeeToolContractRegistrationsV2'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   developmentExecutionContractRegistrations,
   developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
-} from '@/modules/development-automation/composition/employeeTypePackage'
+} from '@/modules/development-automation/application/employeeTypePackage'
 import {
   DEVELOPMENT_TOOL_CONTRACT_IDS_V2,
   developmentToolInputSchemasV2,

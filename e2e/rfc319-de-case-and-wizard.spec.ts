@@ -56,7 +56,7 @@ const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2,
  * `development.prepare-materials@3`，而这份合同允许 program 执行体。
  *
  * 输出形状必须逐字符合 `development.prepare-materials.result.v2`
- * （`digitalEmployeeToolContractsV2.ts` 的 outputExample）——发布前平台会**真的跑一遍**
+ * （`application/digitalEmployeeToolContractRegistrationsV2.ts` 的 outputExample）——发布前平台会**真的跑一遍**
  * 这个脚本并校验它的 stdout（validation check `program-fixture-exact-output`）。
  */
 const PROGRAM_FIXTURE = `process.stdout.write(JSON.stringify({ outcome: 'completed' }))`
@@ -585,7 +585,7 @@ test('RFC-319 DE-23: 向导用需求 / 问题 ID 发起任务，外部编号随 
   await page.getByTestId('wizard-launch').click()
   const launched = await launchRequest
   // ID 必须走 `externalId` 而不是被塞进 body：后端按 kind 分派材料准备工具
-  // （`employeeTypePackage.ts:1944` 的 kindRequirements），塞错字段等于这条入口失效。
+  // （`application/employeeTypePackage.ts` 里包描述符的 kindRequirements），塞错字段等于这条入口失效。
   expect(launched.postDataJSON()).toMatchObject({
     name: taskName,
     kind: 'external-id',
