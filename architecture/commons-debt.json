@@ -1100,8 +1100,8 @@
         "packages/backend/src/util/safePath.ts:14-41",
         "packages/backend/src/modules/development-automation/domain/requirementManifest.ts:13-27",
         "packages/backend/src/modules/development-automation/application/employeeTypePackage.ts:2633-2670",
-        "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:57-70",
-        "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:323-327",
+        "packages/backend/src/modules/development-automation/application/employeeWorkspace.ts:56-69",
+        "packages/backend/src/modules/development-automation/application/employeeWorkspace.ts:322-326",
         "packages/backend/src/modules/development-automation/application/employeePlatformWorkItems.ts:49-53"
       ],
       "findingId": "CC-08",

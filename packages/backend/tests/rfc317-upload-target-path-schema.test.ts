@@ -21,7 +21,8 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
 /** 写侧边界：这两处的 `targetPath` 最终会拼进 workspace 根并落盘。 */
 const BOUNDARY_FILES = [
-  'packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts',
+  // RFC-496: the workspace use case (and its Issue upload schema) moved to development-automation's application layer.
+  'packages/backend/src/modules/development-automation/application/employeeWorkspace.ts',
   // RFC-495: the platform work-item use cases (and their upload schema) moved to development-automation's application layer.
   'packages/backend/src/modules/development-automation/application/employeePlatformWorkItems.ts',
 ] as const

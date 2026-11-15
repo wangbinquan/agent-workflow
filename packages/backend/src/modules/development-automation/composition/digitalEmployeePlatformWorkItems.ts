@@ -12,10 +12,7 @@ import {
 import { selectedAutomationWorkspaceEffects } from '../infrastructure/automationWorkspaceEffects'
 import { createEmployeePlatformWorkItemPersistence } from '../infrastructure/employeePlatformWorkItemPersistence'
 import { createGitBaselineReader } from '../infrastructure/gitBaselineReader'
-import {
-  businessTreeSnapshot,
-  businessTreeSnapshotDigest,
-} from '../infrastructure/workspaceValidator'
+import { businessTreeSnapshot, businessTreeSnapshotDigest } from '../application/workspaceValidator'
 import { EvidenceStore } from '../infrastructure/evidenceStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 

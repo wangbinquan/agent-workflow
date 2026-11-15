@@ -31,7 +31,7 @@
 工厂、靠缺省选本机实现的调用。
 
 三组常量 `PLATFORM_OWNED_GIT_METADATA_PREFIXES`、`RUNTIME_OWNED_GIT_METADATA_PREFIXES`、`GIT_METADATA_SKIP_PREFIXES`（`attemptSupport.ts`
-第 53～82 行）是平台与运行时各自拥有、`git-meta` 受保护目录对拍时跳过的路径，不依赖任何东西；使用方是 `attemptSupport.ts` 本身、
+第 43～82 行，含注释）是平台与运行时各自拥有、`git-meta` 受保护目录对拍时跳过的路径，不依赖任何东西；使用方是 `attemptSupport.ts` 本身、
 本文件、`graph-development/employeeWorkspace.ts` 与 `rfc370-runtime-git-cache-protected-root` 用例。
 
 工作区文件的使用方：bootstrap（`bootstrap/daemonModules/digitalEmployee.ts`）取 `composeDevelopmentEmployeeWorkspace` 与
@@ -76,12 +76,12 @@ domain / application 与其他模块 public 的精确入口，`rfc294-review-mod
   - `taskImageWorkspace` 要用的三个转出（`serializeProtectedRootSnapshot`、`reviveWorkspaceValidationInput`、类型
     `SerializedWorkspaceValidationInput`）：这个文件归 RFC-370 余项、逐个避让，不改它的 import；转出记为债（§8）。
 - 其余使用方改取 application：`attemptSupport.ts`（在作用域内读快照、校验与类型）、`graph-development/employeeWorkspace.ts`（序列化与
-  还原）、RFC-495 的业务树摘要绑定（选定的工厂，改取 application 的两个函数）、4 个用例里的纯函数与类型；不给工厂的调用照旧取
-  infrastructure 的包装。
+  还原）、RFC-495 的业务树摘要绑定（选定的工厂，改取 application 的两个函数）、3 个用例里的纯函数与类型
+  （`rfc370-v3-development-tree-operations` 只用包装、不改）；不给工厂的调用照旧取 infrastructure 的包装。
 
 ### D4 常量归 domain
 
-`attemptSupport.ts` 第 53～82 行（三组常量与注释）原样迁入 `domain/gitMetadataOwnership.ts`；`attemptSupport.ts`、
+`attemptSupport.ts` 第 43～82 行（三组常量与注释）原样迁入 `domain/gitMetadataOwnership.ts`；`attemptSupport.ts`、
 `graph-development/employeeWorkspace.ts`、工作区用例与 `rfc370-runtime-git-cache-protected-root` 改取 domain，原位置不留转出。
 
 ### D5 composition 只留装配

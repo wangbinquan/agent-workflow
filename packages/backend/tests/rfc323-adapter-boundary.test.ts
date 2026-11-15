@@ -18,12 +18,13 @@ const platformParticipant = join(
   'application',
   'employeePlatformWorkItems.ts',
 )
+// RFC-496: the workspace use case moved to development-automation's application layer.
 const workspaceParticipant = join(
   backendRoot,
   'modules',
   'development-automation',
-  'composition',
-  'digitalEmployeeWorkspace.ts',
+  'application',
+  'employeeWorkspace.ts',
 )
 // RFC-494: the type package's contracts moved out of composition into development-automation's application layer.
 const employeeTypePackage = join(

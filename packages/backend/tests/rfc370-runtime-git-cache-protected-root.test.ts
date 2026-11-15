@@ -9,11 +9,12 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createWorkspaceValidationAdapter } from '@/modules/development-automation/infrastructure/attemptSupport'
+// RFC-496: the Git metadata ownership rules moved to development-automation's domain.
 import {
-  createWorkspaceValidationAdapter,
   GIT_METADATA_SKIP_PREFIXES,
   PLATFORM_OWNED_GIT_METADATA_PREFIXES,
-} from '@/modules/development-automation/infrastructure/attemptSupport'
+} from '@/modules/development-automation/domain/gitMetadataOwnership'
 import { runGit } from '@/util/git'
 
 const roots: string[] = []

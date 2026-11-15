@@ -32,12 +32,12 @@ import {
   graphWork,
 } from '../../application/graph-development/reactionMaterial'
 import { businessTreeSnapshot, validateWorkspaceOutcome } from '../workspaceValidator'
+import { snapshotProtectedRoots } from '../protectedSnapshot'
 import {
-  snapshotProtectedRoots,
-  serializeProtectedRootSnapshot,
   reviveProtectedRootSnapshot,
-} from '../protectedSnapshot'
-import { GIT_METADATA_SKIP_PREFIXES } from '../attemptSupport'
+  serializeProtectedRootSnapshot,
+} from '../../application/protectedSnapshot'
+import { GIT_METADATA_SKIP_PREFIXES } from '../../domain/gitMetadataOwnership'
 import { withAutomationWorkspaceEffects } from '../automationWorkspaceEffects'
 
 export interface GraphWorkspaceState extends GraphVerificationWorkspace {

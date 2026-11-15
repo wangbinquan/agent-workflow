@@ -65,7 +65,8 @@ const BOOTSTRAP_ENTRY = new Set([
 const REGISTRATION = 'developmentEmployeeTypePackage'
 /** Unrelated declarations that share a moved name, pinned one by one (all predate RFC-494). */
 const HOMONYMS: Readonly<Record<string, readonly string[]>> = {
-  mergeRequestContextSchema: [`${DA}/composition/digitalEmployeeWorkspace`],
+  // RFC-496: the workspace use case moved to development-automation's application layer.
+  mergeRequestContextSchema: [`${DA}/application/employeeWorkspace`],
   WorkContract: ['modules/digital-employee/domain/model'],
   ToolImplementation: ['modules/digital-employee/domain/model'],
 }

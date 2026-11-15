@@ -18,14 +18,11 @@ import {
   withAutomationWorkspaceEffects,
 } from '@/modules/development-automation/infrastructure/automationWorkspaceEffects'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
-import {
-  protectedRootSnapshotDigest,
-  snapshotProtectedRoots,
-} from '@/modules/development-automation/infrastructure/protectedSnapshot'
-import {
-  businessTreeSnapshot,
-  businessTreeSnapshotDigest,
-} from '@/modules/development-automation/infrastructure/workspaceValidator'
+// RFC-496: the pure helpers and types moved to development-automation's application layer; the default-selecting wrappers stay.
+import { protectedRootSnapshotDigest } from '@/modules/development-automation/application/protectedSnapshot'
+import { snapshotProtectedRoots } from '@/modules/development-automation/infrastructure/protectedSnapshot'
+import { businessTreeSnapshotDigest } from '@/modules/development-automation/application/workspaceValidator'
+import { businessTreeSnapshot } from '@/modules/development-automation/infrastructure/workspaceValidator'
 import { createWorkspaceValidationAdapter } from '@/modules/development-automation/infrastructure/attemptSupport'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { runMissionReconcile } from '@/modules/development-automation/application/missionReconciler'

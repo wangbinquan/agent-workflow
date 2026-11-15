@@ -7,7 +7,7 @@ import type {
 import type {
   DevelopmentEmployeeCaseWorkspaceDetailReader,
   DevelopmentEmployeeCaseWorkspaceDetailRow,
-} from './digitalEmployeeWorkspace'
+} from '../application/employeeWorkspace'
 import {
   changeCandidateContextSchema,
   issueHandlingContextSchema,

@@ -298,7 +298,8 @@ test('RFC-383 one employee case participant supplies workspace and platform work
 test('all three original checkpoint consumers await the selected receipt before their next owner statement', () => {
   for (const [path, expression, count] of [
     [
-      'modules/development-automation/composition/digitalEmployeeWorkspace.ts',
+      // RFC-496: the workspace use case moved to development-automation's application layer.
+      'modules/development-automation/application/employeeWorkspace.ts',
       'sourceControl.checkpoint',
       2,
     ],

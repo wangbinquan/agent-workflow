@@ -26,10 +26,9 @@ import {
   usesMinimalMergeRequestToolContracts,
   usesTargetAwareMergeRequestPipeline,
 } from '@/modules/development-automation/domain/mergeRequestLifecycle'
-import {
-  businessTreeSnapshot,
-  businessTreeSnapshotDigest,
-} from '@/modules/development-automation/infrastructure/workspaceValidator'
+// RFC-496: the pure helpers and types moved to development-automation's application layer; the default-selecting wrappers stay.
+import { businessTreeSnapshotDigest } from '@/modules/development-automation/application/workspaceValidator'
+import { businessTreeSnapshot } from '@/modules/development-automation/infrastructure/workspaceValidator'
 import {
   employeeTypePackageDescriptorSchema,
   validateTypePackage,

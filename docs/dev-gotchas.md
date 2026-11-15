@@ -152,6 +152,13 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   `rfc321` 的发布账本（要可达历史）。别把这两类红算到候选头上，也别因此改用例。
 - 提交前逐个 `cmp` 工作树与导出里的本次路径，确认验过的就是要提交的；`STATE.md`、`docs/*.md` 这类别人也有未提交改动的共享文件，
   用「HEAD 的内容 + 自己的改动行」另备一份提交（同样经私有 index），工作树里那份照常就地改，别人的行不进提交也不丢。
+- **导出目录与自写脚本放在 `/tmp`（含 `/private/tmp` 下的会话 scratchpad）里，3 天没改就会被系统删掉**（2026-11-14、11-15 两次实撞，RFC-496）：
+  `/usr/libexec/tmp_cleaner`（launchd `com.apple.tmp_cleaner`，`StartCalendarInterval` 每天 0 点）对 `/tmp` 执行
+  `find … -type f -atime +3 -mtime +3 -ctime +3 -delete`，再删 3 天未改的空目录；本机读文件不更新 atime，实际只看修改与状态变更时间。
+  `git archive` 解出的文件 mtime 是**提交时间**、不是解包时间：复用了四天的导出目录在同一分钟里丢了自建 git 的 `.git/HEAD`、`config` 与所有
+  没再同步过的文件（`proposal/` 成了空目录），`git` 报 `not a git repository`；次日又删掉了连用了四天、创建后没再改过的跑测脚本与发布脚本。跨天再用
+  之前先 `git status` / 比对一遍，坏了就重新导出；解包时加 `tar -m` 让文件取当前时间；长期要用的脚本隔两天 `touch` 一次。删除之前跑出的
+  结果仍然有效（看导出里最后一次同步的时间），之后的不能用。
 
 ## 测试 / CI
 

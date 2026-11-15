@@ -55,7 +55,8 @@ const MOVED = [
 ] as const
 /** Unrelated declarations that share a moved name, pinned one by one (all predate RFC-495). */
 const HOMONYMS: Readonly<Record<string, readonly string[]>> = {
-  contextsOf: [`${DA}/composition/digitalEmployeeWorkspace`],
+  // RFC-496: the workspace use case moved to development-automation's application layer.
+  contextsOf: [`${DA}/application/employeeWorkspace`],
   usesMinimalToolContracts: [`${DA}/application/employeeTypePackage`],
 }
 const COMPOSITION_DECLARED = [

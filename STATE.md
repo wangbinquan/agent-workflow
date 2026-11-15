@@ -12,6 +12,26 @@
   本身的归位；`taskImage*`（RFC-370 余项，逐个避让）；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
   2026-11-23：上次 2026-11-09，其后关闭 19 个后继（另一条件是满 20 个：本 RFC 关闭即到期，须由没有实施被抽查后继的会话执行）。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是工作区用例与它依赖的快照、校验，落 application，不依赖任何东西的常量落
+  domain；composition 只留装配（选定实现、默认时钟、读侧的数据库绑定）；不新增用例入口（用例本来就由 bootstrap 接到 digital-employee
+  反应执行的 `workspace` 端口上）。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-496 用例覆盖全部生产文件（下限
+  3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import（命名 import、type-only、re-export、命名空间成员与动态 import 的解构，带负
+  对照），另读 composition 文件、infrastructure 的两个包装文件与新文件。C13 `composition-control-flow-development-automation` 371 → 274
+  （收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第三步**：清单（design §3）的名字只在 development-automation 的 `application/employeeWorkspace.ts`、
+  `application/protectedSnapshot.ts`、`application/workspaceValidator.ts` 与 `domain/gitMetadataOwnership.ts` 声明（早已存在的同名声明与
+  infrastructure 的三个包装逐个钉住）；composition 文件只声明组合输入类型、bootstrap 输入类型、两个装配函数与读侧的数据库绑定，只交出其中三个，
+  没有控制流语句；infrastructure 的快照 / 校验文件只留包装与三个转出；没有文件从旧位置取迁出的名字；三个 application 文件只取 zod、shared、
+  `@/util/hash`、`@/util/gitRef`、digital-employee 的 `public/types` 与本模块 domain / application，domain 文件没有 import，都不用进程全局。
+  生产文件 4,092 → 4,096，跨 context import 7,504 → 7,504（6 条随内容迁到 application，context 对与符号相同）。S10 的其余范围（mission /
+  config 操作、交付桥）由后继步骤承接。
+- **集中验证**（候选 1，基于 `0b601e52e`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 443 个
+  文件、与对照 A/B，候选多出的 16 条失败都是撞时限（14 条撞默认的 5 秒、2 条撞自带的 20 秒）；任一边红的 72 个文件放宽默认时限复跑，候选
+  没有对照之外的失败名。全量 SQLite 2,940 个文件 2,922 个通过，其余 18 个：三个报告类撞自带时限，15 个与对照 A/B——2 个两边都过、11 个两边
+  红在同样的用例、2 个两边红的用例不同（import 闭包不含本 RFC 的路径、与对照逐字相同，两边各跑 3 轮同形）；员工工作区相关的用例全过。
+  系统模拟 E2E、文档写入根绑定、员工 Case 运行与三个报告类用例只放宽时限的副本候选全过（系统模拟 E2E 的 PostgreSQL 两例 329 / 417 秒，
+  超出自带的 180 秒；Case 运行的 PostgreSQL 一例 107.5 秒，超出自带的 30 秒）。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定
+  自审，只审功能）。
 
 ## 2026-11-13 RFC-495 开发自动化的平台工作项用例迁出 composition（Done；`design/RFC-495-development-platform-work-items-out-of-composition/`）
 
