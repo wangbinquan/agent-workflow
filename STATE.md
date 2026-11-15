@@ -1,3 +1,18 @@
+## 2026-11-14 RFC-496 开发自动化的员工工作区用例迁出 composition（In Progress；`design/RFC-496-development-employee-workspace-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 点名“`digitalEmployeeWorkspace.ts` 的工作区策略……按层归位”；RFC-495 之后 development-automation 组合层
+  控制流实测 371 行，这个文件（1,418 行）占 97 行、是最多的一个。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
+  不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、
+  实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：工作区用例、它的 schema 与辅助函数、用例的输入接口与 Case 工作区读侧原样迁入 `application/employeeWorkspace.ts`；它依赖的
+  受保护目录快照与工作区校验迁入 application（infrastructure 只留缺省选本机实现的三个包装与 `taskImageWorkspace` 要用的三个转出）；三组
+  git 元数据前缀常量迁入 `domain/gitMetadataOwnership.ts`；工作区效果的选定与默认时钟由 composition 给，composition 只留组合输入类型（形状
+  不变）与装配函数，使用方不改。清单见 design §3。
+- **不做**：development-automation composition 的其余文件（S10 后继步骤）与其他模块；`attemptSupport.ts`、`graph-development/employeeWorkspace.ts`
+  本身的归位；`taskImage*`（RFC-370 余项，逐个避让）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）不晚于
+  2026-11-23：上次 2026-11-09，其后关闭 19 个后继（另一条件是满 20 个：本 RFC 关闭即到期，须由没有实施被抽查后继的会话执行）。
+
 ## 2026-11-13 RFC-495 开发自动化的平台工作项用例迁出 composition（Done；`design/RFC-495-development-platform-work-items-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`digitalEmployeePlatformWorkItems.ts` 的工作项用例归 application”；RFC-494 之后 development-automation
@@ -29,7 +44,8 @@
   （本会话按路径限定自审，只审功能）。
 - **落地**：`c08c4db2e`（15 个文件；父提交是本 RFC 的落档提交 `89d0a8087`）。
 - **CI**：`c08c4db2e` 主 CI run 43594357375 的 70 个 job 全部通过（这次推送没有按路径触发其他 workflow）。落档提交 `89d0a8087`（只改文档）：
-  主 CI run 43567345143 的 70 个 job 全部通过。
+  主 CI run 43567345143 的 70 个 job 全部通过。转 Done 的 `a8e04f58f`（只改文档）：主 CI run 43597434331 的 70 个 job 全部通过（补记于
+  RFC-496 的落档提交）。
 - **下一步**：RFC-294 S10 第二步已关闭（plan §1.2 增一行、§3 S10 记后继）。S10 在 development-automation 的下一步是
   `digitalEmployeeWorkspace.ts` 的工作区策略（组合层控制流 371 行里占 97 行），随后 `graphDeliveryBridge.ts` / `missionOperations.ts` /
   `configOperations.ts` 的命令处理与 S10 的其余模块，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。独立对账（plan §0 第 10 条）
