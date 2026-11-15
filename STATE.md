@@ -1,3 +1,18 @@
+## 2026-11-15 RFC-497 开发自动化的 mission 与配置操作用例迁出 composition（In Progress；`design/RFC-497-development-mission-and-config-operations-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 点名“`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位”；RFC-496 之后
+  development-automation 组合层控制流实测 274 行，`missionOperations.ts` 占 61 行、`configOperations.ts` 占 18 行（`graphDeliveryBridge.ts` 62 行，
+  留给下一步）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：两组操作的实现（合同早在 application）原样迁入 `application/missionOperationHandlers.ts` 与 `application/configOperationHandlers.ts`；
+  mission 用例要用的模块参与方成员成为 application 端口（`ports/developmentMissionAutomation.ts`），`DevelopmentAutomationModule` 改为继承它；
+  上传准入的基线解析与默认时钟由 composition 给，composition 只留组合输入类型（形状不变）、准入开关的查询投影与装配函数，使用方不改。
+  清单见 design §3。
+- **不做**：`graphDeliveryBridge.ts`（S10 下一步）、`activityOperations.ts` 与 development-automation composition 的其余文件、其他模块；两份
+  合同文件与 `public/operations`；`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已在
+  RFC-496 关闭时到期（2026-11-09 之后关闭满 20 个后继），已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
 ## 2026-11-14 RFC-496 开发自动化的员工工作区用例迁出 composition（Done；`design/RFC-496-development-employee-workspace-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`digitalEmployeeWorkspace.ts` 的工作区策略……按层归位”；RFC-495 之后 development-automation 组合层
@@ -34,7 +49,8 @@
   自审，只审功能）。
 - **落地**：`9688abfd3`（29 个文件；父提交是本 RFC 的落档提交 `0b601e52e`）。
 - **CI**：`9688abfd3` 主 CI run 43749130381 的 70 个 job 全部通过（这次推送没有按路径触发其他 workflow）。落档提交 `0b601e52e`（只改文档）：
-  主 CI run 43717139271 的 70 个 job 全部通过。
+  主 CI run 43717139271 的 70 个 job 全部通过。转 Done 的 `b549dcc5e`（只改文档）：主 CI run 43752623967 的 70 个 job 全部通过（补记于
+  RFC-497 的落档提交）。
 - **下一步**：RFC-294 S10 第三步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继到本 RFC 满 20 个，先于 11-23 的期限）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告
   对照 §14、证据分级，只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 在
