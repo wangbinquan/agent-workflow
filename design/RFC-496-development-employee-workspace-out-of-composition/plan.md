@@ -27,7 +27,7 @@
       远端树操作照旧优先
 - [x] AC-3 新文件的依赖面是闭集（application 不取 infrastructure、composition、IO 包与进程全局；domain 不取任何模块）；跨 context 边、
       public surface 不升；组合层控制流收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`9688abfd3` 主 CI run 43749130381 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证（2026-11-15，候选 1）
 
@@ -108,7 +108,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `9688abfd3`（实现，父提交是本 RFC 的落档提交 `0b601e52e`）：exact SHA 主 CI run 43749130381 的 70 个 job 全部通过；这次推送没有按路径
+  触发其他 workflow。
 - 本 RFC 的落档提交 `0b601e52e`（只改文档）：主 CI run 43717139271 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）

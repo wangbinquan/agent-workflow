@@ -1,4 +1,4 @@
-## 2026-11-14 RFC-496 开发自动化的员工工作区用例迁出 composition（In Progress；`design/RFC-496-development-employee-workspace-out-of-composition/`）
+## 2026-11-14 RFC-496 开发自动化的员工工作区用例迁出 composition（Done；`design/RFC-496-development-employee-workspace-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`digitalEmployeeWorkspace.ts` 的工作区策略……按层归位”；RFC-495 之后 development-automation 组合层
   控制流实测 371 行，这个文件（1,418 行）占 97 行、是最多的一个。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
@@ -32,6 +32,15 @@
   系统模拟 E2E、文档写入根绑定、员工 Case 运行与三个报告类用例只放宽时限的副本候选全过（系统模拟 E2E 的 PostgreSQL 两例 329 / 417 秒，
   超出自带的 180 秒；Case 运行的 PostgreSQL 一例 107.5 秒，超出自带的 30 秒）。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定
   自审，只审功能）。
+- **落地**：`9688abfd3`（29 个文件；父提交是本 RFC 的落档提交 `0b601e52e`）。
+- **CI**：`9688abfd3` 主 CI run 43749130381 的 70 个 job 全部通过（这次推送没有按路径触发其他 workflow）。落档提交 `0b601e52e`（只改文档）：
+  主 CI run 43717139271 的 70 个 job 全部通过。
+- **下一步**：RFC-294 S10 第三步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继到本 RFC 满 20 个，先于 11-23 的期限）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告
+  对照 §14、证据分级，只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 在
+  development-automation 的下一步是 `graphDeliveryBridge.ts` / `missionOperations.ts` / `configOperations.ts` 的命令处理（组合层控制流
+  274 行里分别占 62 / 61 / 18 行；`taskImage*` / `crewstation*` 属 RFC-370 余项，继续避让），随后 S10 的其余模块，再到 S12；S9 余下的其他
+  context 对按对另立；成员表一族另立。
 
 ## 2026-11-13 RFC-495 开发自动化的平台工作项用例迁出 composition（Done；`design/RFC-495-development-platform-work-items-out-of-composition/`）
 
