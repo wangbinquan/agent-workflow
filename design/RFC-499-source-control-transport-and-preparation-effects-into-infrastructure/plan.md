@@ -25,7 +25,7 @@
       `node:fs`；两个被删的函数没有声明、import 与调用；准备的装配文件只有装配与转出、没有控制流语句
 - [x] AC-2 同样输入下发布会话与准备绑定各方法的返回、错误码、持久化与外部调用的次序和参数和此前一致
 - [x] AC-3 新文件不取 composition（`required-ports` 的类型除外）；跨 context 边、public surface 不升；两项组合层计数收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`797bd884e` 主 CI run 43902539587 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证（2026-11-16，候选 1）
 
@@ -144,7 +144,7 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `797bd884e`（实现，父提交是 `1195a6f66`）：exact SHA 主 CI run 43902539587 的 70 个 job 全部通过（第 1 次里 macOS 的 Playwright e2e 分片 1/4 与 4/4、第 2 次里 1/4 没有分到 runner 就被取消：注记 `The job was not acquired by Runner of type hosted even after multiple attempts`、0 个步骤，归 runner 容量、与提交无关，判据见 `docs/audit-backlog.md` 的同形条目；只重跑没分到 runner 的作业，第 3 次全部通过）；同一推送按路径触发的 windows-platform run 43902539725（1 个 job）通过。
 - 本 RFC 的落档提交 `1195a6f66`（只改文档）：主 CI run 43829729267 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）

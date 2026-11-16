@@ -1,4 +1,4 @@
-## 2026-11-16 RFC-499 源代码管理的发布传输与仓库准备的 effect 实现归 infrastructure（In Progress；`design/RFC-499-source-control-transport-and-preparation-effects-into-infrastructure/`）
+## 2026-11-16 RFC-499 源代码管理的发布传输与仓库准备的 effect 实现归 infrastructure（Done；`design/RFC-499-source-control-transport-and-preparation-effects-into-infrastructure/`）
 
 - **来由**：RFC-294 plan §3 S10 点名 source-control“`repositoryPublicationTransport.ts`、`repositoryPreparation.ts` 的 effect 实现归
   infrastructure”与“`composition-forbidden-import-files` 14 → 0”，退出门要求点名的文件不再位于 `composition/`；source-control 组合层
@@ -37,6 +37,14 @@
   只放宽时限的副本两边全过（14 个文件，各 194 / 194）；其中 `rfc363-task-workspace-process-recovery` 一例候选用了 445 秒，是 `fs.watch` 事件
   晚到（插桩副本两边各 10 / 10、worker 各阶段耗时相同）。PostgreSQL 一侧两边红在同样用例、只撞时限的 48 条，SQLite 变体候选都通过，以 exact
   SHA CI 为准。架构报告 60 项只差上述两项。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`797bd884e`（19 个文件；父提交是 `1195a6f66`）。
+- **CI**：`797bd884e` 主 CI run 43902539587 的 70 个 job 全部通过（macOS 的 e2e 分片两次没有分到 runner 就被取消，归 runner 容量；只重跑这些作业，第 3 次全部通过）；同一推送按路径触发的 windows-platform run 43902539725（1 个 job）通过。
+  落档提交 `1195a6f66`（只改文档）：主 CI run 43829729267 的 70 个 job 全部通过。
+- **下一步**：RFC-294 S10 第六步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是其余模块
+  （integration、resource-catalog、system-operations、intent、runtime-management、digital-employee 的余项；`taskImage*` / `crewstation*`
+  属 RFC-370 余项，继续避让）与收口，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-15 RFC-498 开发自动化的图交付桥用例迁出 composition（Done；`design/RFC-498-development-graph-delivery-bridge-out-of-composition/`）
 
