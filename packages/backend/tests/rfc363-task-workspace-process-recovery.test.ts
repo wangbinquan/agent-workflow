@@ -54,6 +54,9 @@ function fixture() {
   }
   return { root, repo, base: commit('frozen'), commit }
 }
+// The 200 ms poll backs up the directory watcher. A busy macOS fseventsd delivers the `ready.json` event late or drops
+// it (RFC-482; RFC-499 measured the watcher 0.2–9.7 s behind a poll on both sides of an A/B), and a parked worker then
+// looked like "checkpoint was not reached" at 30 s on a different checkpoint every run. See docs/dev-gotchas.md.
 function waitForCheckpoint(root: string, exited: Promise<number>): Promise<void> {
   return new Promise((resolveReady, reject) => {
     let done = false
@@ -61,16 +64,19 @@ function waitForCheckpoint(root: string, exited: Promise<number>): Promise<void>
       if (done) return
       done = true
       watcher.close()
+      clearInterval(poll)
       clearTimeout(timer)
       if (error) reject(error)
       else resolveReady()
     }
-    const watcher = watch(root, () => {
+    const ready = () => {
       if (existsSync(join(root, 'ready.json'))) finish()
-    })
+    }
+    const watcher = watch(root, ready)
+    const poll = setInterval(ready, 200)
     const timer = setTimeout(() => finish(new Error('checkpoint was not reached')), 30_000)
     void exited.then((code) => finish(new Error(`worker exited before checkpoint: ${code}`)))
-    if (existsSync(join(root, 'ready.json'))) finish()
+    ready()
   })
 }
 

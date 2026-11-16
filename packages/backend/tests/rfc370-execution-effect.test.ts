@@ -52,26 +52,28 @@ function deferred() {
 function waitForFile(directory: string, path: string) {
   // Windows can report creation while Bun.write is still writing the marker.
   // Reject the receipt only after the target has persisted its exact start fact.
+  // The 200 ms poll backs up the watcher: a busy macOS fseventsd delivers the event late or drops it, and an event
+  // that fired before the marker was complete is never followed by another (RFC-483 / RFC-499, docs/dev-gotchas.md).
   let close: () => void = () => {}
   const promise = new Promise<void>((resolve, reject) => {
-    const watcher = watch(directory, () => {
+    const check = () => {
       if (existsSync(path) && readFileSync(path, 'utf8') === 'started') {
         close()
         resolve()
       }
-    })
+    }
+    const watcher = watch(directory, check)
+    const poll = setInterval(check, 200)
     const timeout = setTimeout(() => {
       close()
       reject(new Error('native target did not start before receipt acknowledgement'))
     }, 10000)
     close = () => {
       watcher.close()
+      clearInterval(poll)
       clearTimeout(timeout)
     }
-    if (existsSync(path) && readFileSync(path, 'utf8') === 'started') {
-      close()
-      resolve()
-    }
+    check()
   })
   return { promise, close }
 }
