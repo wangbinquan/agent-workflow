@@ -158,8 +158,9 @@ describe('RFC-447 —— 位置与引用', () => {
     // public/queries 的转出——它模块外唯一的读者 services/task.ts 已退役。
     expect(importers.sort()).toEqual([
       `${SC}/composition/repositoryGroups.ts`,
-      `${SC}/composition/repositoryPreparation.ts`,
       `${SC}/infrastructure/legacyWorkspaceRecovery.ts`,
+      // RFC-499: the preparation binding moved from composition/repositoryPreparation.ts into infrastructure.
+      `${SC}/infrastructure/repositoryPreparationBridge.ts`,
       `${SC}/infrastructure/workspaceMaterializer.ts`,
     ])
   }, 60_000)

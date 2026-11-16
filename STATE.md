@@ -13,6 +13,30 @@
   准备的本机回落与部署选择合同里以 `typeof` 本机工厂定型的槽位（S12 第 1、6 项）；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
   到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是 effect 实现（发布传输、本机准备与 scratch 的 effect 工厂）与把准备日志、准备
+  参与方和 effect 接成准备绑定的适配器，落 infrastructure；composition 只留本机回落的选择与建绑定（S12 第 1 项要清理的回退留在
+  composition、由 S12 的锁看见）；不新增用例入口。C11 public 不变（`public/queries.ts` 只改注释）；不导出 SQL 片段、行形状查询工厂或
+  状态写原子。C12 RFC-499 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明（`sessionOf` 另有 intent 一个
+  无关的私有同名函数，逐个钉住）、被删函数的声明 / import / 调用与旧位置的 import（命名 import、type-only、re-export、命名空间成员与动态
+  import 的解构，带负对照），另读 `composition.ts`、装配文件与三个新文件。C13 `composition-control-flow-source-control` 198 → 148、
+  `composition-forbidden-import-files` 14 → 12（都收紧到实测），其余 58 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第六步**：清单（design §3）的名字只在清单列的文件声明；`composition/repositoryPublicationTransport.ts` 不存在，没有
+  文件从旧位置取名字；`composition.ts` 从新文件只转出 `createRepositoryPublicationTransport`、不取 `node:fs`；两个被删函数没有声明、import
+  与调用；`composition/repositoryPreparation.ts` 只有装配函数（恰好一次建绑定、恰好两处本机回落）与对本机选择的转出，没有控制流语句；
+  准备绑定的两组 effect 必填；三个新文件不取 composition（`composition/required-ports` 的类型除外）。生产文件 4,099 → 4,101；跨 context
+  import 7,504 → 7,505（context 对 135 → 135、没有新的符号；多出的一条是本机文件取 `required-ports` 类型的 source-control 内部
+  required-implementation 边），public surface 1,195 → 1,195。S10 点名的 source-control 两个文件：`repositoryPublicationTransport.ts` 离开
+  `composition/`；`repositoryPreparation.ts` 的 effect 实现归 infrastructure，composition 的同名文件只剩装配（S10 收口时并入模块装配或改名，
+  回落随 S12 第 1 项改为必填注入）。`composition-forbidden-import-files` 余下的 12 个都是 `taskImage*` / `crewstation*` 一族（RFC-370 余项）。
+- **集中验证**（候选 1，基于 `1195a6f66`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 448 个
+  文件、与对照 A/B，候选多出的 23 条失败都是时序或环境（撞时限、前一例超时连带的钩子超时、等子进程检查点、播种时连接被重置、S-17 写者
+  先后起跑）；任一边红过的 105 个文件放宽默认时限复跑，这 23 条候选 21 条通过、2 条两边都红，这一轮候选多出的 11 条里 8 条撞时限、2 条等
+  检查点，1 条是 `util/git.ts` 的 `runGit` 读 stdout 只等 250 毫秒、高负载下把成功的 `rev-parse` 读成空输出（对照在同一文件红的一例形态相同；
+  不归本 RFC，登记在 `docs/audit-backlog.md`）。全量 SQLite 2,943 个文件 2,930 个通过，其余 13 个：三个报告类撞自带时限，10 个与对照 A/B；
+  静态 import 闭包取到本 RFC 改动代码的 556 个里 549 个通过。三个报告类用例与 11 个取到本 RFC 代码的文件（两边红法相同，或候选多出撞时限）
+  只放宽时限的副本两边全过（14 个文件，各 194 / 194）；其中 `rfc363-task-workspace-process-recovery` 一例候选用了 445 秒，是 `fs.watch` 事件
+  晚到（插桩副本两边各 10 / 10、worker 各阶段耗时相同）。PostgreSQL 一侧两边红在同样用例、只撞时限的 48 条，SQLite 变体候选都通过，以 exact
+  SHA CI 为准。架构报告 60 项只差上述两项。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-15 RFC-498 开发自动化的图交付桥用例迁出 composition（Done；`design/RFC-498-development-graph-delivery-bridge-out-of-composition/`）
 

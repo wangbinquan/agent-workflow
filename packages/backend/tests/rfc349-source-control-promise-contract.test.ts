@@ -20,7 +20,8 @@ describe('RFC-349 source-control Promise contract', () => {
       'packages/backend/src/modules/source-control/public/queries.ts',
       'packages/backend/src/modules/source-control/public/participants.ts',
       'packages/backend/src/modules/source-control/composition.ts',
-      'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
+      // RFC-499: the publication transport moved into source-control's infrastructure.
+      'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
       // RFC-450: the connection service moved into integration's infrastructure.
       'packages/backend/src/modules/integration/infrastructure/codeHost/connections.ts',
     ]
@@ -82,7 +83,7 @@ describe('RFC-349 source-control Promise contract', () => {
 
   test('publication composition consumes an injected closed repository', () => {
     const source = read(
-      'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
+      'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
     )
     expect(source).toContain('readonly repository: RepositoryTransportCredentialRepository')
     expect(source).toContain('await repository.listConnections()')

@@ -171,8 +171,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/integration/composition/taskImageDevelopmentAdapter.ts',
     'packages/backend/src/modules/intent/composition/crewstationScratch.ts',
     'packages/backend/src/modules/resource-catalog/composition/taskImagePlugin.ts',
-    'packages/backend/src/modules/source-control/composition.ts',
-    'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
+    // RFC-499: source-control composition.ts and the publication transport left (the transport moved to infrastructure;
+    // the unused key-file resolvers that read `node:fs` were deleted).
     'packages/backend/src/modules/source-control/composition/taskImageIsolation.ts',
     'packages/backend/src/modules/source-control/composition/taskImageRepositoryEffects.ts',
     'packages/backend/src/modules/source-control/composition/taskImageUploads.ts',

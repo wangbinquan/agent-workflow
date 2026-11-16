@@ -401,7 +401,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/runtime-management/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/source-control/composition/repositoryPreparation.ts -> @/modules/identity-access/public/participants',
+      // RFC-499: the preparation binding moved from composition/repositoryPreparation.ts into infrastructure.
+      'packages/backend/src/modules/source-control/infrastructure/repositoryPreparationBridge.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',

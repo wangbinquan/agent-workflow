@@ -1,0 +1,325 @@
+// RFC-499 (RFC-294 S10 step 6): the preparation binding, moved here from composition/repositoryPreparation.ts
+// (composeRepositoryPreparation) unchanged except that both effect selections are required inputs; the local
+// fallback stays in that composition file.
+import type { SecretBox } from '@/auth/secretBox'
+import type { RequestAuthority } from '@/modules/identity-access/public/participants'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { resolveRepoGroupLayout } from '../application/repositoryGroups'
+import { DomainError, NotFoundError } from '@/util/errors'
+import type { GitCommitIdentity, TaskStartOptions } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
+import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
+import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
+import { cleanupRepositoryWorkspace } from '../application/repositoryPreparationCleanup'
+import { decodeRepositoryLaunchRef } from '../domain/repositoryLaunchRef'
+import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
+import {
+  reclaimLegacyWorkspaceArtifacts,
+  type LegacyWorkspaceRecoveryLog,
+} from './legacyWorkspaceRecovery'
+import type { RepositoryPreparationInput } from './local/repositoryPreparation'
+import { createPublicRepositorySourceSeal } from './publicRepositorySourceSeal'
+import { createRepositoryLaunchSnapshotInTx } from './repositoryLaunchSnapshot'
+import { createRepositoryPreparationJournal } from './repositoryPreparationJournal'
+import { composeRepositoryPreparationParticipant } from './repositoryPreparationParticipant'
+import { composeRepositoryWorkspaceStore } from './repositoryWorkspaceStore'
+import type {
+  MaterializedSpace,
+  PlannedSpaceLayout,
+  WorkspaceCleanupHookEvent,
+  WorkspaceCleanupReport,
+} from './workspaceMaterializer'
+import {
+  cleanupMaterializedSpace,
+  commitMaterializedSpace,
+  decodeWorkspacePreparationReceipt,
+  encodeWorkspacePreparationReceipt,
+  materializeSpaceWithProvider,
+} from './workspaceMaterializer'
+import type {
+  FrozenRepositoryPreparationRef,
+  RepositoryLaunchSource,
+  SealedPublicRepositorySourceRef,
+} from '../public/types'
+
+/** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
+export function createRepositoryPreparationBridge(
+  input: RepositoryPreparationInput & {
+    readonly preparationEffects: RepositoryPreparationEffectFactory
+    readonly scratchEffects: ScratchWorkspaceEffects
+  },
+) {
+  const journal = createRepositoryPreparationJournal(input.db)
+  const driver = composeRepositoryPreparationParticipant({ journal })
+  const scratch: ScratchWorkspaceEffects = input.scratchEffects
+  const preparationEffects: RepositoryPreparationEffectFactory = input.preparationEffects
+  return {
+    async groupName(groupId: string): Promise<string> {
+      return (
+        await resolveRepoGroupLayout(
+          composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+          groupId,
+        )
+      ).groupName
+    },
+    // RFC-478：task-execution 延后准备的重试回收原先自己解析组布局（取 source-control composition）；改经绑定，同一份解析。
+    async groupCachedRepoIds(groupId: string): Promise<readonly string[]> {
+      return (
+        await resolveRepoGroupLayout(
+          composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+          groupId,
+        )
+      ).repos.map((repository) => repository.cachedRepoId)
+    },
+    legacy: {
+      reclaim(
+        task: { id: string; cachedRepoId: string | null; repoGroupId: string | null },
+        log: LegacyWorkspaceRecoveryLog,
+      ) {
+        return reclaimLegacyWorkspaceArtifacts(
+          {
+            appHome: input.appHome,
+            store: composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+            log,
+          },
+          task,
+        )
+      },
+      async prepare(request: {
+        task: TaskStartOptions
+        taskId: string
+        gitCommitIdentity: GitCommitIdentity | null
+        signal?: AbortSignal
+        secretBox?: SecretBox
+        cloneTimeoutMs?: number
+        workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
+        loadFrozenSpaceLayout(sourceTaskId: string): Promise<PlannedSpaceLayout>
+      }): Promise<MaterializedSpace> {
+        const configuration =
+          input.preparationConfiguration === undefined
+            ? { cloneTimeoutMs: input.cloneTimeoutMs }
+            : await input.preparationConfiguration.read()
+        return await materializeSpaceWithProvider(
+          request.task,
+          {
+            appHome: input.appHome,
+            repositoryWorkspace: composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+            loadFrozenSpaceLayout: request.loadFrozenSpaceLayout,
+            gitCommitIdentity: request.gitCommitIdentity,
+            ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+            ...(configuration.cloneTimeoutMs === undefined
+              ? {}
+              : { cloneTimeoutMs: configuration.cloneTimeoutMs }),
+            ...(input.workspaceCleanupHook === undefined
+              ? {}
+              : { workspaceCleanupHook: input.workspaceCleanupHook }),
+            ...(request.secretBox === undefined ? {} : { secretBox: request.secretBox }),
+            ...(request.cloneTimeoutMs === undefined
+              ? {}
+              : { cloneTimeoutMs: request.cloneTimeoutMs }),
+            ...(request.workspaceCleanupHook === undefined
+              ? {}
+              : { workspaceCleanupHook: request.workspaceCleanupHook }),
+            ...(request.signal === undefined
+              ? {}
+              : { sourceTerminationLaunchSignal: request.signal }),
+          },
+          request.taskId,
+        )
+      },
+      commit: commitMaterializedSpace,
+      cleanup: (
+        space: MaterializedSpace,
+        hook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>,
+      ) => cleanupMaterializedSpace(space, hook ?? input.workspaceCleanupHook),
+    },
+    async prepareScratch(request: {
+      taskId: string
+      gitCommitIdentity: GitCommitIdentity | null
+      signal: AbortSignal
+      assertCurrent(): Promise<void>
+    }): Promise<MaterializedSpace> {
+      await request.assertCurrent()
+      const space = await scratch.prepare(request)
+      await request.assertCurrent()
+      return space
+    },
+    restoreScratch(
+      taskId: string,
+      artifactJson: string,
+    ): MaterializedSpace | Promise<MaterializedSpace> {
+      const saved = decodeWorkspacePreparationReceipt(taskId, artifactJson)
+      if (saved.space?.kind !== 'scratch') throw new Error('scratch-preparation-artifact-mismatch')
+      return scratch.restore(taskId, saved.space)
+    },
+    async cleanupScratch(request: {
+      taskId: string
+      assertCurrent(): Promise<void>
+    }): Promise<WorkspaceCleanupReport> {
+      await request.assertCurrent()
+      const report = await scratch.cleanup(request)
+      await request.assertCurrent()
+      return report
+    },
+    async releaseUnadmitted(taskId: string): Promise<void> {
+      await scratch.releaseUnadmitted?.(taskId)
+    },
+    sourceSeal: createPublicRepositorySourceSeal({
+      taskPorts: input.taskPorts,
+      db: input.db,
+      appHome: input.appHome,
+      ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+    }),
+    async sealedIdentity(reference: SealedPublicRepositorySourceRef): Promise<string> {
+      const source = await journal.source(reference)
+      if (source === null) throw new Error('repository-source-unavailable')
+      return SealedRepositorySourceFactsSchema.parse(JSON.parse(source.factsJson)).cachedRepoId
+    },
+    snapshot(request: { transaction: PersistenceDb; authority: RequestAuthority; now: number }) {
+      let active = true
+      const scope = createRepositoryLaunchSnapshotInTx({
+        taskPorts: input.taskPorts,
+        ...request,
+        assertLive: () => {
+          if (!active) throw new Error('repository-launch-scope-ended')
+        },
+      })
+      const inTx = createRepositoryPreparationJournal(request.transaction)
+      return {
+        participant: scope.participant,
+        frozenLayout: scope.frozenLayout,
+        async source(selector: {
+          cachedRepoId: string | null
+          repoGroupId: string | null
+          base: string
+          sealedSource?: SealedPublicRepositorySourceRef
+        }): Promise<RepositoryLaunchSource> {
+          if (selector.sealedSource !== undefined)
+            return { kind: 'sealed-public-repository', source: selector.sealedSource }
+          if (selector.repoGroupId !== null)
+            return {
+              kind: 'repository-group',
+              group: await scope.currentGroup(selector.repoGroupId),
+            }
+          if (selector.cachedRepoId === null) throw new Error('repository-launch-source-missing')
+          return {
+            kind: 'repository',
+            repository: await scope.currentRepository(selector.cachedRepoId),
+            // Blank preserves the existing unspecified-ref behavior: resolve the
+            // cache's default after fetch, then persist its concrete commit.
+            base: selector.base,
+          }
+        },
+        async plan(source: FrozenRepositoryPreparationRef) {
+          if (!active) throw new Error('repository-launch-scope-ended')
+          const operation = decodeRepositoryLaunchRef('operation', `sc:operation:v1:${ulid()}`)
+          await inTx.plan({ id: operation, snapshotRef: source, now: request.now })
+          return operation
+        },
+        close() {
+          active = false
+          scope.close()
+        },
+      }
+    },
+    async nextAttempt(request: { transaction: PersistenceDb; operationRef: string; now: number }) {
+      const inTx = createRepositoryPreparationJournal(request.transaction)
+      const previous = await inTx.operation(request.operationRef)
+      if (previous === null) throw new Error('repository-preparation-not-found')
+      if (previous.state !== 'cleaned') return previous.id
+      const operation = decodeRepositoryLaunchRef('operation', `sc:operation:v1:${ulid()}`)
+      await inTx.plan({ id: operation, snapshotRef: previous.snapshotRef, now: request.now })
+      return operation
+    },
+    async effect(request: {
+      taskId: string
+      operationRef: string
+      workingBranch?: string
+      gitCommitIdentity: GitCommitIdentity | null
+      signal: AbortSignal
+      assertCurrent(): Promise<void>
+    }) {
+      const operation = decodeRepositoryLaunchRef('operation', request.operationRef)
+      const record = await journal.operation(operation)
+      if (record === null)
+        throw new NotFoundError(
+          'repository-preparation-not-found',
+          'preparation operation not found',
+        )
+      const source = decodeRepositoryLaunchRef('preparation', record.snapshotRef)
+      const configuration =
+        input.preparationConfiguration === undefined
+          ? undefined
+          : await input.preparationConfiguration.read()
+      const effects = await preparationEffects.create({
+        taskId: request.taskId,
+        operationRef: operation,
+        ...(configuration === undefined ? {} : { cloneTimeoutMs: configuration.cloneTimeoutMs }),
+        ...(request.workingBranch === undefined ? {} : { workingBranch: request.workingBranch }),
+        gitCommitIdentity: request.gitCommitIdentity,
+        signal: request.signal,
+        assertCurrent: request.assertCurrent,
+      })
+      const scope = driver.bindEffect({
+        operation,
+        source,
+        effects: {
+          assertCurrent: () => effects.assertCurrent(),
+          async resolveCommits(facts) {
+            const result = await effects.resolveCommits(facts)
+            if (result.kind === 'resolved') return result
+            return result.kind === 'failed'
+              ? {
+                  ...result,
+                  diagnosticsJson: encodeWorkspacePreparationReceipt(result.diagnosticsJson),
+                }
+              : { ...result, receiptJson: encodeWorkspacePreparationReceipt(result.receiptJson) }
+          },
+          async materialize(input) {
+            const result = await effects.materialize(input)
+            return result.kind === 'failed'
+              ? {
+                  ...result,
+                  diagnosticsJson: encodeWorkspacePreparationReceipt(result.diagnosticsJson),
+                }
+              : { ...result, receiptJson: encodeWorkspacePreparationReceipt(result.receiptJson) }
+          },
+        },
+      })
+      return {
+        participant: driver.participant,
+        capability: scope.capability,
+        operation,
+        source,
+        async space(): Promise<MaterializedSpace> {
+          await request.assertCurrent()
+          const saved = await journal.operation(operation)
+          if (saved === null) throw new Error('repository-preparation-result-missing')
+          const raw = saved.state === 'prepared' ? saved.receiptJson : saved.diagnosticsJson
+          const result =
+            raw === null ? null : decodeWorkspacePreparationReceipt(request.taskId, raw)
+          if (result?.space !== undefined) return result.space
+          if (result?.error !== undefined)
+            throw new DomainError(
+              result.error.code,
+              result.error.message,
+              result.error.status,
+              result.error.details,
+            )
+          if (saved.state === 'stopped') throw new Error('repository preparation aborted')
+          throw new Error('repository-preparation-result-unavailable')
+        },
+        async cleanup(): Promise<WorkspaceCleanupReport> {
+          const result = await cleanupRepositoryWorkspace({
+            operation,
+            journal,
+            effects,
+            now: Date.now,
+          })
+          return (JSON.parse(result.receiptJson) as { report: WorkspaceCleanupReport }).report
+        },
+        close: scope.close,
+      }
+    },
+  }
+}

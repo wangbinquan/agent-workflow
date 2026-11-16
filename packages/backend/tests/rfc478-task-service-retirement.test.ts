@@ -402,7 +402,8 @@ describe('RFC-478 —— 准备绑定与清理账本', () => {
     expect(read(TE + 'infrastructure/repositoryPreparationBinding.ts')).toContain(
       '  groupCachedRepoIds(groupId: string): Promise<readonly string[]>\n',
     )
-    const binding = read('modules/source-control/composition/repositoryPreparation.ts')
+    // RFC-499: the preparation binding moved from composition/repositoryPreparation.ts into infrastructure.
+    const binding = read('modules/source-control/infrastructure/repositoryPreparationBridge.ts')
     const resolution =
       '        await resolveRepoGroupLayout(\n' +
       '          composeRepositoryWorkspaceStore(input.db, input.taskPorts),\n' +

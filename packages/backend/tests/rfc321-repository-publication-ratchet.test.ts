@@ -372,7 +372,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
 
   test('personal credentials stay inside Git publication and their explicit identity probe', () => {
     const publication = read(
-      'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
+      // RFC-499: the publication transport moved from composition/ into infrastructure/.
+      'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
     )
     const endpointDiscovery = read(
       'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
@@ -461,7 +462,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/task-execution/infrastructure/commitPushAttempt.ts',
       'packages/backend/src/modules/source-control/application/deliverCandidate.ts',
       'packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts',
-      'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
+      // RFC-499: moved from composition/ into infrastructure/.
+      'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
       'packages/backend/src/util/gitCredentialLease.ts',
     ].map((file) => ({ file, source: read(file) }))
     expect(repositoryPublicationBoundaryViolations(publicationSources)).toEqual([])
@@ -523,7 +525,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       {
         file: 'mutated-publication.ts',
         source: `${read(
-          'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
+          'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
         )}\nconst endpoint = 'https://git.example/repo?token=plaintext'`,
       },
     ]

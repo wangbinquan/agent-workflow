@@ -1,3 +1,5 @@
+// RFC-499 (RFC-294 S10 step 6): moved here from composition/repositoryPublicationTransport.ts unchanged; the key-file
+// resolver at its end had no caller and was deleted.
 // RFC-321 — bootstrap-owned repository publication transport composition.
 // Selection, provider metadata resolution, endpoint validation, unsealing and
 // the exact-target helper are completed once per publication attempt. Consumers
@@ -13,9 +15,7 @@ import {
   type ResolvedRepositoryHttpEndpoint,
 } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { readFileSync } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute } from 'node:path'
 import { runGit as defaultRunGit } from '@/util/git'
 import type { RepositoryGit } from '../application/repositoryCommit'
 import { RepositoryTransportCredentials } from '../application/repositoryTransportCredentials'
@@ -350,30 +350,4 @@ export function createRepositoryPublicationTransport(input: {
       }
     },
   }
-}
-
-/**
- * Scheduler-safe production resolver. It only reads an existing daemon key;
- * missing/corrupt keys yield a fail-closed managed transport and never create
- * credential material from a background task.
- */
-export function resolveRepositoryPublicationTransportFromKeyFile(input: {
-  readonly repository: RepositoryTransportCredentialRepository
-  readonly appHome: string
-  readonly endpointDiscovery?: RepositoryEndpointDiscoveryParticipant
-}): RepositoryPublicationTransport {
-  let secretBox: SecretBox | undefined
-  try {
-    secretBox = createSecretBoxFromKey(readFileSync(join(input.appHome, 'secret.key')))
-  } catch {
-    secretBox = undefined
-  }
-  return createRepositoryPublicationTransport({
-    repository: input.repository,
-    appHome: input.appHome,
-    ...(secretBox === undefined ? {} : { secretBox }),
-    ...(input.endpointDiscovery === undefined
-      ? {}
-      : { endpointDiscovery: input.endpointDiscovery }),
-  })
 }

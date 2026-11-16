@@ -4,8 +4,7 @@ import type { RepositoryPublicationTransport } from './public/types'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
 import { type CodeHostProvider } from '@agent-workflow/shared'
-import { readFileSync } from 'node:fs'
-import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/auth/secretBox'
 import { RepositoryTransportCredentials } from './application/repositoryTransportCredentials'
 import type {
   RepositoryTransportConnectionProjectionInput,
@@ -31,10 +30,7 @@ import { createFileEmployeeCaseWorkspaceEffectsFactory } from './infrastructure/
 import type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 
-export {
-  createRepositoryPublicationTransport,
-  resolveRepositoryPublicationTransportFromKeyFile,
-} from './composition/repositoryPublicationTransport'
+export { createRepositoryPublicationTransport } from './infrastructure/repositoryPublicationTransport'
 // RFC-451：本地镜像缓存家族（批量导入的清理与归属、后台子模块保鲜、开发工作区仓库准备），供装配根取用。
 export { batchOwnerUserId, startBatchImportGc } from './infrastructure/local/repositoryBatchImport'
 export { startConfiguredSubmoduleRefreshLoop } from './infrastructure/local/repositoryMirrorAutoRefresh'
@@ -154,22 +150,6 @@ export function composeRepositoryTransportCredentials(
   })
   bySecretBox.set(secretBox, module)
   return module
-}
-
-/** Scheduler/background composition. Missing or unreadable key material is a
- * fail-closed unavailable supply; this helper never creates a replacement key. */
-export function resolveRepositoryTransportCredentialsFromKeyFile(
-  repository: RepositoryTransportCredentialRepository,
-  keyFile: string,
-): RepositoryTransportCredentials | null {
-  try {
-    return composeRepositoryTransportCredentials(
-      repository,
-      createSecretBoxFromKey(readFileSync(keyFile)),
-    ).credentialSupply
-  } catch {
-    return null
-  }
 }
 
 /** Upgrade/boot convergence for the migration's ciphertext-only initial projection. */

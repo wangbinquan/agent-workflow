@@ -7,6 +7,24 @@
 1. **登记前先按「症状关键词」搜本文件，不是只搜 `flaky` / `间歇` 这类分类词。** 实撞：一条 `intent-builder` e2e 红被当成新发现登记，而 08-14 的 webkit nightly 条目里**早已一字不差记着同一形态**（「按钮从未出现，不是 detach」）——登记者 grep 的是 `flaky|间歇`,没 grep `intent-builder`。**判据**:用**失败用例的文件名 / 症状原文**搜一遍再动笔;命中既有条目就**补进那条**,不另起——同一件事散成两条，下一个人只会读到其中一条，而那条可能恰好是写错的那条。
 2. **「说明还有 X 未解」「疑似还有 Y」「未追」这类措辞是待办，不是免责声明。** 要么**当场追一步给出结论**,要么显式写成一条带 owner 的待办;不允许只留一句观察就翻篇。实撞：08-14 写下「说明该 spec 至少还有第二个竞态未解」后没往下追——而当时查明它**只需要看一眼那个按钮的渲染条件**;代价是 08-15 撞上时从零重建全部上下文（拉 trace、逐条比对 actionability 日志、翻前端条件渲染),外加一条写错方向的 backlog 又返工。**悬案的成本从来不是「留着不管」，是下次撞上时重建上下文，而重建的人未必是当初写下线索的人。**
 
+## `runGit` 带 signal / 超时的读法只等 stdout 250 毫秒，高负载下把成功的 git 命令读成“退出 0、无输出”（2026-11-16，RFC-499 集中验证实测，未修）
+
+**现象**：本机高负载（10 核，1 分钟负载 40～50）下，RFC-499 的复跑里 `single-nonroot-member-workspace` 候选与对照各红一例，都是任务准备在 git 上失败、由准备绑定的 `space()` 重放落库的错误：
+
+- 候选（SQLite，root sparse：子任务恢复准入也查成员在位）：`mounting '<root>' failed: git worktree add failed: fatal: invalid reference:`——交给 `worktree add` 的引用是空串。
+- 对照（PostgreSQL，多成员：物化的根与成员路径与检查点布局一致）：`ref '(default)' not found in …/src-0`（`ref: null`，mountPath `api`）。
+
+两边的 `util/git.ts` 与准备的本机 effect 逐字相同；同一文件的其余用例两边都过，全量 SQLite 里这个文件 113 / 113。
+
+**根因**：`packages/backend/src/util/git.ts` 的 `runGit` 带 `signal` 或 `timeoutMs` 时先等子进程退出，再用 `raceWithFallback(outPromise, 250, '')` 读 stdout / stderr（第 261～262 行与第 287～288 行；`util/process.ts:472`）——250 毫秒内没读完就回落为空串，退出码照旧。这个上限防的是孙进程继承写端、`.text()` 永远等不到 EOF；副作用是机器忙、读管道慢于 250 毫秒时，一条成功的命令被读成“退出 0、无输出”。`git rev-parse --verify <base>^{commit} --` 成功时必然打印对象名，所以“退出 0、空 stdout”只能来自这条回落：
+
+- 候选那例落在 `createWorktree` 的基准解析（`util/git.ts:1028`，第 1046 行取 `baseRev.stdout.trim()`）：空串当作基准提交交给 `git worktree add -b <branch> <path> ''`，git 报 `invalid reference:`。
+- 对照那例的形态与同一回落落在准备的解析步骤相符（`modules/source-control/infrastructure/local/fileRepositoryPreparationEffects.ts:152`，第 186 行取 `resolved.stdout.trim()` 作 `resolvedCommit`）：基准提交读成空串，物化时解析空引用失败，按 `repo-group-ref-not-found` 报“默认引用不存在”。
+
+**影响**：负载高的机器上任务启动可能被误报为引用不存在或 worktree 创建失败；凡带 `signal` / `timeoutMs` 调 `runGit` 再用 stdout 的地方都走这条读法。
+
+**待办（owner：用户指定）**：让回落可区分——读满上限仍未 EOF 时不以“退出 0 + 空输出”返回（例如标记截断并按失败处理，或只在管道仍被占用时才截断），并给 `rev-parse` 这类成功必有输出的调用加“成功却无输出即失败”的判据；带回归用例（可用迟迟不交 EOF 的假管道复现）。
+
 ## CI：macOS arm64 runner 容量不足，macOS 作业未被分配 runner 就被取消（2026-11-04，已自行恢复）
 
 **现象**：2026-11-04 15:00～19:00（UTC）之间，主 CI 的 macOS 作业（`Build production binary + e2e artifact (smoke) (macos-latest)`、`Playwright e2e (macos-latest shard N/4)`）反复以 `cancelled` 结束，`runner_name` 为空；作业注记为 `The job was not acquired by Runner of type hosted even after multiple attempts`，并附 GitHub 的 `Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.`。受影响的 exact SHA 运行：`3d3f21e4b`（run 41848657338）、`9c1a6f2a9`（41854437159）、`21ae7afa3`（41867668794）、`98cd1706f`（41881968088），非 macOS 作业全部通过。
