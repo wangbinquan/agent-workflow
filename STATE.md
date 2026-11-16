@@ -1,3 +1,18 @@
+## 2026-11-15 RFC-498 开发自动化的图交付桥用例迁出 composition（In Progress；`design/RFC-498-development-graph-delivery-bridge-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 点名“`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位”，退出门
+  要求点名的文件不再位于 `composition/`；RFC-497 之后 development-automation 组合层控制流实测 195 行，`graphDeliveryBridge.ts` 占 62 行、是
+  余下最多的一个。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：交付用例 `createGraphDeliveryBridge` 连同它的类型与两个辅助函数原样迁入 `application/graph-development/deliveryBridge.ts`；
+  临时上传的搬运改用 application 的 `withSelectedAutomationWorkspaceEffects`（交来的就是 bootstrap 选定的工厂），时钟改为必填、由装配给；
+  `composition/graphDeliveryBridge.ts` 删除，`graphDevelopment.ts` 直接从 application 取它并交出默认时钟。清单见 design §3。
+- **不做**：`graphDeliveryLifecycle.ts` / `graphDeliveryJob.ts`、`graphDevelopment.ts` 其余的装配与控制流、development-automation composition
+  的其余文件与其他模块；infrastructure 的 `createGraphEmployeeWorkspace`；`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；任何行为
+  变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
 ## 2026-11-15 RFC-497 开发自动化的 mission 与配置操作用例迁出 composition（Done；`design/RFC-497-development-mission-and-config-operations-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位”；RFC-496 之后
@@ -35,7 +50,8 @@
   路径限定自审，只审功能）。
 - **落地**：`b01642940`（17 个文件；父提交是本 RFC 的落档提交 `1e31f3bc9`）。
 - **CI**：`b01642940` 主 CI run 43784575765 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43784575771（1 个 job）
-  通过。落档提交 `1e31f3bc9`（只改文档）：主 CI run 43756084489 的 70 个 job 全部通过。
+  通过。落档提交 `1e31f3bc9`（只改文档）：主 CI run 43756084489 的 70 个 job 全部通过。转 Done 的 `b84ac06c2`（只改文档）：主 CI run
+  43788244224 的 70 个 job 全部通过（补记于 RFC-498 的落档提交）。
 - **下一步**：RFC-294 S10 第四步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 在 development-automation 的下一步
