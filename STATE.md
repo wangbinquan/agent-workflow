@@ -1,3 +1,19 @@
+## 2026-11-16 RFC-499 源代码管理的发布传输与仓库准备的 effect 实现归 infrastructure（In Progress；`design/RFC-499-source-control-transport-and-preparation-effects-into-infrastructure/`）
+
+- **来由**：RFC-294 plan §3 S10 点名 source-control“`repositoryPublicationTransport.ts`、`repositoryPreparation.ts` 的 effect 实现归
+  infrastructure”与“`composition-forbidden-import-files` 14 → 0”，退出门要求点名的文件不再位于 `composition/`；source-control 组合层
+  控制流实测 198 行，两个文件分占 32 行与 18 行。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，
+  按授权记为已批准，不派 Codex。
+- **范围**：发布传输原样迁入 `infrastructure/repositoryPublicationTransport.ts`，composition 的文件删除、`composition.ts` 改从新文件转出；
+  本机准备与 scratch 的 effect 工厂迁入 `infrastructure/local/repositoryPreparation.ts`，准备绑定迁入
+  `infrastructure/repositoryPreparationBridge.ts`（两组 effect 必填），`composition/repositoryPreparation.ts` 只留本机回落与建绑定的装配，
+  使用方不改；两个零调用方的密钥文件解析删除，`composition.ts` 不再取 `node:fs`。清单见 design §3。
+- **不做**：`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）、source-control composition 的其余文件与 `composition.ts` 的其余内容；
+  准备的本机回落与部署选择合同里以 `typeof` 本机工厂定型的槽位（S12 第 1、6 项）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
 ## 2026-11-15 RFC-498 开发自动化的图交付桥用例迁出 composition（Done；`design/RFC-498-development-graph-delivery-bridge-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位”，退出门
@@ -32,7 +48,8 @@
 - **落地**：`1aafddf1c`（9 个文件；父提交是 `147ee35d1`）。
 - **CI**：`1aafddf1c` 主 CI run 43820563940 的 70 个 job 全部通过。
   落档提交 `959b13557`（只改文档）：主 CI run 43791770971 的 70 个 job 里 68 个通过，`scheduler-clarify-dispatch` 一例撞默认的 5 秒
-  （runner 时序，归因与修复见 plan §CI），修用例的 `147ee35d1`：主 CI run 43796881045 的 70 个 job 全部通过。
+  （runner 时序，归因与修复见 plan §CI），修用例的 `147ee35d1`：主 CI run 43796881045 的 70 个 job 全部通过。转 Done 的 `a0e2c551c`
+  （只改文档）：主 CI run 43825167743 的 70 个 job 全部通过（补记于 RFC-499 的落档提交）。
 - **下一步**：RFC-294 S10 第五步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是 source-control 点名的
