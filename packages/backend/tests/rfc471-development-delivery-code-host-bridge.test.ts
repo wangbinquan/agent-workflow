@@ -214,9 +214,10 @@ describe('RFC-471 —— 结构同形与依赖方向', () => {
         s.includes('development-automation'),
       ),
     ).toEqual([])
+    // RFC-497: the Mission operations use case moved from composition/missionOperations.ts.
     expect(
-      imports('modules/development-automation/composition/missionOperations.ts').filter((s) =>
-        s.includes('developmentDeliveryDeps'),
+      imports('modules/development-automation/application/missionOperationHandlers.ts').filter(
+        (s) => s.includes('developmentDeliveryDeps'),
       ),
     ).toEqual([])
   })

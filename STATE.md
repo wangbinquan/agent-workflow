@@ -12,6 +12,27 @@
   合同文件与 `public/operations`；`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已在
   RFC-496 关闭时到期（2026-11-09 之后关闭满 20 个后继），已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组操作用例与它们的辅助规则，落 application；mission 用例要用的模块参与方
+  成员成为 application 端口，`DevelopmentAutomationModule` 继承它；composition 只留装配（绑定持久化、按选定的基线效果建上传准入的基线
+  解析、默认时钟与准入开关的查询投影）；不新增用例入口（两组操作本来就由 bootstrap 装配，经 `public/operations` 的合同交给路由与 MCP）。
+  C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-497 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）
+  与 e2e 里的同名声明与 import（命名 import、type-only、re-export、命名空间成员与动态 import 的解构，带负对照），另读两个 composition 文件、
+  `composition.ts` 与三个新文件。C13 `composition-control-flow-development-automation` 274 → 195（收紧到实测），其余 59 项实测与对照逐项
+  相同，都在 `max` 内。
+- **§14 不变量 / S10 第四步**：清单（design §3）的名字只在 development-automation 的 `application/missionOperationHandlers.ts`、
+  `application/configOperationHandlers.ts` 与 `application/ports/developmentMissionAutomation.ts` 声明（早已存在的同名声明逐个钉住）；两个
+  composition 文件只声明并交出组合输入类型、准入开关的查询投影与装配函数（配置一侧另外转出 ACL 参与方类型），没有控制流语句；
+  `DevelopmentAutomationModule` 继承端口、只另外声明 6 个成员；没有文件从旧位置取迁出的名字；mission 用例只取 zod、`ulid`、shared、
+  `@/util/errors`、`@/util/log` 与本模块 domain / application，配置用例只取 `ulid`、shared、`@/util/errors`、identity-access 的
+  `public/participants` 与本模块 domain / application / engine，端口只取本模块 application，都不用进程全局。生产文件 4,096 → 4,099，跨
+  context import 7,504 → 7,504（8 条随内容迁到 application，context 对与符号相同），public surface 1,195 → 1,195。S10 在 development-automation
+  的其余范围（交付桥）由后继步骤承接。
+- **集中验证**（候选 1，基于 `1e31f3bc9`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 448 个
+  文件、与对照 A/B，候选多出的 13 条失败都是 PostgreSQL 撞时限（12 条撞默认的 5 秒、1 条撞自带的 20 秒）；任一边红的 72 个文件放宽默认时限
+  复跑，候选多出的失败名只有 `rfc384-daemon-intent-bundle` 的 PostgreSQL 一例撞自带的 15 秒（15.96 秒；对照 14.08 秒）。全量 SQLite 2,941 个
+  文件 2,925 个通过，其余 16 个：两个报告类撞自带时限，14 个与对照 A/B，候选没有对照之外的失败名；mission 与配置相关的用例全过。`rfc384` 与
+  两个报告类用例只放宽时限的副本两边全过（`rfc384` 那一例候选 20.3 秒、对照 17.2 秒）。架构报告 60 项只差上述一项。实现门 PASS（本会话按
+  路径限定自审，只审功能）。
 
 ## 2026-11-14 RFC-496 开发自动化的员工工作区用例迁出 composition（Done；`design/RFC-496-development-employee-workspace-out-of-composition/`）
 

@@ -23,14 +23,15 @@ const COMPOSITION_SOURCE = resolve(
   'development-automation',
   'composition.ts',
 )
+// RFC-497: the Mission operations use case moved from composition/missionOperations.ts.
 const MISSION_OPERATIONS_SOURCE = resolve(
   import.meta.dir,
   '..',
   'src',
   'modules',
   'development-automation',
-  'composition',
-  'missionOperations.ts',
+  'application',
+  'missionOperationHandlers.ts',
 )
 const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'bootstrap/daemonHttpComposition.ts')
 

@@ -224,8 +224,9 @@ const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
   }
 })
 
+// RFC-497: the development configuration use case moved from composition/configOperations.ts.
 const CONFIG_OPERATION_SOURCE =
-  'packages/backend/src/modules/development-automation/composition/configOperations.ts'
+  'packages/backend/src/modules/development-automation/application/configOperationHandlers.ts'
 const AGENT_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts'
 const MCP_OPERATION_SOURCE =

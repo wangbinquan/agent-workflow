@@ -345,9 +345,10 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',
+      // RFC-497: the development configuration use case moved from composition/configOperations.ts.
+      'packages/backend/src/modules/development-automation/application/configOperationHandlers.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/missionOperations.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/development-automation/composition/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/inbound/http/employeeCaseRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/digital-employee/composition.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/digital-employee/public/participants.ts -> @/modules/identity-access/public/participants',

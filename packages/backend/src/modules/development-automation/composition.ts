@@ -29,17 +29,10 @@ export type { VerificationCommandEffectsFactory }
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 export { createDevelopmentDeliveryProvider } from './infrastructure/developmentDeliveryProvider'
 import { runMissionReconcile, type ReconcileOutcome } from './application/missionReconciler'
-import {
-  createDeferredMissionDrive,
-  driveMission,
-  type MissionDriveOutcome,
-} from './application/missionDriver'
+import { createDeferredMissionDrive, driveMission } from './application/missionDriver'
 import { recoverMissions } from './application/missionRecovery'
-import { confirmNoChange, type ConfirmNoChangeResult } from './application/commands/confirmNoChange'
-import {
-  submitMissionAnswers,
-  type SubmitAnswersResult,
-} from './application/commands/submitMissionAnswers'
+import { confirmNoChange } from './application/commands/confirmNoChange'
+import { submitMissionAnswers } from './application/commands/submitMissionAnswers'
 import {
   attachMergeRequest,
   handoffMission,
@@ -65,6 +58,7 @@ import type {
   UploadPublicationPort,
 } from './application/ports/reconcilerPorts'
 import type { AdmissionLookup } from './application/ports/admissionLookup'
+import type { DevelopmentMissionAutomation } from './application/ports/developmentMissionAutomation'
 import type { MissionPersistence } from './application/ports/missionStore'
 import type { PlaybookSagaPersistence } from './application/ports/playbookSagaStore'
 import type {
@@ -81,7 +75,6 @@ import { createWorkspaceValidationAdapter } from './infrastructure/attemptSuppor
 import { adoptActionWorkspace, materializeActionWorkspace } from './application/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
 import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
-import type { EvidenceDownloadQueries } from './application/evidenceDownloads'
 import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
 import type { EvidenceDocumentCommands } from './application/evidenceDocumentCommands'
 export type { EvidenceDocumentCommands }
@@ -104,7 +97,6 @@ import {
 } from './infrastructure/gitBaselineReader'
 import {
   createSelectedRequirementMaterializer,
-  type RequirementMaterializer,
   type RequirementSourceRunnerDep,
 } from './application/requirementMaterializer'
 import { createAdmissionLookup } from './infrastructure/admissionLookup'
@@ -180,41 +172,10 @@ export function composeDevelopmentAutomationMaintenanceCommands(
   }
 }
 
-export interface DevelopmentAutomationModule {
-  readonly materializer: RequirementMaterializer
+/** RFC-497: the members the Mission operations use are their application port; this participant adds the rest. */
+export interface DevelopmentAutomationModule extends DevelopmentMissionAutomation {
   readonly evidence: EvidenceArtifactPort
-  readonly evidenceContents: EvidenceContentQueries
-  readonly evidenceDownloads: EvidenceDownloadQueries
-  /** Business-safe child/approval receipts for Mission detail and journey projection. */
-  collaboration(missionId: string): Promise<{
-    readonly children: readonly {
-      readonly stepRunId: string
-      readonly childMissionId: string | null
-      readonly status: string | null
-      readonly completionSatisfied: boolean
-      readonly observedAt: number | null
-      readonly deadlineAt: number | null
-    }[]
-    readonly approvals: readonly {
-      readonly stepRunId: string
-      readonly externalRequestRef: string | null
-      readonly status: string
-      readonly nextObserveAt: number | null
-      readonly deadlineAt: number
-      readonly updatedAt: number
-    }[]
-  }>
   reconcile(missionId: string): Promise<ReconcileOutcome>
-  /** Advance settled platform steps until the next real asynchronous boundary. */
-  drive(missionId: string): Promise<MissionDriveOutcome>
-  /** T55a：no-change 人工确认（唯一能进入 completed-no-change 的通道）。 */
-  confirmNoChange(rawInput: unknown): Promise<ConfirmNoChangeResult>
-  /** 平台渠道答题（T55：新 revision 会失效 in-flight action）。 */
-  submitAnswers(rawInput: unknown): Promise<SubmitAnswersResult>
-  /** T80：交接三命令（完整 ports——handoff 撤销含真 agent cancel）。 */
-  handoff(rawInput: unknown): ReturnType<typeof handoffMission>
-  attachMr(rawInput: unknown): ReturnType<typeof attachMergeRequest>
-  resume(rawInput: unknown): ReturnType<typeof resumeMission>
   /** 30s 级 sweep：到期 durable wake（fireWake CAS 认领）+ 未消费 wake hint。 */
   sweepWakes(): Promise<{ reconciled: number }>
   /** hourly：未 claim 上传的 TTL 回收。 */

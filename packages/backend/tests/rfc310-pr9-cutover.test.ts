@@ -635,8 +635,9 @@ describeEachProviderHttpApplication(
             'src',
             'modules',
             'development-automation',
-            'composition',
-            'missionOperations.ts',
+            // RFC-497: the Mission operations use case moved from composition/missionOperations.ts.
+            'application',
+            'missionOperationHandlers.ts',
           ),
           'utf8',
         )

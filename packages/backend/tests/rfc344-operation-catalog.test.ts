@@ -812,12 +812,20 @@ describe('RFC-344 single inbound root source locks', () => {
       join(ROOT, 'src/modules/development-automation/composition/missionOperations.ts'),
       'utf8',
     )
-    expect(missionComposition).toContain('readonly automation: DevelopmentAutomationModule')
-    expect(missionComposition).toContain('const automation = deps.automation')
-    expect(missionComposition).not.toContain('composeDevelopmentAutomation(')
-    expect(missionComposition).not.toMatch(
-      /from '@\/modules\/(?:integration|source-control|task-execution)\//,
+    // RFC-497: the Mission operations use case moved to application; composition passes the bootstrap participant on.
+    const missionHandlers = readFileSync(
+      join(ROOT, 'src/modules/development-automation/application/missionOperationHandlers.ts'),
+      'utf8',
     )
+    expect(missionComposition).toContain('readonly automation: DevelopmentAutomationModule')
+    expect(missionComposition).toContain('automation: deps.automation,')
+    expect(missionHandlers).toContain('const automation = deps.automation')
+    for (const source of [missionComposition, missionHandlers]) {
+      expect(source).not.toContain('composeDevelopmentAutomation(')
+      expect(source).not.toMatch(
+        /from '@\/modules\/(?:integration|source-control|task-execution)\//,
+      )
+    }
 
     const configComposition = readFileSync(
       join(ROOT, 'src/modules/development-automation/composition/configOperations.ts'),
