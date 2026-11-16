@@ -1,4 +1,4 @@
-## 2026-11-15 RFC-497 开发自动化的 mission 与配置操作用例迁出 composition（In Progress；`design/RFC-497-development-mission-and-config-operations-out-of-composition/`）
+## 2026-11-15 RFC-497 开发自动化的 mission 与配置操作用例迁出 composition（Done；`design/RFC-497-development-mission-and-config-operations-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位”；RFC-496 之后
   development-automation 组合层控制流实测 274 行，`missionOperations.ts` 占 61 行、`configOperations.ts` 占 18 行（`graphDeliveryBridge.ts` 62 行，
@@ -33,6 +33,14 @@
   文件 2,925 个通过，其余 16 个：两个报告类撞自带时限，14 个与对照 A/B，候选没有对照之外的失败名；mission 与配置相关的用例全过。`rfc384` 与
   两个报告类用例只放宽时限的副本两边全过（`rfc384` 那一例候选 20.3 秒、对照 17.2 秒）。架构报告 60 项只差上述一项。实现门 PASS（本会话按
   路径限定自审，只审功能）。
+- **落地**：`b01642940`（17 个文件；父提交是本 RFC 的落档提交 `1e31f3bc9`）。
+- **CI**：`b01642940` 主 CI run 43784575765 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43784575771（1 个 job）
+  通过。落档提交 `1e31f3bc9`（只改文档）：主 CI run 43756084489 的 70 个 job 全部通过。
+- **下一步**：RFC-294 S10 第四步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 在 development-automation 的下一步
+  是 `graphDeliveryBridge.ts` 的命令处理（组合层控制流 195 行里占 62 行；`taskImage*` / `crewstation*` 属 RFC-370 余项，继续避让），随后
+  S10 的其余模块，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-14 RFC-496 开发自动化的员工工作区用例迁出 composition（Done；`design/RFC-496-development-employee-workspace-out-of-composition/`）
 

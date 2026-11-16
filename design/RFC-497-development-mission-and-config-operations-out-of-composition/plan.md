@@ -30,7 +30,7 @@
       Catalog 交来的参与方
 - [x] AC-3 新文件的依赖面是闭集（不取 infrastructure、composition、IO 包与进程全局）；跨 context 边、public surface 不升；组合层控制流
       收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`b01642940` 主 CI run 43784575765 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证（2026-11-15，候选 1）
 
@@ -107,7 +107,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `b01642940`（实现，父提交是本 RFC 的落档提交 `1e31f3bc9`）：exact SHA 主 CI run 43784575765 的 70 个 job 全部通过；同一推送按路径
+  触发的 windows-platform run 43784575771（1 个 job）通过。
 - 本 RFC 的落档提交 `1e31f3bc9`（只改文档）：主 CI run 43756084489 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
