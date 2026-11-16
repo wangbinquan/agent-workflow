@@ -22,7 +22,7 @@
       函数、恰好调用一次
 - [x] AC-2 同样输入下三个观察者的返回与错误和此前一致；装配交的时钟与激活标识与此前的缺省相同
 - [x] AC-3 新文件的依赖面是闭集、不用进程全局；跨 context 边、public surface 不升；`composition-control-flow-integration` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`81bb9a42b` 主 CI run 43961229752 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证（2026-11-16，候选 1）
 
@@ -102,7 +102,7 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `81bb9a42b`（实现，父提交是 `31df05fb7`）：exact SHA 主 CI run 43961229752 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43961229772（1 个 job）通过。
 - 本 RFC 的落档提交 `31df05fb7`（只改文档）：主 CI run 43933933245 的 70 个 job 里 67 个通过。Backend tests shard 20/44 红一条：
   `rfc359-w5hn-workflow-route-launch-provider-parity` 的 PostgreSQL「缺必填 / 未声明键」，打开 HTTP 应用的 `beforeEach`（组装整个 daemon）
   用了 6.2 秒、撞 bun 默认的 5 秒，随后的「graph-builtin-implementer-missing」是钩子超时后清理与组装交错的连带；归因：这个提交只改文档，

@@ -1,4 +1,4 @@
-## 2026-11-16 RFC-500 集成的开发员工事件观察者迁出 composition（In Progress；`design/RFC-500-integration-development-event-observers-out-of-composition/`）
+## 2026-11-16 RFC-500 集成的开发员工事件观察者迁出 composition（Done；`design/RFC-500-integration-development-event-observers-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列“integration、resource-catalog、system-operations、intent、runtime-management、digital-employee 的
   余项”；RFC-499 之后 integration 组合层控制流实测 101 行，`digitalEmployeeEventObserver.ts` 占 27 行、是余下最多的一个。用户 2026-11-02
@@ -29,6 +29,15 @@
   三个报告类用例与两边红在同样用例、取到本 RFC 代码的 4 个文件只放宽时限的副本两边全过（各 79 / 79）。设计 §4 原先高估了现有用例对
   代码托管观察者 `run` 的覆盖（daemon 装配的用例只建不跑），补上对系统模拟 GitLab 跑观察者、钉住分派与装配的行为用例（4 / 4）。架构报告
   60 项只差上述一项。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`81bb9a42b`（11 个文件；父提交是 `31df05fb7`）。
+- **CI**：`81bb9a42b` 主 CI run 43961229752 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43961229772（1 个 job）通过。
+  落档提交 `31df05fb7`（只改文档）：主 CI run 43933933245 的 70 个 job 里 67 个通过（backend shard 20/44 一个钩子撞默认的 5 秒、macOS 的
+  e2e 分片 2/4 没有分到 runner，归因见 plan §CI；修用例另行提交）。
+- **下一步**：RFC-294 S10 第七步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是 integration 其余
+  组合文件（`webhookAdmission.ts` 等）与其余模块（resource-catalog、system-operations、intent、runtime-management、digital-employee 的
+  余项；`taskImage*` / `crewstation*` 属 RFC-370 余项，继续避让）与收口，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-16 RFC-499 源代码管理的发布传输与仓库准备的 effect 实现归 infrastructure（Done；`design/RFC-499-source-control-transport-and-preparation-effects-into-infrastructure/`）
 
