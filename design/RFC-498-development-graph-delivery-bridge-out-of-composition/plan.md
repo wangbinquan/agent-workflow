@@ -24,7 +24,7 @@
       同一个工厂
 - [x] AC-3 新文件的依赖面是闭集（不取 infrastructure、composition、IO 包与进程全局）；跨 context 边、public surface 不升；组合层控制流
       收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`1aafddf1c` 主 CI run 43820563940 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证（2026-11-15，候选 1）
 
@@ -106,7 +106,7 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `1aafddf1c`（实现，父提交是 `147ee35d1`）：exact SHA 主 CI run 43820563940 的 70 个 job 全部通过。
 - 本 RFC 的落档提交 `959b13557`（只改文档）：主 CI run 43791770971 的 70 个 job 里 68 个通过。Backend tests shard 42/44 红一条：
   `scheduler-clarify-dispatch` 的 PostgreSQL「rerun row after a manually-seeded answered session」撞 bun 默认的 5 秒（5,857 ms；超时后用例体
   继续跑到第 577 行，记为 1 error），连带 CI required 红。归因：这个提交只改文档，这个用例不读它们；代码相同的父提交 `b84ac06c2` 的

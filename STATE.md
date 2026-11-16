@@ -1,4 +1,4 @@
-## 2026-11-15 RFC-498 开发自动化的图交付桥用例迁出 composition（In Progress；`design/RFC-498-development-graph-delivery-bridge-out-of-composition/`）
+## 2026-11-15 RFC-498 开发自动化的图交付桥用例迁出 composition（Done；`design/RFC-498-development-graph-delivery-bridge-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 点名“`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理按层归位”，退出门
   要求点名的文件不再位于 `composition/`；RFC-497 之后 development-automation 组合层控制流实测 195 行，`graphDeliveryBridge.ts` 占 62 行、是
@@ -29,6 +29,15 @@
   全量 SQLite 2,942 个文件 2,926 个通过，其余 16 个：两个报告类撞自带时限，14 个与对照 A/B、红法不同的 3 个两边各跑 3 轮，都不经过本 RFC
   的代码；图交付相关的用例全过。两个报告类用例与 `rfc396-mr-bridge`、`rfc384-daemon-intent-bundle` 只放宽时限的副本两边全过
   （`rfc396-mr-bridge` 74 / 74）。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`1aafddf1c`（9 个文件；父提交是 `147ee35d1`）。
+- **CI**：`1aafddf1c` 主 CI run 43820563940 的 70 个 job 全部通过。
+  落档提交 `959b13557`（只改文档）：主 CI run 43791770971 的 70 个 job 里 68 个通过，`scheduler-clarify-dispatch` 一例撞默认的 5 秒
+  （runner 时序，归因与修复见 plan §CI），修用例的 `147ee35d1`：主 CI run 43796881045 的 70 个 job 全部通过。
+- **下一步**：RFC-294 S10 第五步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是 source-control 点名的
+  `repositoryPublicationTransport.ts`、`repositoryPreparation.ts` 的 effect 实现归 infrastructure（`taskImage*` / `crewstation*` 属 RFC-370
+  余项，继续避让），随后 S10 的其余模块与收口，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-15 RFC-497 开发自动化的 mission 与配置操作用例迁出 composition（Done；`design/RFC-497-development-mission-and-config-operations-out-of-composition/`）
 
