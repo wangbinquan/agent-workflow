@@ -12,6 +12,23 @@
   变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
   到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是交付用例与它的类型、两个辅助函数，落 application；工厂的选定在 bootstrap，
+  默认时钟由 `graphDevelopment.ts` 给；不新增用例入口（用例本来就只由 `graphDevelopment.ts` 装配、交给工作项用例）。C11 public 不变；不导出
+  SQL 片段、行形状查询工厂或状态写原子。C12 RFC-498 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与
+  import（命名 import、type-only、re-export、命名空间成员与动态 import 的解构，带负对照），另读 `graphDevelopment.ts` 与新文件。C13
+  `composition-control-flow-development-automation` 195 → 133（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第五步**：清单（design §3）的名字只在 `application/graph-development/deliveryBridge.ts` 声明；
+  `composition/graphDeliveryBridge.ts` 不存在，没有文件从旧位置取名字；`graphDevelopment.ts` 从新文件取 `createGraphDeliveryBridge`、恰好调用
+  一次，字段是原来的 10 个加 `now: Date.now`；新文件只取 shared、source-control 的 `public/types`、`@/util/gitRef` 与本模块 domain /
+  application，开作用域恰好一处、用 `withSelectedAutomationWorkspaceEffects`，不取 infrastructure、composition 与 IO 包，不用进程全局。生产
+  文件 4,099 → 4,099，跨 context import 7,504 → 7,504（5 条随内容迁到新文件，context 对与符号相同），public surface 1,195 → 1,195。S10
+  点名的三个文件里，`graphDeliveryBridge.ts` 由此离开 `composition/`；另两个由 RFC-497 迁走实现、只剩装配，S10 收口时并入模块装配或改名。
+- **集中验证**（候选 1，基于 `b84ac06c2`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 451 个
+  文件、与对照 A/B，候选多出的 22 条失败都是撞时限（19 条撞默认的 5 秒、3 条撞自带的 20 / 30 秒）；任一边红过的 72 个文件放宽默认时限
+  复跑，候选多出的失败名只有 `rfc395-retired-runtime-shapes` 的 PostgreSQL 钩子撞自带的 90 秒（闭包不含本 RFC 路径，首批两边都红在它）。
+  全量 SQLite 2,942 个文件 2,926 个通过，其余 16 个：两个报告类撞自带时限，14 个与对照 A/B、红法不同的 3 个两边各跑 3 轮，都不经过本 RFC
+  的代码；图交付相关的用例全过。两个报告类用例与 `rfc396-mr-bridge`、`rfc384-daemon-intent-bundle` 只放宽时限的副本两边全过
+  （`rfc396-mr-bridge` 74 / 74）。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-15 RFC-497 开发自动化的 mission 与配置操作用例迁出 composition（Done；`design/RFC-497-development-mission-and-config-operations-out-of-composition/`）
 

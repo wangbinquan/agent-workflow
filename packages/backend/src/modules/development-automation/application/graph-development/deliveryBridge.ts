@@ -1,3 +1,6 @@
+// RFC-498 (RFC-294 S10 step 5): the graph delivery bridge use case moved here from composition/graphDeliveryBridge.ts,
+// unchanged except that its assembly supplies the clock and its one effect scope opens on the factory it is given
+// (bootstrap already selected that factory).
 import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
 import type {
   CandidateDeliveryParticipant,
@@ -5,26 +8,19 @@ import type {
   EmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/public/types'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
-import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
-import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
-import type { EmployeePlatformWorkItemPersistence } from '../application/ports/employeePlatformWorkItemPersistence'
-import type { GraphDesignStore } from '../application/ports/graphDesignStore'
-import type { GraphDesignExecutionPort } from '../application/ports/graphDesignExecution'
-import type { GraphDesignCommands } from '../application/graph-development/designCommands'
-import type { GraphEmployeeContext } from '../application/graph-development/employeeCodec'
-import type {
-  createGraphVerification,
-  GraphVerificationWorkspace,
-} from '../application/graph-development/verification'
-import { graphResultSchemas } from '../application/graph-development/toolContracts'
-import {
-  createGraphMrCare,
-  validateGraphMrBasis,
-  type GraphMrHandoff,
-} from '../application/graph-development/mrCare'
-import { graphDigest } from '../domain/graph-development/model'
-import { withAutomationWorkspaceEffects } from '../infrastructure/automationWorkspaceEffects'
-import { issueHandlingContextSchema } from '../application/employeeTypePackage'
+import type { AutomationWorkspaceEffectsFactory } from '../ports/automationWorkspaceEffects'
+import type { EmployeeWorkspacePersistence } from '../ports/employeeWorkspacePersistence'
+import type { EmployeePlatformWorkItemPersistence } from '../ports/employeePlatformWorkItemPersistence'
+import type { GraphDesignStore } from '../ports/graphDesignStore'
+import type { GraphDesignExecutionPort } from '../ports/graphDesignExecution'
+import type { GraphDesignCommands } from './designCommands'
+import type { GraphEmployeeContext } from './employeeCodec'
+import type { createGraphVerification, GraphVerificationWorkspace } from './verification'
+import { graphResultSchemas } from './toolContracts'
+import { createGraphMrCare, validateGraphMrBasis, type GraphMrHandoff } from './mrCare'
+import { graphDigest } from '../../domain/graph-development/model'
+import { withSelectedAutomationWorkspaceEffects } from '../automationWorkspaceEffectLifetime'
+import { issueHandlingContextSchema } from '../employeeTypePackage'
 
 type Candidate = Extract<
   Awaited<ReturnType<ChangeCandidateParticipant['derive']>>,
@@ -167,9 +163,9 @@ export function createGraphDeliveryBridge(deps: {
   readonly commands: GraphDesignCommands
   readonly execution: Pick<GraphDesignExecutionPort, 'reviewReceipt' | 'assertMaterialsReadable'>
   readonly verification: Pick<ReturnType<typeof createGraphVerification>, 'run'>
-  readonly now?: () => number
+  readonly now: () => number
 }) {
-  const now = deps.now ?? Date.now
+  const now = deps.now
   const caseRoot = (caseId: string) =>
     deps.factory.resolve(
       deps.factory.applicationRootReference ?? deps.appHome,
@@ -634,7 +630,7 @@ export function createGraphDeliveryBridge(deps: {
       const uploads = issue.request.uploads
       // Graph intake stores temporary files in its own material directory. The
       // shared care tools consume the existing requirements-directory contract.
-      await withAutomationWorkspaceEffects(deps.factory, async (effects) => {
+      await withSelectedAutomationWorkspaceEffects(deps.factory, async (effects) => {
         for (const [index, upload] of uploads.entries()) {
           if (upload.placement !== 'temporary') continue
           const from = deps.factory.resolve(
@@ -700,5 +696,3 @@ export function createGraphDeliveryBridge(deps: {
     },
   }
 }
-
-export type GraphDeliveryBridge = ReturnType<typeof createGraphDeliveryBridge>

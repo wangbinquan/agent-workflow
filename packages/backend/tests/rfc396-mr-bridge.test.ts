@@ -22,10 +22,11 @@ import {
   bindChangeCandidateParticipant,
 } from '@/modules/source-control/composition/repositoryCandidate'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
+// RFC-498: the graph delivery bridge moved from composition/graphDeliveryBridge.ts; its clock is a required input.
 import {
   createGraphDeliveryBridge,
   type GraphMrHandoffResult,
-} from '@/modules/development-automation/composition/graphDeliveryBridge'
+} from '@/modules/development-automation/application/graph-development/deliveryBridge'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphDigest } from '@/modules/development-automation/domain/graph-development/model'
 import { issueHandlingContextSchema } from '@/modules/development-automation/application/employeeTypePackage'
@@ -429,6 +430,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     const bridge = createGraphDeliveryBridge({
       appHome: root,
       factory: createFileAutomationWorkspaceEffectsFactory(),
+      now: Date.now,
       sourceControl: {
         ...sourceControl,
         async checkpoint(input) {
@@ -1411,6 +1413,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
           ...f,
           appHome: f.root,
           factory: createFileAutomationWorkspaceEffectsFactory(),
+          now: Date.now,
           workspacePersistence,
           sourceControl: {
             ...f.sourceControl,

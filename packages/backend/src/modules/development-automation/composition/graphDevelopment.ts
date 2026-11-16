@@ -27,6 +27,7 @@ import { createGraphExecutionConsumption } from '../application/graph-developmen
 import { createGraphVerification } from '../application/graph-development/verification'
 import { createGraphLimitationReview } from '../application/graph-development/limitationReview'
 import { createGraphPlatformWorkItems } from '../application/graph-development/platformWorkItems'
+import { createGraphDeliveryBridge } from '../application/graph-development/deliveryBridge'
 import type {
   GraphDesignCasePort,
   GraphDesignExecutionPort,
@@ -46,7 +47,6 @@ import { graphDigest, staleGraphReads } from '../domain/graph-development/model'
 import { mountGraphDesignRoutes } from '../infrastructure/http/graphDesignRoutes'
 import type { Hono } from 'hono'
 import type { Actor } from '@/auth/actor'
-import { createGraphDeliveryBridge } from './graphDeliveryBridge'
 import { createEmployeeWorkspacePersistence } from '../infrastructure/employeeWorkspacePersistence'
 import { createEmployeePlatformWorkItemPersistence } from '../infrastructure/employeePlatformWorkItemPersistence'
 import { createDevelopmentEmployeeCaseWorkspaceDetailReader } from './digitalEmployeeWorkspace'
@@ -208,6 +208,7 @@ export function composeGraphDevelopment(input: {
     commands,
     execution,
     verification,
+    now: Date.now,
   })
   const platformWorkItems = createGraphPlatformWorkItems({
     publication: input.publication,
