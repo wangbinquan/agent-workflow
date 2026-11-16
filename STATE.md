@@ -1,3 +1,21 @@
+## 2026-11-16 RFC-500 集成的开发员工事件观察者迁出 composition（In Progress；`design/RFC-500-integration-development-event-observers-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的范围列“integration、resource-catalog、system-operations、intent、runtime-management、digital-employee 的
+  余项”；RFC-499 之后 integration 组合层控制流实测 101 行，`digitalEmployeeEventObserver.ts` 占 27 行、是余下最多的一个。用户 2026-11-02
+  「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的设计已经刷新，
+  你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：纯投影、游标与代码托管 / 外部审批观察者及分派器原样迁入 `application/developmentEventObservers.ts`（三个用例改名为
+  `createDevelopment…EventObserver`，时钟与激活标识必填）；`composition/digitalEmployeeEventObserver.ts` 只留装配函数
+  `composeDevelopmentEmployeeEventObserver`，交进程时钟与 `randomUUID`；bootstrap `daemonModules/integration.ts` 改为调它。清单见 design §3。
+- **不做**：integration `composition/` 的其余文件与其他模块；`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；把纯投影与游标拆到
+  domain（它们取 application 的 `MrFactsSnapshot`）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是三个观察者用例与它们的纯投影、游标，落 application；composition 只留装配
+  （时钟与激活标识的选定）；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-500 用例覆盖全部
+  生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读装配文件、bootstrap 文件与新文件。C13
+  `composition-control-flow-integration` 101 → 实测，其余计数不升。
+
 ## 2026-11-16 RFC-499 源代码管理的发布传输与仓库准备的 effect 实现归 infrastructure（Done；`design/RFC-499-source-control-transport-and-preparation-effects-into-infrastructure/`）
 
 - **来由**：RFC-294 plan §3 S10 点名 source-control“`repositoryPublicationTransport.ts`、`repositoryPreparation.ts` 的 effect 实现归
@@ -39,7 +57,12 @@
   SHA CI 为准。架构报告 60 项只差上述两项。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **落地**：`797bd884e`（19 个文件；父提交是 `1195a6f66`）。
 - **CI**：`797bd884e` 主 CI run 43902539587 的 70 个 job 全部通过（macOS 的 e2e 分片两次没有分到 runner 就被取消，归 runner 容量；只重跑这些作业，第 3 次全部通过）；同一推送按路径触发的 windows-platform run 43902539725（1 个 job）通过。
-  落档提交 `1195a6f66`（只改文档）：主 CI run 43829729267 的 70 个 job 全部通过。
+  落档提交 `1195a6f66`（只改文档）：主 CI run 43829729267 的 70 个 job 全部通过。转 Done 的 `b1ebf236f`（只改文档）：主 CI run
+  43915500529 的 70 个 job 全部通过（补记于 RFC-500 的落档提交；落在同一 SHA 的定时 `Release upgrade nightly` 红在 macOS 的候选作业没有
+  分到 runner、0 个步骤，归 runner 容量）。随后的用例修正 `3cf7d3404`（`test(backend)`：`rfc363-task-workspace-process-recovery`、
+  `rfc363-preparation-process-recovery` 与 `rfc370-execution-effect` 等子进程标记文件时补 200 毫秒轮询兜底，见集中验证里 fs.watch 晚到的一条与
+  `docs/dev-gotchas.md`）：主 CI run 43924182021 的 70 个 job 全部通过（第 1 次 macOS 的 e2e 分片 4/4 没有分到 runner 就被取消，只重跑它，
+  第 2 次通过）。
 - **下一步**：RFC-294 S10 第六步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是其余模块

@@ -146,6 +146,9 @@
 
 - `797bd884e`（实现，父提交是 `1195a6f66`）：exact SHA 主 CI run 43902539587 的 70 个 job 全部通过（第 1 次里 macOS 的 Playwright e2e 分片 1/4 与 4/4、第 2 次里 1/4 没有分到 runner 就被取消：注记 `The job was not acquired by Runner of type hosted even after multiple attempts`、0 个步骤，归 runner 容量、与提交无关，判据见 `docs/audit-backlog.md` 的同形条目；只重跑没分到 runner 的作业，第 3 次全部通过）；同一推送按路径触发的 windows-platform run 43902539725（1 个 job）通过。
 - 本 RFC 的落档提交 `1195a6f66`（只改文档）：主 CI run 43829729267 的 70 个 job 全部通过。
+- 转 Done 的 `b1ebf236f`（只改文档；补记于 RFC-500 的落档提交）：主 CI run 43915500529 的 70 个 job 全部通过。落在同一 SHA 的定时
+  `Release upgrade nightly`（run 43915764342）红在 `Candidate macos-latest`：没有分到 runner 就被取消（`not acquired`、0 个步骤），归 runner
+  容量。
 
 ## 实现门（本会话自审，只审功能）
 
