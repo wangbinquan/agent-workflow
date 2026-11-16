@@ -360,7 +360,8 @@ function registerCases(provider: ProviderHarness) {
     const cRun = runs.find((r) => r.nodeId === 'c')
     expect(dRun?.status).toBe('done') // agent expressed an ask successfully
     expect(cRun?.status).toBe('awaiting_human')
-  })
+    // Explicit budget, as for the other cases in this file: a task run on a spawned runtime plus fixture writes.
+  }, 20_000)
 
   // RFC-100: a wired clarify channel is MANDATORY ask-back. An agent that emits
   // <workflow-output> instead of asking is rejected (clarify-required); with the
@@ -578,7 +579,9 @@ function registerCases(provider: ProviderHarness) {
     // RFC-132 (PR-C): the flat `## Clarify Q&A` block carries the answer as an equal peer.
     expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Clarify Q&A')
     expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Postgres')
-  })
+    // Explicit budget, as for the other cases in this file: two task runs plus fixture writes. PostgreSQL CI took
+    // 1215 ms on b84ac06c2 but 5857 ms on 959b13557 (shard 42/44, same code), past bun's default 5 s.
+  }, 20_000)
 
   // Regression: prior to the isFresherNodeRun comparator, the latest-row
   // ordering put retryIndex first. When a user (a) had previously triggered
