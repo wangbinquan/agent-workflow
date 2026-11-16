@@ -15,7 +15,7 @@
 // 实测把 SQLite 路由的 payload `name` 缀一截（`{ ...task, name: \`${task.name}_MUT\` }`）
 // 当场红在行级比对上。
 import { readTaskFixtures } from './helpers/model'
-import { beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
@@ -23,6 +23,10 @@ import { earlyLifecycleViolation } from './helpers/taskRowParity'
 import { comparableEpoch2TaskRow as comparableTaskRow } from './fixtures/rfc395TaskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+
+// Every test launches through both engines over HTTP; on a busy machine a PostgreSQL body ran past bun's 5 s default
+// (28 s including the hook below) while CI takes under a second. Budget the tests as well as the hook.
+setDefaultTimeout(30_000)
 
 const TOKEN = 'j'.repeat(64)
 
@@ -145,10 +149,12 @@ describeEachProviderHttpApplication(
   (scope) => {
     let app: Hono
 
+    // Opening the HTTP application composes the whole daemon. CI run 43933933245 (31df05fb7, docs only) spent 6.2 s in this
+    // hook on PostgreSQL and hit bun's 5 s default; the same code passed it in 0.7 s one commit earlier. Give it a budget.
     beforeEach(async () => {
       await seedTestDefaultOpencodeRuntime(scope.harness.db)
       ;({ app } = await scope.open())
-    })
+    }, 30_000)
 
     test('同一份 POST /api/tasks：两个引擎落出的 task 行逐字相同', async () => {
       const suffix = ulid().slice(-8).toLowerCase()
