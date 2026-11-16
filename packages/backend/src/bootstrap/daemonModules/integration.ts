@@ -17,11 +17,7 @@ import {
   createCodeHostWebhookRoutingDirectory,
 } from '@/modules/integration/composition'
 import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import {
-  composeDevelopmentApprovalEventObserver,
-  composeDevelopmentCodeHostEventObserver,
-  composeDevelopmentEmployeeEventObserver,
-} from '@/modules/integration/composition/digitalEmployeeEventObserver'
+import { composeDevelopmentEmployeeEventObserver } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
 import {
@@ -81,7 +77,7 @@ export function composeDaemonIntegrationModules(input: {
   >[0]['digitalEmployeeWorkStart']
   /** RFC-471: the repository → code-host binding integration composed for development delivery. */
   readonly developmentCodeHostBinding: Parameters<
-    typeof composeDevelopmentCodeHostEventObserver
+    typeof composeDevelopmentEmployeeEventObserver
   >[0]['binding']
   readonly developmentPurposeRoot: {
     readonly approval: Parameters<typeof composeSelectedApprovalGatewayRunnerFor>[1]
@@ -172,12 +168,8 @@ export function composeDaemonIntegrationModules(input: {
         digitalEmployeeLifecycleEventCatalogJson,
       ],
       observer: composeDevelopmentEmployeeEventObserver({
-        codeHost: composeDevelopmentCodeHostEventObserver({
-          binding: input.developmentCodeHostBinding,
-        }),
-        approval: composeDevelopmentApprovalEventObserver({
-          gateway: developmentApprovalGateway,
-        }),
+        binding: input.developmentCodeHostBinding,
+        gateway: developmentApprovalGateway,
       }),
       routingSubscriptions: createCodeHostWebhookRoutingDirectory(
         input.db,

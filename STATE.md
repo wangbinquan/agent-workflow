@@ -14,7 +14,21 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是三个观察者用例与它们的纯投影、游标，落 application；composition 只留装配
   （时钟与激活标识的选定）；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-500 用例覆盖全部
   生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读装配文件、bootstrap 文件与新文件。C13
-  `composition-control-flow-integration` 101 → 实测，其余计数不升。
+  `composition-control-flow-integration` 101 → 74（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第七步**：清单（design §3）的名字只在清单列的文件声明，改名前的两个观察者名没有声明；
+  `composition/digitalEmployeeEventObserver.ts` 只有装配函数 `composeDevelopmentEmployeeEventObserver`——只取 `node:crypto` 与新文件，没有
+  控制流语句与回落，两个观察者与分派器各建恰好一次，交进程时钟与 `randomUUID`；bootstrap 只取这个装配函数、调用恰好一次；新文件的
+  依赖面是闭集、不用进程全局，三个用例的时钟与激活标识必填。生产文件 4,101 → 4,102；跨 context import 7,505 → 7,503（context 对
+  135 → 135、没有新的符号），public surface 1,195 → 1,195。integration 组合层控制流余下 74 行：`webhookAdmission.ts` 17 行、
+  `developmentAdapterConfigOperations.ts` 12 行、`codeHostEffects.ts` 11 行、`approvalGateway.ts` 10 行、`digitalEmployeeToolConnections.ts`
+  7 行、`webhookIngress.ts` 1 行与 RFC-370 余项的 `taskImageDevelopmentAdapter.ts` 13 行、`crewstationDevelopmentAdapters.ts` 3 行。
+- **集中验证**（候选 1 基于 `3cf7d3404`，候选 1b 加观察者的行为用例，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；
+  首批按 CI 的跑法跑 158 个文件、与对照 A/B，候选多出的 5 条失败都是时序或环境（3 条撞时限，系统模拟 E2E 的两例在播种时连接被重置、
+  事件中心还没起）；任一边红过的 16 个文件放宽默认时限复跑，两边都是 222 条通过、7 条红，红在同样的用例。全量 SQLite 2,944 个文件
+  2,930 个通过，其余 14 个：三个报告类撞自带时限，11 个与对照 A/B、没有候选多出的失败名；取到本 RFC 改动代码的 260 个文件里 257 个通过。
+  三个报告类用例与两边红在同样用例、取到本 RFC 代码的 4 个文件只放宽时限的副本两边全过（各 79 / 79）。设计 §4 原先高估了现有用例对
+  代码托管观察者 `run` 的覆盖（daemon 装配的用例只建不跑），补上对系统模拟 GitLab 跑观察者、钉住分派与装配的行为用例（4 / 4）。架构报告
+  60 项只差上述一项。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-16 RFC-499 源代码管理的发布传输与仓库准备的 effect 实现归 infrastructure（Done；`design/RFC-499-source-control-transport-and-preparation-effects-into-infrastructure/`）
 

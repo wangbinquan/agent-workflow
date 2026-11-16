@@ -122,8 +122,12 @@ bootstrap `daemonModules/integration.ts`：第 20～24 行只取 `composeDevelop
   不取 infrastructure、composition、IO 包，不用进程全局（`Date.now`、`randomUUID`、`Math.random`、`process`），三个用例的时钟与激活
   标识必填；带负对照。
 
-行为由现有用例对拍：`rfc310-event-center`（纯投影、游标与审批观察者）、经 bootstrap 装配事件中心的用例（`rfc381-daemon-integration-bundles`、
-员工自动化包等）与 RFC-471 的代码托管桥用例。
+行为由现有用例对拍：`rfc310-event-center`（纯投影、游标与审批观察者）；经 bootstrap 装配事件中心的用例
+（`rfc381-daemon-integration-bundles`、员工自动化包等）只建观察者、不跑它。此前没有用例直接跑代码托管观察者的 `run`（绑定 →
+`collectMergeRequestFacts` → 投影 → 游标）与分派器，集中验证时补上（2026-11-16）：新增
+`packages/backend/tests/rfc500-integration-development-event-observers-behavior.test.ts`——对系统模拟的 GitLab 跑迁移后的代码托管观察者
+（首轮产出生命周期、检视与门禁复核三条观察，事实不变的复跑只重发周期复核），钉住其他来源原样放行、畸形主题 / 缺绑定 / 取事实失败
+抛错、分派器按来源分派，以及装配把部署的绑定与网关原样交给观察者、时钟取进程时间、激活标识是 `randomUUID`。
 
 ## 5. 失败模式
 

@@ -20,8 +20,8 @@ import { createEventAutomationWorkIntentStore } from '@/modules/event-center/inf
 import {
   advanceDevelopmentCodeHostObserverCursor,
   buildDevelopmentCodeHostFacts,
-  composeDevelopmentApprovalEventObserver,
-} from '@/modules/integration/composition/digitalEmployeeEventObserver'
+  createDevelopmentApprovalEventObserver,
+} from '@/modules/integration/application/developmentEventObservers'
 import type { MrFactsSnapshot } from '@/modules/integration/application/mrFacts'
 import {
   codeHostBusinessEventObservation,
@@ -479,7 +479,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
 describe('RFC-310 shared Event Center', () => {
   test('approval observer emits revision changes only and uses the typed approval subject', async () => {
     let observations = 0
-    const observer = composeDevelopmentApprovalEventObserver({
+    const observer = createDevelopmentApprovalEventObserver({
       gateway: {
         async observe(input) {
           observations += 1
