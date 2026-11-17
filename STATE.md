@@ -1,4 +1,4 @@
-## 2026-11-16 RFC-501 集成的 webhook 启动准入与触发器校验迁出 composition（In Progress；`design/RFC-501-integration-webhook-admission-out-of-composition/`）
+## 2026-11-16 RFC-501 集成的 webhook 启动准入与触发器校验迁出 composition（Done；`design/RFC-501-integration-webhook-admission-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 integration 等模块的余项；RFC-500 之后 integration 组合层控制流实测 74 行，`webhookAdmission.ts`
   占 17 行、是余下最多的一个；它的使用方 `infrastructure/webhookDispatchRuntime.ts` 反取 composition（RFC-294 的依赖表不许）。用户
@@ -31,6 +31,14 @@
   RFC 改动代码的 430 个文件里 425 个通过。三个报告类用例与 9 个取到本 RFC 代码的文件（两边红法相同，或候选多出撞时限）只放宽时限的副本
   两边全过（12 个文件，各 145 / 145）。改取新位置的触发器校验用例两边全过。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定
   自审，只审功能）。
+- **落地**：`1ac43b89b`（18 个文件；父提交是 `f47466869`）。
+- **CI**：`1ac43b89b` 主 CI run 44021789499 的 70 个 job 全部通过。
+  落档提交 `f47466869`（只改文档）：主 CI run 43984477325 的 70 个 job 全部通过。
+- **下一步**：RFC-294 S10 第八步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是 integration 其余
+  组合文件（`developmentAdapterConfigOperations.ts` 等）与其余模块（resource-catalog、system-operations、intent、runtime-management、digital-employee 的
+  余项；`taskImage*` / `crewstation*` 属 RFC-370 余项，继续避让）与收口，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-16 RFC-500 集成的开发员工事件观察者迁出 composition（Done；`design/RFC-500-integration-development-event-observers-out-of-composition/`）
 

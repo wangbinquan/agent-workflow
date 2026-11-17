@@ -22,7 +22,7 @@
       函数、不取 composition
 - [x] AC-2 同样输入下启动准入与保存校验的结果、错误码与端口调用和此前一致；派发与触发器服务拿到的是同一份实现
 - [x] AC-3 新文件的依赖面是闭集；跨 context 边、public surface 不升；`composition-control-flow-integration` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`1ac43b89b` 主 CI run 44021789499 的 70 个 job 全部通过（见 §CI）
 
 ## 集中验证
 
@@ -100,7 +100,7 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `1ac43b89b`（实现，父提交是 `f47466869`）：exact SHA 主 CI run 44021789499 的 70 个 job 全部通过。
 - 本 RFC 的落档提交 `f47466869`（只改文档）：主 CI run 43984477325 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
