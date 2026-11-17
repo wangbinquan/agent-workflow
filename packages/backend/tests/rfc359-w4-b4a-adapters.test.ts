@@ -16,10 +16,8 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleOwnerIdentityPersistence } from '@/modules/identity-access/infrastructure/ownerIdentityQueries'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
-import {
-  createWebhookDispatchOrchestrationRuntime,
-  createWebhookLaunchAdmission,
-} from '@/modules/integration/infrastructure/webhookDispatchRuntime'
+import { createWebhookLaunchAdmission } from '@/modules/integration/application/webhookAdmission'
+import { createWebhookDispatchOrchestrationRuntime } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import { createWebhookEndpointAdministration } from '@/modules/integration/infrastructure/webhookEndpointAdministration'
 import { createWebhookTriggerAdministration } from '@/modules/integration/infrastructure/webhookTriggerAdministration'
 import { DrizzleMemoryDistillReadStore } from '@/modules/memory/infrastructure/memoryDistillReadStore'

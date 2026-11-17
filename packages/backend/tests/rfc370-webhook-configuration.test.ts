@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
-import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
+import { createWebhookTriggerValidation } from '@/modules/integration/application/webhookAdmission'
 import {
   createWebhookEndpoint,
   getWebhookEndpoint,
@@ -108,7 +108,7 @@ describeEachProvider('RFC-370 webhook configuration query', (harness) => {
     const ready = barrier()
     let failed = false
     let reads = 0
-    const validate = composeWebhookTriggerValidation(scheduledTaskRuntime(harness.db).operations, {
+    const validate = createWebhookTriggerValidation(scheduledTaskRuntime(harness.db).operations, {
       async read() {
         reads += 1
         entered.release()

@@ -7,7 +7,7 @@ import { ulid } from 'ulid'
 
 import { buildActor } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
-import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
+import { assertWebhookTriggerSaveable } from '../src/modules/integration/application/webhookAdmission'
 import { createUser } from './helpers/userFixture'
 import { ValidationError } from '../src/util/errors'
 import {

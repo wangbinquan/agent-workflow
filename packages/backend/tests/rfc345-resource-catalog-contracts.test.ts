@@ -737,7 +737,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const triggerValidation = readFileSync(
-      resolve(sourceRoot, 'modules/integration/composition/webhookAdmission.ts'),
+      resolve(sourceRoot, 'modules/integration/application/webhookAdmission.ts'),
       'utf8',
     )
     const scheduledPersistence = readFileSync(

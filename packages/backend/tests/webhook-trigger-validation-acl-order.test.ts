@@ -25,7 +25,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
+import { assertWebhookTriggerSaveable } from '../src/modules/integration/application/webhookAdmission'
 import { createUser } from './helpers/userFixture'
 import { NotFoundError, ValidationError } from '../src/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

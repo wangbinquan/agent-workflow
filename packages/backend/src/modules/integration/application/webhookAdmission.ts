@@ -1,5 +1,7 @@
+// RFC-501 (RFC-294 S10 step 8): the webhook launch admission and trigger save validation, moved here unchanged from
+// composition/webhookAdmission.ts; the two factories are now named create… (the composition file is gone).
 import type { Actor } from '@/auth/actor'
-import type { WebhookConfigurationQuery } from '../application/ports/webhookConfiguration'
+import type { WebhookConfigurationQuery } from './ports/webhookConfiguration'
 import type { FrozenIntegrationTriggerResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import { assertTriggerPreflight } from '@/modules/resource-catalog/public/queries'
 import {
@@ -7,19 +9,19 @@ import {
   assertScheduledTargetUsable,
   loadIntegrationTriggerResourceSnapshot,
   type ScheduledTaskOperations,
-} from '../application/scheduledTasks'
-import type { IntegrationTriggerResourceAuthority } from '../application/ports/scheduledTaskPersistence'
+} from './scheduledTasks'
+import type { IntegrationTriggerResourceAuthority } from './ports/scheduledTaskPersistence'
 import {
   renderWebhookLaunch,
   type RenderedLaunch,
   type WebhookDispatchDeps,
-} from '../application/webhookDispatch'
+} from './webhookDispatch'
 import {
   rehearsalEvent,
   staticTriggerIssues,
   type WebhookTriggerSaveCandidate,
 } from '../domain/webhookTriggerValidation'
-import type { WebhookTriggerServiceDeps } from '../application/webhookTriggers'
+import type { WebhookTriggerServiceDeps } from './webhookTriggers'
 import { ValidationError } from '@/util/errors'
 import { webhookPayloadTemplateSchemaFor, type WorkflowDefinition } from '@agent-workflow/shared'
 
@@ -28,7 +30,7 @@ import { webhookPayloadTemplateSchemaFor, type WorkflowDefinition } from '@agent
  * the database mechanism; webhook dispatch only consumes its closed resource
  * and validation ports.
  */
-export function composeWebhookLaunchAdmission(
+export function createWebhookLaunchAdmission(
   operations: ScheduledTaskOperations,
 ): WebhookDispatchDeps['admitLaunch'] {
   return async (input) => {
@@ -169,7 +171,7 @@ export async function assertWebhookTriggerSaveable(
   )
 }
 
-export function composeWebhookTriggerValidation(
+export function createWebhookTriggerValidation(
   operations: ScheduledTaskOperations,
   configuration: WebhookConfigurationQuery,
 ): WebhookTriggerServiceDeps['validateSaveable'] {

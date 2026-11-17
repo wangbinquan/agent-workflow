@@ -52,7 +52,7 @@ import {
   composeWebhookDeliveryRuntimeFor,
   composeWebhookIngressPersistenceFor,
 } from '@/modules/integration/composition/webhookIngress'
-import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
+import { createWebhookTriggerValidation } from '@/modules/integration/application/webhookAdmission'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
@@ -337,7 +337,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     // 「两个 provider 装出来的一致」由此得到的是比对读更强的证据。
     const deps = composeWebhookTriggerServiceDependenciesFor(
       harness.db,
-      composeWebhookTriggerValidation(
+      createWebhookTriggerValidation(
         scheduled.operations,
         composeFileApplicationConfigurationQueries('/tmp/aw-rfc359-w7.json'),
       ),

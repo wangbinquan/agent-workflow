@@ -39,8 +39,8 @@
       "reason": "max=2: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/identity-access/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-integration": {
-      "max": 74,
-      "reason": "max=74: RFC-500 (RFC-294 S10 step 7) moved the development employee event observers out of integration composition into application (101 -> 74, measured). RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/integration/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 57,
+      "reason": "max=57: RFC-501 (RFC-294 S10 step 8) moved the webhook launch admission and trigger save validation out of integration composition into application (74 -> 57, measured). RFC-500 (RFC-294 S10 step 7) moved the development employee event observers out of integration composition into application (101 -> 74, measured). RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/integration/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-intent": {
       "max": 23,

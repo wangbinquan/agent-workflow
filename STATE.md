@@ -14,7 +14,23 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两道准入用例与校验器工厂，落 application；composition 不再有这个文件，
   infrastructure 不再取 composition；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-501 用例覆盖
   全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读 `webhookDispatchRuntime.ts`、`webhookDispatch.ts`、
-  `composition.ts`、bootstrap 文件与新文件。C13 `composition-control-flow-integration` 74 → 实测，其余计数不升。
+  `composition.ts`、bootstrap 文件与新文件。C13 `composition-control-flow-integration` 74 → 57（收紧到实测），其余 59 项实测与对照逐项相同，
+  都在 `max` 内。
+- **§14 不变量 / S10 第八步**：清单（design §3）的三个名字只在 `application/webhookAdmission.ts` 声明，改名前的两个工厂名没有声明；
+  `composition/webhookAdmission.ts` 不存在，没有文件从旧位置取名字；`infrastructure/webhookDispatchRuntime.ts` 不声明
+  `createWebhookLaunchAdmission`、不取 composition（一条 infrastructure → composition 的反向边消失）；`webhookDispatch.ts` 从新文件取启动
+  准入，integration `composition.ts` 从新文件转出校验器工厂，bootstrap 只经它取、调用一次；新文件的依赖面是闭集、不用进程全局。生产文件
+  4,102 → 4,102；跨 context import 7,503 → 7,503（context 对 135 → 135、没有新的符号），public surface 1,195 → 1,195。integration 组合层
+  控制流余下 57 行：`developmentAdapterConfigOperations.ts` 12 行、`codeHostEffects.ts` 11 行、`approvalGateway.ts` 10 行、
+  `digitalEmployeeToolConnections.ts` 7 行、`webhookIngress.ts` 1 行与 RFC-370 余项的 `taskImageDevelopmentAdapter.ts` 13 行、
+  `crewstationDevelopmentAdapters.ts` 3 行。
+- **集中验证**（候选 1，基于 `ea271ecac`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 352 个
+  文件、与对照 A/B，两边都是 3,088 条通过、240 条红，候选多出的 25 条失败都是时序（22 条撞时限，3 条是等待计时器、超时连带与 `clarify`
+  的 KNOWN-INCIDENT 一例）；任一边红过的 89 个文件放宽默认时限复跑，首批多出的 25 条没有一条仍只红在候选，这一轮候选多出的 4 条也都是撞
+  时限或等收尾。全量 SQLite 2,946 个文件 2,932 个通过，其余 14 个：三个报告类撞自带时限，11 个与对照 A/B、没有候选多出的失败名；取到本
+  RFC 改动代码的 430 个文件里 425 个通过。三个报告类用例与 9 个取到本 RFC 代码的文件（两边红法相同，或候选多出撞时限）只放宽时限的副本
+  两边全过（12 个文件，各 145 / 145）。改取新位置的触发器校验用例两边全过。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定
+  自审，只审功能）。
 
 ## 2026-11-16 RFC-500 集成的开发员工事件观察者迁出 composition（Done；`design/RFC-500-integration-development-event-observers-out-of-composition/`）
 

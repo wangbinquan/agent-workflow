@@ -15,11 +15,11 @@ import {
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
+  createWebhookTriggerValidation,
 } from '@/modules/integration/composition'
 import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentEmployeeEventObserver } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
 import {
   composeWebhookDispatchCore,
   composeWebhookTriggerServiceDependenciesFor,
@@ -212,7 +212,7 @@ export function composeDaemonIntegrationModules(input: {
     webhookEndpointService: composeWebhookEndpointServiceDependencies(input),
     webhookTriggerService: composeWebhookTriggerServiceDependenciesFor(
       input.db,
-      composeWebhookTriggerValidation(input.scheduledTaskRuntime.operations, input.configuration),
+      createWebhookTriggerValidation(input.scheduledTaskRuntime.operations, input.configuration),
     ),
     eventAutomationWorkIntents,
     eventAutomationContexts,

@@ -2,19 +2,11 @@
 // 执行器调用面（RFC-257 / RFC-243 源码锁点名的文件）：只经注入的 TaskExecution 参与者启动 / 取消。
 
 import type { WebhookDispatchDeps } from '../application/webhookDispatch'
-import type { ScheduledTaskOperations } from '../application/scheduledTasks'
 import {
   createWebhookExecutionRuntime,
   type WebhookExecutionRuntimeDependencies,
 } from './webhookExecutionRuntime'
 import type { DigitalEmployeeWorkStartPort } from '../public/participants'
-import { composeWebhookLaunchAdmission } from '../composition/webhookAdmission'
-
-export function createWebhookLaunchAdmission(
-  operations: ScheduledTaskOperations,
-): WebhookDispatchDeps['admitLaunch'] {
-  return composeWebhookLaunchAdmission(operations)
-}
 
 type WebhookDispatchRuntimeInput = Readonly<{
   readonly taskExecutions: WebhookExecutionRuntimeDependencies['taskExecutions']

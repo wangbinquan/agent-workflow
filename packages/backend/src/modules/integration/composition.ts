@@ -74,6 +74,9 @@ export { schemaContribution } from './composition/schema'
 
 export { createWebhookFireRetentionPhase } from './infrastructure/retentionPhase'
 
+// RFC-501: the webhook trigger save validation is an application use case; bootstrap takes its factory via composition.
+export { createWebhookTriggerValidation } from './application/webhookAdmission'
+
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createIntegrationMaintenanceJobHandlers } from './application/maintenanceJobs'
 
