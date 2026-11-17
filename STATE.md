@@ -1,3 +1,21 @@
+## 2026-11-16 RFC-501 集成的 webhook 启动准入与触发器校验迁出 composition（In Progress；`design/RFC-501-integration-webhook-admission-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的范围列 integration 等模块的余项；RFC-500 之后 integration 组合层控制流实测 74 行，`webhookAdmission.ts`
+  占 17 行、是余下最多的一个；它的使用方 `infrastructure/webhookDispatchRuntime.ts` 反取 composition（RFC-294 的依赖表不许）。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09 再次下达）、2026-11-10「当前RFC294的
+  设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：启动准入、触发器保存校验与校验器工厂原样迁入 `application/webhookAdmission.ts`（两个工厂改名为 `createWebhookLaunchAdmission` /
+  `createWebhookTriggerValidation`）；`composition/webhookAdmission.ts` 删除；`infrastructure/webhookDispatchRuntime.ts` 里只转手它的函数删除；
+  `composition/webhookDispatch.ts` 直接取 application；bootstrap 经 integration `composition.ts` 的转出取校验器工厂。清单见 design §3。
+- **不做**：integration `composition/` 的其余文件与其他模块；`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；改写准入或校验的
+  判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两道准入用例与校验器工厂，落 application；composition 不再有这个文件，
+  infrastructure 不再取 composition；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-501 用例覆盖
+  全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读 `webhookDispatchRuntime.ts`、`webhookDispatch.ts`、
+  `composition.ts`、bootstrap 文件与新文件。C13 `composition-control-flow-integration` 74 → 实测，其余计数不升。
+
 ## 2026-11-16 RFC-500 集成的开发员工事件观察者迁出 composition（Done；`design/RFC-500-integration-development-event-observers-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列“integration、resource-catalog、system-operations、intent、runtime-management、digital-employee 的
@@ -32,7 +50,11 @@
 - **落地**：`81bb9a42b`（11 个文件；父提交是 `31df05fb7`）。
 - **CI**：`81bb9a42b` 主 CI run 43961229752 的 70 个 job 全部通过；同一推送按路径触发的 windows-platform run 43961229772（1 个 job）通过。
   落档提交 `31df05fb7`（只改文档）：主 CI run 43933933245 的 70 个 job 里 67 个通过（backend shard 20/44 一个钩子撞默认的 5 秒、macOS 的
-  e2e 分片 2/4 没有分到 runner，归因见 plan §CI；修用例另行提交）。
+  e2e 分片 2/4 没有分到 runner，归因见 plan §CI；修用例另行提交）。转 Done 的 `7bfd2c5e8`（只改文档）：主 CI run 43968347935 的 70 个 job
+  全部通过（补记于 RFC-501 的落档提交）。随后的用例修正 `ea271ecac`（`test(backend)`：`rfc398` 辅助的 `ready()` 改用容忍写了一半的
+  `.daemon.info` 的 `readDaemonInfo`；`rfc359-w5hn` 的钩子与用例给 30 秒）：主 CI run 43974472901 的 70 个 job 全部通过（第 1 次 backend
+  shard 5/44 的 checkout 用了 9 分钟、作业撞 15 分钟上限，macOS 的 e2e 分片 3/4 一条 `rfc372-mindmap` 等待超时后作业撞 20 分钟上限，都与
+  提交无关；只重跑这两个作业，第 2 次通过）。
 - **下一步**：RFC-294 S10 第七步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是 integration 其余

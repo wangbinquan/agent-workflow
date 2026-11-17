@@ -108,6 +108,8 @@
   用了 6.2 秒、撞 bun 默认的 5 秒，随后的「graph-builtin-implementer-missing」是钩子超时后清理与组装交错的连带；归因：这个提交只改文档，
   代码相同的父提交 `3cf7d3404` 的 run 43924182021 里同一分片同一例 0.7 秒通过——runner 时序，按 flaky 的规则给这个钩子显式的 30 秒，
   修用例另行提交。Playwright e2e（macOS 2/4）没有分到 runner 就被取消（`not acquired`、0 个步骤），归 runner 容量；两者连带 CI required 红。
+  修用例的提交是 `ea271ecac`（同时修了全量 SQLite 里 `rfc398` 辅助读到写了一半的 `.daemon.info` 那一处）。
+- 转 Done 的 `7bfd2c5e8`（只改文档；补记于 RFC-501 的落档提交）：主 CI run 43968347935 的 70 个 job 全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
