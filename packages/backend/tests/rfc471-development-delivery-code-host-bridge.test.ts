@@ -175,9 +175,11 @@ describe('RFC-471 —— 退役的文件不在、零引用', () => {
     ].join('\n')
     const targets = specifiersIn(fixture).map((specifier) => targetOf(probe, specifier))
     expect(targets.filter((target) => RETIRED.includes(target ?? ''))).toHaveLength(3)
+    // An absolute probe path keeps the label independent of the working directory: `relative(REPO_ROOT, 'probe.ts')`
+    // resolves against cwd, so bun started in packages/backend labelled it 'packages/backend/probe.ts' (CI runs from the root).
     expect(
       retiredPathLiterals(
-        'probe.ts',
+        join(REPO_ROOT, 'probe.ts'),
         [
           "read('packages/backend/src/services/developmentDeliveryDeps.ts')",
           '// packages/backend/src/services/developmentDeliveryDeps.ts',

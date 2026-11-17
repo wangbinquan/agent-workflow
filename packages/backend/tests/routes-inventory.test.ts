@@ -5,7 +5,7 @@
 // (corrupt JSON) / 404 task / 404 node-run / 410 non-agent kind.
 
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -16,6 +16,11 @@ import type {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+
+// 预算，不是性能门：每条用例都经 `describeEachProviderHttpApplication` 打开一整个 provider 应用，PostgreSQL 那半边在分片并行下
+// 偶尔超过 bun 默认的 5 秒（CI run 44159454316 的 backend 分片 42/44：一条 5,255ms，同文件其余 0.6～1.1 秒；本机高负载下
+// PostgreSQL 的 11 条在 HEAD 与改动后同样 5.7～6.1 秒）。做法见 docs/dev-gotchas.md「给它一个说得出理由的显式预算」。
+setDefaultTimeout(30_000)
 
 const TOKEN = 'a'.repeat(64)
 
