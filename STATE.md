@@ -1,3 +1,25 @@
+## 2026-11-17 RFC-502 集成的开发适配器配置、代码托管交付、审批网关与工具连接目录迁出 composition（In Progress；`design/RFC-502-integration-development-use-cases-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的范围列 integration 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-501
+  之后 integration 组合层控制流实测 57 行，除 RFC-370 余项的 16 行与 `webhookIngress.ts` 的 1 行外，40 行在四个“用例写在 composition、装配
+  一两行”的文件里（`developmentAdapterConfigOperations.ts` 12、`codeHostEffects.ts` 11、`approvalGateway.ts` 10、
+  `digitalEmployeeToolConnections.ts` 7），`approvalGateway.ts` 里同一段 66 行的回执投影逐字出现两遍。用户 2026-11-02「好，你继续推进RFC294，
+  过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新
+  刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：四组用例原样迁入 application 的 `developmentAdapterConfigOperations.ts`、`developmentCodeHostDelivery.ts`、
+  `developmentApprovalGateway.ts`、`developmentToolConnectionCatalog.ts`（工厂改名为 `create…`，配置操作的时钟改为必填），审批的两条装配
+  共用一份投影；工具连接 store 的接口迁入 `application/ports/developmentToolConnectionStore.ts`；四个组合文件只留五个装配入口与配置操作的
+  装配输入，bootstrap 不改。清单见 design §3。
+- **不做**：integration 的其余组合文件（`webhookIngress.ts` 的一行等）与其他模块；`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；
+  删除旧的审批装配 `composeApprovalGatewayRunnerFor`（bootstrap 已不用，系统 mock E2E 仍取它，design §8）；`process.env` 的读取位置与 S12 的
+  回落写法；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是四组用例，落 application；composition 只留装配、没有控制流；不新增用例入口，
+  审批投影由两份变一份。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-502 用例覆盖全部生产文件（下限 3,000）、
+  全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读四个组合文件、工具连接 store、bootstrap 的三个文件与新文件。C13
+  `composition-control-flow-integration` 57 → 实测，其余计数不升。
+
 ## 2026-11-16 RFC-501 集成的 webhook 启动准入与触发器校验迁出 composition（Done；`design/RFC-501-integration-webhook-admission-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 integration 等模块的余项；RFC-500 之后 integration 组合层控制流实测 74 行，`webhookAdmission.ts`
@@ -34,6 +56,7 @@
 - **落地**：`1ac43b89b`（18 个文件；父提交是 `f47466869`）。
 - **CI**：`1ac43b89b` 主 CI run 44021789499 的 70 个 job 全部通过。
   落档提交 `f47466869`（只改文档）：主 CI run 43984477325 的 70 个 job 全部通过。
+  转 Done 的 `183febdb9`（只改文档）：主 CI run 44026161529 的 70 个 job 全部通过（补记于 RFC-502 的落档提交）。
 - **下一步**：RFC-294 S10 第八步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。S10 的下一步是 integration 其余
