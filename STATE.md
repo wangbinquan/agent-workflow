@@ -1,3 +1,23 @@
+## 2026-11-17 RFC-503 意图的平台清单、图校验与维护命令迁出 composition（In Progress；`design/RFC-503-intent-use-cases-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的范围列 intent 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-502 之后
+  intent 组合层控制流实测 23 行，18 行在四个“用例写在 composition”的文件里（`platformInventory.ts` 9、`graphValidation.ts` 5、`maintenance.ts`
+  3、`dispatch.ts` 1）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17
+  再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为
+  已批准，不派 Codex。
+- **范围**：平台清单参与者、图校验端口的实现与两条维护命令原样迁入 application 的 `platformInventoryParticipant.ts`、
+  `workflowGraphValidationProvider.ts`、`maintenanceCommands.ts`（工厂改名为 `create…`，维护命令的时钟由装配传入）；`composition/platformInventory.ts`
+  与 `composition/graphValidation.ts` 删除，两个工厂经 intent `composition.ts` 转出、bootstrap 改取；`composeIntentMaintenanceCommands` 只交时钟；
+  `dispatch.ts` 去掉多余的判空。清单见 design §3。
+- **不做**：`composition/resourceCatalog.ts` 的绑定守卫、`crewstation*`（RFC-370 余项，逐个避让）、`maintenance.ts` 回落到文件草稿目录的
+  `??`（S12）、`application/maintenance.ts` 的旧函数与其他模块；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是三组用例，落 application；两个组合文件删除，余下两处只装配、没有控制流；不新增
+  用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-503 用例覆盖全部生产文件（下限 3,000）、全部用例（下限
+  2,500）与 e2e 里的同名声明与 import，另读 `maintenance.ts`、`dispatch.ts`、intent `composition.ts`、bootstrap 文件与新文件。C13
+  `composition-control-flow-intent` 23 → 实测，其余计数不升。
+
 ## 2026-11-17 RFC-502 集成的开发适配器配置、代码托管交付、审批网关与工具连接目录迁出 composition（Done；`design/RFC-502-integration-development-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 integration 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-501
@@ -36,6 +56,8 @@
 - **CI**：`7953576df` 主 CI run 44159454316 的 70 个 job 里 68 个通过：Static scans 的依赖审计红（本提交不改依赖清单与锁文件，同一步骤在
   父提交通过，与提交无关）；backend 分片 42/44 的 `routes-inventory` 一例撞默认的 5 秒（本机在 HEAD 上同样撞，与提交无关）。用例修正
   `249e9f0b0` 给它 30 秒预算，并让 `rfc471` 的负对照与工作目录无关；`249e9f0b0` 的主 CI run 44171615750 第 1 次 backend 分片全部通过，另三格红（同一项依赖审计、RFC-378 `research.md` 两个外链回 503、macOS e2e 分片 4/4 没有分到 runner）与它无关，只重跑失败的作业，第 2 次记在下一个 RFC 的落档提交。
+  补记（RFC-503 的落档提交）：`249e9f0b0` 的第 2 次只重跑失败的作业，`design/` 链接检查与 macOS 的 e2e 分片 4/4 都通过，依赖审计仍红
+  （外部，与提交无关）；转 Done 的 `7d2e82937`（只改文档）：主 CI run 44180121845 在本提交时仍排队，结果补记于 RFC-503 的实现提交。
   落档提交 `4bd91e405`（只改文档）：主 CI run 44109573487 第 1 次 macOS 的 e2e 分片 4/4 没有分到 runner（0 个步骤，与提交无关），只重跑这一个
   作业，第 2 次通过，70 个 job 全部通过。
 - **下一步**：RFC-294 S10 第九步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的

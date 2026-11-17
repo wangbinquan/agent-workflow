@@ -116,6 +116,8 @@
     查询在清理之后报错）。它走 provider 应用的打开与清单路由，本 RFC 不改它们的运行时行为；本机高负载下这个文件 PostgreSQL 的 11 条
     在 HEAD 与改动后同样 5.7～6.1 秒撞 5 秒。不以重跑追绿：按 `docs/dev-gotchas.md` 给这个文件 30 秒预算的用例修正另行提交
     （`249e9f0b0`，同一提交让 `rfc471` 的负对照与工作目录无关）；它的主 CI run 44171615750 第 1 次 backend 分片全部通过（含 `routes-inventory` 与 `rfc471`），另三格红与它无关：同一项依赖审计、`design/` 的链接检查（RFC-378 的 `research.md` 里两个 github.com 外链回 503，文件未改动）、macOS 的 e2e 分片 4/4 没有分到 runner；只重跑失败的作业，第 2 次的结果记在下一个 RFC 的落档提交。
+- 补记（RFC-503 的落档提交）：用例修正 `249e9f0b0` 的主 CI run 44171615750 第 2 次只重跑失败的作业，`design/` 链接检查与 macOS 的 e2e
+  分片 4/4 都通过，依赖审计仍红（外部，与提交无关）。转 Done 的 `7d2e82937`（只改文档）：主 CI run 44180121845 在本提交时仍排队，结果补记于 RFC-503 的实现提交。
 - 本 RFC 的落档提交 `4bd91e405`（只改文档）：主 CI run 44109573487 第 1 次 70 个 job 里 69 个通过，macOS 的 e2e 分片 4/4 没有分到 runner
   （0 个步骤，“The job was not acquired by Runner of type hosted even after multiple attempts”，同时有 macOS 容量受限的提示），与提交无关；
   只重跑这一个作业，第 2 次通过（17 个步骤），70 个 job 全部通过。
