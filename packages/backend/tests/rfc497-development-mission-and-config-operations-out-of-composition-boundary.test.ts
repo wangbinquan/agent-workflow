@@ -70,7 +70,8 @@ const GENERIC: Readonly<Record<string, readonly string[]>> = {
 }
 /** Declarations that share a moved name and predate RFC-497, pinned one by one. */
 const HOMONYMS: Readonly<Record<string, readonly string[]>> = {
-  identityView: ['modules/integration/composition/developmentAdapterConfigOperations'],
+  // RFC-502 moved integration's copy with its configuration operations into application.
+  identityView: ['modules/integration/application/developmentAdapterConfigOperations'],
 }
 const MISSION_COMPOSITION_NAMES = [
   'DevelopmentMissionOperationCompositionOptions',

@@ -93,7 +93,7 @@ describe('RFC-466 —— 原消费方改取 owner 的合同', () => {
   })
 
   test('integration 取 resource-catalog public/queries、knowledge-evolution 取 public/types', () => {
-    expect(read('modules/integration/composition/digitalEmployeeToolConnections.ts')).toContain(
+    expect(read('modules/integration/application/developmentToolConnectionCatalog.ts')).toContain(
       "import { isVisibleToAudienceSnapshot } from '@/modules/resource-catalog/public/queries'",
     )
     expect(read('modules/knowledge-evolution/inbound/fusionRoutes.ts')).toContain(

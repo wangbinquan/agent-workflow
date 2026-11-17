@@ -2,18 +2,8 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { DevelopmentAdapterIdentityRow } from '../application/developmentAdapterCommands'
+import type { DevelopmentToolConnectionStore } from '../application/ports/developmentToolConnectionStore'
 import { toIdentityRow } from './developmentAdapterStore'
-
-interface DevelopmentToolConnectionStore {
-  identity(id: string): Promise<DevelopmentAdapterIdentityRow | null>
-  identities(): Promise<readonly DevelopmentAdapterIdentityRow[]>
-  revision(
-    id: string,
-    revision: number,
-  ): Promise<{ readonly contentJson: string; readonly contentDigest: string } | null>
-  grantedUserIds(id: string): Promise<ReadonlySet<string>>
-}
 
 /**
  * RFC-359 AC-1（plan §5ft）—— **两个 provider 唯一的一份**工具连接读取。
@@ -80,5 +70,3 @@ export function createDevelopmentToolConnectionStore(
     },
   }
 }
-
-export type { DevelopmentToolConnectionStore }

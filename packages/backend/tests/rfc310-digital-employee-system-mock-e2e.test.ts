@@ -67,7 +67,7 @@ import {
   publishDevelopmentAdapter,
 } from '@/modules/integration/application/developmentAdapterCommands'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
+import { createDevelopmentMrEffects } from '@/modules/integration/application/developmentCodeHostDelivery'
 import { createPipelineEvidenceAdapter } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { AdapterFailureReceipt } from '@/modules/integration/infrastructure/developmentAdapterRunner'
 import { createAsyncDbAdapterBindingResolver } from '@/modules/integration/infrastructure/developmentRequirementSourceAdapter'
@@ -798,7 +798,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
             ctx: { ports: {} },
           },
         }
-        const reviewMrEffects = composeDevelopmentMrEffects({
+        const reviewMrEffects = createDevelopmentMrEffects({
           binding: (repositoryId) =>
             repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
         })

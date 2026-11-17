@@ -848,6 +848,13 @@ describe('RFC-344 single inbound root source locks', () => {
     )
     expect(adapterComposition).toContain('composeDevelopmentAdapterConfigOperations')
     expect(adapterComposition).not.toContain("from '@/modules/development-automation/")
+    // RFC-502: the operations moved to integration's application; the no-DA rule follows them.
+    const adapterOperations = readFileSync(
+      join(ROOT, 'src/modules/integration/application/developmentAdapterConfigOperations.ts'),
+      'utf8',
+    )
+    expect(adapterOperations).toContain('createDevelopmentAdapterConfigOperations')
+    expect(adapterOperations).not.toContain("from '@/modules/development-automation/")
   })
 
   test('pilot transport adapters depend on the narrow database port, not the composition root', () => {

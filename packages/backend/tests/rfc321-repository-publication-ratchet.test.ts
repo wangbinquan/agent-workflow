@@ -397,9 +397,13 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     ]
       .map(read)
       .join('\n')
-    const integrationRest = read(
+    // RFC-502: the binding and the MR effects moved to integration's application; read both files.
+    const integrationRest = [
       'packages/backend/src/modules/integration/composition/codeHostEffects.ts',
-    )
+      'packages/backend/src/modules/integration/application/developmentCodeHostDelivery.ts',
+    ]
+      .map(read)
+      .join('\n')
     const reconcilerPorts = read(
       'packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts',
     )

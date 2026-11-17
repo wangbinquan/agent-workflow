@@ -61,7 +61,7 @@ import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
 } from '../src/modules/source-control/composition'
-import { composeDevelopmentMrEffects } from '../src/modules/integration/composition/codeHostEffects'
+import { createDevelopmentMrEffects } from '../src/modules/integration/application/developmentCodeHostDelivery'
 import { collectMergeRequestFacts } from '../src/modules/integration/application/mrFacts'
 import { projectMrCells } from '../src/modules/development-automation/domain/mrFacts'
 import type { MergeRequestFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
@@ -247,7 +247,7 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
   await publishAutomationPolicy(fx.db, { id: policy.id, publishedBy: 'admin' })
   ;(fx as unknown as Record<string, unknown>).t109PolicyId = policy.id
 
-  mrEffects = composeDevelopmentMrEffects({ binding: () => hostBinding() })
+  mrEffects = createDevelopmentMrEffects({ binding: () => hostBinding() })
   // 与 composeDevelopmentMrFactsCollector（RFC-471 前叫 buildDevelopmentMrFactsDeps）的生产投影同形（binding 直给以绕开
   // secret-keyfile connection 配置）：claim 行 → 真三读 fence 采集打 mock →
   // projectMrCells + threads bodyDigest。生产投影若改形，本测试会红——对拍锁。

@@ -42,7 +42,7 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import { composeEventCenter } from './helpers/eventCenter'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
-import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
+import { createDevelopmentMrEffects } from '@/modules/integration/application/developmentCodeHostDelivery'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { describeEachProvider } from './helpers/eachProvider'
 import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
@@ -176,7 +176,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
             ctx: { ports: {} },
           },
         }
-        const mrEffects = composeDevelopmentMrEffects({
+        const mrEffects = createDevelopmentMrEffects({
           binding: (candidateRepositoryId) =>
             candidateRepositoryId === repositoryId ? hostBinding : null,
         })

@@ -18,7 +18,20 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是四组用例，落 application；composition 只留装配、没有控制流；不新增用例入口，
   审批投影由两份变一份。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-502 用例覆盖全部生产文件（下限 3,000）、
   全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读四个组合文件、工具连接 store、bootstrap 的三个文件与新文件。C13
-  `composition-control-flow-integration` 57 → 实测，其余计数不升。
+  `composition-control-flow-integration` 57 → 17（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第九步**：清单（design §3）的名字只在各自的新文件声明（`identityView` 另有 development-automation 的那一份），改名前的
+  四个工厂名没有声明；四个组合文件只声明并交出五个装配入口与配置操作的装配输入，没有控制流语句，各自从新文件取工厂；`approvalGateway.ts`
+  的两条装配共用一份投影；工具连接 store 从 application 的端口文件取接口；bootstrap 取的装配入口照旧；新文件的依赖面是闭集、不用进程全局。
+  生产文件 4,102 → 4,107；跨 context import 7,503 → 7,503（context 对 135 → 135、没有新的符号），public surface 1,195 → 1,195。integration
+  组合层控制流余下 17 行：RFC-370 余项的 `taskImageDevelopmentAdapter.ts` 13 行与 `crewstationDevelopmentAdapters.ts` 3 行、`webhookIngress.ts`
+  1 行。
+- **集中验证**（候选 1，基于 `4bd91e405`，详见 plan）：没有查出本 RFC 的问题。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 236 个
+  文件、与对照 A/B，候选 2,419 条通过、330 条红，对照 2,418 条通过、331 条红，候选多出的 13 条失败都撞时限；任一边红过的 62 个文件放宽默认
+  时限复跑，首批多出的 13 条没有一条仍只红在候选，这一轮候选多出的 3 条也都撞自带的时限。全量 SQLite 2,947 个文件 2,933 个通过，其余 14 个：
+  三个报告类撞自带时限，11 个与对照 A/B，候选多出的一条在不取本 RFC 路径的 `rfc098` 里、撞自带的 20 秒；取到本 RFC 改动代码的 283 个文件里
+  280 个通过。三个报告类用例与 7 个取到本 RFC 代码的文件（两边红法相同，或候选多出撞时限）只放宽时限的副本两边全过（10 个文件，各
+  175 / 175），其中直接走新代码托管桥与旧审批装配的 system mock E2E 4 / 4。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定自审，
+  只审功能）。
 
 ## 2026-11-16 RFC-501 集成的 webhook 启动准入与触发器校验迁出 composition（Done；`design/RFC-501-integration-webhook-admission-out-of-composition/`）
 

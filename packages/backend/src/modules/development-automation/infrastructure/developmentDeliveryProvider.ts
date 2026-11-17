@@ -2,8 +2,8 @@
 // 无密钥嵌入下的「volatile 仓库 URL」按数据库句柄身份取（此前只有 SQLite 版接了这条回退）。
 //
 // RFC-471（RFC-294 W9-D）：代码托管绑定（按远端 URL 选连接、拼调用依赖）归 integration 的
-// `composeDevelopmentCodeHostBinding`，它经本 provider 的 `resolveRepository` 取远端；这里只答仓库远端、
-// MR 事实目标与 pipeline 执行。接口定义从 `services/developmentDeliveryDeps.ts` 迁来。
+// `createDevelopmentCodeHostBinding`（RFC-502 起在 application），它经本 provider 的 `resolveRepository` 取远端；
+// 这里只答仓库远端、MR 事实目标与 pipeline 执行。接口定义从 `services/developmentDeliveryDeps.ts` 迁来。
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'

@@ -44,7 +44,7 @@ import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
 } from '../src/modules/source-control/composition'
-import { composeDevelopmentMrEffects } from '../src/modules/integration/composition/codeHostEffects'
+import { createDevelopmentMrEffects } from '../src/modules/integration/application/developmentCodeHostDelivery'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -204,7 +204,7 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
       resolve: (repositoryId) =>
         repositoryId === 'repo-1' ? { remoteUrl: repoHttpUrl, defaultBranch: 'main' } : null,
     },
-    mrEffects: composeDevelopmentMrEffects({
+    mrEffects: createDevelopmentMrEffects({
       binding: () => ({
         provider: 'gitlab',
         project: encodeURIComponent(PROJECT_PATH),

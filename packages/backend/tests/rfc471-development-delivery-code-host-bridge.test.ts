@@ -29,12 +29,12 @@ import type { DevelopmentDeliveryProvider } from '@/modules/development-automati
 import type { MrEnsureConnectionDeps } from '@/modules/integration/application/mrEnsure'
 import type * as IntegrationFacts from '@/modules/integration/application/mrFacts'
 import {
-  composeDevelopmentCodeHostBinding,
-  composeDevelopmentCodeHostDelivery,
-  composeDevelopmentMrEffects,
-  composeDevelopmentMrFactsSource,
-  composeRepositoryCodeHostClaimKeys,
-} from '@/modules/integration/composition/codeHostEffects'
+  createDevelopmentCodeHostBinding,
+  createDevelopmentMrEffects,
+  createDevelopmentMrFactsSource,
+  createRepositoryCodeHostClaimKeys,
+} from '@/modules/integration/application/developmentCodeHostDelivery'
+import { composeDevelopmentCodeHostDelivery } from '@/modules/integration/composition/codeHostEffects'
 import { sha256Hex } from '@/util/hash'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -117,7 +117,7 @@ const handOver = (
 // DA's repository remote is what integration's binding reads.
 const remoteForBinding = (
   remote: RepoRemotePort,
-): Parameters<typeof composeDevelopmentCodeHostBinding>[0]['repositories'] => remote
+): Parameters<typeof createDevelopmentCodeHostBinding>[0]['repositories'] => remote
 
 type CodeHostConnection = MrEnsureConnectionDeps['call']['connection']
 const connection = (provider: 'gitlab' | 'github', baseUrl: string) =>
@@ -209,11 +209,15 @@ describe('RFC-471 —— 结构同形与依赖方向', () => {
         'modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
       ).filter((s) => s.includes('modules/integration')),
     ).toEqual(['@/modules/integration/public/participants'])
-    expect(
-      imports('modules/integration/composition/codeHostEffects.ts').filter((s) =>
-        s.includes('development-automation'),
-      ),
-    ).toEqual([])
+    // RFC-502: the bridge's implementation moved to integration's application; neither file takes DA.
+    for (const path of [
+      'modules/integration/composition/codeHostEffects.ts',
+      'modules/integration/application/developmentCodeHostDelivery.ts',
+    ])
+      expect([path, imports(path).filter((s) => s.includes('development-automation'))]).toEqual([
+        path,
+        [],
+      ])
     // RFC-497: the Mission operations use case moved from composition/missionOperations.ts.
     expect(
       imports('modules/development-automation/application/missionOperationHandlers.ts').filter(
@@ -275,7 +279,7 @@ describe('RFC-471 —— 结构同形与依赖方向', () => {
       expect([name, offered.includes(name)]).toEqual([name, false])
   })
 
-  test('MR effects 全仓只一份实现：integration 的三个 MR 写 / 读函数只在 codeHostEffects.ts 被调', () => {
+  test('MR effects 全仓只一份实现：integration 的三个 MR 写 / 读函数只在 developmentCodeHostDelivery.ts 被调（RFC-502 起在 application）', () => {
     const callers = walk(SRC).flatMap((path) => {
       const text = readFileSync(path, 'utf8')
       return ['ensureMergeRequest(', 'observeMergeRequest(', 'replyMergeRequestThread(']
@@ -283,9 +287,9 @@ describe('RFC-471 —— 结构同形与依赖方向', () => {
         .map((call) => `${slash(relative(SRC, path))}: ${call}`)
     })
     expect(callers.sort()).toEqual([
-      'modules/integration/composition/codeHostEffects.ts: ensureMergeRequest(',
-      'modules/integration/composition/codeHostEffects.ts: observeMergeRequest(',
-      'modules/integration/composition/codeHostEffects.ts: replyMergeRequestThread(',
+      'modules/integration/application/developmentCodeHostDelivery.ts: ensureMergeRequest(',
+      'modules/integration/application/developmentCodeHostDelivery.ts: observeMergeRequest(',
+      'modules/integration/application/developmentCodeHostDelivery.ts: replyMergeRequestThread(',
     ])
   })
 })
@@ -341,7 +345,7 @@ describe('RFC-471 —— 行为', () => {
       b: 'https://gitlab.example/grp/sub/repo.git',
       c: 'https://elsewhere.example/x/y.git',
     }
-    const binding = composeDevelopmentCodeHostBinding({
+    const binding = createDevelopmentCodeHostBinding({
       repositories: { resolve: async (id) => (id in remotes ? { remoteUrl: remotes[id]! } : null) },
       connections: { resolve: async (provider) => (provider === 'github' ? gh : gl) },
       requests,
@@ -364,7 +368,7 @@ describe('RFC-471 —— 行为', () => {
     })
     expect(await binding('c')).toBeNull()
     // The SaaS fallback names github.com, but without a configured connection there is nothing to bind.
-    const unconnected = composeDevelopmentCodeHostBinding({
+    const unconnected = createDevelopmentCodeHostBinding({
       repositories: { resolve: () => ({ remoteUrl: remotes.a! }) },
       connections: { resolve: async () => null },
       requests,
@@ -374,7 +378,7 @@ describe('RFC-471 —— 行为', () => {
 
   test('MR effects：同步与异步绑定缺失时三个方法都回 code-host-connection-missing；异步绑定照常调用', async () => {
     for (const binding of [() => null, async () => null]) {
-      const effects = composeDevelopmentMrEffects({ binding })
+      const effects = createDevelopmentMrEffects({ binding })
       expect(
         await effects.ensure('r1', {
           missionId: 'm1',
@@ -395,7 +399,7 @@ describe('RFC-471 —— 行为', () => {
         return { ok: true, status: 201, body: '{"id":42}' }
       },
     } as unknown as MrEnsureConnectionDeps['requests']
-    const effects = composeDevelopmentMrEffects({
+    const effects = createDevelopmentMrEffects({
       binding: async () => ({
         provider: 'gitlab',
         project: 'grp%2Frepo',
@@ -414,7 +418,7 @@ describe('RFC-471 —— 行为', () => {
 
   test('原始事实：绑定缺失回 code-host-connection-missing，其余原样透传采集结果', async () => {
     expect(
-      await composeDevelopmentMrFactsSource({ binding: async () => null }).collect('r1', '7', {
+      await createDevelopmentMrFactsSource({ binding: async () => null }).collect('r1', '7', {
         selfMarker: 'm1',
       }),
     ).toEqual(MISSING)
@@ -423,7 +427,7 @@ describe('RFC-471 —— 行为', () => {
         return { ok: false, code: 'http-500', summary: 'boom' }
       },
     } as unknown as MrEnsureConnectionDeps['requests']
-    const out = await composeDevelopmentMrFactsSource({
+    const out = await createDevelopmentMrFactsSource({
       binding: () => ({
         provider: 'github',
         project: 'owner/repo',
@@ -463,7 +467,7 @@ describe('RFC-471 —— 行为', () => {
   })
 
   test('认领键：解出 provider 与解码后的 project；没有绑定 → null', async () => {
-    const keys = composeRepositoryCodeHostClaimKeys({
+    const keys = createRepositoryCodeHostClaimKeys({
       binding: async (id) =>
         id === 'r1'
           ? {

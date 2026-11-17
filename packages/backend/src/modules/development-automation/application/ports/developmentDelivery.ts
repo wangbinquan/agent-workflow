@@ -1,7 +1,8 @@
 // RFC-471（RFC-294 W9-D）—— 开发交付经代码托管的两个窄端口。
 //
-// 实现归 integration（`composition/codeHostEffects.ts` 的 `composeDevelopmentMrFactsSource`、
-// `composeRepositoryCodeHostClaimKeys`），按结构满足、装配根注入；本模块不 import integration。
+// 实现归 integration（`application/developmentCodeHostDelivery.ts` 的 `createDevelopmentMrFactsSource`、
+// `createRepositoryCodeHostClaimKeys`，经 `composition/codeHostEffects.ts` 组装），按结构满足、装配根注入；本模块不 import
+// integration。
 // MR effects 用 `reconcilerPorts.ts` 的 `MrEffectsPort`（PR-5 T60 起就是结构同形）。
 
 /** 一条线程里的单条消息（integration `MrThreadMessageFact` 的结构同形）。 */
