@@ -1,4 +1,4 @@
-## 2026-11-17 RFC-502 集成的开发适配器配置、代码托管交付、审批网关与工具连接目录迁出 composition（In Progress；`design/RFC-502-integration-development-use-cases-out-of-composition/`）
+## 2026-11-17 RFC-502 集成的开发适配器配置、代码托管交付、审批网关与工具连接目录迁出 composition（Done；`design/RFC-502-integration-development-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 integration 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-501
   之后 integration 组合层控制流实测 57 行，除 RFC-370 余项的 16 行与 `webhookIngress.ts` 的 1 行外，40 行在四个“用例写在 composition、装配
@@ -32,6 +32,17 @@
   280 个通过。三个报告类用例与 7 个取到本 RFC 代码的文件（两边红法相同，或候选多出撞时限）只放宽时限的副本两边全过（10 个文件，各
   175 / 175），其中直接走新代码托管桥与旧审批装配的 system mock E2E 4 / 4。架构报告 60 项只差上述一项。实现门 PASS（本会话按路径限定自审，
   只审功能）。
+- **落地**：`7953576df`（27 个文件；父提交是 `4bd91e405`）。
+- **CI**：`7953576df` 主 CI run 44159454316 的 70 个 job 里 68 个通过：Static scans 的依赖审计红（本提交不改依赖清单与锁文件，同一步骤在
+  父提交通过，与提交无关）；backend 分片 42/44 的 `routes-inventory` 一例撞默认的 5 秒（本机在 HEAD 上同样撞，与提交无关）。用例修正
+  `249e9f0b0` 给它 30 秒预算，并让 `rfc471` 的负对照与工作目录无关；`249e9f0b0` 的主 CI run 44171615750 第 1 次 backend 分片全部通过，另三格红（同一项依赖审计、RFC-378 `research.md` 两个外链回 503、macOS e2e 分片 4/4 没有分到 runner）与它无关，只重跑失败的作业，第 2 次记在下一个 RFC 的落档提交。
+  落档提交 `4bd91e405`（只改文档）：主 CI run 44109573487 第 1 次 macOS 的 e2e 分片 4/4 没有分到 runner（0 个步骤，与提交无关），只重跑这一个
+  作业，第 2 次通过，70 个 job 全部通过。
+- **下一步**：RFC-294 S10 第九步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。integration 组合层余下 17 行（RFC-370
+  余项的 `taskImage*` / `crewstation*` 16 行继续避让，`webhookIngress.ts` 1 行）；S10 的下一步是其余模块（resource-catalog、system-operations、
+  intent、runtime-management、digital-employee 的余项）与收口，再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-16 RFC-501 集成的 webhook 启动准入与触发器校验迁出 composition（Done；`design/RFC-501-integration-webhook-admission-out-of-composition/`）
 

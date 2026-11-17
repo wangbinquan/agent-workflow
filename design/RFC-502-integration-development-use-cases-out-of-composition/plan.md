@@ -24,7 +24,7 @@
       声明；store 接口只在端口文件声明
 - [x] AC-2 同样输入下四组用例的结果、错误码与端口调用和此前一致；bootstrap 取到的装配入口不变；审批的两条装配共用一份投影
 - [x] AC-3 新文件的依赖面是闭集；跨 context 边、public surface 不升；`composition-control-flow-integration` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`7953576df` 主 CI run 44159454316 的 70 个 job 里 68 个通过，两格红都与提交无关（逐格归因见 §CI）
 
 ## 集中验证
 
@@ -109,7 +109,13 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `7953576df`（实现，父提交是 `4bd91e405`）：exact SHA 主 CI run 44159454316 的 70 个 job 里 68 个通过，另两格红都与提交无关：
+  - 「Static scans」的 dependency audit gate（high+critical）：本提交不改任何依赖清单与锁文件，同一步骤在父提交的 run 44109573487
+    通过；依赖面相同，变化在外部的审计数据，按用户规则不分析、只记录。
+  - backend 分片 42/44：`routes-inventory` 的 PostgreSQL 一例 5,255ms 撞默认的 5 秒（同文件其余 0.6～1.1 秒；随后一条 builtin 工作流的
+    查询在清理之后报错）。它走 provider 应用的打开与清单路由，本 RFC 不改它们的运行时行为；本机高负载下这个文件 PostgreSQL 的 11 条
+    在 HEAD 与改动后同样 5.7～6.1 秒撞 5 秒。不以重跑追绿：按 `docs/dev-gotchas.md` 给这个文件 30 秒预算的用例修正另行提交
+    （`249e9f0b0`，同一提交让 `rfc471` 的负对照与工作目录无关）；它的主 CI run 44171615750 第 1 次 backend 分片全部通过（含 `routes-inventory` 与 `rfc471`），另三格红与它无关：同一项依赖审计、`design/` 的链接检查（RFC-378 的 `research.md` 里两个 github.com 外链回 503，文件未改动）、macOS 的 e2e 分片 4/4 没有分到 runner；只重跑失败的作业，第 2 次的结果记在下一个 RFC 的落档提交。
 - 本 RFC 的落档提交 `4bd91e405`（只改文档）：主 CI run 44109573487 第 1 次 70 个 job 里 69 个通过，macOS 的 e2e 分片 4/4 没有分到 runner
   （0 个步骤，“The job was not acquired by Runner of type hosted even after multiple attempts”，同时有 macOS 容量受限的提示），与提交无关；
   只重跑这一个作业，第 2 次通过（17 个步骤），70 个 job 全部通过。
