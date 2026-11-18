@@ -22,7 +22,7 @@ CLAUDE.md 文首硬规则：先完成全部实现与用例编写，再集中验�
 - [x] AC-1 清单里的名字只在各自的新位置声明；三个组合文件没有控制流、从新位置取实现；装配入口不变
 - [x] AC-2 同样输入下三组行为的结果、错误与端口调用和此前一致；时钟仍在调用时取、每处一次
 - [x] AC-3 新位置的依赖面是闭集；public surface 不升；三项 `composition-control-flow-*` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`490d75e04` 主 CI run 44382772167 的 70 个 job 第 1 次全部通过（见 §CI）
 
 ## 集中验证
 
@@ -190,7 +190,8 @@ CLAUDE.md 文首硬规则：先完成全部实现与用例编写，再集中验�
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `490d75e04`（实现，父提交是 `9628d5590`）：exact SHA 主 CI run 44382772167 的 70 个 job 第 1 次全部通过（含「Static scans」与
+  `CI required`），未重跑。
 - 本 RFC 的落档提交 `9628d5590`（只改文档，同一提交补记 RFC-504 转 Done 提交的 CI）：主 CI run 44288340179 共 70 个 job，68 个通过；红的
   两格与提交无关：「Static scans」的 dependency audit gate（high+critical）（依赖面没有变化，按用户规则不分析、只记录）与随之红的
   `CI required`。没有重跑。

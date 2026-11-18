@@ -1,4 +1,4 @@
-## 2026-11-18 RFC-505 数字员工的内建作业、PostgreSQL 磁盘报告与运行时选择快照迁出 composition（In Progress；`design/RFC-505-employee-jobs-disk-report-runtime-snapshots-out-of-composition/`）
+## 2026-11-18 RFC-505 数字员工的内建作业、PostgreSQL 磁盘报告与运行时选择快照迁出 composition（Done；`design/RFC-505-employee-jobs-disk-report-runtime-snapshots-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 system-operations、runtime-management、digital-employee 等模块的余项，退出门要求组合层无循环与
   switch、`try` / `throw` 只在登记清单内；RFC-504 之后这三个模块组合层控制流的非 RFC-370 部分只剩 digital-employee
@@ -38,6 +38,17 @@
   task-execution，同一例在首批通过）。三个报告类用例、扫描里红的 `rfc400` 与 21 个取到本 RFC 代码、红过且带自带时限的文件只放宽
   时限（副本，默认 1,500 秒）再跑：25 个文件两边都是 283 条通过、0 条红。架构报告 60 项只差三项
   `composition-control-flow-*`。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`490d75e04`（16 个文件；父提交是 `9628d5590`）。
+- **CI**：`490d75e04` 主 CI run 44382772167 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
+  `9628d5590`（只改文档）：主 CI run 44288340179 的 70 个 job 里 68 个通过，红的是依赖审计（外部，与提交无关）与随之红的
+  `CI required`，未重跑。
+- **下一步**：RFC-294 S10 第十二步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。digital-employee、system-operations
+  与 runtime-management 组合层余下的都是 RFC-370 余项（继续避让），另有 system-operations `daemonDatabase.ts` 与
+  `manualDatabaseMigration.ts` 的装配期路径选择随 S12；S10 的下一步是其余模块的余项（identity-access 的改密用例、source-control 与
+  development-automation 的非 RFC-370 文件、task-execution、resource-catalog 的 `resourceAcl.ts` 等）与收口，再到 S12；S9 余下的其他
+  context 对按对另立；成员表一族另立。
 
 ## 2026-11-17 RFC-504 资源目录的内建工作流、资源包暂存、任务房协作、意图上下文授权与 MCP 测试失效迁出 composition（Done；`design/RFC-504-resource-catalog-use-cases-out-of-composition/`）
 
