@@ -644,7 +644,12 @@ test('resource ACL compatibility barrels retire only consumer-zero symbols', () 
   expect(packageCli).not.toContain("from '@/services/resourceAcl'")
   expect(packageCli).toContain('catalog.transport.findOwnedResourceIdsByName')
   expect(packageComposition).toContain('readonly resources: ResourcePackageOwnedResourceLookupPort')
-  expect(packageComposition).toContain('return deps.resources.findOwnedIdsByName({')
+  // RFC-504: the transport (and its owned-resource lookup) moved to application with the one-shot staging.
+  const packageStaging = readFileSync(
+    resolve(sourceRoot, 'modules/resource-catalog/application/package/stagedExecution.ts'),
+    'utf8',
+  )
+  expect(packageStaging).toContain('return deps.resources.findOwnedIdsByName({')
   // RFC-359 W12: both provider wrappers delegate the lookup binding to one composition.
   // RFC-359（apply 引擎合一，plan §5dv/§5dw）：SQLite 专属的那个 wrapper
   // （`composeSqliteResourcePackageProvider`）零生产消费者后退役，只剩带写会话的那一条；

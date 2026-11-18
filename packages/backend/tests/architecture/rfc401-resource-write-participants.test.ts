@@ -101,7 +101,8 @@ const STACKS: readonly WriteStack[] = [
       { path: INTENT_PORTS, fn: 'createWorkflowPort' },
       { path: PACKAGE_ARMS, fn: 'commitPostgresqlWorkflowPackageMutation' },
       { path: INFRA + 'workflowRepository.ts', fn: 'createWorkflowRepository' },
-      { path: RC + 'composition/builtinWorkflowCatalog.ts', fn: 'composeBuiltinWorkflowCatalog' },
+      // RFC-504: the built-in workflow catalog moved from composition into infrastructure.
+      { path: INFRA + 'builtinWorkflowCatalog.ts', fn: 'createBuiltinWorkflowCatalog' },
     ],
   },
   {

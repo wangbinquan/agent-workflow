@@ -45,7 +45,7 @@ import { composeWebhookIngressPersistenceFor } from '@/modules/integration/compo
 import { composeMemoryOperationsFor } from '@/modules/memory/composition'
 import {
   composeWorkgroupTaskRoom,
-  composeWorkgroupTaskRoomActiveUsers,
+  createWorkgroupTaskRoomActiveUsers,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { createTaskStatusCounts } from '@/modules/task-execution/composition'
@@ -182,7 +182,7 @@ export async function createProductionPerformanceApplication(
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
       collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
-    activeUsers: composeWorkgroupTaskRoomActiveUsers({
+    activeUsers: createWorkgroupTaskRoomActiveUsers({
       userDirectory: identityAccess.userDirectory,
     }),
     dynamicWorkflow: {

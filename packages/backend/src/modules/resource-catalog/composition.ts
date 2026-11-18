@@ -62,3 +62,6 @@ export {
   pluginOperationCoordinator,
 } from './composition/resourceOperationCoordinators'
 export { getProbeByMcpId } from './application/mcps/probeRecords'
+
+// RFC-504: the built-in workflow catalog lives in infrastructure; bootstrap takes it via composition.
+export { createBuiltinWorkflowCatalog } from './infrastructure/builtinWorkflowCatalog'

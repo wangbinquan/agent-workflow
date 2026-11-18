@@ -377,14 +377,15 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/resource-catalog/application/mcps/diagnosticsOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/package/ports.ts -> @/modules/identity-access/public/participants',
+      // RFC-504: the resource-package staging and the intent-context authority resolver moved out of composition.
+      'packages/backend/src/modules/resource-catalog/application/package/stagedExecution.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/application/participants/intentContextResourceAuthorization.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/resourceCatalogQuery.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/resource-catalog/composition/intentContextAuthorization.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts -> @/modules/identity-access/public/participants',
       // RFC-455: the resource-package execution adapter moved from services/resourcePackage into resource-catalog composition.
       'packages/backend/src/modules/resource-catalog/composition/resourcePackageExecution.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts -> @/modules/identity-access/public/participants',

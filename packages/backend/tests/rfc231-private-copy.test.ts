@@ -464,11 +464,14 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       sources.get('modules/resource-catalog/infrastructure/workflowMutationParticipant.ts'),
     ).toContain('createWorkflowDefinitionWriteParticipant(transaction).insert(')
     // RFC-359 W4-D19b：房间的「另存为工作流」不再自己 insert(workflows)，改为把提交递给
-    // 工作流目录的 create 操作（`composeWorkgroupTaskRoomDynamicWorkflow`）。归属判定因此
+    // 工作流目录的 create 操作（RFC-504 起是 application 的 `createWorkgroupTaskRoomDynamicWorkflow`）。归属判定因此
     // 收进上面那条 workflow 写入参与者的断言（RFC-401 T6 前是 `legacy/workflow.ts`），不再单列。
     expect(
       await readFile(
-        join(BACKEND_SRC, 'modules/resource-catalog/composition/workgroupTaskRoom.ts'),
+        join(
+          BACKEND_SRC,
+          'modules/resource-catalog/application/workgroups/taskRoomCollaborators.ts',
+        ),
         'utf8',
       ),
     ).toContain('input.workflows.invoke(authority as never')

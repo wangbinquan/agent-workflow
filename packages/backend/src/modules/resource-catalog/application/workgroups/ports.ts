@@ -5,6 +5,7 @@ import type {
   Workgroup,
   WorkgroupDetail,
   WorkgroupDraftSnapshot,
+  WorkflowDefinition,
 } from '@agent-workflow/shared'
 import type { WorkgroupOperationContext } from '../../public/participants'
 import type {
@@ -93,4 +94,25 @@ export interface WorkgroupMutationClock {
 
 export interface WorkgroupIdFactory {
   next(): string
+}
+
+// RFC-504: the task room's two collaborator ports, moved here from infrastructure/workgroupTaskRoom.ts (their implementations are
+// application use cases in taskRoomCollaborators.ts; the room's infrastructure takes them as dependencies).
+export interface WorkgroupTaskRoomActiveUserDirectory {
+  findActiveUserIds(userIds: readonly string[]): Promise<ReadonlySet<string>>
+}
+
+export interface WorkgroupTaskRoomDynamicWorkflowOperations {
+  validateGenerated(
+    authority: WorkgroupOperationContext,
+    input: Readonly<{
+      definition: WorkflowDefinition
+      triggerContextJson: string | null
+      poolAgentIds: readonly string[]
+    }>,
+  ): Promise<WorkflowDefinition>
+  create(
+    authority: WorkgroupOperationContext,
+    input: Readonly<{ name: string; description: string; definition: WorkflowDefinition }>,
+  ): Promise<Readonly<{ id: string; name: string }>>
 }

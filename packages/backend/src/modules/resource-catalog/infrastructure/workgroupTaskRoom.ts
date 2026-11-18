@@ -7,7 +7,6 @@ import {
   parseBatchShardKey,
   parseMsgShardKey,
   type DwState,
-  type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
   type TaskWorkgroupRuntimeConfig,
   utf16MaxLength,
@@ -27,6 +26,10 @@ import {
   hasResourceAclBypass,
   isVisibleRow,
 } from '../domain/resourceAccess'
+import type {
+  WorkgroupTaskRoomActiveUserDirectory,
+  WorkgroupTaskRoomDynamicWorkflowOperations,
+} from '../application/workgroups/ports'
 import type { WorkgroupOperationContext } from '../public/participants'
 import type { WorkgroupTaskJsonDocument } from '../public/types'
 import {
@@ -45,25 +48,6 @@ export type RoomEvent =
 
 export interface WorkgroupTaskRoomTaskParticipantFactory {
   inTransaction(transaction: ResourceCatalogTransaction): WorkgroupTaskRoomTaskParticipantInTx
-}
-
-export interface WorkgroupTaskRoomActiveUserDirectory {
-  findActiveUserIds(userIds: readonly string[]): Promise<ReadonlySet<string>>
-}
-
-export interface WorkgroupTaskRoomDynamicWorkflowOperations {
-  validateGenerated(
-    authority: WorkgroupOperationContext,
-    input: Readonly<{
-      definition: WorkflowDefinition
-      triggerContextJson: string | null
-      poolAgentIds: readonly string[]
-    }>,
-  ): Promise<WorkflowDefinition>
-  create(
-    authority: WorkgroupOperationContext,
-    input: Readonly<{ name: string; description: string; definition: WorkflowDefinition }>,
-  ): Promise<Readonly<{ id: string; name: string }>>
 }
 
 /**

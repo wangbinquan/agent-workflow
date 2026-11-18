@@ -1,33 +1,17 @@
-import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import { createIntentContextResourceAuthorizationSession } from '../application/participants/intentContextResourceAuthorization'
-import type {
-  IntentContextResourceAuthorizationSession,
-  ResourceRequestContext,
-} from '../public/participants'
+import {
+  createIntentContextCurrentAuthorityResolver,
+  createIntentContextResourceAuthorizationSession,
+  type IntentContextResourceAuthorityPair,
+} from '../application/participants/intentContextResourceAuthorization'
+import type { IntentContextResourceAuthorizationSession } from '../public/participants'
 import { createIntentContextResourceAuthorizationReadPort } from '../infrastructure/intentContextResourceAuthorization'
 import type { ResourceCatalogTransaction } from '../infrastructure/resourceCatalogTransaction'
-
-export interface IntentContextResourceAuthorityPair {
-  readonly authority: ResourceRequestContext
-  readonly actor: DirectAuthenticatedAuthority
-}
 
 export interface IntentContextResourceAuthorizationFactory {
   inTransaction(
     transaction: ResourceCatalogTransaction,
     pair: IntentContextResourceAuthorityPair,
   ): IntentContextResourceAuthorizationSession
-}
-
-function currentAuthorityResolver(pair: IntentContextResourceAuthorityPair) {
-  return Object.freeze({
-    resolve(authority: ResourceRequestContext): DirectAuthenticatedAuthority {
-      if (authority !== pair.authority) {
-        throw new Error('foreign-intent-context-resource-authority')
-      }
-      return pair.actor
-    },
-  })
 }
 
 /**
@@ -37,6 +21,8 @@ function currentAuthorityResolver(pair: IntentContextResourceAuthorityPair) {
  * → `createIntentContextResourceAuthorizationSyncSession` → `createIntentContextResourceAuthorizationSyncReadPort`），
  * 供还跑在 `dbTxSync` 回调里的 Intent 宿主用。W7 合掉 IntentSqlProgramRunner 后两个 SQLite
  * bootstrap（`server.ts` / `cli/start.ts`）都改指本工厂，那条同步链自己写下的退役条件成立，整条已删。
+ *
+ * RFC-504：逐次核对授权上下文的解析器迁入 application（`createIntentContextCurrentAuthorityResolver`），这里只接线。
  */
 export function composeIntentContextResourceAuthorizationFactory(): IntentContextResourceAuthorizationFactory {
   return Object.freeze({
@@ -45,7 +31,7 @@ export function composeIntentContextResourceAuthorizationFactory(): IntentContex
       pair: IntentContextResourceAuthorityPair,
     ) {
       return createIntentContextResourceAuthorizationSession(
-        currentAuthorityResolver(pair),
+        createIntentContextCurrentAuthorityResolver(pair),
         createIntentContextResourceAuthorizationReadPort(transaction),
       )
     },

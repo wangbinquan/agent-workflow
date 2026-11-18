@@ -80,7 +80,7 @@ import {
   isGraphPlan,
 } from '@/modules/development-automation/composition/graphDevelopment'
 import { composeGraphBuiltinResources } from '@/modules/development-automation/composition/graphBuiltinResources'
-import { composeBuiltinWorkflowCatalog } from '@/modules/resource-catalog/composition/builtinWorkflowCatalog'
+import { createBuiltinWorkflowCatalog } from '@/modules/resource-catalog/composition'
 import { createCommittedHumanInputQueries } from '@/modules/collaboration/composition'
 import {
   createEmployeeExecutionArtifactQueries,
@@ -187,7 +187,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   })
   const graphPlatformTools = composeGraphBuiltinResources({
     agents: resources.digitalEmployeeAgentTemplates,
-    workflows: composeBuiltinWorkflowCatalog(db),
+    workflows: createBuiltinWorkflowCatalog(db),
   })
   const platformTools: typeof legacyPlatformTools = {
     async load() {

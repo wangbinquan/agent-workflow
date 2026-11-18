@@ -15,6 +15,7 @@ import {
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ConflictError } from '@/util/errors'
 import { isVisibleToAudienceSnapshot } from '../domain/resourceAccess'
+import type { ResourceAclMutationLifecycle } from './resourceAclRepository'
 
 type SessionRow = PersistenceTables['mcpRuntimeTestSessions']['$inferSelect']
 
@@ -219,4 +220,25 @@ export async function transitionRuntimeTests(
       await blockAfterTurn(transaction, session, input.reason, input.now)
     else await endNow(transaction, session, input.reason, input.now)
   }
+}
+
+/**
+ * 目录 ACL 写事务里的 MCP 运行时测试失效：装进 `composeResourceCatalogFor({ lifecycle })`，两个 provider 同一份
+ * （此前只有 SQLite 的 ACL 装配接了这条 afterWriteInTx，PG 上改 ACL 不会结束 / 阻塞已失去可见性的测试会话）。
+ * RFC-504（RFC-294 S10 第十一步）：从 `composition/mcpOperations.ts` 原样迁来，组合文件转出同名函数。
+ */
+export function mcpAclRuntimeTestLifecycle(): ResourceAclMutationLifecycle {
+  const lifecycle: ResourceAclMutationLifecycle = {
+    async afterWriteInTransaction(transaction, change) {
+      if (change.type !== 'mcp') return
+      await transitionMcpAclRuntimeTests(transaction, {
+        mcpId: change.resourceId,
+        ownerUserId: change.ownerUserId,
+        visibility: change.visibility,
+        grantedUserIds: change.grantedUserIds,
+        now: change.now,
+      })
+    },
+  }
+  return Object.freeze(lifecycle)
 }

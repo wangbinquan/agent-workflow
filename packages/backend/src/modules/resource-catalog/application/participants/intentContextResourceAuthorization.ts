@@ -1,4 +1,5 @@
 import type { Actor } from '@/auth/actor'
+import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { ResourceGrantLevel } from '@agent-workflow/shared'
 import {
   canViewAccess,
@@ -19,6 +20,28 @@ import type {
 
 export interface IntentContextCurrentAuthorityResolver {
   resolve(authority: ResourceRequestContext): Actor
+}
+
+export interface IntentContextResourceAuthorityPair {
+  readonly authority: ResourceRequestContext
+  readonly actor: DirectAuthenticatedAuthority
+}
+
+/**
+ * RFC-504 (RFC-294 S10 step 11): the exact-authority resolver, moved here unchanged from composition/intentContextAuthorization.ts
+ * (where it was the private currentAuthorityResolver): every read must present the very authority this session was minted for.
+ */
+export function createIntentContextCurrentAuthorityResolver(
+  pair: IntentContextResourceAuthorityPair,
+) {
+  return Object.freeze({
+    resolve(authority: ResourceRequestContext): DirectAuthenticatedAuthority {
+      if (authority !== pair.authority) {
+        throw new Error('foreign-intent-context-resource-authority')
+      }
+      return pair.actor
+    },
+  })
 }
 
 function projectVisibleIdentity(

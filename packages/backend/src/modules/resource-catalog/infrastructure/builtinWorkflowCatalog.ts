@@ -1,9 +1,12 @@
+// RFC-504 (RFC-294 S10 step 11): the built-in workflow catalog (read, content check, system create, broadcast), moved here
+// unchanged from composition/builtinWorkflowCatalog.ts; the factory is now createBuiltinWorkflowCatalog (the composition file is
+// gone; bootstrap takes it via resource-catalog's composition.ts).
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { broadcastWorkflowCreated, getWorkflow } from '../infrastructure/legacy/workflow'
-import { runResourceCatalogTransaction } from '../infrastructure/resourceCatalogTransaction'
-import { createWorkflowMutationParticipant } from '../infrastructure/workflowMutationParticipant'
-import { workflowDetailOf } from '../infrastructure/workflowPersistence'
+import { broadcastWorkflowCreated, getWorkflow } from './legacy/workflow'
+import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
+import { createWorkflowMutationParticipant } from './workflowMutationParticipant'
+import { workflowDetailOf } from './workflowPersistence'
 import {
   canonicalJson,
   migrateWorkflowDefinitionToLatest,
@@ -17,7 +20,7 @@ import {
  * is written by the one workflow mutation participant as a system write (system owner, public, builtin); the
  * catalog keeps its own layout planning and the created broadcast.
  */
-export function composeBuiltinWorkflowCatalog(db: PersistenceDb) {
+export function createBuiltinWorkflowCatalog(db: PersistenceDb) {
   return {
     async ensure(id: string, definition: CreateWorkflow) {
       const existing = await getWorkflow(db, id)

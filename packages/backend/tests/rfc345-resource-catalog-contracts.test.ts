@@ -2110,8 +2110,16 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     // RFC-359 W4-D16：ACL 写事务里的运行时测试失效经目录 lifecycle 接入，两个 provider 同一份。
-    expect(mcpComposition).toContain('transitionMcpAclRuntimeTests(')
-    expect(mcpComposition).toContain('export function mcpAclRuntimeTestLifecycle(')
+    // RFC-504: the lifecycle moved to infrastructure with the transitions it runs; the composition file re-exports it.
+    const mcpTransitions = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts'),
+      'utf8',
+    )
+    expect(mcpTransitions).toContain('await transitionMcpAclRuntimeTests(transaction, {')
+    expect(mcpTransitions).toContain('export function mcpAclRuntimeTestLifecycle(')
+    expect(mcpComposition).toContain(
+      "export { mcpAclRuntimeTestLifecycle } from '../infrastructure/mcpRuntimeTestTransitions'",
+    )
     expect(mcpComposition).toContain('runtime.reconcileDurableIntents()')
     expect(workflowComposition).toContain('workflowsBroadcaster.broadcast')
     expect(workflowComposition).toContain("type: 'workflow.acl.updated'")

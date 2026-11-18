@@ -28,14 +28,18 @@ describe('RFC-345 Intent context resource authorization seam', () => {
   // RFC-359 W4-D20：异步读端口合成一份中立实现（此前 SQLite 的那份异步工厂零生产消费）。
   test('the async factory binds one neutral session to a caller-owned transaction', () => {
     const composition = source('composition/intentContextAuthorization.ts')
+    const application = source('application/participants/intentContextResourceAuthorization.ts')
     const reads = source('infrastructure/intentContextResourceAuthorization.ts')
 
     expect(composition).toContain('composeIntentContextResourceAuthorizationFactory')
     expect(composition).not.toMatch(
       /composeSqliteIntentContextResourceAuthorizationFactory\b|composePostgresqlIntentContextResourceAuthorizationFactory/,
     )
-    expect(composition).toContain('authority !== pair.authority')
-    expect(composition).toContain('foreign-intent-context-resource-authority')
+    // RFC-504: the exact-authority check moved to application (createIntentContextCurrentAuthorityResolver); the factory wires it.
+    expect(composition).toContain('createIntentContextCurrentAuthorityResolver(pair)')
+    expect(composition).not.toContain('authority !== pair.authority')
+    expect(application).toContain('authority !== pair.authority')
+    expect(application).toContain('foreign-intent-context-resource-authority')
     expect(reads).toContain('ACL_TABLES(transaction)[resourceType]')
     expect(reads).toContain('resourceGrants.resourceType')
     expect(reads).not.toMatch(

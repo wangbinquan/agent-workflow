@@ -11,8 +11,6 @@ import type {
 } from '../application/mcps/ports'
 import { createMcpAclIdentityParticipant } from '../application/participants/mcpAclIdentity'
 import { createMcpRepository, type McpTransactionLifecycle } from '../infrastructure/mcpRepository'
-import { transitionMcpAclRuntimeTests } from '../infrastructure/mcpRuntimeTestTransitions'
-import type { ResourceAclMutationLifecycle } from '../infrastructure/resourceAclRepository'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { createMcpOperationDescriptors } from './catalogOperationDescriptors'
@@ -71,25 +69,8 @@ export function composeMcpCatalogFromAdapters(
   })
 }
 
-/**
- * 目录 ACL 写事务里的 MCP 运行时测试失效：装进 `composeResourceCatalogFor({ lifecycle })`，两个 provider 同一份
- * （此前只有 SQLite 的 ACL 装配接了这条 afterWriteInTx，PG 上改 ACL 不会结束 / 阻塞已失去可见性的测试会话）。
- */
-export function mcpAclRuntimeTestLifecycle(): ResourceAclMutationLifecycle {
-  const lifecycle: ResourceAclMutationLifecycle = {
-    async afterWriteInTransaction(transaction, change) {
-      if (change.type !== 'mcp') return
-      await transitionMcpAclRuntimeTests(transaction, {
-        mcpId: change.resourceId,
-        ownerUserId: change.ownerUserId,
-        visibility: change.visibility,
-        grantedUserIds: change.grantedUserIds,
-        now: change.now,
-      })
-    },
-  }
-  return Object.freeze(lifecycle)
-}
+// RFC-504: the ACL write-transaction lifecycle lives with the transitions it runs (infrastructure); bootstrap still takes it here.
+export { mcpAclRuntimeTestLifecycle } from '../infrastructure/mcpRuntimeTestTransitions'
 
 /** 一份装配，两个 provider 共用（RFC-359 W4-D16）：仓库 / 生命周期 / ACL 应用都已是中立实现。 */
 export function composeMcpCatalog(input: McpCatalogCompositionDependencies): McpCatalogModule {

@@ -52,8 +52,8 @@ import { type ConfigConcurrencyHotApplyCommand } from '@/routes/config'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import {
   composeWorkgroupTaskRoom,
-  composeWorkgroupTaskRoomActiveUsers,
-  composeWorkgroupTaskRoomDynamicWorkflow,
+  createWorkgroupTaskRoomActiveUsers,
+  createWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { type DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
@@ -342,10 +342,10 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db: input.db,
     taskParticipantFactory: taskExecutionProvider.workgroupTaskRoom,
-    activeUsers: composeWorkgroupTaskRoomActiveUsers({
+    activeUsers: createWorkgroupTaskRoomActiveUsers({
       userDirectory: identityAccess.userDirectory,
     }),
-    dynamicWorkflow: composeWorkgroupTaskRoomDynamicWorkflow({
+    dynamicWorkflow: createWorkgroupTaskRoomDynamicWorkflow({
       validationContext,
       workflows: workflowCatalog.operations.create,
     }),

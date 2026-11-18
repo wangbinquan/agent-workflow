@@ -113,8 +113,10 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     const adapter = read('modules/resource-catalog/infrastructure/workgroupTaskRoom.ts')
     expect(adapter).toContain('WorkgroupTaskRoomActiveUserDirectory')
     expect(adapter).toContain('WorkgroupTaskRoomDynamicWorkflowOperations')
-    expect(adapter).toContain('findActiveUserIds')
-    expect(adapter).toContain('validateGenerated')
+    // RFC-504: the two collaborator port interfaces moved to application (their implementations are application use cases).
+    const ports = read('modules/resource-catalog/application/workgroups/ports.ts')
+    expect(ports).toContain('findActiveUserIds')
+    expect(ports).toContain('validateGenerated')
     expect(adapter).toContain('readonly broadcast:')
     // RFC-359 W4-D19b —— 「恢复执行」按部署形态注入：单进程做预检 + 内联驱动，多进程两件皆空操作。
     expect(adapter).toContain('WorkgroupTaskRoomContinuationDriver')

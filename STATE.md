@@ -19,7 +19,25 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是三组用例与两处 IO，分别落 application 与 infrastructure；一个组合文件删除，余下
   四处只装配、没有控制流；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-504 用例覆盖全部生产
   文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读四个组合文件、resource-catalog `composition.ts`、bootstrap 的
-  两个文件与新位置。C13 `composition-control-flow-resource-catalog` 92 → 实测，其余计数不升。
+  两个文件与新位置。C13 `composition-control-flow-resource-catalog` 92 → 77（收紧到实测），其余 59 项实测与对照逐项
+  相同，都在 `max` 内。
+- **§14 不变量 / S10 第十一步**：清单（design §3）的名字只在各自的新位置声明（同名类型钉在原处），改名前的三个工厂名与私有的
+  `currentAuthorityResolver` 没有声明；`composition/builtinWorkflowCatalog.ts` 不存在，没有文件从它取名字；`intentContextAuthorization.ts`、
+  `mcpOperations.ts`、`resourcePackageOperations.ts` 与 `workgroupTaskRoom.ts` 没有控制流语句、各自从新位置取实现；resource-catalog 的
+  `composition.ts` 转出 `createBuiltinWorkflowCatalog`，bootstrap 只经它取、调用一次；任务房的两个工厂只在 `daemonHttpComposition.ts` 各调用
+  一次；application 的新位置依赖面是闭集、不用进程全局，infrastructure 的新文件不取 composition。生产文件 4,108 → 4,110；跨 context import
+  7,503 → 7,503（context 对 135 → 135），public surface 1,195 → 1,195。resource-catalog 组合层控制流余下 77 行：RFC-370 余项 72 行与
+  `resourcePackageMaintenance.ts` 2 行、`resourceAcl.ts`、`skillContentBinding.ts` 与 `skillVersionCommit.ts` 各 1 行。
+- **集中验证**（基于 `600d36322`，详见 plan）：没有查出本 RFC 的缺陷（静态一项里 `tsc` 报的新用例类型错误在功能验证起跑前已修正）。
+  backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 285 个文件、与对照 A/B，候选 3,425 条通过、373 条红，对照 3,415 条通过、367 条红，
+  本 RFC 用例 10 / 10、改钉的锁两边都过，候选多出的 33 条都撞时限或是撞时限的连带；bootstrap `daemonModules/digitalEmployee.ts` 的 12 个
+  文本读者两边 84 / 84。任一边红过的 68 个文件放宽默认时限复跑，候选 1,380 条通过、30 条红，对照 1,423 条通过、21 条红：首批候选多出的
+  33 条里 26 条两边都过、4 条钩子所在的文件两边全过，其余 3 条所在的 describe 在一边撞钩子或轮询；这一轮的红都在 PostgreSQL 一段、都撞
+  时限。全量 SQLite 2,949 个文件 2,928 个通过，其余 21 个：三个报告类撞自带时限，18 个与对照 A/B 两边都是 148 条通过、13 条红（只有两个
+  源码扫描互换一例，单独在两边同时跑，墙钟与 CPU 时间都相同）；取到本 RFC 改动代码的 894 个文件里 885 个通过。三个报告类用例与 23 个取到
+  本 RFC 代码、红过的文件只放宽时限（副本或默认 1,500 秒）再跑：候选 505 条通过、2 条红，对照 502 条通过、5 条红，22 个文件两边全过；
+  候选红的 2 条对照同样红（PostgreSQL 计划审计装载十万行的钩子超过 1,500 秒、`rfc238` 运行时测试的一例读到会话已结束），没有只红在候选
+  的用例。架构报告 60 项只差 `composition-control-flow-resource-catalog` 一项。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-17 RFC-503 意图的平台清单、图校验与维护命令迁出 composition（Done；`design/RFC-503-intent-use-cases-out-of-composition/`）
 
@@ -61,7 +79,8 @@
   父提交同样红，与提交无关）与随之红的 `CI required`；其余第 1 次全部通过，未重跑。落档提交 `2f0406cb5`（只改文档）：主 CI run
   44185405801 第 1 次 66 个通过，依赖审计、macOS 的 e2e 分片 4/4 没有分到 runner、backend 分片 16/44 的 `rfc311-perf-guards` 一例
   （那台 runner 上 PostgreSQL 慢，代码树与 `249e9f0b0` 相同）三格红与提交无关；只重跑失败的作业，第 2 次除依赖审计外全部通过。
-  转 Done 的 `d0bcbd1c8`（只改文档）：主 CI run 44227363882 在 RFC-504 落档时仍排队，结果补记于 RFC-504 的实现提交。
+  转 Done 的 `d0bcbd1c8`（只改文档）：主 CI run 44227363882 的 70 个 job 里 68 个通过（补记于 RFC-504 的实现提交）：依赖审计红（外部，与提交无关）
+  与随之红的 `CI required`，其余全部通过，未重跑。
 - **下一步**：RFC-294 S10 第十步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。intent 组合层余下 5 行
