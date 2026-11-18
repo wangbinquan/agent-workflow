@@ -1,3 +1,23 @@
+## 2026-11-18 RFC-505 数字员工的内建作业、PostgreSQL 磁盘报告与运行时选择快照迁出 composition（In Progress；`design/RFC-505-employee-jobs-disk-report-runtime-snapshots-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的范围列 system-operations、runtime-management、digital-employee 等模块的余项，退出门要求组合层无循环与
+  switch、`try` / `throw` 只在登记清单内；RFC-504 之后这三个模块组合层控制流的非 RFC-370 部分只剩 digital-employee
+  `builtinJobTemplates.ts` 6 行、system-operations `maintenanceDisk.ts` 2 行与两处装配期路径选择各 1 行、runtime-management
+  `runtimeSelection.ts` 1 行。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、
+  2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：内建作业模板的确保迁入 digital-employee `application/builtinEmployeeJobs.ts`（作者面持久化、发布与时钟由装配传入），冻结运行时
+  的快照表迁入 runtime-management `application/runtimeSelection.ts`，PostgreSQL 磁盘报告连同 `nonNegativeInteger` 迁入 system-operations
+  `infrastructure/postgresqlMaintenanceDisk.ts`；三个组合文件保留装配入口（名字、签名与位置不变），从新位置取实现。清单见 design §3。
+- **不做**：`daemonDatabase.ts` 与 `manualDatabaseMigration.ts` 的装配期路径选择（缺省回落随 S12）、`taskImage*` / `crewstation*`（RFC-370
+  余项，逐个避让）、identity-access 的改密用例与 code-capability / integration 的缺省与可选装配；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组用例与一处 IO，分别落 application 与 infrastructure；三个组合文件只装配、
+  没有控制流；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-505 用例覆盖全部生产文件（下限
+  3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读三个组合文件与三个新位置。C13 三个模块的 `composition-control-flow-*` → 实测，
+  其余计数不升。
+
 ## 2026-11-17 RFC-504 资源目录的内建工作流、资源包暂存、任务房协作、意图上下文授权与 MCP 测试失效迁出 composition（Done；`design/RFC-504-resource-catalog-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 resource-catalog 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；
@@ -42,6 +62,7 @@
 - **CI**：`96e678719` 主 CI run 44280453337 的 70 个 job 里 68 个通过：Static scans 的依赖审计红（本提交不改依赖清单与锁文件，同一步骤在
   父提交同样红，与提交无关）与随之红的 `CI required`；其余第 1 次全部通过，未重跑；同一推送的 windows-platform run 44280453189 通过。
   落档提交 `600d36322`（只改文档）：主 CI run 44228954525 的 70 个 job 里 68 个通过，红的同样是依赖审计与 `CI required`，未重跑。
+  转 Done 的 `a1a5b70a1`（只改文档）：主 CI run 44286472930 在 RFC-505 落档时仍排队，结果补记于 RFC-505 的实现提交。
 - **下一步**：RFC-294 S10 第十一步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。resource-catalog 组合层余下 77 行
