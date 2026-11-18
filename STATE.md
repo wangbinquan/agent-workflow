@@ -1,3 +1,26 @@
+## 2026-11-17 RFC-504 资源目录的内建工作流、资源包暂存、任务房协作、意图上下文授权与 MCP 测试失效迁出 composition（In Progress；`design/RFC-504-resource-catalog-use-cases-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的范围列 resource-catalog 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；
+  RFC-503 之后 resource-catalog 组合层控制流实测 92 行，除 RFC-370 余项的 72 行外，20 行在 9 个文件里，其中 15 行在五个“用例或 IO 写在
+  composition”的文件里（`resourcePackageOperations.ts` 7、`builtinWorkflowCatalog.ts` 3、`intentContextAuthorization.ts` 2、
+  `workgroupTaskRoom.ts` 2、`mcpOperations.ts` 1）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与
+  集中验证，按授权记为已批准，不派 Codex。
+- **范围**：资源包暂存迁入 `application/package/stagedExecution.ts`，任务房的两个端口实现迁入 `application/workgroups/taskRoomCollaborators.ts`
+  （两个端口接口迁入同目录的 `ports.ts`），意图上下文的授权核对迁入 `application/participants/intentContextResourceAuthorization.ts`；内建
+  工作流目录迁入 `infrastructure/builtinWorkflowCatalog.ts`，MCP 的 ACL 测试失效迁入 `infrastructure/mcpRuntimeTestTransitions.ts`（工厂改名为
+  `create…`，资源包暂存的 id 由装配传入）；`composition/builtinWorkflowCatalog.ts` 删除、经 resource-catalog `composition.ts` 转出，其余四个
+  组合文件只留装配与转出。清单见 design §3。
+- **不做**：`composition/resourceAcl.ts`（另立）、`resourcePackageMaintenance.ts` 的装配期守卫（登记清单）、`skillContentBinding.ts` 与
+  `skillVersionCommit.ts` 的缺省选择（S12）、`taskImage*` / `crewstation*`（RFC-370 余项，逐个避让）；合并 `resourcePackageExecution.ts` 的
+  私有类型副本；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是三组用例与两处 IO，分别落 application 与 infrastructure；一个组合文件删除，余下
+  四处只装配、没有控制流；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-504 用例覆盖全部生产
+  文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明与 import，另读四个组合文件、resource-catalog `composition.ts`、bootstrap 的
+  两个文件与新位置。C13 `composition-control-flow-resource-catalog` 92 → 实测，其余计数不升。
+
 ## 2026-11-17 RFC-503 意图的平台清单、图校验与维护命令迁出 composition（Done；`design/RFC-503-intent-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 intent 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-502 之后
@@ -38,6 +61,7 @@
   父提交同样红，与提交无关）与随之红的 `CI required`；其余第 1 次全部通过，未重跑。落档提交 `2f0406cb5`（只改文档）：主 CI run
   44185405801 第 1 次 66 个通过，依赖审计、macOS 的 e2e 分片 4/4 没有分到 runner、backend 分片 16/44 的 `rfc311-perf-guards` 一例
   （那台 runner 上 PostgreSQL 慢，代码树与 `249e9f0b0` 相同）三格红与提交无关；只重跑失败的作业，第 2 次除依赖审计外全部通过。
+  转 Done 的 `d0bcbd1c8`（只改文档）：主 CI run 44227363882 在 RFC-504 落档时仍排队，结果补记于 RFC-504 的实现提交。
 - **下一步**：RFC-294 S10 第十步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。intent 组合层余下 5 行
