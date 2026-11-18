@@ -7,16 +7,37 @@
   2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权
   记为已批准，不派 Codex。
 - **范围**：内建作业模板的确保迁入 digital-employee `application/builtinEmployeeJobs.ts`（作者面持久化、发布与时钟由装配传入），冻结运行时
-  的快照表迁入 runtime-management `application/runtimeSelection.ts`，PostgreSQL 磁盘报告连同 `nonNegativeInteger` 迁入 system-operations
-  `infrastructure/postgresqlMaintenanceDisk.ts`；三个组合文件保留装配入口（名字、签名与位置不变），从新位置取实现。清单见 design §3。
+  的快照表迁入 runtime-management `application/runtimeSelection.ts`，PostgreSQL 磁盘报告的那次读连同 `nonNegativeInteger` 迁入 platform
+  `persistence/postgresqlStorageFootprint.ts`、拼装迁入 system-operations `infrastructure/local/systemMaintenanceDisk.ts`；三个组合文件保留装配入口（名字、签名与位置不变），从新位置取实现。清单见 design §3。
 - **不做**：`daemonDatabase.ts` 与 `manualDatabaseMigration.ts` 的装配期路径选择（缺省回落随 S12）、`taskImage*` / `crewstation*`（RFC-370
   余项，逐个避让）、identity-access 的改密用例与 code-capability / integration 的缺省与可选装配；改写任何判据；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
   到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组用例与一处 IO，分别落 application 与 infrastructure；三个组合文件只装配、
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组用例与一处 IO：用例落 application，PostgreSQL 的那次读落 platform/persistence、拼装落 infrastructure；三个组合文件只装配、
   没有控制流；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-505 用例覆盖全部生产文件（下限
-  3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读三个组合文件与三个新位置。C13 三个模块的 `composition-control-flow-*` → 实测，
-  其余计数不升。
+  3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读三个组合文件与四个新位置。C13 digital-employee 19 → 13、system-operations
+  28 → 26、runtime-management 23 → 22（`composition-control-flow-*` 收紧到实测），其余 57 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十二步**：清单（design §3）的名字只在各自的新位置声明（`nonNegativeInteger` 在 system-operations 与
+  platform/persistence 里只在 platform 的新文件声明）；两个新文件恰好声明、交出清单列的名字，两个既有文件交出清单列的名字，三个组合文件只
+  声明并导出原有的四个装配入口；三个组合文件没有控制流语句、不发 SQL、不建 `Map`，四个实现在生产代码里都只在各自的组合文件调用一次；新
+  位置的依赖面是闭集、不用进程全局（platform 的新文件只取同层的 PostgreSQL 运行时类型）。provider 命名文件的落位账本不变（T17）。生产文件
+  4,110 → 4,112；跨 context import 7,503 → 7,504（多一条组合文件取 platform 新文件的值边），public surface 不变。三个模块组合层余下的控制流
+  都是 RFC-370 余项（digital-employee `crewstationContent.ts` 13 行；system-operations `crewstationDatabaseRestore.ts` 与
+  `crewstationDeployment.ts` 各 12 行；runtime-management `crewstationRuntimeManagement.ts` 11 行、`crewstationSystemAgentMaterial.ts` 7 行与
+  `taskImageMaterial.ts` 4 行），只有 system-operations `daemonDatabase.ts` 与 `manualDatabaseMigration.ts` 的装配期路径选择各 1 行随 S12。
+- **集中验证**（基于 `9628d5590`，详见 plan）：查出本 RFC 的一处缺陷，已修正并复验：PostgreSQL 磁盘报告起初整个迁进 system-operations
+  `infrastructure/postgresqlMaintenanceDisk.ts`，T17 判 `platform/persistence/` 之外的 provider 命名文件多出一个；改为方言读进 platform
+  `persistence/postgresqlStorageFootprint.ts`、拼装进 infrastructure 的中立名字 `reportMeasuredDiskReclaimable`。backend `tsc` 0 错，eslint
+  无告警。首批（修正前）按 CI 的跑法跑 384 个文件、与对照 A/B：候选 3,543 条通过、475 条红，对照 3,530 条通过、501 条红；本 RFC 用例
+  7 / 7，走迁出代码的用例两边相同，候选多出的 37 条除 T17 外都撞时限或是撞时限的连带。全量 SQLite（修正前）2,950 个文件 2,937 个通过，
+  其余 13 个除 T17、发布账本（导出仓库的历史）与 `rfc167` 的 `settleTask` 等待外都撞自带时限；取到本 RFC 改动代码的 409 个文件里 402 个
+  通过。修正后：改动文件的 25 个行为用例候选 229 条通过、20 条红，都撞时限，只红在候选的一条撞默认的 5 秒；源码扫描 342 个里 337 个通过
+  （T17 通过），余下 5 个撞自带时限或是发布账本。任一边红过的 123 个文件放宽默认时限复跑：候选 1,840 条通过、63 条红，对照 1,843 条通过、
+  61 条红。首批候选多出的 36 条里，26 条两边都过、9 条所在的文件两边全过、1 条两边仍撞自带时限；这一轮只红在候选的 6 条里，4 条撞自带
+  时限，1 条是不取本 RFC 代码的钩子撞 90 秒，1 条按代码看是 task-execution 释放序列与在途 owner 心跳的既有时序（本 RFC 不改
+  task-execution，同一例在首批通过）。三个报告类用例、扫描里红的 `rfc400` 与 21 个取到本 RFC 代码、红过且带自带时限的文件只放宽
+  时限（副本，默认 1,500 秒）再跑：25 个文件两边都是 283 条通过、0 条红。架构报告 60 项只差三项
+  `composition-control-flow-*`。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-17 RFC-504 资源目录的内建工作流、资源包暂存、任务房协作、意图上下文授权与 MCP 测试失效迁出 composition（Done；`design/RFC-504-resource-catalog-use-cases-out-of-composition/`）
 
@@ -62,7 +83,8 @@
 - **CI**：`96e678719` 主 CI run 44280453337 的 70 个 job 里 68 个通过：Static scans 的依赖审计红（本提交不改依赖清单与锁文件，同一步骤在
   父提交同样红，与提交无关）与随之红的 `CI required`；其余第 1 次全部通过，未重跑；同一推送的 windows-platform run 44280453189 通过。
   落档提交 `600d36322`（只改文档）：主 CI run 44228954525 的 70 个 job 里 68 个通过，红的同样是依赖审计与 `CI required`，未重跑。
-  转 Done 的 `a1a5b70a1`（只改文档）：主 CI run 44286472930 在 RFC-505 落档时仍排队，结果补记于 RFC-505 的实现提交。
+  转 Done 的 `a1a5b70a1`（只改文档）：主 CI run 44286472930 的 70 个 job 里 68 个通过（补记于 RFC-505 的实现提交）：依赖审计红（外部，与提交无关）
+  与随之红的 `CI required`，其余全部通过，未重跑。
 - **下一步**：RFC-294 S10 第十一步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。resource-catalog 组合层余下 77 行

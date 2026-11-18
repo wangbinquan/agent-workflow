@@ -10,8 +10,8 @@
 - **前序**：[RFC-504](../RFC-504-resource-catalog-use-cases-out-of-composition/proposal.md)（S10 第十一步，Done，`96e678719`）。S10 与 S12
   共用模块 composition 文件（同一文件同批只允许一个）；本 RFC 只改 digital-employee 的 `composition/builtinJobTemplates.ts`、
   system-operations 的 `composition/maintenanceDisk.ts` 与 runtime-management 的 `composition/runtimeSelection.ts`，新增 digital-employee 的
-  `application/builtinEmployeeJobs.ts` 与 system-operations 的 `infrastructure/postgresqlMaintenanceDisk.ts`，扩充 runtime-management 的
-  `application/runtimeSelection.ts`；三个装配入口的名字、签名与位置不变，bootstrap 与用例的 import 不改；不碰 `taskImage*` /
+  `application/builtinEmployeeJobs.ts` 与 platform 的 `persistence/postgresqlStorageFootprint.ts`，扩充 system-operations 的
+  `infrastructure/local/systemMaintenanceDisk.ts` 与 runtime-management 的 `application/runtimeSelection.ts`；三个装配入口的名字、签名与位置不变，bootstrap 与用例的 import 不改；不碰 `taskImage*` /
   `crewstation*`（RFC-370 余项）。
 
 ## 1. 背景
@@ -39,8 +39,9 @@ RFC-504 之后，三个模块的组合层控制流（F13 口径）：digital-emp
 - **G1 用例与 IO 归位**（函数体逐字不变）：
   - 内建作业模板的确保迁入 digital-employee 的 `application/builtinEmployeeJobs.ts`（`createBuiltinEmployeeJobs`；作者面持久化、`publish`
     与时钟由装配传入）；
-  - PostgreSQL 的磁盘报告连同 `nonNegativeInteger` 迁入 system-operations 的 `infrastructure/postgresqlMaintenanceDisk.ts`
-    （`reportPostgresqlDiskReclaimable`）；
+  - PostgreSQL 的磁盘报告拆成两半：发 SQL 的那次读连同 `nonNegativeInteger` 迁入 platform 的 `persistence/postgresqlStorageFootprint.ts`
+    （`readPostgresqlStorageFootprint`；provider 命名的文件只住 `platform/persistence/`，RFC-359 W5-T17），报告的拼装迁入 system-operations
+    的 `infrastructure/local/systemMaintenanceDisk.ts`（`reportMeasuredDiskReclaimable`，不分引擎）；
   - 运行时快照表迁入 runtime-management 的 `application/runtimeSelection.ts`（`createRuntimeSelectionSnapshotsInTx`，与参与者同文件）。
 - **G2 composition 只装配**：三个组合文件保留装配入口（名字、签名与位置不变），各自从新位置取实现，不再有 F13 口径的控制流。
 - **G3 账本与锁**：三个模块的 `composition-control-flow-*` 按实测收紧；新增 RFC-505 用例。
@@ -58,11 +59,12 @@ RFC-504 之后，三个模块的组合层控制流（F13 口径）：digital-emp
 
 ## 5. 验收标准
 
-- **AC-1**：design §3 清单里的名字只在各自的新位置声明（`nonNegativeInteger` 在 system-operations 里只在新文件声明，collaboration 的三个
-  同名私有函数不动）；三个组合文件没有 F13 口径的控制流，各自从新位置取实现；装配入口的名字、签名与位置不变。
+- **AC-1**：design §3 清单里的名字只在各自的新位置声明（`nonNegativeInteger` 在 system-operations 与 platform/persistence 里只在新文件声明，
+  collaboration 的三个同名私有函数不动）；三个组合文件没有 F13 口径的控制流，各自从新位置取实现；装配入口的名字、签名与位置不变。
 - **AC-2**：同样输入下内建作业的确保（草稿与发布两种）、PostgreSQL 磁盘报告与运行时快照的存取的结果、错误与对端口的调用和此前一致（迁移
   逐字，现有用例对拍）；时钟仍在调用时取，每处取一次，与此前相同。
 - **AC-3**：新位置的依赖面是闭集：digital-employee 的新文件只取本模块 domain、application 的端口类型与 `@agent-workflow/shared`，
-  runtime-management 新增的函数只用该文件已取的类型，两者不取 infrastructure、composition 与 IO 包、不用进程全局；system-operations 的新
-  文件不取 composition；public surface 不升；三个模块的 `composition-control-flow-*` 收紧到实测，其余计数不升。
+  runtime-management 新增的函数只用该文件已取的类型，两者不取 infrastructure、composition 与 IO 包、不用进程全局；platform 的新文件只取
+  同层的 PostgreSQL 运行时类型、不用进程全局，system-operations 新增的函数不新增 import；RFC-359 W5-T17 的 provider 命名文件账本与同文件
+  双实现对账本不变；public surface 不升；三个模块的 `composition-control-flow-*` 收紧到实测，其余计数不升。
 - **AC-4**：受影响用例全部通过；推送后 exact SHA 的 GitHub Actions 全绿（环境性红格逐格归因、如实记录）。

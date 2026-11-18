@@ -11,7 +11,9 @@
 // 持锁重写整个库，对单连接同步 daemon 等于长时间全站冻结，不能提供「一键」。
 
 // System Operations SQLite disk-reclamation projection. Provider-independent filesystem cleanup
-// stays here beside the SQLite row-size estimator it reports.
+// stays here beside the SQLite row-size estimator it reports. RFC-505: the provider-independent
+// report over a storage footprint the provider measured itself (PostgreSQL reads its catalog in
+// platform/persistence/postgresqlStorageFootprint.ts) is here too.
 
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { sql } from 'drizzle-orm'
@@ -98,6 +100,18 @@ export function reportDiskReclaimable(
     dbFreelistBytes: freelist * pageSize,
     dbFileBytes: pageCount * pageSize,
   }
+}
+
+/** 只读盘点：库那部分由 provider 自己量好交进来（RFC-505），退役目录仍在本机量。 */
+export function reportMeasuredDiskReclaimable(
+  storage: { readonly reclaimableBytes: number; readonly databaseBytes: number },
+  appHome: string,
+): DiskReclaimReport {
+  return Object.freeze({
+    items: Object.freeze([reportRetiredRuntimeStores(appHome)]),
+    dbFreelistBytes: storage.reclaimableBytes,
+    dbFileBytes: storage.databaseBytes,
+  })
 }
 
 /**

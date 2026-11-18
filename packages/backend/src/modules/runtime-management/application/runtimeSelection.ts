@@ -50,3 +50,23 @@ export function createRuntimeSelectionParticipantInTx(deps: {
   participants.add(participant)
   return participant
 }
+
+/**
+ * RFC-505 (RFC-294 S10 step 12): the per-transaction table of frozen runtime snapshots, moved verbatim out of
+ * composition/runtimeSelection.ts. The participant's `freeze` retains each snapshot under its reference; the
+ * task reads it back inside its scope, as a copy.
+ */
+export function createRuntimeSelectionSnapshotsInTx(assertTaskScope: () => void) {
+  const snapshots = new Map<FrozenRuntimeRef, ResolvedRuntime>()
+  return Object.freeze({
+    retain(reference: FrozenRuntimeRef, snapshot: ResolvedRuntime): void {
+      snapshots.set(reference, snapshot)
+    },
+    readSnapshot(reference: FrozenRuntimeRef): ResolvedRuntime {
+      assertTaskScope()
+      const snapshot = snapshots.get(reference)
+      if (snapshot === undefined) throw new Error('runtime-selection-reference-unavailable')
+      return structuredClone(snapshot)
+    },
+  })
+}

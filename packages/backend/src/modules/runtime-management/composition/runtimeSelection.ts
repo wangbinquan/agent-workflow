@@ -1,9 +1,8 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { FrozenRuntimeRef } from '../public/participants'
-import type { ResolvedRuntime } from '../domain/runtimeProfile'
 import {
   createNodeRunRuntimeSelectionCapabilityInTx,
   createRuntimeSelectionParticipantInTx,
+  createRuntimeSelectionSnapshotsInTx,
 } from '../application/runtimeSelection'
 import { createRuntimeRegistryApplication } from '../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryEffects'
@@ -15,24 +14,17 @@ export function composeRuntimeSelectionParticipantInTx(
 ) {
   const reader = createRuntimeSelectionPersistence(transaction)
   const registry = createRuntimeRegistryApplication(createRuntimeRegistryEffects())
-  const snapshots = new Map<FrozenRuntimeRef, ResolvedRuntime>()
+  const snapshots = createRuntimeSelectionSnapshotsInTx(assertTaskScope)
   const capability = createNodeRunRuntimeSelectionCapabilityInTx(assertTaskScope)
   const participant = createRuntimeSelectionParticipantInTx({
     capability,
     resolve: (agentRuntime, defaultRuntime) =>
       registry.resolveAgentRuntime(reader, agentRuntime, defaultRuntime),
-    retain: (reference, snapshot) => {
-      snapshots.set(reference, snapshot)
-    },
+    retain: snapshots.retain,
   })
   return Object.freeze({
     capability,
     participant,
-    readSnapshot(reference: FrozenRuntimeRef): ResolvedRuntime {
-      assertTaskScope()
-      const snapshot = snapshots.get(reference)
-      if (snapshot === undefined) throw new Error('runtime-selection-reference-unavailable')
-      return structuredClone(snapshot)
-    },
+    readSnapshot: snapshots.readSnapshot,
   })
 }

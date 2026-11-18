@@ -23,8 +23,8 @@
       "reason": "max=133: RFC-498 (RFC-294 S10 step 5) moved the graph delivery bridge use case out of composition into the application layer and deleted composition/graphDeliveryBridge.ts (195 -> 133, measured). RFC-497 (RFC-294 S10 step 4) moved the Mission and development configuration operation use cases out of composition into the application layer (274 -> 195, measured). RFC-496 (RFC-294 S10 step 3) moved the employee workspace use case out of composition into the application layer (371 -> 274, measured). RFC-495 (RFC-294 S10 step 2) moved the platform work-item use cases out of composition into the application layer (491 -> 371, measured). RFC-494 (RFC-294 S10 step 1) moved the development employee type package contracts and codecs out of composition into the application layer (660 -> 491, measured). RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/development-automation/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-digital-employee": {
-      "max": 19,
-      "reason": "max=19: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/digital-employee/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 13,
+      "reason": "max=13: RFC-505 (RFC-294 S10 step 12) moved the built-in employee job template seeding use case out of digital-employee composition into application (19 -> 13, measured). max=19: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/digital-employee/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-event-center": {
       "max": 5,
@@ -63,16 +63,16 @@
       "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/run-observability/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-runtime-management": {
-      "max": 23,
-      "reason": "max=23: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/runtime-management/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 22,
+      "reason": "max=22: RFC-505 (RFC-294 S10 step 12) moved the frozen runtime snapshot table out of runtime-management composition into application (23 -> 22, measured). max=23: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/runtime-management/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-source-control": {
       "max": 148,
       "reason": "max=148: RFC-499 (RFC-294 S10 step 6) moved the publication transport and the preparation binding with the standalone preparation effects out of source-control composition into infrastructure (198 -> 148, measured). RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/source-control/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-system-operations": {
-      "max": 28,
-      "reason": "max=28: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/system-operations/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 26,
+      "reason": "max=26: RFC-505 (RFC-294 S10 step 12) moved the PostgreSQL maintenance disk report out of system-operations composition (the storage footprint read into platform/persistence, the report into infrastructure) (28 -> 26, measured). max=28: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/system-operations/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-task-catalog": {
       "max": 0,
