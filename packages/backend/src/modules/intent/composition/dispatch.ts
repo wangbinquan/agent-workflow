@@ -6,10 +6,10 @@ import {
 
 export type { IntentDispatchDeps }
 
+// RFC-503: no empty-list guard here — application's resume treats an empty list as a no-op (no listing, no loop, no events).
 export async function resumeQueuedIntentWorkingSets(
   dependencies: IntentDispatchDeps,
   sessionIds: readonly string[],
 ): Promise<void> {
-  if (sessionIds.length === 0) return
   await resumeWorkingSets(dependencies, sessionIds)
 }

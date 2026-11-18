@@ -1,6 +1,7 @@
 // RFC-358 —— 把 intent 的图校验端口绑到 resource-catalog 的 exact public 合同。
 //
-// 这里是**唯一**知道「图校验由谁提供」的地方：application 只见端口，domain 连端口都不见。
+// RFC-503（RFC-294 S10 第十步）：实现从 composition/graphValidation.ts 原样迁来，工厂改名为 createIntentWorkflowGraphValidation。这里是
+// **唯一**知道「图校验由谁提供」的地方：application 的其余代码只见端口，domain 连端口都不见。
 
 import type { Actor } from '@/auth/actor'
 import type {
@@ -8,9 +9,9 @@ import type {
   WorkflowValidationQueries,
 } from '@/modules/resource-catalog/public/queries'
 import type { WorkflowOperationContext } from '@/modules/resource-catalog/public/participants'
-import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
+import type { IntentWorkflowGraphValidationPort } from './ports/intentWorkflowGraphValidation'
 
-export function composeIntentWorkflowGraphValidation(deps: {
+export function createIntentWorkflowGraphValidation(deps: {
   readonly validationQueries: WorkflowValidationQueries
   readonly workflowQueries: WorkflowQueries
   readonly authorityFor: (actor: Actor) => WorkflowOperationContext

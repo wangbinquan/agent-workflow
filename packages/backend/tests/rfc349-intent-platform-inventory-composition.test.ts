@@ -12,7 +12,7 @@ import {
 } from '@/modules/digital-employee/composition'
 import type { DigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/public/participants'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
+import { createIntentPlatformInventoryParticipant } from '@/modules/intent/application/platformInventoryParticipant'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 
@@ -111,7 +111,7 @@ describe('RFC-349 Intent platform inventory composition', () => {
       ]),
     } satisfies Record<DevelopmentConfigResourceKind, DevelopmentConfigResourceOperations>
 
-    const inventory = composeIntentPlatformInventoryParticipant({
+    const inventory = createIntentPlatformInventoryParticipant({
       authorityFor(actor) {
         expect(actor).toBe(ACTOR)
         return directAuthority

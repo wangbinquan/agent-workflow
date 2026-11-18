@@ -5,13 +5,11 @@ import type { IntentScratchStore } from '../application/ports/intentScratchStore
 import { createFileIntentScratchStore } from '../infrastructure/local/fileIntentScratchStore'
 import { createIntentPersistence } from '../infrastructure/intentPersistence'
 import type { IntentMaintenanceCommands } from '../public/commands'
-import type { IntentBootRecoveryInput, IntentScratchSweepInput } from '../public/commands'
 import { INTENT_SCRATCH_DIRNAME } from '../domain/scratchDirectory'
-
-export interface IntentMaintenanceLog {
-  info(message: string, fields: Readonly<Record<string, unknown>>): void
-  warn(message: string, fields: Readonly<Record<string, unknown>>): void
-}
+import {
+  createIntentMaintenanceCommands,
+  type IntentMaintenanceLog,
+} from '../application/maintenanceCommands'
 
 export interface IntentMaintenanceCompositionDependencies {
   readonly persistence: IntentMaintenancePersistence
@@ -61,55 +59,11 @@ export function composeIntentMaintenanceSnapshotQueriesFor(input: {
   })
 }
 
+// RFC-503：两条维护命令的实现迁入 `application/maintenanceCommands.ts`；这里只交进程时钟（仍在调用时取）。
 export function composeIntentMaintenanceCommands(
   dependencies: IntentMaintenanceCompositionDependencies,
 ): IntentMaintenanceCommands {
-  return Object.freeze({
-    scratch: Object.freeze({
-      async sweep(input: IntentScratchSweepInput) {
-        const cutoff = (input.now ?? Date.now()) - input.retentionHours * 3_600_000
-        const staleTurnIds = await dependencies.scratch.staleTurnIds(cutoff)
-        const running = await dependencies.persistence.listRunningTurnIds(staleTurnIds)
-        const failed: string[] = []
-        let removed = 0
-        for (const turnId of staleTurnIds) {
-          if (running.has(turnId)) continue
-          try {
-            await dependencies.scratch.remove(turnId)
-            removed += 1
-            dependencies.log?.info('intent-scratch-swept', { turnId })
-          } catch (error) {
-            failed.push(turnId)
-            dependencies.log?.warn('intent-scratch-sweep-failed', {
-              turnId,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          }
-        }
-        await dependencies.persistence.markScratchSwept({
-          cutoff,
-          excludedTurnIds: [...running, ...failed],
-        })
-        return { removed }
-      },
-    }),
-    recovery: Object.freeze({
-      bootTurnIds: () => dependencies.persistence.listTurnIdsForBootRecovery(),
-      async recover(input: IntentBootRecoveryInput) {
-        const orphanedTurns = await dependencies.persistence.recoverTurnsOnBoot({
-          turnIds: input.recoverTurnIds,
-          now: input.now ?? Date.now(),
-          reason: 'intent-run-daemon-restart',
-        })
-        const queuedSessionIds = await dependencies.persistence.listQueuedWorkingSetSessionIds()
-        return {
-          queuedWorkingSets: queuedSessionIds.length,
-          orphanedTurns,
-          queuedSessionIds,
-        }
-      },
-    }),
-  })
+  return createIntentMaintenanceCommands({ ...dependencies, now: () => Date.now() })
 }
 
 export function composeIntentMaintenanceCommandsForAppHome(

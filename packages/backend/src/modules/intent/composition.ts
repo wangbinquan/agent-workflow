@@ -15,3 +15,8 @@ export { createIntentTurnEventRetentionPhase } from './infrastructure/retentionP
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createIntentMaintenanceJobHandlers } from './application/maintenanceJobs'
+
+// RFC-503: Intent's platform inventory participant and workflow graph validation are application use cases; bootstrap takes their
+// factories via composition.
+export { createIntentPlatformInventoryParticipant } from './application/platformInventoryParticipant'
+export { createIntentWorkflowGraphValidation } from './application/workflowGraphValidationProvider'

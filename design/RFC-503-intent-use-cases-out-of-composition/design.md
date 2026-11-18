@@ -38,8 +38,9 @@ resource-catalog 的校验查询，`workflowsUsingAgents` 在 actor 可见的工
   `rfc349-intent-integration-maintenance` 直接调 `composeIntentMaintenanceCommands`；其余维护用例只取按 app home / 按数据库的装配。
 - 按路径钉着 `platformInventory.ts` 的边账本：`rfc305-architecture-lock` 第 364 行（→ identity-access `public/participants`）、
   `architecture/rfc294-review-offered-edge-dag` 第 357～368 行两条（→ development-automation、→ digital-employee，W4-E 销账）、
-  `architecture/rfc376-structural-guards` 第 123～124 行两条；`architecture/rfc380-daemon-module-bundles` 第 31、34 行把两个 `compose…` 名字列为
-  成员工厂。`graphValidation.ts` 与 `dispatch.ts` 只有 bootstrap 按路径取。
+  `architecture/rfc376-structural-guards` 第 123～124 行两条，以及 RFC-310 `os-architecture-manifest.json` 里 digital-employee
+  `externalImports` 第 47 行一条（→ `public/participants`，由 `rfc310-digital-employee-os-architecture` 逐条等值比对；落档时漏列，集中验证的全仓
+  扫描补出，见 plan §集中验证）；`architecture/rfc380-daemon-module-bundles` 第 31、34 行把两个 `compose…` 名字列为成员工厂。`graphValidation.ts` 与 `dispatch.ts` 只有 bootstrap 按路径取。
 - `rfc294-review-module-layer-rules` 只禁 domain / application / engine 取 `@/db/schema`、infrastructure 与适配器 / 厂商包；application 取外域
   `public/operations` 的类型有先例（system-operations `application/overview.ts`），取本模块 `public/commands` 的类型有 15 处先例。
 
@@ -79,7 +80,7 @@ resource-catalog 的校验查询，`workflowsUsingAgents` 在 actor 可见的工
 - 用例：`rfc349-intent-platform-inventory-composition` 改从 application 取 `createIntentPlatformInventoryParticipant`；
   `architecture/rfc380-daemon-module-bundles` 的 `FACTORIES` 两个名字换新名字。
 - 边账本改钉新文件、上下文对不变：`rfc305-architecture-lock` 一条、`architecture/rfc294-review-offered-edge-dag` 两条（`why` 与销账波次照旧）、
-  `architecture/rfc376-structural-guards` 两条。
+  `architecture/rfc376-structural-guards` 两条、RFC-310 `os-architecture-manifest.json` 的 digital-employee `externalImports` 一条（集中验证补出）。
 - `architecture/counts.json`：`composition-control-flow-intent` 23 → 实测（预计 5）。`guard-manifest.json` 登记 RFC-503 用例。
 - 不改：只取装配入口的维护用例；`design/` 里的历史记述。
 
@@ -118,7 +119,7 @@ resource-catalog 的校验查询，`workflowsUsingAgents` 在 actor 可见的工
 - **用例走样**：函数体逐字迁移；维护命令的时钟从 `Date.now()` 换成传入的 `now()`，组合文件交的就是 `() => Date.now()`、仍在调用时取。
 - **空列表**：`dispatch.ts` 去掉判空后 application 收到空数组——§1 读过它的函数体，不列表、不循环、无副作用。
 - **遗留引用**：删除文件后由 `tsc` 与 RFC-503 用例 ③ 覆盖；迁移后按名字、路径片段与代码里的字符串字面量全仓再扫。
-- **锁静默变空**：三个边账本改钉新文件，上下文对与销账波次照旧；`rfc380` 的名字表换新名字。
+- **锁静默变空**：四个边账本改钉新文件，上下文对与销账波次照旧；`rfc380` 的名字表换新名字。
 
 ## 6. 取舍（可推翻）
 

@@ -15,11 +15,13 @@ import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
 } from '@/modules/intent/composition/dispatch'
-import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
+import {
+  createIntentPlatformInventoryParticipant,
+  createIntentWorkflowGraphValidation,
+} from '@/modules/intent/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
-import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
 import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
 import { composeIntentResourceCatalogBinding } from '@/modules/intent/composition/resourceCatalog'
 import type { IntentSessionRouteDependencies } from '@/modules/intent/composition/routes'
@@ -86,7 +88,7 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
-  const graphValidation = composeIntentWorkflowGraphValidation({
+  const graphValidation = createIntentWorkflowGraphValidation({
     validationQueries: resources.workflowCatalog.validationQueries,
     workflowQueries: resources.workflowCatalog.queries,
     authorityFor,
@@ -103,7 +105,7 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     aclIdentities: resources.resourceCatalog.persistence.identities,
     artifacts,
   })
-  const platformInventory = composeIntentPlatformInventoryParticipant({
+  const platformInventory = createIntentPlatformInventoryParticipant({
     authorityFor,
     capabilityTemplates: resources.capabilityTemplateOperations,
     developmentConfig: resources.developmentConfigOperations,

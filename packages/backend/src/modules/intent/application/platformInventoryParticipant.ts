@@ -1,3 +1,6 @@
+// RFC-503 (RFC-294 S10 step 10): Intent's platform inventory participant, moved here unchanged from
+// composition/platformInventory.ts; the factory is now createIntentPlatformInventoryParticipant (the composition file is gone;
+// bootstrap takes it via intent's composition.ts).
 import type { Actor } from '@/auth/actor'
 import type { DevelopmentConfigOperations } from '@/modules/development-automation/public/operations'
 import type { DigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/public/participants'
@@ -5,7 +8,7 @@ import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/pub
 import type {
   IntentPlatformInventoryParticipant,
   IntentPlatformInventoryRow,
-} from '../application/ports/intentAuxiliaryQueries'
+} from './ports/intentAuxiliaryQueries'
 import type { PlatformOnlyResourceType } from '../domain/teaching/platformMap'
 
 /** Code Capability contributes only its already-authorized public list view. */
@@ -19,7 +22,7 @@ export interface IntentCapabilityTemplateInventoryQueries {
   >
 }
 
-export interface IntentPlatformInventoryCompositionDependencies {
+export interface IntentPlatformInventoryParticipantDependencies {
   readonly authorityFor: (actor: Actor) => DirectAuthenticatedAuthority
   readonly capabilityTemplates: IntentCapabilityTemplateInventoryQueries
   readonly developmentConfig: Pick<DevelopmentConfigOperations, 'resources'>
@@ -94,8 +97,8 @@ function developmentRows(
  * Every contributing query is composed from the same selected provider and is
  * responsible for owner-native visibility filtering before rows cross here.
  */
-export function composeIntentPlatformInventoryParticipant(
-  input: IntentPlatformInventoryCompositionDependencies,
+export function createIntentPlatformInventoryParticipant(
+  input: IntentPlatformInventoryParticipantDependencies,
 ): IntentPlatformInventoryParticipant {
   return Object.freeze({
     async listRows(type: PlatformOnlyResourceType, actor: Actor) {

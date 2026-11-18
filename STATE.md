@@ -16,7 +16,23 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是三组用例，落 application；两个组合文件删除，余下两处只装配、没有控制流；不新增
   用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-503 用例覆盖全部生产文件（下限 3,000）、全部用例（下限
   2,500）与 e2e 里的同名声明与 import，另读 `maintenance.ts`、`dispatch.ts`、intent `composition.ts`、bootstrap 文件与新文件。C13
-  `composition-control-flow-intent` 23 → 实测，其余计数不升。
+  `composition-control-flow-intent` 23 → 5（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十步**：清单（design §3）的名字只在各自的新文件声明（`optionalText` 另有 identity-access 的那一份），改名前的两个
+  工厂名与平台清单的组合依赖接口名没有声明；`composition/platformInventory.ts` 与 `composition/graphValidation.ts` 不存在，没有文件从旧位置
+  取名字；`maintenance.ts` 与 `dispatch.ts` 没有控制流语句，前者从新文件取工厂；intent `composition.ts` 从新文件转出两个工厂，bootstrap 只经
+  它取、各调用一次；新文件的依赖面是闭集、不用进程全局。生产文件 4,107 → 4,108；跨 context import 7,503 → 7,503（context 对 135 → 135、
+  没有新的符号），public surface 1,195 → 1,195。intent 组合层控制流余下 5 行：`resourceCatalog.ts` 1 行与 RFC-370 余项的
+  `crewstationArtifacts.ts` 3 行、`crewstationScratch.ts` 1 行。
+- **集中验证**（候选 3，基于 `2f0406cb5`，详见 plan）：查出本 RFC 的两处缺陷，修复后复验——RFC-503 用例的转出筛选把 RFC-399 既有的
+  `maintenanceJobs` 转出也算进来（改为只看三个新文件，负对照钉住）；RFC-310 的 OS 架构清单有一条按路径记着删除的组合文件（全仓扫描查出，
+  改钉新文件；换回旧清单时该用例红）。backend `tsc` 0 错，eslint 无告警；首批按 CI 的跑法跑 224 个文件、与对照 A/B，候选 2,538 条通过、
+  301 条红，对照 2,541 条通过、298 条红，候选多出的 11 条除上述用例一条外都撞时限；任一边红过的 50 个文件放宽默认时限复跑，两边都是
+  903 条通过、5 条红，首批多出的 11 条只剩 `rfc395-af2` 的一例仍只红在候选（PostgreSQL，撞自带的 30 秒）。全量 SQLite 2,948 个文件
+  2,934 个通过，其余 14 个：本 RFC 用例（修复前的候选）、三个报告类撞自带时限、10 个与对照 A/B（候选多出的一条在不取本 RFC 路径的
+  `lifecycle-property` 里、撞自带的 15 秒）；取到本 RFC 改动代码的 268 个文件里 265 个通过。三个报告类用例与 6 个取到本 RFC 代码的文件
+  （两边红法相同，或某一边多出撞时限）只放宽时限的副本两边全过（9 个文件，各 171 / 171），候选多出的 `rfc395-af2` 那一例 21.3 / 22.3 秒；
+  报告类里候选慢的两例单独在两边同时跑，墙钟与 CPU 时间都相同。架构报告 60 项只差 `composition-control-flow-intent` 一项。实现门 PASS
+  （本会话按路径限定自审，只审功能）。
 
 ## 2026-11-17 RFC-502 集成的开发适配器配置、代码托管交付、审批网关与工具连接目录迁出 composition（Done；`design/RFC-502-integration-development-use-cases-out-of-composition/`）
 
@@ -57,7 +73,8 @@
   父提交通过，与提交无关）；backend 分片 42/44 的 `routes-inventory` 一例撞默认的 5 秒（本机在 HEAD 上同样撞，与提交无关）。用例修正
   `249e9f0b0` 给它 30 秒预算，并让 `rfc471` 的负对照与工作目录无关；`249e9f0b0` 的主 CI run 44171615750 第 1 次 backend 分片全部通过，另三格红（同一项依赖审计、RFC-378 `research.md` 两个外链回 503、macOS e2e 分片 4/4 没有分到 runner）与它无关，只重跑失败的作业，第 2 次记在下一个 RFC 的落档提交。
   补记（RFC-503 的落档提交）：`249e9f0b0` 的第 2 次只重跑失败的作业，`design/` 链接检查与 macOS 的 e2e 分片 4/4 都通过，依赖审计仍红
-  （外部，与提交无关）；转 Done 的 `7d2e82937`（只改文档）：主 CI run 44180121845 在本提交时仍排队，结果补记于 RFC-503 的实现提交。
+  （外部，与提交无关）；转 Done 的 `7d2e82937`（只改文档）：主 CI run 44180121845 的 70 个 job 里 67 个通过（补记于 RFC-503 的实现提交）：依赖审计红（外部，与提交无关）；`design/` 链接检查红在
+  RFC-378 `research.md` 的一个 github.com 外链回 503（文件未改动，同一组外链在 `249e9f0b0` 第 2 次通过，与提交无关）；`CI required` 随之红，其余全部通过，未重跑。
   落档提交 `4bd91e405`（只改文档）：主 CI run 44109573487 第 1 次 macOS 的 e2e 分片 4/4 没有分到 runner（0 个步骤，与提交无关），只重跑这一个
   作业，第 2 次通过，70 个 job 全部通过。
 - **下一步**：RFC-294 S10 第九步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
