@@ -1,3 +1,21 @@
+## 2026-11-18 RFC-506 身份访问的改密用例与意图目录的演员绑定迁出 composition（In Progress；`design/RFC-506-password-reset-and-catalog-actor-binding-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-505 之后 identity-access
+  组合层控制流只有 `userOperations.ts` 的改密用例 2 行，intent 的非 RFC-370 部分只有 `resourceCatalog.ts` 的演员绑定 1 行。用户 2026-11-02
+  「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的
+  设计已经刷新，你按照最新刷新的设计，进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：改密用例迁入 identity-access `application/commands/resetUserPassword.ts`（系统用户 id、认证运行时的两次凭据写、哈希与时钟由
+  装配传入），目录的演员绑定迁入 intent `application/resourceCatalog.ts`；两个组合文件保留装配入口（名字、签名与位置不变），从新位置取
+  实现。清单见 design §3。
+- **不做**：code-capability 的未绑定缺省、integration 的可选装配与 system-operations 的装配期路径选择（另立或随 S12）、resource-catalog
+  的 `resourceAcl.ts`（另立）、`crewstation*`（RFC-370 余项）；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是一个用例与一处用例状态，都落 application；两个组合文件只装配、没有控制流；
+  不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-506 用例覆盖全部生产文件（下限 3,000）、全部
+  用例（下限 2,500）与 e2e 里的同名声明，另读两个组合文件与两个新位置。C13 `composition-control-flow-identity-access` 2 → 实测、
+  `composition-control-flow-intent` 5 → 实测，其余计数不升；T19b 账本少一行。
+
 ## 2026-11-18 RFC-505 数字员工的内建作业、PostgreSQL 磁盘报告与运行时选择快照迁出 composition（Done；`design/RFC-505-employee-jobs-disk-report-runtime-snapshots-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 system-operations、runtime-management、digital-employee 等模块的余项，退出门要求组合层无循环与
@@ -41,7 +59,8 @@
 - **落地**：`490d75e04`（16 个文件；父提交是 `9628d5590`）。
 - **CI**：`490d75e04` 主 CI run 44382772167 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
   `9628d5590`（只改文档）：主 CI run 44288340179 的 70 个 job 里 68 个通过，红的是依赖审计（外部，与提交无关）与随之红的
-  `CI required`，未重跑。
+  `CI required`，未重跑。转 Done 的 `7f0e056c3`（只改文档）：主 CI run 44391326397 在 RFC-506 落档时仍排队，结果补记于 RFC-506 的
+  实现提交。
 - **下一步**：RFC-294 S10 第十二步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。digital-employee、system-operations
