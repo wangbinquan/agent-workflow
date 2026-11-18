@@ -1,4 +1,4 @@
-## 2026-11-17 RFC-504 资源目录的内建工作流、资源包暂存、任务房协作、意图上下文授权与 MCP 测试失效迁出 composition（In Progress；`design/RFC-504-resource-catalog-use-cases-out-of-composition/`）
+## 2026-11-17 RFC-504 资源目录的内建工作流、资源包暂存、任务房协作、意图上下文授权与 MCP 测试失效迁出 composition（Done；`design/RFC-504-resource-catalog-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 resource-catalog 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；
   RFC-503 之后 resource-catalog 组合层控制流实测 92 行，除 RFC-370 余项的 72 行外，20 行在 9 个文件里，其中 15 行在五个“用例或 IO 写在
@@ -38,6 +38,17 @@
   本 RFC 代码、红过的文件只放宽时限（副本或默认 1,500 秒）再跑：候选 505 条通过、2 条红，对照 502 条通过、5 条红，22 个文件两边全过；
   候选红的 2 条对照同样红（PostgreSQL 计划审计装载十万行的钩子超过 1,500 秒、`rfc238` 运行时测试的一例读到会话已结束），没有只红在候选
   的用例。架构报告 60 项只差 `composition-control-flow-resource-catalog` 一项。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`96e678719`（31 个文件；父提交是 `600d36322`）。
+- **CI**：`96e678719` 主 CI run 44280453337 的 70 个 job 里 68 个通过：Static scans 的依赖审计红（本提交不改依赖清单与锁文件，同一步骤在
+  父提交同样红，与提交无关）与随之红的 `CI required`；其余第 1 次全部通过，未重跑；同一推送的 windows-platform run 44280453189 通过。
+  落档提交 `600d36322`（只改文档）：主 CI run 44228954525 的 70 个 job 里 68 个通过，红的同样是依赖审计与 `CI required`，未重跑。
+- **下一步**：RFC-294 S10 第十一步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。resource-catalog 组合层余下 77 行
+  （RFC-370 余项 72 行继续避让，`resourceAcl.ts` 另立，`resourcePackageMaintenance.ts` 的装配期守卫随 S10 收口的登记清单，
+  `skillContentBinding.ts` 与 `skillVersionCommit.ts` 的缺省选择随 S12）；S10 的下一步是其余模块的余项（source-control、
+  development-automation、task-execution、system-operations、runtime-management、digital-employee、integration、event-center 等）与收口，
+  再到 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-17 RFC-503 意图的平台清单、图校验与维护命令迁出 composition（Done；`design/RFC-503-intent-use-cases-out-of-composition/`）
 

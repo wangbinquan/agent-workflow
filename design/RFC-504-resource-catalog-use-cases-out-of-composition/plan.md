@@ -24,7 +24,7 @@
       组合文件没有控制流
 - [x] AC-2 同样输入下五组行为的结果、错误与端口调用和此前一致；bootstrap 拿到的是同一份实现；资源包暂存与应用的 id 同源
 - [x] AC-3 新位置的依赖面是闭集；跨 context 边、public surface 不升；`composition-control-flow-resource-catalog` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`96e678719` 主 CI run 44280453337 的 70 个 job 里 68 个通过，两格红都与提交无关（依赖审计与随之红的 `CI required`，见 §CI）
 
 ## 集中验证
 
@@ -154,7 +154,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `96e678719`（实现，父提交是 `600d36322`）：exact SHA 主 CI run 44280453337 的 70 个 job 里 68 个通过，另两格红都与提交无关：
+  - 「Static scans」的 dependency audit gate（high+critical）：本提交不改任何依赖清单与锁文件，同一步骤在父提交的 run 44228954525
+    同样红；依赖面相同，按用户规则不分析、只记录。
+  - `CI required` 随之红。
+  - 其余 68 个 job 第 1 次全部通过，未重跑；同一推送另触发的 windows-platform run 44280453189 通过。
 - 本 RFC 的落档提交 `600d36322`（只改文档，同一提交补记 RFC-503 转 Done 提交的 CI）：主 CI run 44228954525 共 70 个 job，68 个通过；红的
   两格与提交无关：「Static scans」的 dependency audit gate（high+critical）（依赖面没有变化，按用户规则不分析、只记录）与随之红的
   `CI required`。没有重跑。
