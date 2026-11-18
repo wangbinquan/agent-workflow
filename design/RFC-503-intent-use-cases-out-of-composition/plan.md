@@ -25,7 +25,7 @@
 - [x] AC-2 同样输入下平台清单、图校验与两条维护命令的结果、日志与端口调用和此前一致；bootstrap 拿到的是同一份实现；开机恢复对空列表与非空
       列表的行为不变
 - [x] AC-3 新文件的依赖面是闭集；跨 context 边、public surface 不升；`composition-control-flow-intent` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`448e40c78` 主 CI run 44222875990 的 70 个 job 里 68 个通过，两格红都与提交无关（依赖审计与随之红的 `CI required`，见 §CI）
 
 ## 集中验证
 
@@ -126,7 +126,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `448e40c78`（实现，父提交是 `2f0406cb5`）：exact SHA 主 CI run 44222875990 的 70 个 job 里 68 个通过，另两格红都与提交无关：
+  - 「Static scans」的 dependency audit gate（high+critical）：本提交不改任何依赖清单与锁文件，同一步骤在父提交的 run 44185405801
+    同样红；依赖面相同，按用户规则不分析、只记录。
+  - `CI required` 随之红。
+  - 其余 68 个 job 第 1 次全部通过，未重跑；同一推送没有触发别的 workflow。
 - 本 RFC 的落档提交 `2f0406cb5`（只改文档）：主 CI run 44185405801 第 1 次 70 个 job 里 66 个通过，另四格红与提交无关：
   - 「Static scans」的 dependency audit gate（high+critical）：依赖面没有变化，按用户规则不分析、只记录；
   - macOS 的 e2e 分片 4/4 没有分到 runner（0 个步骤）；

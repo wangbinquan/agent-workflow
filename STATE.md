@@ -1,4 +1,4 @@
-## 2026-11-17 RFC-503 意图的平台清单、图校验与维护命令迁出 composition（In Progress；`design/RFC-503-intent-use-cases-out-of-composition/`）
+## 2026-11-17 RFC-503 意图的平台清单、图校验与维护命令迁出 composition（Done；`design/RFC-503-intent-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的范围列 intent 等模块的余项，退出门要求组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-502 之后
   intent 组合层控制流实测 23 行，18 行在四个“用例写在 composition”的文件里（`platformInventory.ts` 9、`graphValidation.ts` 5、`maintenance.ts`
@@ -33,6 +33,17 @@
   （两边红法相同，或某一边多出撞时限）只放宽时限的副本两边全过（9 个文件，各 171 / 171），候选多出的 `rfc395-af2` 那一例 21.3 / 22.3 秒；
   报告类里候选慢的两例单独在两边同时跑，墙钟与 CPU 时间都相同。架构报告 60 项只差 `composition-control-flow-intent` 一项。实现门 PASS
   （本会话按路径限定自审，只审功能）。
+- **落地**：`448e40c78`（22 个文件；父提交是 `2f0406cb5`）。
+- **CI**：`448e40c78` 主 CI run 44222875990 的 70 个 job 里 68 个通过：Static scans 的依赖审计红（本提交不改依赖清单与锁文件，同一步骤在
+  父提交同样红，与提交无关）与随之红的 `CI required`；其余第 1 次全部通过，未重跑。落档提交 `2f0406cb5`（只改文档）：主 CI run
+  44185405801 第 1 次 66 个通过，依赖审计、macOS 的 e2e 分片 4/4 没有分到 runner、backend 分片 16/44 的 `rfc311-perf-guards` 一例
+  （那台 runner 上 PostgreSQL 慢，代码树与 `249e9f0b0` 相同）三格红与提交无关；只重跑失败的作业，第 2 次除依赖审计外全部通过。
+- **下一步**：RFC-294 S10 第十步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
+  后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
+  只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。intent 组合层余下 5 行
+  （`resourceCatalog.ts` 1 行，RFC-370 余项的 `crewstationArtifacts.ts` 3 行与 `crewstationScratch.ts` 1 行继续避让）；S10 的下一步是其余
+  模块（resource-catalog、system-operations、runtime-management、digital-employee 的余项）与收口，再到 S12；S9 余下的其他 context 对按对
+  另立；成员表一族另立。
 
 ## 2026-11-17 RFC-502 集成的开发适配器配置、代码托管交付、审批网关与工具连接目录迁出 composition（Done；`design/RFC-502-integration-development-use-cases-out-of-composition/`）
 
