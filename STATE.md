@@ -1,3 +1,22 @@
+## 2026-11-19 RFC-511 源码控制组合层的端口完整性核对迁出 composition（In Progress；`design/RFC-511-source-control-port-completeness-checks-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；source-control 组合层控制流
+  148 行，RFC-370 的 `crewstation*` / `taskImage*` 占 101 行，其余 11 个文件 47 行里有 28 行是端口的装配期完整性核对（交入的隔离工作区、仓库
+  Git 工作区、上传内容、排除配置、工作区只读查询、冲突合并效果与候选效果工厂不齐就抛原文错误）。用户 2026-11-02「好，你继续推进RFC294，过程
+  中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设
+  计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：5 组工作区端口核对迁入新的 `application/workspacePorts.ts`，候选效果工厂的核对迁入新的
+  `application/repositoryCandidateEffects.ts`，冲突合并效果的核对并入 `application/conflictMerge.ts`；7 个组合文件保留装配入口、选择与转出的
+  名字（含 public participants 从组合文件转出的两个 `require*`），从新位置取核对。清单见 design §3。
+- **不做**：装配期选择；`repositoryMirrors.ts` 的缓存仓库用例（另立后继）；`crewstation*` / `taskImage*`（RFC-370 余项）；改写任何判据；任何
+  行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。集中验证按名字、路径、错误串与直接取用
+  选用例与 HEAD A/B，全量语料交给 CI 的 backend 分片。独立对账（plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话
+  执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是端口的装配期完整性核对，落 application；组合文件只装配与选择。C11 public 不变（转
+  出的名字与开放类型的种类不变）；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-511 用例覆盖全部生产文件（下限 3,000）、全部用例（下
+  限 2,500）与 e2e 里的同名声明，另读 7 个组合文件与新位置。C13 `composition-control-flow-source-control` 148 → 实测，其余计数不升。
+
 ## 2026-11-19 RFC-510 任务执行组合层的端口完整性核对迁出 composition（Done；`design/RFC-510-task-execution-port-completeness-checks-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-509 之后 task-execution 组
@@ -31,8 +50,8 @@
   实现门 PASS（本会话按路径限定自审，只审功能；18 段代码与 HEAD 按词法单元逐个相同）。
 - **落地**：`90c631993`（23 个文件；父提交是 `d8ff84650`）。
 - **CI**：`90c631993` 主 CI run 44605266287 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
-  `d8ff84650`（只改文档）：主 CI run 44593469586 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的提交（只改文档）：CI 结果补记于后继 RFC 的
-  落档提交。
+  `d8ff84650`（只改文档）：主 CI run 44593469586 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的 `036df2e8c`（只改文档）：主 CI run
+  44612166013 在 RFC-511 落档时仍在运行，结果补记于 RFC-511 的实现提交。
 - **下一步**：RFC-294 S10 第十七步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
   已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
   没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。task-execution 组合层控制流 17 行：装配期选择 4 行与运行时
