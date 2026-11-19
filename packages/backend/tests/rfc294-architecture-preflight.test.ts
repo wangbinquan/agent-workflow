@@ -346,6 +346,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
+  // RFC-511: the two source-control completeness checks offered through public participants are declared in
+  // application/workspacePorts.ts (moved out of composition; same open types) — two entries relocated, none added.
   // RFC-485: the node-run, node-output and task-gate query factories reach collaboration through its participant bindings
   // and memory through its assembly input (task-execution's public offers the closed reads) — three entries settled.
   // RFC-482: five task-execution factories reach collaboration through its participant bindings (factory references
@@ -382,13 +384,13 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/runtime-management/domain/usageMeter.ts#JsonObject: unsafe/open type UnknownKeyword',
   // RFC-492: `modelKey` is no longer offered by runtime-management's public (only the driver family read it).
   'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',
-  'modules/source-control/composition/isolationWorkspaces.ts#requireIsolationWorkspaceScope: unsafe/open type UnknownKeyword',
+  'modules/source-control/application/workspacePorts.ts#requireIsolationWorkspaceScope: unsafe/open type UnknownKeyword',
+  'modules/source-control/application/workspacePorts.ts#requireWorkspaceUploadContent: unsafe/open type UnknownKeyword',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/util/log#Logger',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: unsafe/open type FunctionType',
   'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type FunctionType',
   'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type TypeQuery',
   'modules/source-control/composition/workspaceExcludeProfiles.ts#selectWorkspaceExcludeProfileFactory: unsafe/open type FunctionType',
-  'modules/source-control/composition/workspaceUploads.ts#requireWorkspaceUploadContent: unsafe/open type UnknownKeyword',
   'modules/source-control/infrastructure/crewstation/workspaceOwnership.ts#readHostedWorkspaceOwnerForBusinessTask: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/source-control/infrastructure/repositoryIdentityQueries.ts#existingRepositoryIds: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/source-control/infrastructure/repositoryIdentityQueries.ts#repositoryExistsExpression: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',

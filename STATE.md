@@ -15,7 +15,18 @@
   执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是端口的装配期完整性核对，落 application；组合文件只装配与选择。C11 public 不变（转
   出的名字与开放类型的种类不变）；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-511 用例覆盖全部生产文件（下限 3,000）、全部用例（下
-  限 2,500）与 e2e 里的同名声明，另读 7 个组合文件与新位置。C13 `composition-control-flow-source-control` 148 → 实测，其余计数不升。
+  限 2,500）与 e2e 里的同名声明，另读 7 个组合文件与新位置。C13 `composition-control-flow-source-control` 148 → 120（收紧到实测），其余
+  59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十八步**：清单（design §3）的名字只在各自的位置声明；两个新文件恰好声明、交出清单列的名字；7 个组合文件不再声明它们、
+  转出原有的名字，不再有 `TypeError` / `Error` 的构造，余下的控制流只是装配期选择（`conflictMerge.ts` 1 行、`repositoryCandidate.ts`
+  3 行）；新位置只取本模块的端口与 public participants 的类型，不用进程全局。生产文件 4,123 → 4,125；跨 context import 7,508 不变，public
+  surface 1,195 不变、偏差 56 不变（两条随声明位置改到新文件）。source-control 组合层控制流 148 → 120：余下的是 RFC-370 的
+  `crewstation*` / `taskImage*` 101 行与 19 行（装配期选择 8 行、`repositoryMirrors.ts` 的已登记仓库读取与远端登记用例 11 行），另立后继。
+- **集中验证**（基于 `036df2e8c` / `4353e15ee`，详见 plan）：没有查出本 RFC 的缺陷。backend `tsc` 0 错，eslint 无告警。首批 179 个文件按 CI
+  的跑法与对照 A/B：候选 1,748 条通过、72 条红，对照 1,736 条通过、71 条红，本 RFC 用例 13 / 13；候选多出的 3 条与对照多出的 2 条都撞默认的
+  5 秒，其余红两边相同、都是时限；直接覆盖 7 组核对的 rfc370 用例在候选一边全过。默认时限放宽到 60 秒后，两边各自多出的红所在的文件与另 4 个
+  同样撞 5 秒的文件两边各 98 / 98 全过；`rfc294-architecture-preflight` 的能力归属一例放宽到 1,800 秒后两边都通过。架构报告 60 项只差一项
+  `composition-control-flow-source-control`。实现门 PASS（本会话按路径限定自审，只审功能；12 段代码与 HEAD 按词法单元逐个相同）。
 
 ## 2026-11-19 RFC-510 任务执行组合层的端口完整性核对迁出 composition（Done；`design/RFC-510-task-execution-port-completeness-checks-out-of-composition/`）
 
@@ -51,7 +62,10 @@
 - **落地**：`90c631993`（23 个文件；父提交是 `d8ff84650`）。
 - **CI**：`90c631993` 主 CI run 44605266287 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
   `d8ff84650`（只改文档）：主 CI run 44593469586 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的 `036df2e8c`（只改文档）：主 CI run
-  44612166013 在 RFC-511 落档时仍在运行，结果补记于 RFC-511 的实现提交。
+  44612166013 的 70 个 job 第 1 次运行 68 个通过；design/ 的链接检查红：GitHub 对
+  `design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接重试 5 次后仍回 503（外部服务暂时不可用，该文件不在
+  这次提交里），`CI required` 只因它红；未重跑。后继 RFC-511 落档提交 `4353e15ee` 的 run 44616049713 里同一项链接检查通过（补记于 RFC-511 的
+  实现提交）。
 - **下一步**：RFC-294 S10 第十七步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
   已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
   没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。task-execution 组合层控制流 17 行：装配期选择 4 行与运行时

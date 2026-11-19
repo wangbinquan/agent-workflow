@@ -2,6 +2,10 @@ import type {
   WorkspaceExcludeParticipant,
   WorkspaceExcludeProfileFactory,
 } from '../public/participants'
+import {
+  requireWorkspaceExcludeParticipant,
+  requireWorkspaceExcludeProfileFactory,
+} from '../application/workspacePorts'
 import { bindWorkspaceExcludeParticipant } from '../infrastructure/workspaceExcludeBinding'
 
 /** Native configuration is read at the original per-repository binding boundary. */
@@ -20,9 +24,7 @@ export function selectWorkspaceExcludeProfileFactory(
           },
         })
       : selected
-  if (factory === null || typeof factory !== 'object' || typeof factory.bind !== 'function') {
-    throw new TypeError('Workspace exclude requires a complete profile factory')
-  }
+  requireWorkspaceExcludeProfileFactory(factory)
   return factory
 }
 
@@ -38,12 +40,6 @@ export function bindWorkspaceExcludeProfile(
   input: { readonly workspaceRef: string },
 ): WorkspaceExcludeParticipant {
   const participant = factory.bind(input)
-  if (
-    participant === null ||
-    typeof participant !== 'object' ||
-    typeof participant.ensure !== 'function'
-  ) {
-    throw new TypeError('Workspace exclude requires a complete profile participant')
-  }
+  requireWorkspaceExcludeParticipant(participant)
   return participant
 }

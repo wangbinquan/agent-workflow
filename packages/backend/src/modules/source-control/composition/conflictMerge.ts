@@ -3,6 +3,7 @@ import {
   finishConflictMerge,
   inspectConflictMerge,
   prepareConflictMerge,
+  requireConflictMergeWorkspaceEffects,
 } from '../application/conflictMerge'
 import type { RepositoryGit } from '../application/repositoryCommit'
 import type { ConflictMergeWorkspaceEffects } from '../application/ports/conflictMergeWorkspaceEffects'
@@ -22,21 +23,7 @@ export function bindConflictMergeParticipant(
   discard: BoundConflictOperation<typeof discardConflictMergeWorkspace>
 } {
   const selected = input.effects
-  if (
-    selected !== undefined &&
-    (selected === null ||
-      [
-        'allocate',
-        'cloneBaseline',
-        'run',
-        'installPlatformExclude',
-        'readConflictFile',
-        'mergeHeadExists',
-        'discard',
-      ].some((name) => typeof selected[name as keyof ConflictMergeWorkspaceEffects] !== 'function'))
-  ) {
-    throw new Error('conflict-merge-workspace-effects-incomplete')
-  }
+  requireConflictMergeWorkspaceEffects(selected)
   const effects = selected === undefined ? createFileConflictMergeWorkspaceEffects() : selected
   const forOperation = (request: NativeGitFixture): ConflictMergeWorkspaceEffects => {
     if (selected !== undefined) return effects

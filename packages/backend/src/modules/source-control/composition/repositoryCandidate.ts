@@ -19,32 +19,10 @@ import {
   type RepositoryCandidateOperationHost,
 } from '../application/ports/repositoryCandidateOperations'
 import type { RepositoryGit } from '../application/repositoryCommit'
+import { requireRepositoryCandidateEffectsFactory } from '../application/repositoryCandidateEffects'
 import { createFileRepositoryCandidateEffectsFactory } from '../infrastructure/local/fileRepositoryCandidateEffects'
 import { createFileRepositoryPublicationFixtureSession } from '../infrastructure/local/fileRepositoryPublicationFixture'
 import type { RepositoryPublicationTransport } from '../public/types'
-
-function validateFactory(selected: RepositoryCandidateEffectsFactory | undefined): void {
-  if (selected === undefined) return
-  if (selected === null || typeof selected !== 'object')
-    throw new Error('repository-candidate-effects-incomplete')
-  if (isRepositoryCandidateOperationHost(selected)) {
-    const operations = selected.operations as Partial<
-      RepositoryCandidateOperationHost['operations']
-    >
-    if (
-      operations === null ||
-      typeof operations !== 'object' ||
-      typeof operations.derive !== 'function' ||
-      typeof operations.stage !== 'function' ||
-      typeof operations.commit !== 'function' ||
-      typeof operations.push !== 'function'
-    )
-      throw new Error('repository-candidate-effects-incomplete')
-    return
-  }
-  if (typeof selected.acquire !== 'function')
-    throw new Error('repository-candidate-effects-incomplete')
-}
 
 function hostOf(
   selected: RepositoryCandidateEffectsFactory | undefined,
@@ -67,7 +45,7 @@ export function bindChangeCandidateParticipant(
   input: { readonly candidateEffects?: RepositoryCandidateEffectsFactory } = {},
 ) {
   const selected = input.candidateEffects
-  validateFactory(selected)
+  requireRepositoryCandidateEffectsFactory(selected)
   const host = hostOf(selected)
   const steps =
     host === undefined ? (selected as RepositoryCandidateStepEffectsFactory | undefined) : undefined
@@ -86,7 +64,7 @@ export function bindCandidateDeliveryParticipant(
   } = {},
 ) {
   const selected = input.candidateEffects
-  validateFactory(selected)
+  requireRepositoryCandidateEffectsFactory(selected)
   const host = hostOf(selected)
   const steps =
     host === undefined ? (selected as RepositoryCandidateStepEffectsFactory | undefined) : undefined
