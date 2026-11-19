@@ -1,4 +1,4 @@
-## 2026-11-19 RFC-509 开发自动化组合层的非 RFC-370 余项迁出 composition（In Progress；`design/RFC-509-development-automation-composition-remainder/`）
+## 2026-11-19 RFC-509 开发自动化组合层的非 RFC-370 余项迁出 composition（Done；`design/RFC-509-development-automation-composition-remainder/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-508 之后
   development-automation 组合层控制流 102 行，RFC-370 的 `crewstation*` / `taskImage*` 占 80 行，其余 7 个文件 22 行里 20 行是写在组合文件里
@@ -37,6 +37,17 @@
   14 个全过、1 个两边同红在用例自带的等待上；修正后的锁与默认 5 秒下红过的 6 个文件两边全过；10 个放宽自带时限的副本（含报告类
   2 个、`rfc310` 的系统 mock E2E 与 `rfc359-w14` 的终态唤醒）两边全过。架构报告 60 项只差一项
   `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；20 段代码与 HEAD 按词法单元逐个相同）。
+- **落地**：`de25526b7`（23 个文件；父提交是 `afd425c00`）。
+- **CI**：`de25526b7` 主 CI run 44581180318 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
+  `afd425c00`（只改文档，与 RFC-508 转 Done 同一提交）：主 CI run 44555911052 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的提交（只改文
+  档）：CI 结果补记于后继 RFC 的落档提交。
+- **下一步**：RFC-294 S10 第十六步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
+  已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
+  没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。development-automation 组合层的非 RFC-370 实现已清零，只剩
+  两处装配期选择（`evidenceStaging.ts`、`repositoryFactsScanner.ts` 各 1 行）；S10 的下一步是 task-execution 的组合层余项（14 个文件 42 行：
+  端口的装配期完整性核对与几处运行时绑定）、source-control（11 个文件 47 行）、resource-catalog（`resourceAcl.ts` 等 4 个文件
+  5 行）、system-operations、integration 与 code-capability 的余项与收口，再到 S12；`crewstation*` / `taskImage*` 待 RFC-370 余项；S9 余下的
+  其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-19 RFC-508 开发自动化的流水线证据端口与 MR 事实采集迁出 composition（Done；`design/RFC-508-delivery-pipeline-evidence-and-mr-facts-out-of-composition/`）
 

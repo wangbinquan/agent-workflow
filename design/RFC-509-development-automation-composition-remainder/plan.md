@@ -22,7 +22,7 @@
 - [x] AC-1 清单里的名字只在各自的位置声明；6 个组合文件只留装配入口、转出与装配期选择；装配入口与转出的名字不变
 - [x] AC-2 同样输入下各实现的结果、错误与端口调用和此前一致
 - [x] AC-3 新位置的依赖面是闭集；public surface 不升；`composition-control-flow-development-automation` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`de25526b7` 主 CI run 44581180318 的 70 个 job 第 1 次全部通过（见 §CI）
 
 ## 集中验证
 
@@ -99,7 +99,8 @@ HEAD 的树相同。集中验证查出本 RFC 的一处缺陷，修正后复验�
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `de25526b7`（实现，父提交是 `afd425c00`）：exact SHA 主 CI run 44581180318 的 70 个 job 第 1 次全部通过（含「Static scans」与
+  `CI required`），未重跑。
 - 本 RFC 的落档提交 `afd425c00`（只改文档，与 RFC-508 转 Done 同一提交）：主 CI run 44555911052 共 70 个 job，第一次运行全部通过。没有重跑。
 
 ## 实现门（本会话自审，只审功能）
