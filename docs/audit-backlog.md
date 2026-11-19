@@ -5762,6 +5762,18 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办：复现时在网关的 `connection` / `close` 事件上记录 socket 的关闭方与时刻，确认机制后再定改法（网关设 `keepAliveTimeout`、控制请求带
   `connection: close`，或客户端对连接级错误重试）。
 
+## `rfc190-overview-route` 的 `[postgresql]` 一例：`beforeEach` 钩子撞默认的 5 秒（2026-11-19 首见，CI 偶发，未处置）
+
+- 现象：主 CI run 44459197814（`0e8d143b9`，RFC-506 转 Done，只改文档）后端 ubuntu 12/44 分片里，「tasks 统计（HTTP，member 口径 + 7d
+  窗口 + canceled 不计）」[postgresql] 红在钩子：`a beforeEach/afterEach hook timed out for this test`（5,232 ms）。这一例写出默认配置后
+  约 4.9 秒才建出第一个用户（同文件上一例 [postgresql] 约 0.4 秒）。钩子超时之后，用例之间报了一条未处理的错误
+  `ForbiddenError: user access actor is not active`（`tests/helpers/userFixture.ts:90`），排在钩子超时之后，看起来是夹具在这一例拆掉后
+  仍在建用户的连带。
+- 归因：该提交只改五个文档文件。同一棵 backend 树在 RFC-506 实现提交 `88011e010` 的 run 44455094940 与 RFC-507 落档提交 `23d235187`
+  的 run 44459633183 上，同一分片的这个文件都全部通过（这一例 652 ms 与 1,027 ms）。用例属 RFC-190，未改、未重跑。
+- 待办：再次出现时先看同片 PostgreSQL 服务容器在这一例期间的状态，以及 `beforeEach` 里各步（`buildHarness` 打开应用、建四个用户的慢速
+  哈希，再种资源与任务）的耗时，再决定是给钩子写明预算，还是把建用户改为按需。
+
 ## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
 
 实现门（基准 `0244e0e24`，见 RFC-395 plan「实现门与设计门」）三条 P2 证据缺口里，下面两条只做了部分处置：

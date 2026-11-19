@@ -168,7 +168,11 @@
   `CI required`），未重跑。
 - 本 RFC 的落档提交 `6ba5d66c9`（只改文档，同一提交记下 RFC-505 转 Done 提交 `7f0e056c3` 的 CI 当时仍排队）：主 CI run 44393041030
   共 70 个 job，第一次运行全部通过。没有重跑。
-- 补记（RFC-507 的落档提交）：转 Done 的 `0e8d143b9`（只改文档）：主 CI run 44459197814 在本提交时仍排队，结果补记于 RFC-507 的实现提交。
+- 转 Done 的 `0e8d143b9`（只改文档）：主 CI run 44459197814 的 70 个 job 里 68 个通过（补记于 RFC-507 的实现提交）。红的一格是
+  `Backend tests (ubuntu-latest shard 12/44)`，「CI required」随之红：`rfc190-overview-route` 的「tasks 统计（HTTP，member 口径 + 7d 窗口 +
+  canceled 不计）」PostgreSQL 一例的 `beforeEach` 钩子撞默认的 5 秒（5,232 ms），随后用例之间报了一条连带的未处理错误。归因：该提交只改文
+  档；同一棵 backend 树在实现提交 `88011e010` 的 run 44455094940 与 RFC-507 落档提交 `23d235187` 的 run 44459633183 上，同一分片的这个文件都
+  全部通过。用例属 RFC-190，未改、未重跑；登记于 `docs/audit-backlog.md`。
 
 ## 实现门（本会话自审，只审功能）
 

@@ -12,10 +12,27 @@
   RFC-370 文件（后继）；`crewstation*` / `taskImage*`（RFC-370 余项）；改写任何判据；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
   到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组用例，都落 application；`graphDevelopment.ts` 只装配、没有控制流；不新增
-  用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-507 用例覆盖全部生产文件（下限 3,000）、全部用例
-  （下限 2,500）与 e2e 里的同名声明，另读组合文件与两个新位置。C13 `composition-control-flow-development-automation` 133 → 实测，其余计数
-  不升。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组用例，都落 application；`graphDevelopment.ts` 只装配、没有控制流；不新增用例
+  入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-507 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）
+  与 e2e 里的同名声明，另读组合文件与两个新位置。C13 `composition-control-flow-development-automation` 133 → 119（收紧到实测），其余 59 项实
+  测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十四步**：清单（design §3）的名字只在各自的新位置声明；两个新文件恰好声明、交出清单列的名字，`graphDevelopment.ts` 只
+  声明并导出原有的装配入口与类型，转出的五个名字不变；组合文件没有控制流语句，三个实现在生产代码里都只在该文件调用一次，晚建的执行消费、员工
+  工作区与交付桥以转发函数交入；新位置的依赖面是闭集、不用进程全局（只取 shared、zod、本模块的 domain、application 与 `application/ports`，
+  以及 source-control 的 public types）。生产文件 4,113 → 4,115；跨 context import 7,504 → 7,506（证据验收的新文件取 source-control public
+  types 的两条类型边），public surface 不变。development-automation 组合层控制流 133 → 119，非 RFC-370 的余项是 9 个文件 39 行，循环只剩
+  `pipelineEvidence.ts` 一处。
+- **集中验证**（基于 `23d235187`，详见 plan）：查出本 RFC 的一处缺陷，已修正并复验：guard-manifest 给本 RFC 用例的条目漏了
+  `assertsAbsence: true`，`rfc317-guard-negative-fixture` 逐条比对用例实际是否断言“不存在”，因此红；补上这一项。backend `tsc` 0 错，eslint
+  无告警。首批（修正前）按 CI 的跑法跑 226 个文件、与对照 A/B：候选 2,349 条通过、344 条红，对照 2,341 条通过、339 条红；本 RFC 用例
+  13 / 13，图开发的用例两边相同，候选多出的 10 条除 `rfc317` 外都撞时限。全量 SQLite（修正前）2,952 个文件 2,929 个通过，其余 23 个除
+  `rfc317`、发布账本（导出仓库的历史）与四处等待或看门狗到点外都撞自带时限；取到本 RFC 改动代码的 262 个文件里 257 个通过。修正后，读
+  guard-manifest 的 142 个用例在候选 2 上 139 个通过（含 `rfc317-guard-negative-fixture` 17 / 17 与本 RFC 用例），红的 3 个是报告类与负对照
+  撞自带时限。任一边红过的 68 个文件放宽默认时限复跑：候选 1,073 条通过、33 条红，对照 1,072 条、33 条；两边共同红的 29 条失败名相同，各自多
+  出的 4 条都撞时限或等待到点。13 个放宽自带时限的副本（报告类 3 个、取到本 RFC 改动代码的 7 个、候选多出的另 3 个）两边各 181 条通过、1 条
+  红，红的那条两边相同（`rfc395-v3-old-epoch-unpack` 的 PostgreSQL 一段撞测试辅助自带的 90 秒钩子时限，不取本 RFC 改动的代码）。架构报告
+  60 项只差一项 `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；五段函数体与 HEAD 按词法单元
+  逐个相同）。
 
 ## 2026-11-18 RFC-506 身份访问的改密用例与意图目录的演员绑定迁出 composition（Done；`design/RFC-506-password-reset-and-catalog-actor-binding-out-of-composition/`）
 
@@ -51,9 +68,11 @@
   与只红在候选的 2 个只放宽时限（副本，默认 1,500 秒）再跑：11 个文件两边都是 109 条通过、0 条红。架构报告 60 项只差两项
   `composition-control-flow-*`。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **落地**：`88011e010`（13 个文件；父提交是 `6ba5d66c9`）。
-- **CI**：`88011e010` 主 CI run 44455094940 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
-  `6ba5d66c9`（只改文档）：主 CI run 44393041030 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的 `0e8d143b9`（只改文档）：主 CI
-  run 44459197814 在 RFC-507 落档时仍排队，结果补记于 RFC-507 的实现提交。
+- **CI**：`88011e010` 主 CI run 44455094940 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交 `6ba5d66c9`
+  （只改文档）：主 CI run 44393041030 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的 `0e8d143b9`（只改文档）：主 CI run 44459197814 的
+  70 个 job 里 68 个通过（补记于 RFC-507 的实现提交）：后端 ubuntu 12/44 分片里 `rfc190-overview-route` 的 PostgreSQL 一例 `beforeEach` 钩子
+  撞默认的 5 秒，「CI required」随之红；该提交只改文档，同一棵 backend 树在 `88011e010` 与 `23d235187` 的 CI 上这个文件都通过；用例属
+  RFC-190，未改、未重跑，登记于 `docs/audit-backlog.md`。
 - **下一步**：RFC-294 S10 第十三步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。identity-access 组合层控制流归零，

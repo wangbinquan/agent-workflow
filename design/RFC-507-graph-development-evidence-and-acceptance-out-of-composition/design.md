@@ -125,6 +125,9 @@ development-automation 组合层控制流（F13 口径，按语法树计数）13
 - **对象字段走样**：路由按 `GraphDevelopment` 的字段调用；`graph` 的字段名与签名逐个保留，由 `tsc` 与路由用例覆盖。
 - **遗留引用**：装配入口不变，使用方不改；迁移后按名字、路径片段与代码里的字符串字面量全仓再扫，另按全部文件类型扫一遍。
 - **按原始文本扫的锁误计**：新文件的注释不写组合文件的路径（RFC-506 的教训）。
+- **账本漏标**：guard-manifest 的 `assertsAbsence` 要与用例实际是否断言“不存在”一致，`rfc317-guard-negative-fixture` 按
+  `tests/architecture/census.ts` 的判据逐条比对。本 RFC 用例断言清单里的名字不在别处声明、组合文件没有控制流，属于断言“不存在”，
+  条目须标 `assertsAbsence: true`（RFC-505、506 的条目都标了）。集中验证第一轮因漏标红过，已补（见 plan）。
 
 ## 6. 取舍（可推翻）
 
