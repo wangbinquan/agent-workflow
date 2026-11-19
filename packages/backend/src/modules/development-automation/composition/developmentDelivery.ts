@@ -1,7 +1,7 @@
 // RFC-471（RFC-294 W9-D）—— 开发交付的组装：由 `services/developmentDeliveryDeps.ts` 迁来，函数体原样，只把
 // 「`provider.resolveBinding` 再调 integration」换成注入的端口——MR effects（`MrEffectsPort`）与 MR 原始事实
 // （`DevelopmentMrFactsSourcePort`），实现是 integration `composition/codeHostEffects.ts` 的组装，按结构满足、装配根注入。
-// MR 事实的 cell 投影、快照摘要（`snapshotRef`）与线程摘要只在这里做。
+// MR 事实的读取与采集（cell 投影、快照摘要 `snapshotRef` 与线程摘要）在 application 的 `developmentMrFacts.ts`（RFC-508）。
 
 import type {
   MergeRequestFactsCollectorPort,
@@ -11,8 +11,10 @@ import type {
 } from '../application/ports/reconcilerPorts'
 import type { DevelopmentMrFactsSourcePort } from '../application/ports/developmentDelivery'
 import type { PipelineStagingFactories } from '../application/ports/evidenceStaging'
-import { canonicalDigest } from '../domain/canonicalJson'
-import { projectMrCells } from '../domain/mrFacts'
+import {
+  createDevelopmentMrFacts,
+  createDevelopmentMrFactsCollector,
+} from '../application/developmentMrFacts'
 import type { DevelopmentDeliveryProvider } from '../infrastructure/developmentDeliveryProvider'
 import type { SelectedPipelineEvidenceExecution } from '../composition'
 import {
@@ -20,7 +22,6 @@ import {
   composeSelectedDevelopmentPipelineEvidence,
   type LegacyPipelineEvidencePort,
 } from './pipelineEvidence'
-import { sha256Hex } from '@/util/hash'
 
 type PipelineEvidenceExecution = Parameters<typeof composeLegacyDevelopmentPipelineEvidence>[0]
 
@@ -77,38 +78,7 @@ export function composeDevelopmentDeliveryDeps(deps: {
   const repoRemote: RepoRemotePort = {
     resolve: (repositoryId) => provider.resolveRepository(repositoryId),
   }
-  const mrFacts = {
-    async collect(repositoryId: string, mrRef: string, selfMarker: string) {
-      // RFC-471: a missing binding is the source's `code-host-connection-missing` (same code, same text).
-      const result = await deps.mrFacts.collect(repositoryId, mrRef, { selfMarker })
-      if (!result.ok) return result
-      return {
-        ok: true as const,
-        snapshot: {
-          state: result.snapshot.state,
-          headSha: result.snapshot.headSha,
-          targetSha: result.snapshot.targetSha,
-          targetBranch: result.snapshot.targetBranch,
-          draft: result.snapshot.draft,
-          mergeableState: result.snapshot.mergeableState,
-          approvalHold: result.snapshot.approvalHold,
-          mergedCommitSha: result.snapshot.mergedCommitSha,
-          unresolvedReviewCount: result.snapshot.threads.filter(
-            (thread) => !thread.resolved && thread.authorClass !== 'self',
-          ).length,
-          reviewThreads: result.snapshot.threads.map((thread) => ({
-            threadRef: thread.threadRef,
-            revision: thread.revision,
-            authorClass: thread.authorClass,
-            resolved: thread.resolved,
-            body: thread.lastBody,
-            path: thread.path,
-            messages: thread.messages,
-          })),
-        },
-      }
-    },
-  }
+  const mrFacts = createDevelopmentMrFacts({ mrFacts: deps.mrFacts })
   return {
     repoRemote,
     mrEffects: deps.mrEffects,
@@ -122,51 +92,12 @@ export function composeDevelopmentMrFactsCollector(deps: {
   readonly provider: Pick<DevelopmentDeliveryProvider, 'readMrFactTarget'>
   readonly mrFacts: DevelopmentMrFactsSourcePort
 }): { readonly mergeRequestFacts: MergeRequestFactsCollectorPort } {
-  const provider = deps.provider
   return {
-    mergeRequestFacts: {
-      async collect(input) {
-        if (input.mrClaimId === null) {
-          throw new Error(`mission ${input.missionId} has no MR claim to collect facts for`)
-        }
-        const target = await provider.readMrFactTarget({
-          missionId: input.missionId,
-          mrClaimId: input.mrClaimId,
-        })
-        if (target === null) throw new Error(`mr claim ${input.mrClaimId} or mission not found`)
-        const out = await deps.mrFacts.collect(target.repositoryId, target.mrIid, {
-          selfMarker: input.missionId,
-        })
-        if (!out.ok) {
-          // RFC-471: the binding is resolved by the source; its missing-binding code keeps the original text.
-          if (out.code === 'code-host-connection-missing') {
-            throw new Error(`no code-host binding for repository ${target.repositoryId}`)
-          }
-          throw new Error(`mr facts collect failed: ${out.code}: ${out.detail}`)
-        }
-        const snapshot = out.snapshot
-        const snapshotRef = canonicalDigest(snapshot)
-        const now = Date.now()
-        return {
-          cells:
-            snapshot.headSha === null
-              ? {}
-              : projectMrCells({ ...snapshot, headSha: snapshot.headSha }, 0, snapshotRef, now),
-          snapshotRef,
-          headSha: snapshot.headSha,
-          targetSha: snapshot.targetSha,
-          threads: snapshot.threads.map((thread) => ({
-            threadRef: thread.threadRef,
-            revision: thread.revision,
-            authorClass: thread.authorClass,
-            resolved: thread.resolved,
-            bodyDigest: sha256Hex(thread.lastBody),
-            body: thread.lastBody,
-            path: thread.path,
-          })),
-        }
-      },
-    },
+    mergeRequestFacts: createDevelopmentMrFactsCollector({
+      provider: deps.provider,
+      mrFacts: deps.mrFacts,
+      now: () => Date.now(),
+    }),
   }
 }
 

@@ -16,7 +16,20 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是流水线证据端口的实现与 MR 事实的读取、采集，都落 application；两个组合文件只装
   配、没有控制流；不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-508 用例覆盖全部生产文件（下限
   3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读两个组合文件、两个新位置与 `reconcilerPorts.ts`。C13
-  `composition-control-flow-development-automation` 119 → 实测，其余计数不升。
+  `composition-control-flow-development-automation` 119 → 102（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十五步**：清单（design §3）的名字只在各自的新位置声明；两个新文件恰好声明、交出清单列的名字，两个组合文件只声明并导出
+  原有的装配入口与类型，`pipelineEvidence.ts` 转出旧实现的两个名字不变；组合文件没有控制流语句，三个实现在生产代码里都只在组合文件调用一次；
+  新位置的依赖面是闭集、不用进程全局（只取本模块的 domain、application 与 `application/ports`，以及 `@/util/hash`），integration 的执行面以
+  结构同形的端口表达。生产文件 4,115 → 4,117；跨 context import 7,506 不变（MR 事实采集取 `@/util/hash` 的那条边随代码移到新文
+  件），`off-dag-offered-file-context-pairs` 仍是 45，public surface 不变。development-automation 组合层控制流 119 → 102，非 RFC-370 的余项
+  是 7 个文件 22 行，已没有循环。
+- **集中验证**（基于 `1e2af4f0c`，详见 plan）：没有查出本 RFC 的缺陷。backend `tsc` 0 错，eslint 无告警。首批按 CI 的跑法跑 215 个文件、与对
+  照 A/B：候选 2,178 条通过、305 条红，对照 2,159 条通过、306 条红；本 RFC 用例 18 / 18，钉着这两个文件与装配入口的用例两边相同、全过，两边
+  各自多出的 5 条与 6 条都撞时限。全量 SQLite 因负载升到 174 进度很慢，为加快推进跑完较慢的 1,441 个文件后停下：1,431 个通过，其余 10 个除发
+  布账本（导出仓库的历史）外都撞自带时限或等待到点；取到本 RFC 改动代码的 308 个文件里 305 个通过，红的 3 个（`rfc167`、`rfc300`、`tasks`）
+  放宽时限的副本两边全过。全量没跑的一半里取到改动代码的 57 个文件补跑、与对照 A/B：两边共同红的失败名相同，候选多出的 2 条放宽时限的副本两
+  边全过。报告类的 `rfc294-architecture-preflight` 放宽时限的副本两边都 14 / 14。架构报告 60 项只差一项
+  `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；五段函数体与 HEAD 按词法单元逐个相同）。
 
 ## 2026-11-18 RFC-507 开发自动化的图开发执行端口、证据与验收迁出 composition（Done；`design/RFC-507-graph-development-evidence-and-acceptance-out-of-composition/`）
 
@@ -56,7 +69,7 @@
 - **落地**：`fa4398837`（11 个文件；父提交是 `23d235187`）。
 - **CI**：`fa4398837` 主 CI run 44504341206 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
   `23d235187`（只改文档）：主 CI run 44459633183 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的 `155d8c0fc`（只改文档）：主 CI run
-  44509781998 在 RFC-508 落档时仍排队，结果补记于 RFC-508 的实现提交。
+  44509781998 的 70 个 job 第 1 次全部通过，未重跑（补记于 RFC-508 的实现提交）。
 - **下一步**：RFC-294 S10 第十四步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
   已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
   没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。development-automation 组合层的非 RFC-370 余项是 9 个文件

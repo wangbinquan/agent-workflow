@@ -1,4 +1,4 @@
-import type { EvidenceStagingLease } from './evidenceStaging'
+import type { EvidenceStagingLease, EvidenceStagingReference } from './evidenceStaging'
 type Completion<T> = T | Promise<T>
 // RFC-310 PR-2 —— reconciler 消费的窄执行端口（T26）。
 //
@@ -553,6 +553,67 @@ export interface PipelineEvidencePort {
         readonly runRef: string
         readonly attempt: number
         readonly providerReceiptRef: string
+      }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
+  >
+}
+
+/**
+ * RFC-508 —— 选定的 pipeline 执行面：integration 选定执行面的结构同形，装配根注入，本模块不 import integration。入参是
+ * `PipelineEvidencePort` 同名方法的入参加一份暂存引用；暂存的分配、核对与关闭在 `PipelineEvidencePort` 的实现里。envelope 只写
+ * 实现读到的字段。
+ */
+export interface SelectedPipelineEvidenceRunnerPort {
+  collect(input: {
+    readonly adapterBindingRef: string
+    readonly headSha: string
+    readonly targetSha: string
+    readonly gateKeys: readonly string[]
+    readonly staging: EvidenceStagingReference
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly envelope: PipelineCollectEnvelopeDto
+        readonly outputBudget: {
+          readonly maxFiles: number
+          readonly maxFileBytes: number
+          readonly maxTotalBytes: number
+        }
+      }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
+  >
+  trigger(input: {
+    readonly adapterBindingRef: string
+    readonly headSha: string
+    readonly gateKeys: readonly string[]
+    readonly idempotencyKey: string
+    readonly staging: EvidenceStagingReference
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly envelope: {
+          readonly runRef: string
+          readonly providerReceiptRef: string
+          readonly adopted: boolean
+        }
+      }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
+  >
+  rerun(input: {
+    readonly adapterBindingRef: string
+    readonly runRef: string
+    readonly gateKey: string
+    readonly headSha: string
+    readonly idempotencyKey: string
+    readonly staging: EvidenceStagingReference
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly envelope: {
+          readonly runRef: string
+          readonly attempt: number
+          readonly providerReceiptRef: string
+        }
       }
     | { readonly ok: false; readonly failure: OperationFailureReceipt }
   >
