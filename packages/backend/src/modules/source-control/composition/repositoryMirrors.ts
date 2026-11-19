@@ -1,5 +1,6 @@
-// RFC-370 §10 V17 — the selected repository mirrors (see the port).
-import { gitUrlCacheKeyWith, parseGitUrl } from '@agent-workflow/shared'
+// RFC-370 §10 V17 — the selected repository mirrors (see the port). RFC-512: the reads, the registration and the
+// refresh are application use cases (application/repositoryMirrors.ts); this assembly selects standalone or
+// hosted and hands each its effects.
 import type { SecretBox } from '@/auth/secretBox'
 import {
   ensureCachedRepoIdentity,
@@ -7,21 +8,20 @@ import {
   rowToCached,
 } from '../infrastructure/local/repositoryMirrorCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { sha1Hex } from '@/util/hash'
 import {
   createKnownPathRepositoryReads,
   getRepoFiles,
   getRepoRefs,
 } from '../infrastructure/local/repositoryIntrospection'
-import type {
-  CachedRepositoryRecord,
-  RepositoryWorkspaceStore,
-} from '../ports/repositoryWorkspaceStore'
+import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 import type {
   RepositoryMirrors,
   RepositoryRemoteEffects,
 } from '../application/ports/repositoryMirrors'
+import {
+  createLocalRepositoryMirrors,
+  createRemoteRepositoryMirrors,
+} from '../application/repositoryMirrors'
 
 export function composeRepositoryMirrors(input: {
   readonly store: RepositoryWorkspaceStore
@@ -32,66 +32,25 @@ export function composeRepositoryMirrors(input: {
    * daemon's own mirror clones. */
   readonly remote?: RepositoryRemoteEffects
 }): RepositoryMirrors {
-  const registered = async (id: string): Promise<CachedRepositoryRecord> => {
-    const row = await input.store.findCachedRepoById(id)
-    if (row === null)
-      throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
-    return row
-  }
   const remote = input.remote
   if (remote === undefined) {
-    const local = async <T>(id: string, read: (path: string) => Promise<T>): Promise<T> => {
-      const row = await registered(id)
-      try {
-        return await read(row.localPath)
-      } catch (error) {
-        // The wire never carries a mirror's local path (RFC-204: a historical
-        // slug can embed a token); the repository id names it instead.
-        if (error instanceof DomainError)
-          throw new DomainError(error.code, `cached repo '${id}': ${error.code}`, error.status)
-        throw error
-      }
-    }
-    return {
-      refs: (id) => local(id, (path) => getRepoRefs(path)),
-      files: (id) => local(id, getRepoFiles),
+    return createLocalRepositoryMirrors({
+      store: input.store,
+      reads: { refs: (path) => getRepoRefs(path), files: getRepoFiles },
       // RFC-446: the `?path=` form reads only inside a registered mirror (the
       // check routes/repos.ts used to make before calling these).
       local: createKnownPathRepositoryReads(() => input.store.listKnownRepositoryPaths()),
-    }
+    })
   }
   const now = input.now ?? Date.now
-  const remoteOf = (row: CachedRepositoryRecord): string => {
-    const url = unsealRepoUrl(row, input.secretBox, input.store)
-    if (url === null)
-      throw new DomainError(
-        'repo-url-unavailable',
-        `cached repo '${row.id}' has no readable URL (sealed with a different secret.key?), so its remote cannot be read`,
-        409,
-        { url: row.urlRedacted },
-      )
-    return url
-  }
-  /** A verified remote counts as fetched: the platform reached it just now. */
-  const recordVerified = async (id: string, defaultBranch: string | null): Promise<void> => {
-    await input.store.updateCachedRepo(id, { defaultBranch, lastFetchedAt: now() })
-    invalidateRepoFacetsCache(input.store)
-  }
-  return {
-    refs: async (id) => remote.refs(remoteOf(await registered(id))),
-    files: async (id) => remote.files(remoteOf(await registered(id))),
-    remoteRegistration: {
-      async register(url) {
-        const parsed = parseGitUrl(url)
-        if (parsed === null)
-          throw new ValidationError('repo-url-invalid', 'unsupported or malformed Git URL')
-        const facts = await remote.verify(url)
-        const before = await input.store.findCachedRepoByHash(
-          gitUrlCacheKeyWith(parsed, sha1Hex).hash,
-        )
-        // The same identity row a hosted URL launch records; the content is
-        // fetched by each task inside its own volume.
-        const identity = await ensureCachedRepoIdentity(
+  return createRemoteRepositoryMirrors({
+    store: input.store,
+    remote,
+    now,
+    cache: {
+      unsealUrl: (row) => unsealRepoUrl(row, input.secretBox, input.store),
+      ensureIdentity: (url) =>
+        ensureCachedRepoIdentity(
           {
             store: input.store,
             ...(input.appHome === undefined ? {} : { appHome: input.appHome }),
@@ -99,24 +58,9 @@ export function composeRepositoryMirrors(input: {
             now,
           },
           { url },
-        )
-        await recordVerified(identity.cachedRepoId, facts.defaultBranch)
-        return { cachedRepoId: identity.cachedRepoId, created: before === null }
-      },
-      async refresh(id) {
-        const row = await registered(id)
-        const facts = await remote.verify(remoteOf(row))
-        await recordVerified(id, facts.defaultBranch)
-        const updated = await registered(id)
-        return {
-          item: rowToCached(updated, await input.store.cachedRepoReferenceCount(id)),
-          fetchOk: true,
-          fetchError: null,
-          submoduleSyncOk: updated.lastSubmoduleSyncOk ?? true,
-          submoduleSyncError: updated.lastSubmoduleSyncError ?? null,
-          hasSubmodules: updated.hasSubmodules ?? false,
-        }
-      },
+        ),
+      invalidateFacets: () => invalidateRepoFacetsCache(input.store),
+      project: rowToCached,
     },
-  }
+  })
 }

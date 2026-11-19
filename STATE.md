@@ -15,7 +15,17 @@
   执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是用例，落 application；组合文件只做选择与注入。C11 public 不变；不导出 SQL 片段、
   行形状查询工厂或状态写原子。C12 RFC-512 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读组合文件与新位
-  置。C13 `composition-control-flow-source-control` 120 → 实测，其余计数不升。
+  置。C13 `composition-control-flow-source-control` 120 → 110（收紧到实测），其余 59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十九步**：清单（design §3）的名字只在各自的位置声明；新文件恰好声明、交出三个名字，端口文件只多两个类
+  型；`composition/repositoryMirrors.ts` 只声明、只交出 `composeRepositoryMirrors`，控制流只剩一处选择，不构造错误，不再取地址解析、错误与散
+  列；新文件只取地址解析、错误、散列与本模块的端口，不用进程全局（时钟由装配注入）。生产文件 4,125 → 4,126；跨 context import 7,508 不
+  变，public surface 不变。source-control 组合层控制流 120 → 110：余下的是 RFC-370 的 `crewstation*` / `taskImage*` 101 行与 9 行装配期选
+  择。
+- **集中验证**（基于 `f4a79d7ce`，详见 plan）：查出本 RFC 的一处缺陷，已修正并复验：本 RFC 用例里刷新投影的替身与 `toEqual` 推出的类型不符
+  （只在类型层，`tsc` 报出），改为先赋给 `unknown`。候选 2 的 backend `tsc` 0 错，eslint 无告警；本 RFC 用例与读 guard-manifest 的三个普查用
+  例在候选 2 上通过。首批 155 个文件按 CI 的跑法与对照 A/B：候选 1,523 条通过、13 条红，对照 1,505 条通过、17 条红，本 RFC 用例 14 / 14；候
+  选多出的 1 条与对照多出的 5 条都是时限，其余红两边相同、都是时限；直接覆盖装配入口的托管与单机用例两边全过。架构报告 60 项只差一项
+  `composition-control-flow-source-control`。实现门 PASS（本会话按路径限定自审，只审功能；12 段代码与 HEAD 按词法单元逐个相同）。
 
 ## 2026-11-19 RFC-511 源码控制组合层的端口完整性核对迁出 composition（In Progress；`design/RFC-511-source-control-port-completeness-checks-out-of-composition/`）
 

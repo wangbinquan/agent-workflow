@@ -9,6 +9,7 @@
 // remote before recording the same identity row a hosted URL launch records,
 // and a refresh verifies it again.
 import type { CachedRepo, RepoFilesResponse, RepoRefsResponse } from '@agent-workflow/shared'
+import type { CachedRepositoryRecord } from '../../ports/repositoryWorkspaceStore'
 
 /** What the remote answered while being verified. */
 export interface RepositoryRemoteFacts {
@@ -57,4 +58,19 @@ export interface RepositoryMirrors {
     register(url: string): Promise<RepositoryRegistration>
     refresh(cachedRepoId: string): Promise<RepositoryRefresh>
   }
+}
+
+/** RFC-512 — reads inside one repository directory on the daemon's own disk. */
+export type RepositoryDirectoryReads = NonNullable<RepositoryMirrors['local']>
+
+/** RFC-512 — what the mirror use cases need from the mirror cache and the URL seal. */
+export interface RepositoryMirrorCache {
+  /** The registered repository's URL; null when its seal cannot be opened here. */
+  unsealUrl(row: CachedRepositoryRecord): string | null
+  /** The identity row for a URL, recorded when it is new. */
+  ensureIdentity(url: string): Promise<{ readonly cachedRepoId: string }>
+  /** Drops the cached repository facets after a verified remote is recorded. */
+  invalidateFacets(): void
+  /** The wire projection of a registered repository. */
+  project(row: CachedRepositoryRecord, referencingTaskCount: number): CachedRepo
 }
