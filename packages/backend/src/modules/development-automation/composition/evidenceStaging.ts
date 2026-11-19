@@ -23,7 +23,7 @@ import {
   createFileEvidenceDocumentCommands,
   createFileEvidenceDocumentCommandsOnFirstWrite,
 } from '../infrastructure/local/fileEvidenceDocumentCommands'
-import { assertEvidenceStagingFactory } from '../application/evidenceStaging'
+import { selectedRequirementMaterializerContent } from '../application/evidenceStaging'
 
 /** Owner composition selects the writer, artifact receiver and staging together. */
 export function composeRequirementMaterializerContent(input: {
@@ -36,11 +36,10 @@ export function composeRequirementMaterializerContent(input: {
   readonly documentCommands: EvidenceDocumentCommands
 } {
   if (input.staging !== undefined) {
-    assertEvidenceStagingFactory(input.staging)
-    if (typeof input.documentCommands?.writeDocument !== 'function') {
-      throw new Error('requirement-selected-content-incomplete:documentCommands')
-    }
-    return { staging: input.staging, documentCommands: input.documentCommands }
+    return selectedRequirementMaterializerContent({
+      staging: input.staging,
+      documentCommands: input.documentCommands,
+    })
   }
   const documentCommands =
     input.documentCommands ??

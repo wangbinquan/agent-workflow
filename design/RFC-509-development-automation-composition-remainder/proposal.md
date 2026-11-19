@@ -41,7 +41,7 @@ RFC-508 之后，development-automation 组合层的控制流（F13 口径）共
   - 选定内容的完整性核对迁入既有的 `application/evidenceStaging.ts`（`selectedRequirementMaterializerContent`）。
 - **G2 composition 只装配**：6 个组合文件保留各自的装配入口与转出的名字，从新位置取实现；只留两处装配期选择。
 - **G3 账本与锁**：`composition-control-flow-development-automation` 102 → 82（按实测）；RFC-310 的 OS 架构清单随 import 的移动更新；钉着这些
-  文件与装配根的既有用例不改且仍通过；新增 RFC-509 用例。
+  文件与装配根的既有用例仍通过（`rfc344-operation-catalog` 里读组合文件原文的一段随唤醒改读新位置，见 design D5）；新增 RFC-509 用例。
 
 ## 3. 非目标
 

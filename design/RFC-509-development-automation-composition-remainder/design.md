@@ -116,8 +116,13 @@ mission，找不到就返回；记一条唤醒提示（`id: ulid()`、`source: '
   精确清单（`rfc310-digital-employee-os-architecture` 逐条比对）。增三个新文件取 `public/types` 的条目，删 `composition/graphDeliveryJob.ts`
   的条目（它只剩转出）；`composition/employeeCaseDetailProjection.ts` 与 `composition/graphDeliveryLifecycle.ts` 的签名仍用 digital-employee 的
   类型，条目保留。
-- 不改：RFC-396 的三个用例、`rfc337`、`rfc310-employee-case-runtime`、`rfc344`、`rfc359-w11`（运行时导出面）、`rfc359-w14`、`rfc359-p0`
-  夹具（按路径替换装配入口）、RFC-380 / RFC-317 / RFC-359 T3 读 bootstrap 原文的用例；`design/` 里的历史记述。
+- 随代码改的锁（集中验证查出，见 §5）：`rfc344-operation-catalog` 有一段读 `composition/executionTerminalObserver.ts` 的原文，要求其中出现
+  `missionIdOfExecutionRef` 与 `recordWakeHint`、不取 task-execution；`recordWakeHint` 随唤醒迁到 application 的新文件，这段改为同时读组合
+  文件与新文件（组合文件里有 `missionIdOfExecutionRef`，新文件里有 `recordWakeHint`，两者都不取 task-execution），意图不变。
+  `scripts/rfc359-p0-mutations.ts` 的指纹清单（变异运行前后核对目标文件未被改动，`rfc359-w14-p0-mutation-verdict` 断言每项存在）增
+  application 的新文件，与 RFC-400、RFC-480 迁移时的做法一致；P0 夹具仍按组合文件路径替换装配入口，不改。
+- 不改：RFC-396 的三个用例、`rfc337`、`rfc310-employee-case-runtime`、`rfc344` 的其余用例、`rfc359-w11`（运行时导出面）、`rfc359-w14`、
+  `rfc359-p0` 夹具（按路径替换装配入口）、RFC-380 / RFC-317 / RFC-359 T3 读 bootstrap 原文的用例；`design/` 里的历史记述。
 
 ## 3. 清单（退出门）
 
@@ -163,6 +168,9 @@ mission，找不到就返回；记一条唤醒提示（`id: ulid()`、`source: '
 - **清单漏改**：RFC-310 的 OS 架构清单随 import 的移动改三增一删（D5）。
 - **遗留引用**：装配入口与转出不变，使用方不改；迁移后按名字、路径片段与代码里的字符串字面量全仓再扫，另按全部文件类型扫一遍。
 - **按原始文本扫的锁误计**：新文件的注释不写组合文件的路径（RFC-506 的教训）。
+- **读原文的锁随代码走**：有的锁按原文读组合文件，要求迁走的调用仍出现在组合文件里。D5 起初只清点了按名字与路径取用组合文件的用例，
+  漏了 `rfc344-operation-catalog` 读 `composition/executionTerminalObserver.ts` 找 `recordWakeHint` 的一段；首批里它只在候选一边红，
+  已改为同时读新文件（D5）。迁移前按组合文件路径全仓扫用例里的 `readFileSync`，逐条核对它们要的文本是否随代码迁走。
 - **账本漏标**：guard-manifest 条目标 `assertsAbsence: true`（RFC-507 的教训）。
 
 ## 6. 取舍（可推翻）

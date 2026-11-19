@@ -667,6 +667,8 @@ export const sourceFiles = [
   'packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts',
   'packages/backend/src/modules/development-automation/composition.ts',
   'packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts',
+  // RFC-509: the terminal wake moved to application; the fixture still replaces the composition entry above.
+  'packages/backend/src/modules/development-automation/application/executionTerminalObserver.ts',
   'packages/backend/src/modules/development-automation/application/agentActionOrchestrator.ts',
   'packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/skillCatalogBootAdapter.ts',

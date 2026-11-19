@@ -124,6 +124,8 @@
   出，补记于 RFC-509 的实现提交（后继证据）。
 - 本 RFC 的落档提交 `1e2af4f0c`（只改文档，同一提交记下 RFC-507 转 Done 提交 `155d8c0fc` 的 CI 当时仍排队）：主 CI run 44511189599
   共 70 个 job，第一次运行全部通过。没有重跑。
+- 补记（RFC-509 的实现提交）：后继证据：转 Done 的 `afd425c00`（父提交是 `f07489c9c`，只改 `STATE.md` 与 `design/`）的主 CI run
+  44555911052 共 70 个 job，第一次运行全部通过（含 `Playwright e2e (macos-latest shard 2/4)` 与 `CI required`）。没有重跑。
 
 ## 实现门（本会话自审，只审功能）
 

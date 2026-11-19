@@ -834,13 +834,20 @@ describe('RFC-344 single inbound root source locks', () => {
     expect(configComposition).toContain('developmentAdapter: DevelopmentConfigResourceOperations')
     expect(configComposition).not.toContain("from '@/modules/integration/")
 
+    // RFC-509: the wake itself (find the mission, record the hint, drive it) is application code; the composition
+    // file keeps the assembly entry that hands it the execution-reference reader and the Mission persistence.
     const terminalObserver = readFileSync(
       join(ROOT, 'src/modules/development-automation/composition/executionTerminalObserver.ts'),
       'utf8',
     )
+    const terminalWake = readFileSync(
+      join(ROOT, 'src/modules/development-automation/application/executionTerminalObserver.ts'),
+      'utf8',
+    )
     expect(terminalObserver).toContain('missionIdOfExecutionRef')
-    expect(terminalObserver).toContain('recordWakeHint')
-    expect(terminalObserver).not.toContain("from '@/modules/task-execution/")
+    expect(terminalWake).toContain('recordWakeHint')
+    for (const source of [terminalObserver, terminalWake])
+      expect(source).not.toContain("from '@/modules/task-execution/")
 
     const adapterComposition = readFileSync(
       join(ROOT, 'src/modules/integration/composition/developmentAdapterConfigOperations.ts'),

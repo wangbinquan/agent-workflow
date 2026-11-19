@@ -19,7 +19,24 @@
   §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是 6 组实现，都落 application；6 个组合文件只装配，只留装配期选择；不新增用例入
   口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-509 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与
-  e2e 里的同名声明，另读 6 个组合文件与 6 个新位置。C13 `composition-control-flow-development-automation` 102 → 实测，其余计数不升。
+  e2e 里的同名声明，另读 6 个组合文件与 6 个新位置。C13 `composition-control-flow-development-automation` 102 → 82（收紧到实测），其余 59 项
+  实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第十六步**：清单（design §3）的名字只在各自的位置声明；四个新文件恰好声明、交出清单列的名字，两个既有 application 文件
+  交出新增的名字；6 个组合文件只声明并导出原有的装配入口、转出原有的名字（`activityOperations.ts` 运行时只导出装配入口），控制流只剩
+  `evidenceStaging.ts` 的一处选定或本地选择；新位置的依赖面是闭集、不用进程全局（只取本模块的 domain、application 与
+  `application/ports`、zod 与 digital-employee 的 public types）。生产文件 4,117 → 4,121；跨 context import 7,506 → 7,508（取
+  digital-employee public types 的类型边随代码移到新文件，参与者与类型包登记的两个类型组合文件的签名仍要
+  用），`off-dag-offered-file-context-pairs` 仍是 45，public surface 不变。development-automation 组合层控制流 102 → 82，非 RFC-370 的余项只
+  剩两处装配期选择（`evidenceStaging.ts`、`repositoryFactsScanner.ts` 各 1 行）。
+- **集中验证**（基于 `f07489c9c` / `afd425c00`，详见 plan）：查出本 RFC 的一处缺陷，已修正并复验：`rfc344-operation-catalog` 有一段按原文读
+  组合文件 `executionTerminalObserver.ts` 找 `recordWakeHint`，这个调用随唤醒迁到了 application，首批里这一例只在候选一边红；改为同时读新文
+  件（断言不变），P0 变异脚本的指纹清单增新文件。另有环境事故：08:02 左右系统的临时目录清理删掉了两个导出仓库里 3 天没碰过的文件，导出仓库从
+  `afd425c00` 重建，此后结束的结果两边作废重跑。backend `tsc` 0 错，eslint 无告警。首批 257 个文件按 CI 的跑法与对照 A/B：事故前结束的
+  171 个候选 1,775 条通过、170 条红，对照 1,770 条、175 条；重跑的 86 个候选 897 条通过、141 条红，对照 877 条、139 条；本 RFC 用例
+  22 / 22，两边各自多出的红除上面的缺陷外都撞时限、等待到点或是 mock 端口的连接重置。默认时限放宽到 60 秒后，先跑的 15 个重型 HTTP 文件两边
+  14 个全过、1 个两边同红在用例自带的等待上；修正后的锁与默认 5 秒下红过的 6 个文件两边全过；10 个放宽自带时限的副本（含报告类
+  2 个、`rfc310` 的系统 mock E2E 与 `rfc359-w14` 的终态唤醒）两边全过。架构报告 60 项只差一项
+  `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；20 段代码与 HEAD 按词法单元逐个相同）。
 
 ## 2026-11-19 RFC-508 开发自动化的流水线证据端口与 MR 事实采集迁出 composition（Done；`design/RFC-508-delivery-pipeline-evidence-and-mr-facts-out-of-composition/`）
 
@@ -55,9 +72,10 @@
   `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；五段函数体与 HEAD 按词法单元逐个相同）。
 - **落地**：`f07489c9c`（11 个文件；父提交是 `1e2af4f0c`）。
 - **CI**：`f07489c9c` 主 CI run 44546732110 的 70 个 job 里 68 个通过：`Playwright e2e (macos-latest shard 2/4)` 没有分到 GitHub 托管的
-  macOS runner（一步未跑）而被取消，`CI required` 随之红；归因于托管 runner 的容量，未重跑；这一分片由后继提交的 CI 补证，结果补记于
-  RFC-509 的实现提交。落档提交 `1e2af4f0c`（只改文档）：主 CI run 44511189599 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的提交（只改文
-  档，与 RFC-509 落档同一提交）：CI 结果补记于 RFC-509 的实现提交。
+  macOS runner（一步未跑）而被取消，`CI required` 随之红；归因于托管 runner 的容量，未重跑。这一分片由后继提交补证（补记于 RFC-509 的实现提
+  交）：转 Done 的 `afd425c00`（父提交是 `f07489c9c`，只改 `STATE.md` 与 `design/`，与 RFC-509 落档同一提交）的主 CI run 44555911052 的
+  70 个 job 第 1 次全部通过（含这一分片与 `CI required`），未重跑。落档提交 `1e2af4f0c`（只改文档）：主 CI run 44511189599 的 70 个 job 第
+  1 次全部通过，未重跑。
 - **下一步**：RFC-294 S10 第十五步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
   已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
   没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。development-automation 组合层的非 RFC-370 余项是 7 个文件

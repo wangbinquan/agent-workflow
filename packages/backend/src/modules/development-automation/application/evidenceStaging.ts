@@ -1,3 +1,4 @@
+import type { EvidenceDocumentCommands } from './evidenceDocumentCommands'
 import type {
   EvidenceStagingFactory,
   EvidenceStagingLease,
@@ -35,4 +36,19 @@ export function assertEvidenceStagingLease(
       throw new Error(`evidence-staging-lease-incomplete:${name}`)
     }
   }
+}
+
+/** RFC-509 — the selected requirement content: a complete staging factory and a document writer, handed over unchanged. */
+export function selectedRequirementMaterializerContent(input: {
+  readonly staging: EvidenceStagingFactory
+  readonly documentCommands: EvidenceDocumentCommands | undefined
+}): {
+  readonly staging: EvidenceStagingFactory
+  readonly documentCommands: EvidenceDocumentCommands
+} {
+  assertEvidenceStagingFactory(input.staging)
+  if (typeof input.documentCommands?.writeDocument !== 'function') {
+    throw new Error('requirement-selected-content-incomplete:documentCommands')
+  }
+  return { staging: input.staging, documentCommands: input.documentCommands }
 }
