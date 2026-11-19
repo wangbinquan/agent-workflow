@@ -1,4 +1,4 @@
-## 2026-11-19 RFC-510 任务执行组合层的端口完整性核对迁出 composition（In Progress；`design/RFC-510-task-execution-port-completeness-checks-out-of-composition/`）
+## 2026-11-19 RFC-510 任务执行组合层的端口完整性核对迁出 composition（Done；`design/RFC-510-task-execution-port-completeness-checks-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-509 之后 task-execution 组
   合层控制流 43 行，其中 26 行是同一种东西：端口的装配期完整性核对（交入的内容收发、操作、读取器、删除效果、运行选择、启动配置读取器与运行绑
@@ -29,6 +29,17 @@
   正后 140 个架构用例里两处缺陷所在的用例通过，红的 5 个撞时限、首批里对照同样红；默认时限放宽到 60 秒后候选多出的 5 秒红与另三个架构用例两
   边全过，`rfc370-selected-task-root-configuration` 放宽副本两边 14 / 14。架构报告 60 项只差一项 `composition-control-flow-task-execution`。
   实现门 PASS（本会话按路径限定自审，只审功能；18 段代码与 HEAD 按词法单元逐个相同）。
+- **落地**：`90c631993`（23 个文件；父提交是 `d8ff84650`）。
+- **CI**：`90c631993` 主 CI run 44605266287 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
+  `d8ff84650`（只改文档）：主 CI run 44593469586 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的提交（只改文档）：CI 结果补记于后继 RFC 的
+  落档提交。
+- **下一步**：RFC-294 S10 第十七步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
+  已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
+  没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。task-execution 组合层控制流 17 行：装配期选择 4 行与运行时
+  绑定、引擎（`taskEngineApplication.ts` 5 行、`humanGate.ts` 2 行、本地配置桥、本地启动配置与几处旁表各 1 行），另立后
+  继；`rfc423-composition-assembly-only` 的 throw 账本只剩 3 个文件各 1 条。S10 的下一步是 source-control（11 个文件
+  47 行）、resource-catalog（`resourceAcl.ts` 等 4 个文件 5 行）、system-operations、integration 与 code-capability 的余项与 task-execution
+  的运行时余项，再到 S10 收口与 S12；`crewstation*` / `taskImage*` 待 RFC-370 余项；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-19 RFC-509 开发自动化组合层的非 RFC-370 余项迁出 composition（Done；`design/RFC-509-development-automation-composition-remainder/`）
 
