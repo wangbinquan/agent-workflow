@@ -1,3 +1,22 @@
+## 2026-11-19 RFC-514 任务执行组合层余下的 try / throw 迁出 composition（In Progress；`design/RFC-514-task-execution-composition-try-throw-out/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求组合层的 `try` / `throw` 只在登记清单内、例外清单最终为空。RFC-513 之后，RFC-370 之外的组合层
+  `throw` 只剩 task-execution 的三处（`rfc423-composition-assembly-only` 的 throw 账本各记 1 条），另有驱动入口的 `try` / `finally`（该锁唯
+  一的 try 豁免）：都是运行期的驱动与 fail-closed 判断，不是装配。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用
+  提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你
+  加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：驱动入口的 `try` / `finally` 与执行上下文选择迁入新的 `engine/task/driveTaskRun.ts`；动态工作流操作的 fail-closed 迁入新的
+  `application/dynamicWorkflowOperations.ts`；配置引用的登记与找回并入 `application/taskRunSelection.ts`；取消后读回并入
+  `application/digitalEmployeeExecution.ts`。三个组合文件的装配入口与导出的名字、签名不变。清单见 design §3。
+- **不做**：其余装配期选择与端口绑定；模块根 `composition.ts` 的模块生命周期（不在 F13 与 `rfc423` 的扫描面，留给 S10 的全模块
+  门）；`crewstation*`（RFC-370 余项）；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。集中验证按名字、路径、错误串与直接取用
+  选用例与 HEAD A/B，全量语料交给 CI 的 backend 分片。独立对账（plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话
+  执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是驱动与运行期判断，落 engine 与 application；组合文件只装配与选择。C11 public 不
+  变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-514 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声
+  明，另读 task-execution `composition/` 目录的全部文件与新位置。C13 `composition-control-flow-task-execution` 17 → 实测，其余计数不升。
+
 ## 2026-11-19 RFC-513 代码能力与资源目录组合层余下的 throw 迁出 composition（In Progress；`design/RFC-513-code-history-and-package-recovery-throws-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求组合层的 `try` / `throw` 只在登记清单内、例外清单最终为空。RFC-512 之后，RFC-370 之外的组合层
