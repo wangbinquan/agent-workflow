@@ -132,7 +132,8 @@ guard-manifest：
     后撤销，写入形状与时刻、撤销的时刻都对，`force` 缺省 false、给 true 时透传，时钟每次取一次；
   - 演员绑定：登记后按上下文取回；未登记的上下文抛 `intent-resource-catalog-context-not-bound`；两个绑定互不串台。
 
-行为另由现有用例对拍：改密经 `users-service`、`users-http`、`users-cli` 与 `rfc221-account-auth-policy`；演员绑定经
+行为另由现有用例对拍：改密经 `users-service`、`users-http`、`users-cli`、`rfc221-account-auth-policy` 与 e2e
+`identity-credentials.spec.ts`（含系统用户被拒）；演员绑定经
 `rfc384-daemon-intent-bundle`、`rfc349-intent-boot-resume-authority` 与走意图目录的用例。
 
 ## 5. 失败模式
@@ -141,6 +142,8 @@ guard-manifest：
 - **方法脱离接收者**：`credentials` 交的是认证运行时对象本身，`deps.credentials.writeLocalPasswordIfUnmanaged(...)` 的 `this` 仍是它；改密
   夹具替换方法后交入的对象同样原样使用。演员绑定的两个方法只用闭包里的表，不用 `this`，作为函数值交给查询时行为不变。
 - **遗留引用**：装配入口不变，使用方不改；迁移后按名字、路径片段与代码里的字符串字面量全仓再扫，另按全部文件类型扫一遍。
+- **按原始文本扫的锁误计**：`rfc347-identity-access-runtime` 的 `importPaths('identity-access/composition')` 在原始源码（含注释）里找这段
+  路径，新文件的注释若写出组合文件的路径就会被算作取组合层的文件。所以新文件的注释不写这条路径（集中验证第一轮因此红过，见 plan）。
 - **账本走样**：T19b 账本逐字比对，组合文件那一行若不删就红（减了也红）；`rfc349-auth-caller-closure` 改钉后若新文件不再 `await` 两次写
   就红。
 

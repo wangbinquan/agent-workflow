@@ -5,11 +5,11 @@ import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { hashPassword } from '@/auth/passwords'
 import type { IdentityAccessModule } from '@/modules/identity-access/composition'
+import { createResetUserPassword } from '@/modules/identity-access/application/commands/resetUserPassword'
 import {
   createIdentityUserOperations,
   type IdentityUserOperations,
 } from '@/modules/identity-access/public/operations'
-import { ValidationError } from '@/util/errors'
 
 export function composeIdentityUserOperations(input: {
   readonly identityAccess: IdentityAccessModule
@@ -27,20 +27,13 @@ export function composeIdentityUserOperations(input: {
     isOidcManagedUser: (userId) => input.auth.isOidcManagedUser(userId),
     searchUsers: async (query) => [...(await input.identityAccess.userDirectory.search(query))],
     lookupUsers: async (ids) => [...(await input.identityAccess.userDirectory.lookup(ids))],
-    async resetPassword({ userId, newPassword, force }) {
-      if (userId === SYSTEM_USER_ID) {
-        throw new ValidationError('system-user-immutable', 'cannot reset password for __system__')
-      }
-      const now = Date.now()
-      await input.auth.writeLocalPasswordIfUnmanaged({
-        userId,
-        passwordHash: await hashPassword(newPassword),
-        forcePasswordChange: force ?? false,
-        activate: true,
-        updatedAt: now,
-      })
-      await input.auth.revokeAllSessionsForUser(userId, now)
-    },
+    // RFC-506: the password reset use case lives in application; the clock is read at call time.
+    resetPassword: createResetUserPassword({
+      systemUserId: SYSTEM_USER_ID,
+      credentials: input.auth,
+      hashPassword,
+      now: () => Date.now(),
+    }),
     async afterDisabled({ userId, at }) {
       await input.auth.revokeAllSessionsForUser(userId, at)
       await input.afterDisabled?.(userId)

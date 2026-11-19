@@ -13,8 +13,24 @@
   到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是一个用例与一处用例状态，都落 application；两个组合文件只装配、没有控制流；
   不新增用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-506 用例覆盖全部生产文件（下限 3,000）、全部
-  用例（下限 2,500）与 e2e 里的同名声明，另读两个组合文件与两个新位置。C13 `composition-control-flow-identity-access` 2 → 实测、
-  `composition-control-flow-intent` 5 → 实测，其余计数不升；T19b 账本少一行。
+  用例（下限 2,500）与 e2e 里的同名声明，另读两个组合文件与两个新位置。C13 `composition-control-flow-identity-access` 2 → 0、
+  `composition-control-flow-intent` 5 → 4（收紧到实测），其余 58 项实测与对照逐项相同，都在 `max` 内；T19b 账本少一行。
+- **§14 不变量 / S10 第十三步**：清单（design §3）的名字只在各自的新位置声明；identity-access 的新文件恰好声明、交出清单列的两个名字，intent
+  的 `application/resourceCatalog.ts` 交出 `createIntentCatalogActorBinding`，两个组合文件只声明并导出原有的装配入口；两个组合文件没有控制流
+  语句、不建 `WeakMap`、时钟只以函数交出，两个实现在生产代码里都只在各自的组合文件调用一次；新位置的依赖面是闭集、不用进程全局（新文件只取
+  `@/util/errors` 的 `ValidationError`，intent 的 application 文件 import 不变）。生产文件 4,112 → 4,113；跨 context import 7,504 不变（取
+  `ValidationError` 的那条值边从组合文件移到新文件），public surface 不变。identity-access 组合层控制流归零；intent 组合层余下的 4 行都是
+  RFC-370 余项（`crewstationArtifacts.ts` 3 行、`crewstationScratch.ts` 1 行）。
+- **集中验证**（基于 `6ba5d66c9`，详见 plan）：查出本 RFC 的一处缺陷，已修正并复验：identity-access 新文件的头注释写出了组合文件的路径，
+  `rfc347-identity-access-runtime` 在原始源码（含注释）里找这段路径，把新文件算作取组合层的文件；改为注释不写出这条路径，锁不改。backend `tsc`
+  0 错，eslint 无告警。首批（修正前）按 CI 的跑法跑 318 个文件、与对照 A/B：候选 4,178 条通过、815 条红，对照 4,171 条通过、820 条红；本 RFC
+  用例 11 / 11，走迁出代码的用例两边相同，候选多出的 14 条除 `rfc347` 外都撞时限或是撞时限的连带。全量 SQLite（修正前）2,951 个文件 2,938 个通
+  过，其余 13 个除 `rfc347`、发布账本（导出仓库的历史）与 `rfc167` 的 `settleTask` 等待外都撞自带时限或流程看门狗；取到本 RFC 改动代码的 321
+  个文件里 318 个通过。修正后：源码扫描 348 个里 344 个通过（`rfc347` 8 / 8），余下 4 个撞自带时限或是发布账本。任一边红过的 119 个文件放宽默
+  认时限复跑：候选 2,236 条通过、19 条红，对照 2,235 条通过、20 条红；首批候选多出的 13 条时限项里 12 条在候选上通过，1 条（`rfc400` 的负对照）
+  两边都撞自带的 30 秒；这一轮只红在候选的 2 条都撞自带时限、不取本 RFC 的代码。三个报告类用例、`rfc400`、取到本 RFC 代码而在候选上红过的 5 个
+  与只红在候选的 2 个只放宽时限（副本，默认 1,500 秒）再跑：11 个文件两边都是 109 条通过、0 条红。架构报告 60 项只差两项
+  `composition-control-flow-*`。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-18 RFC-505 数字员工的内建作业、PostgreSQL 磁盘报告与运行时选择快照迁出 composition（Done；`design/RFC-505-employee-jobs-disk-report-runtime-snapshots-out-of-composition/`）
 
@@ -59,8 +75,8 @@
 - **落地**：`490d75e04`（16 个文件；父提交是 `9628d5590`）。
 - **CI**：`490d75e04` 主 CI run 44382772167 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
   `9628d5590`（只改文档）：主 CI run 44288340179 的 70 个 job 里 68 个通过，红的是依赖审计（外部，与提交无关）与随之红的
-  `CI required`，未重跑。转 Done 的 `7f0e056c3`（只改文档）：主 CI run 44391326397 在 RFC-506 落档时仍排队，结果补记于 RFC-506 的
-  实现提交。
+  `CI required`，未重跑。转 Done 的 `7f0e056c3`（只改文档）：主 CI run 44391326397 的 70 个 job 第 1 次全部
+  通过（补记于 RFC-506 的实现提交），未重跑。
 - **下一步**：RFC-294 S10 第十二步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。digital-employee、system-operations

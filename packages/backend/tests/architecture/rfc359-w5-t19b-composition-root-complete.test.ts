@@ -147,7 +147,10 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
   // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
   // RFC-384: the three root WeakMaps are one Intent composition binding.
-  'modules/intent/composition/resourceCatalog.ts: marker=1, prose=0, holder=0',
+  // RFC-506 销账：`modules/intent/composition/resourceCatalog.ts: marker=1` —— 那张 WeakMap 与取不到就抛的
+  // `intent-resource-catalog-context-not-bound` 迁入 intent `application/resourceCatalog.ts` 的
+  // `createIntentCatalogActorBinding`。它是每请求的用例状态（上面 PG 那条早已写明不是装配缺口）；组合文件
+  // 只装配，application 不在本守卫的扫描面。
   'modules/task-execution/composition/taskEngineApplication.ts: marker=1, prose=0, holder=0',
   // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
   // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、

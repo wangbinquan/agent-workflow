@@ -35,16 +35,16 @@
       "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/execution-contract/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-identity-access": {
-      "max": 2,
-      "reason": "max=2: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/identity-access/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 0,
+      "reason": "max=0: RFC-506 (RFC-294 S10 step 13) moved the administrator password reset out of identity-access composition into application (2 -> 0, measured). max=2: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/identity-access/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-integration": {
       "max": 17,
       "reason": "max=17: RFC-502 (RFC-294 S10 step 9) moved the development adapter configuration operations, the code-host delivery bridge, the approval gateway receipt projection and the tool connection catalog out of integration composition into application (57 -> 17, measured). RFC-501 (RFC-294 S10 step 8) moved the webhook launch admission and trigger save validation out of integration composition into application (74 -> 57, measured). RFC-500 (RFC-294 S10 step 7) moved the development employee event observers out of integration composition into application (101 -> 74, measured). RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/integration/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-intent": {
-      "max": 5,
-      "reason": "max=5: RFC-503 (RFC-294 S10 step 10) moved the platform inventory participant, the workflow graph validation and the two maintenance commands out of intent composition into application and dropped a redundant guard in dispatch.ts (23 -> 5, measured). max=23: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/intent/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 4,
+      "reason": "max=4: RFC-506 (RFC-294 S10 step 13) moved the catalog actor binding out of intent composition into application (5 -> 4, measured). max=5: RFC-503 (RFC-294 S10 step 10) moved the platform inventory participant, the workflow graph validation and the two maintenance commands out of intent composition into application and dropped a redundant guard in dispatch.ts (23 -> 5, measured). max=23: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/intent/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-knowledge-evolution": {
       "max": 0,

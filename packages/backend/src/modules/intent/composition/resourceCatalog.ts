@@ -9,6 +9,7 @@ import type { ResourceCatalogQuery } from '@/modules/resource-catalog/public/que
 import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
 import {
   composeIntentResourceCatalogFor,
+  createIntentCatalogActorBinding,
   type IntentResourceCatalogFactoryDependencies,
 } from '../application/resourceCatalog'
 
@@ -25,21 +26,16 @@ export function composeIntentResourceCatalogBinding(input: {
   readonly catalogs: IntentResourceCatalogFactoryDependencies['catalogs']
 }) {
   const { identityAccess } = input
-  const intentCatalogActors = new WeakMap<object, Actor>()
+  // RFC-506: the per-request actor binding lives in application; this file only wires it.
+  const actors = createIntentCatalogActorBinding()
   return composeIntentResourceCatalogFor({
-    query: input.resourceCatalog.createQuery({
-      resolveActor(context) {
-        const actor = intentCatalogActors.get(context)
-        if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
-        return actor
-      },
-    }),
+    query: input.resourceCatalog.createQuery({ resolveActor: actors.resolveActor }),
     contextFor(actor) {
       const context = identityAccess.contexts.queryFromAuthority(
         directRequestAuthority(identityAccess.directAuthority, actor),
         'http',
       )
-      intentCatalogActors.set(context, actor)
+      actors.bind(context, actor)
       return context
     },
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),

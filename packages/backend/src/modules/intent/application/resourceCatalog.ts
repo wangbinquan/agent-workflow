@@ -117,6 +117,26 @@ export function bindIntentResourceCatalog(
 }
 
 /**
+ * RFC-506 (RFC-294 S10 step 13): which actor each catalog query context was minted for, moved verbatim
+ * out of composition/resourceCatalog.ts. `contextFor` binds the context it mints; the Resource Catalog
+ * query resolves the actor back, and a context this catalog did not mint is rejected. Per-request use
+ * case state, not an assembly gap.
+ */
+export function createIntentCatalogActorBinding() {
+  const intentCatalogActors = new WeakMap<object, Actor>()
+  return Object.freeze({
+    bind(context: QueryContext, actor: Actor): void {
+      intentCatalogActors.set(context, actor)
+    },
+    resolveActor(context: QueryContext): Actor {
+      const actor = intentCatalogActors.get(context)
+      if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
+      return actor
+    },
+  })
+}
+
+/**
  * Binds one request actor to the already-composed provider Resource Catalog.
  * The aggregate holds only public query participants and branded identity
  * contexts, so both SQLite and PostgreSQL bootstrap use the same closed seam.

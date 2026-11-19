@@ -24,13 +24,18 @@ describe('RFC-349 auth caller closure（源码闭包）', () => {
     const authCli = source('src/cli/auth.ts')
     const userBootstrap = source('src/cli/userBootstrap.ts')
     const userOperations = source('src/modules/identity-access/composition/userOperations.ts')
+    // RFC-506: the password reset moved into identity-access application; the composition entry hands it the
+    // auth runtime itself as `credentials`, so both writes still await the Promise binding.
+    const resetUserPassword = source(
+      'src/modules/identity-access/application/commands/resetUserPassword.ts',
+    )
 
     expect(oidcRoute).not.toContain("from '@/server'")
     expect(oidcRoute).not.toContain('deps.db')
     expect(oidcRoute).not.toContain("from '@/auth/loginPolicy'")
     expect(oidcRoute).not.toContain('createOidcProvidersService({')
 
-    for (const caller of [authCli, userBootstrap, userOperations]) {
+    for (const caller of [authCli, userBootstrap, userOperations, resetUserPassword]) {
       expect(caller).not.toContain('DbClient')
       expect(caller).not.toContain("from '@/auth/loginPolicy'")
       expect(caller).not.toContain("from '@/auth/sessionStore'")
@@ -41,7 +46,9 @@ describe('RFC-349 auth caller closure（源码闭包）', () => {
       'src/modules/identity-access/infrastructure/legacyUserService.ts',
     ])
       expect(existsSync(resolve(import.meta.dir, '..', path))).toBe(false)
-    expect(userOperations).toContain('await input.auth.writeLocalPasswordIfUnmanaged')
+    expect(resetUserPassword).toContain('await deps.credentials.writeLocalPasswordIfUnmanaged')
+    expect(resetUserPassword).toContain('await deps.credentials.revokeAllSessionsForUser')
+    expect(userOperations).toContain('credentials: input.auth,')
     expect(userOperations).toContain('await input.auth.revokeAllSessionsForUser')
   })
 })
