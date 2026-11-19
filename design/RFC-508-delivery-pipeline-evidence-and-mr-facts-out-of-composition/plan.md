@@ -21,7 +21,7 @@
 - [x] AC-1 清单里的名字只在各自的位置声明；两个组合文件没有控制流、从新位置取实现；四个装配入口与交出的对象不变
 - [x] AC-2 同样输入下流水线证据端口、MR 事实读取与采集的结果、错误与端口调用和此前一致
 - [x] AC-3 新位置的依赖面是闭集；public surface 不升；`composition-control-flow-development-automation` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`f07489c9c` 的 run 44546732110 70 个 job 里 68 个通过，两格红是 runner 分配失败（环境，见 §CI）
 
 ## 集中验证
 
@@ -117,7 +117,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `f07489c9c`（实现，父提交是 `1e2af4f0c`）：exact SHA 主 CI run 44546732110 的 70 个 job 里 68 个通过（含「Static scans」与 backend 全部分
+  片）。没通过的两格：`Playwright e2e (macos-latest shard 2/4)` 没有分到 GitHub 托管的 macOS runner（注记“The job was not acquired by Runner
+  of type hosted even after multiple attempts”，另有 macOS arm64 容量不足的提示；一步也没跑）而被取消，`CI required` 随之红。归因：托管
+  runner 的容量，与本提交的内容无关；未重跑。这一分片在同一棵 backend / 前端树上的结果由后继提交（本 RFC 转 Done 的提交，只改文档）的 CI 给
+  出，补记于 RFC-509 的实现提交（后继证据）。
 - 本 RFC 的落档提交 `1e2af4f0c`（只改文档，同一提交记下 RFC-507 转 Done 提交 `155d8c0fc` 的 CI 当时仍排队）：主 CI run 44511189599
   共 70 个 job，第一次运行全部通过。没有重跑。
 

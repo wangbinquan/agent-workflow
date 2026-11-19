@@ -1,4 +1,27 @@
-## 2026-11-19 RFC-508 开发自动化的流水线证据端口与 MR 事实采集迁出 composition（In Progress；`design/RFC-508-delivery-pipeline-evidence-and-mr-facts-out-of-composition/`）
+## 2026-11-19 RFC-509 开发自动化组合层的非 RFC-370 余项迁出 composition（In Progress；`design/RFC-509-development-automation-composition-remainder/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-508 之后
+  development-automation 组合层控制流 102 行，RFC-370 的 `crewstation*` / `taskImage*` 占 80 行，其余 7 个文件 22 行里 20 行是写在组合文件里
+  的实现（graph@2 的 MR 交付生命周期与作业模板、案例详情投影、活动周期、执行终态唤醒与选定内容核对），2 行是装配期选择。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当
+  前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批
+  准，不派 Codex；非 RFC-370 余项一步做完。
+- **范围**：图交付生命周期与作业模板迁入 development-automation
+  `application/graph-development/`（`deliveryLifecycle.ts`、`deliveryJobs.ts`；开发员工类型包的登记对象由装配传入），案例详情投影与执行终态
+  唤醒迁入 `application/employeeCaseDetailProjection.ts` 与 `application/executionTerminalObserver.ts`（id 与时钟由装配传入），活动周期与选
+  定内容核对并入既有的 `application/activityOperations.ts` 与 `application/evidenceStaging.ts`；6 个组合文件保留装配入口与转出的名字（名字、
+  签名、交出的对象与位置不变），从新位置取实现；RFC-310 的 OS 架构清单随 import 的移动更新。清单见 design §3。
+- **不做**：两处装配期选择（`evidenceStaging.ts` 的选定或本地内容、`repositoryFactsScanner.ts` 的卷上或进程内扫描，留在组合层计入上
+  限）；`graphDevelopment.ts` 的 `detailProjection` 与 `digitalEmployeeWorkspace.ts`；`crewstation*` / `taskImage*`（RFC-370 余项）；改写任
+  何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-508 转 Done 同一提交，实现与验证后再提交。集中验证按静态 import
+  闭包与名字选取受影响用例与 HEAD A/B，全量语料交给 CI 的 backend 分片（RFC-508 的教训：本机高负载下全量 SQLite 要数小时）。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是 6 组实现，都落 application；6 个组合文件只装配，只留装配期选择；不新增用例入
+  口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-509 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与
+  e2e 里的同名声明，另读 6 个组合文件与 6 个新位置。C13 `composition-control-flow-development-automation` 102 → 实测，其余计数不升。
+
+## 2026-11-19 RFC-508 开发自动化的流水线证据端口与 MR 事实采集迁出 composition（Done；`design/RFC-508-delivery-pipeline-evidence-and-mr-facts-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-507 之后
   development-automation 组合层的非 RFC-370 控制流是 9 个文件 39 行，循环只剩 `pipelineEvidence.ts` 一处；它与 `developmentDelivery.ts` 合占
@@ -30,6 +53,19 @@
   放宽时限的副本两边全过。全量没跑的一半里取到改动代码的 57 个文件补跑、与对照 A/B：两边共同红的失败名相同，候选多出的 2 条放宽时限的副本两
   边全过。报告类的 `rfc294-architecture-preflight` 放宽时限的副本两边都 14 / 14。架构报告 60 项只差一项
   `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；五段函数体与 HEAD 按词法单元逐个相同）。
+- **落地**：`f07489c9c`（11 个文件；父提交是 `1e2af4f0c`）。
+- **CI**：`f07489c9c` 主 CI run 44546732110 的 70 个 job 里 68 个通过：`Playwright e2e (macos-latest shard 2/4)` 没有分到 GitHub 托管的
+  macOS runner（一步未跑）而被取消，`CI required` 随之红；归因于托管 runner 的容量，未重跑；这一分片由后继提交的 CI 补证，结果补记于
+  RFC-509 的实现提交。落档提交 `1e2af4f0c`（只改文档）：主 CI run 44511189599 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的提交（只改文
+  档，与 RFC-509 落档同一提交）：CI 结果补记于 RFC-509 的实现提交。
+- **下一步**：RFC-294 S10 第十五步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
+  已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
+  没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。development-automation 组合层的非 RFC-370 余项是 7 个文件
+  22 行（`graphDeliveryLifecycle.ts` 6 行、`activityOperations.ts` 5 行、`graphDeliveryJob.ts` 4 行、`evidenceStaging.ts`
+  3 行、`employeeCaseDetailProjection.ts` 2 行、`executionTerminalObserver.ts` 与 `repositoryFactsScanner.ts` 各 1 行），已没有循环；这些余
+  项由 RFC-509 一步承接（In Progress，与本条转 Done 同一提交落档）；S10 的下一步是 task-execution、source-control、resource-catalog 的
+  `resourceAcl.ts` 等其余模块的余项与收口，再到 S12；`crewstation*` / `taskImage*` 待 RFC-370 余项；code-capability 的未绑定缺
+  省、integration 的可选装配与 system-operations 的装配期路径选择随上限登记或随 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-18 RFC-507 开发自动化的图开发执行端口、证据与验收迁出 composition（Done；`design/RFC-507-graph-development-evidence-and-acceptance-out-of-composition/`）
 
