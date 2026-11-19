@@ -22,6 +22,7 @@ import { composeLocalTaskScriptRunFamily } from './localTaskScriptRunFamily'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import { selectWorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import { Paths } from '@/util/paths'
+import { requireTaskRunDriveBinding } from '../application/taskRunSelection'
 
 /** The Task bootstrap bridge alone translates the legacy application-home override. */
 export function composeTaskWorkspaceExcludeProfilesFor(
@@ -145,9 +146,7 @@ export function bindProviderTaskRunParticipantsInput<Input extends object>(
 ): Input & { readonly taskRunBinding: TaskRunDriveBinding } {
   if (input.taskRunBinding !== undefined) {
     const selected = input.taskRunBinding
-    if (selected === null || typeof selected !== 'object' || typeof selected.bind !== 'function') {
-      throw new TypeError('Task provider requires a complete run binding')
-    }
+    requireTaskRunDriveBinding(selected)
     return Object.assign(input, { taskRunBinding: selected })
   }
   const receiver = Object.assign(input, {

@@ -5,7 +5,7 @@ import type { PortArtifactOperations } from './portArtifactContent'
 import type { TaskAgentRunFamily } from './taskAgentRunFamily'
 import type { TaskOperationConfigurationQueries } from './taskOperationConfiguration'
 import type { TaskScriptRunFamily } from './taskScriptRunFamily'
-import type { TaskExecutionContextRef } from './taskExecutionTopology'
+import type { TaskDriveRequest, TaskExecutionContextRef } from './taskExecutionTopology'
 
 /** The selected implementation owns both reference dialects and their lifetime. */
 export interface TaskRunContentNamespace {
@@ -51,4 +51,23 @@ export interface TaskRunSelection {
   taskScriptRunsFor(
     binding: TaskRunFamilyBinding,
   ): TaskScriptRunFamily | Promise<TaskScriptRunFamily>
+}
+
+/** Only this compatibility bridge accepts the public standalone drive vocabulary. */
+export interface TaskRunRootSelection {
+  readonly runs: TaskRunSelection
+  configurationFor(request: TaskDriveRequest): TaskRunConfigurationReference
+}
+
+export interface TaskRunDriveBinding {
+  bind(
+    request: TaskDriveRequest,
+    owners: TaskRunOwnerDependencies,
+  ): BoundTaskRunFamilies | Promise<BoundTaskRunFamilies>
+}
+
+export interface TaskRunRootBinding {
+  readonly nodeRunPrompts: NodeRunPromptOperations
+  readonly portArtifacts: PortArtifactOperations
+  readonly drive: TaskRunDriveBinding
 }

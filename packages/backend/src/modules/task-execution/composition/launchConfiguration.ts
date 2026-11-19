@@ -6,6 +6,7 @@ import {
   resolveTaskStartLaunchConfiguration,
   resolveTaskSubagentLiveCapture,
   resolveTaskSubagentLiveCaptureFromReader,
+  requireTaskLaunchConfigurationInput,
   type TaskLaunchRuntimeConfiguration,
 } from '../application/launchConfiguration'
 import type {
@@ -22,14 +23,7 @@ export function composeTaskLaunchConfiguration(
       }
     | { readonly kind: 'selected'; readonly queries: TaskLaunchConfigurationQueries },
 ) {
-  if (
-    (input.kind !== 'local-sync' && input.kind !== 'selected') ||
-    input.queries === null ||
-    input.queries === undefined ||
-    typeof input.queries.read !== 'function'
-  ) {
-    throw new TypeError('task-launch-configuration-incomplete')
-  }
+  requireTaskLaunchConfigurationInput(input)
   const localRuntime = (): TaskLaunchRuntimeConfiguration =>
     input.kind === 'local-sync'
       ? resolveTaskLaunchRuntimeFromReader(() => input.queries.read())

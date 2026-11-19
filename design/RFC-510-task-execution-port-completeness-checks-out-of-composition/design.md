@@ -60,6 +60,10 @@ task-execution 组合层控制流（F13 口径）43 行：RFC-370 的 `crewstati
 
 - `architecture/counts.json`：`composition-control-flow-task-execution` 43 → 实测（预计 17）。`guard-manifest.json` 登记 RFC-510 用例
   （`assertsAbsence: true`）。
+- 随代码改的锁（集中验证查出，见 §5）：`architecture/rfc423-composition-assembly-only` 按语料逐文件数 task-execution 组合层的 `throw`，与它的
+  `THROW_LEDGER` 精确相等；核对迁走后 7 个文件的数变了（`localTaskRunSelection.ts` 2 → 1，其余 6 个 → 0），账本随之收紧为 3 个文件各 1 条
+  （本地配置桥、驱动入口的动态工作流守卫、数字员工的任务不存在映射），说明与负对照改用仍在账本里的 `localTaskRunSelection.ts`；guard-manifest
+  里这条锁的行数随之改为 212。
 - 不改：`envelope-prefix-swap-source`（读的几个文件拼起来仍含同样的文本）、`rfc370-port-artifact-bindings`（读的调用与那一行不动）、按错误串断言的
   两个 RFC-370 用例、`rfc422-run-family-openers`；`design/` 里的历史记述。迁移前已按组合文件路径全仓扫用例里的 `readFileSync`（RFC-509 的教训）。
 
@@ -100,7 +104,11 @@ guard-manifest：
 - **类型挪动**：三个接口逐字挪到端口文件、组合文件转出原名，`tsc` 覆盖全部使用方。
 - **读原文的锁**：迁移前已按组合文件路径扫用例（RFC-509 的教训），读到的两处不受影响（D4）。
 - **按原始文本扫的锁误计**：新文件的注释不写组合文件的路径（RFC-506 的教训）。
-- **账本漏标**：guard-manifest 条目标 `assertsAbsence: true`（RFC-507 的教训）。
+- **账本漏标**：guard-manifest 条目标 `assertsAbsence: true`（RFC-507 的教训）；`rfc317-guard-negative-fixture` 按语法认“断言不存在”：只认
+  `expect(x).toEqual([])`、`toHaveLength(0)` 与 `.not.toContain` 这类字面形态。本 RFC 用例起初把“不存在”写成 `toEqual([location, []])`，
+  不被认出，集中验证里这一例红；改为 `expect(x, location).toEqual([])`。
+- **按语料数的账本**：`rfc423-composition-assembly-only` 不按路径读组合文件，而是扫语料后逐文件数 `throw`，与账本精确相等；按路径扫
+  `readFileSync` 的预查找不到它。迁走核对前要连同这类按语料计数的账本一起核对（集中验证里它只在候选一边红，已随代码收紧，D4）。
 
 ## 6. 取舍（可推翻）
 

@@ -14,48 +14,17 @@ import type {
 import {
   archivePortArtifactPolicy,
   readPortArtifactPolicy,
+  requirePortArtifactContentEffects,
+  requirePortArtifactOperations,
+  requirePortArtifactReader,
   runNativePortArtifactPolicy,
   runPortArtifactPolicy,
 } from '../application/portArtifacts'
 import { createFilePortArtifactContent } from '../infrastructure/local/filePortArtifactContent'
-
-export function requirePortArtifactContentEffects(
-  value: unknown,
-): asserts value is PortArtifactContentEffects {
-  const methods: readonly (keyof PortArtifactContentEffects)[] = [
-    'prepareArchive',
-    'reference',
-    'size',
-    'copy',
-    'readPrefix',
-    'write',
-    'linkTarget',
-    'readArchive',
-    'existsArchive',
-    'readWorkspace',
-    'existsWorkspace',
-  ]
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    methods.some((name) => typeof (value as PortArtifactContentEffects)[name] !== 'function')
-  ) {
-    throw new TypeError('Port artifacts require a complete content effects receiver')
-  }
-}
-
-export function requirePortArtifactOperations(
-  value: unknown,
-): asserts value is PortArtifactOperations {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    typeof (value as PortArtifactOperations).archive !== 'function' ||
-    typeof (value as PortArtifactOperations).read !== 'function'
-  ) {
-    throw new TypeError('Port artifacts require complete operations')
-  }
-}
+export {
+  requirePortArtifactContentEffects,
+  requirePortArtifactOperations,
+} from '../application/portArtifacts'
 
 /** Undefined alone selects one complete native binding without performing IO. */
 export function composePortArtifactOperations(
@@ -91,9 +60,7 @@ export function selectPortArtifactReader(
 ): PortArtifactReader {
   const reader =
     selected === undefined ? composePortArtifactOperations(undefined, appHome) : selected
-  if (reader === null || typeof reader !== 'object' || typeof reader.read !== 'function') {
-    throw new TypeError('Port artifacts require a complete reader')
-  }
+  requirePortArtifactReader(reader)
   return reader
 }
 

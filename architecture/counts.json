@@ -79,8 +79,8 @@
       "reason": "max=0: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/task-catalog/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-task-execution": {
-      "max": 43,
-      "reason": "max=43: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/task-execution/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
+      "max": 17,
+      "reason": "max=17: RFC-510 (RFC-294 S10 step 17) moved the port completeness checks (content effects, operations, readers, deletion effects, run selection, drive configuration, launch configuration reader and run binding) out of composition/ into the application layer (43 -> 17, measured); the rest are assembly-time selections and runtime bindings left to successors. max=43: RFC-479 (RFC-294 S11; review-2026-11-09 F13) — line-start if / for / while / switch / try and throw statements in modules/task-execution/composition/ (syntax tree, strings and comments excluded); temporary until the S10 composition-only-assembles gate replaces it; no growth authorized."
     },
     "composition-control-flow-workspace-insight": {
       "max": 0,

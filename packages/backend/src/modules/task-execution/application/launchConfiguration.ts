@@ -268,3 +268,18 @@ export async function resolveTaskUploadLimits(
     return { ...fallback }
   }
 }
+
+/** RFC-510 — root selection validates the reader without reading it or starting any effect. */
+export function requireTaskLaunchConfigurationInput(input: {
+  readonly kind: string
+  readonly queries: { read(): unknown } | null | undefined
+}): void {
+  if (
+    (input.kind !== 'local-sync' && input.kind !== 'selected') ||
+    input.queries === null ||
+    input.queries === undefined ||
+    typeof input.queries.read !== 'function'
+  ) {
+    throw new TypeError('task-launch-configuration-incomplete')
+  }
+}

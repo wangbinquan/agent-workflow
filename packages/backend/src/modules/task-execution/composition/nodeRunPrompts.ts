@@ -5,37 +5,19 @@ import type {
   NodeRunPromptRow,
   PromptStorage,
 } from '../application/ports/nodeRunPromptContent'
-import { readNodeRunPromptContent, storeNodeRunPromptContent } from '../application/nodeRunPrompt'
+import {
+  readNodeRunPromptContent,
+  requireNodeRunPromptContentEffects,
+  requireNodeRunPromptOperations,
+  storeNodeRunPromptContent,
+} from '../application/nodeRunPrompt'
+export {
+  requireNodeRunPromptContentEffects,
+  requireNodeRunPromptOperations,
+} from '../application/nodeRunPrompt'
 import { createFileNodeRunPromptContent } from '../infrastructure/local/fileNodeRunPromptContent'
 
 export type { PromptStorage } from '../application/ports/nodeRunPromptContent'
-
-export function requireNodeRunPromptContentEffects(
-  value: unknown,
-): asserts value is NodeRunPromptContentEffects {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    typeof (value as NodeRunPromptContentEffects).reference !== 'function' ||
-    typeof (value as NodeRunPromptContentEffects).write !== 'function' ||
-    typeof (value as NodeRunPromptContentEffects).read !== 'function'
-  ) {
-    throw new TypeError('Node-run prompts require a complete content effects receiver')
-  }
-}
-
-export function requireNodeRunPromptOperations(
-  value: unknown,
-): asserts value is NodeRunPromptOperations {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    typeof (value as NodeRunPromptOperations).store !== 'function' ||
-    typeof (value as NodeRunPromptOperations).read !== 'function'
-  ) {
-    throw new TypeError('Node-run prompts require complete operations')
-  }
-}
 
 /** Undefined alone selects the complete native receiver for this runs namespace. */
 export function composeNodeRunPromptOperations(

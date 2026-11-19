@@ -16,7 +16,19 @@
   阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是端口的装配期完整性核对，落 application；组合文件只装配与选择；不新增用例入口。C11
   public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-510 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里
-  的同名声明，另读 7 个组合文件与新位置。C13 `composition-control-flow-task-execution` 43 → 实测，其余计数不升。
+  的同名声明，另读 7 个组合文件与新位置。C13 `composition-control-flow-task-execution` 43 → 17（收紧到实测），其余 59 项实测与对照逐项相同，
+  都在 `max` 内。
+- **§14 不变量 / S10 第十七步**：清单（design §3）的名字只在各自的位置声明；两个新文件恰好声明、交出清单列的名字；7 个组合文件不再声明它们、
+  转出原有的名字，不再有 `TypeError` 的构造，余下的控制流只是装配期选择与运行时绑定；新位置只取本模块的 application 与端口，不用进程全局。生
+  产文件 4,121 → 4,123；跨 context import 7,508 不变，public surface 不变。task-execution 组合层控制流 43 → 17，余下的是装配期选择 4 行与运
+  行时绑定、引擎（`taskEngineApplication.ts` 5 行等），另立后继；`rfc423-composition-assembly-only` 的 throw 账本收紧为 3 个文件各 1 条。
+- **集中验证**（基于 `0bf3116d2` / `d8ff84650`，详见 plan）：查出本 RFC 的两处缺陷，已修正并复验：`rfc423-composition-assembly-only` 扫语料
+  逐文件数组合层的 `throw` 并与账本精确相等，核对迁走后只在候选一边红，账本随代码收紧；`rfc317-guard-negative-fixture` 只认 `toEqual([])` 这
+  类字面形态的“断言不存在”，本 RFC 用例的写法不被认出，改为字面形态。backend `tsc` 0 错，eslint 无告警。首批 194 个文件按 CI 的跑法与对照
+  A/B：两边都跑完的文件候选与对照各 1,953 条通过、54 条红，本 RFC 用例 22 / 22；候选多出的 7 条除两处缺陷外都撞时限，对照多出的 7 条同样。修
+  正后 140 个架构用例里两处缺陷所在的用例通过，红的 5 个撞时限、首批里对照同样红；默认时限放宽到 60 秒后候选多出的 5 秒红与另三个架构用例两
+  边全过，`rfc370-selected-task-root-configuration` 放宽副本两边 14 / 14。架构报告 60 项只差一项 `composition-control-flow-task-execution`。
+  实现门 PASS（本会话按路径限定自审，只审功能；18 段代码与 HEAD 按词法单元逐个相同）。
 
 ## 2026-11-19 RFC-509 开发自动化组合层的非 RFC-370 余项迁出 composition（Done；`design/RFC-509-development-automation-composition-remainder/`）
 
@@ -60,7 +72,7 @@
 - **落地**：`de25526b7`（23 个文件；父提交是 `afd425c00`）。
 - **CI**：`de25526b7` 主 CI run 44581180318 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
   `afd425c00`（只改文档，与 RFC-508 转 Done 同一提交）：主 CI run 44555911052 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的
-  `0bf3116d2`（只改文档）：主 CI run 44588754752 在 RFC-510 落档时仍在运行，结果补记于 RFC-510 的实现提交。
+  `0bf3116d2`（只改文档）：主 CI run 44588754752 的 70 个 job 第 1 次全部通过，未重跑（补记于 RFC-510 的实现提交）。
 - **下一步**：RFC-294 S10 第十六步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
   已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
   没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。development-automation 组合层的非 RFC-370 实现已清零，只剩

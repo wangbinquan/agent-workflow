@@ -33,7 +33,8 @@ RFC-509 之后，task-execution 组合层的控制流（F13 口径）共 43 行�
   `launchConfiguration.ts` 增名字，新增 `taskDeletionEffects.ts` 与 `taskRunSelection.ts`；核对要的 3 个运行选择接口（`TaskRunRootSelection`、
   `TaskRunDriveBinding`、`TaskRunRootBinding`）挪到 `application/ports/taskRunSelection.ts`。
 - **G2 composition 只装配**：7 个组合文件保留装配入口、选择与转出的名字，从新位置取核对；这 26 行不再在组合层。
-- **G3 账本与锁**：`composition-control-flow-task-execution` 43 → 17（按实测）；钉着这些文件的既有用例仍通过；新增 RFC-510 用例。
+- **G3 账本与锁**：`composition-control-flow-task-execution` 43 → 17（按实测）；`rfc423-composition-assembly-only` 的 throw 账本随核对迁走
+  收紧（design D4）；钉着这些文件的其余用例仍通过；新增 RFC-510 用例。
 
 ## 3. 非目标
 

@@ -14,8 +14,10 @@ import type {
   PortArchiveItem,
   PortArtifactArchiveRequest,
   PortArtifactContentEffects,
+  PortArtifactOperations,
   PortArtifactReadItem,
   PortArtifactReadRequest,
+  PortArtifactReader,
 } from './ports/portArtifactContent'
 
 const log = createLogger('port-artifacts')
@@ -291,4 +293,50 @@ export async function forcedPortPathsForTask(
   taskId: string,
 ): Promise<string[]> {
   return [...(await queries.forcedPaths(taskId))]
+}
+
+// RFC-510 — port completeness checks: a selected content face or operation set is complete, or the assembly fails.
+export function requirePortArtifactContentEffects(
+  value: unknown,
+): asserts value is PortArtifactContentEffects {
+  const methods: readonly (keyof PortArtifactContentEffects)[] = [
+    'prepareArchive',
+    'reference',
+    'size',
+    'copy',
+    'readPrefix',
+    'write',
+    'linkTarget',
+    'readArchive',
+    'existsArchive',
+    'readWorkspace',
+    'existsWorkspace',
+  ]
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    methods.some((name) => typeof (value as PortArtifactContentEffects)[name] !== 'function')
+  ) {
+    throw new TypeError('Port artifacts require a complete content effects receiver')
+  }
+}
+
+export function requirePortArtifactOperations(
+  value: unknown,
+): asserts value is PortArtifactOperations {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    typeof (value as PortArtifactOperations).archive !== 'function' ||
+    typeof (value as PortArtifactOperations).read !== 'function'
+  ) {
+    throw new TypeError('Port artifacts require complete operations')
+  }
+}
+
+/** Read-only consumers receive the original selected reader, with no per-method fallback. */
+export function requirePortArtifactReader(reader: PortArtifactReader): void {
+  if (reader === null || typeof reader !== 'object' || typeof reader.read !== 'function') {
+    throw new TypeError('Port artifacts require a complete reader')
+  }
 }

@@ -1,60 +1,25 @@
-import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
-import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
-import type { TaskDriveRequest } from '../application/ports/taskExecutionTopology'
 import type {
   BoundTaskRunFamilies,
-  TaskRunConfigurationReference,
+  TaskRunDriveBinding,
   TaskRunFamilyBinding,
-  TaskRunOwnerDependencies,
-  TaskRunSelection,
+  TaskRunRootBinding,
+  TaskRunRootSelection,
 } from '../application/ports/taskRunSelection'
 import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
 import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
-
-/** Only this compatibility bridge accepts the public standalone drive vocabulary. */
-export interface TaskRunRootSelection {
-  readonly runs: TaskRunSelection
-  configurationFor(request: TaskDriveRequest): TaskRunConfigurationReference
-}
-
-export interface TaskRunDriveBinding {
-  bind(
-    request: TaskDriveRequest,
-    owners: TaskRunOwnerDependencies,
-  ): BoundTaskRunFamilies | Promise<BoundTaskRunFamilies>
-}
-
-export interface TaskRunRootBinding {
-  readonly nodeRunPrompts: NodeRunPromptOperations
-  readonly portArtifacts: PortArtifactOperations
-  readonly drive: TaskRunDriveBinding
-}
+import {
+  requireTaskRunConfiguration,
+  requireTaskRunRootSelection,
+} from '../application/taskRunSelection'
+export type {
+  TaskRunDriveBinding,
+  TaskRunRootBinding,
+  TaskRunRootSelection,
+} from '../application/ports/taskRunSelection'
 
 /** A sync native binding keeps its original call timing; selected async bindings await ACK. */
 export function taskRunBindingPending<T>(value: T | Promise<T>): value is Promise<T> {
   return typeof (value as Promise<T>)?.then === 'function'
-}
-
-function requireTaskRunRootSelection(selected: TaskRunRootSelection): void {
-  const runs = selected?.runs
-  if (
-    selected === null ||
-    typeof selected !== 'object' ||
-    typeof selected.configurationFor !== 'function' ||
-    runs === null ||
-    typeof runs !== 'object' ||
-    runs.contentNamespace?.kind !== 'task-run-content-namespace' ||
-    runs.contentNamespace.reference === null ||
-    typeof runs.contentNamespace.reference !== 'object' ||
-    typeof runs.nodeRunPrompts?.read !== 'function' ||
-    typeof runs.nodeRunPrompts.store !== 'function' ||
-    typeof runs.portArtifacts?.read !== 'function' ||
-    typeof runs.portArtifacts.archive !== 'function' ||
-    typeof runs.taskAgentRunsFor !== 'function' ||
-    typeof runs.taskScriptRunsFor !== 'function'
-  ) {
-    throw new TypeError('Task run selection requires complete content and execution families')
-  }
 }
 
 /** Every drive binds the selection's own root content receivers (RFC-431: both deployments select one). */
@@ -67,13 +32,7 @@ export function bindTaskRunRootSelection(selected: TaskRunRootSelection): TaskRu
     bind(request, owners) {
       const contents = { nodeRunPrompts, portArtifacts }
       const configuration = selected.configurationFor(request)
-      if (
-        configuration?.kind !== 'task-run-configuration' ||
-        configuration.reference === null ||
-        typeof configuration.reference !== 'object'
-      ) {
-        throw new TypeError('Task run selection requires its configuration reference')
-      }
+      requireTaskRunConfiguration(configuration)
       const binding: TaskRunFamilyBinding = {
         ...owners,
         taskId: request.taskId,

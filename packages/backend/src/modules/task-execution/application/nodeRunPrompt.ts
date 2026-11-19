@@ -2,6 +2,7 @@ import { decodePrompt, encodePrompt, promptNeedsFile } from '@/platform/content/
 import { createLogger } from '@/util/log'
 import type {
   NodeRunPromptContentEffects,
+  NodeRunPromptOperations,
   NodeRunPromptRow,
   PromptStorage,
   SynchronousNodeRunPromptContentEffects,
@@ -102,5 +103,33 @@ export function readNodeRunPromptContent(
     return finishEffect(content.read(reference), (value) => value, failed)
   } catch (error) {
     return failed(error)
+  }
+}
+
+// RFC-510 — node-run prompt completeness checks: a selected content face or operation set is complete.
+export function requireNodeRunPromptContentEffects(
+  value: unknown,
+): asserts value is NodeRunPromptContentEffects {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    typeof (value as NodeRunPromptContentEffects).reference !== 'function' ||
+    typeof (value as NodeRunPromptContentEffects).write !== 'function' ||
+    typeof (value as NodeRunPromptContentEffects).read !== 'function'
+  ) {
+    throw new TypeError('Node-run prompts require a complete content effects receiver')
+  }
+}
+
+export function requireNodeRunPromptOperations(
+  value: unknown,
+): asserts value is NodeRunPromptOperations {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    typeof (value as NodeRunPromptOperations).store !== 'function' ||
+    typeof (value as NodeRunPromptOperations).read !== 'function'
+  ) {
+    throw new TypeError('Node-run prompts require complete operations')
   }
 }

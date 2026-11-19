@@ -2,6 +2,7 @@ import { runOutputValidationPolicy } from '@agent-workflow/shared'
 import {
   bindPortOutputValidationEffects,
   portOutputValidationPolicy,
+  requirePortOutputValidationContent,
 } from '../application/portOutputValidation'
 import type {
   PortOutputContentValidation,
@@ -20,14 +21,7 @@ export { resolveNativePortContentDetailed } from '../infrastructure/local/filePo
 export function composePortOutputContentValidation(
   content: PortOutputValidationContent,
 ): PortOutputContentValidation {
-  if (
-    content === null ||
-    typeof content !== 'object' ||
-    typeof content.resolve !== 'function' ||
-    typeof content.readUtf8 !== 'function'
-  ) {
-    throw new TypeError('Port output validation requires a complete content receiver')
-  }
+  requirePortOutputValidationContent(content)
   const io = bindPortOutputValidationEffects(content)
   return Object.freeze({
     async resolve(request: PortOutputValidationRequest) {

@@ -20,21 +20,15 @@ const HOSTED_RECOVERY = TE + 'infrastructure/crewstation/hostedRecoverySelection
 const PREPARATION_GC = TE + 'infrastructure/workspacePreparationGc.ts'
 const DRIVE_ENTRY = COMPOSITION + 'taskEngineApplication.ts#driveTaskEngineApplication'
 /**
- * Composition files that throw, and how often: each is an injected receiver's completeness check (TypeError), the
- * local configuration bridge's unknown-reference check, the dynamic-workflow operations guard of the drive or the
- * digital employee's task-not-found mapping. Changing a count means changing composition's assembly shape: update the
- * ledger with the reason.
+ * Composition files that throw, and how often: the local configuration bridge's unknown-reference check, the
+ * dynamic-workflow operations guard of the drive and the digital employee's task-not-found mapping. RFC-510 moved the
+ * injected receivers' completeness checks (TypeError) to application, so their files left the ledger. Changing a
+ * count means changing composition's assembly shape: update the ledger with the reason.
  */
 const THROW_LEDGER: Readonly<Record<string, number>> = {
   [COMPOSITION + 'digitalEmployeeExecution.ts']: 1,
-  [COMPOSITION + 'launchConfiguration.ts']: 1,
-  [COMPOSITION + 'localTaskRunSelection.ts']: 2,
-  [COMPOSITION + 'nodeRunPrompts.ts']: 2,
-  [COMPOSITION + 'portArtifacts.ts']: 3,
-  [COMPOSITION + 'portOutputValidation.ts']: 1,
-  [COMPOSITION + 'taskDeletionEffects.ts']: 3,
+  [COMPOSITION + 'localTaskRunSelection.ts']: 1,
   [COMPOSITION + 'taskEngineApplication.ts']: 1,
-  [COMPOSITION + 'taskRunSelection.ts']: 2,
 }
 /** Every moved symbol (and the composition entries that stay for bootstrap) and its one owner. */
 const OWNERS = new Map([
@@ -196,10 +190,15 @@ test('negative fixtures: a loop, a switch, an unregistered try or throw in compo
     ],
   ] as const)
     expect(shapeViolations([sourceUnit(path, body)]), body).toContain(error)
-  const ledgered = COMPOSITION + 'portArtifacts.ts'
+  const ledgered = COMPOSITION + 'localTaskRunSelection.ts'
   expect(
-    shapeViolations([sourceUnit(ledgered, 'export function f() { throw new TypeError("x") }')]),
-  ).toContain(`composition-throw:${ledgered} 1 (ledger 3)`)
+    shapeViolations([
+      sourceUnit(
+        ledgered,
+        'export function f() { throw new TypeError("x"); throw new Error("y") }',
+      ),
+    ]),
+  ).toContain(`composition-throw:${ledgered} 2 (ledger 1)`)
   // Infrastructure is outside the lock: the moved logic may branch, loop and throw there.
   expect(
     shapeViolations([

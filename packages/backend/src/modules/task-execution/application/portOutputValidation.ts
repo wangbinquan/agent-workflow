@@ -183,3 +183,15 @@ export function parsePortValidationFailuresJson(
   }
   return out
 }
+
+/** RFC-510 — one complete content receiver is selected, never filling missing methods from native IO. */
+export function requirePortOutputValidationContent(content: PortOutputValidationContent): void {
+  if (
+    content === null ||
+    typeof content !== 'object' ||
+    typeof content.resolve !== 'function' ||
+    typeof content.readUtf8 !== 'function'
+  ) {
+    throw new TypeError('Port output validation requires a complete content receiver')
+  }
+}
