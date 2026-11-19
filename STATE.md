@@ -1,3 +1,22 @@
+## 2026-11-19 RFC-512 源码控制的已登记仓库读取与远端登记用例迁出 composition（In Progress；`design/RFC-512-source-control-repository-mirror-use-cases-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-511 之后 source-control 组
+  合层控制流 120 行，RFC-370 的 `crewstation*` / `taskImage*` 101 行，其余 19 行里 11 行在 `composition/repositoryMirrors.ts`：它的装配入口
+  里内联了已登记仓库的读取、远端登记与刷新这一整个用例（RFC-370 §10 V17）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行
+  判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推
+  进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：用例迁入新的 `application/repositoryMirrors.ts`（`readRegisteredRepository`、单机与托管各一个工厂），镜像缓存的四个操作以
+  `RepositoryMirrorCache` 端口声明在 `application/ports/repositoryMirrors.ts`；`composeRepositoryMirrors` 只做“有没有托管远端”的选择并注入基
+  础设施实现，名字、入参与返回形状不变。清单见 design §3。
+- **不做**：其余装配期选择（8 行）；`crewstation*` / `taskImage*`（RFC-370 余项）；镜像缓存与远端核验本身的实现；改写任何判据；任何行为变
+  化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。集中验证按名字、路径、错误串与直接取用
+  选用例与 HEAD A/B，全量语料交给 CI 的 backend 分片。独立对账（plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话
+  执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是用例，落 application；组合文件只做选择与注入。C11 public 不变；不导出 SQL 片段、
+  行形状查询工厂或状态写原子。C12 RFC-512 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读组合文件与新位
+  置。C13 `composition-control-flow-source-control` 120 → 实测，其余计数不升。
+
 ## 2026-11-19 RFC-511 源码控制组合层的端口完整性核对迁出 composition（In Progress；`design/RFC-511-source-control-port-completeness-checks-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；source-control 组合层控制流
