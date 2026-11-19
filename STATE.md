@@ -1,3 +1,23 @@
+## 2026-11-19 RFC-513 代码能力与资源目录组合层余下的 throw 迁出 composition（In Progress；`design/RFC-513-code-history-and-package-recovery-throws-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求组合层的 `try` / `throw` 只在登记清单内、例外清单最终为空。RFC-512 之后，RFC-370 之外的组合层
+  `throw` 还剩六处：task-execution 三处（运行时绑定与引擎，另立后继）、code-capability 两处（`historyQueries.ts` 里未绑定安装时的空读取
+  器）、resource-catalog 一处（`resourcePackageMaintenance.ts` 里恢复产物端口与恢复效果工厂的互斥核对）。用户 2026-11-02「好，你继续推
+  进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按
+  照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：空读取器迁入新的 `code-capability/application/unboundHistoryReader.ts`（`createUnboundCodeHistoryReader`），互斥核对并入
+  `resource-catalog/application/resourcePackageMaintenance.ts`（`requireExclusiveRecoverySelection`）；两个装配入口改为取新位置，名字、入参
+  与返回形状不变。清单见 design §3。
+- **不做**：task-execution 组合层的运行时绑定与引擎；两个模块的其余装配期选择；`crewstation*` / `taskImage*`（RFC-370 余项）；改写任何判据；
+  任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。集中验证按名字、路径、错误串与直接取用
+  选用例与 HEAD A/B，全量语料交给 CI 的 backend 分片。独立对账（plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话
+  执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是空读取器与装配期核对，落 application；组合文件只装配与选择。C11 public 不变；不导
+  出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-513 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读两
+  个模块的组合文件与新位置。C13 `composition-control-flow-code-capability` 2 → 实测、`composition-control-flow-resource-catalog` 77 → 实测，
+  其余计数不升。
+
 ## 2026-11-19 RFC-512 源码控制的已登记仓库读取与远端登记用例迁出 composition（In Progress；`design/RFC-512-source-control-repository-mirror-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-511 之后 source-control 组
