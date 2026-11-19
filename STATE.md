@@ -1,3 +1,22 @@
+## 2026-11-18 RFC-507 开发自动化的图开发执行端口、证据与验收迁出 composition（In Progress；`design/RFC-507-graph-development-evidence-and-acceptance-out-of-composition/`）
+
+- **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-506 之后
+  development-automation 组合层的非 RFC-370 控制流是 10 个文件 53 行，其中循环 4 处、`try` 4 处；`graphDevelopment.ts` 一个文件占 14 行
+  （3 处 `for`、1 处 `try`），因为装配入口里内联写着设计执行端口、证据与验收的用例。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优
+  架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，
+  进行推进」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：设计执行端口的实现迁入 development-automation `application/graph-development/designExecution.ts`（晚建的执行消费、员工工作区与
+  交付桥以转发函数交入），证据、人工验收、请求验证与两种验证档案列表迁入 `application/graph-development/evidenceAcceptance.ts`；
+  `composeGraphDevelopment` 保留（名字、签名、交出的对象与位置不变），从新位置取实现。清单见 design §3。
+- **不做**：`detailProjection` 与它依赖的 `employeeCaseDetailProjection.ts`、`digitalEmployeeWorkspace.ts`；development-automation 其余非
+  RFC-370 文件（后继）；`crewstation*` / `taskImage*`（RFC-370 余项）；改写任何判据；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已
+  到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是两组用例，都落 application；`graphDevelopment.ts` 只装配、没有控制流；不新增
+  用例入口。C11 public 不变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-507 用例覆盖全部生产文件（下限 3,000）、全部用例
+  （下限 2,500）与 e2e 里的同名声明，另读组合文件与两个新位置。C13 `composition-control-flow-development-automation` 133 → 实测，其余计数
+  不升。
+
 ## 2026-11-18 RFC-506 身份访问的改密用例与意图目录的演员绑定迁出 composition（Done；`design/RFC-506-password-reset-and-catalog-actor-binding-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-505 之后 identity-access
@@ -33,7 +52,8 @@
   `composition-control-flow-*`。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **落地**：`88011e010`（13 个文件；父提交是 `6ba5d66c9`）。
 - **CI**：`88011e010` 主 CI run 44455094940 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交
-  `6ba5d66c9`（只改文档）：主 CI run 44393041030 的 70 个 job 第 1 次全部通过，未重跑。
+  `6ba5d66c9`（只改文档）：主 CI run 44393041030 的 70 个 job 第 1 次全部通过，未重跑。转 Done 的 `0e8d143b9`（只改文档）：主 CI
+  run 44459197814 在 RFC-507 落档时仍排队，结果补记于 RFC-507 的实现提交。
 - **下一步**：RFC-294 S10 第十三步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的
   后继已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，
   只改文档；须由没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。identity-access 组合层控制流归零，
