@@ -1,5 +1,6 @@
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import type { ResourcePackageApplyActivityQuery } from '../public/queries'
+import type { ResourcePackageRecoveryEffectsFactory } from './package/recoveryContentEffects'
 
 export type ResourcePackageApplyJournalState = 'prepared' | 'applying' | 'committed' | 'failed'
 
@@ -72,4 +73,17 @@ export function createResourcePackageApplyActivityRegistry(): Readonly<{
       activeApplyIds: () => [...active],
     }),
   })
+}
+
+/** RFC-513 — recovered artifacts and recovery effects are alternative selections; giving both is refused. */
+export function requireExclusiveRecoverySelection(input: {
+  readonly artifacts?: ResourcePackageApplyArtifactRecoveryPort
+  readonly recoveryEffectsFactory?: ResourcePackageRecoveryEffectsFactory
+}): void {
+  if (
+    input.artifacts !== undefined &&
+    input.artifacts !== null &&
+    input.recoveryEffectsFactory !== undefined
+  )
+    throw new Error('resource-package-recovery-selections-conflict')
 }

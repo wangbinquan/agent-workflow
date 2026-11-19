@@ -15,8 +15,18 @@
   执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是空读取器与装配期核对，落 application；组合文件只装配与选择。C11 public 不变；不导
   出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-513 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声明，另读两
-  个模块的组合文件与新位置。C13 `composition-control-flow-code-capability` 2 → 实测、`composition-control-flow-resource-catalog` 77 → 实测，
-  其余计数不升。
+  个模块的组合文件与新位置。C13 `composition-control-flow-code-capability` 2 → 0、`composition-control-flow-resource-catalog` 77 → 75（收紧
+  到实测），其余 58 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第二十步**：清单（design §3）的名字只在各自的位置声明；新文件恰好声明、交出
+  `createUnboundCodeHistoryReader`；code-capability 组合层的每个文件与 resource-catalog 的 `resourcePackageMaintenance.ts` 都没有控制流、不
+  构造错误；新位置只取本模块的 domain、端口与 application 类型，不用进程全局。生产文件 4,126 → 4,127；跨 context import 与 public surface 不
+  变。code-capability 组合层控制流 2 → 0；resource-catalog 77 → 75（余下的是 RFC-370 的 `crewstation*` / `taskImage*` 72 行与 3 行装配期选
+  择）。RFC-370 之外的组合层 `throw` 只剩 task-execution 的三处（运行时绑定与引擎），另立后继。
+- **集中验证**（基于 `fc19801d2`，详见 plan）：没有查出本 RFC 的缺陷。backend `tsc` 0 错，eslint 无告警。首批 161 个文件按 CI 的跑法与对照
+  A/B：候选 1,624 条通过、9 条红，对照 1,613 条通过、11 条红，本 RFC 用例 9 / 9；候选没有多出的红，对照多出的 2 条都是时限，其余红两边相同、
+  都是时限；按错误串断言、读组合文件原文与算 import 闭包的用例在候选一边全过。默认时限放宽到 60 秒后，两边同样撞 5 秒的 4 个文件两边各
+  33 / 33 全过。架构报告 60 项只差两项（`composition-control-flow-code-capability` 与 `composition-control-flow-resource-catalog`）。实现门
+  PASS（本会话按路径限定自审，只审功能；3 段代码与 HEAD 按词法单元逐个相同）。
 
 ## 2026-11-19 RFC-512 源码控制的已登记仓库读取与远端登记用例迁出 composition（In Progress；`design/RFC-512-source-control-repository-mirror-use-cases-out-of-composition/`）
 

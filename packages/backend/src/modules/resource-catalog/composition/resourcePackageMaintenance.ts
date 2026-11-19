@@ -7,6 +7,7 @@ import {
   type ResourcePackageApplyArtifactRecoveryPort,
   type ResourcePackageApplyActivityTracker,
   type ResourcePackageApplyMaintenanceLog,
+  requireExclusiveRecoverySelection,
 } from '../application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../infrastructure/postgresqlResourcePackageMaintenance'
 import { createResourcePackageApplyJournalPort } from '../infrastructure/resourcePackageApplyJournal'
@@ -50,12 +51,7 @@ export function composeResourcePackageApplyMaintenance(input: {
 }): PostgresqlResourcePackageApplyMaintenance {
   const activity = createResourcePackageApplyActivityRegistry()
   const log = input.log ?? createLogger('resourcePackageMaintenance')
-  if (
-    input.artifacts !== undefined &&
-    input.artifacts !== null &&
-    input.recoveryEffectsFactory !== undefined
-  )
-    throw new Error('resource-package-recovery-selections-conflict')
+  requireExclusiveRecoverySelection(input)
   const effectsFactory =
     input.artifacts === undefined || input.artifacts === null
       ? selectedResourcePackageRecoveryEffects(input.recoveryEffectsFactory, input.appHome)

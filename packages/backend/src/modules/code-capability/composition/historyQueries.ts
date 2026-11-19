@@ -2,7 +2,7 @@
 // database clients supply the same readers and application projections.
 
 import type { CodeHistoryReader } from '../application/ports/historyReader'
-import { CodeHistoryReadError } from '../domain/codeHistoryPackage'
+import { createUnboundCodeHistoryReader } from '../application/unboundHistoryReader'
 import type { CapabilityAgentExistence } from '../application/ports/existingResources'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -42,14 +42,7 @@ export interface CodeHistoryQueries {
 export function composeCodeHistoryQueries(
   db: PersistenceDb,
   agents: CapabilityAgentExistence,
-  history: CodeHistoryReader = {
-    rows: async () => {
-      throw new CodeHistoryReadError('code-history-reader-unbound', 'installation binding required')
-    },
-    find: async () => {
-      throw new CodeHistoryReadError('code-history-reader-unbound', 'installation binding required')
-    },
-  },
+  history: CodeHistoryReader = createUnboundCodeHistoryReader(),
 ): CodeHistoryQueries {
   return Object.freeze({
     matrix: createCodeMatrixQuery(createCapabilityMatrixRead(db, agents)),
