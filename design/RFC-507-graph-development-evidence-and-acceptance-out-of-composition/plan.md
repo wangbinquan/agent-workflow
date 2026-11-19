@@ -19,7 +19,7 @@
 - [x] AC-1 清单里的名字只在各自的新位置声明；`graphDevelopment.ts` 没有控制流、从新位置取实现；装配入口与交出的对象不变
 - [x] AC-2 同样输入下执行端口、证据、验收、请求验证与档案列表的结果、错误与端口调用和此前一致
 - [x] AC-3 新位置的依赖面是闭集；public surface 不升；`composition-control-flow-development-automation` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：`fa4398837` 主 CI run 44504341206 的 70 个 job 第 1 次全部通过（见 §CI）
 
 ## 集中验证
 
@@ -156,7 +156,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `fa4398837`（实现，父提交是 `23d235187`）：exact SHA 主 CI run 44504341206 的 70 个 job 第 1 次全部通过（含「Static scans」与
+  `CI required`），未重跑。
 - 本 RFC 的落档提交 `23d235187`（只改文档，同一提交记下 RFC-506 转 Done 提交 `0e8d143b9` 的 CI 当时仍排队）：主 CI run 44459633183
   共 70 个 job，第一次运行全部通过。没有重跑。
 

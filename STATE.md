@@ -1,4 +1,4 @@
-## 2026-11-18 RFC-507 开发自动化的图开发执行端口、证据与验收迁出 composition（In Progress；`design/RFC-507-graph-development-evidence-and-acceptance-out-of-composition/`）
+## 2026-11-18 RFC-507 开发自动化的图开发执行端口、证据与验收迁出 composition（Done；`design/RFC-507-graph-development-evidence-and-acceptance-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-506 之后
   development-automation 组合层的非 RFC-370 控制流是 10 个文件 53 行，其中循环 4 处、`try` 4 处；`graphDevelopment.ts` 一个文件占 14 行
@@ -33,6 +33,16 @@
   红，红的那条两边相同（`rfc395-v3-old-epoch-unpack` 的 PostgreSQL 一段撞测试辅助自带的 90 秒钩子时限，不取本 RFC 改动的代码）。架构报告
   60 项只差一项 `composition-control-flow-development-automation`。实现门 PASS（本会话按路径限定自审，只审功能；五段函数体与 HEAD 按词法单元
   逐个相同）。
+- **落地**：`fa4398837`（11 个文件；父提交是 `23d235187`）。
+- **CI**：`fa4398837` 主 CI run 44504341206 的 70 个 job 第 1 次全部通过（含 Static scans 与 `CI required`），未重跑。落档提交 `23d235187`
+  （只改文档）：主 CI run 44459633183 的 70 个 job 第 1 次全部通过，未重跑。
+- **下一步**：RFC-294 S10 第十四步已关闭（plan §1.2 增一行、§3 S10 记后继）。**独立对账已到期**（plan §0 第 10 条：2026-11-09 之后关闭的后继
+  已满 20 个）：按 design §13.5 按源码抽查已关闭后继的退出门、核对 Done 所依据的锁的覆盖范围、重出架构报告对照 §14、证据分级，只改文档；须由
+  没有实施被抽查后继的会话执行，本会话实施了这些后继、不做，已在本会话向用户说明。development-automation 组合层的非 RFC-370 余项是 9 个文件
+  39 行（`pipelineEvidence.ts` 9 行，含组合层最后一处循环；`developmentDelivery.ts` 8 行；`graphDeliveryLifecycle.ts` 6 行等）；S10 的下一步
+  是这些余项与 task-execution、source-control、resource-catalog 的 `resourceAcl.ts` 等其余模块的余项与收口，再到 S12；
+  `crewstation*` / `taskImage*` 待 RFC-370 余项；code-capability 的未绑定缺省、integration 的可选装配与 system-operations 的装配期路径选择随
+  上限登记或随 S12；S9 余下的其他 context 对按对另立；成员表一族另立。
 
 ## 2026-11-18 RFC-506 身份访问的改密用例与意图目录的演员绑定迁出 composition（Done；`design/RFC-506-password-reset-and-catalog-actor-binding-out-of-composition/`）
 
