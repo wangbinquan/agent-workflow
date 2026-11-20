@@ -9,7 +9,7 @@ import type {
 } from '../application/ports/taskRun'
 import { collaboratorUserIdsOf } from '../domain/taskCollaborators'
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
-import { runTask } from '../engine/task/runTask'
+import { driveTaskRun } from '../engine/task/driveTaskRun'
 import { inspectReadonlyRepos } from '../engine/task/readonlyInspection'
 import { createReadonlyInspectionPorts } from './commitPushBinding'
 import { driveDagScope } from './taskDagScope'
@@ -19,7 +19,7 @@ import type { TaskMechanicsState } from './taskMechanicsState'
 import { runDynamicWorkflowGenerate } from '../engine/task/dynamicWorkflowGenerate'
 import type { DynamicWorkflowGeneratePorts } from '../application/ports/dynamicWorkflowGenerate'
 import { triggerPreflightIssue } from '@/modules/resource-catalog/public/queries'
-import { runWithTaskExecutionContext } from '../application/taskExecutionContext'
+import { requireDynamicWorkflowOperations } from '../application/dynamicWorkflowOperations'
 import { createLogger, type Logger } from '@/util/log'
 import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutionTopology'
 import {
@@ -192,10 +192,7 @@ function prepareTaskDrive(
   }
   // RFC-410: the dynamic-workflow generation engine's ports (engine/task/dynamicWorkflowGenerate.ts).
   const dynamicWorkflowPorts = (): DynamicWorkflowGeneratePorts => {
-    const dynamicWorkflow = opts.dynamicWorkflow
-    if (dynamicWorkflow === undefined) {
-      throw new Error('dynamic-workflow-operations-not-composed')
-    }
+    const dynamicWorkflow = requireDynamicWorkflowOperations(opts.dynamicWorkflow)
     return {
       persistence: dynamicWorkflow.persistence,
       nodeRuns: opts.persistence.nodeRuns,
@@ -274,22 +271,10 @@ export async function driveTaskEngineApplication(
   topology: SchedulerRuntimeTopology,
   runtimeComponents: TaskExecutionRuntimeComponents,
 ): Promise<void> {
-  // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
-  // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
-  // mutex against our cached legacy mechanics writeSem reference).
-  // RFC-266: the fan-out sub-pool registry entry follows the SAME rule and the
-  // same reasoning (a split pool would run a task at double its configured
-  // shard concurrency), so it is reclaimed in this one place too.
-  try {
-    // RFC-408: the task control plane runs in engine/task on ports bound inside the execution context.
-    const run = () => runTask(createTaskRunPorts(opts, topology, runtimeComponents))
-    if (opts.executionContext === undefined) {
-      await run()
-    } else {
-      await runWithTaskExecutionContext(opts.executionContext, run)
-    }
-  } finally {
-    opts.executionPermits.gcTaskWriteSem(opts.taskId)
-    opts.executionPermits.gcTaskFanoutSem(opts.taskId)
-  }
+  await driveTaskRun({
+    taskId: opts.taskId,
+    executionContext: opts.executionContext,
+    executionPermits: opts.executionPermits,
+    ports: () => createTaskRunPorts(opts, topology, runtimeComponents),
+  })
 }

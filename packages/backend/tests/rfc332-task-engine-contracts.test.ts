@@ -269,7 +269,12 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     expect(scheduler).not.toMatch(/\bfunction\s+(?:buildScopeUpstreams|findScopeCycle)\b/)
     expect(orchestrator).toContain('export async function runTask<Admission>(')
     expect(binding).not.toMatch(/\bfunction\s+runTaskEngineOrchestratorInner\b/)
-    expect(binding).toContain('runTask(createTaskRunPorts(opts, topology, runtimeComponents))')
+    // RFC-514: the binding hands the drive (engine/task/driveTaskRun.ts) the bound ports; the drive runs
+    // the control plane on them.
+    expect(binding).toContain('ports: () => createTaskRunPorts(opts, topology, runtimeComponents)')
+    expect(
+      source('packages/backend/src/modules/task-execution/engine/task/driveTaskRun.ts'),
+    ).toContain('runTask(input.ports())')
     expect(scope).toContain('function runScope(')
     expect(graph).toContain('function buildScopeUpstreams(')
     expect(graph).toContain('function findScopeCycle(')

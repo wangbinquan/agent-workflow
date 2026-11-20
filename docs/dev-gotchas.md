@@ -759,6 +759,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 - **钉调用行原文的源码兜底**（RFC-466 实撞）：把直调改成端口注入之前，按被改那一行的**原文**全仓搜用例——`rfc359-w58` 钉着
   `canViewResource(dependencies.db, actor, 'workflow', workflow)`，改成 `dependencies.canViewWorkflow(...)` 后 1 ms 内红；兜底改成同时锁
   注入的调用与实现处的那一条，等价于原来那一行。
+  RFC-514 再撞（2026-11-19）：驱动入口的 `runTask(createTaskRunPorts(opts, topology, runtimeComponents))` 一行被
+  `rfc408-task-control-plane` 与 `rfc332-task-engine-contracts` 经 `source()` 一类辅助函数读原文钉着，按文件路径扫 `readFileSync` 找不
+  到；迁移前把被迁的每一行原文（不只是文件名）全仓搜一遍。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
   RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
   `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。

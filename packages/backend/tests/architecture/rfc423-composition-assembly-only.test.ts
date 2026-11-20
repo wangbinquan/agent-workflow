@@ -18,18 +18,14 @@ const TRIGGER = TE + 'infrastructure/taskExecutionTrigger.ts'
 const RECOVERY_SELECTION = TE + 'infrastructure/taskRecoverySelection.ts'
 const HOSTED_RECOVERY = TE + 'infrastructure/crewstation/hostedRecoverySelection.ts'
 const PREPARATION_GC = TE + 'infrastructure/workspacePreparationGc.ts'
-const DRIVE_ENTRY = COMPOSITION + 'taskEngineApplication.ts#driveTaskEngineApplication'
 /**
- * Composition files that throw, and how often: the local configuration bridge's unknown-reference check, the
- * dynamic-workflow operations guard of the drive and the digital employee's task-not-found mapping. RFC-510 moved the
- * injected receivers' completeness checks (TypeError) to application, so their files left the ledger. Changing a
- * count means changing composition's assembly shape: update the ledger with the reason.
+ * Composition files that throw, and how often. RFC-510 moved the injected receivers' completeness checks (TypeError) to
+ * application; RFC-514 moved the last three (the local configuration bridge's unknown-reference check, the
+ * dynamic-workflow operations guard and the digital employee's task-not-found mapping) to application, and the drive's
+ * try / finally to engine/task/driveTaskRun.ts, so the ledger is empty and composition has no try. Changing a count means
+ * changing composition's assembly shape: update the ledger with the reason.
  */
-const THROW_LEDGER: Readonly<Record<string, number>> = {
-  [COMPOSITION + 'digitalEmployeeExecution.ts']: 1,
-  [COMPOSITION + 'localTaskRunSelection.ts']: 1,
-  [COMPOSITION + 'taskEngineApplication.ts']: 1,
-}
+const THROW_LEDGER: Readonly<Record<string, number>> = {}
 /** Every moved symbol (and the composition entries that stay for bootstrap) and its one owner. */
 const OWNERS = new Map([
   ['createTaskExecutionTriggerParticipant', TRIGGER],
@@ -134,7 +130,7 @@ function shapeViolations(units: readonly SourceUnit[]): string[] {
   const shape = compositionShape(units)
   const found = [
     ...shape.loops.map((site) => 'composition-loop:' + site),
-    ...shape.tries.filter((site) => site !== DRIVE_ENTRY).map((site) => 'composition-try:' + site),
+    ...shape.tries.map((site) => 'composition-try:' + site),
   ]
   const files = new Set([...Object.keys(THROW_LEDGER), ...shape.throws.keys()])
   for (const file of files) {
@@ -155,7 +151,7 @@ test('live corpus: composition only assembles, and the moved logic has one infra
   expect(existsSync(resolve(ROOT, COMPOSITION + 'triggerExecution.ts'))).toBe(false)
   expect(ownershipViolations(UNITS)).toEqual([])
   expect(shapeViolations(UNITS)).toEqual([])
-  expect(compositionShape(UNITS).tries).toEqual([DRIVE_ENTRY])
+  expect(compositionShape(UNITS).tries).toEqual([])
 })
 
 test('negative fixtures: a missing, duplicated or relocated owner is detected', () => {
@@ -190,23 +186,29 @@ test('negative fixtures: a loop, a switch, an unregistered try or throw in compo
     ],
   ] as const)
     expect(shapeViolations([sourceUnit(path, body)]), body).toContain(error)
-  const ledgered = COMPOSITION + 'localTaskRunSelection.ts'
+  // RFC-514: the files that left the ledger count from zero again, and the drive entry is no longer exempt from try.
+  const formerlyLedgered = COMPOSITION + 'localTaskRunSelection.ts'
   expect(
     shapeViolations([
       sourceUnit(
-        ledgered,
+        formerlyLedgered,
         'export function f() { throw new TypeError("x"); throw new Error("y") }',
       ),
     ]),
-  ).toContain(`composition-throw:${ledgered} 2 (ledger 1)`)
+  ).toContain(`composition-throw:${formerlyLedgered} 2 (ledger 0)`)
+  const driveEntry = COMPOSITION + 'taskEngineApplication.ts'
+  expect(
+    shapeViolations([
+      sourceUnit(
+        driveEntry,
+        'export async function driveTaskEngineApplication() { try { await 0 } finally { void 0 } }',
+      ),
+    ]),
+  ).toContain(`composition-try:${driveEntry}#driveTaskEngineApplication`)
   // Infrastructure is outside the lock: the moved logic may branch, loop and throw there.
   expect(
     shapeViolations([
       sourceUnit(PREPARATION_GC, 'export function f() { try { throw 1 } finally {} }'),
     ]),
-  ).toEqual(
-    Object.keys(THROW_LEDGER)
-      .map((file) => `composition-throw:${file} 0 (ledger ${THROW_LEDGER[file]})`)
-      .sort(),
-  )
+  ).toEqual([])
 })

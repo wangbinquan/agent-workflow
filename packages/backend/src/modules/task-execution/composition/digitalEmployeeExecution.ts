@@ -8,11 +8,13 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { projectExecutionOutcome } from '../infrastructure/executionOutcome'
 import { getTask } from '../infrastructure/taskDetailRead'
-import { NotFoundError } from '@/util/errors'
 
 import { composeReactionExecutionAdmissionParticipantInTx } from '../application/adapters/reaction-admission-adapter'
 import { composeReactionExecutionPortV1 } from '../application/adapters/reaction-execution-adapter'
-import { createDigitalEmployeeExecutionCore } from '../application/digitalEmployeeExecution'
+import {
+  cancelAndReadTask,
+  createDigitalEmployeeExecutionCore,
+} from '../application/digitalEmployeeExecution'
 import type { DigitalEmployeeExecutionCore } from '../application/ports/digitalEmployeeExecutionCore'
 import type { DigitalEmployeeExecutionPorts } from '../application/ports/digitalEmployeeExecution'
 import type { ProgramToolSource } from '../application/ports/scriptFixture'
@@ -135,12 +137,15 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
   return Object.freeze({
     tasks: {
       get: (taskId: string) => getTask(db, taskId),
-      async cancel(taskId: string) {
-        await composeTaskCancellation(db, historyRestrictions, humanGateOpen).cancel(taskId)
-        const task = await getTask(db, taskId)
-        if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-        return task
-      },
+      cancel: (taskId: string) =>
+        cancelAndReadTask(
+          {
+            cancel: (id) =>
+              composeTaskCancellation(db, historyRestrictions, humanGateOpen).cancel(id),
+            read: (id) => getTask(db, id),
+          },
+          taskId,
+        ),
     },
     readModels: createTaskExecutionReadModels(db),
     resourceUsage: {

@@ -4,7 +4,6 @@ import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily
 import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
 import type { TaskDriveRequest } from '../application/ports/taskExecutionTopology'
 import type {
-  TaskRunConfigurationReference,
   TaskRunContentNamespace,
   TaskRunFamilyBinding,
 } from '../application/ports/taskRunSelection'
@@ -22,7 +21,10 @@ import { composeLocalTaskScriptRunFamily } from './localTaskScriptRunFamily'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import { selectWorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import { Paths } from '@/util/paths'
-import { requireTaskRunDriveBinding } from '../application/taskRunSelection'
+import {
+  createTaskRunConfigurationReferences,
+  requireTaskRunDriveBinding,
+} from '../application/taskRunSelection'
 
 /** The Task bootstrap bridge alone translates the legacy application-home override. */
 export function composeTaskWorkspaceExcludeProfilesFor(
@@ -54,26 +56,17 @@ export type ProviderTaskRunBindingSelection =
 function localConfigurationBridge(
   input: Pick<LegacyTaskRunComposition, 'taskAgentRunsFor' | 'taskScriptRunsFor'>,
 ) {
-  const requests = new WeakMap<object, TaskDriveRequest>()
+  const references = createTaskRunConfigurationReferences()
   const contentNamespace: TaskRunContentNamespace = Object.freeze({
     kind: 'task-run-content-namespace',
     reference: Object.freeze({}),
   })
-  const requestFor = (binding: TaskRunFamilyBinding): TaskDriveRequest => {
-    const request = requests.get(binding.configuration.reference)
-    if (request === undefined) throw new Error('local-task-run-configuration-unavailable')
-    return request
-  }
   return {
     contentNamespace,
-    configurationFor(request: TaskDriveRequest): TaskRunConfigurationReference {
-      const reference = Object.freeze({})
-      requests.set(reference, request)
-      return Object.freeze({ kind: 'task-run-configuration', reference })
-    },
+    configurationFor: references.configurationFor,
     taskAgentRunsFor(binding: TaskRunFamilyBinding): TaskAgentRunFamily {
       return input.taskAgentRunsFor({
-        request: requestFor(binding),
+        request: references.requestFor(binding),
         nodeRunRuntime: binding.nodeRunRuntime,
         runtimeRegistry: binding.runtimeRegistry,
         nodeRunPrompts: binding.nodeRunPrompts,
@@ -84,7 +77,7 @@ function localConfigurationBridge(
       })
     },
     taskScriptRunsFor(binding: TaskRunFamilyBinding): TaskScriptRunFamily {
-      return input.taskScriptRunsFor(requestFor(binding))
+      return input.taskScriptRunsFor(references.requestFor(binding))
     },
   }
 }

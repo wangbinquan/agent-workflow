@@ -3,6 +3,7 @@
 // references and host snapshots per implementation kind, launch, inspection (completed / failed / stopped, the plan path
 // and workspace semantic checks) and cancel. It runs on DigitalEmployeeExecutionPorts; the composition binds the
 // provider's root launch kernel behind `launchHost`.
+import { NotFoundError } from '@/util/errors'
 import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import {
   utf16MaxLength,
@@ -643,4 +644,18 @@ export function createDigitalEmployeeExecutionCore(
   }
 
   return Object.freeze(core)
+}
+
+/** RFC-514 — cancel a task, then read it back; a task gone by then is a 404. */
+export async function cancelAndReadTask<T>(
+  steps: {
+    readonly cancel: (taskId: string) => Promise<unknown>
+    readonly read: (taskId: string) => Promise<T | null>
+  },
+  taskId: string,
+): Promise<T> {
+  await steps.cancel(taskId)
+  const task = await steps.read(taskId)
+  if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  return task
 }

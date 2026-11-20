@@ -1,7 +1,9 @@
 // RFC-510 — task run selection completeness checks: the root selection, each drive configuration and a selected run binding.
+import type { TaskDriveRequest } from './ports/taskExecutionTopology'
 import type {
   TaskRunConfigurationReference,
   TaskRunDriveBinding,
+  TaskRunFamilyBinding,
   TaskRunRootSelection,
 } from './ports/taskRunSelection'
 
@@ -40,5 +42,29 @@ export function requireTaskRunConfiguration(configuration: TaskRunConfigurationR
 export function requireTaskRunDriveBinding(selected: TaskRunDriveBinding): void {
   if (selected === null || typeof selected !== 'object' || typeof selected.bind !== 'function') {
     throw new TypeError('Task provider requires a complete run binding')
+  }
+}
+
+/**
+ * RFC-514 — the standalone configuration references: each drive request is registered under a fresh opaque reference,
+ * and a run family binding finds its request again; an unknown reference fails closed.
+ */
+export function createTaskRunConfigurationReferences(): {
+  configurationFor(request: TaskDriveRequest): TaskRunConfigurationReference
+  requestFor(binding: TaskRunFamilyBinding): TaskDriveRequest
+} {
+  const requests = new WeakMap<object, TaskDriveRequest>()
+  const requestFor = (binding: TaskRunFamilyBinding): TaskDriveRequest => {
+    const request = requests.get(binding.configuration.reference)
+    if (request === undefined) throw new Error('local-task-run-configuration-unavailable')
+    return request
+  }
+  return {
+    configurationFor(request: TaskDriveRequest): TaskRunConfigurationReference {
+      const reference = Object.freeze({})
+      requests.set(reference, request)
+      return Object.freeze({ kind: 'task-run-configuration', reference })
+    },
+    requestFor,
   }
 }

@@ -15,7 +15,20 @@
   执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是驱动与运行期判断，落 engine 与 application；组合文件只装配与选择。C11 public 不
   变；不导出 SQL 片段、行形状查询工厂或状态写原子。C12 RFC-514 用例覆盖全部生产文件（下限 3,000）、全部用例（下限 2,500）与 e2e 里的同名声
-  明，另读 task-execution `composition/` 目录的全部文件与新位置。C13 `composition-control-flow-task-execution` 17 → 实测，其余计数不升。
+  明，另读 task-execution `composition/` 目录的全部文件与新位置。C13 `composition-control-flow-task-execution` 17 → 11（收紧到实测），其余
+  59 项实测与对照逐项相同，都在 `max` 内。
+- **§14 不变量 / S10 第二十一步**：清单（design §3）的名字只在各自的位置声明；两个新文件恰好声明、交出清单列的名字；task-execution
+  `composition/` 目录的每个文件没有 `try` / `throw`、不构造错误，`rfc423-composition-assembly-only` 的 throw 账本为空、驱动入口不再是 try 豁
+  免；新位置只取本模块的 engine 与 application，不用进程全局。生产文件 4,127 → 4,129；跨 context import 7,508 不变，public surface 不
+  变。task-execution 组合层控制流 17 → 11（装配期选择与端口绑定，另有 RFC-370 的 `crewstation*` 1 行）。至此 RFC-370 之外的各模块
+  `composition/` 目录都没有 `try` / `throw`。
+- **集中验证**（基于 `fda04702a`，详见 plan）：查出本 RFC 的一处缺陷，已修正并复验：三个用例按原文或结构钉着被迁的代码
+  （`rfc408-task-control-plane` 与 `rfc332-task-engine-contracts` 钉驱动入口那一行，本会话 RFC-510 的用例钉
+  `application/taskRunSelection.ts` 交出的名字与 import），按文件路径的预查没找到，只在候选一边红；改钉新位置，意图不变。两个候选的 backend
+  `tsc` 都 0 错，eslint 无告警。首批 174 个文件按 CI 的跑法与对照 A/B：候选 1,854 条通过、49 条红，对照 1,852 条通过、38 条红，本 RFC 用例
+  13 / 13；候选多出的红除上述 5 例外都是时限。修正后默认时限放宽到 60 秒复验 22 个文件：修正的三个用例、本 RFC 用例与驱动任务的用例两边全
+  过，两边各余 2 条相同的红（`rfc400` 自带的 30 秒、`rfc167` 的批准一例在用例自己的等待后仍读到 `running`）。架构报告 60 项只差一项
+  `composition-control-flow-task-execution`。实现门 PASS（本会话按路径限定自审，只审功能；迁移的代码与 HEAD 按词法单元逐段相同）。
 
 ## 2026-11-19 RFC-513 代码能力与资源目录组合层余下的 throw 迁出 composition（In Progress；`design/RFC-513-code-history-and-package-recovery-throws-out-of-composition/`）
 

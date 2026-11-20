@@ -151,7 +151,9 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // `intent-resource-catalog-context-not-bound` 迁入 intent `application/resourceCatalog.ts` 的
   // `createIntentCatalogActorBinding`。它是每请求的用例状态（上面 PG 那条早已写明不是装配缺口）；组合文件
   // 只装配，application 不在本守卫的扫描面。
-  'modules/task-execution/composition/taskEngineApplication.ts: marker=1, prose=0, holder=0',
+  // RFC-514 销账：`modules/task-execution/composition/taskEngineApplication.ts: marker=1` —— 上面那句条件依赖的 fail-closed
+  // （`dynamic-workflow-operations-not-composed`）迁入 task-execution `application/dynamicWorkflowOperations.ts` 的
+  // `requireDynamicWorkflowOperations`，判据与错误串不变；组合文件只装配，application 不在本守卫的扫描面。
   // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
   // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、
   // `mcpCatalogRef`），改成直接闭包引用同作用域的 `const`；`collaborationContext` 同理，顺带

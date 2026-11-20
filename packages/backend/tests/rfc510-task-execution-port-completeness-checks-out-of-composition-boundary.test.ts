@@ -75,7 +75,9 @@ const LISTED: readonly (readonly [string, string])[] = [
 /** design §3: the two new files declare and offer exactly these names. */
 const NEW_FILES: Readonly<Record<string, readonly string[]>> = {
   [DELETION]: ['requireTaskDeletionContentEffects', 'requireTaskDeletionEffects'],
+  // RFC-514 added the standalone configuration references (moved out of composition/localTaskRunSelection.ts).
   [RUNS]: [
+    'createTaskRunConfigurationReferences',
     'requireTaskRunConfiguration',
     'requireTaskRunDriveBinding',
     'requireTaskRunRootSelection',
@@ -185,11 +187,12 @@ const ROOTS: Readonly<
       'composeLocalTaskRunSelection',
       'composeTaskWorkspaceExcludeProfilesFor',
     ],
-    // The exclude-profile and run-binding selections, and the local configuration bridge's lookup (a later successor).
-    shapes: ['if', 'if', 'throw', 'if'],
+    // The exclude-profile and run-binding selections; RFC-514 moved the local configuration bridge's lookup (and its
+    // throw) to application/taskRunSelection.ts as createTaskRunConfigurationReferences.
+    shapes: ['if', 'if'],
     takes: [
-      `import ${RUN_PORTS}: TaskRunConfigurationReference, TaskRunContentNamespace, TaskRunFamilyBinding`,
-      `import ${RUNS}: requireTaskRunDriveBinding`,
+      `import ${RUN_PORTS}: TaskRunContentNamespace, TaskRunFamilyBinding`,
+      `import ${RUNS}: createTaskRunConfigurationReferences, requireTaskRunDriveBinding`,
     ],
   },
 }
@@ -216,8 +219,10 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   [DELETION]: [
     `import ${TE}/application/ports/taskDeletionContentEffects: TaskDeletionContentEffects, TaskDeletionEffects`,
   ],
+  // RFC-514: the configuration references take the drive request and family binding types.
   [RUNS]: [
-    `import ${RUN_PORTS}: TaskRunConfigurationReference, TaskRunDriveBinding, TaskRunRootSelection`,
+    `import ${TE}/application/ports/taskExecutionTopology: TaskDriveRequest`,
+    `import ${RUN_PORTS}: TaskRunConfigurationReference, TaskRunDriveBinding, TaskRunFamilyBinding, TaskRunRootSelection`,
   ],
 }
 /** The new files take only this module's ports. */

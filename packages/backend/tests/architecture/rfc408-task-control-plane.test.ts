@@ -17,11 +17,14 @@ const RUN = TASK + 'runTask.ts'
 const SETTLEMENT = TASK + 'taskSettlement.ts'
 const GRAPH = SCOPE + 'dagGraph.ts'
 const BINDING = TE + 'composition/taskEngineApplication.ts'
+/** RFC-514: the drive (try / finally and execution context) left the binding for engine/task/. */
+const DRIVE = TASK + 'driveTaskRun.ts'
 const PORT = TE + 'application/ports/taskRun.ts'
 const DELETED = [TE + 'composition/taskDagGraph.ts']
 /** Every moved symbol and its one owner. */
 const OWNERS = new Map([
   ['runTask', RUN],
+  ['driveTaskRun', DRIVE],
   ['failTaskRun', SETTLEMENT],
   ['cancelTaskRun', SETTLEMENT],
   ['settleTaskScopeOutcome', SETTLEMENT],
@@ -106,12 +109,19 @@ function flowViolations(units: readonly SourceUnit[]): string[] {
       for (const reason of CONTROL_PLANE_REASONS)
         if (unit.text.includes(reason)) found.push('binding-flow:' + reason)
   }
+  // RFC-514: the binding hands the drive the bound ports, and the drive runs the control plane on them.
   const binding = units.find((unit) => unit.path === BINDING)
   if (
     binding !== undefined &&
-    !binding.text.includes('runTask(createTaskRunPorts(opts, topology, runtimeComponents))')
+    !(
+      binding.text.includes('await driveTaskRun({') &&
+      binding.text.includes('ports: () => createTaskRunPorts(opts, topology, runtimeComponents)')
+    )
   )
     found.push('binding-drive')
+  const drive = units.find((unit) => unit.path === DRIVE)
+  if (drive !== undefined && !drive.text.includes('runTask(input.ports())'))
+    found.push('drive-control-plane')
   return found.sort()
 }
 
@@ -148,7 +158,7 @@ function replaceUnit(units: readonly SourceUnit[], path: string, from: string, t
 test('live corpus: the control plane lives in engine/task/, the graph in engine/scope/, the binding only binds', () => {
   expect(UNITS.length).toBeGreaterThanOrEqual(2000)
   for (const path of DELETED) expect(existsSync(resolve(ROOT, path)), path).toBe(false)
-  for (const path of [RUN, SETTLEMENT, GRAPH, BINDING, PORT])
+  for (const path of [RUN, DRIVE, SETTLEMENT, GRAPH, BINDING, PORT])
     expect(
       UNITS.some((unit) => unit.path === path),
       path,
@@ -205,8 +215,8 @@ test('negative fixtures: the binding regaining the flow or skipping the control 
   const revived = replaceUnit(
     UNITS,
     BINDING,
-    'runTask(createTaskRunPorts(opts, topology, runtimeComponents))',
-    'runTaskEngineOrchestratorInner(opts, topology, runtimeComponents)',
+    'ports: () => createTaskRunPorts(opts, topology, runtimeComponents)',
+    'ports: () => runTaskEngineOrchestratorInner(opts, topology, runtimeComponents)',
   )
   expect(flowViolations(revived)).toEqual(
     expect.arrayContaining([
@@ -214,6 +224,10 @@ test('negative fixtures: the binding regaining the flow or skipping the control 
       'retired-name:runTaskEngineOrchestratorInner:' + BINDING,
     ]),
   )
+  // RFC-514: a drive that stops running the control plane on the bound ports is detected too.
+  expect(
+    flowViolations(replaceUnit(UNITS, DRIVE, 'runTask(input.ports())', 'Promise.resolve()')),
+  ).toEqual(['drive-control-plane'])
   // Comments and strings are not identifiers: history notes may keep naming the old functions.
   expect(
     flowViolations(

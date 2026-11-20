@@ -76,6 +76,7 @@ F13 口径 6 行：`taskEngineApplication.ts` 第 196、197、283、286 行，`l
 - **走样**：按 HEAD 原行切片生成，用词法单元比对复核。
 - **端口构造的时机**：`ports` 是闭包，仍在 `try` 里、执行上下文内构造；构造抛错时仍回收登记。
 - **账本**：两个按语料比对的账本（rfc423 的 throw 账本与 try 豁免、t19b 的占位账本）随迁移同步改，已预查。
+- **按原文钉住被迁行的锁**（集中验证查出）：`rfc408-task-control-plane` 与 `rfc332-task-engine-contracts` 经 `source()` 一类辅助函数读组合文件原文、钉着 `runTask(createTaskRunPorts(opts, topology, runtimeComponents))` 这一行，按文件路径的预查找不到；`rfc266-task-fanout-pools` 钉着 `finally` 里两句回收的原文；RFC-510 用例钉着 `application/taskRunSelection.ts` 交出的名字与 import。这些锁随迁移改为钉新位置（绑定交出端口闭包、驱动在端口上跑控制面），断言的意图不变。
 
 ## 6. 取舍（可推翻）
 

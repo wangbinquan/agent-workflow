@@ -125,24 +125,21 @@ describe('RFC-266 task fan-out pool registry', () => {
     gcTaskFanoutSem(id)
   })
 
-  test('the task engine application gc-s the entry in its drive finally and nowhere else', () => {
-    const application = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'taskEngineApplication.ts',
-      ),
-      'utf8',
-    )
+  test('the task drive gc-s the entry in its finally and nowhere else', () => {
+    // RFC-514: the drive's try / finally moved from composition/taskEngineApplication.ts to
+    // engine/task/driveTaskRun.ts; the composition hands the drive its permits and no longer gc-s.
+    const read = (...path: string[]) =>
+      readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', ...path),
+        'utf8',
+      )
+    const drive = read('engine', 'task', 'driveTaskRun.ts')
     // 与 gcTaskWriteSem 同处、同一个 finally —— 唯一允许的 gc 点。
-    expect(application).toContain(
-      'gcTaskWriteSem(opts.taskId)\n    opts.executionPermits.gcTaskFanoutSem(opts.taskId)',
+    expect(drive).toContain(
+      'gcTaskWriteSem(input.taskId)\n    input.executionPermits.gcTaskFanoutSem(input.taskId)',
     )
-    expect(application.match(/gcTaskFanoutSem\(/g)).toHaveLength(1)
+    expect(drive.match(/gcTaskFanoutSem\(/g)).toHaveLength(1)
+    expect(read('composition', 'taskEngineApplication.ts')).not.toContain('gcTaskFanoutSem')
     // HTTP 侧绝不允许 gc（会与调度器缓存的引用竞争 ⇒ 裂池）。
     const routes = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'config.ts'),
