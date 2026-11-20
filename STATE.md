@@ -1,3 +1,22 @@
+## 2026-11-19 RFC-515 组合层只装配的全模块门（In Progress；`design/RFC-515-composition-assembly-only-gate/`）
+
+- **来由**：RFC-294 plan §3 S10 要求把 RFC-414 / RFC-423 的收口锁改写为一条覆盖全部模块的门（无循环与 switch、`try` / `throw` 只在登记清单
+  内、不做 DB / FS / 进程 / git 工作），退出门是该门对全部模块为绿、例外清单为空、`composition-forbidden-import-files` = 0、各模块的分支计数
+  不高于经确认的上限。RFC-514 之后 RFC-370 之外的各模块 `composition/` 目录都已没有 `try` / `throw`。用户 2026-11-02「好，你继续推进RFC294，
+  过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新
+  的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准（分支上限按同一授权记为已确认），不
+  派 Codex。
+- **范围**：新增 `architecture/rfc515-composition-assembly-only` 覆盖全部模块的 `composition/` 目录与模块根 `composition.ts`，例外清单逐文件
+  登记 33 个（RFC-370 的 27 个与模块根 6 个，各写后继），陈旧例外与清单外违反都红；唯一的非 RFC-370 违反项（resource-catalog
+  `composition/intentApply.ts` 自己读库的 `loadSkillOperationState`）迁入 `infrastructure/skillOperationStateQuery.ts`；RFC-414 与
+  RFC-423 的锁只留归属检查；分支上限按 design D4 写明（即 `counts.json` 现值）。
+- **不做**：例外清单里的文件本身（RFC-370 余项；模块根的运行期逻辑另立后继）；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。集中验证按新门、两条旧
+  锁、`tests/architecture/` 全部与经装配入口对拍的用例与 HEAD A/B，全量语料交给 CI 的 backend 分片。独立对账（plan §0 第 10 条）已到期、已在
+  本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 门即“组合层只装配”的全模块判据；C11 public 不变；C12 门覆盖全部模块的组合层（下限 350）并
+  带负对照；C13 计数不升，分支上限按 design D4。
+
 ## 2026-11-19 RFC-514 任务执行组合层余下的 try / throw 迁出 composition（In Progress；`design/RFC-514-task-execution-composition-try-throw-out/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求组合层的 `try` / `throw` 只在登记清单内、例外清单最终为空。RFC-513 之后，RFC-370 之外的组合层
