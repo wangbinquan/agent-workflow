@@ -19,7 +19,7 @@
 - [x] AC-1 11 处回落不再存在，选项必填、只为回落存在的选项删去，门的实测与登记相等、适配器回落 67 条
 - [x] AC-2 daemon 与维护 worker 得到的对象不变，用例显式给出的选择与此前缺省相同
 - [x] AC-3 bootstrap 不深取模块的 infrastructure；public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 68 / 70：红的是 design/ 链接检查的外部 503 与随之红的 `CI required`（见下文）
 
 ## 集中验证
 
@@ -47,7 +47,16 @@ HEAD（`fe2628450`）的树相同。集中验证没有查出本 RFC 的缺陷；
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `20fcbd1dc`（实现，父提交是 `fe2628450`）：exact SHA 主 CI run 44773723166 的 70 个 job 第 1 次运行 68 个通过（backend 全部分
+  片、PostgreSQL 一路与三个 OS 的 Playwright 都过）；红的是 design/ 链接检查对 RFC-371 文档
+  （`design/RFC-371-run-observability/native-real-validation-20261007.md`）里一条既有提交链接的外部 503，`CI required` 只因它红；未重跑。
+- 本 RFC 的落档提交 `fe2628450`（只改文档）：主 CI run 44756054041 的 70 个 job 第 1 次运行 66 个通过、1 个取消。红的除同一条外部 503 与
+  `CI required`，还有 PostgreSQL 一路的 RFC-359 P0 变异核对：`p0-8-command-omission` 的 PostgreSQL 一半里
+  `rfc359-w12-collaboration-composition` 的一条（`clarify.saveDraft`）撞默认 5 秒（8.6 秒），超时的用例体随后抛出未处理错误，核对因失败名不
+  符判红——这个提交不改代码，同一份代码在父提交 `f889f5192` 上这一路通过，`20fcbd1dc` 上也通过，属 runner 时限；取消的是 macOS 的 Playwright
+  分片 3/4，跑满 20 分钟的 job 上限（环境）；未重跑。
+- RFC-522 转 Done 的文档提交 `f889f5192`（本 RFC 落档的父提交）：主 CI run 44754776266 的 70 个 job 第 1 次运行 68 个通过；红的是同一条外部
+  503 与随之红的 `CI required`；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

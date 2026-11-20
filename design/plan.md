@@ -553,7 +553,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-520](./RFC-520-shared-resource-package-runtime/proposal.md) | 资源包装配共用一个模块工厂（RFC-294 S12 第一步）：CLI 包命令与 daemon 的资源包绑定不再各自手写 provider / 原子 apply / catalog 与授权登记，改调 resource-catalog 新增的 `composeResourcePackageRuntime`；授权登记（未登记的授权以原错误拒绝）归 application。无用户可见变化。 | Done |
 | [RFC-521](./RFC-521-composition-adapter-fallback-gate/proposal.md) | 组合层适配器回落的全模块门与清单（RFC-294 S12 第二步）：新增覆盖全部模块组合层的结构锁，按语法树找出“没给就自己造一个”的回落构造（114 处、59 个文件），逐条登记——31 处中性默认带类别，83 处适配器回落按模块指定后继、总数只减不增。不改生产代码。 | Done |
 | [RFC-522](./RFC-522-employee-and-event-center-required-selections/proposal.md) | 数字员工与事件中心的适配器回落改为必填注入（RFC-294 S12 第三步）：`composeDigitalEmployee` 的输入工件库、程序工件库与写入切换，`composeEventCenter` 的观察者程序与自定义观察者程序工厂改为调用方必须给出，删去 5 处回落、只为回落存在的 `writerInstallation` 选项与 `selectLocalCustomObserverProgramFactory`；用例经测试助手给出同样的单机选择。RFC-521 门的适配器回落 83 → 78，余下各步按改动面重排。无用户可见变化。 | Done |
-| [RFC-523](./RFC-523-intent-code-history-memory-required-selections/proposal.md) | 意图、代码历史与记忆的适配器回落改为必填注入（RFC-294 S12 第四步）：intent apply 只收已经装好的资源会话绑定与工件生命周期（daemon 在 bootstrap 里显式构造，维护 worker 取 intent 的单机选择），代码历史的读取器与记忆的注入查询必填；只给用例用的 `applyIntentChangeset` 移到测试助手。RFC-521 门的适配器回落 78 → 67。无用户可见变化。 | In Progress |
+| [RFC-523](./RFC-523-intent-code-history-memory-required-selections/proposal.md) | 意图、代码历史与记忆的适配器回落改为必填注入（RFC-294 S12 第四步）：intent apply 只收已经装好的资源会话绑定与工件生命周期（daemon 在 bootstrap 里显式构造，维护 worker 取 intent 的单机选择），代码历史的读取器与记忆的注入查询必填；只给用例用的 `applyIntentChangeset` 移到测试助手。RFC-521 门的适配器回落 78 → 67。无用户可见变化。 | Done |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

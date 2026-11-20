@@ -1,4 +1,4 @@
-## 2026-11-20 RFC-523 意图、代码历史与记忆的适配器回落改为必填注入（In Progress；`design/RFC-523-intent-code-history-memory-required-selections/`）
+## 2026-11-20 RFC-523 意图、代码历史与记忆的适配器回落改为必填注入（Done；`design/RFC-523-intent-code-history-memory-required-selections/`）
 
 - **来由**：RFC-522 之后 RFC-521 门余 78 处适配器回落；按 RFC-522 design D4 的次序，第 1 项第三步清 intent、code-capability 与 memory 的
   11 处——其中 intent 的资源会话绑定与旧版兼容绑定在 daemon 的生产路径上一直由回落造，维护 worker 的单机效果是 `null`、也落在回落上。用户
@@ -20,6 +20,11 @@
 - **集中验证**（基于 `fe2628450`，详见 plan）：tsc 0 错；首批 253 个文件按 CI 的跑法与对照 A/B，候选的红全部是时限；候选多出红的 13 个文件放
   宽到 60 秒后全过；收紧上限后结构门复验通过。架构报告的 60 项只有收紧的一项变化、与新上限相等。实现门 PASS（本会话按路径限定自审，只审功
   能）。
+- **落地**：`20fcbd1dc`（52 个文件；父提交是 `fe2628450`）。
+- **CI**：实现提交 68 / 70（design/ 链接检查的外部 503 与随之红的 `CI required`）；落档提交 66 / 70：同一条 503，PostgreSQL 一路的 P0 变异核
+  对里一条用例撞默认 5 秒（同一份代码在父提交上这一路通过），macOS 的 Playwright 分片 3/4 跑满 20 分钟上限被取消，都属环境；RFC-522 转 Done
+  的 `f889f5192` 68 / 70（同一条 503）。都未重跑。
+- **下一步**：S12 第 1 项第四步：system-operations 与 development-automation 的 16 处适配器回落（RFC-522 design D4 的次序）。
 
 ## 2026-11-20 RFC-522 数字员工与事件中心的适配器回落改为必填注入（Done；`design/RFC-522-employee-and-event-center-required-selections/`）
 
