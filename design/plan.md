@@ -554,6 +554,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-521](./RFC-521-composition-adapter-fallback-gate/proposal.md) | 组合层适配器回落的全模块门与清单（RFC-294 S12 第二步）：新增覆盖全部模块组合层的结构锁，按语法树找出“没给就自己造一个”的回落构造（114 处、59 个文件），逐条登记——31 处中性默认带类别，83 处适配器回落按模块指定后继、总数只减不增。不改生产代码。 | Done |
 | [RFC-522](./RFC-522-employee-and-event-center-required-selections/proposal.md) | 数字员工与事件中心的适配器回落改为必填注入（RFC-294 S12 第三步）：`composeDigitalEmployee` 的输入工件库、程序工件库与写入切换，`composeEventCenter` 的观察者程序与自定义观察者程序工厂改为调用方必须给出，删去 5 处回落、只为回落存在的 `writerInstallation` 选项与 `selectLocalCustomObserverProgramFactory`；用例经测试助手给出同样的单机选择。RFC-521 门的适配器回落 83 → 78，余下各步按改动面重排。无用户可见变化。 | Done |
 | [RFC-523](./RFC-523-intent-code-history-memory-required-selections/proposal.md) | 意图、代码历史与记忆的适配器回落改为必填注入（RFC-294 S12 第四步）：intent apply 只收已经装好的资源会话绑定与工件生命周期（daemon 在 bootstrap 里显式构造，维护 worker 取 intent 的单机选择），代码历史的读取器与记忆的注入查询必填；只给用例用的 `applyIntentChangeset` 移到测试助手。RFC-521 门的适配器回落 78 → 67。无用户可见变化。 | Done |
+| [RFC-524](./RFC-524-system-operations-development-automation-required-selections/proposal.md) | 系统运维与开发自动化的适配器回落改为必填注入（RFC-294 S12 第五步）：system-operations 的本机系统运维、daemon 的数据库准备、宿主生命周期与运行期查询、迁移模块与手动迁移的配置、种子标记与打开前恢复，development-automation 的证据库、准入查询、需求物化器的写入器与暂存与旧版流水线证据桥，共 16 处回落改为调用方给出；daemon 按部署选择显式选数据库准备的一支，没有使用方的入口删去或移进测试助手。RFC-521 门的适配器回落 67 → 51。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

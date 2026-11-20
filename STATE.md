@@ -1,3 +1,20 @@
+## 2026-11-20 RFC-524 系统运维与开发自动化的适配器回落改为必填注入（In Progress；`design/RFC-524-system-operations-development-automation-required-selections/`）
+
+- **来由**：RFC-523 之后 RFC-521 门余 67 处适配器回落；按 RFC-522 design D4 的次序，第 1 项第四步清 system-operations 的 9 处与
+  development-automation 的 7 处——其中 `backup` / `restore` 命令的数据库配置、CLI 迁移的配置与演示种子的标记在生产路径上一直由回落造，daemon
+  把部署选择里表示单机的 `null` 转回 `undefined` 再交给回落；其余只服务用例，旧版流水线证据桥与组合层的打开前恢复已经没有生产调用方。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当
+  前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批
+  准，不派 Codex。
+- **范围**：两个模块组合层的 16 处回落改为必填注入；daemon 的数据库准备按 `kind` 显式选托管安装或本机文件一支；删去两个 `select*` 助手（组合
+  层转出本机宿主）、应用与 HTTP 装配的 `daemonInfoPath`、迁移模块的 `configPath`；种子标记改为 `composeLocalInstallationSeedCompletion`；删
+  去没有使用方的旧版流水线证据桥与懒建证据库，组合层的打开前恢复移进测试助手；bootstrap 在原来回落的位置显式给出；两个测试助手，用例随
+  改；RFC-521 门 67 → 51；新增 RFC-524 用例。
+- **不做**：单机选择整体收进 `bootstrap/standalone.ts`（与维护 worker 的单机效果一并另立后继）；两个模块 infrastructure 里的 `select*` 助
+  手；其余模块的回落；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已
+  在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
 ## 2026-11-20 RFC-523 意图、代码历史与记忆的适配器回落改为必填注入（Done；`design/RFC-523-intent-code-history-memory-required-selections/`）
 
 - **来由**：RFC-522 之后 RFC-521 门余 78 处适配器回落；按 RFC-522 design D4 的次序，第 1 项第三步清 intent、code-capability 与 memory 的
