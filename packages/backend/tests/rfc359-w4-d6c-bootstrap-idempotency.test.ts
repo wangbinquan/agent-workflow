@@ -24,6 +24,7 @@ import type { TypePackageRecord } from '@/modules/digital-employee/application/p
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const NOW = 1_700_000_000_000
 
@@ -129,8 +130,15 @@ describeEachProvider('RFC-359 W4-D6c 补 —— 启动期并发注册的幂等�
       typePackages: [developmentEmployeeTypePackage],
       executionContracts,
     }
-    const routeSide = composeDigitalEmployee(options)
-    const workerSide = composeDigitalEmployee(options)
+    // RFC-522: each side builds its own standalone selections, as composition used to when none was given.
+    const routeSide = composeDigitalEmployee({
+      ...options,
+      ...standaloneDigitalEmployeeSelections({ db: harness.db, appHome }),
+    })
+    const workerSide = composeDigitalEmployee({
+      ...options,
+      ...standaloneDigitalEmployeeSelections({ db: harness.db, appHome }),
+    })
     await Promise.all([routeSide.maintenance.ready(), workerSide.maintenance.ready()])
     for (const module of [routeSide, workerSide]) {
       expect((await module.queries.listTypes()).map((item) => item.typeRef.typeId)).toContain(

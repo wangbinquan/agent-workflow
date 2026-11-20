@@ -1,9 +1,8 @@
 // RFC-370: preserve the legacy factory getter timing and publish's second validation.
 import { describe, expect, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { composeCustomEventObserverProgram } from '@/modules/event-center/composition/customObserverProgram'
-import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import { executeCustomObserverProgram } from '@/modules/event-center/application/customObserverProgram'
 import type {
   CustomObserverProgramEffects,
@@ -403,7 +402,6 @@ describe('RFC-370 complete selected custom observer program', () => {
       },
     }
     expect((await executeCustomObserverProgram(factory, value)).batch.observations).toHaveLength(1)
-    expect(selectLocalCustomObserverProgramFactory(factory)).toBe(factory)
   })
   test('unavailable interpreter does not enter cleanup', async () => {
     const selected = fixture({ unavailable: true })
@@ -644,6 +642,7 @@ describeEachProvider('RFC-370 selected custom observer actual Event Center path'
       ordinal = 0
     const selected = fixture(),
       options = {
+        ...standaloneEventCenterSelections(),
         db: harness.db,
         typePackageDescriptorJsons: [],
         automation: { kind: 'observation-only' as const },

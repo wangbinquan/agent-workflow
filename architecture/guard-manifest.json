@@ -3907,7 +3907,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc516-module-root-runtime-logic-out-boundary.test.ts",
       "id": "rfc516-module-root-runtime-logic-out-boundary",
-      "lines": 476,
+      "lines": 459,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -3967,9 +3967,21 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc521-composition-adapter-fallbacks.test.ts",
       "id": "rfc521-composition-adapter-fallbacks",
-      "lines": 537,
+      "lines": 526,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc522-employee-and-event-center-required-selections-boundary.test.ts",
+      "id": "rfc522-employee-and-event-center-required-selections-boundary",
+      "lines": 217,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
       "negativeFixture": true,
       "runner": "bun"
     }

@@ -4,7 +4,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
@@ -24,7 +24,11 @@ async function compose(harness: ProviderHarness) {
   }
   // RFC-359 AC-1（plan §5fz）：两个 provider 同一个装配入口，`db` 收中立句柄——
   // 原来的三元（两臂只差一个 cast）与两个 cast 一起消失。
-  return await composeEventCenter({ ...options, db: harness.db })
+  return await composeEventCenter({
+    ...standaloneEventCenterSelections(),
+    ...options,
+    db: harness.db,
+  })
 }
 
 function observation(revision = 1) {

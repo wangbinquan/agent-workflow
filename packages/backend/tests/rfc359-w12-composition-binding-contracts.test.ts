@@ -33,6 +33,7 @@ import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalo
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const roots: string[] = []
 afterEach(() => {
@@ -154,12 +155,14 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   })
 
   test('digital employee: a runtime binding yields real queries and idle workers', async () => {
+    const home = appHome()
     const options = {
       db: harness.db,
-      appHome: appHome(),
+      appHome: home,
       typePackages: [],
       executionContracts,
       runtime,
+      ...standaloneDigitalEmployeeSelections({ db: harness.db, appHome: home }),
     }
     const neutral: DigitalEmployeeModuleWithRuntime = composeDigitalEmployee(options)
     await neutral.maintenance.ready()
@@ -183,11 +186,13 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   })
 
   test('digital employee: omitted or optional runtime keeps the authoring-only contract', async () => {
+    const home = appHome()
     const options = {
       db: harness.db,
-      appHome: appHome(),
+      appHome: home,
       typePackages: [],
       executionContracts,
+      ...standaloneDigitalEmployeeSelections({ db: harness.db, appHome: home }),
     }
     const omitted = composeDigitalEmployee(options)
     await omitted.maintenance.ready()

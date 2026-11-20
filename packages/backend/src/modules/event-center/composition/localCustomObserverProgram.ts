@@ -1,9 +1,2 @@
-import type { CustomObserverProgramFactory } from '../application/ports/customObserverProgram'
-import { createLocalCustomObserverProgramFactory } from '../infrastructure/local/customObserverProgram'
-
+// RFC-522: the standalone selection; composition no longer picks it when a caller gives none.
 export { createLocalCustomObserverProgramFactory } from '../infrastructure/local/customObserverProgram'
-export function selectLocalCustomObserverProgramFactory(
-  selected: CustomObserverProgramFactory | undefined,
-): CustomObserverProgramFactory {
-  return selected === undefined ? createLocalCustomObserverProgramFactory() : selected
-}

@@ -6,13 +6,20 @@
   进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
 - **范围**：`composeDigitalEmployee` 的 `inputArtifacts` / `programArtifacts` / `writerCutover`、`composeEventCenter` 的
   `observer` / `customObserverPrograms` 改为必填，删去回落、`writerInstallation` 选项与
-  `selectLocalCustomObserverProgramFactory`，event-center 的兼容入口改调 application；两个测试助手给出与此前缺省相同的单机选择，约 30 个用例
-  文件随改；RFC-521 门的登记、总数（83 → 78）与后继标签随改；新增 RFC-522 用例。
+  `selectLocalCustomObserverProgramFactory`，event-center 的兼容入口改调 application，只剩用例在用的空观察者原样移进测试助手；两个测试助手给
+  出与此前缺省相同的单机选择，约 30 个用例文件随改；RFC-521 门的登记、总数（83 → 78）与后继标签随改；新增 RFC-522 用例。
 - **不做**：其余模块的回落；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已
   在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 组合层不再替调用方造适配器；C11 public 不变；C12 RFC-522 用例读全部生产文件；C13 计数不
   升，适配器回落 83 → 78。
+- **§14 不变量 / S12 第三步**：digital-employee 与 event-center 的组合层不再替调用方造适配器：`composeDigitalEmployee` 的输入工件库、程序工
+  件库与写入切换，`composeEventCenter` 的观察者与自定义观察者程序工厂都由调用方给出；`writerInstallation` 选
+  项、`selectLocalCustomObserverProgramFactory` 与生产代码里的空观察者都不再存在（空观察者移进测试助手）。RFC-521 门的适配器回落 83 →
+  78。public surface 与计数不变。
+- **集中验证**（基于 `568fda4f6`，详见 plan）：tsc 0 错；首批 223 个文件按 CI 的跑法与对照 A/B，查出空观察者成了不可达的生产文件
+  （`unreachable-production-files` 15 → 16），移进测试助手后复验通过；其余候选多出的红都是时限。复验 178 个文件放宽到 60 秒，候选的红两边都
+  有。架构报告的 60 项与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-20 RFC-521 组合层适配器回落的全模块门与清单（Done；`design/RFC-521-composition-adapter-fallback-gate/`）
 

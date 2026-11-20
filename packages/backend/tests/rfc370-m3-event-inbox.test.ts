@@ -21,7 +21,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import type {
   EventObservationInput,
   EventObservationReceipt,
@@ -749,6 +749,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     let blocked = false,
       guards = 0
     const center = await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db: harness.db,
       typePackageDescriptorJsons: [codeHostEventCatalogJson],
       automation: { kind: 'observation-only' },
@@ -878,6 +879,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
   test('a hosted deployment has no direct webhook ingress; a standalone one keeps it', async () => {
     const f = await setup()
     const eventCenter = await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db: harness.db,
       typePackageDescriptorJsons: [codeHostEventCatalogJson],
       automation: { kind: 'observation-only' },

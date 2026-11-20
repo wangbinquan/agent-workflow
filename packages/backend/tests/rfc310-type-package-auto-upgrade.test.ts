@@ -24,9 +24,10 @@ import type {
   EmployeeTypePackageRegistration,
 } from '@/modules/digital-employee/public/types'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { and, eq } from 'drizzle-orm'
 import { designEmployeeTypePackage } from './fixtures/digitalEmployeeTypePackages'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const executionContracts: ExecutionContractParticipant = {
   list: () => [],
@@ -277,6 +278,7 @@ function createFixtureModule(input: {
 }) {
   let ordinal = 0
   return composeDigitalEmployee({
+    ...standaloneDigitalEmployeeSelections({ db: input.db, appHome: input.appHome }),
     db: input.db,
     appHome: input.appHome,
     typePackages: [input.typePackage],
@@ -1232,6 +1234,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       const id = () => `invocation-upgrade-${++ordinal}`
       const v1Package = versionedCollaboratingDesignPackage(1)
       const eventCenter = await composeEventCenter({
+        ...standaloneEventCenterSelections(),
         db,
         typePackageDescriptorJsons: [
           v1Package.descriptorJson,
@@ -1366,6 +1369,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         issues?: Array<{ reasonCode: string; resourceId: string }>,
       ) =>
         composeDigitalEmployee({
+          ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
           db,
           appHome,
           typePackages: [typePackage],

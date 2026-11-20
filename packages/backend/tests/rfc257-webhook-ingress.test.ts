@@ -17,7 +17,7 @@ import type {
 import type { EventCenterModule } from '../src/modules/event-center/composition'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
@@ -95,6 +95,7 @@ async function harness(opts?: {
   const eventCenter =
     opts?.digitalEmployeeEventCenter ??
     (await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db,
       typePackageDescriptorJsons: [codeHostEventCatalogJson],
       automation: { kind: 'observation-only' },

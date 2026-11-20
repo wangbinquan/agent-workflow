@@ -30,6 +30,7 @@ import { composeScriptActionExecution } from '@/modules/task-execution/compositi
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const T0 = 1_700_000_000_000
 
@@ -124,6 +125,7 @@ describeEachProvider('RFC-359 W7 —— digital-employee 组合根', (harness) =
   test('数字员工模块：启动屏障就绪后类型包可见，输入上传清扫是真事务', async () => {
     const appHome = tmpRoot('aw-rfc359-w7-de-')
     const module = composeDigitalEmployee({
+      ...standaloneDigitalEmployeeSelections({ db: asPostgresql(harness.db), appHome: appHome }),
       db: asPostgresql(harness.db),
       appHome,
       typePackages: [developmentEmployeeTypePackage],

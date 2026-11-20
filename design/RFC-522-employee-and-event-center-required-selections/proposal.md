@@ -39,5 +39,6 @@ daemon 的两种部署（standalone / crewstation）都已在部署选择里显�
 - **AC-1**：这 5 处回落不再存在；两个组合函数的对应选项必填；`writerInstallation` 选项与 `selectLocalCustomObserverProgramFactory` 不再存
   在；RFC-521 门的实测与登记逐条相等，适配器回落 78 条。
 - **AC-2**：daemon 的两种部署得到的对象与此前相同（传入的仍是部署选择已给的对象）；用例显式给出的选择与此前缺省时构造的对象逐个相同。
-- **AC-3**：event-center 的 infrastructure 不再取本模块的组合文件；public surface 不升；计数不升。
+- **AC-3**：event-center 的 infrastructure 不再取本模块组合层的值（只余 `composition/required-ports` 的类型 import）；public surface 不升；
+  计数不升。
 - **AC-4**：受影响用例全部通过；推送后 exact SHA 的 GitHub Actions 全绿（环境性红格逐格归因、如实记录）。

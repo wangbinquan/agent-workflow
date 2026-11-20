@@ -39,7 +39,7 @@ import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { createDevelopmentMrEffects } from '@/modules/integration/application/developmentCodeHostDelivery'
@@ -55,6 +55,7 @@ import {
   SQLiteRepositoryTransportCredentialRepository,
 } from '@/modules/source-control/composition'
 import { codeHostRequests } from '@/modules/integration/composition'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 setDefaultTimeout(180_000)
 
@@ -152,6 +153,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           conflictMerge: bindConflictMergeParticipant(),
         })
         const eventCenter = await composeEventCenter({
+          ...standaloneEventCenterSelections(),
           db,
           typePackageDescriptorJsons: [
             developmentEmployeeTypePackage.descriptorJson,
@@ -337,6 +339,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
         })
         let idOrdinal = 0
         const employeeOs = composeDigitalEmployee({
+          ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
           db,
           appHome,
           typePackages: [developmentEmployeeTypePackage],

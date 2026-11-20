@@ -1,21 +1,20 @@
 // RFC-370 compatibility entry; policy and effects each have one implementation.
-import { composeCustomEventObserverProgram } from '../composition/customObserverProgram'
-import { selectLocalCustomObserverProgramFactory } from '../composition/localCustomObserverProgram'
+// RFC-522: the program factory is required and the entry calls the application directly (no composition import).
+import { createCustomEventObserverProgram as createObserverProgram } from '../application/customObserverProgram'
 import type { CustomEventSourceStorePort } from '../application/ports/customEventSourceStore'
 import type { CustomObserverProgramFactory } from '../application/ports/customObserverProgram'
-import type { CustomEventObserverProgramPort } from '../composition/required-ports'
 
 export function createCustomEventObserverProgram(input: {
   readonly store: CustomEventSourceStorePort
   readonly now?: () => number
-  readonly programs?: CustomObserverProgramFactory
-}): CustomEventObserverProgramPort {
+  readonly programs: CustomObserverProgramFactory
+}) {
   const now = input.now ?? Date.now
-  return composeCustomEventObserverProgram({
+  return createObserverProgram({
     get store() {
       return input.store
     },
     now,
-    programs: selectLocalCustomObserverProgramFactory(input.programs),
+    programs: input.programs,
   })
 }

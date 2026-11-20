@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
   taskLifecycleCommittedEventCodec,
@@ -42,6 +42,7 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
     let now = 10_000
     let ordinal = 0
     const eventCenter = await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db,
       typePackageDescriptorJsons: [taskLifecycleEventCatalogJson],
       automation: { kind: 'observation-only' },

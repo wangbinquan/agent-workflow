@@ -71,6 +71,7 @@ import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { createHttpRequestApp, type AppHttpProviderCore } from '@/server'
 import { createProductionOverviewQuery } from './productionOverview'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { standaloneDigitalEmployeeSelections } from './digitalEmployeeSelections'
 
 export interface ProductionPerformanceApplicationInput {
   readonly db: PersistenceDb
@@ -107,6 +108,7 @@ export async function createProductionPerformanceApplication(
     programFixtures: createExecutionContractProgramFixtureAdapter({ appHome }),
   })
   const digitalEmployee = composeDigitalEmployee({
+    ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
     db,
     appHome,
     typePackages: [developmentEmployeeTypePackage],

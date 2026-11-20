@@ -36,6 +36,9 @@ RFC-521 门登记的 5 处（`packages/backend/src/modules/` 下）：
 - 删除 `selectLocalCustomObserverProgramFactory`（组合根随之不再转出它；`createLocalCustomObserverProgramFactory` 照旧转出）。
 - 兼容入口 `createCustomEventObserverProgram`（infrastructure）的 `programs` 改为必填，改调 application 的
   `createCustomEventObserverProgram`，不再取组合层。
+- 缺省观察者的空实现（RFC-516 放在 `application/unavailableObserverProgram.ts`）随回落删除后只剩用例在用；留在生产代码里它会成为不可达文件
+  （`unreachable-production-files` 15 → 16，`counts.json` 不许增长），因此原样移到 `tests/helpers/eventCenter.ts`，删去生产文件；RFC-516 用
+  例里锁它的位置、调用、依赖与行为的几处随之删去（行为的两种情形挪进 RFC-522 用例）。
 
 ### D3 用例
 
@@ -57,18 +60,19 @@ RFC-521 门登记的 5 处（`packages/backend/src/modules/` 下）：
 
 - 上表 5 处回落不再存在；RFC-521 门的实测与登记逐条相等，适配器回落 78 条，`SUCCESSORS` 不含 digital-employee 与 event-center。
 - `ComposeDigitalEmployeeOptions` 的 `inputArtifacts` / `programArtifacts` / `writerCutover` 与 `ComposeEventCenterOptions` 的
-  `observer` / `customObserverPrograms` 是必填属性；`writerInstallation` 选项与 `selectLocalCustomObserverProgramFactory` 在生产代码里没有声
-  明。
-- `event-center/infrastructure/` 不取本模块的组合文件。
+  `observer` / `customObserverPrograms` 是必填属性；`writerInstallation` 选项、`selectLocalCustomObserverProgramFactory` 与
+  `createUnavailableEventObserverProgram` 在生产代码里没有声明（后者只在测试助手里）。
+- `event-center/infrastructure/` 不取本模块组合层的值，只余 `composition/required-ports` 的类型 import（另一个 infrastructure 文件原本就这样
+  取端口类型）。
 
 ## 4. 用例
 
 - RFC-521 门（登记表与总数随 D4 改）锁住回落不再出现。
 - 新增 `packages/backend/tests/rfc522-employee-and-event-center-required-selections-boundary.test.ts`，登记 guard-manifest：① 两个选项接口里
   这 5 个属性存在且不带 `?`（语法树），`writerInstallation` 不在 `ComposeDigitalEmployeeOptions` 里；② 全部生产文件（下限 3,000）里没有
-  `selectLocalCustomObserverProgramFactory` 的声明，`event-center/infrastructure/` 的 import 不指向组合层；③ 两个测试助手给出的对象与此前缺
-  省时一致（数字员工的输入工件库落在 `<appHome>/artifacts/employee-inputs`，事件中心的观察者拒绝运行、自定义观察者工厂是本机实现）；带负对
-  照。
+  `selectLocalCustomObserverProgramFactory` 与 `createUnavailableEventObserverProgram` 的声明，`event-center/infrastructure/` 不取组合层的值
+  （`composition/required-ports` 的类型 import 不算）；③ 两个测试助手给出的对象与此前缺省时一致（数字员工的输入工件库落在
+  `<appHome>/artifacts/employee-inputs`，事件中心的观察者带与不带观察者程序引用都以原文错误拒绝、自定义观察者工厂是本机实现）；带负对照。
 - 既有用例照旧覆盖行为：数字员工的编写、运行与内容用例，事件中心的观察、投递与自定义观察者用例（经测试助手给出同样的单机选择）。
 
 ## 5. 失败模式

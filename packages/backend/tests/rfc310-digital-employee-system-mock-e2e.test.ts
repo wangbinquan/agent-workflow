@@ -87,7 +87,7 @@ import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/ru
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { createEventAutomationWorkIntentStore } from '@/modules/event-center/composition'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -104,6 +104,7 @@ import { composeWebhookIngressTransport } from '@/modules/integration/compositio
 import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { createWebhookDispatcher } from '@/modules/integration/application/webhookDispatch'
 import { codeHostRequests } from '@/modules/integration/composition'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 setDefaultTimeout(180_000)
 
@@ -352,6 +353,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           getDefaultRuntime: async () => null,
         })
         const eventCenter = await composeEventCenter({
+          ...standaloneEventCenterSelections(),
           db,
           typePackageDescriptorJsons: [
             developmentEmployeeTypePackage.descriptorJson,
@@ -960,6 +962,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           }),
         })
         const employeeOs = composeDigitalEmployee({
+          ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
           db,
           appHome,
           typePackages: [developmentEmployeeTypePackage],

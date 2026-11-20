@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
@@ -20,11 +19,9 @@ import type {
   ReactionRetryFeedbackReaderV1,
   ToolConnectionCatalogPort,
 } from './composition/required-ports'
-import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
 export { createProgramArtifactStore } from './infrastructure/programArtifactStore'
 import { createReactionRoundQueries } from './infrastructure/reactionRoundQueries'
 import type { EmployeeReactionRoundQueryPort } from './public/types'
-import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 import { createEmployeeInputUploadPersistence } from './infrastructure/inputUploadStore'
 import type { EmployeeInputUploadPersistence } from './application/ports/inputUploadStore'
 import { createDigitalEmployeeAuthoringPersistence } from './infrastructure/authoringStore'
@@ -183,8 +180,9 @@ export interface DigitalEmployeeCompositionOptions {
   readonly typePackages: readonly EmployeeTypePackageRegistration[]
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
   readonly connectionCatalog?: ToolConnectionCatalogPort
-  readonly programArtifacts?: ProgramArtifactPort
-  readonly inputArtifacts?: EmployeeInputArtifactPort
+  /** RFC-522: the deployment states both artifact stores; composition never builds a local one. */
+  readonly programArtifacts: ProgramArtifactPort
+  readonly inputArtifacts: EmployeeInputArtifactPort
   readonly executionContracts: ExecutionContractParticipant
   readonly platformTools?: DigitalEmployeePlatformToolCatalogParticipant
   readonly onAutomaticUpgradeIssue?: (issue: AutomaticTypeUpgradeIssue) => void
@@ -229,14 +227,15 @@ type DigitalEmployeeRuntimeBinding = {
 export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   /** 两个 provider 同一份持久化（RFC-359 W4-D6c/D7a/D7b），装配入口收中立句柄。 */
   readonly db: PersistenceDb
-  readonly writerInstallation?: DigitalEmployeeWriterInstallation
-  readonly writerCutover?: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
+  /** RFC-522: the caller composes the writer cutover (the daemon with its installation port). */
+  readonly writerCutover: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
   readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
 }
 
 export interface ComposePostgresqlDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   readonly db: PostgresqlDatabaseClient
+  readonly writerCutover: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
   /** 与 SQLite 装配同一语义：Bun-dev 的类型包草稿覆盖只在显式要求时打开。 */
   readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
 }
@@ -461,9 +460,7 @@ function composeDigitalEmployeeFromPersistence(
 ): DigitalEmployeeModule {
   const store = persistence.authoring
   const inputUploadStore = persistence.inputUploads
-  const inputArtifacts =
-    options.inputArtifacts ??
-    createEmployeeInputArtifactStore(join(options.appHome, 'artifacts', 'employee-inputs'))
+  const inputArtifacts = options.inputArtifacts
   const runtimePackages = options.typePackages.map(runtimePackageOf)
   const platformTools = platformToolCatalogOf(options.platformTools)
   const service = new DigitalEmployeeAuthoringService({
@@ -474,7 +471,7 @@ function composeDigitalEmployeeFromPersistence(
         return null
       },
     },
-    programArtifacts: options.programArtifacts ?? createProgramArtifactStore(options.appHome),
+    programArtifacts: options.programArtifacts,
     executionContracts: options.executionContracts,
     platformTools,
     ...(options.onAutomaticUpgradeIssue === undefined
@@ -760,9 +757,7 @@ export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
   const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
-  const writerCutover =
-    options.writerCutover ??
-    composeDigitalEmployeeWriterCutoverFor(options.db, options.writerInstallation)
+  const writerCutover = options.writerCutover
   return composeDigitalEmployeeFromPersistence(options, {
     authoring:
       options.typePackageDriftPolicy === 'draft-overlay'

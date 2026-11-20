@@ -44,7 +44,7 @@ import {
   renderedLaunchPayload,
 } from '../src/modules/integration/application/webhookDispatch'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
@@ -181,6 +181,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     },
   })
   const eventCenter = await composeEventCenter({
+    ...standaloneEventCenterSelections(),
     db,
     typePackageDescriptorJsons: [codeHostEventCatalogJson],
     automation: { kind: 'observation-only' },

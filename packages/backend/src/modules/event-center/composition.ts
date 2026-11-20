@@ -1,6 +1,5 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { EventCenterService } from './application/eventCenterService'
-import { createUnavailableEventObserverProgram } from './application/unavailableObserverProgram'
 import {
   createEventResponseDeliveryConsumer,
   createEventResponseRoutingDirectory,
@@ -20,7 +19,6 @@ import {
   composeCustomEventObserverProgram,
   type CustomObserverProgramFactory,
 } from './composition/customObserverProgram'
-import { selectLocalCustomObserverProgramFactory } from './composition/localCustomObserverProgram'
 /** RFC-431: the standalone selection runs custom observer programs on this host. */
 export { createLocalCustomObserverProgramFactory } from './composition/localCustomObserverProgram'
 import { createCustomEventSourceStore } from './infrastructure/customEventSourceStore'
@@ -44,7 +42,6 @@ export {
   executeTaskImageObserver,
   TASK_IMAGE_OBSERVER_OPERATIONS,
 } from './infrastructure/crewstation/taskImageObserver'
-export { selectLocalCustomObserverProgramFactory }
 export type { CustomObserverProgramFactory }
 /**
  * RFC-436: the route-facing handle lives in `application/ports`; bootstrap and
@@ -191,8 +188,9 @@ export interface ComposeEventCenterOptions {
    * `DEFAULT_TARGET_LAUNCH_PERMISSIONS`；给了就整表覆盖。
    */
   readonly targetLaunchPermissions?: TargetLaunchPermissions
-  readonly observer?: EventObserverProgramPort
-  readonly customObserverPrograms?: CustomObserverProgramFactory
+  /** RFC-522: the deployment states the observer program and the custom observer program factory. */
+  readonly observer: EventObserverProgramPort
+  readonly customObserverPrograms: CustomObserverProgramFactory
   readonly routingSubscriptions?: EventRoutingSubscriptionDirectoryPort
   readonly deliveryConsumers?: readonly EventDeliveryConsumerPort[]
   readonly deliveryRetryLimits?: EventDeliveryRetryLimitsPort
@@ -211,12 +209,8 @@ export interface EventCenterPersistence {
   readonly committedEvents: CommittedEventDeliveryPersistencePort
 }
 
-export type ComposeEventCenterWithPortsOptions = Omit<
-  ComposeEventCenterOptions,
-  'db' | 'customObserverPrograms'
-> & {
+export type ComposeEventCenterWithPortsOptions = Omit<ComposeEventCenterOptions, 'db'> & {
   readonly persistence: EventCenterPersistence
-  readonly customObserverPrograms: CustomObserverProgramFactory
 }
 
 export async function composeEventCenterWithPorts(
@@ -252,7 +246,7 @@ export async function composeEventCenterWithPorts(
     store: eventStore,
     customSources,
     typePackageDescriptorJsons: options.typePackageDescriptorJsons,
-    observer: options.observer ?? createUnavailableEventObserverProgram(),
+    observer: options.observer,
     customObserver,
     routingSubscriptions: {
       async list() {
@@ -456,7 +450,6 @@ export async function composeEventCenter(
   const { db, ...shared } = options
   return await composeEventCenterWithPorts({
     ...shared,
-    customObserverPrograms: selectLocalCustomObserverProgramFactory(options.customObserverPrograms),
     persistence: {
       events: createEventStore(db, options.beforeObservationWrite),
       customSources: createCustomEventSourceStore(db),

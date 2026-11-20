@@ -36,9 +36,10 @@ import {
   MAX_CHILD_INVOCATIONS_PER_CASE,
   MAX_EMPLOYEE_INVOCATION_DEPTH,
 } from '@/modules/digital-employee/domain/runtimeModel'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { parsePersistedEmployeeTypePackageDescriptor } from '@/modules/digital-employee/domain/model'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 /**
  * RFC-368：业务工具 round 不再经 outbox 启动，而是由派发臂（`dispatchOneReaction`）领取。
@@ -396,6 +397,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       let ordinal = 0
       const id = () => `planning-isolation-${++ordinal}`
       const eventCenter = await composeEventCenter({
+        ...standaloneEventCenterSelections(),
         db,
         typePackageDescriptorJsons: [
           developmentEmployeeTypePackage.descriptorJson,
@@ -433,6 +435,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
       })
       const module = composeDigitalEmployee({
+        ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
         db,
         appHome,
         typePackages: [developmentEmployeeTypePackage],
@@ -712,6 +715,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       const launchedAttempts: Array<{ ordinal: number; mode: string }> = []
       const nextId = () => `resource-${String(++ordinal).padStart(4, '0')}`
       const eventCenter = await composeEventCenter({
+        ...standaloneEventCenterSelections(),
         db,
         typePackageDescriptorJsons: [
           developmentEmployeeTypePackage.descriptorJson,
@@ -749,6 +753,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
       })
       const module = composeDigitalEmployee({
+        ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
         db,
         appHome,
         typePackages: [developmentEmployeeTypePackage],

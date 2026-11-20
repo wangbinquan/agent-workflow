@@ -7,11 +7,11 @@ import { developmentEmployeeTypePackage } from '@/modules/development-automation
 import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/public/types'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import {
-  selectLocalCustomObserverProgramFactory,
+  createLocalCustomObserverProgramFactory,
   type ComposeEventCenterOptions,
   type EventCenterAutomationCapability,
 } from '@/modules/event-center/composition'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import type {
   EventAutomationDelegatedContext,
   EventAutomationDelegatedContextFactory,
@@ -39,11 +39,13 @@ const OWNER_PRINCIPAL = {
 
 function composeForProvider(
   harness: ProviderHarness,
-  options: Omit<ComposeEventCenterOptions, 'db'>,
+  options: Omit<ComposeEventCenterOptions, 'db' | 'observer' | 'customObserverPrograms'> &
+    Partial<Pick<ComposeEventCenterOptions, 'observer' | 'customObserverPrograms'>>,
 ) {
   // RFC-359 AC-1（plan §5fz）：两个 provider 同一个装配入口，`db` 收中立句柄——
   // 原来的三元（两臂只差一个 cast）与两个 cast 一起消失。
-  return composeEventCenter({ ...options, db: harness.db })
+  // RFC-522: the composition requires both selections; a case that does not exercise them keeps the standalone pair.
+  return composeEventCenter({ ...standaloneEventCenterSelections(), ...options, db: harness.db })
 }
 
 function testAutomation(
@@ -1216,7 +1218,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
   test('a global custom source validates its real script, publishes exact events, polls on subscription, and dedupes storage', async () => {
     let now = Date.parse('2026-08-21T08:00:00.000Z')
     let ordinal = 0
-    const nativePrograms = selectLocalCustomObserverProgramFactory(undefined)
+    const nativePrograms = createLocalCustomObserverProgramFactory()
     const eventCenter = await composeForProvider(harness, {
       // RFC-370: retain the actual native family and every original reference;
       // report its failed settlement without changing the result or its budget.

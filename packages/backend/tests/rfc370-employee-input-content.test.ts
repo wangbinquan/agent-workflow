@@ -16,8 +16,9 @@ import {
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/application/employeeTypePackage'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const roots: string[] = []
 setDefaultTimeout(30_000)
@@ -70,6 +71,7 @@ describeEachProvider('RFC-370 selected employee input presence', (harness) => {
         },
       }
       const eventCenter = await composeEventCenter({
+        ...standaloneEventCenterSelections(),
         db,
         typePackageDescriptorJsons: [
           developmentEmployeeTypePackage.descriptorJson,
@@ -105,6 +107,7 @@ describeEachProvider('RFC-370 selected employee input presence', (harness) => {
         },
       })
       const module = composeDigitalEmployee({
+        ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
         db,
         appHome,
         typePackages: [developmentEmployeeTypePackage],

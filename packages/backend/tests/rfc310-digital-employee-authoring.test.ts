@@ -51,6 +51,7 @@ import {
   designEmployeeTypePackage,
   testEmployeeTypePackage,
 } from './fixtures/digitalEmployeeTypePackages'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const roots: string[] = []
 const developmentContractRefs = developmentExecutionContractRegistrations.map(
@@ -120,6 +121,7 @@ function fixtureModule(retryLimits?: {
   roots.push(appHome)
   let ordinal = 0
   return composeDigitalEmployee({
+    ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
     db,
     appHome,
     typePackages: [developmentEmployeeTypePackage],
@@ -1056,6 +1058,7 @@ describeEachProviderHttpApplication(
         roots.push(appHome)
         let ordinal = 0
         const module = composeDigitalEmployee({
+          ...standaloneDigitalEmployeeSelections({ db: db, appHome: appHome }),
           db,
           appHome,
           typePackages: [designEmployeeTypePackage, testEmployeeTypePackage],

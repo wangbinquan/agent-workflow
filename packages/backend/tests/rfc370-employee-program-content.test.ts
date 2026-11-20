@@ -11,6 +11,7 @@ import { developmentEmployeeTypePackage } from '@/modules/development-automation
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import { sha256Hex } from '@/util/hash'
+import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const roots: string[] = []
 afterEach(() => {
@@ -72,6 +73,7 @@ describeEachProvider('RFC-370 selected employee program content', (harness) => {
         },
       }
       const module = composeDigitalEmployee({
+        ...standaloneDigitalEmployeeSelections({ db: harness.db, appHome: appHome }),
         db: harness.db,
         appHome,
         typePackages: [developmentEmployeeTypePackage],

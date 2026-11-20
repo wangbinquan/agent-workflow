@@ -12,7 +12,7 @@ import {
   createEventAutomationWorkIntentStore,
   type EventCenterAutomationCapability,
 } from '@/modules/event-center/composition'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import type {
   EmployeeAutomationWorkStartV1,
   EventAutomationDelegatedContext,
@@ -155,6 +155,7 @@ async function createRuleAndDelivery(input: {
 }) {
   let ordinal = 0
   const eventCenter = await composeEventCenter({
+    ...standaloneEventCenterSelections(),
     db: input.harness.db,
     typePackageDescriptorJsons: [codeHostEventCatalogJson],
     automation: input.automation,
@@ -252,6 +253,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
 
     clock = 3_000
     const restarted = await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db: harness.db,
       typePackageDescriptorJsons: [codeHostEventCatalogJson],
       automation: automationCapability({ store: baseStore, taskWorkStart }),
@@ -313,6 +315,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
 
     clock = 20_000
     const winner = await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db: harness.db,
       typePackageDescriptorJsons: [codeHostEventCatalogJson],
       automation: automationCapability({ store, taskWorkStart }),

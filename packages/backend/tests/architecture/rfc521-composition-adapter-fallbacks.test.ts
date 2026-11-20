@@ -53,19 +53,10 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   'digital-employee/composition.ts': [
     ['Date.now', 'clock'],
     ['Date.now', 'clock'],
-    ['composeDigitalEmployeeWriterCutoverFor', 'adapter'],
-    ['createEmployeeInputArtifactStore', 'adapter'],
-    ['createProgramArtifactStore', 'adapter'],
     ['service.getExecutionPolicy', 'option'],
     ['service.getExecutionPolicy', 'option'],
   ],
-  'event-center/composition.ts': [
-    ['createUnavailableEventObserverProgram', 'adapter'],
-    ['service.initialize', 'memo'],
-  ],
-  'event-center/composition/localCustomObserverProgram.ts': [
-    ['createLocalCustomObserverProgramFactory', 'adapter'],
-  ],
+  'event-center/composition.ts': [['service.initialize', 'memo']],
   'integration/composition/webhookIngress.ts': [['createWebhookRateLimiters', 'process-local']],
   'intent/composition/apply.ts': [
     ['composeIntentApplyArtifactLifecycle', 'adapter'],
@@ -240,21 +231,19 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   ],
 }
 
-/** design D3: the S12 item 1 step that clears each module's adapter fallbacks. */
+/** design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. */
 const SUCCESSORS: Readonly<Record<string, string>> = {
-  'source-control': 'S12 item 1, step 2',
-  'resource-catalog': 'S12 item 1, step 3',
-  'task-execution': 'S12 item 1, step 4',
-  intent: 'S12 item 1, step 5',
-  'code-capability': 'S12 item 1, step 5',
-  memory: 'S12 item 1, step 5',
-  'system-operations': 'S12 item 1, step 6',
-  'development-automation': 'S12 item 1, step 6',
-  'digital-employee': 'S12 item 1, step 7',
-  'event-center': 'S12 item 1, step 7',
+  intent: 'S12 item 1, step 3',
+  'code-capability': 'S12 item 1, step 3',
+  memory: 'S12 item 1, step 3',
+  'system-operations': 'S12 item 1, step 4',
+  'development-automation': 'S12 item 1, step 4',
+  'resource-catalog': 'S12 item 1, step 5',
+  'task-execution': 'S12 item 1, step 6',
+  'source-control': 'S12 item 1, step 7',
 }
-/** Adapter fallbacks measured at RFC-521; each successor lowers it. */
-const ADAPTER_FALLBACKS = 83
+/** Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center. */
+const ADAPTER_FALLBACKS = 78
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */

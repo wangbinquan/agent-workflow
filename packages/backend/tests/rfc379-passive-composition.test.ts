@@ -17,6 +17,7 @@ import {
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import { lifecycleFixture } from './helpers/daemonLifecycle'
+import { standaloneEventCenterSelections } from './helpers/eventCenter'
 
 test('authoring waits for initialize/ready; concurrent calls share initialization and rejection', async () => {
   let reads = 0
@@ -152,6 +153,7 @@ describeEachProvider('RFC-379 fresh catalog boot regression', (harness) => {
   })
   test('event catalog registration is explicit and idempotent', async () => {
     const module = await composeEventCenter({
+      ...standaloneEventCenterSelections(),
       db: harness.db,
       automation: { kind: 'observation-only' },
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],

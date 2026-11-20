@@ -28,7 +28,7 @@ import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
@@ -126,6 +126,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     },
   })
   const eventCenter = await composeEventCenter({
+    ...standaloneEventCenterSelections(),
     db,
     typePackageDescriptorJsons: [codeHostEventCatalogJson],
     automation: { kind: 'observation-only' },

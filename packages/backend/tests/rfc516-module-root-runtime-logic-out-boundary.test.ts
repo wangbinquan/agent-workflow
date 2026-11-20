@@ -7,6 +7,9 @@
 // ④ 行为：缺省观察者以原文错误拒绝；在线状态登记表只为会话来源开连接、释放幂等、关停释放全部；投影收敛逐行同步、移除缺失的提供方；
 //    员工案例操作宿主的核对。
 //
+// RFC-522：组合层不再替调用方造观察者，缺省观察者的空实现只剩用例在用，移到 `tests/helpers/eventCenter.ts`；这里不再锁它的位置、调用与
+// 行为（行为由 RFC-522 用例锁住），清单与新文件都少它一项。
+//
 // 覆盖范围（C12）：① 与 ② 的调用方读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字文本筛、再逐个
 // 解析 AST；② ③ 另读三个模块根与新位置。
 import { describe, expect, test } from 'bun:test'
@@ -14,7 +17,6 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
-import { createUnavailableEventObserverProgram } from '@/modules/event-center/application/unavailableObserverProgram'
 import { RuntimePresenceConnections } from '@/modules/identity-access/application/runtimePresenceConnections'
 import { requireEmployeeCaseWorkspaceOperations } from '@/modules/source-control/application/employeeCaseWorkspace'
 import {
@@ -29,7 +31,6 @@ const slash = (path: string) => path.split('\\').join('/')
 const parse = (path: string, text: string) =>
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
 
-const OBSERVER = 'modules/event-center/application/unavailableObserverProgram'
 const PRESENCE = 'modules/identity-access/application/runtimePresenceConnections'
 const PROJECTION = 'modules/source-control/application/repositoryTransportConnectionProjection'
 const CASE = 'modules/source-control/application/employeeCaseWorkspace'
@@ -38,18 +39,15 @@ const ROOTS = ['event-center', 'identity-access', 'source-control'].map(
 )
 /** design §3: every listed name with the one file that declares it. */
 const LISTED: readonly (readonly [string, string])[] = [
-  [OBSERVER, 'createUnavailableEventObserverProgram'],
   [PRESENCE, 'RuntimePresenceConnections'],
   [PROJECTION, 'reconcileRepositoryTransportConnectionProjections'],
   [CASE, 'requireEmployeeCaseWorkspaceOperations'],
 ]
 const NEW_FILES: Readonly<Record<string, readonly string[]>> = {
-  [OBSERVER]: ['createUnavailableEventObserverProgram'],
   [PRESENCE]: ['RuntimePresenceConnections'],
 }
 /** design §4 ③: the exact imports of the two new files. */
 const IMPORTS: Readonly<Record<string, readonly string[]>> = {
-  [OBSERVER]: ['import modules/event-center/composition/required-ports: EventObserverProgramPort'],
   [PRESENCE]: [
     'import modules/identity-access/public/participants: PresenceConnectionTracker, PresenceLease',
     'import modules/identity-access/application/commands/trackUserPresence: TrackUserPresence',
@@ -70,7 +68,6 @@ const SAME_MODULE = (file: string, specifier: string): boolean => {
 const CALLS: Readonly<
   Record<string, readonly [readonly string[], readonly (readonly string[])[] | null]>
 > = {
-  createUnavailableEventObserverProgram: [['modules/event-center/composition x1'], [[]]],
   reconcileRepositoryTransportConnectionProjections: [['bootstrap/daemonApplication x1'], null],
   requireEmployeeCaseWorkspaceOperations: [
     ['modules/source-control/composition x1'],
@@ -285,7 +282,7 @@ describe('RFC-516 ① 清单里的名字只在各自的位置声明', () => {
           )
           .map(corpusPath)
           .sort()
-      expect(LISTED).toHaveLength(4)
+      expect(LISTED).toHaveLength(3)
       for (const [location, name] of LISTED)
         expect([name, declaring(name)]).toEqual([name, [`packages/backend/src/${location}.ts`]])
     },
@@ -388,20 +385,6 @@ describe('RFC-516 ③ 新文件的依赖面是闭集、不用进程全局', () =
 })
 
 describe('RFC-516 ④ 行为', () => {
-  test('缺省观察者：带与不带观察者程序引用都以原文错误拒绝', async () => {
-    const observer = createUnavailableEventObserverProgram()
-    for (const [source, id] of [
-      [{ observerProgramRef: { id: 'program-1' }, sourceRef: { id: 'source-1' } }, 'program-1'],
-      [{ sourceRef: { id: 'source-2' } }, 'source-2'],
-    ] as const) {
-      const error = await observer.run({ source } as never).then(
-        () => null,
-        (rejected: unknown) => rejected,
-      )
-      expect((error as Error).message).toBe(`observer program unavailable: ${id}`)
-    }
-  })
-
   test('在线状态登记表：只为会话来源开连接；释放幂等；关停释放全部活着的连接', () => {
     const calls: string[] = []
     const direct = {

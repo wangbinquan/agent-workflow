@@ -67,7 +67,10 @@ RFC-521 第一版的门只认 `??` 一类、条件表达式、单条赋值的 `i
 每步：把该模块登记的适配器回落改为必填注入；单机默认由 `bootstrap/standalone.ts`（daemon）或命令根（`bootstrap/commandBootstraps.ts`）显式传
 入，部署选择里的可空槽位（standalone 现在给 `null`、装配处再转回 `undefined` 的那几个）改为必填，用例经工厂图或显式参数注入；删去登记、下调
 总数。某条查明其实是中性默认的，在该步的 design 写明理由并改登记类别；查明要等别的后继（例如 `repositoryCommit.ts` 的本机 git 分支依赖路径绑
-定退役）的，在该步的 design 改指后继。
+定退役）的，在该步的 design 改指后继。执行次序后由 [RFC-522](../RFC-522-employee-and-event-center-required-selections/design.md) design
+D4 按改动面重排：第二步 digital-employee 与 event-center，其后依次是
+intent / code-capability / memory、system-operations / development-automation、resource-catalog、task-execution、source-control；门里的后继
+标签随之改，§3 的“清偿”一栏仍按本表原次序。
 
 ### D4 账本
 

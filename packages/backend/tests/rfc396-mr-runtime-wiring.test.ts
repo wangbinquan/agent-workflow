@@ -44,7 +44,7 @@ import type { RootTaskLaunchRequest } from '@/modules/task-execution/application
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeEventCenter } from './helpers/eventCenter'
+import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 
 const graph = composeGraphDeliveryLifecycleRuntimeCodec(graphEmployeeRuntimeCodec)
 const graphPackage = composeGraphDeliveryLifecycleTypePackage(graphEmployeeTypePackage)
@@ -335,7 +335,11 @@ describeEachProvider('RFC-396 MR catalog and runtime wiring', (harness) => {
       graphPackage.descriptorJson,
     ]
     const options = { db: harness.db, automation: { kind: 'observation-only' as const } }
-    await composeEventCenter({ ...options, typePackageDescriptorJsons: descriptors })
+    await composeEventCenter({
+      ...standaloneEventCenterSelections(),
+      ...options,
+      typePackageDescriptorJsons: descriptors,
+    })
     const store = createEventStore(harness.db)
     const sources = await store.listSources()
     const events = await store.listEventTypes()
@@ -377,7 +381,11 @@ describeEachProvider('RFC-396 MR catalog and runtime wiring', (harness) => {
         ),
       ).toMatchObject({ ownerTypeId: 'graph-development' })
     }
-    await composeEventCenter({ ...options, typePackageDescriptorJsons: [...descriptors].reverse() })
+    await composeEventCenter({
+      ...standaloneEventCenterSelections(),
+      ...options,
+      typePackageDescriptorJsons: [...descriptors].reverse(),
+    })
     expect(await store.listSources()).toEqual(sources)
     expect(await store.listEventTypes()).toEqual(events)
   })
