@@ -144,25 +144,20 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
       expect(src).toContain('getTaskWriteSem')
       expect(src.includes('gcTaskWriteSem')).toBe(false)
     }
-    const application = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'taskEngineApplication.ts',
-      ),
-      'utf-8',
-    )
-    // The one-and-only delete point: the application drive's try/finally shell.
-    expect(application).toMatch(
-      /finally\s*\{\s*opts\.executionPermits\.gcTaskWriteSem\(opts\.taskId\)/,
-    )
-    // No second call site sneaks in (one import line + one call).
-    const calls = application.match(/gcTaskWriteSem\(/g) ?? []
-    expect(calls.length).toBe(1)
+    // RFC-514: the drive's try/finally shell moved from composition/taskEngineApplication.ts to engine/task/driveTaskRun.ts;
+    // the composition hands the drive its permits and never gc-s itself.
+    const read = (...segments: string[]) =>
+      readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', ...segments),
+        'utf-8',
+      )
+    const drive = read('engine', 'task', 'driveTaskRun.ts')
+    // The one-and-only delete point: the drive's try/finally shell.
+    expect(drive).toMatch(/finally\s*\{\s*input\.executionPermits\.gcTaskWriteSem\(input\.taskId\)/)
+    // No second call site sneaks in.
+    expect((drive.match(/gcTaskWriteSem\(/g) ?? []).length).toBe(1)
+    const application = read('composition', 'taskEngineApplication.ts')
+    expect(application.includes('gcTaskWriteSem')).toBe(false)
     // The task engine's mechanics state writer lock comes from the registry (S-9 wiring).
     expect(application).toContain('writeSem: opts.executionPermits.getTaskWriteSem(taskId)')
   })
