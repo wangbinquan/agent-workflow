@@ -21,7 +21,7 @@
 - [x] AC-1 清单里的名字只在各自的位置声明；7 个组合文件不再有这 28 行核对；装配入口、选择函数与转出的名字不变
 - [x] AC-2 同样输入下每个核对接受与拒绝的输入、错误与时机和此前一致
 - [x] AC-3 新位置的依赖面是闭集；public surface 不升；`composition-control-flow-source-control` 收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 除外部服务的链接检查外全绿（逐格归因见 §CI）
 
 ## 集中验证
 
@@ -71,7 +71,10 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `6006cf70a`（实现，父提交是 `4353e15ee`）：exact SHA 主 CI run 44626593875 的 70 个 job 第 1 次运行 68 个通过；design/ 的链接检查
+  红：GitHub 对 `design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接重试 5 次后仍回 503（外部服务暂时不可
+  用，该文件不在本提交里），`CI required` 只因它红；未重跑。后继 RFC-512 实现提交 `b0fa6513a` 的 run 44630588862 里同一项链接检查通过（70 个
+  job 全部通过）。
 - 本 RFC 的落档提交 `4353e15ee`（只改文档，同一提交记下 RFC-510 转 Done 提交 `036df2e8c` 的 CI 当时仍在运行）：主 CI run 44616049713 共
   70 个 job，第一次运行全部通过（含 design/ 的链接检查）。没有重跑。
 

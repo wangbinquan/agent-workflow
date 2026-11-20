@@ -1,3 +1,19 @@
+## 2026-11-19 RFC-516 模块根装配文件的运行期逻辑迁出（一）：事件中心、身份访问与源码控制（In Progress；`design/RFC-516-module-root-runtime-logic-out-1/`）
+
+- **来由**：RFC-515 的全模块门把 6 个模块根 `composition.ts` 登记为例外（后继：模块根收口）。其中 event-center、identity-access 与
+  source-control 各只有一小段运行期逻辑：缺省观察者（一调就抛）、在线状态连接的登记表类、代码托管连接投影的收敛与员工案例操作宿主的核对。用
+  户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当
+  前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批
+  准，不派 Codex。
+- **范围**：缺省观察者迁入新的 `event-center/application/unavailableObserverProgram.ts`，登记表类迁入新的
+  `identity-access/application/runtimePresenceConnections.ts`，收敛与核对并入 source-control 的两个 application 文件；三个模块根只装配，收敛
+  仍从 `source-control/composition.ts` 转出；RFC-515 门的例外清单 33 → 30。清单见 design §3。
+- **不做**：digital-employee、system-operations 与 task-execution 的模块根（另立后继）；RFC-370 的例外文件；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（同一提交把 RFC-511、RFC-512 转 Done），实现与验证后再提
+  交。独立对账（plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是运行期部件与用例，落 application；C11 public 不变；C12 RFC-516 用例覆盖全部生产文
+  件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升。
+
 ## 2026-11-19 RFC-515 组合层只装配的全模块门（In Progress；`design/RFC-515-composition-assembly-only-gate/`）
 
 - **来由**：RFC-294 plan §3 S10 要求把 RFC-414 / RFC-423 的收口锁改写为一条覆盖全部模块的门（无循环与 switch、`try` / `throw` 只在登记清单
@@ -89,7 +105,7 @@
   33 / 33 全过。架构报告 60 项只差两项（`composition-control-flow-code-capability` 与 `composition-control-flow-resource-catalog`）。实现门
   PASS（本会话按路径限定自审，只审功能；3 段代码与 HEAD 按词法单元逐个相同）。
 
-## 2026-11-19 RFC-512 源码控制的已登记仓库读取与远端登记用例迁出 composition（In Progress；`design/RFC-512-source-control-repository-mirror-use-cases-out-of-composition/`）
+## 2026-11-19 RFC-512 源码控制的已登记仓库读取与远端登记用例迁出 composition（Done；`design/RFC-512-source-control-repository-mirror-use-cases-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；RFC-511 之后 source-control 组
   合层控制流 120 行，RFC-370 的 `crewstation*` / `taskImage*` 101 行，其余 19 行里 11 行在 `composition/repositoryMirrors.ts`：它的装配入口
@@ -117,8 +133,13 @@
   例在候选 2 上通过。首批 155 个文件按 CI 的跑法与对照 A/B：候选 1,523 条通过、13 条红，对照 1,505 条通过、17 条红，本 RFC 用例 14 / 14；候
   选多出的 1 条与对照多出的 5 条都是时限，其余红两边相同、都是时限；直接覆盖装配入口的托管与单机用例两边全过。架构报告 60 项只差一项
   `composition-control-flow-source-control`。实现门 PASS（本会话按路径限定自审，只审功能；12 段代码与 HEAD 按词法单元逐个相同）。
+- **落地**：`b0fa6513a`（8 个文件；父提交是 `f4a79d7ce`）。
+- **CI**：`b0fa6513a` 主 CI run 44630588862 的 70 个 job 第 1 次全部通过，未重跑。落档提交 `f4a79d7ce`（只改文档）：主 CI run 44626872531 的
+  70 个 job 66 个通过，红的是外部的链接检查、两个与本 RFC 无关的 backend 时限与随之红的 `CI required`（代码树同 `6006cf70a`，那次 backend 全
+  过），未重跑。转 Done 的提交（只改文档，与 RFC-516 落档同一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第十九步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-513（代码能力与资源目录组合层余下的 throw）。
 
-## 2026-11-19 RFC-511 源码控制组合层的端口完整性核对迁出 composition（In Progress；`design/RFC-511-source-control-port-completeness-checks-out-of-composition/`）
+## 2026-11-19 RFC-511 源码控制组合层的端口完整性核对迁出 composition（Done；`design/RFC-511-source-control-port-completeness-checks-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求全部模块的组合层无循环与 switch、`try` / `throw` 只在登记清单内；source-control 组合层控制流
   148 行，RFC-370 的 `crewstation*` / `taskImage*` 占 101 行，其余 11 个文件 47 行里有 28 行是端口的装配期完整性核对（交入的隔离工作区、仓库
@@ -147,6 +168,12 @@
   5 秒，其余红两边相同、都是时限；直接覆盖 7 组核对的 rfc370 用例在候选一边全过。默认时限放宽到 60 秒后，两边各自多出的红所在的文件与另 4 个
   同样撞 5 秒的文件两边各 98 / 98 全过；`rfc294-architecture-preflight` 的能力归属一例放宽到 1,800 秒后两边都通过。架构报告 60 项只差一项
   `composition-control-flow-source-control`。实现门 PASS（本会话按路径限定自审，只审功能；12 段代码与 HEAD 按词法单元逐个相同）。
+- **落地**：`6006cf70a`（17 个文件；父提交是 `4353e15ee`）。
+- **CI**：`6006cf70a` 主 CI run 44626593875 的 70 个 job 第 1 次运行 68 个通过：design/ 的链接检查遇 GitHub 503（外部服务，该文件不在本提交
+  里）、`CI required` 只因它红，未重跑；后继 `b0fa6513a` 的 run 44630588862 同一项通过。落档提交 `4353e15ee`（只改文档）：主 CI run
+  44616049713 的 70 个 job 第 1 次全部通过。转 Done 的提交（只改文档，与 RFC-516 落档同一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第十八步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-512（`repositoryMirrors.ts` 的已登记仓库读取与远端登
+  记用例）。
 
 ## 2026-11-19 RFC-510 任务执行组合层的端口完整性核对迁出 composition（Done；`design/RFC-510-task-execution-port-completeness-checks-out-of-composition/`）
 
