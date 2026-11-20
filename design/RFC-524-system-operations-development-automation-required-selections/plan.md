@@ -20,7 +20,7 @@
 - [x] AC-1 16 处回落不再存在；RFC-521 门的实测与登记逐条相等，适配器回落 51 条
 - [x] AC-2 daemon、CLI 命令与维护入口得到的对象不变；用例给出的选择与此前缺省相同
 - [x] AC-3 bootstrap 不深取两个模块的 infrastructure；public surface 不升；计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 实现提交 66 / 70 与补正：本人缺陷一格已补正，其余逐格归因为环境（见下文）
 
 ## 集中验证
 
@@ -61,7 +61,14 @@ HEAD（`590435e2f`）的树相同。开发期按 `tsc` 列出的 52 处调用（
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `fa52dfdfc`（实现，父提交是 `590435e2f`）：exact SHA 主 CI run 44808988322 的 70 个 job 第 1 次运行 66 个通过，未重跑。红的四格：backend
+  分片 21/44 是 `rfc370-daemon-runtime-query-bindings` 的 4 条（“query returned before read ACK”）——本人缺陷：测试助手
+  `providerHttpApplication` 先展开用例给的选择、再显式写 `daemonRuntime`，盖掉了用例经 `scope.open({ daemonRuntime })` 自选的查询；首批只从
+  用到助手的用例里抽样，没照到它。补正提交改为 `selections.daemonRuntime ?? 本机查询`。backend 分片 16/44 是 `rfc311-perf-guards` 的
+  AC-11 塌方探测（runner 上 PostgreSQL 的 P95 5.7 秒、是 SQLite 的 79 倍），本 RFC 不碰它测的读路径，属 runner 性能；design/ 链接检查
+  是 RFC-371 文档那条既有提交链接的外部 503；`CI required` 随之红。
+- `8223581fc`（用例补正，父提交是 `fa52dfdfc`）：exact SHA 主 CI run 44815914976 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与
+  `CI required`），backend 分片 21/44 通过；未重跑。
 - 本 RFC 的落档提交 `590435e2f`（只改文档）：主 CI run 44786226871 的 70 个 job 第 1 次运行 67 个通过；红的是 design/ 链接检查的外部
   503（RFC-371 文档的既有提交链接，另有 `design/RFC-378-mindmap-decision-review/research.md` 里一条第三方链接）、backend 分片 1/44（用例步骤
   全部通过，job 在上传计时文件时撞 15 分钟上限被取消）与随之红的 `CI required`，都属环境；未重跑。

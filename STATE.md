@@ -1,4 +1,18 @@
-## 2026-11-20 RFC-524 系统运维与开发自动化的适配器回落改为必填注入（In Progress；`design/RFC-524-system-operations-development-automation-required-selections/`）
+## 2026-11-20 RFC-525 资源目录的适配器回落改为必填注入（In Progress；`design/RFC-525-resource-catalog-required-selections/`）
+
+- **来由**：RFC-524 之后 RFC-521 门余 51 处适配器回落；按 RFC-522 design D4 的次序，第 1 项第五步清 resource-catalog 的 16 处——其中资源包命
+  令（CLI）的技能内容与两个工件属主、单机维护 worker 的工件恢复与单机 MCP 诊断的探测执行器在生产路径上一直由回落造；技能内容一族的回落只服务
+  用例（两种部署的内容绑定都给全）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推
+  进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：技能内容绑定的两项与 16 处回落对应的选项必填，只为回落存在的选项（缺省根目录、`skillContentRoot`、资源包 provider 的
+  `pluginInstaller` 与 `pluginsDir`、维护场景的 `recoveryEffectsFactory`）删去；资源包命令、维护 worker 与单机 MCP 诊断显式给出本机实现（组
+  合层交出）；测试助手，用例随改；RFC-521 门 51 → 35；新增 RFC-525 用例。
+- **不做**：单机选择整体收进 `bootstrap/standalone.ts`（与维护 worker 的单机效果一并另立后继）；其余模块的回落；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-524 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-20 RFC-524 系统运维与开发自动化的适配器回落改为必填注入（Done；`design/RFC-524-system-operations-development-automation-required-selections/`）
 
 - **来由**：RFC-523 之后 RFC-521 门余 67 处适配器回落；按 RFC-522 design D4 的次序，第 1 项第四步清 system-operations 的 9 处与
   development-automation 的 7 处——其中 `backup` / `restore` 命令的数据库配置、CLI 迁移的配置与演示种子的标记在生产路径上一直由回落造，daemon
@@ -25,6 +39,11 @@
 - **集中验证**（基于 `590435e2f`，详见 plan）：tsc 0 错；首批 227 个文件按 CI 的跑法与对照 A/B，查出本人三处缺陷（不可达生产文件与
   integration 未消费符号各多一条、两处按原文钉住回落的锁）并修正；复验 158 个文件两边的红全部是时限，候选多出红的文件放宽到 60 秒后全过（两
   边剩同一条 preflight 撞自带的 180 秒）；架构报告只有收紧的两项变化。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`fa52dfdfc`（76 个文件；父提交是 `590435e2f`），补正 `8223581fc`（2 个文件：测试助手不盖掉用例自选的 daemon 运行期查询）。
+- **CI**：实现提交 66 / 70：backend 分片 21/44 是测试助手盖掉用例自选的 daemon 运行期查询（本人缺陷，已补正），分片 16/44 是
+  `rfc311-perf-guards` 在 runner 上的 PostgreSQL P95（环境），另有 design/ 链接检查的外部 503；补正提交 70 / 70 全过；落档提交 67 / 70（外部
+  503 与撞 15 分钟上限的分片 1/44，环境）。都未重跑。
+- **下一步**：S12 第 1 项第五步：resource-catalog 的 16 处适配器回落（RFC-525）。
 
 ## 2026-11-20 RFC-523 意图、代码历史与记忆的适配器回落改为必填注入（Done；`design/RFC-523-intent-code-history-memory-required-selections/`）
 
