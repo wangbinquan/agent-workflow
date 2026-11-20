@@ -3283,7 +3283,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc414-composition-io-out.test.ts",
       "id": "rfc414-composition-io-out",
-      "lines": 164,
+      "lines": 98,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -3391,7 +3391,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc423-composition-assembly-only.test.ts",
       "id": "rfc423-composition-assembly-only",
-      "lines": 214,
+      "lines": 103,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -3886,6 +3886,18 @@
       "lines": 537,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc515-composition-assembly-only.test.ts",
+      "id": "rfc515-composition-assembly-only",
+      "lines": 213,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
       "negativeFixture": true,
       "runner": "bun"
     }

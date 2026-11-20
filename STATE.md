@@ -15,7 +15,17 @@
   锁、`tests/architecture/` 全部与经装配入口对拍的用例与 HEAD A/B，全量语料交给 CI 的 backend 分片。独立对账（plan §0 第 10 条）已到期、已在
   本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 门即“组合层只装配”的全模块判据；C11 public 不变；C12 门覆盖全部模块的组合层（下限 350）并
-  带负对照；C13 计数不升，分支上限按 design D4。
+  带负对照；C13 计数不升（60 项实测与对照逐项相同），分支上限按 design D4。
+- **§14 不变量 / S10 第二十二步**：全部模块的 `composition/` 目录与模块根 `composition.ts`（358 个文件）在例外清单之外没有循
+  环、switch、`try`、`throw`，不取 RFC-414 清单里的 DB / FS / 进程 / git 模块、不调 `tablesOf` 与 `Bun.spawn`；例外清单 33 个文件
+  （RFC-370 的 27 个、模块根 6 个）与实测逐文件相等。resource-catalog 组合层不再自己读库。跨 context import 7,508 → 7,507，public surface 不
+  变，控制流计数不变；分支上限即 `counts.json` 现值（design D4）。S10 关闭的余项：例外清单清空（RFC-370 的 27 个与模块根 6 个）与
+  `composition-forbidden-import-files` 12 → 0（都是 RFC-370 文件）。
+- **集中验证**（基于 `3502d3875`，详见 plan）：查出本 RFC 的两处缺陷，已修正并复验：新门用例的一处类型错（`tsc` 报出），与两条旧锁删去形状负
+  对照后只剩“活语料加伪造文件”的负对照、普查认不出（`rfc317-guard-negative-fixture` 只在候选一边红），各加一例只用伪造源码的归属负对照。候选
+  2 的 backend `tsc` 0 错，eslint 无告警。首批 150 个文件按 CI 的跑法与对照 A/B：候选 1,525 条通过、13 条红，对照 1,528 条通过、9 条红，新门
+  3 / 3；候选多出的红除缺陷外都是时限，对拍 `loadSkillOperationState` 的用例两边全过。修正后放宽到 60 秒复验 11 个文件两边全过。架构报告只差
+  跨 context import 的一处改道。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-19 RFC-514 任务执行组合层余下的 try / throw 迁出 composition（In Progress；`design/RFC-514-task-execution-composition-try-throw-out/`）
 

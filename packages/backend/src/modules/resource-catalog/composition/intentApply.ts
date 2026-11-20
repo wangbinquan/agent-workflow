@@ -1,6 +1,5 @@
 // RFC-345 T4b — bootstrap-owned binding for the current Intent lifecycle.
 
-import { first } from '@/platform/persistence/queryHelpers'
 import {
   markSkillBootVerified,
   unmarkSkillBootVerified,
@@ -15,8 +14,7 @@ import { hashRegularFileTree } from '../infrastructure/legacy/skillHash'
 import { skillFilesAbs, skillVersionAbs } from '../infrastructure/legacy/skillIdentityPaths'
 import { finishOperation } from '../infrastructure/legacy/skillOperations'
 import { publishStagedSkillVersion } from '../infrastructure/legacy/skillVersion'
-import { skillOperationStateQuery } from '../infrastructure/skillOperationStateQuery'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { loadSkillOperationState } from '../infrastructure/skillOperationStateQuery'
 import type { ResourceCatalogAclIdentityReadPort } from '../application/ports/providerResourceCatalogPersistence'
 import {
   createIntentApplyResourceSession,
@@ -108,8 +106,7 @@ export function composeLegacyIntentSkillArtifactCompat() {
     publishStagedSkillVersion,
     finishOperation,
     unmarkSkillBootVerified,
-    loadSkillOperationState: (db: PersistenceDb, opId: string) =>
-      first(skillOperationStateQuery(db, opId)),
+    loadSkillOperationState,
   })
 }
 

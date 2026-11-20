@@ -1,7 +1,7 @@
 // RFC-414: task-execution composition binds; it does not read or write the database, the filesystem, processes or git
-// itself. Complements RFC-376's `composition-forbidden-import-files` (fs / child_process / drizzle reachability) with the
-// persistence helpers and git, and pins the infrastructure owners the moved I/O landed in. Reads the production sources
-// without importing them.
+// itself. RFC-515 moved the import and call rules (the same lists) into the all-module gate
+// `rfc515-composition-assembly-only`; this lock keeps pinning the infrastructure owners the moved I/O landed in. Reads the
+// production sources without importing them.
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -13,18 +13,6 @@ const PREFIX = 'packages/backend/src/'
 const TE = PREFIX + 'modules/task-execution/'
 const COMPOSITION = TE + 'composition/'
 const INFRA = TE + 'infrastructure/'
-/** Module specifiers a task-execution composition file may not import (type-only imports included). */
-const FORBIDDEN_IMPORTS = [
-  /^drizzle-orm(?:\/|$)/,
-  /^bun:sqlite$/,
-  /^@\/platform\/persistence\/sessionTables$/,
-  /^@\/platform\/persistence\/queryHelpers$/,
-  /^(?:node:)?fs(?:\/promises)?$/,
-  /^(?:node:)?child_process$/,
-  /^@\/util\/git$/,
-]
-/** Calls a composition file may not make. */
-const FORBIDDEN_CALLS = ['tablesOf(', 'Bun.spawn(']
 /** The infrastructure owners RFC-414 introduced or moved symbols into. */
 const OWNERS = new Map([
   ['readTaskStatus', INFRA + 'taskExecutionTaskReads.ts'],
@@ -40,33 +28,6 @@ const OWNERS = new Map([
   ['resolveNativePortContentDetailed', INFRA + 'local/filePortOutputValidation.ts'],
 ])
 const UNITS = backendUnits(ROOT)
-
-function specifiers(unit: SourceUnit): string[] {
-  const found: string[] = []
-  for (const statement of unit.source.statements) {
-    if (
-      (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
-      statement.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(statement.moduleSpecifier)
-    )
-      found.push(statement.moduleSpecifier.text)
-  }
-  return found
-}
-
-/** A composition file importing a forbidden module or making a forbidden call. */
-function compositionIoViolations(units: readonly SourceUnit[]): string[] {
-  const found: string[] = []
-  for (const unit of units) {
-    if (!unit.path.startsWith(COMPOSITION)) continue
-    for (const specifier of specifiers(unit))
-      if (FORBIDDEN_IMPORTS.some((pattern) => pattern.test(specifier)))
-        found.push('import:' + unit.path + ' ' + specifier)
-    for (const call of FORBIDDEN_CALLS)
-      if (unit.text.includes(call)) found.push('call:' + unit.path + ' ' + call)
-  }
-  return found.sort()
-}
 
 // One AST walk per unit, cached by unit identity: the negative fixtures re-run the owner check over the same live corpus
 // (2 × 11 times), and only the replaced or added units are new objects. Without the cache the test walked the whole
@@ -107,48 +68,21 @@ function ownershipViolations(units: readonly SourceUnit[]): string[] {
   return found.sort()
 }
 
-test('live corpus: task-execution composition does no persistence, filesystem, process or git work', () => {
+test('live corpus: the I/O moved out of task-execution composition has one infrastructure owner', () => {
   expect(UNITS.length).toBeGreaterThanOrEqual(2000)
   expect(UNITS.filter((unit) => unit.path.startsWith(COMPOSITION)).length).toBeGreaterThan(80)
   for (const path of new Set(OWNERS.values()))
     expect(existsSync(resolve(ROOT, path)), path).toBe(true)
-  expect(compositionIoViolations(UNITS)).toEqual([])
   expect(ownershipViolations(UNITS)).toEqual([])
 })
 
-test('negative fixtures: every forbidden import and call is detected in a composition file only', () => {
-  const file = COMPOSITION + 'revived.ts'
-  for (const specifier of [
-    'drizzle-orm',
-    'drizzle-orm/sqlite-core',
-    'bun:sqlite',
-    '@/platform/persistence/sessionTables',
-    '@/platform/persistence/queryHelpers',
-    'node:fs',
-    'fs',
-    'node:fs/promises',
-    'node:child_process',
-    '@/util/git',
-  ]) {
-    expect(
-      compositionIoViolations([sourceUnit(file, `import { x } from '${specifier}'`)]),
-      specifier,
-    ).toEqual(['import:' + file + ' ' + specifier])
-    expect(
-      compositionIoViolations([sourceUnit(file, `export { x } from '${specifier}'`)]),
-      specifier,
-    ).toEqual(['import:' + file + ' ' + specifier])
-    // Outside composition the same import is not this lock's business.
-    expect(
-      compositionIoViolations([
-        sourceUnit(INFRA + 'revived.ts', `import { x } from '${specifier}'`),
-      ]),
-    ).toEqual([])
-  }
-  for (const call of FORBIDDEN_CALLS)
-    expect(compositionIoViolations([sourceUnit(file, `const x = ${call}db)`)])).toEqual([
-      'call:' + file + ' ' + call,
-    ])
+test('negative fixtures: fabricated sources alone are judged by the same owner check', () => {
+  // RFC-515: the import / call fixtures moved to rfc515-composition-assembly-only; this keeps a fabricated-only fixture.
+  expect(
+    ownershipViolations([
+      sourceUnit(COMPOSITION + 'relocated.ts', 'export function readTaskStatus() {}'),
+    ]),
+  ).toContain('owner:readTaskStatus')
 })
 
 test('negative fixtures: a missing, duplicated or relocated infrastructure owner is detected', () => {
