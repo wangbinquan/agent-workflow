@@ -1,3 +1,19 @@
+## 2026-11-19 RFC-517 模块根装配文件的运行期逻辑迁出（二）：数字员工、系统运维与任务执行（In Progress；`design/RFC-517-module-root-runtime-logic-out-2/`）
+
+- **来由**：RFC-515 的全模块门登记的 6 个模块根，RFC-516 清掉 3 个；余下 digital-employee、system-operations 与 task-execution 的模块根里还
+  有运行期逻辑：平台清单参与者与员工定义视图投影、文件库启动的持锁段、schema 计划核对与暂存还原后的工件释放、任务执行模块的两个类与关停控制
+  器。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下
+  达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中
+  验证，按授权记为已批准，不派 Codex。
+- **范围**：六个新文件（design §3）：digital-employee 的两个 application 文件，system-operations 的一个 `infrastructure/local/` 文件与两个
+  application 文件，task-execution 的一个 infrastructure 文件；三个模块根只装配、照旧导出，进程级单例与启动准备的二选一留在模块
+  根；RFC-515 门的例外清单 30 → 27，只剩 RFC-370 的文件。
+- **不做**：RFC-370 的例外文件；两份同形认领体的合并；改名；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（同一提交把 RFC-513 转 Done），实现与验证后再提交。独立对账
+  （plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是运行期部件与用例，按层落 application 或 infrastructure；C11 public 不变；C12
+  RFC-517 用例覆盖全部生产文件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升。
+
 ## 2026-11-19 RFC-516 模块根装配文件的运行期逻辑迁出（一）：事件中心、身份访问与源码控制（In Progress；`design/RFC-516-module-root-runtime-logic-out-1/`）
 
 - **来由**：RFC-515 的全模块门把 6 个模块根 `composition.ts` 登记为例外（后继：模块根收口）。其中 event-center、identity-access 与
@@ -83,7 +99,7 @@
   过，两边各余 2 条相同的红（`rfc400` 自带的 30 秒、`rfc167` 的批准一例在用例自己的等待后仍读到 `running`）。架构报告 60 项只差一项
   `composition-control-flow-task-execution`。实现门 PASS（本会话按路径限定自审，只审功能；迁移的代码与 HEAD 按词法单元逐段相同）。
 
-## 2026-11-19 RFC-513 代码能力与资源目录组合层余下的 throw 迁出 composition（In Progress；`design/RFC-513-code-history-and-package-recovery-throws-out-of-composition/`）
+## 2026-11-19 RFC-513 代码能力与资源目录组合层余下的 throw 迁出 composition（Done；`design/RFC-513-code-history-and-package-recovery-throws-out-of-composition/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求组合层的 `try` / `throw` 只在登记清单内、例外清单最终为空。RFC-512 之后，RFC-370 之外的组合层
   `throw` 还剩六处：task-execution 三处（运行时绑定与引擎，另立后继）、code-capability 两处（`historyQueries.ts` 里未绑定安装时的空读取
@@ -112,6 +128,11 @@
   都是时限；按错误串断言、读组合文件原文与算 import 闭包的用例在候选一边全过。默认时限放宽到 60 秒后，两边同样撞 5 秒的 4 个文件两边各
   33 / 33 全过。架构报告 60 项只差两项（`composition-control-flow-code-capability` 与 `composition-control-flow-resource-catalog`）。实现门
   PASS（本会话按路径限定自审，只审功能；3 段代码与 HEAD 按词法单元逐个相同）。
+- **落地**：`57f755178`（9 个文件；父提交是 `fc19801d2`）。
+- **CI**：`57f755178` 主 CI run 44635079439 的 70 个 job 第 1 次全部通过，未重跑。落档提交 `fc19801d2`（只改文档）：主 CI run 44630876474 的
+  70 个 job 68 个通过，红的是一个与本 RFC 无关的 backend 时限与随之红的 `CI required`（代码树同 `b0fa6513a`，那次 backend 全过），未重跑。转
+  Done 的提交（只改文档，与 RFC-517 落档同一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第二十步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-514（任务执行组合层余下的 try / throw）。
 
 ## 2026-11-19 RFC-512 源码控制的已登记仓库读取与远端登记用例迁出 composition（Done；`design/RFC-512-source-control-repository-mirror-use-cases-out-of-composition/`）
 
