@@ -794,6 +794,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `deps.evidenceArtifacts ?? new EvidenceStore(…)`，`rfc349-development-admission-postgresql-adapter` 钉
   `deps.admissionLookup ?? createAdmissionLookup(deps.db)`。回落里构造的是仍在的名字，按删去的名字搜不到，首批才红；改回落前把每处回落那一行
   的原文片段（`?? new X(`、`deps.x ??` 一类）也全仓搜一遍。
+- **把组合层的回落挪进共享测试助手时，别盖掉用例自己给的值**（RFC-524 实撞，2026-11-20）：`providerHttpApplication` 先 `...selections` 展开
+  用例给的选择，RFC-524 在后面显式写 `daemonRuntime: createFileDaemonRuntimeQueries(…)`，把 `rfc370-daemon-runtime-query-bindings` 经
+  `scope.open({ daemonRuntime })` 给的查询盖掉，CI 分片 21/44 才红（`fa52dfdfc`）。此前组合层做的是“给了用给的，没给才造”，助手里要写成同样
+  的 `selections.x ?? 造本机的`。改共享助手前，先全仓搜经它传入被改那一项的用例并逐个跑；抽样用到助手的用例照不到这种覆盖。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
   RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
   `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。

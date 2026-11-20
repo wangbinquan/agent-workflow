@@ -338,7 +338,11 @@ export async function createProviderHttpApplicationFromBinding(
       configPath,
       dbPath: join(appHome, 'db.sqlite'),
       lockPath: join(appHome, '.daemon.lock'),
-      daemonRuntime: createFileDaemonRuntimeQueries({ infoPath: join(appHome, '.daemon.info') }),
+      // RFC-524: a case's own runtime query wins (it rides in with `...selections` above); otherwise the file query over
+      // the scope's info file — what the HTTP composition used to build when none was given.
+      daemonRuntime:
+        selections.daemonRuntime ??
+        createFileDaemonRuntimeQueries({ infoPath: join(appHome, '.daemon.info') }),
       log: createLogger('daemon'),
       applicationConfiguration,
       taskLaunchConfiguration,
