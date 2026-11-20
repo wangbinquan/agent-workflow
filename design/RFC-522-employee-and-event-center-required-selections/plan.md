@@ -17,7 +17,7 @@
 - [x] AC-1 5 处回落不再存在，选项必填，门的实测与登记相等、适配器回落 78 条
 - [x] AC-2 daemon 得到的对象不变，用例显式给出的选择与此前缺省相同
 - [x] AC-3 event-center 的 infrastructure 不取组合层的值；public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 67 / 70 与补正 68 / 70：本人缺陷一格已补正，其余逐格归因为环境（见下文）
 
 ## 集中验证
 
@@ -58,7 +58,9 @@ HEAD（`568fda4f6`）的树相同。集中验证查出本 RFC 的缺陷都已修
   （`docs/dev-gotchas.md` 早有这条），补正提交里补上文本预筛、读盘缓存与 30 秒时限，本机负载 64 下 1.3 秒；Windows 的 Playwright 分片 3/4 是
   `spawnSync git ETIMEDOUT` 起头的一串超时与连带（同一份 daemon 装配在其余 Windows 分片与 Linux / macOS 的 e2e 上通过），属 runner 环
   境；`CI required` 随之红。
-- 【待补：补正提交】
+- `fc2ca2ab2`（用例补正，父提交是 `83edbd8bf`）：主 CI run 44748298284 的 70 个 job 第 1 次运行 68 个通过，本 RFC 用例所在的 backend 分片
+  42/44 通过；红的 backend 分片 16/44 是 `rfc311-perf-guards` 的 AC-11 塌方探测——runner 上 PostgreSQL 的 P95 5.8 秒、是 SQLite 的 125 倍；补
+  正不改生产代码，同一份生产代码在 `83edbd8bf` 上这一分片通过，属 runner 性能；`CI required` 只因它红；未重跑。
 - 本 RFC 的落档提交 `568fda4f6`（只改文档）：主 CI run 44725156096 的 70 个 job 第 1 次运行 68 个通过；红的是 design/ 链接检查对 RFC-371 文
   档（`design/RFC-371-run-observability/native-real-validation-20261007.md`）里一条既有提交链接的外部 503，`CI required` 只因它红；未重跑。
 

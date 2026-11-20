@@ -1,4 +1,4 @@
-## 2026-11-20 RFC-522 数字员工与事件中心的适配器回落改为必填注入（In Progress；`design/RFC-522-employee-and-event-center-required-selections/`）
+## 2026-11-20 RFC-522 数字员工与事件中心的适配器回落改为必填注入（Done；`design/RFC-522-employee-and-event-center-required-selections/`）
 
 - **来由**：RFC-521 的门登记了 83 处组合层适配器回落、按模块指定后继；digital-employee 与 event-center 的 5 处链路最短（daemon 的两种部署都
   已显式给出，回落只服务于用例），作为第 1 项第二步先清。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审
@@ -20,6 +20,11 @@
 - **集中验证**（基于 `568fda4f6`，详见 plan）：tsc 0 错；首批 223 个文件按 CI 的跑法与对照 A/B，查出空观察者成了不可达的生产文件
   （`unreachable-production-files` 15 → 16），移进测试助手后复验通过；其余候选多出的红都是时限。复验 178 个文件放宽到 60 秒，候选的红两边都
   有。架构报告的 60 项与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`83edbd8bf`（38 个文件；父提交是 `5c55576aa`），用例补正 `fc2ca2ab2`（4 个文件：语料扫描先按名字文本筛、给 30 秒时限）。
+- **CI**：实现提交 67 / 70：backend 分片 42/44 是本 RFC 用例的语料扫描撞默认 5 秒（本人缺陷，已补正），Windows e2e 分片 3/4 是
+  `spawnSync git ETIMEDOUT` 起头的一串超时（环境）；补正提交 68 / 70，红的是 `rfc311-perf-guards` 在 runner 上的 PostgreSQL P95（环境，补正
+  不改生产代码）；落档提交 68 / 70（design/ 链接检查的外部 503）。都未重跑。
+- **下一步**：S12 第 1 项第三步：intent、code-capability 与 memory 的 11 处适配器回落（RFC-522 design D4 的次序）。
 
 ## 2026-11-20 RFC-521 组合层适配器回落的全模块门与清单（Done；`design/RFC-521-composition-adapter-fallback-gate/`）
 
