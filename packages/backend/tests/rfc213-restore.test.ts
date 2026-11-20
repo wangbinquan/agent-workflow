@@ -48,6 +48,7 @@ import {
 } from '../src/platform/persistence/sqlite/systemBackupManifest'
 import { restoreCommand } from '../src/cli/restore'
 import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
+import { composeStandaloneLocalSystemOperationsSelection } from './helpers/systemOperations'
 import { hasPendingRestore } from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
 import { writePidFileForTest } from '../src/util/lock'
 import { appVersion } from '../src/util/version'
@@ -489,6 +490,7 @@ describe('restore CLI wrapper guard rails', () => {
       composeLocalSystemOperations({
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
         contract: logicalSchemaContract,
+        ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
       }),
     )
     expect(noArg.status).toBe('error')
@@ -499,6 +501,7 @@ describe('restore CLI wrapper guard rails', () => {
       composeLocalSystemOperations({
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
         contract: logicalSchemaContract,
+        ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
       }),
     )
     expect(missing.status).toBe('error')
@@ -671,6 +674,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
         composeLocalSystemOperations({
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
           contract: logicalSchemaContract,
+          ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
         }),
       )
       expect(res.status).toBe('ok')
@@ -681,6 +685,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
         composeLocalSystemOperations({
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
           contract: logicalSchemaContract,
+          ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
         }),
       )
       expect(apply.status).toBe('error')
@@ -703,6 +708,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
         composeLocalSystemOperations({
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
           contract: logicalSchemaContract,
+          ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
         }),
       )
       expect(res.status).toBe('error')

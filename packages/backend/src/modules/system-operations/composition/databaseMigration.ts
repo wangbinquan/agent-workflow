@@ -4,6 +4,9 @@ import type { LogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import { Paths } from '@/util/paths'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import { createFileDatabaseConfiguration } from '../infrastructure/local/fileDatabaseConfiguration'
+
+/** RFC-524: the local config file's database configuration, for the roots that select it. */
+export { createFileDatabaseConfiguration }
 import { createDatabaseMigrationApplication } from '../application/databaseMigrationApplication'
 import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
 import { createDatabaseMigrationCoordinator } from '../infrastructure/databaseMigrationCoordinator'
@@ -16,25 +19,21 @@ export interface DatabaseMigrationModule {
   readonly coordinator: ReturnType<typeof createDatabaseMigrationCoordinator>
 }
 
-export function composeDatabaseMigrationModule(
-  input: {
-    readonly contract: LogicalSchemaContract
-    readonly admission: DatabaseMigrationAdmissionPort
-    readonly sqlitePath?: string
-    readonly operationsRoot?: string
-    readonly generationPointerPath?: string
-    readonly executionMode?: 'inline' | 'background'
-    readonly onBackgroundFailure?: (input: {
-      readonly operationId: string
-      readonly error: unknown
-    }) => void
-  } & (
-    | { readonly configuration: DatabaseConfigurationPort; readonly configPath?: never }
-    | { readonly configuration?: never; readonly configPath?: string }
-  ),
-): DatabaseMigrationModule {
-  const configuration =
-    input.configuration ?? createFileDatabaseConfiguration(input.configPath ?? Paths.config)
+export function composeDatabaseMigrationModule(input: {
+  readonly contract: LogicalSchemaContract
+  readonly admission: DatabaseMigrationAdmissionPort
+  readonly sqlitePath?: string
+  readonly operationsRoot?: string
+  readonly generationPointerPath?: string
+  readonly executionMode?: 'inline' | 'background'
+  readonly onBackgroundFailure?: (input: {
+    readonly operationId: string
+    readonly error: unknown
+  }) => void
+  /** RFC-524: the caller selects it (daemon and CLI: the local config file). */
+  readonly configuration: DatabaseConfigurationPort
+}): DatabaseMigrationModule {
+  const configuration = input.configuration
   const coordinator = createDatabaseMigrationCoordinator({
     headContract: input.contract,
     contract: input.contract,
@@ -71,6 +70,7 @@ export function composeLocalDatabaseMigrationOperations(
 ): LocalDatabaseMigrationOperations {
   const module = composeDatabaseMigrationModule({
     contract,
+    configuration: createFileDatabaseConfiguration(Paths.config),
     admission: {
       async freezeAndDrain() {},
       async reopenSqlite() {},

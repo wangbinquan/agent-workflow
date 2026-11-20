@@ -38,10 +38,10 @@ describe('RFC-346 CLI typed cutover', () => {
       .split('\nexport ')[0]!
     expect(composeBackup).toContain('const provider = await resolveCommandProvider()')
     expect(composeBackup.replace(/\s+/g, '')).toContain(
-      'composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:logicalSchemaContract,providerRuntime:provider.runtime,})',
+      'composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:logicalSchemaContract,providerRuntime:provider.runtime,databaseConfig:loadConfig(Paths.config).database,})',
     )
     expect(composeRestore.replace(/\s+/g, '')).toContain(
-      'returncomposeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,providerRuntime,})',
+      'returncomposeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,providerRuntime,databaseConfig,})',
     )
     const backup = source.split("case 'backup': {")[1]!.split("case 'restore': {")[0]!
     const restore = source.split("case 'restore': {")[1]!.split("case '")[0]!

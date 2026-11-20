@@ -33,6 +33,7 @@ import {
   employeeTypePackageDescriptorSchema,
   validateTypePackage,
 } from '@/modules/digital-employee/domain/model'
+import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
 
 const graph = composeGraphDeliveryLifecycleRuntimeCodec(graphEmployeeRuntimeCodec)
 const graphPackage = composeGraphDeliveryLifecycleTypePackage(graphEmployeeTypePackage)
@@ -459,6 +460,9 @@ function platformFixture(
   }
   const input: DevelopmentEmployeePlatformWorkItemsCompositionInput = {
     appHome: '/tmp/rfc396-lifecycle-port-fixture',
+    evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({
+      appHome: '/tmp/rfc396-lifecycle-port-fixture',
+    }),
     directPublicationSubject: { kind: 'system' },
     persistence: {
       currentWorkspace: async () => ({ row, repositoryLocalPath: '/repo-baseline' }),

@@ -81,28 +81,20 @@ const ROOTS: Readonly<
 > = {
   [PIPELINE_ROOT]: {
     declares: ['composeSelectedDevelopmentPipelineEvidence'],
-    offers: [
-      'LegacyPipelineEvidencePort',
-      'composeLegacyDevelopmentPipelineEvidence',
-      'composeSelectedDevelopmentPipelineEvidence',
-    ],
+    // RFC-524: the legacy pipeline evidence bridge had no users left and is gone.
+    offers: ['composeSelectedDevelopmentPipelineEvidence'],
     takes: [`import ${PIPELINE}: createSelectedPipelineEvidence`],
   },
   [DELIVERY_ROOT]: {
-    // `composeDevelopmentPipelineDeps` is two overload signatures plus the implementation.
+    // RFC-524: `composeDevelopmentPipelineDeps` is one signature (the legacy single-argument overload is gone).
     declares: [
-      'PipelineEvidenceExecution',
       'composeDevelopmentDeliveryDeps',
       'composeDevelopmentMrFactsCollector',
-      'composeDevelopmentPipelineDeps',
-      'composeDevelopmentPipelineDeps',
       'composeDevelopmentPipelineDeps',
     ],
     offers: [
       'composeDevelopmentDeliveryDeps',
       'composeDevelopmentMrFactsCollector',
-      'composeDevelopmentPipelineDeps',
-      'composeDevelopmentPipelineDeps',
       'composeDevelopmentPipelineDeps',
     ],
     takes: [`import ${MR_FACTS}: createDevelopmentMrFacts, createDevelopmentMrFactsCollector`],

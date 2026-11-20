@@ -17,6 +17,7 @@ import {
   prepareManualDatabaseMigration,
   type ManualDatabaseMigrationOptions,
 } from '@/modules/system-operations/composition/manualDatabaseMigration'
+import { createFileDatabaseConfiguration } from '@/modules/system-operations/composition/databaseMigration'
 
 export async function migrateCommand(
   options?: ManualDatabaseMigrationOptions,
@@ -41,13 +42,15 @@ export async function migrateCommand(
     const guidance = epochInstallationGuidance(installation, config.autoEpochMigration !== false)
     if (guidance) throw new Error(guidance)
   }
-  const prepared = await prepareManualDatabaseMigration(logicalSchemaContract, options).catch(
-    (error: unknown) => {
-      const guidance = schemaDriftGuidance(error)
-      if (guidance) throw new Error(guidance, { cause: error })
-      throw error
-    },
-  )
+  const prepared = await prepareManualDatabaseMigration(
+    logicalSchemaContract,
+    // RFC-524: without options the command selects the local config file.
+    options ?? { kind: 'file', configuration: createFileDatabaseConfiguration(Paths.config) },
+  ).catch((error: unknown) => {
+    const guidance = schemaDriftGuidance(error)
+    if (guidance) throw new Error(guidance, { cause: error })
+    throw error
+  })
   const provider = prepared.runtime
   // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
   // this and stops compiling, instead of falling into the SQLite path below.

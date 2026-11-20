@@ -158,7 +158,6 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
   })
   const missionInputUploads = composeMissionInputUploadOperations({
     db,
-    appHome,
     artifacts: input.evidenceArtifacts,
   })
   return Object.freeze({

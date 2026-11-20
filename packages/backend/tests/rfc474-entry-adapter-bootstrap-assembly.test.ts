@@ -376,12 +376,13 @@ describe('RFC-474 —— 首启示例：参与方类型经 public、完成标记
 
   test('demo-seed 启动步骤体内组装完成标记并传入', () => {
     const step = compact(bootImplementation(read('bootstrap/daemonApplication.ts'), 'demo-seed'))
-    expect(step).toContain('completion:composeInstallationSeedCompletion()})')
+    // RFC-524: the step selects the local marker (the only selection there ever was).
+    expect(step).toContain('completion:composeLocalInstallationSeedCompletion()})')
     expect(
       sourceOfName(
         'bootstrap/daemonApplication.ts',
         read('bootstrap/daemonApplication.ts'),
-        'composeInstallationSeedCompletion',
+        'composeLocalInstallationSeedCompletion',
       ),
     ).toBe('@/modules/system-operations/composition/installationSeedCompletion')
     // The seed itself no longer selects a default: the completion is required.

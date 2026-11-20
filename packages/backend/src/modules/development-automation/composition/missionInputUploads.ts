@@ -1,37 +1,25 @@
-import { join } from 'node:path'
-
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createMissionInputUploadOperations,
   type MissionInputBlobPersistence,
   type MissionInputUploadOperations,
 } from '../application/missionInputUploadOperations'
-import { EvidenceStore } from '../infrastructure/evidenceStore'
 import { createMissionInputUploadPersistence } from '../infrastructure/missionInputUploadPersistence'
 
 import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 
 export type { MissionInputBlobPersistence }
 
-function lazyEvidenceBlobs(appHome: string): MissionInputBlobPersistence {
-  let evidence: EvidenceStore | undefined
-  return {
-    async putFile(absolutePath) {
-      evidence ??= new EvidenceStore(join(appHome, 'evidence'))
-      return await evidence.putBlobFromFile(absolutePath)
-    },
-  }
-}
-
-/** RFC-359 W4-D11：一份装配，两个 provider 共用（persistence 已是中立实现）。 */
+/**
+ * RFC-359 W4-D11：一份装配，两个 provider 共用（persistence 已是中立实现）。
+ * RFC-524：证据库由调用方给出（daemon：部署选择的证据库），组合层不再懒建本机证据库。
+ */
 export function composeMissionInputUploadOperations(input: {
   readonly db: PersistenceDb
-  readonly appHome: string
-  readonly blobs?: MissionInputBlobPersistence
-  readonly artifacts?: EvidenceArtifactPort
+  readonly artifacts: EvidenceArtifactPort
 }): MissionInputUploadOperations {
   return createMissionInputUploadOperations({
     persistence: createMissionInputUploadPersistence(input.db),
-    blobs: input.blobs ?? input.artifacts ?? lazyEvidenceBlobs(input.appHome),
+    blobs: input.artifacts,
   })
 }

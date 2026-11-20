@@ -18,6 +18,7 @@ import type { PipelineEvidencePort } from '@/modules/development-automation/appl
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { mergeRequestContextSchema } from '@/modules/development-automation/application/employeeTypePackage'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
 
 const roots: string[] = []
 let db: PersistenceDb
@@ -161,6 +162,7 @@ function harness(input: {
     // sink and the on-disk evidence store, both per-fixture temp dirs.
     db,
     appHome,
+    evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome }),
     pipelineEvidence,
     reactionRounds: {} as PlatformDeps['reactionRounds'],
     repoRemote: { resolve: () => null },

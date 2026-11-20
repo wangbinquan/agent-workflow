@@ -6,7 +6,6 @@ import { Paths } from '@/util/paths'
 import { loadConfig } from '@/config'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
-import { createFileDatabaseConfiguration } from '../infrastructure/local/fileDatabaseConfiguration'
 import { prepareDatabaseProviderForBoot } from '../composition'
 
 /** Only the prepared provider's lifetime and description reach the CLI. */
@@ -30,14 +29,15 @@ export type ManualDatabaseMigrationOptions =
     }
   | {
       readonly kind: 'file'
-      readonly configuration?: DatabaseConfigurationPort
+      /** RFC-524: the caller selects it (the `migrate` command: the local config file). */
+      readonly configuration: DatabaseConfigurationPort
     }
 
 export async function prepareManualDatabaseMigration(
   contract: LogicalSchemaContract,
-  options: ManualDatabaseMigrationOptions = { kind: 'file' },
+  options: ManualDatabaseMigrationOptions,
 ): Promise<PreparedManualDatabaseMigration> {
-  const configuration = options.configuration ?? createFileDatabaseConfiguration(Paths.config)
+  const configuration = options.configuration
   // Retain the original read-before-contract/preparation ordering. Recovery
   // receives this same instance for its later provider activation/re-read.
   const config = await configuration.read()

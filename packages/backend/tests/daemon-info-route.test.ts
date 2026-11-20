@@ -43,8 +43,8 @@ afterEach(() => {
 })
 
 /**
- * 作用域把 `daemonInfoPath` 固定成 `<appHome>/.daemon.info`，而路由是在**请求时**才读这个文件
- * （`routes/daemon.ts` 的 `readDaemonInfo(deps.daemonInfoPath ?? Paths.daemonInfo)`）。
+ * 作用域把 daemon 运行期查询固定成读 `<appHome>/.daemon.info`（RFC-524：测试装配显式给
+ * `createFileDaemonRuntimeQueries`），而路由是在**请求时**才经 `deps.runtime.readCurrent()` 读这个文件。
  * 所以「文件在 / 文件不在」两种被测状态，装配完之后写不写这个文件即可，不需要各建一个应用。
  */
 async function makeApp(

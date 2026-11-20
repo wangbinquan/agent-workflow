@@ -9,7 +9,11 @@ import {
 } from '@/bootstrap/daemonHttpComposition'
 import { composeProviderAppDeps, createComposedApp } from '@/server'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
-import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
+} from '@/modules/system-operations/composition/databaseMigration'
+import { createFileDaemonRuntimeQueries } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { composeLocalExecutionAuthority } from '@/modules/system-operations/composition'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { join } from 'node:path'
@@ -32,7 +36,7 @@ export async function createProviderHttpCompositionFixture(
   }
   const databaseMigration = composeDatabaseMigrationModule({
     contract: logicalSchemaContract,
-    configPath,
+    configuration: createFileDatabaseConfiguration(configPath),
     sqlitePath: join(application.appHome, 'db.sqlite'),
     operationsRoot: join(application.appHome, 'database-migrations'),
     generationPointerPath: join(application.appHome, 'database-generation.json'),
@@ -76,7 +80,9 @@ export async function createProviderHttpCompositionFixture(
           provider: harness.applicationBinding.provider,
           poolWait: null,
         }),
-        daemonInfoPath: join(application.appHome, '.daemon.info'),
+        daemonRuntime: createFileDaemonRuntimeQueries({
+          infoPath: join(application.appHome, '.daemon.info'),
+        }),
         databaseMigration,
         portArtifacts: composePortArtifactOperations(undefined, application.appHome),
         integrationIdentityAccess: {

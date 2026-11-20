@@ -769,6 +769,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   迁出前对被迁文件 import 的每个 `public/` 符号全仓查一遍其余生产读者；没有就同批撤下出口，读者改取声明处。
   RFC-492 第三种（读者迁进本模块）：运行时驱动一族从 `services/` 整族迁入 runtime-management，它取本模块 public 的 14 个出口失去模块外
   读者。迁移前用架构报告 `publicSurfaces[].productionConsumers` 找出消费方全在被迁文件里的符号，同批撤下，读者改取声明处。
+  RFC-524 再撞（2026-11-20）：删没有使用方的旧版流水线证据桥时，它是 integration public `PipelineEvidenceExecution` 唯一的读者（未消费 8 →
+  9）；把组合层的打开前恢复入口移进测试助手时，application 的同名用例只被它 import，成了不可达生产文件（15 → 16），都到首批的
+  `rfc376-structural-guards` 才红。删或移一个文件之前，对它 import 的 public 符号与本模块文件各查一遍其余生产读者；没有读者的随同处理。
 - **整族迁入模块后，只数模块文件的门跟着变**（RFC-492 实撞）：`services/` 文件迁入 `modules/<ctx>/` 后，`export-star-barrels`（只数模块内
   的星号转出）、R1 的装配根清单（`census.ts` 的 `BOOTSTRAP_FILES`，新加的 bootstrap 装配文件要登记）、`rfc349-provider-cutover` 的业务层
   provider 债（`services/` 算业务层、`infrastructure/` 不算）都会变。迁移后先跑一次架构报告与 `rfc317-module-boundary`、
@@ -787,6 +790,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `rfc271-cli`（`toContain('composePostgresqlResourcePackageCatalog({')`）与 `rfc370-storage-and-worker-root-bindings`（按裸名
   `oneRoot(source, 'composePostgresqlResourcePackageProvider')` 找到那次调用、再核对实参），首批才红。搜锁时先 `grep -l` 列出全部命中文件，
   逐个看它读不读被改的文件，再判它是锁还是夹具；别让 `head` 截断命中清单。
+  RFC-524 再撞（2026-11-20）：按被删的名字全仓搜过锁，仍漏了两条钉回落原文的：`rfc370-evidence-artifact-root-bindings` 钉
+  `deps.evidenceArtifacts ?? new EvidenceStore(…)`，`rfc349-development-admission-postgresql-adapter` 钉
+  `deps.admissionLookup ?? createAdmissionLookup(deps.db)`。回落里构造的是仍在的名字，按删去的名字搜不到，首批才红；改回落前把每处回落那一行
+  的原文片段（`?? new X(`、`deps.x ??` 一类）也全仓搜一遍。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
   RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
   `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。

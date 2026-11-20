@@ -5,10 +5,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { serveDaemon } from '../src/bootstrap/daemonStart'
-import {
-  selectDaemonHostLifecycle,
-  selectDaemonRuntimeQueries,
-} from '../src/modules/system-operations/composition/daemonHostLifecycle'
+import { createNativeDaemonHostLifecycle } from '../src/modules/system-operations/composition/daemonHostLifecycle'
+import { createFileDaemonRuntimeQueries } from '../src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import type {
   DaemonHostControl,
   DaemonHostLifecyclePort,
@@ -383,16 +381,15 @@ test('subscription failure unwinds the listener and business runtime before retu
   }
 }, 20_000)
 
-test('selected lifecycle and query keep the same prototype receiver; local readiness uses the original file format', async () => {
+// RFC-524: the selected-or-native choice moved to bootstrap (`development?.daemonHost ?? createNativeDaemonHostLifecycle(…)`, pinned
+// by the RFC-524 boundary test), so this test keeps only the native host's file format and the file runtime queries.
+test('local readiness uses the original file format', async () => {
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc370-host-local-'))
   const infoPath = join(root, '.daemon.info')
   try {
-    const f = hostFixture()
     const options = { infoPath, controlPath: join(root, '.control'), pid: 818, devWatch: false }
-    expect(selectDaemonHostLifecycle(f.host, options)).toBe(f.host)
-    expect(selectDaemonRuntimeQueries(f.host, { infoPath })).toBe(f.host)
     expect(existsSync(infoPath)).toBe(false)
-    const local = selectDaemonHostLifecycle(undefined, options)
+    const local = createNativeDaemonHostLifecycle(options)
     const readiness = {
       host: '127.0.0.1',
       port: 4100,
@@ -407,7 +404,7 @@ test('selected lifecycle and query keep the same prototype receiver; local readi
     await local.withdrawReady()
     await local.withdrawReady()
     expect(existsSync(infoPath)).toBe(false)
-    expect(await selectDaemonRuntimeQueries(undefined, { infoPath }).readCurrent()).toBeNull()
+    expect(await createFileDaemonRuntimeQueries({ infoPath }).readCurrent()).toBeNull()
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

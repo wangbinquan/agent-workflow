@@ -57,6 +57,7 @@ import {
   WorkspaceReferenceCodec,
   type WorkspaceEffectGate,
 } from './helpers/rfc370ConflictWorkspaceEffects'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 setDefaultTimeout(120_000)
 
@@ -175,6 +176,7 @@ async function seedLaneDatabase(
   })
 
   automation = composeDevelopmentAutomation({
+    ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
@@ -467,11 +469,15 @@ describeEachProvider(
       const evidence = new OpaqueEvidenceArtifacts(codec, join(HOME, 'selected-evidence'))
       const compose = () =>
         composeDevelopmentAutomation({
+          ...composeStandaloneDevelopmentAutomationSelections({
+            db: fx.db,
+            appHome: codec.reference(HOME),
+            evidenceArtifacts: evidence,
+            evidenceDocumentCommands: evidence.documentCommands,
+          }),
           verificationCommands: createLocalVerificationCommandEffectsFactory(),
           db: fx.db,
           appHome: codec.reference(HOME),
-          evidenceArtifacts: evidence,
-          evidenceDocumentCommands: evidence.documentCommands,
           automationWorkspaceEffects: contents,
           actionWorkspaceEffects: action,
           agentLauncher: scripted,

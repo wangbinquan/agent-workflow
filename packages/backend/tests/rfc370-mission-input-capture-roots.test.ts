@@ -32,16 +32,12 @@ function calls(source: ts.SourceFile, expression: string) {
 }
 
 // RFC-429: mission input capture is the deployment's evidenceArtifacts (it is a MissionInputBlobPersistence); no root
-// forwards a separate missionInputBlobs and it is no deployment selection. The module keeps its lazy local default.
+// forwards a separate missionInputBlobs and it is no deployment selection. RFC-524: the module takes it as a required
+// input; its lazy local default is gone.
 test('mission upload capture is the evidence artifacts at every real startup and HTTP root', () => {
   const composition = load('modules/development-automation/composition/missionInputUploads.ts')
-  const defaults = calls(composition, 'lazyEvidenceBlobs')
-  expect(defaults).toHaveLength(1)
-  const selection = defaults[0]!.parent
-  expect(ts.isBinaryExpression(selection)).toBe(true)
-  if (!ts.isBinaryExpression(selection)) throw new Error('selected capture is missing')
-  expect(selection.left.getText(composition)).toBe('input.blobs ?? input.artifacts')
-  expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
+  expect(calls(composition, 'lazyEvidenceBlobs')).toHaveLength(0)
+  expect(composition.text.replace(/\s/g, '')).toContain('blobs:input.artifacts,')
   for (const path of ['bootstrap/daemonApplication.ts', 'bootstrap/daemonStart.ts']) {
     const source = load(path)
     const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')

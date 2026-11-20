@@ -58,16 +58,7 @@ export function composeLocalExecutionAuthority(): ExecutionAuthorityPort {
   return createLocalExecutionAuthority()
 }
 
-import type { DatabasePreOpenRecoveryPort } from './application/ports/databasePreOpenRecovery'
-import {
-  prepareDatabasePreOpenRecovery as prepareSelectedDatabasePreOpenRecovery,
-  type PreparedDatabasePreOpenRecovery,
-} from './application/prepareDatabasePreOpenRecovery'
 import { createFileDatabasePreOpenRecovery } from './infrastructure/local/fileDatabasePreOpenRecovery'
-import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
-
-export type DaemonDatabasePreOpenRecoveryPort =
-  DatabasePreOpenRecoveryPort<PostgresqlMigrationHistory>
 import type { ApplicationConfigurationQueries } from './public/queries'
 // RFC-370: bootstrap-only settings composition; the application has no paths.
 import { createApplicationConfiguration } from './application/applicationConfiguration'
@@ -89,7 +80,6 @@ import { prepareDatabaseInstallation } from './application/prepareDatabaseInstal
 import { requireSchemaPlanForContract } from './application/schemaPlanAdmission'
 import { releaseArtifactAfterStageRestore } from './application/stageRestoreArtifactRelease'
 
-import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
 import { type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -97,7 +87,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RepositoryBackupPreparationParticipant } from '@/modules/source-control/public/participants'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import {
-  resolveDatabaseProviderRuntimeForRestore,
   type ResolvedDatabaseProviderRuntime,
   requireDatabaseConfig,
   requireDatabaseProviderRuntime,
@@ -161,41 +150,6 @@ export {
   type DatabaseMigrationDaemonAdmission,
   type DatabaseMigrationDaemonAdmissionLiveState,
 } from './infrastructure/databaseMigrationDaemonAdmission'
-
-/** Pre-open effects are selected before either history or generation is read. */
-export function prepareDatabasePreOpenRecovery<THistory>(input: {
-  readonly contract: LogicalSchemaContract
-  readonly migrationsFolder: string
-  readonly recovery: DatabasePreOpenRecoveryPort<THistory>
-}): Promise<PreparedDatabasePreOpenRecovery<THistory>>
-export function prepareDatabasePreOpenRecovery(input: {
-  readonly contract: LogicalSchemaContract
-  readonly migrationsFolder: string
-  readonly recovery?: DaemonDatabasePreOpenRecoveryPort
-}): Promise<PreparedDatabasePreOpenRecovery<PostgresqlMigrationHistory>>
-export async function prepareDatabasePreOpenRecovery<THistory>(input: {
-  readonly contract: LogicalSchemaContract
-  readonly migrationsFolder: string
-  readonly recovery?: DatabasePreOpenRecoveryPort<THistory>
-}): Promise<
-  | PreparedDatabasePreOpenRecovery<THistory>
-  | PreparedDatabasePreOpenRecovery<PostgresqlMigrationHistory>
-> {
-  const recovery = input.recovery
-  if (recovery !== undefined) {
-    return await prepareSelectedDatabasePreOpenRecovery({
-      contract: input.contract,
-      effects: recovery,
-    })
-  }
-  return await prepareSelectedDatabasePreOpenRecovery({
-    contract: input.contract,
-    effects: createFileDatabasePreOpenRecovery({
-      contract: input.contract,
-      migrationsFolder: input.migrationsFolder,
-    }),
-  })
-}
 
 /** Boot/manual-command preparation; the returned provider owns the prepared mechanism. */
 export interface SelectedDatabaseBootPreparation<TPrepared> {
@@ -508,21 +462,15 @@ export function composeLocalSystemOperations(deps: {
   ) => RepositoryBackupPreparationParticipant
   readonly contract: LogicalSchemaContract
   readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
-  readonly databaseConfig?: DatabaseConfig
-  readonly providerRuntime?: ResolvedDatabaseProviderRuntime
+  /** RFC-524: the caller reads it (the command roots read the local config file). */
+  readonly databaseConfig: DatabaseConfig
+  /** RFC-524: the provider runtime the caller resolved. */
+  readonly providerRuntime: ResolvedDatabaseProviderRuntime
 }): LocalSystemOperations {
   const appHome = Paths.root
-  const databaseConfig = deps.databaseConfig ?? createFileDatabaseConfiguration(Paths.config).read()
+  const databaseConfig = deps.databaseConfig
   const contract = deps.contract
-  const provider =
-    deps.providerRuntime ??
-    resolveDatabaseProviderRuntimeForRestore({
-      config: databaseConfig,
-      sqlitePath: Paths.db,
-      generationPointerPath: Paths.databaseGenerationPointer,
-      operationsRoot: Paths.databaseMigrationsDir,
-      contract,
-    })
+  const provider = deps.providerRuntime
   const { module, prepareRestoreArtifact } = LOCAL_SYSTEM_OPERATIONS_COMPOSERS[provider.provider]({
     provider,
     databaseConfig,

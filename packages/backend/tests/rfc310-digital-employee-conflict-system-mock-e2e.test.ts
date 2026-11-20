@@ -56,6 +56,7 @@ import {
 } from '@/modules/source-control/composition'
 import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
+import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
 
 setDefaultTimeout(180_000)
 
@@ -188,6 +189,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           ...bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
         }
         const platform = composeDevelopmentEmployeePlatformWorkItems({
+          evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),
           db,
           appHome,
           reactionRounds: createEmployeeReactionRoundQueries(db),

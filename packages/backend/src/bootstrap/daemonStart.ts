@@ -40,7 +40,7 @@ import {
 } from './daemonProviderBootstrap'
 import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
 import {
-  selectDaemonHostLifecycle,
+  createNativeDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
 
@@ -216,12 +216,15 @@ export async function startCommand(
   })
   await runDaemonStartupWithLease(lock, async () => {
     log.info('lock acquired', lock.diagnostics)
-    const daemonHost = selectDaemonHostLifecycle(development?.daemonHost, {
-      infoPath: Paths.daemonInfo,
-      controlPath: Paths.controlFile,
-      pid: process.pid,
-      devWatch: devLockHandoffMs() > 0,
-    })
+    // RFC-524: the development overlay's host, or the native one.
+    const daemonHost =
+      development?.daemonHost ??
+      createNativeDaemonHostLifecycle({
+        infoPath: Paths.daemonInfo,
+        controlPath: Paths.controlFile,
+        pid: process.pid,
+        devWatch: devLockHandoffMs() > 0,
+      })
 
     // 3. Load config; honor logLevel if user set non-default in config.
     // RFC-431: the profile states its configuration source (standalone: the local config file).
@@ -323,7 +326,10 @@ export async function startCommand(
     // but cannot silently select a different database.
     const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
       configuration: applicationConfiguration.databaseConfiguration,
-      installation: databaseInstallation === null ? undefined : databaseInstallation,
+      // RFC-524: the deployment's installation, or (standalone: `null`) the local file preparation.
+      ...(databaseInstallation === null
+        ? { kind: 'file' as const }
+        : { kind: 'selected' as const, installation: databaseInstallation }),
       file: {
         config: config.database,
         sqlitePath: Paths.db,

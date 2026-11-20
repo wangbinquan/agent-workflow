@@ -17,13 +17,7 @@ import {
 } from '../application/developmentMrFacts'
 import type { DevelopmentDeliveryProvider } from '../infrastructure/developmentDeliveryProvider'
 import type { SelectedPipelineEvidenceExecution } from '../composition'
-import {
-  composeLegacyDevelopmentPipelineEvidence,
-  composeSelectedDevelopmentPipelineEvidence,
-  type LegacyPipelineEvidencePort,
-} from './pipelineEvidence'
-
-type PipelineEvidenceExecution = Parameters<typeof composeLegacyDevelopmentPipelineEvidence>[0]
+import { composeSelectedDevelopmentPipelineEvidence } from './pipelineEvidence'
 
 export function composeDevelopmentDeliveryDeps(deps: {
   readonly provider: DevelopmentDeliveryProvider
@@ -101,24 +95,12 @@ export function composeDevelopmentMrFactsCollector(deps: {
   }
 }
 
-/** Explicit legacy bridge; actual roots pass a complete neutral staging selection. */
-export function composeDevelopmentPipelineDeps(runner: PipelineEvidenceExecution): {
-  readonly pipelineEvidence: LegacyPipelineEvidencePort
-}
+/** Roots pass a complete neutral staging selection (RFC-524: the legacy single-argument bridge is gone). */
 export function composeDevelopmentPipelineDeps(
   runner: SelectedPipelineEvidenceExecution,
   staging: PipelineStagingFactories,
 ): {
   readonly pipelineEvidence: PipelineEvidencePort
-}
-export function composeDevelopmentPipelineDeps(
-  runner: PipelineEvidenceExecution | SelectedPipelineEvidenceExecution,
-  staging?: PipelineStagingFactories,
-): { readonly pipelineEvidence: LegacyPipelineEvidencePort | PipelineEvidencePort } {
-  return staging === undefined
-    ? composeLegacyDevelopmentPipelineEvidence(runner as PipelineEvidenceExecution)
-    : composeSelectedDevelopmentPipelineEvidence(
-        runner as SelectedPipelineEvidenceExecution,
-        staging,
-      )
+} {
+  return composeSelectedDevelopmentPipelineEvidence(runner, staging)
 }

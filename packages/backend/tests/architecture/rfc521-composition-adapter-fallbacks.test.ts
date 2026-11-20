@@ -32,23 +32,6 @@ type Entry = readonly [callee: string, kind: Kind]
 
 /** design §3: every construction in a fallback position, per composition file (paths under `src/modules/`), sorted. */
 const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
-  'development-automation/composition.ts': [
-    ['createAdmissionLookup', 'adapter'],
-    ['new EvidenceStore', 'adapter'],
-  ],
-  'development-automation/composition/developmentDelivery.ts': [
-    ['composeLegacyDevelopmentPipelineEvidence', 'adapter'],
-  ],
-  'development-automation/composition/digitalEmployeePlatformWorkItems.ts': [
-    ['new EvidenceStore', 'adapter'],
-  ],
-  'development-automation/composition/evidenceStaging.ts': [
-    ['createFileEvidenceDocumentCommands', 'adapter'],
-  ],
-  'development-automation/composition/missionInputUploads.ts': [
-    ['lazyEvidenceBlobs', 'adapter'],
-    ['new EvidenceStore', 'adapter'],
-  ],
   'digital-employee/composition.ts': [
     ['Date.now', 'clock'],
     ['Date.now', 'clock'],
@@ -141,30 +124,11 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   'system-operations/composition.ts': [
     ['Object.freeze', 'injected'],
     ['buildPostgresqlSchemaPlan', 'pure'],
-    ['createFileDatabaseConfiguration().read', 'adapter'],
     ['join', 'path'],
     ['join', 'path'],
     ['join', 'path'],
-    ['prepareSelectedDatabasePreOpenRecovery', 'adapter'],
     ['repositoryBackupPreparationFactory', 'injected'],
-    ['resolveDatabaseProviderRuntimeForRestore', 'adapter'],
     ['sqliteRuntime.openClient', 'memo'],
-  ],
-  'system-operations/composition/daemonDatabase.ts': [
-    ['prepareDatabaseProviderForBoot', 'adapter'],
-  ],
-  'system-operations/composition/daemonHostLifecycle.ts': [
-    ['createFileDaemonRuntimeQueries', 'adapter'],
-    ['createNativeDaemonHostLifecycle', 'adapter'],
-  ],
-  'system-operations/composition/databaseMigration.ts': [
-    ['createFileDatabaseConfiguration', 'adapter'],
-  ],
-  'system-operations/composition/installationSeedCompletion.ts': [
-    ['createFileInstallationSeedCompletion', 'adapter'],
-  ],
-  'system-operations/composition/manualDatabaseMigration.ts': [
-    ['createFileDatabaseConfiguration', 'adapter'],
   ],
   'task-execution/composition/bootRecovery.ts': [
     ['Date.now', 'clock'],
@@ -216,14 +180,15 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
 
 /** design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. */
 const SUCCESSORS: Readonly<Record<string, string>> = {
-  'system-operations': 'S12 item 1, step 4',
-  'development-automation': 'S12 item 1, step 4',
   'resource-catalog': 'S12 item 1, step 5',
   'task-execution': 'S12 item 1, step 6',
   'source-control': 'S12 item 1, step 7',
 }
-/** Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center, RFC-523 intent, code-capability and memory. */
-const ADAPTER_FALLBACKS = 67
+/**
+ * Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center,
+ * RFC-523 intent, code-capability and memory, RFC-524 system-operations and development-automation.
+ */
+const ADAPTER_FALLBACKS = 51
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */

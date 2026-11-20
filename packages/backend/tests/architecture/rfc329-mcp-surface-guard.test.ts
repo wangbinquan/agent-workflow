@@ -39,7 +39,10 @@ import { createInMemoryDb } from '@/db/client'
 import { ALL_TOOLS, MCP_RESOURCE_KINDS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta } from '@/routes/registry'
 import { recordingOperationHandles } from '../helpers/mcpOperationRecording'
-import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
+} from '@/modules/system-operations/composition/databaseMigration'
 import {
   EXEMPT_REASONS,
   MCP_SURFACE_EXEMPTION_LEAVES,
@@ -79,7 +82,7 @@ async function mountedRoutes(): Promise<
         sqlitePath: join(home, 'db.sqlite'),
         operationsRoot: join(home, 'database-migrations'),
         generationPointerPath: join(home, 'database-generation.json'),
-        configPath: join(home, 'config.json'),
+        configuration: createFileDatabaseConfiguration(join(home, 'config.json')),
         admission: {
           async freezeAndDrain() {},
           async reopenSqlite() {},

@@ -50,6 +50,7 @@ import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { codeHostRequests } from '@/modules/integration/composition'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 setDefaultTimeout(240_000)
 
@@ -194,6 +195,7 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
   ;(fx as { e2ePolicyId?: string } as Record<string, unknown>).e2ePolicyId = vPolicy.id
 
   automation = composeDevelopmentAutomation({
+    ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,

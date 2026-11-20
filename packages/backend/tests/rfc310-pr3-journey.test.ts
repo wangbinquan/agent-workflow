@@ -76,6 +76,7 @@ import { createUser } from './helpers/userFixture'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 setDefaultTimeout(120_000)
 
@@ -297,13 +298,17 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
     evidenceArtifacts: standalone.evidenceArtifacts,
   })
   automation = composeDevelopmentAutomation({
+    ...composeStandaloneDevelopmentAutomationSelections({
+      db,
+      appHome: opened.appHome,
+      evidenceArtifacts: purposeRoot.evidenceArtifacts,
+      evidenceDocumentCommands: purposeRoot.requirement.documentCommands,
+      requirementStaging: purposeRoot.requirement.staging,
+    }),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db,
     appHome: opened.appHome,
     requirementSource: composeSelectedRequirementSourceRunnerFor(db, purposeRoot.requirement),
-    evidenceArtifacts: purposeRoot.evidenceArtifacts,
-    evidenceDocumentCommands: purposeRoot.requirement.documentCommands,
-    requirementStaging: purposeRoot.requirement.staging,
   })
   const admitted = await admitTestDirectAuthority(
     opened.modules.core.identityAccess.directAuthority,

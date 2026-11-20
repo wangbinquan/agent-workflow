@@ -18,8 +18,10 @@ import {
 import { invalidateReadConfigCache, loadConfig, saveConfigRaw } from '@/config'
 import {
   composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
   type DatabaseMigrationModule,
 } from '@/modules/system-operations/composition/databaseMigration'
+import { createFileDaemonRuntimeQueries } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -248,7 +250,7 @@ export async function createProviderHttpApplicationFromBinding(
         sqlitePath: join(appHome, 'db.sqlite'),
         operationsRoot: join(appHome, 'database-migrations'),
         generationPointerPath: join(appHome, 'database-generation.json'),
-        configPath,
+        configuration: createFileDatabaseConfiguration(configPath),
         executionMode: 'inline',
       })
     const applicationConfiguration =
@@ -336,7 +338,7 @@ export async function createProviderHttpApplicationFromBinding(
       configPath,
       dbPath: join(appHome, 'db.sqlite'),
       lockPath: join(appHome, '.daemon.lock'),
-      daemonInfoPath: join(appHome, '.daemon.info'),
+      daemonRuntime: createFileDaemonRuntimeQueries({ infoPath: join(appHome, '.daemon.info') }),
       log: createLogger('daemon'),
       applicationConfiguration,
       taskLaunchConfiguration,

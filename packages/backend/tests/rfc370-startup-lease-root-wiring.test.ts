@@ -37,7 +37,10 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
   expect(lifetime[0]!.arguments[0]!.getText(start)).toBe('lock')
   const boot = lifetime[0]!.arguments[1]!.getText(start)
   expect(boot).toContain("log.info('lock acquired', lock.diagnostics)")
-  expect(boot).toContain('const daemonHost = selectDaemonHostLifecycle(')
+  // RFC-524: the development overlay's host, or the native one — chosen here, not by a composition helper.
+  expect(boot.replace(/\s+/g, '')).toContain(
+    'constdaemonHost=development?.daemonHost??createNativeDaemonHostLifecycle({',
+  )
   expect(boot).toContain('prepareDaemonDatabaseProviderForBoot(')
   expect(boot).toContain('await initial.session.resume(lifecycle)')
   expect(boot).toContain('await serveDaemon({')

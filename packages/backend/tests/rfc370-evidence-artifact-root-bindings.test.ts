@@ -74,9 +74,9 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   expectDeploymentSelection('evidenceArtifacts')
   expect(start.text).toContain('...sessionInput,')
   const composition = load('modules/development-automation/composition.ts')
-  expect(composition.text).toContain(
-    "deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))",
-  )
+  // RFC-524: the evidence artifacts are a required input; the composition no longer builds a local store.
+  expect(composition.text).toContain('  const evidence = deps.evidenceArtifacts\n')
+  expect(composition.text).not.toContain('new EvidenceStore(')
   expect(composition.text).toContain(
     'const factory = selectedAutomationWorkspaceEffects(\n    deps.automationWorkspaceEffects === undefined\n      ? actionWorkspaceEffects.contents\n      : deps.automationWorkspaceEffects,\n  )',
   )

@@ -11,7 +11,7 @@ import {
 import type { DevelopmentOverlay } from '../src/bootstrap/developmentReload'
 import { runDaemonHostApplication } from '../src/modules/system-operations/application/daemonHostApplication'
 import type { DaemonHostLifecyclePort } from '../src/modules/system-operations/application/ports/daemonHostLifecycle'
-import { selectDaemonHostLifecycle } from '../src/modules/system-operations/composition/daemonHostLifecycle'
+import { createNativeDaemonHostLifecycle } from '../src/modules/system-operations/composition/daemonHostLifecycle'
 
 function fixture() {
   const events: string[] = []
@@ -126,7 +126,7 @@ test('closing native host control removes its SIGINT, SIGTERM and exit subscript
   const root = mkdtempSync(join(tmpdir(), 'aw-dev-signals-'))
   const signals = ['SIGINT', 'SIGTERM', 'exit'] as const
   const before = signals.map((signal) => process.listenerCount(signal))
-  const host = selectDaemonHostLifecycle(undefined, {
+  const host = createNativeDaemonHostLifecycle({
     infoPath: join(root, '.daemon.info'),
     controlPath: join(root, '.control'),
     pid: process.pid,

@@ -36,7 +36,6 @@ import {
   composeCodeHostConnectionProbe,
 } from '@/modules/integration/composition'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
-import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { type ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import type {
@@ -121,8 +120,8 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
   readonly frontendMarker: string | null
   readonly databaseTelemetry: () => DatabaseRuntimeTelemetry
   readonly maintenanceStatus?: () => MaintenanceStatus
-  readonly daemonRuntime?: DaemonRuntimeQueries
-  readonly daemonInfoPath: string
+  /** RFC-524: required — the session passes the daemon host. */
+  readonly daemonRuntime: DaemonRuntimeQueries
   readonly databaseMigration: DatabaseMigrationModule
   readonly portArtifacts: PortArtifactOperations
   readonly integrationIdentityAccess: IntegrationTriggerIdentityAccess
@@ -477,9 +476,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         databaseTelemetry: input.databaseTelemetry,
       }),
       daemon: Object.freeze({
-        runtime: selectDaemonRuntimeQueries(input.daemonRuntime, {
-          infoPath: input.daemonInfoPath,
-        }),
+        runtime: input.daemonRuntime,
       }),
       plantuml: Object.freeze({ configuration }),
       runtime: runtimeManagement.models,

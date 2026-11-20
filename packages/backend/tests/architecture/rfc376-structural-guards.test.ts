@@ -115,7 +115,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
-    'packages/backend/src/modules/development-automation/infrastructure/local/legacyPipelineEvidence.ts -> integration',
     'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts -> system-operations',
     'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> development-automation',
     'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> digital-employee',

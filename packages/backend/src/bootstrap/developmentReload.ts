@@ -1,7 +1,7 @@
 // Development-only reloader. Bun --hot retains its state in globalThis;
 // ordinary CLI starts never receive its process-local integrity preparation.
 import {
-  selectDaemonHostLifecycle,
+  createNativeDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
   type DaemonHostShutdownCallbacks,
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
@@ -28,7 +28,7 @@ export function reloadDevelopmentDaemon(
   state: DevelopmentDaemonState,
   start: (development: DevelopmentOverlay) => Promise<void>,
   createHost: () => DaemonHostLifecyclePort = () =>
-    selectDaemonHostLifecycle(undefined, {
+    createNativeDaemonHostLifecycle({
       infoPath: Paths.daemonInfo,
       controlPath: Paths.controlFile,
       pid: process.pid,

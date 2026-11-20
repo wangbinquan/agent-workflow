@@ -192,8 +192,10 @@ const ROOTS: Readonly<
     ],
     shapes: [],
   },
+  // RFC-524: the staging and writer are required selections; the module root takes the check directly, so this file
+  // only offers the local implementations.
   [STAGING_ROOT]: {
-    declares: ['composeRequirementMaterializerContent'],
+    declares: [],
     offers: [
       'createLocalEvidenceArtifactPort',
       'createLocalGraphDevelopmentArtifactPort',
@@ -204,13 +206,11 @@ const ROOTS: Readonly<
       'EvidenceStagingLease',
       'EvidenceStagingNamespace',
       'EvidenceStagingReference',
-      'composeRequirementMaterializerContent',
       'createFileEvidenceDocumentCommands',
       'createFileEvidenceDocumentCommandsOnFirstWrite',
     ],
-    takes: [`import ${STAGING}: selectedRequirementMaterializerContent`],
-    // The assembly-time choice between the selected and the local content (design D2).
-    shapes: ['if'],
+    takes: [],
+    shapes: [],
   },
   [PROJECTION_ROOT]: {
     declares: ['composeDevelopmentEmployeeCaseDetailProjection'],
@@ -246,9 +246,10 @@ const CALLS: Readonly<Record<string, readonly [string, readonly string[]]>> = {
   ],
   createGraphDeliveryLifecycleRuntimeCodec: [LIFECYCLE_ROOT, ['core']],
   createDevelopmentActivityWorkerCycle: [ACTIVITY_ROOT, ['worker']],
+  // RFC-524: called by the module root with the required selections.
   selectedRequirementMaterializerContent: [
-    STAGING_ROOT,
-    ['{staging:input.staging,documentCommands:input.documentCommands,}'],
+    `${DA}/composition`,
+    ['{staging:deps.requirementStaging,documentCommands:deps.evidenceDocumentCommands,}'],
   ],
   createDevelopmentEmployeeCaseDetailProjection: [PROJECTION_ROOT, ['workspaces']],
   createMissionExecutionTerminalObserver: [

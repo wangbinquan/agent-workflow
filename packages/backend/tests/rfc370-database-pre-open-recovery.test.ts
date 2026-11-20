@@ -3,7 +3,7 @@ import { buildFrozenEpoch1LogicalSchemaContract } from '@/platform/persistence/m
 import { describe, expect, test } from 'bun:test'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabasePreOpenRecoveryPort } from '@/modules/system-operations/application/ports/databasePreOpenRecovery'
-import { prepareDatabasePreOpenRecovery } from '@/modules/system-operations/composition'
+import { prepareDatabasePreOpenRecovery } from './helpers/systemOperations'
 import type {
   DatabaseGenerationBootstrapCandidate,
   DatabaseGenerationPayload,

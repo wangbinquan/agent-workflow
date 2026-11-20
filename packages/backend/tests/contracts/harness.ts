@@ -27,7 +27,10 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
-import { composeDatabaseMigrationModule } from '../../src/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
+} from '../../src/modules/system-operations/composition/databaseMigration'
 import { getWorkflow } from '../../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { createUser } from '../helpers/userFixture'
 const openTestApplication = registerProviderHttpApplicationLifetime()
@@ -82,7 +85,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     sqlitePath,
     operationsRoot: join(homePath, 'database-migrations'),
     generationPointerPath: join(homePath, 'database-generation.json'),
-    configPath,
+    configuration: createFileDatabaseConfiguration(configPath),
     admission: {
       async freezeAndDrain() {
         throw new Error('contract-harness-database-migration-admission')

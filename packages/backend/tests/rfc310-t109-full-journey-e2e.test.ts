@@ -71,6 +71,7 @@ import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fix
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { codeHostRequests } from '@/modules/integration/composition'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 setDefaultTimeout(300_000)
 
@@ -292,6 +293,7 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
     },
   }
   automation = composeDevelopmentAutomation({
+    ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,

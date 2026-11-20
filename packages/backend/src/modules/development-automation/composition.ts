@@ -1,7 +1,6 @@
 import type { EvidenceStagingFactory } from './application/ports/evidenceStaging'
-import { composeRequirementMaterializerContent } from './composition/evidenceStaging'
+import { selectedRequirementMaterializerContent } from './application/evidenceStaging'
 import type { AutomationWorkspaceEffectsFactory } from './application/ports/automationWorkspaceEffects'
-import { join } from 'node:path'
 export type { AutomationWorkspaceEffectsFactory }
 import { selectedAutomationWorkspaceEffects } from './infrastructure/automationWorkspaceEffects'
 import type { ActionWorkspaceEffects } from './application/ports/actionWorkspaceEffects'
@@ -73,7 +72,6 @@ import type { RecoveryReaders } from './application/missionRecovery'
 import type { WakeSweepReaders } from './application/missionWakeSweep'
 import { createWorkspaceValidationAdapter } from './infrastructure/attemptSupport'
 import { adoptActionWorkspace, materializeActionWorkspace } from './application/actionWorkspace'
-import { EvidenceStore } from './infrastructure/evidenceStore'
 import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
 import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
 import type { EvidenceDocumentCommands } from './application/evidenceDocumentCommands'
@@ -197,13 +195,15 @@ export interface DevelopmentAutomationCompositionOptions {
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly appHome: string
   readonly evidenceContents?: EvidenceContentQueries
-  readonly evidenceArtifacts?: EvidenceArtifactPort
+  /** RFC-524: the deployment's evidence artifacts (required; the composition no longer builds a local store). */
+  readonly evidenceArtifacts: EvidenceArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
-  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
-  readonly requirementStaging?: EvidenceStagingFactory
+  /** RFC-524: the requirement purpose's writer and staging (required, as in `RequirementPurposeSelection`). */
+  readonly evidenceDocumentCommands: EvidenceDocumentCommands
+  readonly requirementStaging: EvidenceStagingFactory
   readonly attemptContext?: AttemptContextStorePort
-  /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
-  readonly admissionLookup?: AdmissionLookup
+  /** Bootstrap-selected admission configuration provider (RFC-524: required). */
+  readonly admissionLookup: AdmissionLookup
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
   readonly requirementSource?: RequirementSourceRunnerDep
   /** task-execution 模块组装的 agent 执行 runner；不注入 = 动作发射诚实 blocked。 */
@@ -262,14 +262,12 @@ function composeDevelopmentAutomationFromPersistence(
   const store = persistence.store
   const lookup = persistence.admissionLookup
   const snapshots = persistence.snapshots
-  const evidence = deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))
+  const evidence = deps.evidenceArtifacts
   const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
   const evidenceDownloads = deps.evidenceRead?.downloads ?? evidence.downloads
   const materializer = createSelectedRequirementMaterializer({
     documents: deps.evidenceRead?.documents,
-    ...composeRequirementMaterializerContent({
-      evidence,
-      stagingRoot: join(deps.appHome, 'evidence', 'staging'),
+    ...selectedRequirementMaterializerContent({
       staging: deps.requirementStaging,
       documentCommands: deps.evidenceDocumentCommands,
     }),
@@ -441,7 +439,7 @@ export function composeDevelopmentAutomation(
   const repositories = createRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
     store: createMissionPersistence(deps.db),
-    admissionLookup: deps.admissionLookup ?? createAdmissionLookup(deps.db),
+    admissionLookup: deps.admissionLookup,
     snapshots: createFactSnapshotReader(deps.db),
     bundleRefs: createRequirementBundleRefPersistence(deps.db),
     uploadPlacement: createUploadPlacementPersistence(deps.db),

@@ -174,6 +174,7 @@ export async function composeBackupCommandOperations() {
       repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
       contract: logicalSchemaContract,
       providerRuntime: provider.runtime,
+      databaseConfig: loadConfig(Paths.config).database,
     })
   } catch (error) {
     await provider.runtime.close()
@@ -184,8 +185,9 @@ export async function composeBackupCommandOperations() {
 /** `restore` (epoch-2 archives): the local system operations over the provider a restore targets. */
 export function composeRestoreCommandOperations() {
   const contract = logicalSchemaContract
+  const databaseConfig = loadConfig(Paths.config).database
   const providerRuntime = resolveDatabaseProviderRuntimeForRestore({
-    config: loadConfig(Paths.config).database,
+    config: databaseConfig,
     sqlitePath: Paths.db,
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
@@ -195,6 +197,7 @@ export function composeRestoreCommandOperations() {
     repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
     contract,
     providerRuntime,
+    databaseConfig,
   })
 }
 

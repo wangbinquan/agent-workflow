@@ -121,7 +121,7 @@ import { recoverInterruptedDeliveries } from '@/modules/integration/composition/
 import { Paths } from '@/util/paths'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
-import { composeInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
+import { composeLocalInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import type { createLogger } from '@/util/log'
@@ -171,8 +171,8 @@ export interface DaemonApplicationInput<
   readonly appHome: string
   readonly configPath: string
   readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
-  readonly daemonInfoPath: string
-  readonly daemonRuntime?: DaemonRuntimeQueries
+  /** RFC-524: required — the session passes the daemon host. */
+  readonly daemonRuntime: DaemonRuntimeQueries
   readonly daemonStartupLease?: DaemonStartupLease
   readonly lockPath: string
   readonly secretBox: SecretBox
@@ -670,7 +670,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     databaseTelemetry: input.provider.telemetry,
     maintenanceStatus: input.maintenanceStatus,
     daemonRuntime: input.daemonRuntime,
-    daemonInfoPath: input.daemonInfoPath,
     databaseMigration: input.databaseMigration,
     portArtifacts,
     integrationIdentityAccess,
@@ -822,7 +821,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
         resourceCatalog: composeDemoResourceCatalogSeedParticipant(input.db),
         codeCapability: composeCodeCapabilityDemoSeedParticipant(input.db),
         // RFC-474: the standalone marker is selected here, at each boot call (it was the seed's own default).
-        completion: composeInstallationSeedCompletion(),
+        completion: composeLocalInstallationSeedCompletion(),
       })
       if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
     },

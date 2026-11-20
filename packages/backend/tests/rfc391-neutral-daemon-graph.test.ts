@@ -28,7 +28,11 @@ import {
   type DaemonBootStepDeclaration,
 } from '@/bootstrap/daemonLifecycleProgram'
 import * as resourceCatalog from '@/bootstrap/daemonModules/resourceCatalog'
-import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
+} from '@/modules/system-operations/composition/databaseMigration'
+import { createFileDaemonRuntimeQueries } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
@@ -53,7 +57,7 @@ function fixture(harness: ProviderDatabaseHarness) {
     sqlitePath: join(appHome, 'db.sqlite'),
     operationsRoot: join(appHome, 'database-migrations'),
     generationPointerPath: join(appHome, 'database-generation.json'),
-    configPath,
+    configuration: createFileDatabaseConfiguration(configPath),
     executionMode: 'inline',
   })
   const binding = harness.applicationBinding
@@ -93,7 +97,7 @@ function fixture(harness: ProviderDatabaseHarness) {
     token: 'rfc391-token',
     appHome,
     configPath,
-    daemonInfoPath: join(appHome, '.daemon.info'),
+    daemonRuntime: createFileDaemonRuntimeQueries({ infoPath: join(appHome, '.daemon.info') }),
     lockPath: join(appHome, '.daemon.lock'),
     secretBox: createSecretBoxFromKey(Buffer.alloc(32, 39)),
     databaseMigration,

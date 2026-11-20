@@ -101,6 +101,7 @@ export async function prepareNativeHistory(built: BuiltRelease): Promise<void> {
   const config = loadConfig(configPath)
   const initial = epochOperations(built.home)
   const prepared = await prepareDaemonDatabaseProviderForBoot({
+    kind: 'file',
     configuration: {
       read: () => loadConfig(configPath).database,
       write(database) {

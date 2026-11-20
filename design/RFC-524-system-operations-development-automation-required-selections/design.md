@@ -36,8 +36,10 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/` 下）�
   `{ kind: 'file', configuration: createFileDatabaseConfiguration(Paths.config) }`（读取仍在准备里、同一时机）。
 - **演示种子的完成标记**：`composeInstallationSeedCompletion(selected?)` 改为 `composeLocalInstallationSeedCompletion()`，不再收参数（唯一的生产
   调用本来就不给），每次调用时取 `Paths.demoSeedMarker`。
-- **组合层的打开前恢复**：没有生产调用方，原样移到 `tests/helpers/systemOperations.ts`；`DaemonDatabasePreOpenRecoveryPort` 随之移去；
-  `rfc394-start-sequence` 对它的 spy 删去（没有被调用的路径）。application 的同名用例与 `applyLocalEpoch2PendingRestore` 不变。
+- **打开前恢复**：组合层的入口没有生产调用方；application 的同名用例只被它调用（daemon 自 RFC-395 II-b 激活 epoch 2 起不再在打开前准备恢
+  复），入口移走后它会成为不可达的生产文件。两者原样移到 `tests/helpers/systemOperations.ts`（用例连同按 provider 穷举的
+  表），`DaemonDatabasePreOpenRecoveryPort` 随之移去；`rfc394-start-sequence` 对入口的 spy 删去（没有被调用的路径）。本机文件实现与
+  `applyLocalEpoch2PendingRestore` 不变。
 
 ### D2 system-operations：daemon
 
@@ -54,8 +56,9 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/` 下）�
 - **`composeDevelopmentAutomation`**：`evidenceArtifacts`、`admissionLookup`、`requirementStaging` 与 `evidenceDocumentCommands` 必填。需求物化器
   的内容直接取 application 的 `selectedRequirementMaterializerContent({ staging, documentCommands })`（核对与错误原文不变）；
   `composeRequirementMaterializerContent` 只剩这次核对，删去（`composition/evidenceStaging.ts` 的转出不变）。
-- **开发交付**：`composeDevelopmentPipelineDeps` 删去单参数的旧版重载与 `PipelineEvidenceExecution` 类型。旧版流水线证据桥此后在生产代码、用例、
-  e2e 与脚本里都没有使用方，连同 `composition/pipelineEvidence.ts` 的转出一并删去。
+- **开发交付**：`composeDevelopmentPipelineDeps` 删去单参数的旧版重载与 `PipelineEvidenceExecution` 类型。旧版流水线证据桥此后在生产代码、用
+  例、e2e 与脚本里都没有使用方，连同 `composition/pipelineEvidence.ts` 的转出一并删去；integration public 转出的 `PipelineEvidenceExecution`
+  只有这座桥在用，随之删去（integration 自己的旧版执行器不变，见 §8）。
 - **平台工作项**：`evidenceArtifacts` 必填，交给 application 的 `evidenceStore` 直接返回它。
 - **任务输入上传**：只收必填的 `artifacts`（daemon 本来给的就是它），删去 `blobs` 与只为回落存在的 `appHome`；懒建证据库的 `lazyEvidenceBlobs`
   没有使用方，删去。
@@ -80,30 +83,33 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/` 下）�
 
 ## 3. 清单（退出门）
 
-| 名字                                                                                                                                                                                                                                                                        | 之后                                         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `selectDaemonHostLifecycle`、`selectDaemonRuntimeQueries`、`composeInstallationSeedCompletion`、`composeRequirementMaterializerContent`、`lazyEvidenceBlobs`、`composeLegacyDevelopmentPipelineEvidence`、`LegacyPipelineEvidencePort`、`DaemonDatabasePreOpenRecoveryPort` | 生产代码里不再声明                           |
-| 组合层的 `prepareDatabasePreOpenRecovery`                                                                                                                                                                                                                                   | 只在测试助手里（application 的同名用例不变） |
-| `composeLocalInstallationSeedCompletion`、`createNativeDaemonHostLifecycle` 与 `createFileDatabaseConfiguration` 的组合层转出                                                                                                                                               | 新增                                         |
-| `daemonInfoPath`（应用与 HTTP 装配）、`configPath`（迁移模块）、`blobs` 与 `appHome`（任务输入上传）                                                                                                                                                                        | 选项删去                                     |
+| 名字                                                                                                                                                                                                                                                                        | 之后               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `selectDaemonHostLifecycle`、`selectDaemonRuntimeQueries`、`composeInstallationSeedCompletion`、`composeRequirementMaterializerContent`、`lazyEvidenceBlobs`、`composeLegacyDevelopmentPipelineEvidence`、`LegacyPipelineEvidencePort`、`DaemonDatabasePreOpenRecoveryPort` | 生产代码里不再声明 |
+| 组合层的 `prepareDatabasePreOpenRecovery` 与 application 的同名用例、`PreparedDatabasePreOpenRecovery`                                                                                                                                                                      | 只在测试助手里     |
+| `composeLocalInstallationSeedCompletion`、`createNativeDaemonHostLifecycle` 与 `createFileDatabaseConfiguration` 的组合层转出                                                                                                                                               | 新增               |
+| `daemonInfoPath`（应用与 HTTP 装配）、`configPath`（迁移模块）、`blobs` 与 `appHome`（任务输入上传）                                                                                                                                                                        | 选项删去           |
+| `PipelineEvidenceExecution`（integration public 的转出）                                                                                                                                                                                                                    | 删去               |
 
 ## 4. 用例
 
 新增 `packages/backend/tests/rfc524-system-operations-development-automation-required-selections-boundary.test.ts`，登记 guard-manifest：
 
 - ① 选项必填：逐个钉住各入口的入参成员（可选标记一并钉）。
-- ② §3 清单的名字在全部生产文件（下限 3,000）里不再声明，组合层的打开前恢复只在测试助手里（先按名字文本筛、给语料用例时限）。
+- ② §3 清单的名字在全部生产文件（下限 3,000）里不再声明，打开前恢复的入口与用例只在测试助手里，integration 不再转出
+  `PipelineEvidenceExecution`（先按名字文本筛、给语料用例时限）。
 - ③ bootstrap 不取两个模块的 infrastructure。
 - ④ 装配处的显式构造逐处钉住：daemon 按部署选择选数据库准备的一支、两处本机宿主、会话的迁移配置、两个命令根的配置与 provider、`migrate`
   的本机选项、daemon 的任务输入上传。
-- ⑤ 行为：数据库准备按 `kind` 调用各自的准备（托管一支不碰本机文件）；测试助手只在没给时构造、给了原样交出，平台工作项的证据库首次使用前不建
-  目录。
+- ⑤ 行为：测试助手只在没给时构造、给了原样交出，平台工作项的证据库首次读成员前不建目录、`then` 不触发构建。数据库准备两支的行为由随改的
+  `rfc370-daemon-database-boot-bindings`（托管一支不碰本机文件）与发布升级的测试助手（本机一支）覆盖，RFC-524 用例钉住两支各自的调用。
 - ⑥ 负对照：可选成员、深取 infrastructure 与转回 `undefined` 的写法都会被识别。
 
 ## 5. 失败模式
 
 - **改变读取时机**：配置读取放在原来回落发生的位置；`restore` 根合并为一次读取（同一文件、相邻两次读取）。
 - **改变构造时机**：证据库的“装配时建 / 首次使用时建”在测试助手里分别保留。
+- **移走入口后成为不可达的生产文件**（RFC-522 的教训）：架构报告对照；打开前恢复的 application 用例因此一并移走。
 - **按原文钉住旧形状的锁**：按被删的每个名字与选项全仓搜（RFC-514 的教训），逐条随改。
 - **删除的文件成为账本里的陈旧条目**：同提交删去。
 
@@ -118,7 +124,7 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/` 下）�
 ## 7. 对 RFC-294 刷新后规则的对账
 
 - **C10**：组合层只装配；单机选择经组合层交出，bootstrap 选择。
-- **C11**：public 不变。
+- **C11**：public：integration 删去一个不再有使用方的类型转出（`PipelineEvidenceExecution`），其余不变。
 - **C12**：RFC-524 用例覆盖全部生产文件里的同名声明与 bootstrap 的取用；RFC-521 门覆盖全部组合层。
 - **C13**：计数不升，降的收紧到实测；适配器回落 67 → 51。
 
@@ -127,5 +133,7 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/` 下）�
 - **承担**：S12 第 1 项第四步；system-operations 与 development-automation 的组合层不再替调用方造适配器；S12 点名的“把可空选择转回 `undefined`”
   在 daemon 的数据库准备处删去。
 - **留下**：bootstrap 里的单机选择（开发叠加层与本机宿主、`migrate` 的本机选项、两个命令根的配置读取）与维护 worker 的单机效果一并收进
-  `bootstrap/standalone.ts`（另立后继）；两个模块 infrastructure 里的 `select*` 助手；第 1 项余下各步：resource-catalog（16）、task-execution（16）、
-  source-control（19）。
+  `bootstrap/standalone.ts`（另立后继）；两个模块 infrastructure 里的 `select*` 助手；integration 的旧版流水线执行器
+  （`composePipelineEvidenceRunnerFor` 与 `infrastructure/local/legacyPipelineAdapter.ts`）此后只剩用例在用，留给 integration 的后继；daemon
+  应用里余下两处同样的“`=== null ? undefined :`”（任务输入文件与任务恢复）随 task-execution 一步；第 1 项余下各
+  步：resource-catalog（16）、task-execution（16）、source-control（19）。

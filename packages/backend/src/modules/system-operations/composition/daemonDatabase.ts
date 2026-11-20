@@ -1,5 +1,7 @@
 // The daemon selects configuration and installation effects independently.
 // The existing preparation application retains generation and recovery policy.
+// RFC-524: the caller names the preparation — the deployment's selected installation or the local file
+// preparation — instead of leaving the installation out.
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
 import { prepareDatabaseProviderForBoot } from '../composition'
@@ -12,22 +14,33 @@ type PreparedDaemonDatabase = Awaited<ReturnType<typeof prepareDatabaseProviderF
 
 export type DaemonDatabaseInstallationPort = DatabaseInstallationPort<PreparedDaemonDatabase>
 
-export function prepareDaemonDatabaseProviderForBoot<TPrepared>(input: {
+interface SelectedDaemonDatabasePreparation<TPrepared> {
+  readonly kind: 'selected'
   readonly configuration: DatabaseConfigurationPort
   readonly installation: DatabaseInstallationPort<TPrepared>
   readonly file: FilePreparation
-}): Promise<TPrepared>
-export function prepareDaemonDatabaseProviderForBoot(input: {
+}
+
+interface FileDaemonDatabasePreparation {
+  readonly kind: 'file'
   readonly configuration: DatabaseConfigurationPort
-  readonly installation?: DaemonDatabaseInstallationPort
   readonly file: FilePreparation
-}): Promise<PreparedDaemonDatabase>
-export async function prepareDaemonDatabaseProviderForBoot<TPrepared>(input: {
-  readonly configuration: DatabaseConfigurationPort
-  readonly installation?: DatabaseInstallationPort<TPrepared>
-  readonly file: FilePreparation
-}): Promise<TPrepared | PreparedDaemonDatabase> {
-  if (input.installation !== undefined) {
+}
+
+export type DaemonDatabasePreparation =
+  | SelectedDaemonDatabasePreparation<PreparedDaemonDatabase>
+  | FileDaemonDatabasePreparation
+
+export function prepareDaemonDatabaseProviderForBoot<TPrepared>(
+  input: SelectedDaemonDatabasePreparation<TPrepared>,
+): Promise<TPrepared>
+export function prepareDaemonDatabaseProviderForBoot(
+  input: DaemonDatabasePreparation,
+): Promise<PreparedDaemonDatabase>
+export async function prepareDaemonDatabaseProviderForBoot<TPrepared>(
+  input: SelectedDaemonDatabasePreparation<TPrepared> | FileDaemonDatabasePreparation,
+): Promise<TPrepared | PreparedDaemonDatabase> {
+  if (input.kind === 'selected') {
     return await prepareDatabaseProviderForBoot({
       config: input.file.config,
       contract: input.file.contract,

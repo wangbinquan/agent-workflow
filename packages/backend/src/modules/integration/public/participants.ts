@@ -45,7 +45,6 @@ export interface DigitalEmployeeWorkStartPort {
   }): Promise<{ readonly caseId: string }>
 }
 
-export type { PipelineEvidenceExecution } from '../infrastructure/local/legacyPipelineAdapter'
 export type { SelectedPipelineEvidenceExecution } from '../application/developmentPipelineAdapter'
 export type {
   RequirementAdapterBinding,

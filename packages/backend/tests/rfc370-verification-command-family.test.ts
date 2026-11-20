@@ -39,6 +39,7 @@ import type { FactCellValue } from '@/modules/development-automation/domain/fact
 import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 type KnownVerificationCell = Extract<FactCell<FactCellValue>, { readonly state: 'known' }>
 const workspaceRef = 'owner:workspace:verification'
@@ -528,9 +529,13 @@ describeEachProvider('RFC-370 real DA selected verification family', (harness) =
         }
       }
       const automation = composeDevelopmentAutomation({
+        ...composeStandaloneDevelopmentAutomationSelections({
+          db: harness.db,
+          appHome,
+          evidenceArtifacts: fx.evidence,
+        }),
         db: harness.db,
         appHome,
-        evidenceArtifacts: fx.evidence,
         verificationCommands: new Factory(),
         candidateDelivery: {
           async stage(input) {

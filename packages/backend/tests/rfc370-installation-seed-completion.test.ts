@@ -3,7 +3,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composeInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
 import type { InstallationSeedCompletionPort } from '@/modules/system-operations/public/participants'
 import { DEMO_AGENT_ID, seedDemoContent } from '@/services/demoSeed'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -39,7 +38,6 @@ describeEachProvider('RFC-370 selected installation seed completion', (harness) 
           recorded.push(at)
         },
       }
-      expect(composeInstallationSeedCompletion(completion)).toBe(completion)
       const before = await snapshot()
       let settled = false
       const result = seedDemoContent({ ...participants(), completion }).then((value) => {

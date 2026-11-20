@@ -19,6 +19,7 @@ import { bindChangeCandidateParticipant } from '../src/modules/source-control/co
 import { createDeferredMissionDrive } from '../src/modules/development-automation/application/missionDriver'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 function git(cwd: string, ...args: string[]): void {
   const proc = Bun.spawnSync({ cmd: ['git', ...args], cwd })
@@ -70,6 +71,7 @@ describeEachProvider('rfc310 mission driver', (harness) => {
       },
     }
     const automation = composeDevelopmentAutomation({
+      ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: home }),
       verificationCommands: createLocalVerificationCommandEffectsFactory(),
       db: fx.db,
       appHome: home,

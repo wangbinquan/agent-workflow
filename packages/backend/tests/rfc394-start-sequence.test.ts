@@ -88,10 +88,6 @@ function fixture(input: {
     targetState: null,
     rollbackIncomplete: false,
   })
-  const recovery = spyOn(operations, 'prepareDatabasePreOpenRecovery').mockResolvedValue({
-    history: {},
-    applyStagedRestore: async () => false,
-  } as unknown as Awaited<ReturnType<typeof operations.prepareDatabasePreOpenRecovery>>)
   const prepared = spyOn(database, 'prepareDaemonDatabaseProviderForBoot').mockResolvedValue({
     databaseConfig: { provider: 'sqlite' },
     runtime: { provider: 'sqlite', generation: { payload: { generationId: 'rfc394' } } },
@@ -145,7 +141,6 @@ function fixture(input: {
       composeSession.mockRestore()
       token.mockRestore()
       prepared.mockRestore()
-      recovery.mockRestore()
       epochFacts.mockRestore()
       migration.mockRestore()
       createLogger.mockRestore()

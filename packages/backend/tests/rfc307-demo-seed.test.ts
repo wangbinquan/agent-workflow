@@ -35,7 +35,7 @@ import {
 import { lookupStageContract } from '../src/modules/code-capability/domain/capabilityRegistry'
 import { composeCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composeInstallationSeedCompletion } from '../src/modules/system-operations/composition/installationSeedCompletion'
+import { composeLocalInstallationSeedCompletion } from '../src/modules/system-operations/composition/installationSeedCompletion'
 
 let db: PersistenceDb
 let home: string
@@ -46,7 +46,7 @@ const seed = () =>
   seedDemoContent({
     resourceCatalog: composeDemoResourceCatalogSeedParticipant(db),
     codeCapability: composeCodeCapabilityDemoSeedParticipant(db),
-    completion: composeInstallationSeedCompletion(),
+    completion: composeLocalInstallationSeedCompletion(),
   })
 
 function seedFixture(harness: ProviderHarness): void {

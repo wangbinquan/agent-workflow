@@ -69,7 +69,10 @@ import {
   notifyChildBudgetTaskStatus,
   notifyTaskTerminal,
 } from '@/modules/task-execution/composition'
-import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
+} from '@/modules/system-operations/composition/databaseMigration'
 import {
   createDaemonProviderRuntimeSession,
   type DaemonProviderCloseParticipant,
@@ -239,7 +242,7 @@ export async function composeDaemonSession(
     sqlitePath: activeDbPath,
     operationsRoot: Paths.databaseMigrationsDir,
     generationPointerPath: Paths.databaseGenerationPointer,
-    configPath: Paths.config,
+    configuration: createFileDatabaseConfiguration(Paths.config),
     executionMode: 'background',
     onBackgroundFailure({ operationId, error }) {
       input.log.error('database migration background operation failed', {
@@ -267,7 +270,6 @@ export async function composeDaemonSession(
       appHome: Paths.root,
       digitalEmployeeTypePackageDriftPolicy: input.digitalEmployeeTypePackageDriftPolicy,
       configPath: Paths.config,
-      daemonInfoPath: Paths.daemonInfo,
       lockPath: Paths.lock,
       sourceWriteWindow: input.sourceWriteWindow,
       databaseMigration,

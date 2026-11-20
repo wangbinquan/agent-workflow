@@ -343,12 +343,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
-    from: 'packages/backend/src/modules/development-automation/infrastructure/local/legacyPipelineEvidence.ts',
-    to: 'integration',
-    why: 'RFC-370 Purpose 独立 native pipeline 配对消费 Integration exact public 的原 pipeline 执行合同。原完整 native 调用和行为保持；精确登记迁入 local 包后的实际 offered type 边，在 A-T7 收敛 required SPI 归属，不改变目标 DAG、分类器或集合断言。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
     from: 'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',

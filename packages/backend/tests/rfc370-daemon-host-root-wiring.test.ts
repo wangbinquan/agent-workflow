@@ -50,9 +50,14 @@ const server = source('bootstrap/daemonHttpComposition.ts')
 
 test('start selects the host once and passes the same object to serving, initial composition and recompose', () => {
   const root = declaration(start, 'startCommand')
-  const factories = calls(root, start, 'selectDaemonHostLifecycle')
+  // RFC-524: the root chooses the development overlay's host or the native one itself.
+  const factories = calls(root, start, 'createNativeDaemonHostLifecycle')
   expect(factories).toHaveLength(1)
-  expect(compact(factories[0]!.arguments[0]!, start)).toBe('development?.daemonHost')
+  const choice = factories[0]!.parent
+  if (!ts.isBinaryExpression(choice)) throw new Error('the host choice is missing')
+  expect(choice.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
+  expect(compact(choice.left, start)).toBe('development?.daemonHost')
+  expect(calls(root, start, 'selectDaemonHostLifecycle')).toHaveLength(0)
   const sessionInputs = find(
     root,
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
@@ -82,9 +87,10 @@ test('both HTTP roots consume the host query rather than reading the info file i
   for (const [file, name, receiver] of [
     [server, 'composeProviderAppComposition', 'input'],
   ] as const) {
-    const selection = calls(declaration(file, name), file, 'selectDaemonRuntimeQueries')
-    expect(selection).toHaveLength(1)
-    expect(compact(selection[0]!.arguments[0]!, file)).toBe(`${receiver}.daemonRuntime`)
+    // RFC-524: the runtime queries are a required input, used as given.
+    const body = declaration(file, name)
+    expect(calls(body, file, 'selectDaemonRuntimeQueries')).toHaveLength(0)
+    expect(compact(body, file)).toContain(`daemon:Object.freeze({runtime:${receiver}.daemonRuntime`)
   }
   selected(
     declaration(pg, 'composeDaemonApplication'),

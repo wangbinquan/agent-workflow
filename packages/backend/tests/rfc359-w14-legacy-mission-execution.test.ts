@@ -70,6 +70,7 @@ import {
 } from './helpers/digitalEmployeeStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
 
 const CHILD = resolve(import.meta.dir, 'fixtures', 'mock-opencode-legacy-mission.ts')
 
@@ -352,10 +353,14 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         })
         const lookup = composeDevelopmentAdmissionLookup(db)
         const automation = composeDevelopmentAutomation({
+          ...composeStandaloneDevelopmentAutomationSelections({
+            db,
+            appHome,
+            admissionLookup: lookup,
+          }),
           verificationCommands: createLocalVerificationCommandEffectsFactory(),
           db,
           appHome,
-          admissionLookup: lookup,
           changeCandidate: bindChangeCandidateParticipant(),
           ...launchers,
         })

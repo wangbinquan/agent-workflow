@@ -90,9 +90,9 @@ describe('RFC-349 PostgreSQL development admission lookup', () => {
     expect(composition).toContain('readonly admissionLookup: AdmissionLookup')
     expect(composition).toContain('const lookup = persistence.admissionLookup')
     // RFC-359 W4-B5c：admission 查找一份实现两个 provider 共用，两条装配路径装的是同一个工厂。
-    expect(composition).toContain(
-      'admissionLookup: deps.admissionLookup ?? createAdmissionLookup(deps.db)',
-    )
+    // RFC-524：组合层不再替调用方造它（daemon 经 `composeDevelopmentAdmissionLookup(db)` 显式给出，见下）。
+    expect(composition).toContain('admissionLookup: deps.admissionLookup,')
+    expect(composition).not.toContain('?? createAdmissionLookup(')
     expect(missionOperations).toContain('readonly admissionLookup: AdmissionLookup')
     expect(missionOperations).toContain('lookup: deps.admissionLookup')
     expect(missionOperations).not.toContain('createAdmissionLookup')

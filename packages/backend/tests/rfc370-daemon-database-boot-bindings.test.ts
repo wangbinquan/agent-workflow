@@ -202,6 +202,7 @@ describe('RFC-370 daemon database selected bindings', () => {
     }
     expect(
       await prepareDaemonDatabaseProviderForBoot({
+        kind: 'selected',
         file: f.file,
         configuration: binding.databaseConfiguration,
         installation: f.installation,
@@ -283,6 +284,7 @@ describe('RFC-370 daemon database selected bindings', () => {
       return await original(input)
     }
     const preparing = prepareDaemonDatabaseProviderForBoot({
+      kind: 'selected',
       file: f.file,
       configuration: binding.databaseConfiguration,
       installation: f.installation,
@@ -316,6 +318,7 @@ describe('RFC-370 daemon database selected bindings', () => {
     }
     let settled = false
     const running = prepareDaemonDatabaseProviderForBoot({
+      kind: 'selected',
       file: f.file,
       configuration: selected(new Storage()).databaseConfiguration,
       installation: f.installation,

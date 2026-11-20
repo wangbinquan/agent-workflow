@@ -144,6 +144,7 @@ const DAEMON_ENTRY_FILES: readonly string[] = [
  * SO application/prepareDatabasePreOpenRecovery.ts 的 `PRE_OPEN_STAGED_RESTORE` 是那张按 `DatabaseProvider` 穷举的表
  * （`satisfies Record<DatabaseProvider, …>`），SQLite 适配器跑 `applyPendingRestoreIfAny`，
  * 外部服务器适配器恒为「什么都没应用」；中立序列在打开库之前调用它一次。
+ * （RFC-524：daemon 自 RFC-395 II-b 起不再调用这个用例；它只剩用例在用，连同表移进 `tests/helpers/systemOperations.ts`。）
  * `if` 连同这条记账一起删除。
  *
  * **只降不升**：多一条就红——新的 boot 步骤要么两个 provider 都跑，要么走端口 + 适配器，

@@ -16,7 +16,10 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import { ALL_TOOLS } from '../src/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'
-import { composeDatabaseMigrationModule } from '../src/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  createFileDatabaseConfiguration,
+} from '../src/modules/system-operations/composition/databaseMigration'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -568,7 +571,7 @@ describe('RFC-305 permission catalog architecture', () => {
           sqlitePath: join(home, 'db.sqlite'),
           operationsRoot: join(home, 'database-migrations'),
           generationPointerPath: join(home, 'database-generation.json'),
-          configPath: join(home, 'config.json'),
+          configuration: createFileDatabaseConfiguration(join(home, 'config.json')),
           admission: {
             async freezeAndDrain() {},
             async reopenSqlite() {},

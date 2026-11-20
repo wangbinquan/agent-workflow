@@ -105,6 +105,7 @@ import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { createWebhookDispatcher } from '@/modules/integration/application/webhookDispatch'
 import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
+import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
 
 setDefaultTimeout(180_000)
 
@@ -805,6 +806,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
             repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
         })
         const platform = composeDevelopmentEmployeePlatformWorkItems({
+          evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),
           reactionRounds: createEmployeeReactionRoundQueries(db),
           db,
           appHome,
