@@ -30,7 +30,14 @@ function walk(dir: string): string[] {
     })
 }
 const PRODUCTION = walk(SRC)
-const text = (path: string) => readFileSync(path, 'utf8')
+const TEXTS = new Map<string, string>()
+const text = (path: string) => {
+  let content = TEXTS.get(path)
+  if (content === undefined) TEXTS.set(path, (content = readFileSync(path, 'utf8')))
+  return content
+}
+/** The corpus test reads every production file; the first read is cold (CI shards measured 6.3 s against the default 5 s). */
+const CORPUS_TIMEOUT = 30_000
 const srcPath = (path: string) => slash(relative(SRC, path)).replace(/\.tsx?$/, '')
 
 const DIGITAL_EMPLOYEE = join(SRC, 'modules', 'digital-employee', 'composition.ts')
@@ -138,26 +145,32 @@ describe('RFC-522 ① 选项必填', () => {
 })
 
 describe('RFC-522 ② 选择助手与组合层依赖', () => {
-  test('生产代码里没有 selectLocalCustomObserverProgramFactory；event-center 的 infrastructure 不取组合层的值（语料下限 3,000）', () => {
-    expect(PRODUCTION.length).toBeGreaterThanOrEqual(3000)
-    for (const name of [
-      'selectLocalCustomObserverProgramFactory',
-      'createUnavailableEventObserverProgram',
-    ])
-      expect([
-        name,
-        PRODUCTION.filter((path) => declaresOrExports(path, text(path), name)).map(srcPath),
-      ]).toEqual([name, []])
-    const infrastructure = PRODUCTION.filter((path) =>
-      srcPath(path).startsWith('modules/event-center/infrastructure/'),
-    )
-    expect(infrastructure.length).toBeGreaterThan(0)
-    expect(
-      infrastructure.flatMap((path) =>
-        compositionImports(path, text(path)).map((specifier) => `${srcPath(path)}: ${specifier}`),
-      ),
-    ).toEqual([])
-  })
+  test(
+    '生产代码里没有 selectLocalCustomObserverProgramFactory；event-center 的 infrastructure 不取组合层的值（语料下限 3,000）',
+    () => {
+      expect(PRODUCTION.length).toBeGreaterThanOrEqual(3000)
+      for (const name of [
+        'selectLocalCustomObserverProgramFactory',
+        'createUnavailableEventObserverProgram',
+      ])
+        expect([
+          name,
+          PRODUCTION.filter(
+            (path) => text(path).includes(name) && declaresOrExports(path, text(path), name),
+          ).map(srcPath),
+        ]).toEqual([name, []])
+      const infrastructure = PRODUCTION.filter((path) =>
+        srcPath(path).startsWith('modules/event-center/infrastructure/'),
+      )
+      expect(infrastructure.length).toBeGreaterThan(0)
+      expect(
+        infrastructure.flatMap((path) =>
+          compositionImports(path, text(path)).map((specifier) => `${srcPath(path)}: ${specifier}`),
+        ),
+      ).toEqual([])
+    },
+    CORPUS_TIMEOUT,
+  )
 
   test('负对照：声明、转出与组合层的值 import 都会被认出，required-ports 的类型 import 不算', () => {
     const probe = join(SRC, 'probe.ts')

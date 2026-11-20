@@ -3979,7 +3979,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc522-employee-and-event-center-required-selections-boundary.test.ts",
       "id": "rfc522-employee-and-event-center-required-selections-boundary",
-      "lines": 217,
+      "lines": 230,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,

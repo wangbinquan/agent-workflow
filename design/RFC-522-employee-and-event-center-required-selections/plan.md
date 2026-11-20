@@ -53,7 +53,12 @@ HEAD（`568fda4f6`）的树相同。集中验证查出本 RFC 的缺陷都已修
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `83edbd8bf`（实现，父提交是 `5c55576aa`）：exact SHA 主 CI run 44741246089 的 70 个 job 第 1 次运行 67 个通过，未重跑。红的三格：backend
+  分片 42/44 是本 RFC 用例的语料扫描一条撞默认 5 秒（6.3 秒）——本人缺陷：逐个解析全部生产文件，没先按名字文本筛、也没给语料用例时限
+  （`docs/dev-gotchas.md` 早有这条），补正提交里补上文本预筛、读盘缓存与 30 秒时限，本机负载 64 下 1.3 秒；Windows 的 Playwright 分片 3/4 是
+  `spawnSync git ETIMEDOUT` 起头的一串超时与连带（同一份 daemon 装配在其余 Windows 分片与 Linux / macOS 的 e2e 上通过），属 runner 环
+  境；`CI required` 随之红。
+- 【待补：补正提交】
 - 本 RFC 的落档提交 `568fda4f6`（只改文档）：主 CI run 44725156096 的 70 个 job 第 1 次运行 68 个通过；红的是 design/ 链接检查对 RFC-371 文
   档（`design/RFC-371-run-observability/native-real-validation-20261007.md`）里一条既有提交链接的外部 503，`CI required` 只因它红；未重跑。
 
