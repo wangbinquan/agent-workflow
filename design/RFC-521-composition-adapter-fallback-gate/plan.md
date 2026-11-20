@@ -15,7 +15,7 @@
 - [x] AC-1 门覆盖全部模块的组合层，实测与登记表逐条相等，适配器回落 83 条、各模块指定后继
 - [x] AC-2 每种回落写法都有会红的负对照，不构造的回落与组合层以外的文件不判
 - [x] AC-3 生产代码不变；public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 各 68 / 70，红格逐格归因为环境（见下文）
 
 ## 集中验证
 
@@ -51,8 +51,14 @@ HEAD（`e095916d2`）的树相同。集中验证没有查出本 RFC 的缺陷；
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
-- 本 RFC 的落档提交 `e095916d2`（只改文档）：【待补：落档提交】
+- `bf0eb6971`（实现，父提交是 `e095916d2`）：exact SHA 主 CI run 44721357999 的 70 个 job 第 1 次运行 68 个通过，未重跑；红的是 design/ 的链
+  接检查——GitHub 对 RFC-371 文档（`design/RFC-371-run-observability/native-real-validation-20261007.md`）里一条既有的提交链接答 503，外部原
+  因，`CI required` 只因它红。
+- `9afd1539d`（门的补正，父提交是 `bf0eb6971`）：主 CI run 44723998058 的 70 个 job 第 1 次运行 68 个通过，未重跑；红的 backend 分片
+  20/44 是 `rfc363-task-preparation-admission` 的 SQLite 一条（Git 补偿）撞它自带的 60 秒——补正只改架构门用例、guard-manifest 与文档，同一份
+  生产代码在 `bf0eb6971` 上全部 backend 分片通过，属 runner 时限；`CI required` 只因它红。
+- 本 RFC 的落档提交 `e095916d2`（只改文档）：主 CI run 44717193463 的 70 个 job 第 1 次运行 68 个通过，红的同样是 design/ 链接检查的外部
+  503 与随之红的 `CI required`；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

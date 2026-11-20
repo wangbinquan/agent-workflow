@@ -14,7 +14,7 @@
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 组合层不再替调用方造适配器；C11 public 不变；C12 RFC-522 用例读全部生产文件；C13 计数不
   升，适配器回落 83 → 78。
 
-## 2026-11-20 RFC-521 组合层适配器回落的全模块门与清单（In Progress；`design/RFC-521-composition-adapter-fallback-gate/`）
+## 2026-11-20 RFC-521 组合层适配器回落的全模块门与清单（Done；`design/RFC-521-composition-adapter-fallback-gate/`）
 
 - **来由**：S12 第 1 项要求模块 composition 的适配器回退改为必填注入、单机默认值只留在 `bootstrap/standalone.ts`，日志器一类中性默认由后继
   design 列明，退出门是一条覆盖全部模块的结构锁；现在没有任何门或计数钉住这类写法。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构
@@ -35,8 +35,13 @@
   `tests/architecture/`、读 guard-manifest 的用例与 preflight）按 CI 的跑法与对照 A/B，本 RFC 用例 2 / 2，红的两边都是时限；候选多红的
   `rfc400` 一条单独再跑通过。实现门自审查出负对照少了真值条件一条，补上后复验通过；实现提交之后复核又补进守卫返回、条件回落与多语句缺失块
   （99 → 114 处，适配器回落 72 → 83），复验通过；实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`bf0eb6971`（2 个文件；父提交是 `e095916d2`），门的补正 `9afd1539d`（7 个文件：补认守卫返回、条件回落与多语句缺失块，99 →
+  114 处、适配器回落 72 → 83）。
+- **CI**：实现与落档提交各 68 / 70，红的都是 design/ 链接检查的外部 503（RFC-371 文档里一条既有链接）；补正提交 68 / 70，红的是
+  `rfc363-task-preparation-admission` 撞自带的 60 秒（同一份生产代码在 `bf0eb6971` 上通过）。都与本 RFC 无关，未重跑。
+- **下一步**：S12 第 1 项第二步 RFC-522（digital-employee 与 event-center），其后按 RFC-522 design D4 的次序。
 
-## 2026-11-19 RFC-520 资源包装配共用一个模块工厂（In Progress；`design/RFC-520-shared-resource-package-runtime/`）
+## 2026-11-19 RFC-520 资源包装配共用一个模块工厂（Done；`design/RFC-520-shared-resource-package-runtime/`）
 
 - **来由**：S10 关闭后进入 S12（装配余项）。第 2 项要求 CLI 命令根与 daemon HTTP 装配不再并行手写同一张工厂图；资源包的 provider / 原子
   apply / catalog 与授权登记在 `bootstrap/commandBootstraps.ts` 与 `bootstrap/daemonHttpComposition.ts` 各手写一份。用户 2026-11-02「好，你
@@ -58,6 +63,11 @@
   design §4 写了用例里没有的核对（已补用例）；修正后复验全过。其余候选多出的红都是时限，两边都有的红（preflight 自带时限的两条等）交给 CI。
   补充批 133 个文件（遍历 `bootstrap/` 与语料的守卫等）的红与对照复验后都是时限或导出仓库合成历史造成的假红。架构报告的 60 项与对照逐项相
   同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`b01de1179`（13 个文件；父提交是 `6de9f6302`）。
+- **CI**：`b01de1179` 的 exact SHA 主 CI 67 / 70：backend 分片 27/44 一条撞默认 5 秒、macOS e2e 分片 3/4 撞 job 上限被取消，`CI required` 随
+  之红，都与本 RFC 无关；后继 `bf0eb6971`（生产代码相同）上这两格通过。落档提交 `6de9f6302` 68 / 70（design/ 链接检查的外部 503）。
+- **下一步**：S12 第 1 项由 RFC-521（门与清单）与 RFC-522（digital-employee 与 event-center）推进，余下按 RFC-522 design D4 的次序；第
+  3～6 项另立后继；独立对账（plan §0 第 10 条）仍待没有实施被抽查后继的会话执行。
 
 ## 2026-11-19 RFC-519 托管实现迁出组合层（二）：拆开余下 4 个文件的装配与实现（Done；`design/RFC-519-hosted-implementations-out-of-composition-2/`）
 

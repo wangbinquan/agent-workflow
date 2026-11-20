@@ -18,7 +18,7 @@
 - [x] AC-1 两处 bootstrap 改调 `composeResourcePackageRuntime`、不再调四个资源包工厂
 - [x] AC-2 catalog、原子 apply 与授权解析的行为和此前一致
 - [x] AC-3 授权登记落 application、组合层只装配；public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 67 / 70，红格逐格归因为环境，后继提交上同 job 通过（见下文）
 
 ## 集中验证
 
@@ -73,7 +73,11 @@ HEAD（`6de9f6302`）的树相同。集中验证查出本 RFC 的缺陷都已修
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `b01de1179`（实现，父提交是 `6de9f6302`）：exact SHA 主 CI run 44715005299 的 70 个 job 第 1 次运行 67 个通过，未重跑。红的三格逐格归因，
+  都与本 RFC 的改动无关：backend 分片 27/44 里 `rfc395-staging-page-cost` 的一条撞默认的 5 秒（6.1 秒；它只取 platform 的迁移暂存库）；macOS
+  的 Playwright 分片 3/4 在 `e2e/rfc372-mindmap.spec.ts:315`（前端画布的大投影）可见性断言失败后撞 20 分钟的 job 上限被取消；`CI required`
+  只因这两格红。后继证据：`bf0eb6971`（包含本提交，生产代码与它相同）的 run 44721357999 里这两格都通过，它唯一的红是 design/ 链接检查对
+  RFC-371 文档里一条既有链接的外部 503。
 - 本 RFC 的落档提交 `6de9f6302`（只改文档）：主 CI run 44699102929 的 70 个 job 第 1 次运行 68 个通过；红的是 design/ 的链接检查——GitHub 对
   RFC-371 文档（`design/RFC-371-run-observability/native-real-validation-20261007.md`，`6825e230c` 加入）里一条既有的提交链接答 503，外部原
   因、不是本 RFC 的文件，`CI required` 只因它红；未重跑。

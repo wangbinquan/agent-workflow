@@ -146,6 +146,8 @@
 | S10 第二十四步 | [RFC-517](../RFC-517-module-root-runtime-logic-out-2/proposal.md) | 模块根装配文件的运行期逻辑迁出（二）：digital-employee 的平台清单参与者与员工定义视图投影迁入两个新的 application 文件，system-operations 的文件库启动持锁段迁入 `infrastructure/local/fileDatabaseProviderBoot.ts`、schema 计划核对与暂存还原后的工件释放迁入两个新的 application 文件，task-execution 的任务执行模块两个类与关停控制器迁入 `infrastructure/taskExecutionModule.ts`；三个模块根只装配，导出的名字不变；RFC-515 门的例外清单 30 → 27 | `rfc517-module-root-runtime-logic-out-boundary`（清单里的名字只在各自的位置声明；三个模块根没有循环、try / throw、不构造错误；新名字的调用方与实参；六个新文件的 import 闭集与层次、进程全局；各段行为；形状、层次与进程全局各带负对照）；全模块门 `rfc515-composition-assembly-only`（例外 27） |
 | S10 第二十五步 | [RFC-518](../RFC-518-hosted-implementations-out-of-composition-1/proposal.md) | 托管实现迁出组合层（一）：RFC-370 余项里 23 个不取别的组合文件的 `crewstation*` / `taskImage*` 托管实现原样迁入 9 个模块的 `infrastructure/crewstation/`（只重算相对 import），bootstrap 改经模块根取、模块根照旧名转出；RFC-515 门的例外清单 27 → 4，`composition-forbidden-import-files` 12 → 0，九个模块的组合层控制流上限收紧到实测（合计 354 → 68） | `rfc518-hosted-implementations-out-of-composition-boundary`（旧路径不存在、导出名钉住；没有 import 指向旧路径，bootstrap 不深引用模块 infrastructure，模块根转出与新位置是同一对象；新位置不取组合层，例外只有两处本模块 `required-ports` 的类型 import，带负对照）；`rfc376-structural-guards` 的 forbidden-import 名单清零 |
 | S10 第二十六步 | [RFC-519](../RFC-519-hosted-implementations-out-of-composition-2/proposal.md) | 托管实现迁出组合层（二）：余下 4 个 RFC-370 托管文件拆开装配与实现，托管实现原样迁入五个新的 `infrastructure/crewstation/` 文件（两处装配闭包改为参数），组合文件只留装配、导出的名字与 HEAD 相同；RFC-515 门的例外清单 4 → 0，四个模块的组合层控制流上限收紧到实测（合计 56 → 5） | `rfc519-hosted-implementations-out-of-composition-boundary`（清单名字的唯一声明位置；组合文件导出与 HEAD 相同、转出同一对象；组合文件只装配；新位置不取组合层；三段行为；带负对照）；全模块门 `rfc515-composition-assembly-only`（例外 0） |
+| S12 第一步 | [RFC-520](../RFC-520-shared-resource-package-runtime/proposal.md) | 资源包装配共用一个模块工厂：CLI 包命令根与 daemon 的资源包绑定改调 resource-catalog 新增的 `composeResourcePackageRuntime`（provider、原子 apply、catalog 与授权登记一处装配），授权登记 `createResourceAuthorityRegistry` 归 application；按 bootstrap 全文复核，没有第二处并行手写的装配图 | `rfc520-shared-resource-package-runtime-boundary`（四个资源包工厂只在模块工厂里各被调用一次；两处 bootstrap 各调一次模块工厂；实参钉住；登记的行为；带负对照）；`rfc349-postgresql-resource-package-bootstrap`、`rfc271-cli`、`rfc370-storage-and-worker-root-bindings`（改钉新工厂） |
+| S12 第二步 | [RFC-521](../RFC-521-composition-adapter-fallback-gate/proposal.md) | 组合层适配器回落的全模块门与清单：按语法树找出全部模块组合层里回落一侧是调用或 `new` 的位置（`??` 一类、缺失判断的条件表达式、守卫返回、`if` 块里的赋值、缺省值；114 处、59 个文件），与登记表逐条相等——31 处中性默认带类别（封闭 9 类），83 处适配器回落按模块指定后继、总数只减不增；不改生产代码 | `rfc521-composition-adapter-fallbacks`（全部模块的组合层；清单外与陈旧两向报红；类别封闭；总数与后继逐个相等；每种写法带负对照） |
 
 「结构锁 / 覆盖范围」列（2026-11-10，RFC-479 / S11）：G1～G14 指 RFC-376 的硬结构门（`tests/architecture/rfc376-structural-guards.test.ts`，G2 context 值级 DAG、G3 / G4 public 边界、G6 application 直接 effect、G7 模块分层、G9 部署分支、G14 入口可达）；「全 src」= `packages/backend/src` 的全部源文件，括号里是用例断言的语料下限；「指定 N 个文件」= 只读点名的文件；负对照指合成 fixture 或对真实文件的变异；「未登记 guard-manifest」的锁不受 RFC-317 的语料下限与负对照普查约束。逐行依据是各锁的源码与 `architecture/guard-manifest.json`。
 
@@ -566,6 +568,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **前置 / 冲突**：只改测试、`architecture/counts.json` 与文档，可与任何后继并行。**能力影响**：无。
 
 ### S12 装配余项
+
+> 后继：第 2 项 [RFC-520](../RFC-520-shared-resource-package-runtime/proposal.md)（Done，2026-11-20，`b01de1179`）：CLI 包命令根与 daemon 的资源包绑定改调 resource-catalog 的 `composeResourcePackageRuntime`，生产代码里四个资源包工厂只在这个模块工厂里各被调用一次，授权登记归 application。按 bootstrap 全文复核，第 2 项记载的这一处就是全部（身份访问运行时、用户操作、MCP 事务生命周期与诊断早已共用模块工厂）：第 2 项与退出门里对应的一条关闭。其余各项另立后继。
+>
+> 后继：第 1 项第一步 [RFC-521](../RFC-521-composition-adapter-fallback-gate/proposal.md)（Done，2026-11-20，`bf0eb6971`，补正 `9afd1539d`）：全模块门 `rfc521-composition-adapter-fallbacks` 立起，plan 要求后继 design 列明的那份清单落在门里——组合层的回落构造 114 处，31 处中性默认带类别，83 处适配器回落按模块指定后继、总数只减不增（plan 的按名字基线 50 / 14 / 1 漏掉不以 create / compose 起名的与守卫返回、条件回落的写法）。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在 `bootstrap/standalone.ts`；装配处把可空
