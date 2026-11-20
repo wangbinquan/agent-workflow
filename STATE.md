@@ -1,3 +1,18 @@
+## 2026-11-19 RFC-519 托管实现迁出组合层（二）：拆开余下 4 个文件的装配与实现（In Progress；`design/RFC-519-hosted-implementations-out-of-composition-2/`）
+
+- **来由**：RFC-518 迁走 23 个自足的托管实现后，RFC-515 门的例外清单只剩 4 个文件：它们在托管实现之外还调用本模块的组合助手，不能整个搬。用
+  户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当
+  前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批
+  准，不派 Codex。
+- **范围**：intent `crewstationArtifacts`、resource-catalog `crewstationMcpDiagnostics`、runtime-management `crewstationRuntimeManagement`
+  与 system-operations `crewstationDeployment` 里的托管实现原样迁入五个新的 `infrastructure/crewstation/` 文件（清单见 design §3）；4 个组合
+  文件只留装配、照旧转出迁走的名字；RFC-515 门的例外清单 4 → 0。
+- **不做**：组合层里装配期的选择分支；把组合文件并入模块根或改名；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已
+  在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 托管实现落各模块 `infrastructure/crewstation/`，组合层只留装配；C11 public 不变；C12
+  RFC-519 用例覆盖全部生产文件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升，触及的上限收紧到实测。
+
 ## 2026-11-19 RFC-518 托管实现迁出组合层（一）：RFC-370 余项里 23 个自足的文件（In Progress；`design/RFC-518-hosted-implementations-out-of-composition-1/`）
 
 - **来由**：RFC-517 清完模块根后，RFC-515 门的例外清单只剩 RFC-370（2026-10-19 Done）留在组合层的 27 个 `crewstation*` / `taskImage*` 托管实
