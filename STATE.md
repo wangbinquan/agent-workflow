@@ -1,3 +1,17 @@
+## 2026-11-19 RFC-520 资源包装配共用一个模块工厂（In Progress；`design/RFC-520-shared-resource-package-runtime/`）
+
+- **来由**：S10 关闭后进入 S12（装配余项）。第 2 项要求 CLI 命令根与 daemon HTTP 装配不再并行手写同一张工厂图；资源包的 provider / 原子
+  apply / catalog 与授权登记在 `bootstrap/commandBootstraps.ts` 与 `bootstrap/daemonHttpComposition.ts` 各手写一份。用户 2026-11-02「好，你
+  继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷
+  新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：resource-catalog 新增 `composeResourcePackageRuntime`（组合层）与 `createResourceAuthorityRegistry`（application），两处
+  bootstrap 改调它；钉旧装配原文的锁改钉新位置。按 bootstrap 全文复核，没有第二处并行手写的装配图。
+- **不做**：S12 的其余各项；改动 provider / catalog 工厂本身；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已
+  在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 授权登记（含拒绝）落 application，组合层只装配；C11 public 不变；C12 RFC-520 用例读全部生
+  产文件，RFC-515 门覆盖全模块；C13 计数不升。
+
 ## 2026-11-19 RFC-519 托管实现迁出组合层（二）：拆开余下 4 个文件的装配与实现（Done；`design/RFC-519-hosted-implementations-out-of-composition-2/`）
 
 - **来由**：RFC-518 迁走 23 个自足的托管实现后，RFC-515 门的例外清单只剩 4 个文件：它们在托管实现之外还调用本模块的组合助手，不能整个搬。用

@@ -550,6 +550,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-517](./RFC-517-module-root-runtime-logic-out-2/proposal.md) | 模块根装配文件的运行期逻辑迁出（二）：数字员工、系统运维与任务执行（RFC-294 S10 第二十四步）：digital-employee 的平台清单参与者与员工定义视图投影、system-operations 的文件库启动持锁段、schema 计划核对与暂存还原后的工件释放、task-execution 的任务执行模块两个类与关停控制器从模块根 `composition.ts` 迁入各自的 application 或 infrastructure；模块根只装配，导出的名字不变；RFC-515 门的例外清单 30 → 27（只剩 RFC-370 的文件）。无用户可见变化。 | Done |
 | [RFC-518](./RFC-518-hosted-implementations-out-of-composition-1/proposal.md) | 托管实现迁出组合层（一）：RFC-370 余项里 23 个自足的文件（RFC-294 S10 第二十五步）：9 个模块 `composition/` 下不取别的组合文件的 `crewstation*` / `taskImage*` 托管实现原样迁入各自的 `infrastructure/crewstation/`，bootstrap 改经模块根取、模块根照旧名转出；RFC-515 门的例外清单 27 → 4，`composition-forbidden-import-files` 12 → 0，触及的控制流上限收紧到实测。无用户可见变化。 | Done |
 | [RFC-519](./RFC-519-hosted-implementations-out-of-composition-2/proposal.md) | 托管实现迁出组合层（二）：拆开余下 4 个文件的装配与实现（RFC-294 S10 第二十六步）：intent、resource-catalog、runtime-management 与 system-operations 组合层里余下的 RFC-370 托管实现原样迁入各自的 `infrastructure/crewstation/`，组合文件只留装配、照旧转出迁走的名字；RFC-515 门的例外清单 4 → 0，S10 的组合层收口完成。无用户可见变化。 | Done |
+| [RFC-520](./RFC-520-shared-resource-package-runtime/proposal.md) | 资源包装配共用一个模块工厂（RFC-294 S12 第一步）：CLI 包命令与 daemon 的资源包绑定不再各自手写 provider / 原子 apply / catalog 与授权登记，改调 resource-catalog 新增的 `composeResourcePackageRuntime`；授权登记（未登记的授权以原错误拒绝）归 application。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
