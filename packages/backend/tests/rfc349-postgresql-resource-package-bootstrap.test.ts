@@ -119,6 +119,7 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
     expect(source).toContain('readonly provider: PostgresqlResourcePackageProviderComposition')
     expect(source).toContain('execution: input.execution')
     expect(source).toContain('mutationSessionFactory,')
+    expect(source).toContain('registerAuthority: authorities.register')
     const sharedReads = readFileSync(
       resolve(backendRoot, 'src/modules/resource-catalog/composition/resourcePackageProvider.ts'),
       'utf8',
@@ -140,13 +141,23 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
   test('standalone package CLI binds the selected PostgreSQL owners without a SQLite fallback', () => {
     // RFC-427: the package command bootstrap moved from main.ts to bootstrap/.
     const source = readFileSync(resolve(backendRoot, 'src/bootstrap/commandBootstraps.ts'), 'utf8')
+    // RFC-520: the package command and the daemon routes share the module's one resource-package graph; this root only
+    // states its local selections (capability template owner, MCP lifecycle, local plugin installer).
     for (const factory of [
-      'composePostgresqlResourcePackageCatalog',
-      'createResourcePackageAtomicApplyOperations',
+      'composeResourcePackageRuntime',
       'createPostgresqlCapabilityTemplatePackageMutationOwner',
       'createMcpTransactionLifecycle',
+      'createResourcePackagePluginInstaller',
     ]) {
       expect(source).toContain(`${factory}(`)
+    }
+    for (const factory of [
+      'composePostgresqlResourcePackageCatalog',
+      'composePostgresqlResourcePackageProvider',
+      'createResourcePackageAtomicApplyOperations',
+      'createPostgresqlResourcePackageExecutionAdapter',
+    ]) {
+      expect(source).not.toContain(`${factory}(`)
     }
     expect(source).not.toContain('postgresql-resource-package-bootstrap-not-composed')
   })

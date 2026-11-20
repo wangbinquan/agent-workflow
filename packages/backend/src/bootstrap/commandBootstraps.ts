@@ -9,7 +9,6 @@ import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProvid
 import { resolveDatabaseProviderRuntimeForRestore } from '@/platform/persistence/databaseProviderRuntime'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { createSecretBox } from '@/auth/secretBox'
-import type { Actor } from '@/auth/actor'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { loadConfig } from '@/config'
 import {
@@ -25,15 +24,10 @@ import {
 import { composeLocalDatabaseMigrationOperations } from '@/modules/system-operations/composition/databaseMigration'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
-import {
-  composePostgresqlResourcePackageCatalog,
-  composePostgresqlResourcePackageProvider,
-} from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import { composeResourcePackageRuntime } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { Paths } from '@/util/paths'
 
 export async function composeUserCommandBootstrap() {
@@ -116,48 +110,25 @@ export async function composePackageCommandBootstrap() {
     return unhandledDatabaseProvider(provider.provider)
   }
   const identityAccess = createIdentityAccessRuntime({ db: provider.db })
-  type PostgresqlResourcePackageProviderInput = Parameters<
-    typeof composePostgresqlResourcePackageProvider
-  >[0]
-  type PackageAuthority = Parameters<
-    PostgresqlResourcePackageProviderInput['authorityResolver']['resolve']
-  >[0]
-  const actorsByAuthority = new WeakMap<PackageAuthority, Actor>()
-  const authorityResolver: PostgresqlResourcePackageProviderInput['authorityResolver'] =
-    Object.freeze({
-      resolve(authority: PackageAuthority) {
-        const actor = actorsByAuthority.get(authority)
-        if (actor === undefined) throw new Error('foreign-resource-package-authority')
-        return actor
-      },
-    })
   const box = createSecretBox(Paths.secretKeyFile)
   // RFC-359 —— 资源包 apply **一台引擎两个 provider**。此处此前是一个
   // `provider === 'sqlite' ? … : …`：SQLite 走 `commitResourcePackage` + 同步事务里的
   // legacy 参与者，PostgreSQL 走 journal + prestage/compensate 的原子 apply。两份做的是
   // 同一件事，而判据只跑 SQLite 那一份（见 `rfc359-w13-…-conformance`）。现在只剩后者，
   // 装配所需的四件依赖本来就是中立的，此前就已经算在分叉之外。
-  const resourcePackageProvider = composePostgresqlResourcePackageProvider({
+  // RFC-520: the package command and the daemon routes share one resource-package graph (provider, atomic apply,
+  // catalog and the authority registry); this root only states its local selections.
+  const packages = composeResourcePackageRuntime({
     db: provider.db,
     appHome: Paths.root,
-    authorityResolver,
+    box,
     mcpLifecycle: createMcpTransactionLifecycle(),
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
       db: provider.db,
     }),
     pluginInstaller: createResourcePackagePluginInstaller(),
   })
-  const catalog = composePostgresqlResourcePackageCatalog({
-    provider: resourcePackageProvider,
-    execution: createPostgresqlResourcePackageExecutionAdapter({
-      box,
-      provider: resourcePackageProvider,
-      atomicApply: createResourcePackageAtomicApplyOperations({
-        db: provider.db,
-        box,
-      }),
-    }),
-  })
+  const catalog = packages.catalog
   const identity = Object.freeze({
     async resolveLocalIdentityByUsername(username: string) {
       const user = await identityAccess.userDirectory.findByUsername(username)
@@ -173,12 +144,12 @@ export async function composePackageCommandBootstrap() {
                 actor: local.actor,
                 commandContext() {
                   const context = local.commandContext()
-                  actorsByAuthority.set(context.authority, local.actor)
+                  packages.registerAuthority(context.authority, local.actor)
                   return context
                 },
                 queryContext() {
                   const context = local.queryContext()
-                  actorsByAuthority.set(context.authority, local.actor)
+                  packages.registerAuthority(context.authority, local.actor)
                   return context
                 },
               }),

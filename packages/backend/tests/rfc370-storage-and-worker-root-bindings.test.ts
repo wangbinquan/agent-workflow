@@ -229,7 +229,8 @@ test('both actual HTTP composers take the stated workspace and package owners', 
       throw new Error('workspace binding must have an actual composition owner')
     expect(owner.parameters.map((parameter) => compact(parameter.name, source))).toContain('input')
 
-    const packages = oneRoot(source, 'composePostgresqlResourcePackageProvider')
+    // RFC-520: the daemon takes the module's one resource-package graph; the owners are its inputs.
+    const packages = oneRoot(source, 'composeResourcePackageRuntime')
     expect(compact(property(packages, source, 'skillArtifacts'), source)).toBe(
       `${receiver}.resourcePackageSkillArtifacts`,
     )

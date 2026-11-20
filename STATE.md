@@ -11,6 +11,15 @@
   在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 授权登记（含拒绝）落 application，组合层只装配；C11 public 不变；C12 RFC-520 用例读全部生
   产文件，RFC-515 门覆盖全模块；C13 计数不升。
+- **§14 不变量 / S12 第一步**：CLI 包命令根（`bootstrap/commandBootstraps.ts`）与 daemon 的资源包绑定
+  （`bootstrap/daemonHttpComposition.ts`）都改调 resource-catalog 的 `composeResourcePackageRuntime`，不再自己调四个资源包工厂；生产代码里四
+  个工厂只在这个模块工厂里各被调用一次。授权登记 `createResourceAuthorityRegistry` 落 application（未登记的授权以原错误拒绝），组合层只装
+  配。public surface 与计数不变。
+- **集中验证**（基于 `6de9f6302`，详见 plan）：首批 234 个文件按 CI 的跑法与对照 A/B，查出本人缺陷 4 处——两条钉旧装配原文的锁漏改（设计时搜
+  锁的结果被 `head` 截断，已补进 `docs/dev-gotchas.md`）、guard-manifest 的 `assertsAbsence` 标错、本 RFC 用例依赖语料遍历的次序，另有
+  design §4 写了用例里没有的核对（已补用例）；修正后复验全过。其余候选多出的红都是时限，两边都有的红（preflight 自带时限的两条等）交给 CI。
+  补充批 133 个文件（遍历 `bootstrap/` 与语料的守卫等）的红与对照复验后都是时限或导出仓库合成历史造成的假红。架构报告的 60 项与对照逐项相
+  同。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-19 RFC-519 托管实现迁出组合层（二）：拆开余下 4 个文件的装配与实现（Done；`design/RFC-519-hosted-implementations-out-of-composition-2/`）
 

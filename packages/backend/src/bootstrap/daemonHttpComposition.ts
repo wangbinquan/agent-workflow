@@ -82,14 +82,11 @@ import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composi
 import { composeTaskWorkspaceInsight } from '@/modules/workspace-insight/composition'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
-import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import {
-  composePostgresqlResourcePackageCatalog,
-  composePostgresqlResourcePackageProvider,
+  composeResourcePackageRuntime,
   type ResourcePackageSkillArtifactOwner,
   type SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
 import {
   composeMcpProbeOperations,
   mcpOperationCoordinator,
@@ -744,25 +741,16 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   })
 }
 
-/** Resource-package authority, catalog and atomic apply share one session binding. */
+/** Resource-package authority, catalog and atomic apply share one session binding (RFC-520: the module's one graph). */
 function composeResourcePackageBinding<P extends DatabaseProvider>(
   input: ProviderAppOwnerInput<P>,
 ) {
-  const packageActorsByAuthority = new WeakMap<object, Actor>()
-  const box = input.secretBox
   const identityAccess = input.modules.core.identityAccess
-  const resourceCatalogModules = input.modules.resourceCatalog
-  const provider = composePostgresqlResourcePackageProvider({
+  const packages = composeResourcePackageRuntime({
     db: input.db,
     appHome: input.appHome,
-    authorityResolver: {
-      resolve(authority) {
-        const actor = packageActorsByAuthority.get(authority)
-        if (actor === undefined) throw new Error('foreign-resource-package-authority')
-        return actor
-      },
-    },
-    mcpLifecycle: resourceCatalogModules.mcpTransactionLifecycle,
+    box: input.secretBox,
+    mcpLifecycle: input.modules.resourceCatalog.mcpTransactionLifecycle,
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
       db: input.db,
     }),
@@ -770,26 +758,15 @@ function composeResourcePackageBinding<P extends DatabaseProvider>(
     skillPackageContent: input.selections.resourcePackageSkillContent,
     pluginArtifacts: input.selections.resourcePackagePluginArtifacts,
   })
-  const atomicApply = createResourcePackageAtomicApplyOperations({
-    db: input.db,
-    box,
-  })
   return Object.freeze({
-    applyActivity: atomicApply,
-    catalog: composePostgresqlResourcePackageCatalog({
-      provider,
-      execution: createPostgresqlResourcePackageExecutionAdapter({
-        box,
-        provider,
-        atomicApply,
-      }),
-    }),
+    applyActivity: packages.atomicApply,
+    catalog: packages.catalog,
     commandContextFor(actor: Actor): CommandContext {
       const context = identityAccess.contexts.fromAuthority(
         directRequestAuthority(identityAccess.directAuthority, actor),
         'http',
       )
-      packageActorsByAuthority.set(context.authority, actor)
+      packages.registerAuthority(context.authority, actor)
       return context
     },
   })

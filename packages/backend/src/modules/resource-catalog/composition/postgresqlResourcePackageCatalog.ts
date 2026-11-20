@@ -20,6 +20,9 @@ import {
   type FileResourcePackagePluginInstaller,
 } from '../infrastructure/local/fileResourcePackageArtifacts'
 import { composeResourcePackageProvider } from './resourcePackageProvider'
+import { createResourcePackageAtomicApplyOperations } from './resourcePackageAtomicApply'
+import { createPostgresqlResourcePackageExecutionAdapter } from './resourcePackageExecution'
+import { createResourceAuthorityRegistry } from '../application/participants/resourceAuthorityRegistry'
 import {
   composeResourcePackageOperations,
   type ComposedResourcePackageCatalog,
@@ -120,4 +123,35 @@ export function composePostgresqlResourcePackageCatalog(
     resources: input.provider.resources,
     ...(input.id === undefined ? {} : { id: input.id }),
   })
+}
+
+/** Every arm of the provider dependencies, without the authority resolver the runtime owns. */
+type WithoutAuthorityResolver<T> = T extends unknown ? Omit<T, 'authorityResolver'> : never
+
+export type ResourcePackageRuntimeDependencies =
+  WithoutAuthorityResolver<PostgresqlResourcePackageProviderDependencies> & {
+    readonly box: Parameters<typeof createResourcePackageAtomicApplyOperations>[0]['box']
+  }
+
+/**
+ * RFC-520 — the one resource-package graph the package command and the daemon routes share: the provider, the atomic apply
+ * and the catalog over them, with the authority registry the provider resolves actors through. Each caller registers the
+ * actor of every context it hands out.
+ */
+export function composeResourcePackageRuntime(input: ResourcePackageRuntimeDependencies) {
+  const authorities = createResourceAuthorityRegistry()
+  const provider = composePostgresqlResourcePackageProvider({
+    ...input,
+    authorityResolver: authorities.resolver,
+  })
+  const atomicApply = createResourcePackageAtomicApplyOperations({ db: input.db, box: input.box })
+  const catalog = composePostgresqlResourcePackageCatalog({
+    provider,
+    execution: createPostgresqlResourcePackageExecutionAdapter({
+      box: input.box,
+      provider,
+      atomicApply,
+    }),
+  })
+  return Object.freeze({ provider, atomicApply, catalog, registerAuthority: authorities.register })
 }

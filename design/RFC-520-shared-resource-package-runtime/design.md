@@ -10,9 +10,12 @@
 两处的解析器逐字相同：按授权取行为人，取不到抛 `foreign-resource-package-authority`。把 CLI 命令根（`commandBootstraps.ts`）调用的模块工厂逐
 个与 daemon 侧比对：身份访问运行时、用户操作、MCP 事务生命周期与诊断都已是同一个模块工厂，只有资源包这张图是两处并行手写。
 
-钉着旧装配原文的锁：`rfc349-postgresql-resource-package-bootstrap` 断言 `commandBootstraps.ts` 里有
-`composePostgresqlResourcePackageCatalog(` 与 `createResourcePackageAtomicApplyOperations(` 的调用，并断言
-`postgresqlResourcePackageCatalog.ts` 里没有 `fallback`、`no-op` 等字样；其余用例直接调这几个工厂搭夹具，不受影响。
+钉着旧装配原文的锁有三条（后两条是集中验证的首批查出来的，见 plan）：`rfc349-postgresql-resource-package-bootstrap` 断言
+`commandBootstraps.ts` 里有 `composePostgresqlResourcePackageCatalog(` 与 `createResourcePackageAtomicApplyOperations(` 的调用，并断言
+`postgresqlResourcePackageCatalog.ts` 里没有 `fallback`、`no-op` 等字样；`rfc271-cli` 断言包命令根里有
+`composePostgresqlResourcePackageCatalog({`；`rfc370-storage-and-worker-root-bindings` 在 daemon 的资源包绑定里按名字找
+`composePostgresqlResourcePackageProvider` 的那一次调用，再核对技能 / 插件工件属主与技能内容读取器取自部署选择、没有展开、也不装本机插件安装
+器。其余用例直接调这几个工厂搭夹具，不受影响。
 
 ## 2. 机制与落位
 
@@ -40,30 +43,34 @@
 
 ### D4 锁与账本
 
-- `rfc349-postgresql-resource-package-bootstrap`：CLI 一条改为断言 `composeResourcePackageRuntime(` 与仍由 bootstrap 装的两个属主，旧的两条
-  调用改为不得出现；组合文件一条随新函数补 `registerAuthority`。
+- `rfc349-postgresql-resource-package-bootstrap`：CLI 一条改为断言 `composeResourcePackageRuntime(` 与仍由 bootstrap 装的三件（能力模板变更
+  属主、MCP 事务生命周期、本机插件安装器），四个资源包工厂的调用不得出现；组合文件一条随新函数补 `registerAuthority`。
+- `rfc271-cli` 改为断言包命令根里有 `composeResourcePackageRuntime({`；`rfc370-storage-and-worker-root-bindings` 改为找 daemon 里
+  `composeResourcePackageRuntime` 的那一次调用，核对的属主与断言不变。
 - guard-manifest 登记 RFC-520 用例；`counts.json` 不变。
 
 ## 3. 清单（退出门）
 
 - `bootstrap/commandBootstraps.ts` 与 `bootstrap/daemonHttpComposition.ts` 都调 `composeResourcePackageRuntime`，都不调四个资源包工厂；生产
-  代码里四个工厂只在 resource-catalog 内被调用（`composeResourcePackageRuntime` 与它们彼此之间）。
-- `createResourceAuthorityRegistry` 只在 application 声明，是 `foreign-resource-package-authority` 在生产代码里唯一的出处。
+  代码里四个工厂只在 `composeResourcePackageRuntime` 里各被调用一次。
+- `createResourceAuthorityRegistry` 只在 application 声明，未登记的授权由它以 `foreign-resource-package-authority` 拒绝（生产代码里另一处同
+  名拒绝是变更会话自己的“解析出的行为人不是请求者”核对，既有代码，不动）。
 
 ## 4. 用例
 
 新增 `packages/backend/tests/rfc520-shared-resource-package-runtime-boundary.test.ts`，登记 guard-manifest：
 
-- ① 全部生产文件（下限 3,000）里四个资源包工厂的调用方只在 resource-catalog；两处 bootstrap 各调一次
-  `composeResourcePackageRuntime`；`foreign-resource-package-authority` 只出现在 application 的登记里；带负对照。
-- ② 行为：未登记的授权以原错误拒绝；登记过的授权解析出登记的行为人；两个工厂实例的登记互不相通；`composeResourcePackageRuntime` 交出的
-  catalog 与原子 apply 来自同一次装配（执行适配器拿到的就是交出的原子 apply）。
+- ① 全部生产文件（下限 3,000）里四个资源包工厂只在模块工厂所在的组合文件里各被调用一次；两处 bootstrap 各调一次
+  `composeResourcePackageRuntime`；`foreign-resource-package-authority` 只出自 application 的登记与变更会话自己的行为人核对；模块工厂里各工
+  厂的实参钉住（原子 apply 只构造一次，交给执行适配器并交出的是同一个）；带负对照。
+- ② 行为：未登记的授权以原错误拒绝；登记过的授权解析出登记的行为人；两个登记互不相通；模块工厂把登记接进 provider 的变更会话工厂（登记前以原
+  错误拒绝、登记后解析出登记的行为人、两次装配互不相通），交出的对象冻结。
 - 资源包 apply 的端到端行为由既有的 RFC-349 / RFC-359 用例覆盖（CLI 与 daemon 路由用例经 bootstrap 走新工厂）。
 
 ## 5. 失败模式
 
 - **登记丢失**：两处原来在交出上下文时写表，改为调 `registerAuthority`；用例 ② 与既有的包命令 / 路由用例覆盖。
-- **按原文钉住的锁**：已按每个被删的调用全仓搜（§1）。
+- **按原文钉住的锁**：设计时按被删的调用全仓搜，看漏了两条（搜索结果被截断，见 plan 与 `docs/dev-gotchas.md`）；首批查出后补进 §1 与 D4。
 
 ## 6. 取舍（可推翻）
 

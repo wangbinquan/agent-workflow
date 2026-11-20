@@ -90,7 +90,8 @@ describe('① --as-user 强制', () => {
     expect(BOOTSTRAPS).toContain('identityAccess.localOperator.forUser(user.id)')
     // RFC-359 —— 两台 apply 引擎合一后，bootstrap 只剩这一条装配（此前 SQLite 走
     // `composeResourcePackageOperations({` + `commitResourcePackage`，PostgreSQL 走这一条）。
-    expect(BOOTSTRAPS).toContain('composePostgresqlResourcePackageCatalog({')
+    // RFC-520: the package command and the daemon routes share the module's one resource-package graph.
+    expect(BOOTSTRAPS).toContain('composeResourcePackageRuntime({')
     expect(BOOTSTRAPS).not.toMatch(
       /provider\.provider === 'sqlite'\s*\n?\s*\?[\s\S]{0,80}ResourcePackage/,
     )
