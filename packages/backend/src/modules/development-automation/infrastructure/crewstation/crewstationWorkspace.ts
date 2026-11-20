@@ -5,9 +5,9 @@ import type {
   AutomationWorkspaceEffectsFactory,
   AutomationWorkspaceTreeOperation,
   AutomationWorkspaceTreeOperations,
-} from '../application/ports/automationWorkspaceEffects'
-import type { ActionWorkspaceEffects } from '../application/ports/actionWorkspaceEffects'
-import type { RepositoryBaselineEffectsFactory } from '../application/ports/repositoryBaselineEffects'
+} from '../../application/ports/automationWorkspaceEffects'
+import type { ActionWorkspaceEffects } from '../../application/ports/actionWorkspaceEffects'
+import type { RepositoryBaselineEffectsFactory } from '../../application/ports/repositoryBaselineEffects'
 import {
   DEVELOPMENT_TREE_OPERATION,
   DEVELOPMENT_TREE_INLINE_BYTES,

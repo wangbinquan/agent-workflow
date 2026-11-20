@@ -6,7 +6,7 @@ import {
   type WorkspaceHelperOutcome,
 } from '@/platform/crewstation/workspaceProtocol'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
-import { executeTaskImageWorkspaceOperation } from '@/modules/source-control/composition/taskImageWorkspace'
+import { executeTaskImageWorkspaceOperation } from '@/modules/source-control/composition'
 import {
   executeTaskImageCodeReview,
   TASK_IMAGE_CODE_REVIEW_OPERATION,
@@ -20,23 +20,23 @@ import {
   executeTaskImageExecutionOperation,
   TASK_IMAGE_EXECUTION_OPERATIONS,
 } from '@/modules/task-execution/composition/taskImageExecution'
+import { executeTaskImageSystemWorkspace } from '@/modules/runtime-management/composition'
 import {
   executeTaskImageDevelopmentOperation,
   TASK_IMAGE_DEVELOPMENT_OPERATIONS,
-} from '@/modules/development-automation/composition/taskImageWorkspace'
-import { executeTaskImageSystemWorkspace } from '@/modules/runtime-management/composition/taskImageMaterial'
-import { executeTaskImageEvidence } from '@/modules/development-automation/composition/taskImageEvidence'
-import { executeTaskImageVerification } from '@/modules/development-automation/composition/taskImageVerification'
-import { executeTaskImageDevelopmentAdapter } from '@/modules/integration/composition/taskImageDevelopmentAdapter'
+  executeTaskImageEvidence,
+  executeTaskImageVerification,
+} from '@/modules/development-automation/composition'
 import { executeTaskImageArchive } from '@/modules/task-execution/composition/taskImageArchive'
 import { executeTaskImageFusionWorkspace } from '@/modules/source-control/composition/taskImageFusionWorkspace'
-import { executeTaskImagePlugin } from '@/modules/resource-catalog/composition/taskImagePlugin'
+import { executeTaskImageDevelopmentAdapter } from '@/modules/integration/composition'
 import { executeTaskImageMcpProbe } from '@/modules/resource-catalog/composition/taskImageMcpProbe'
 import {
   executeTaskImageObserver,
   TASK_IMAGE_OBSERVER_OPERATIONS,
 } from '@/modules/event-center/composition'
 
+import { executeTaskImagePlugin } from '@/modules/resource-catalog/composition'
 /** The outcome is published atomically: a reader sees either no file or the
  * complete outcome, never a partial one, even across a container restart. */
 export function writeWorkspaceHelperOutcome(

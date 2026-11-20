@@ -115,18 +115,18 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts -> system-operations',
     'packages/backend/src/modules/collaboration/public/commands.ts -> memory',
     'packages/backend/src/modules/development-automation/composition.ts -> integration',
-    'packages/backend/src/modules/development-automation/composition/crewstationEvidence.ts -> system-operations',
+    'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
     'packages/backend/src/modules/development-automation/infrastructure/local/legacyPipelineEvidence.ts -> integration',
-    'packages/backend/src/modules/digital-employee/composition/crewstationContent.ts -> system-operations',
+    'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts -> system-operations',
     'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> development-automation',
     'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> digital-employee',
     'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts -> runtime-management',
-    'packages/backend/src/modules/resource-catalog/composition/crewstationNativePlugin.ts -> runtime-management',
+    'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/crewstationNativePlugin.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts -> system-operations',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts -> runtime-management',
     'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts -> task-execution',
@@ -163,21 +163,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'inbound-context-internal-import|packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts|@/modules/task-execution/inbound/directTaskInitiator',
   ],
   'composition-forbidden-import-files': [
-    'packages/backend/src/modules/development-automation/composition/taskImageEvidence.ts',
-    'packages/backend/src/modules/development-automation/composition/taskImageVerification.ts',
-    'packages/backend/src/modules/development-automation/composition/taskImageWorkspace.ts',
-    'packages/backend/src/modules/digital-employee/composition/crewstationContent.ts',
-    'packages/backend/src/modules/event-center/composition/taskImageObserver.ts',
-    'packages/backend/src/modules/integration/composition/taskImageDevelopmentAdapter.ts',
-    'packages/backend/src/modules/intent/composition/crewstationScratch.ts',
-    'packages/backend/src/modules/resource-catalog/composition/taskImagePlugin.ts',
-    // RFC-499: source-control composition.ts and the publication transport left (the transport moved to infrastructure;
-    // the unused key-file resolvers that read `node:fs` were deleted).
-    'packages/backend/src/modules/source-control/composition/taskImageIsolation.ts',
-    'packages/backend/src/modules/source-control/composition/taskImageRepositoryEffects.ts',
-    'packages/backend/src/modules/source-control/composition/taskImageUploads.ts',
-    'packages/backend/src/modules/source-control/composition/taskImageWorkspace.ts',
-    // RFC-414: the seven task-execution entries left — their persistence / filesystem work is infrastructure now.
+    // RFC-518: the last twelve (RFC-370 task-image and hosted adapters) moved to infrastructure/crewstation.
   ],
   'deployment-mode-branch-sites': [
     // RFC-425：执行权端口的两处部署字面量与 `embed.ts` 的 SPA 标记比较销账（部署种类改由 profile 下传）。
@@ -372,7 +358,8 @@ for (const id of EXACT_GATES)
       ).toEqual({ unregistered: [], stale: [] })
     })
     test('allowlist mutation reports an unregistered item and a stale item', () => {
-      const observed = KNOWN[id]!
+      // RFC-518: an allowlist that reached zero still proves both directions on a fabricated item.
+      const observed = KNOWN[id]!.length > 0 ? KNOWN[id]! : ['fabricated/observed.ts']
       expect(observed.length).toBeGreaterThan(0)
       expect(exactAllowlist(observed, observed.slice(1))).toEqual({
         unregistered: [observed[0]!],

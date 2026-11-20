@@ -31,11 +31,15 @@ import {
   readCrewStationEventSources,
   validateCrewStationEventSubscriptions,
 } from '@/modules/integration/composition/crewstationEvents'
+import { composeCrewStationDevelopmentAdapters } from '@/modules/integration/composition'
 import { composeCrewStationReviewArtifacts } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
 import { composeCrewStationCodeReviewArtifacts } from '@/modules/workspace-insight/composition'
 import { logicalSchemaContract } from './persistenceSchema'
 import { composeCrewStationMaintenanceDescriptor } from './crewstationMaintenance'
-import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition/crewstationArtifacts'
+import {
+  composeCrewStationResourceArtifacts,
+  createHostedNativePluginReader,
+} from '@/modules/resource-catalog/composition'
 import {
   composeCrewStationIntentArtifacts,
   composeCrewStationIntentPluginRetention,
@@ -51,8 +55,8 @@ import {
   readCrewStationEnvironment,
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createCrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import { composeCrewStationWorkspaceOwner } from '@/modules/source-control/composition'
 import { createCrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
-import { composeCrewStationWorkspaceOwner } from '@/modules/source-control/composition/crewstationWorkspace'
 import {
   createHostedGitCommandEnvironment,
   createHostedGitAgentEnvironment,
@@ -60,18 +64,18 @@ import {
 import { composeCrewStationExecutionOwner } from '@/modules/task-execution/composition/crewstationExecution'
 import { composeCrewStationRunFamilySelections } from './runFamilyProviders'
 import { composeCrewStationMaterialObjects } from '@/modules/task-execution/composition/crewstationMaterialObjects'
-import { createHostedNativePluginReader } from '@/modules/resource-catalog/composition/crewstationNativePlugin'
 import { composeLocalTaskAgentRuntimeBindings } from '@/modules/runtime-management/composition/taskAgentRuntimeBindings'
 import { selectExecutionInitialization } from './executionInitialization'
-import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/composition/crewstationWorkspace'
 import { createCrewStationObserverProgramFactory } from '@/modules/event-center/composition'
+import {
+  composeCrewStationDevelopmentWorkspaces,
+  composeCrewStationDevelopmentEvidence,
+  createCrewStationVerificationCommandEffectsFactory,
+  composeCrewStationEvidenceStaging,
+} from '@/modules/development-automation/composition'
 import { composeCrewStationEmployeeContent } from '@/modules/digital-employee/composition'
-import { composeCrewStationDevelopmentEvidence } from '@/modules/development-automation/composition/crewstationEvidence'
-import { createCrewStationVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/crewstationVerification'
 import { HostedRuntimeCapabilitiesSchema } from '@/modules/runtime-management/composition/crewstationRuntimeManagement'
 import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
-import { composeCrewStationEvidenceStaging } from '@/modules/development-automation/composition/crewstationEvidenceStaging'
-import { composeCrewStationDevelopmentAdapters } from '@/modules/integration/composition/crewstationDevelopmentAdapters'
 import { composeStreamTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
 
 /** RFC-370 v3 V5: owner restore-normalization participants for the CS RFC-042

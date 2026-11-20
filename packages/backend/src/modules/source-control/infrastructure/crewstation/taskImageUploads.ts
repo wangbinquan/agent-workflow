@@ -14,8 +14,8 @@ import {
 import { dirname, join, relative, sep } from 'node:path'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { assertTargetDirInsideWorktree } from '@/platform/content/local/uploadPaths'
-import { createFileWorkspaceUploadContentFactory } from '../infrastructure/local/fileWorkspaceUploadContent'
-import { HOSTED_UPLOAD_CHUNK_BYTES } from '../infrastructure/crewstation/workspaceUploads'
+import { createFileWorkspaceUploadContentFactory } from '../local/fileWorkspaceUploadContent'
+import { HOSTED_UPLOAD_CHUNK_BYTES } from './workspaceUploads'
 import { createSha256DigestBuilder } from '@/util/hash'
 
 export const TASK_IMAGE_UPLOAD_OPERATIONS = [

@@ -30,7 +30,7 @@ import {
   materializeActionWorkspace,
 } from '@/modules/development-automation/application/actionWorkspace'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/application/ports/evidenceArtifacts'
-import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/composition/crewstationWorkspace'
+import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/infrastructure/crewstation/crewstationWorkspace'
 import { createWorkspaceValidationAdapter } from '@/modules/development-automation/infrastructure/attemptSupport'
 import { snapshotProtectedRoots } from '@/modules/development-automation/infrastructure/protectedSnapshot'
 import {

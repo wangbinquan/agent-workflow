@@ -65,3 +65,8 @@ export { getProbeByMcpId } from './application/mcps/probeRecords'
 
 // RFC-504: the built-in workflow catalog lives in infrastructure; bootstrap takes it via composition.
 export { createBuiltinWorkflowCatalog } from './infrastructure/builtinWorkflowCatalog'
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { composeCrewStationResourceArtifacts } from './infrastructure/crewstation/crewstationArtifacts'
+export { createHostedNativePluginReader } from './infrastructure/crewstation/crewstationNativePlugin'
+export { executeTaskImagePlugin } from './infrastructure/crewstation/taskImagePlugin'

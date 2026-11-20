@@ -516,3 +516,15 @@ export {
   mountDevelopmentCaseRoutes,
   type DevelopmentCaseRoutes,
 } from './inbound/http/employeeCaseRoutes'
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { composeCrewStationDevelopmentEvidence } from './infrastructure/crewstation/crewstationEvidence'
+export { composeCrewStationEvidenceStaging } from './infrastructure/crewstation/crewstationEvidenceStaging'
+export { createCrewStationVerificationCommandEffectsFactory } from './infrastructure/crewstation/crewstationVerification'
+export { composeCrewStationDevelopmentWorkspaces } from './infrastructure/crewstation/crewstationWorkspace'
+export { executeTaskImageEvidence } from './infrastructure/crewstation/taskImageEvidence'
+export { executeTaskImageVerification } from './infrastructure/crewstation/taskImageVerification'
+export {
+  executeTaskImageDevelopmentOperation,
+  TASK_IMAGE_DEVELOPMENT_OPERATIONS,
+} from './infrastructure/crewstation/taskImageWorkspace'

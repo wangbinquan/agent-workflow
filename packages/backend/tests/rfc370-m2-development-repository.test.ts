@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createHostedDevelopmentRepositoryPreparation } from '@/modules/source-control/infrastructure/crewstation/developmentRepository'
-import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/composition/crewstationWorkspace'
+import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/infrastructure/crewstation/crewstationWorkspace'
 import {
   parseHostedWorkspaceReference,
   hostedWorkspaceReference,

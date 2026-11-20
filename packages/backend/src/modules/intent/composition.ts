@@ -20,3 +20,6 @@ export { createIntentMaintenanceJobHandlers } from './application/maintenanceJob
 // factories via composition.
 export { createIntentPlatformInventoryParticipant } from './application/platformInventoryParticipant'
 export { createIntentWorkflowGraphValidation } from './application/workflowGraphValidationProvider'
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { composeCrewStationIntentScratchStore } from './infrastructure/crewstation/crewstationScratch'

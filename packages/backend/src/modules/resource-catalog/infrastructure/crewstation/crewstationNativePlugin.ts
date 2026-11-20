@@ -1,6 +1,6 @@
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
 import type { BusinessNativePlugin } from '@/platform/crewstation/nativeMaterial'
-import type { createHostedPluginGenerations } from '../infrastructure/crewstation/pluginGenerations'
+import type { createHostedPluginGenerations } from './pluginGenerations'
 
 /** Resource Catalog resolves its own immutable manifest. Task Execution only
  * consumes the portable tree and never interprets plugin cache locators. */

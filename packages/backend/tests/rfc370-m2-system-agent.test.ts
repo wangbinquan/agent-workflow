@@ -2,7 +2,7 @@ import {
   composeCrewStationRunFamilySelections,
   localSystemAgentRunProviders,
 } from '@/bootstrap/runFamilyProviders'
-import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition/crewstationSystemAgentMaterial'
+import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/infrastructure/crewstation/crewstationSystemAgentMaterial'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/application/ports/runtimeRegistry'
 import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
 import { expect, test } from 'bun:test'
@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCrewStationSystemAgentRunFamily } from '@/modules/task-execution/composition/crewstationSystemAgentRunFamily'
-import { executeTaskImageSystemWorkspace } from '@/modules/runtime-management/composition/taskImageMaterial'
+import { executeTaskImageSystemWorkspace } from '@/modules/runtime-management/infrastructure/crewstation/taskImageMaterial'
 import type {
   HostedExecution,
   HostedExecutionSink,

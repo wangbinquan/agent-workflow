@@ -3,8 +3,8 @@ import { rmSync } from 'node:fs'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { assertTargetDirInsideWorktree } from '@/platform/content/local/uploadPaths'
 import { resolveScriptInterpreter } from '@/platform/execution/local/scriptInterpreter'
-import type { CustomObserverProgramInput } from '../application/ports/customObserverProgram'
-import { createLocalCustomObserverProgram } from '../infrastructure/local/customObserverProgram'
+import type { CustomObserverProgramInput } from '../../application/ports/customObserverProgram'
+import { createLocalCustomObserverProgram } from '../local/customObserverProgram'
 
 export const TASK_IMAGE_OBSERVER_OPERATIONS = [
   'observer-resolve',

@@ -1,46 +1,46 @@
-import type { RepositoryWorkspaceTaskPorts } from './required-ports'
+import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-ports'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import type { Logger } from '@/util/log'
-import { createHostedRepositoryPublicationTransport } from '../infrastructure/crewstation/publicationTransport'
-import type { MaterializedSpace } from '../application/workspaceMaterialization'
-import type { HostedVolumeActivity } from '../public/participants'
-import type { WorkspaceExcludeProfileReceipt } from '../public/types'
-import { createHostedTaskWorkspaces } from '../infrastructure/crewstation/taskWorkspace'
-import { createHostedWorkspaceCommands } from '../infrastructure/crewstation/workspaceCommands'
-import { createHostedWorkspaceImageUpgrades } from '../infrastructure/crewstation/workspaceImageUpgrade'
-import { createHostedWorkspaceEffects } from '../infrastructure/crewstation/workspaceEffects'
-import { createHostedRepositoryRevisionContent } from '../infrastructure/crewstation/repositoryRevisionContent'
-import { createHostedRepositoryRemote } from '../infrastructure/crewstation/repositoryRemote'
-import { createHostedWorkspaceMaintenance } from '../infrastructure/crewstation/workspaceMaintenance'
-import { createHostedIsolationWorkspaces } from '../infrastructure/crewstation/isolationWorkspace'
-import { createHostedRepositoryCandidateOperations } from '../infrastructure/crewstation/repositoryCandidate'
-import { createHostedConflictMergeEffects } from '../infrastructure/crewstation/conflictMerge'
-import { createHostedEmployeeCaseWorkspaceOperations } from '../infrastructure/crewstation/employeeCaseWorkspace'
-import { createHostedTaskDeletionRepositories } from '../infrastructure/crewstation/taskDeletionRepositories'
-import { createHostedDevelopmentRepositoryPreparation } from '../infrastructure/crewstation/developmentRepository'
+import { createHostedRepositoryPublicationTransport } from './publicationTransport'
+import type { MaterializedSpace } from '../../application/workspaceMaterialization'
+import type { HostedVolumeActivity } from '../../public/participants'
+import type { WorkspaceExcludeProfileReceipt } from '../../public/types'
+import { createHostedTaskWorkspaces } from './taskWorkspace'
+import { createHostedWorkspaceCommands } from './workspaceCommands'
+import { createHostedWorkspaceImageUpgrades } from './workspaceImageUpgrade'
+import { createHostedWorkspaceEffects } from './workspaceEffects'
+import { createHostedRepositoryRevisionContent } from './repositoryRevisionContent'
+import { createHostedRepositoryRemote } from './repositoryRemote'
+import { createHostedWorkspaceMaintenance } from './workspaceMaintenance'
+import { createHostedIsolationWorkspaces } from './isolationWorkspace'
+import { createHostedRepositoryCandidateOperations } from './repositoryCandidate'
+import { createHostedConflictMergeEffects } from './conflictMerge'
+import { createHostedEmployeeCaseWorkspaceOperations } from './employeeCaseWorkspace'
+import { createHostedTaskDeletionRepositories } from './taskDeletionRepositories'
+import { createHostedDevelopmentRepositoryPreparation } from './developmentRepository'
 import {
   createHostedMigrationDrain,
   createHostedWorkspaceLifecycle,
   hostedWorkspaceLifecycleOwner,
-} from '../infrastructure/crewstation/workspaceLifecycle'
+} from './workspaceLifecycle'
 import {
   createHostedWorkspaceUploads,
   readHostedWorkspaceFile,
   openHostedWorkspaceFile,
   writeHostedWorkspaceStream,
-} from '../infrastructure/crewstation/workspaceUploads'
+} from './workspaceUploads'
 import {
   createHostedRepositoryPreparation,
   createHostedScratchWorkspaces,
-} from '../infrastructure/crewstation/repositoryPreparation'
-import { createHostedFusionWorkspaces } from '../infrastructure/crewstation/fusionWorkspace'
+} from './repositoryPreparation'
+import { createHostedFusionWorkspaces } from './fusionWorkspace'
 import {
   hostedWorkspaceReference,
   parseHostedWorkspaceReference,
   joinHostedWorkspaceReference,
-} from '../infrastructure/crewstation/workspaceReference'
+} from './workspaceReference'
 import { sha256Hex } from '@/util/hash'
 
 /** Source Control owns both parent volumes, all interpretations of their

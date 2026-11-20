@@ -22,7 +22,7 @@
 - [x] AC-1 清单里的名字只在各自的位置声明；三个模块根不再有循环、`try` 与 `throw`；门的例外清单删去它们后仍绿（只剩 RFC-370 的 27 个）
 - [x] AC-2 清单参与者、员工视图、启动准备、schema 计划核对、暂存还原后的释放、任务执行模块与关停控制器的行为、错误与次序和此前一致
 - [x] AC-3 新文件的依赖面是闭集并服从层次；public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 除外部服务的链接检查外全绿（逐格归因见 §CI）
 
 ## 集中验证
 
@@ -65,7 +65,9 @@ HEAD（`eb72bb67e`）的树相同。集中验证查出本 RFC 两处缺陷，都
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `dd2d1b24a`（实现，父提交是 `eb72bb67e`）：exact SHA 主 CI run 44674339750 的 70 个 job 第 1 次运行 68 个通过；红的是 design/ 的链接检查遇
+  GitHub 503（`design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接，外部服务暂时不可用，该文件不在本提交
+  里），`CI required` 只因它红；backend 分片全过（含本机跑不进时限、交给 CI 的 `rfc294-architecture-preflight` 两条），未重跑。
 - 本 RFC 的落档提交 `eb72bb67e`（只改文档，同一提交记下 RFC-513 转 Done）：主 CI run 44661446598 的 70 个 job 第 1 次运行 68 个通过；红的是
   design/ 的链接检查遇 GitHub 503（`design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接，外部服务暂时不可
   用，该文件不在本提交里），`CI required` 只因它红；backend 分片全过，未重跑。

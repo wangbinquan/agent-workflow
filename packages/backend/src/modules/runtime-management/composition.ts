@@ -41,3 +41,7 @@ export function composeRealtimeRuntimeFor(input: {
 }
 
 export { schemaContribution } from './composition/schema'
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { composeCrewStationSystemAgentContents } from './infrastructure/crewstation/crewstationSystemAgentMaterial'
+export { executeTaskImageSystemWorkspace } from './infrastructure/crewstation/taskImageMaterial'

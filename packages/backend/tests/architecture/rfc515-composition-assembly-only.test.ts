@@ -30,32 +30,9 @@ const FORBIDDEN_CALLS = ['tablesOf(', 'Bun.spawn(']
 const RFC370 = 'RFC-370 余项：crewstation / taskImage 的托管实现归 infrastructure'
 /** design §2 D1: every composition file that may still break a rule, and the successor that clears it. */
 const EXCEPTIONS: Readonly<Record<string, string>> = {
-  [MODULES + 'development-automation/composition/crewstationEvidence.ts']: RFC370,
-  [MODULES + 'development-automation/composition/crewstationEvidenceStaging.ts']: RFC370,
-  [MODULES + 'development-automation/composition/crewstationVerification.ts']: RFC370,
-  [MODULES + 'development-automation/composition/crewstationWorkspace.ts']: RFC370,
-  [MODULES + 'development-automation/composition/taskImageEvidence.ts']: RFC370,
-  [MODULES + 'development-automation/composition/taskImageVerification.ts']: RFC370,
-  [MODULES + 'development-automation/composition/taskImageWorkspace.ts']: RFC370,
-  [MODULES + 'digital-employee/composition/crewstationContent.ts']: RFC370,
-  [MODULES + 'event-center/composition/taskImageObserver.ts']: RFC370,
-  [MODULES + 'integration/composition/crewstationDevelopmentAdapters.ts']: RFC370,
-  [MODULES + 'integration/composition/taskImageDevelopmentAdapter.ts']: RFC370,
   [MODULES + 'intent/composition/crewstationArtifacts.ts']: RFC370,
-  [MODULES + 'intent/composition/crewstationScratch.ts']: RFC370,
-  [MODULES + 'resource-catalog/composition/crewstationArtifacts.ts']: RFC370,
   [MODULES + 'resource-catalog/composition/crewstationMcpDiagnostics.ts']: RFC370,
-  [MODULES + 'resource-catalog/composition/crewstationNativePlugin.ts']: RFC370,
-  [MODULES + 'resource-catalog/composition/taskImagePlugin.ts']: RFC370,
   [MODULES + 'runtime-management/composition/crewstationRuntimeManagement.ts']: RFC370,
-  [MODULES + 'runtime-management/composition/crewstationSystemAgentMaterial.ts']: RFC370,
-  [MODULES + 'runtime-management/composition/taskImageMaterial.ts']: RFC370,
-  [MODULES + 'source-control/composition/crewstationWorkspace.ts']: RFC370,
-  [MODULES + 'source-control/composition/taskImageIsolation.ts']: RFC370,
-  [MODULES + 'source-control/composition/taskImageRepositoryEffects.ts']: RFC370,
-  [MODULES + 'source-control/composition/taskImageUploads.ts']: RFC370,
-  [MODULES + 'source-control/composition/taskImageWorkspace.ts']: RFC370,
-  [MODULES + 'system-operations/composition/crewstationDatabaseRestore.ts']: RFC370,
   [MODULES + 'system-operations/composition/crewstationDeployment.ts']: RFC370,
 }
 const UNITS = backendUnits(ROOT)
@@ -124,7 +101,8 @@ function gate(units: readonly SourceUnit[]): { unregistered: string[]; stale: st
 test('live corpus: every module composition only assembles, outside the listed exceptions', () => {
   expect(UNITS.length).toBeGreaterThanOrEqual(2000)
   const composition = UNITS.filter((unit) => isComposition(unit.path))
-  expect(composition.length).toBeGreaterThanOrEqual(350)
+  // RFC-518 moved 23 RFC-370 hosted implementations out of composition/ (358 -> 335 files).
+  expect(composition.length).toBeGreaterThanOrEqual(330)
   expect(
     composition.filter((unit) => unit.path.endsWith('/composition.ts')).length,
   ).toBeGreaterThanOrEqual(15)
@@ -135,8 +113,8 @@ test('live corpus: every module composition only assembles, outside the listed e
   expect(listed.filter((path) => !existsSync(resolve(ROOT, path)))).toEqual([])
   expect(listed.filter((path) => !isComposition(path))).toEqual([])
   expect([...listed].sort()).toEqual(listed)
-  // RFC-516 and RFC-517 cleared every module root; only RFC-370's crewstation / taskImage files remain.
-  expect(listed).toHaveLength(27)
+  // RFC-516 and RFC-517 cleared every module root; RFC-518 moved 23 RFC-370 hosted implementations to infrastructure.
+  expect(listed).toHaveLength(4)
 })
 
 test('negative fixtures: each rule is caught in composition files and module roots only; listed files are judged against the list', () => {

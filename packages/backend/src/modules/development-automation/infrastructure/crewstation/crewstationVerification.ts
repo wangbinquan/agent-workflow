@@ -4,7 +4,7 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type {
   VerificationCommandEffectsFactory,
   VerificationProgramRef,
-} from '../application/ports/verificationCommandEffects'
+} from '../../application/ports/verificationCommandEffects'
 import type { HostedVerificationReceipt } from './taskImageVerification'
 
 export function createCrewStationVerificationCommandEffectsFactory(input: {

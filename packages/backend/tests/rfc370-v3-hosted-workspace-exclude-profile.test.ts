@@ -86,7 +86,10 @@ test('the hosted workspace owner binds the profile to that task-volume operation
   // The owner composes a full platform session; this source lock keeps the
   // selection from silently falling back to the service-local Git manager.
   const source = readFileSync(
-    new URL('../src/modules/source-control/composition/crewstationWorkspace.ts', import.meta.url),
+    new URL(
+      '../src/modules/source-control/infrastructure/crewstation/crewstationWorkspace.ts',
+      import.meta.url,
+    ),
     'utf8',
   )
   expect(source).toMatch(

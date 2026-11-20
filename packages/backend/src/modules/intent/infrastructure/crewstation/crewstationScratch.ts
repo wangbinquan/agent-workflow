@@ -1,7 +1,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, lte } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { IntentScratchStore } from '../application/ports/intentScratchStore'
+import type { IntentScratchStore } from '../../application/ports/intentScratchStore'
 
 /** Intent owns retention and turn identities. The selected execution owner
  * proves quiescence and removes only that turn's remote scratch directory. */

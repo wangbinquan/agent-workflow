@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
+import type { EvidenceArtifactPort } from '../../application/ports/evidenceArtifacts'
 import type {
   EvidenceStagingFactory,
   EvidenceStagingNamespace,
   EvidenceStagingReference,
-} from '../application/ports/evidenceStaging'
-import { assertEvidenceRelativePath } from '../infrastructure/crewstation/evidenceArtifacts'
+} from '../../application/ports/evidenceStaging'
+import { assertEvidenceRelativePath } from './evidenceArtifacts'
 
 /** Content and executable adapters share one selected staging namespace. */
 export function composeCrewStationEvidenceStaging(input: {

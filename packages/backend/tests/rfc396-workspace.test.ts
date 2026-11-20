@@ -13,7 +13,7 @@ import {
   parseHostedWorkspaceReference,
 } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
-import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/composition/crewstationWorkspace'
+import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/infrastructure/crewstation/crewstationWorkspace'
 import { createGraphEmployeeWorkspace } from '@/modules/development-automation/infrastructure/graph-development/employeeWorkspace'
 import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import { createGraphExecutionConsumption } from '@/modules/development-automation/application/graph-development/executionConsumption'

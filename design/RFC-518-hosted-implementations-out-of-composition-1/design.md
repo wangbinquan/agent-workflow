@@ -63,15 +63,15 @@ application / domain / ports / infrastructure、platform 与他模块 public，�
 ## 3. 清单（退出门）
 
 - 新位置：上表 23 个文件都在 `infrastructure/crewstation/` 下，导出的名字与 HEAD 逐个相同。
-- 旧位置：各模块 `composition/` 下名字以 `crewstation` 或 `taskImage` 开头的文件只剩 §1 的 4 个。
+- 旧位置：23 个旧路径都不存在；RFC-515 门的例外清单恰是 §1 的 4 个（组合层里另有只做装配、本就不在例外清单里的 `crewstation*` / `taskImage*`
+  文件，不受影响）。
 - 入口：bootstrap 经模块根取这些名字，模块根的转出与新位置的导出是同一个对象。
 
 ## 4. 用例
 
 新增 `packages/backend/tests/rfc518-hosted-implementations-out-of-composition-boundary.test.ts`，登记 guard-manifest：
 
-- ① 23 个文件只在新位置、旧位置不存在；全部模块 `composition/` 下的 `crewstation*` / `taskImage*` 文件恰是 §1 的 4 个；新位置的导出名字逐个
-  钉住。
+- ① 23 个文件只在新位置、旧位置不存在，新位置的导出名字逐个钉住；RFC-515 门的例外清单恰是 §1 的 4 个。
 - ② 全部生产文件里没有 import 指向 23 个旧路径；bootstrap 不深引用任何模块的 infrastructure；模块根转出的名字与新位置导出的是同一个对象（逐
   名比对）。
 - ③ 23 个新位置文件不取任何组合文件，例外只有两处本模块 `required-ports` 的类型 import（逐条钉住）；带负对照（取组合文件、取别的模块的组合文

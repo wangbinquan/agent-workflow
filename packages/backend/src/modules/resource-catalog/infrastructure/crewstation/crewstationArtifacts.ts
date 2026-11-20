@@ -1,17 +1,17 @@
 // RFC-370 — the hosted Resource Catalog artifact store selection, shared by
 // HTTP, Intent and maintenance. Assembly only.
-import type { HostedIntentResourceArtifacts } from '../public/participants'
-import { createHostedPluginGenerations } from '../infrastructure/crewstation/pluginGenerations'
-import { createHostedPluginArtifactOwners } from '../infrastructure/crewstation/pluginArtifacts'
-import { createHostedResourcePackagePluginRetention } from '../infrastructure/crewstation/pluginRetention'
-import { createDatabaseSkillArtifactOwners } from '../infrastructure/crewstation/skillArtifacts'
+import type { HostedIntentResourceArtifacts } from '../../public/participants'
+import { createHostedPluginGenerations } from './pluginGenerations'
+import { createHostedPluginArtifactOwners } from './pluginArtifacts'
+import { createHostedResourcePackagePluginRetention } from './pluginRetention'
+import { createDatabaseSkillArtifactOwners } from './skillArtifacts'
 import {
   decodeResourcePackageArtifacts,
   decodeResourcePackageReceipt,
   assertResourcePackageArtifactReceipt,
-} from '../infrastructure/postgresqlResourcePackageMaintenance'
-import { isCurrentResourcePackageArtifact } from '../infrastructure/resourcePackageArtifactCodec'
-import type { ResourcePackageApplyArtifactRecoveryPort } from '../application/resourcePackageMaintenance'
+} from '../postgresqlResourcePackageMaintenance'
+import { isCurrentResourcePackageArtifact } from '../resourcePackageArtifactCodec'
+import type { ResourcePackageApplyArtifactRecoveryPort } from '../../application/resourcePackageMaintenance'
 
 export function composeCrewStationResourceArtifacts(
   input: Parameters<typeof createHostedPluginGenerations>[0],

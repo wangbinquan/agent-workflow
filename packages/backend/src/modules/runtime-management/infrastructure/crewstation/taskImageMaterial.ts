@@ -1,9 +1,9 @@
 import { join } from 'node:path'
-import type { AgentMaterialSeedFile } from '../application/ports/agentMaterialWorkspace'
+import type { AgentMaterialSeedFile } from '../../application/ports/agentMaterialWorkspace'
 import {
   bindNativeAgentMaterialWorkspace,
   releaseSystemAgentScratch,
-} from '../infrastructure/local/agentMaterialWorkspace'
+} from '../local/agentMaterialWorkspace'
 import { requireWorkPathWithoutSymlinks } from '@/platform/crewstation/workVolumePath'
 import { assertWorkVolumeWritersSettled } from '@/platform/crewstation/workVolumeWriters'
 

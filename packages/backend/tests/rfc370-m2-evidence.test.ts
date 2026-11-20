@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { createCrewStationEvidenceArtifacts } from '@/modules/development-automation/infrastructure/crewstation/evidenceArtifacts'
 import { createDevelopmentObjectIndex } from '@/modules/development-automation/infrastructure/crewstation/objectIndex'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
-import { executeTaskImageEvidence } from '@/modules/development-automation/composition/taskImageEvidence'
+import { executeTaskImageEvidence } from '@/modules/development-automation/infrastructure/crewstation/taskImageEvidence'
 import {
   inspectEvidenceFile,
   scanEvidenceTree,

@@ -87,7 +87,7 @@ export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/
 export { runDigitalEmployeeOsCycle } from './application/osWorker'
 export { composeDigitalEmployeeAgentTemplateCatalogParticipant } from './composition/agentTemplateCatalog'
 // RFC-370 M2: hosted employee program / input content (CrewStation objects).
-export { composeCrewStationEmployeeContent } from './composition/crewstationContent'
+export { composeCrewStationEmployeeContent } from './infrastructure/crewstation/crewstationContent'
 export type {
   DigitalEmployeeMigrationStatus,
   DigitalEmployeeWriterCutoverOperations,

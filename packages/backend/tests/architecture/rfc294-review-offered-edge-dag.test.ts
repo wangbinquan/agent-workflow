@@ -319,7 +319,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/development-automation/composition/crewstationEvidence.ts',
+    from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
@@ -349,7 +349,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
-    from: 'packages/backend/src/modules/digital-employee/composition/crewstationContent.ts',
+    from: 'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
@@ -385,7 +385,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
-    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationNativePlugin.ts',
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/crewstationNativePlugin.ts',
     to: 'runtime-management',
     why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',

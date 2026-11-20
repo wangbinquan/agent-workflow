@@ -2,21 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
-import { createFileActionWorkspaceEffects } from '../infrastructure/local/fileActionWorkspaceEffects'
-import { createFileRepositoryBaselineEffectsFactory } from '../infrastructure/local/fileRepositoryBaselineEffects'
-import { actionTreeDigest, prepareActionScene } from '../application/actionWorkspace'
-import {
-  serializeProtectedRootSnapshot,
-  snapshotProtectedRoots,
-} from '../infrastructure/protectedSnapshot'
+import { createFileActionWorkspaceEffects } from '../local/fileActionWorkspaceEffects'
+import { createFileRepositoryBaselineEffectsFactory } from '../local/fileRepositoryBaselineEffects'
+import { actionTreeDigest, prepareActionScene } from '../../application/actionWorkspace'
+import { serializeProtectedRootSnapshot, snapshotProtectedRoots } from '../protectedSnapshot'
 import {
   businessTreeSnapshot,
   reviveWorkspaceValidationInput,
   validateWorkspaceOutcome,
   type SerializedWorkspaceValidationInput,
-} from '../infrastructure/workspaceValidator'
-import { scanRepositoryFacts } from '../infrastructure/repositoryFactsScan'
-import { publishSeedTree, seedTreeDigestOf } from '../infrastructure/uploadPlacement'
+} from '../workspaceValidator'
+import { scanRepositoryFacts } from '../repositoryFactsScan'
+import { publishSeedTree, seedTreeDigestOf } from '../uploadPlacement'
 
 /** RFC-370 §9.2 V3 — one whole-tree operation per command. */
 export const DEVELOPMENT_TREE_OPERATION = 'development-tree'

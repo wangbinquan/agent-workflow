@@ -43,7 +43,7 @@ export { createCrewStationObserverProgramFactory } from './infrastructure/crewst
 export {
   executeTaskImageObserver,
   TASK_IMAGE_OBSERVER_OPERATIONS,
-} from './composition/taskImageObserver'
+} from './infrastructure/crewstation/taskImageObserver'
 export { selectLocalCustomObserverProgramFactory }
 export type { CustomObserverProgramFactory }
 /**

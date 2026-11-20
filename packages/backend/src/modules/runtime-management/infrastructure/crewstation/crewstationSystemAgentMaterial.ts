@@ -2,12 +2,12 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type {
   AgentMaterialSeedFile,
   AgentMaterialWorkspace,
-} from '../application/ports/agentMaterialWorkspace'
+} from '../../application/ports/agentMaterialWorkspace'
 import type {
   SystemAgentRetainedContents,
   SystemAgentWorkspaceScope,
   SystemAgentWorkspaceScopes,
-} from '../application/ports/systemAgentRetainedContents'
+} from '../../application/ports/systemAgentRetainedContents'
 import { sha256Hex } from '@/util/hash'
 
 /** System scratch namespaces share durable parent volumes; each invocation has

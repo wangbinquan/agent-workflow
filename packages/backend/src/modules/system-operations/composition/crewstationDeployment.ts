@@ -8,7 +8,7 @@ import {
   createHostedDatabaseWriteBarrier,
   type HostedDatabaseWriteBarrier,
 } from '../infrastructure/crewstation/databaseWriteBarrier'
-import { restoreCrewStationDatabaseFromEnvironment } from './crewstationDatabaseRestore'
+import { restoreCrewStationDatabaseFromEnvironment } from '../infrastructure/crewstation/crewstationDatabaseRestore'
 import type { BusinessExecutionFence } from '@/platform/crewstation/businessExecution'
 // RFC-370 M0 — system-operations selections of a CrewStation-hosted instance.
 // The platform injects every input through environment variables; a missing

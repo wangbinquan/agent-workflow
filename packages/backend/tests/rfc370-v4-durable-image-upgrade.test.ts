@@ -692,7 +692,10 @@ test('the release image is declared only when the platform can upgrade a parent'
     'current.runtimeImageUpgrade === 1 ? (current.taskRuntimeImageVersionId ?? null) : null',
   )
   const owner = readFileSync(
-    join(import.meta.dir, '../src/modules/source-control/composition/crewstationWorkspace.ts'),
+    join(
+      import.meta.dir,
+      '../src/modules/source-control/infrastructure/crewstation/crewstationWorkspace.ts',
+    ),
     'utf8',
   )
   expect(owner).toMatch(/createHostedWorkspaceCommands\(\{[\s\S]*?imageUpgrades,/)

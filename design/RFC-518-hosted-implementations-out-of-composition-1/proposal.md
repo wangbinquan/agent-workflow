@@ -42,8 +42,7 @@
 
 ## 5. 验收标准
 
-- **AC-1**：23 个文件只在新位置；各模块 `composition/` 里只剩上述 4 个 `crewstation*` / `taskImage*` 文件；RFC-515 门的例外清单只剩它们且仍
-  绿；`composition-forbidden-import-files` 实测 0。
+- **AC-1**：23 个文件只在新位置、旧路径不存在；RFC-515 门的例外清单只剩上述 4 个且仍绿；`composition-forbidden-import-files` 实测 0。
 - **AC-2**：迁移的代码逐字不变，导出的名字与签名不变，bootstrap 与各消费方拿到的是同一批函数与常量。
 - **AC-3**：新位置的 infrastructure 文件不取组合层（本模块 `required-ports` 的类型除外）；bootstrap 不深引用模块 infrastructure；跨 context
   的文件对账本只随路径改名、不增；public surface 不升；计数不升，触及的上限收紧到实测。

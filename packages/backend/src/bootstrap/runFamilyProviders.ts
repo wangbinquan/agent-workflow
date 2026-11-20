@@ -16,7 +16,7 @@ import {
   createLocalSystemAgentRuntimeBindings,
 } from '@/modules/runtime-management/composition/systemAgentMaterial'
 import { composeLocalTaskAgentRuntimeBindings } from '@/modules/runtime-management/composition/taskAgentRuntimeBindings'
-import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition/crewstationSystemAgentMaterial'
+import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition'
 import {
   composeLocalRuntimeManagement,
   type LocalRuntimeManagementInput,

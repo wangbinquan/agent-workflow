@@ -26,7 +26,7 @@ import {
   placeUploadSeed,
   seedTreeDigestOf,
 } from '@/modules/development-automation/infrastructure/uploadPlacement'
-import { executeTaskImageDevelopmentOperation } from '@/modules/development-automation/composition/taskImageWorkspace'
+import { executeTaskImageDevelopmentOperation } from '@/modules/development-automation/infrastructure/crewstation/taskImageWorkspace'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/application/ports/automationWorkspaceEffects'
 
 async function git(cwd: string, ...args: string[]) {

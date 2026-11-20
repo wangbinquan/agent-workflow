@@ -49,6 +49,8 @@ const PUBLIC_ALLOWED = new Set([
 
 /** 消费者账本：import 这两个入口的仓内生产文件（相对 backend/src）。 */
 const COMPOSITION_CONSUMERS: string[] = [
+  // RFC-518: the CrewStation / task-image adapters moved to infrastructure/crewstation; bootstrap takes them through the root.
+  'bootstrap/crewstation.ts',
   'bootstrap/daemonApplication.ts',
   'bootstrap/daemonModules/developmentAutomation.ts',
   'bootstrap/daemonModules/digitalEmployee.ts',
@@ -61,6 +63,7 @@ const COMPOSITION_CONSUMERS: string[] = [
   'bootstrap/maintenanceWorkerGraph.ts',
   // RFC-431: the standalone profile states the local development-automation selections.
   'bootstrap/standalone.ts',
+  'bootstrap/workspaceTaskImage.ts',
   // RFC-436: server.ts mounts the case-scoped routes development-automation owns.
   'server.ts',
 ]

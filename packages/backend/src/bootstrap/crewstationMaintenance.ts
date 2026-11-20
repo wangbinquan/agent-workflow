@@ -21,9 +21,9 @@ import {
   composeCrewStationIntentArtifacts,
   composeCrewStationIntentPluginRetention,
 } from '@/modules/intent/composition/crewstationArtifacts'
-import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition/crewstationArtifacts'
-import { composeCrewStationIntentScratchStore } from '@/modules/intent/composition/crewstationScratch'
-import { composeCrewStationWorkspaceOwner } from '@/modules/source-control/composition/crewstationWorkspace'
+import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition'
+import { composeCrewStationIntentScratchStore } from '@/modules/intent/composition'
+import { composeCrewStationWorkspaceOwner } from '@/modules/source-control/composition'
 import {
   HOSTED_TASK_CONTRACT_VERSION,
   composeCrewStationWorkerFence,

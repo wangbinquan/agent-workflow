@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { objectFixture } from './helpers/rfc370Objects'
 import { parseHostedObjectReference } from '@/platform/crewstation/objectReference'
-import { composeCrewStationEmployeeContent } from '@/modules/digital-employee/composition/crewstationContent'
+import { composeCrewStationEmployeeContent } from '@/modules/digital-employee/infrastructure/crewstation/crewstationContent'
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
 import {
   writeHostedWorkspaceStream,

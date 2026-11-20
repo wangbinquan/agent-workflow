@@ -6,9 +6,9 @@ import type {
 import {
   developmentAdapterContentSchema,
   type DevelopmentAdapterContent,
-} from '../domain/developmentAdapterDefinition'
-import type { DevelopmentAdapterOperation } from '../application/developmentAdapterOperation'
-import type { AdapterConfigurationBinding } from '../application/ports/developmentPurposeBinding'
+} from '../../domain/developmentAdapterDefinition'
+import type { DevelopmentAdapterOperation } from '../../application/developmentAdapterOperation'
+import type { AdapterConfigurationBinding } from '../../application/ports/developmentPurposeBinding'
 import type {
   AdapterConfigurationReference,
   AdapterProgramReference,
@@ -18,7 +18,7 @@ import type {
   RequirementAdapterEffects,
   PipelineAdapterEffects,
   ApprovalAdapterEffects,
-} from '../application/ports/developmentAdapterEffects'
+} from '../../application/ports/developmentAdapterEffects'
 import { sha256Hex } from '@/util/hash'
 
 export function composeCrewStationDevelopmentAdapters(input: {

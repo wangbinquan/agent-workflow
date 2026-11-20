@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { requireWorkPathWithoutSymlinks } from '@/platform/crewstation/workVolumePath'
 import { assertWorkVolumeWritersSettled } from '@/platform/crewstation/workVolumeWriters'
-import { inspectEvidenceFile, scanEvidenceTree } from '../infrastructure/local/evidenceFileFacts'
+import { inspectEvidenceFile, scanEvidenceTree } from '../local/evidenceFileFacts'
 
 const Request = z.discriminatedUnion('method', [
   z.object({ method: z.literal('inspect'), path: z.string() }),

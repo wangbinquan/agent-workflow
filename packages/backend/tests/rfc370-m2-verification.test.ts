@@ -14,9 +14,9 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createCrewStationVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/crewstationVerification'
-import { executeTaskImageVerification } from '@/modules/development-automation/composition/taskImageVerification'
-import { executeTaskImageRepositoryOperation } from '@/modules/source-control/composition/taskImageRepositoryEffects'
+import { createCrewStationVerificationCommandEffectsFactory } from '@/modules/development-automation/infrastructure/crewstation/crewstationVerification'
+import { executeTaskImageVerification } from '@/modules/development-automation/infrastructure/crewstation/taskImageVerification'
+import { executeTaskImageRepositoryOperation } from '@/modules/source-control/infrastructure/crewstation/taskImageRepositoryEffects'
 import {
   retainWorkVolumeWriter,
   assertWorkVolumeWritersSettled,

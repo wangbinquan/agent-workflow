@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 715,
+      "lines": 710,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1098
+      "lines": 1063
     },
     {
       "assertsAbsence": true,
@@ -3895,7 +3895,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc515-composition-assembly-only.test.ts",
       "id": "rfc515-composition-assembly-only",
-      "lines": 207,
+      "lines": 184,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -3920,6 +3920,18 @@
       "file": "packages/backend/tests/rfc517-module-root-runtime-logic-out-boundary.test.ts",
       "id": "rfc517-module-root-runtime-logic-out-boundary",
       "lines": 841,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc518-hosted-implementations-out-of-composition-boundary.test.ts",
+      "id": "rfc518-hosted-implementations-out-of-composition-boundary",
+      "lines": 438,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,

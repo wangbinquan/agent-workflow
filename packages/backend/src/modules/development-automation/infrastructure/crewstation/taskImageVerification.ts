@@ -16,12 +16,12 @@ import {
   releaseCompletedWorkVolumeWriter,
   retainWorkVolumeWriter,
 } from '@/platform/crewstation/workVolumeWriters'
-import { createRepoScriptResolver } from '../infrastructure/local/verificationCommandEffects'
+import { createRepoScriptResolver } from '../local/verificationCommandEffects'
 import { requireEvidenceWorkPath } from './taskImageEvidence'
-import { verificationStepSchema } from '../domain/verificationProfile'
-import { assertEvidenceRelativePath } from '../infrastructure/crewstation/evidenceArtifacts'
+import { verificationStepSchema } from '../../domain/verificationProfile'
+import { assertEvidenceRelativePath } from './evidenceArtifacts'
 import { sha256Hex } from '@/util/hash'
-import { readVerificationEnvironment } from '../infrastructure/local/verificationEnvironment'
+import { readVerificationEnvironment } from '../local/verificationEnvironment'
 
 const Request = z.discriminatedUnion('method', [
   z.object({ method: z.literal('environment'), path: z.string() }),

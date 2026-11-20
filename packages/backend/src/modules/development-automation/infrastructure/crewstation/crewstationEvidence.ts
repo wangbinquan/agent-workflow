@@ -3,12 +3,9 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { createDevelopmentObjectIndex } from '../infrastructure/crewstation/objectIndex'
-import {
-  createCrewStationEvidenceArtifacts,
-  assertEvidenceRelativePath,
-} from '../infrastructure/crewstation/evidenceArtifacts'
-import { inspectEvidenceFile, scanEvidenceTree } from '../infrastructure/local/evidenceFileFacts'
+import { createDevelopmentObjectIndex } from './objectIndex'
+import { createCrewStationEvidenceArtifacts, assertEvidenceRelativePath } from './evidenceArtifacts'
+import { inspectEvidenceFile, scanEvidenceTree } from '../local/evidenceFileFacts'
 
 export function composeCrewStationDevelopmentEvidence(input: {
   readonly db: PersistenceDb

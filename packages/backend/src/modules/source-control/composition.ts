@@ -294,3 +294,7 @@ export function composeRepositoryPreparationLookup(db: PersistenceDb) {
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createSourceControlMaintenanceJobHandlers } from './application/maintenanceJobs'
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { composeCrewStationWorkspaceOwner } from './infrastructure/crewstation/crewstationWorkspace'
+export { executeTaskImageWorkspaceOperation } from './infrastructure/crewstation/taskImageWorkspace'

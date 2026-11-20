@@ -3,7 +3,7 @@ import {
   finishConflictResolution,
   type PreparedConflictResolution,
 } from '@/platform/workspace/local/isolation'
-import { listAvailableRefs } from '../infrastructure/local/repositoryMirrorCache'
+import { listAvailableRefs } from '../local/repositoryMirrorCache'
 import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
 import { DomainError } from '@/util/errors'
 import { gitDiffSnapshot, initScratchRepo, isGitWorkTree, runGit, worktreeDiff } from '@/util/git'
@@ -14,31 +14,34 @@ import { dirname, join, resolve, sep } from 'node:path'
 import type {
   IsolationConflict,
   IsolationWorkspaceBinding,
-} from '../application/ports/isolationWorkspace'
-import type { RepositoryCommitWorkspaceOperations } from '../application/ports/repositoryGitWorkspace'
+} from '../../application/ports/isolationWorkspace'
+import type { RepositoryCommitWorkspaceOperations } from '../../application/ports/repositoryGitWorkspace'
 import {
   commitPreparedRepository,
   prepareRepositoryCommit,
   readRepositoryCommitPreview,
-} from '../application/repositoryCommit'
-import type { MaterializedSpace, ResolvedRepoSource } from '../application/workspaceMaterialization'
-import { assertHostedRepositoryUrl } from '../infrastructure/crewstation/repositoryUrl'
-import { createVolumeRepositoryMirrorStore } from '../infrastructure/crewstation/volumeRepositoryMirrors'
-import { REPOSITORY_COMMIT_OPERATION } from '../infrastructure/crewstation/workspaceEffects'
-import { bindFileAgentWorkspaceGitControlObservation } from '../infrastructure/local/fileAgentWorkspaceGitControl'
-import { createFileRepositoryPreviewIndexPort } from '../infrastructure/local/fileRepositoryPreviewIndex'
+} from '../../application/repositoryCommit'
+import type {
+  MaterializedSpace,
+  ResolvedRepoSource,
+} from '../../application/workspaceMaterialization'
+import { assertHostedRepositoryUrl } from './repositoryUrl'
+import { createVolumeRepositoryMirrorStore } from './volumeRepositoryMirrors'
+import { REPOSITORY_COMMIT_OPERATION } from './workspaceEffects'
+import { bindFileAgentWorkspaceGitControlObservation } from '../local/fileAgentWorkspaceGitControl'
+import { createFileRepositoryPreviewIndexPort } from '../local/fileRepositoryPreviewIndex'
 import {
   createLocalIsolationWorkspaceFactory,
   prepareLocalIsolationConflict,
-} from '../infrastructure/local/localIsolationWorkspace'
-import { createNodeWorkspaceMaintenanceFilesystem } from '../infrastructure/nodeWorkspaceMaintenanceFilesystem'
+} from '../local/localIsolationWorkspace'
+import { createNodeWorkspaceMaintenanceFilesystem } from '../nodeWorkspaceMaintenanceFilesystem'
 import {
   cleanupMaterializedSpace,
   decodeMaterializedSpace,
   materializeGroupSpace,
   materializeWorktree,
   resolveRepoSourceSingleWithProvider,
-} from '../infrastructure/workspaceMaterializer'
+} from '../workspaceMaterializer'
 import { executeTaskImageIsolationMergeStep } from './taskImageIsolation'
 import {
   executeTaskImageRepositoryOperation,

@@ -8,9 +8,9 @@ import type {
   EvidenceStagingNamespace,
   EvidenceStagingReference,
 } from '@/modules/development-automation/public/types'
-import { createLocalDevelopmentAdapterEffects } from '../infrastructure/local/developmentAdapterProgram'
-import { developmentAdapterContentSchema } from '../domain/developmentAdapterDefinition'
-import type { AdapterProcessObservation } from '../application/ports/developmentAdapterEffects'
+import { createLocalDevelopmentAdapterEffects } from '../local/developmentAdapterProgram'
+import { developmentAdapterContentSchema } from '../../domain/developmentAdapterDefinition'
+import type { AdapterProcessObservation } from '../../application/ports/developmentAdapterEffects'
 import { sha256Hex } from '@/util/hash'
 
 const text = z.string()

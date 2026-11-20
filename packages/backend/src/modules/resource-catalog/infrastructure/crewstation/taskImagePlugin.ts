@@ -20,7 +20,7 @@ import {
   retainWorkVolumeWriter,
 } from '@/platform/crewstation/workVolumeWriters'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
-import { validatePluginMaterialTree } from '../infrastructure/crewstation/pluginMaterialTree'
+import { validatePluginMaterialTree } from './pluginMaterialTree'
 import {
   installPlugin,
   inferSourceKind,
@@ -28,7 +28,7 @@ import {
   PLUGIN_GENERATION_MANIFEST,
   readGenerationManifestForCachedPath,
   type InstallResult,
-} from '../infrastructure/local/filePluginInstallation'
+} from '../local/filePluginInstallation'
 import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 

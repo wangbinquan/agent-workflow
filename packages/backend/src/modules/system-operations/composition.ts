@@ -623,3 +623,6 @@ export function createSystemOperationsMaintenanceJobHandlers(
 ): ReturnType<typeof createSystemJobHandlers> {
   return createSystemJobHandlers(system, { prune: pruneLocalBackups })
 }
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { verifyCrewStationDatabaseRestore } from './infrastructure/crewstation/crewstationDatabaseRestore'

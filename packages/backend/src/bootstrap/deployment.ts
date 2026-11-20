@@ -16,7 +16,7 @@ import {
   readCrewStationDatabaseEnvironment,
   prepareCrewStationDatabase,
 } from '@/modules/system-operations/composition/crewstationDeployment'
-import { verifyCrewStationDatabaseRestore } from '@/modules/system-operations/composition/crewstationDatabaseRestore'
+import { verifyCrewStationDatabaseRestore } from '@/modules/system-operations/composition'
 import { prepareManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'
 import type { Deployment, DeploymentKind } from './deploymentProfile'
 import { composeStandaloneProfile } from './standalone'

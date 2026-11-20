@@ -731,6 +731,11 @@ RFC-517 把 system-operations 模块根里一句 schema 计划核对挪进 `appl
 **做法**：迁出的代码若只用到方言类型的一两个字段，参数按结构写（例如 `{ readonly contractDigest: string }`），文件名与函数名不带方言；新用例
 也别把方言模块名、方言符号写进字面清单。确实是方言实现的，落 `platform/persistence/`，或照 T17 的报错说明把新增写进账本并说明为什么。
 
+RFC-518 把 23 个文件整个挪出组合层时，又有三类按文件名搜不到的锁跟着变：门自带的语料下限（RFC-515 门对组合层文件数的下限）、假定名单非空的变
+异用例（`rfc376-structural-guards` 的 allowlist mutation，名单清零后要换伪造项）、按“谁 import 模块根”记的消费方账本
+（`rfc310-architecture-lock` 的 `COMPOSITION_CONSUMERS`——bootstrap 从深引用改经模块根，就会多出消费方）。集中验证的批次里要带上全部
+`tests/architecture/` 与记模块根消费方的用例。
+
 ## 删除一跳转出（facade）：守卫看见的是转出背后的真相（RFC-454 实撞，2026-11-05）
 
 RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证里 8 个文件红，没有一个是行为问题，全是转出遮住的东西露了出来：

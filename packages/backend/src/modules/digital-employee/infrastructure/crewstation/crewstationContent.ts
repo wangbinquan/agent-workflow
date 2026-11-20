@@ -12,7 +12,10 @@ import {
   parseHostedObjectReference,
 } from '@/platform/crewstation/objectReference'
 import { CrewStationApiError } from '@/platform/crewstation/platformApi'
-import type { EmployeeInputArtifactPort, ProgramArtifactPort } from './required-ports'
+import type {
+  EmployeeInputArtifactPort,
+  ProgramArtifactPort,
+} from '../../composition/required-ports'
 import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
 
 const parameters = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))

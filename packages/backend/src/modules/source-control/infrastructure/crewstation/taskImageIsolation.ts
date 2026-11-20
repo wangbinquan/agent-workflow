@@ -10,8 +10,11 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { IsolationConflict, IsolationWorkspace } from '../application/ports/isolationWorkspace'
-import { mergeLocalIsolationWorkspace } from '../infrastructure/local/localIsolationWorkspace'
+import type {
+  IsolationConflict,
+  IsolationWorkspace,
+} from '../../application/ports/isolationWorkspace'
+import { mergeLocalIsolationWorkspace } from '../local/localIsolationWorkspace'
 import { assertTargetDirInsideWorktree } from '@/platform/content/local/uploadPaths'
 import { sha256Hex } from '@/util/hash'
 

@@ -87,3 +87,7 @@ export { mountWebhookEndpointRoutes } from './inbound/http/webhookEndpointRoutes
 export { mountWebhookTriggerRoutes } from './inbound/http/webhookTriggerRoutes'
 // RFC-438: the scheduled-task binding moved here too.
 export { mountScheduledTaskRoutes } from './inbound/http/scheduledTaskRoutes'
+
+// RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
+export { composeCrewStationDevelopmentAdapters } from './infrastructure/crewstation/crewstationDevelopmentAdapters'
+export { executeTaskImageDevelopmentAdapter } from './infrastructure/crewstation/taskImageDevelopmentAdapter'

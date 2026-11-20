@@ -14,13 +14,13 @@ import {
   stageCandidateTree,
   type DeriveChangeCandidateInput,
   type StageCandidateTreeInput,
-} from '../application/changeCandidate'
+} from '../../application/changeCandidate'
 import {
   commitCandidate,
   pushCandidate,
   type CommitCandidateInput,
   type PushCandidateInput,
-} from '../application/deliverCandidate'
+} from '../../application/deliverCandidate'
 import {
   checkpointEmployeeCaseWorkspace,
   discardEmployeeCaseWorkspace,
@@ -30,19 +30,19 @@ import {
   rematerializeEmployeeCaseWorkspace,
   resolveEmployeeWorkspaceBaseline,
   restoreEmployeeCaseWorkspace,
-} from '../application/employeeCaseWorkspace'
-import { createFileRepositoryCandidateEffectsFactory } from '../infrastructure/local/fileRepositoryCandidateEffects'
-import { createFileConflictMergeWorkspaceEffects } from '../infrastructure/local/fileConflictMergeWorkspaceEffects'
-import { createFileEmployeeCaseWorkspaceEffectsFactory } from '../infrastructure/local/fileEmployeeCaseWorkspaceEffects'
-import { createGitTaskDeletionRepositoryEffects } from '../infrastructure/local/gitTaskDeletionRepositoryEffects'
-import { ensureWorkspaceExcludeProfile } from '../infrastructure/workspaceExcludeManager'
-import { HOSTED_CANDIDATE_OPERATIONS } from '../infrastructure/crewstation/repositoryCandidate'
-import { HOSTED_EMPLOYEE_CASE_OPERATION } from '../infrastructure/crewstation/employeeCaseWorkspace'
+} from '../../application/employeeCaseWorkspace'
+import { createFileRepositoryCandidateEffectsFactory } from '../local/fileRepositoryCandidateEffects'
+import { createFileConflictMergeWorkspaceEffects } from '../local/fileConflictMergeWorkspaceEffects'
+import { createFileEmployeeCaseWorkspaceEffectsFactory } from '../local/fileEmployeeCaseWorkspaceEffects'
+import { createGitTaskDeletionRepositoryEffects } from '../local/gitTaskDeletionRepositoryEffects'
+import { ensureWorkspaceExcludeProfile } from '../workspaceExcludeManager'
+import { HOSTED_CANDIDATE_OPERATIONS } from './repositoryCandidate'
+import { HOSTED_EMPLOYEE_CASE_OPERATION } from './employeeCaseWorkspace'
 import type {
   RepositoryPublicationSession,
   RepositoryPublicationSubject,
   RepositoryPublicationTransport,
-} from '../public/types'
+} from '../../public/types'
 
 export const TASK_IMAGE_REPOSITORY_OPERATIONS = [
   'review-snapshot-exists',

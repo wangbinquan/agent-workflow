@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { executeTaskImagePlugin } from '@/modules/resource-catalog/composition/taskImagePlugin'
+import { executeTaskImagePlugin } from '@/modules/resource-catalog/infrastructure/crewstation/taskImagePlugin'
 import { retainWorkVolumeWriter } from '@/platform/crewstation/workVolumeWriters'
 import { PLUGIN_GENERATION_MANIFEST } from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 

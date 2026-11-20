@@ -12,9 +12,19 @@
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已
   在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 托管适配器实现落各模块 `infrastructure/crewstation/`；C11 public 不变；C12 RFC-518 用例覆
-  盖全部生产文件与全部模块的组合层，RFC-515 门覆盖全模块；C13 计数不升，触及的上限收紧到实测。
+  盖全部生产文件与全部模块的组合层，RFC-515 门覆盖全模块；C13 计数不升，触及的 10 项上限收紧到实测（见 plan）。
+- **§14 不变量 / S10 第二十五步**：23 个托管实现只在各模块的 `infrastructure/crewstation/` 下，旧路径不存在；生产代码没有 import 指向旧路
+  径，bootstrap 不深引用模块 infrastructure、经模块根取同一批对象；新位置不取组合层，例外只有两处本模块 `required-ports` 的类型
+  import。RFC-515 门的例外清单 27 → 4（intent `crewstationArtifacts`、resource-catalog `crewstationMcpDiagnostics`、runtime-management
+  `crewstationRuntimeManagement`、system-operations `crewstationDeployment`，另立后继）；`composition-forbidden-import-files` 12 → 0；九个模
+  块的 `composition-control-flow-*` 上限收紧到实测（合计 354 → 68）。跨 context import 7,509 → 7,512（新增的 3 条即那两处类型
+  import），public surface 不变。
+- **集中验证**（基于 `8a28fe34d`，详见 plan）：开发期静态自查拦下生成脚本的两处 import 错位与两处误改的负对照；集中验证查出三条漏改的锁
+  （RFC-515 门的语料下限、`rfc376` 名单变异用例、`rfc310` 模块根消费方账本），改后两边全过。首批 212 个文件按 CI 的跑法与对照 A/B；复验
+  24 个文件放宽到 60 秒，剩下的红两边都有（preflight 自带时限的两条交给 CI）。架构报告的 60 项里只有收紧的 10 项变化、与新上限逐项相等。实现
+  门 PASS（本会话按路径限定自审，只审功能；23 个文件与 HEAD 按词法单元逐个相同，只差相对 import）。
 
-## 2026-11-19 RFC-517 模块根装配文件的运行期逻辑迁出（二）：数字员工、系统运维与任务执行（In Progress；`design/RFC-517-module-root-runtime-logic-out-2/`）
+## 2026-11-19 RFC-517 模块根装配文件的运行期逻辑迁出（二）：数字员工、系统运维与任务执行（Done；`design/RFC-517-module-root-runtime-logic-out-2/`）
 
 - **来由**：RFC-515 的全模块门登记的 6 个模块根，RFC-516 清掉 3 个；余下 digital-employee、system-operations 与 task-execution 的模块根里还
   有运行期逻辑：平台清单参与者与员工定义视图投影、文件库启动的持锁段、schema 计划核对与暂存还原后的工件释放、任务执行模块的两个类与关停控制
@@ -38,6 +48,11 @@
   计划核对初稿的方言文件名与方言依赖（三条架构账本红，改为方言中立的 `application/schemaPlanAdmission.ts` 后两边全过）。首批 198 个文件按 CI
   的跑法与对照 A/B，候选多出的红除这三条账本外都是时限；改定后 19 个文件放宽到 60 秒复验，只剩两边都跑不进自带时限的 2 条 preflight，交给
   CI。架构报告 60 项实测与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能；9 段代码与 HEAD 按词法单元逐个相同）。
+- **落地**：`dd2d1b24a`（28 个文件；父提交是 `eb72bb67e`）。
+- **CI**：`dd2d1b24a` 主 CI run 44674339750 的 70 个 job 68 个通过：外部的链接检查（GitHub 503）与随之红的 `CI required`，backend 分片全过
+  （含本机交给 CI 的两条 preflight），未重跑。落档提交 `eb72bb67e`（只改文档）：主 CI run 44661446598 的 70 个 job 68 个通过，红的同是外部链
+  接检查与 `CI required`。转 Done 的提交（与 RFC-518 实现同一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第二十四步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-518（RFC-370 余项的托管实现迁出组合层）。
 
 ## 2026-11-19 RFC-516 模块根装配文件的运行期逻辑迁出（一）：事件中心、身份访问与源码控制（Done；`design/RFC-516-module-root-runtime-logic-out-1/`）
 

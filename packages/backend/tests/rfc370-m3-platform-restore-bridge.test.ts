@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import { createCrewStationObjectReader } from '@/platform/crewstation/objectStorage'
-import { restoreCrewStationDatabaseFromEnvironment } from '@/modules/system-operations/composition/crewstationDatabaseRestore'
+import { restoreCrewStationDatabaseFromEnvironment } from '@/modules/system-operations/infrastructure/crewstation/crewstationDatabaseRestore'
 
 test('platform restore generation is stable across Jobs and serving, distinct from the retained installation', () => {
   const installation = { project: 'restore-test', service: 'app', schemaDigest: 'a'.repeat(64) }
