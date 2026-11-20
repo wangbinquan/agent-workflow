@@ -379,7 +379,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
-    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts',
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts',
     to: 'runtime-management',
     why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',

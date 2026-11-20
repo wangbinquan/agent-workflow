@@ -1,28 +1,18 @@
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
-import {
-  createPostgresqlDatabaseClient,
-  type PostgresqlDatabaseClient,
-} from '@/platform/persistence/postgresqlDatabaseClient'
-import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createHostedDatabaseWriteBarrier,
   type HostedDatabaseWriteBarrier,
 } from '../infrastructure/crewstation/databaseWriteBarrier'
-import { restoreCrewStationDatabaseFromEnvironment } from '../infrastructure/crewstation/crewstationDatabaseRestore'
+import type { restoreCrewStationDatabaseFromEnvironment } from '../infrastructure/crewstation/crewstationDatabaseRestore'
 import type { BusinessExecutionFence } from '@/platform/crewstation/businessExecution'
 // RFC-370 M0 — system-operations selections of a CrewStation-hosted instance.
 // The platform injects every input through environment variables; a missing
 // input refuses to start and names all of them at once. Bootstrap passes the
 // returned selections to the one shared start sequence.
-import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  prepareHostedPostgresqlProviderRuntime,
-  type PreparedPostgresqlProviderSchema,
-} from '@/platform/persistence/databaseProviderRuntime'
-import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
-import { seedHostedInstallation } from '@/platform/persistence/hostedInstallationSeed'
+import { type PreparedPostgresqlProviderSchema } from '@/platform/persistence/databaseProviderRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
 import { createDatabaseApplicationConfiguration } from '../infrastructure/databaseApplicationConfiguration'
@@ -31,13 +21,8 @@ import {
   createCrewStationExecutionAuthority,
   type CrewStationExecutionAuthorityPort,
 } from '../infrastructure/crewstation/crewStationExecutionAuthority'
+import { createDatabaseHostedExecutionControl } from '../infrastructure/hostedExecutionControl'
 import {
-  createDatabaseHostedExecutionControl,
-  hostedLeaseOf,
-  HostedExecutionLeaseLostError,
-} from '../infrastructure/hostedExecutionControl'
-import {
-  CREWSTATION_PLATFORM_API_URL_ENV,
   createCrewStationPlatformApi,
   type CrewStationPlatformApi,
 } from '@/platform/crewstation/platformApi'
@@ -46,8 +31,33 @@ import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
 } from './applicationConfiguration'
-
-export const CREWSTATION_DATABASE_URL_ENV = 'CS_DATABASE_URL'
+import {
+  CREWSTATION_DATABASE_URL_ENV,
+  CrewStationEnvironmentError,
+  HOSTED_TASK_CONTRACT_VERSION,
+  readCrewStationDatabaseEnvironment,
+  readCrewStationEnvironment,
+  type CrewStationDeploymentEnvironment,
+} from '../infrastructure/crewstation/deploymentEnvironment'
+import {
+  createHostedMutationFence,
+  crewStationControlClient,
+  crewStationDatabaseConfig,
+  prepareCrewStationDatabase,
+  prepareCrewStationMigrationInstallation,
+} from '../infrastructure/crewstation/deploymentDatabase'
+// RFC-519: the deployment environment and the hosted database live in infrastructure/crewstation; this file assembles them.
+export {
+  CREWSTATION_DATABASE_URL_ENV,
+  CrewStationEnvironmentError,
+  HOSTED_TASK_CONTRACT_VERSION,
+  crewStationControlClient,
+  crewStationDatabaseConfig,
+  prepareCrewStationDatabase,
+  readCrewStationDatabaseEnvironment,
+  readCrewStationEnvironment,
+  type CrewStationDeploymentEnvironment,
+}
 
 /** A worker's write window: it starts after its owner serves, so it enforces from the start. */
 export function composeCrewStationDatabaseWriteBarrier(): HostedDatabaseWriteBarrier {
@@ -69,167 +79,6 @@ export function composeCrewStationWorkerFence(
   return { current: () => frozen, assertHeld: (tx, expected) => control.assertHeld(tx, expected) }
 }
 
-/** aw's task execution contract (Manifest `tasks.acceptedTaskContractVersions`).
- * Bump when a release can no longer take over another release's running tasks. */
-export const HOSTED_TASK_CONTRACT_VERSION = 'aw-task-v1'
-
-export interface CrewStationDeploymentEnvironment {
-  readonly project: string
-  readonly service: string
-  readonly port: number
-  readonly jwksUrl: string
-  /** The service-domain platform API (`CS_PLATFORM_API_URL`). */
-  readonly platformApiUrl: string
-  /** Present once the Manifest declares `spec.data.objects` (not needed by M0). */
-  readonly objectsUrl: string | null
-  readonly objectSpaceId: string | null
-  /** The service domain (`CS_SERVICE_DOMAIN`): names this service as a platform caller's target. */
-  readonly serviceDomain: string | null
-  readonly secretKey: Buffer
-  /** CrewStation user subjects (`user:<uuid>`) that become administrators on first access. */
-  readonly adminSubjects: readonly string[]
-}
-
-export class CrewStationEnvironmentError extends Error {
-  constructor(readonly problems: readonly string[]) {
-    super(`CrewStation deployment environment is incomplete:\n  - ${problems.join('\n  - ')}`)
-    this.name = 'CrewStationEnvironmentError'
-  }
-}
-
-const SUBJECT_PREFIX = 'user:'
-
-/** Accept `user:<id>` or a bare id; whitespace and empty entries are ignored. */
-function parseAdminSubjects(raw: string | undefined): string[] {
-  return [
-    ...new Set(
-      (raw ?? '')
-        .split(/[\s,]+/)
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0)
-        .map((entry) => (entry.startsWith(SUBJECT_PREFIX) ? entry : `${SUBJECT_PREFIX}${entry}`)),
-    ),
-  ]
-}
-
-function requiredReader(env: Readonly<Record<string, string | undefined>>) {
-  const problems: string[] = []
-  const required = (name: string): string => {
-    const value = env[name]?.trim() ?? ''
-    if (value.length === 0) problems.push(`${name} is required`)
-    return value
-  }
-  return { problems, required }
-}
-
-/** The release migration Job only needs the service identity and its database. */
-export function readCrewStationDatabaseEnvironment(
-  env: Readonly<Record<string, string | undefined>>,
-): Pick<CrewStationDeploymentEnvironment, 'project' | 'service'> {
-  const { problems, required } = requiredReader(env)
-  const project = required('CS_PROJECT')
-  const service = required('CS_SERVICE')
-  required(CREWSTATION_DATABASE_URL_ENV)
-  if (problems.length > 0) throw new CrewStationEnvironmentError(problems)
-  return Object.freeze({ project, service })
-}
-
-export function readCrewStationEnvironment(
-  env: Readonly<Record<string, string | undefined>>,
-): CrewStationDeploymentEnvironment {
-  const { problems, required } = requiredReader(env)
-  const project = required('CS_PROJECT')
-  const service = required('CS_SERVICE')
-  required(CREWSTATION_DATABASE_URL_ENV)
-  const jwksUrl = required('CS_JWKS_URL')
-  const platformApiUrl = required(CREWSTATION_PLATFORM_API_URL_ENV)
-  const objectsUrl = env.CS_OBJECTS_URL?.trim() ?? ''
-  const portText = required('PORT')
-  const port = Number(portText)
-  if (portText.length > 0 && (!Number.isInteger(port) || port < 1 || port > 65_535)) {
-    problems.push(`PORT must be a TCP port number, got ${JSON.stringify(portText)}`)
-  }
-  for (const [name, value] of [
-    ['CS_JWKS_URL', jwksUrl],
-    [CREWSTATION_PLATFORM_API_URL_ENV, platformApiUrl],
-    ['CS_OBJECTS_URL', objectsUrl],
-  ] as const) {
-    if (value.length > 0 && !URL.canParse(value)) problems.push(`${name} must be an absolute URL`)
-  }
-  const keyText = required('AW_SECRET_KEY')
-  const secretKey = Buffer.from(keyText, 'base64')
-  if (keyText.length > 0 && secretKey.length !== 32) {
-    problems.push(
-      'AW_SECRET_KEY must be 32 random bytes encoded as base64 (for example `openssl rand -base64 32`)',
-    )
-  }
-  if (problems.length > 0) throw new CrewStationEnvironmentError(problems)
-  const objectSpaceId = env.CS_OBJECT_SPACE_ID?.trim() ?? ''
-  const serviceDomain = env.CS_SERVICE_DOMAIN?.trim() ?? ''
-  return Object.freeze({
-    project,
-    service,
-    port,
-    jwksUrl,
-    platformApiUrl,
-    objectsUrl: objectsUrl.length > 0 ? objectsUrl : null,
-    objectSpaceId: objectSpaceId.length > 0 ? objectSpaceId : null,
-    serviceDomain: serviceDomain.length > 0 ? serviceDomain : null,
-    secretKey,
-    adminSubjects: Object.freeze(parseAdminSubjects(env.AW_ADMIN_SUBJECTS)),
-  })
-}
-
-/**
- * A hosted instance shares the platform's PostgreSQL with every other service,
- * and both release slots are connected during a handoff, so the pool stays small
- * unless the plan allows more (`AW_DATABASE_POOL_MAX`). With the standalone
- * default of 16, two slots exhausted the local platform's shared server
- * (RFC-370 acceptance, 2026-10-17).
- */
-const HOSTED_DATABASE_POOL_MAX = 8
-
-export function crewStationDatabaseConfig(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): DatabaseConfig {
-  const raw = env.AW_DATABASE_POOL_MAX?.trim()
-  const poolMax = raw === undefined || raw === '' ? HOSTED_DATABASE_POOL_MAX : Number(raw)
-  if (!Number.isInteger(poolMax) || poolMax < 1 || poolMax > 256)
-    throw new Error(
-      `AW_DATABASE_POOL_MAX must be an integer from 1 to 256, got ${JSON.stringify(raw)}`,
-    )
-  return PostgresqlDatabaseConfigSchema.parse({
-    provider: 'postgresql',
-    urlEnv: CREWSTATION_DATABASE_URL_ENV,
-    poolMax,
-  })
-}
-
-/**
- * The migration Job applies the schema history (`apply`); a serving instance
- * only verifies it (`verify`). The target's active row supplies its generation.
- */
-export async function prepareCrewStationDatabase(input: {
-  readonly contract: LogicalSchemaContract
-  readonly environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>
-  readonly schema: 'apply' | 'verify'
-  readonly env?: Readonly<Record<string, string | undefined>>
-}): Promise<PreparedPostgresqlProviderSchema> {
-  const contract = input.contract
-  return await prepareHostedPostgresqlProviderRuntime({
-    config: crewStationDatabaseConfig(input.env ?? process.env),
-    contract,
-    generation: hostedDatabaseGeneration({
-      project: input.environment.project,
-      service: input.environment.service,
-      schemaDigest: contract.digest,
-      env: input.env ?? process.env,
-    }),
-    schema: input.schema,
-    ...(input.env === undefined ? {} : { env: input.env }),
-  })
-}
-
 /**
  * The migration Job's installation: apply the schema history, give a fresh
  * database its initial rows once, and report both.
@@ -245,53 +94,9 @@ export function composeCrewStationMigrationInstallation(
     project: environment.project,
     service: environment.service,
     env: env ?? process.env,
-    async prepare() {
-      await restoreCrewStationDatabaseFromEnvironment({
-        contract,
-        environment,
-        env: env ?? process.env,
-        ...(normalization === undefined ? {} : { normalization }),
-      })
-      const prepared = await prepareCrewStationDatabase({
-        contract,
-        environment,
-        schema: 'apply',
-        ...(env === undefined ? {} : { env }),
-      })
-      try {
-        const seed = await seedHostedInstallation({
-          contract,
-          target: prepared.openBootstrapClient(),
-          migrationsFolder: '',
-          now: Date.now(),
-          installed: prepared.receipt.installedSeeds,
-        })
-        const schemaOutcome = prepared.describeSchemaOutcome()
-        return {
-          ...prepared,
-          describeSchemaOutcome: () =>
-            schemaOutcome +
-            (seed.seeded
-              ? `initial rows installed (${seed.rows} rows in ${seed.tables} tables)\n`
-              : 'initial rows already installed\n'),
-        }
-      } catch (error) {
-        await prepared.runtime.close()
-        throw error
-      }
-    },
+    prepare: () =>
+      prepareCrewStationMigrationInstallation({ contract, environment, env, normalization }),
   })
-}
-
-/**
- * The client that writes the execution-control row. That row is written outside the window it
- * governs and is coordination state, not a live write: an epoch-2 candidate reporting the freeze
- * must not close the switch's rollback window (CrewStation RFC-044 T9).
- */
-export function crewStationControlClient(
-  runtime: PostgresqlDatabaseRuntime,
-): PostgresqlDatabaseClient {
-  return createPostgresqlDatabaseClient(runtime, { countsAsLiveWrite: () => false })
 }
 
 export interface CrewStationSystemSelections {
@@ -365,14 +170,7 @@ export async function composeCrewStationSystemSelections(input: {
       prepare: async () => prepared,
     }),
     executionAuthority,
-    mutationFence: {
-      current() {
-        const state = executionAuthority.current()
-        if (state.kind !== 'active') throw new HostedExecutionLeaseLostError(`${state.kind}`)
-        return hostedLeaseOf(state.fence)
-      },
-      assertHeld: (tx, lease) => control.assertHeld(tx, lease),
-    },
+    mutationFence: createHostedMutationFence(executionAuthority, control),
     platform,
     secretBox: createSecretBoxFromKey(input.environment.secretKey),
   })

@@ -27,14 +27,9 @@ const FORBIDDEN_IMPORTS = [
 ]
 /** RFC-414's list, verbatim: calls a composition file may not make. */
 const FORBIDDEN_CALLS = ['tablesOf(', 'Bun.spawn(']
-const RFC370 = 'RFC-370 余项：crewstation / taskImage 的托管实现归 infrastructure'
 /** design §2 D1: every composition file that may still break a rule, and the successor that clears it. */
-const EXCEPTIONS: Readonly<Record<string, string>> = {
-  [MODULES + 'intent/composition/crewstationArtifacts.ts']: RFC370,
-  [MODULES + 'resource-catalog/composition/crewstationMcpDiagnostics.ts']: RFC370,
-  [MODULES + 'runtime-management/composition/crewstationRuntimeManagement.ts']: RFC370,
-  [MODULES + 'system-operations/composition/crewstationDeployment.ts']: RFC370,
-}
+// RFC-519 emptied the list: every module composition only assembles.
+const EXCEPTIONS: Readonly<Record<string, string>> = {}
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts`. */
@@ -85,13 +80,16 @@ function findings(unit: SourceUnit): string[] {
 }
 
 /** Composition files breaking a rule outside the list, and listed files that no longer break one. */
-function gate(units: readonly SourceUnit[]): { unregistered: string[]; stale: string[] } {
+function gate(
+  units: readonly SourceUnit[],
+  exceptions: Readonly<Record<string, string>> = EXCEPTIONS,
+): { unregistered: string[]; stale: string[] } {
   const unregistered: string[] = []
   const stale: string[] = []
   for (const unit of units) {
     if (!isComposition(unit.path)) continue
     const found = findings(unit)
-    if (EXCEPTIONS[unit.path] === undefined) {
+    if (exceptions[unit.path] === undefined) {
       if (found.length > 0) unregistered.push(`${unit.path}: ${[...new Set(found)].join(', ')}`)
     } else if (found.length === 0) stale.push(unit.path)
   }
@@ -113,8 +111,8 @@ test('live corpus: every module composition only assembles, outside the listed e
   expect(listed.filter((path) => !existsSync(resolve(ROOT, path)))).toEqual([])
   expect(listed.filter((path) => !isComposition(path))).toEqual([])
   expect([...listed].sort()).toEqual(listed)
-  // RFC-516 and RFC-517 cleared every module root; RFC-518 moved 23 RFC-370 hosted implementations to infrastructure.
-  expect(listed).toHaveLength(4)
+  // RFC-516 / RFC-517 cleared the module roots, RFC-518 / RFC-519 moved the RFC-370 hosted implementations to infrastructure.
+  expect(listed).toHaveLength(0)
 })
 
 test('negative fixtures: each rule is caught in composition files and module roots only; listed files are judged against the list', () => {
@@ -152,12 +150,14 @@ test('negative fixtures: each rule is caught in composition files and module roo
         .unregistered,
       outside,
     ).toEqual([])
-  const listed = Object.keys(EXCEPTIONS)[0]!
-  expect(gate([sourceUnit(listed, 'export function f() { throw 1 }')])).toEqual({
+  // RFC-519: the committed list is empty; a fabricated list still proves both directions.
+  const listed = MODULES + 'probe/composition/listed.ts'
+  const fabricated = { [listed]: 'fabricated successor' }
+  expect(gate([sourceUnit(listed, 'export function f() { throw 1 }')], fabricated)).toEqual({
     unregistered: [],
     stale: [],
   })
-  expect(gate([sourceUnit(listed, 'export const f = 1')]).stale).toEqual([listed])
+  expect(gate([sourceUnit(listed, 'export const f = 1')], fabricated).stale).toEqual([listed])
 })
 
 test('RFC-515 D2: the operation state read lives in infrastructure; the composition only references it', () => {

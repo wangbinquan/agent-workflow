@@ -125,8 +125,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts -> runtime-management',
-    'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/crewstationNativePlugin.ts -> runtime-management',
+    'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts -> system-operations',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts -> runtime-management',
     'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts -> task-execution',
@@ -181,7 +181,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   ],
   'direct-setinterval-sites': [
     'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker.start#setInterval#1',
-    'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts#createCrewStationMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
+    'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts#createCrewStationMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
     'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture.ts#startLiveSubagentCapture.intervalHandle#setInterval#1',
     'packages/backend/src/modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts#runChildCallNode.obsTimer#setInterval#1',

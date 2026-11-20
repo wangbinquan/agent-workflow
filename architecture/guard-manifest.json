@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1063
+      "lines": 1064
     },
     {
       "assertsAbsence": true,
@@ -3895,7 +3895,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc515-composition-assembly-only.test.ts",
       "id": "rfc515-composition-assembly-only",
-      "lines": 184,
+      "lines": 185,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -3931,7 +3931,19 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc518-hosted-implementations-out-of-composition-boundary.test.ts",
       "id": "rfc518-hosted-implementations-out-of-composition-boundary",
-      "lines": 438,
+      "lines": 432,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc519-hosted-implementations-out-of-composition-boundary.test.ts",
+      "id": "rfc519-hosted-implementations-out-of-composition-boundary",
+      "lines": 470,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,

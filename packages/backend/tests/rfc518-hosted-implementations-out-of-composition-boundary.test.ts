@@ -105,12 +105,6 @@ const MOVED: Readonly<Record<string, readonly string[]>> = {
     'verifyCrewStationDatabaseRestore',
   ],
 }
-const STAYING = [
-  'modules/intent/composition/crewstationArtifacts',
-  'modules/resource-catalog/composition/crewstationMcpDiagnostics',
-  'modules/runtime-management/composition/crewstationRuntimeManagement',
-  'modules/system-operations/composition/crewstationDeployment',
-]
 /** design D2: what each module root hands bootstrap, by the infrastructure file it comes from. */
 const ROOT_EXPORTS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
   'development-automation': {
@@ -342,16 +336,16 @@ describe('RFC-518 ① 23 个托管实现只在 infrastructure/crewstation', () =
     }
   })
 
-  test('RFC-515 门的例外清单恰是留在组合层的 4 个', () => {
+  test('RFC-515 门的例外清单不再列 23 个已迁走的文件', () => {
     const gate = text(
       join(BACKEND, 'tests', 'architecture', 'rfc515-composition-assembly-only.test.ts'),
     )
     const listed = [...gate.matchAll(/\[MODULES \+ '([^']+)'\]/g)].map(
       (match) => `modules/${match[1]!.replace(/\.ts$/, '')}`,
     )
-    expect(listed.sort()).toEqual([...STAYING].sort())
-    for (const location of STAYING)
-      expect([location, existsSync(sourceOf(location))]).toEqual([location, true])
+    // RFC-519 split the four that stayed and emptied the list.
+    const moved = new Set(Object.keys(MOVED).map(oldLocation))
+    expect(listed.filter((location) => moved.has(location))).toEqual([])
   })
 })
 

@@ -20,7 +20,7 @@
 - [x] AC-1 23 个文件只在新位置；门的例外清单只剩余下的 4 个且仍绿；forbidden-import 实测 0
 - [x] AC-2 迁移的代码逐字不变，导出与消费方拿到的对象不变
 - [x] AC-3 新位置不取组合层（两处 required-ports 类型除外）；bootstrap 不深引用 infrastructure；账本只改名不增；计数收紧到实测
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 除外部服务的链接检查外全绿（逐格归因见 §CI）
 
 ## 集中验证
 
@@ -64,7 +64,9 @@ HEAD（`8a28fe34d`）的树相同。集中验证查出本 RFC 的缺陷都已修
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `623baace0`（实现，父提交是 `8a28fe34d`）：exact SHA 主 CI run 44683743033 的 70 个 job 第 1 次运行 68 个通过；红的是 design/ 的链接检查遇
+  GitHub 503（`design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接，外部服务暂时不可用，该文件不在本提交
+  里），`CI required` 只因它红；backend 分片全过，未重跑。
 - 本 RFC 的落档提交 `8a28fe34d`（只改文档）：主 CI run 44676059620 的 70 个 job 第 1 次运行 68 个通过；红的是 design/ 的链接检查遇 GitHub
   503（`design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接，外部服务暂时不可用，该文件不在本提交
   里），`CI required` 只因它红；backend 分片全过，未重跑。
