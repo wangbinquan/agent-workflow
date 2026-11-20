@@ -1,3 +1,19 @@
+## 2026-11-20 RFC-522 数字员工与事件中心的适配器回落改为必填注入（In Progress；`design/RFC-522-employee-and-event-center-required-selections/`）
+
+- **来由**：RFC-521 的门登记了 83 处组合层适配器回落、按模块指定后继；digital-employee 与 event-center 的 5 处链路最短（daemon 的两种部署都
+  已显式给出，回落只服务于用例），作为第 1 项第二步先清。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审
+  批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推
+  进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`composeDigitalEmployee` 的 `inputArtifacts` / `programArtifacts` / `writerCutover`、`composeEventCenter` 的
+  `observer` / `customObserverPrograms` 改为必填，删去回落、`writerInstallation` 选项与
+  `selectLocalCustomObserverProgramFactory`，event-center 的兼容入口改调 application；两个测试助手给出与此前缺省相同的单机选择，约 30 个用例
+  文件随改；RFC-521 门的登记、总数（83 → 78）与后继标签随改；新增 RFC-522 用例。
+- **不做**：其余模块的回落；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已
+  在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 组合层不再替调用方造适配器；C11 public 不变；C12 RFC-522 用例读全部生产文件；C13 计数不
+  升，适配器回落 83 → 78。
+
 ## 2026-11-20 RFC-521 组合层适配器回落的全模块门与清单（In Progress；`design/RFC-521-composition-adapter-fallback-gate/`）
 
 - **来由**：S12 第 1 项要求模块 composition 的适配器回退改为必填注入、单机默认值只留在 `bootstrap/standalone.ts`，日志器一类中性默认由后继
