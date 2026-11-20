@@ -3967,7 +3967,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc521-composition-adapter-fallbacks.test.ts",
       "id": "rfc521-composition-adapter-fallbacks",
-      "lines": 460,
+      "lines": 537,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

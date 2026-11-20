@@ -3,29 +3,33 @@
 ## 1. 现状（HEAD，源码实读）
 
 全部模块的组合层（每个模块的 `composition/` 目录与模块根 `composition.ts`，共 335 个文件）里，“回落一侧是调用或 `new`”的位置按语法树数共
-99 处、51 个文件（逐条见 §3）：
+114 处、59 个文件（逐条见 §3）：
 
 | 模块                   | 适配器回落 | 中性默认 | 文件 |
 | ---------------------- | ---------- | -------- | ---- |
-| resource-catalog       | 14         | 4        | 9    |
-| source-control         | 14         | 3        | 11   |
-| task-execution         | 14         | 4        | 12   |
+| source-control         | 19         | 5        | 13   |
+| resource-catalog       | 16         | 4        | 10   |
+| task-execution         | 16         | 6        | 16   |
 | intent                 | 9          | 3        | 3    |
+| system-operations      | 9          | 7        | 6    |
 | development-automation | 7          | 0        | 5    |
-| system-operations      | 7          | 7        | 5    |
 | digital-employee       | 3          | 4        | 1    |
 | event-center           | 2          | 1        | 2    |
 | code-capability        | 1          | 0        | 1    |
 | memory                 | 1          | 0        | 1    |
 | integration            | 0          | 1        | 1    |
-| 合计                   | 72         | 27       | 51   |
+| 合计                   | 83         | 31       | 59   |
 
-plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefined ? create…(` 14 处、`?? new X(` 1 处）。按语法树数，`??` 一类 54 处（其中
-2 处 `??=`），缺失判断的条件表达式 41 处，参数缺省值 1 处；比基线多出的，是不以 create / compose 起名的回落（10 处适配器回落与大部分中性默
-认）与 RFC-516 把缺省观察者改成工厂调用后的 1 处。现在没有任何门或计数钉住这类写法。
+按写法：`??` 一类 72 处（含 `??=` 与回落本身是条件表达式的写法），缺失判断的条件表达式 28 处，守卫返回 11 处，`if (x === undefined) { … }`
+块里的赋值 2 处，参数缺省值 1 处。适配器回落 83 处里，15 处的工厂不以 create / compose 起名，11 处只有守卫返回与条件回落两种写法认得出
+来。plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefined ? create…(` 14 处、`?? new X(` 1 处）；现在没有任何门或计数钉住这类
+写法。
 
-中性默认 27 处分 9 类：日志器 5、时钟 3、id 1、由注入的根推出的路径 5、本组合自有对象的惰性构造 2、调注入的工厂或在两种注入形态间选择 5、业
-务选项 2、纯计算 1、进程内推送与限流 3。
+中性默认 31 处分 9 类：日志器 5、时钟 3、id 1、由注入的根推出的路径 5、本组合自有对象的惰性构造 4、调注入的工厂或在两种注入形态间选择 6、开
+关选路径 3、纯计算 1、进程内推送与限流 3。
+
+RFC-521 第一版的门只认 `??` 一类、条件表达式、单条赋值的 `if` 与缺省值（99 处），守卫返回、条件回落与多语句的缺失块是实现提交之后复核时补进
+的（+15 处，plan 有记录）。
 
 ## 2. 机制与落位
 
@@ -33,11 +37,12 @@ plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefine
 
 - **单元**：每个模块的 `composition/` 目录与模块根 `composition.ts`（与 RFC-515 门同一判定）。
 - **回落位置**：`??`、`??=`、`||`、`||=` 的右侧；条件是缺失判断（`x === undefined`、`x == null`，操作数可左可右）时条件表达式的真分支，否定
-  （`!==`、`!=`）时的假分支；`if (x === undefined) x = …`（只有这一条赋值）的赋值右侧；参数与解构元素的缺省值。
-- **构造**：回落表达式去掉括号、`await`、`as` / `satisfies` 与 `!` 后是调用或 `new`，或是挂在它们上的属性读取 / 调用链。记下被调用者文
-  本：`new X` 记 `new X`，调用链里的实参记成 `()`（例如 `createFileDatabaseConfiguration().read`）。
-- 不构造的回落（字面量、已有对象、惰性函数 `() => create…()`）不判；以真值作条件的条件表达式（`x ? x : create…()`）也不判——它与按开关选实现
-  的写法无法区分，现有组合层里没有这种回落。
+  （`!==`、`!=`）时的假分支；`if (x === undefined) { … }` 块里每一条 `x = …` 赋值的右侧；守卫返回：`if (x === undefined) return …` 的返回
+  值，以及 `if (x !== undefined) return …` 之后同一块里下一个 `return` 的返回值（`if` 不带 `else`）；参数与解构元素的缺省值。
+- **构造**：回落表达式去掉括号、`await`、`as` / `satisfies` 与 `!` 后是调用或 `new`，或是挂在它们上的属性读取 / 调用链；回落本身是条件表达式
+  时看它的两个分支。记下被调用者文本：`new X` 记 `new X`，调用链里的实参记成 `()`（例如 `createFileDatabaseConfiguration().read`）。
+- 不构造的回落（字面量、已有对象、惰性函数 `() => create…()`）不判；以真值或复合条件作条件的写法
+  （`x ? x : create…()`、`!enabled || x === undefined ? …`）也不判——它们与按开关选实现的写法无法区分，现有组合层里没有这样的回落构造。
 
 ### D2 登记与判定
 
@@ -45,23 +50,24 @@ plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefine
   默认必须选其中一类。
 - 判定：每个文件实测的被调用者与登记表逐条相等（同名的多处各算一条）。清单外的回落与清单里已不存在的条目都报红；登记的文件必须存在、是组合文
   件、按序排列。
-- 适配器回落的总数钉为实测 72，只减不增；每个有适配器回落的模块都在门里指定了后继，没有适配器回落的模块不留后继。
+- 适配器回落的总数钉为实测 83，只减不增；每个有适配器回落的模块都在门里指定了后继，没有适配器回落的模块不留后继。
 - 登记按文件与被调用者，不按行号与外层函数：同一文件里挪动、改外层函数名都不影响；改了被调用者的名字要同时改登记。
 
 ### D3 后继拆分（S12 第 1 项）
 
 | 步     | 模块                                      | 适配器回落 |
 | ------ | ----------------------------------------- | ---------- |
-| 第二步 | source-control                            | 14         |
-| 第三步 | resource-catalog                          | 14         |
-| 第四步 | task-execution                            | 14         |
+| 第二步 | source-control                            | 19         |
+| 第三步 | resource-catalog                          | 16         |
+| 第四步 | task-execution                            | 16         |
 | 第五步 | intent、code-capability、memory           | 11         |
-| 第六步 | system-operations、development-automation | 14         |
+| 第六步 | system-operations、development-automation | 16         |
 | 第七步 | digital-employee、event-center            | 5          |
 
 每步：把该模块登记的适配器回落改为必填注入；单机默认由 `bootstrap/standalone.ts`（daemon）或命令根（`bootstrap/commandBootstraps.ts`）显式传
-入，用例经工厂图或显式参数注入；删去登记、下调总数。某条查明其实是中性默认的，在该步的 design 写明理由并改登记类别；查明要等别的后继（例如
-`repositoryCommit.ts` 的本机 git 分支依赖路径绑定退役）的，在该步的 design 改指后继。
+入，部署选择里的可空槽位（standalone 现在给 `null`、装配处再转回 `undefined` 的那几个）改为必填，用例经工厂图或显式参数注入；删去登记、下调
+总数。某条查明其实是中性默认的，在该步的 design 写明理由并改登记类别；查明要等别的后继（例如 `repositoryCommit.ts` 的本机 git 分支依赖路径绑
+定退役）的，在该步的 design 改指后继。
 
 ### D4 账本
 
@@ -69,7 +75,7 @@ plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefine
 
 ## 3. 清单（退出门）
 
-后继清偿完 72 处适配器回落后，组合层里的回落构造只剩登记的中性默认；在此之前，实测与下表逐条相等。
+后继清偿完 83 处适配器回落后，组合层里的回落构造只剩登记的中性默认；在此之前，实测与下表逐条相等。
 
 | 文件（`src/modules/` 下）                                                | 适配器回落                                                                                                                                                                                                                                                                       | 中性默认（类别）                                                                                                                                                          | 清偿   |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -92,32 +98,40 @@ plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefine
 | `resource-catalog/composition/postgresqlResourcePackageCatalog.ts`       | `createFileResourcePackagePluginArtifactOwner`、`createFileResourcePackageSkillArtifactOwner`                                                                                                                                                                                    | `join`（path）                                                                                                                                                            | 第三步 |
 | `resource-catalog/composition/resourcePackageMaintenance.ts`             | `createVersionedResourcePackageArtifactRecovery`                                                                                                                                                                                                                                 | `createLogger`（logger）                                                                                                                                                  | 第三步 |
 | `resource-catalog/composition/resourcePackageProvider.ts`                | `createFileSkillPackageContentReader`                                                                                                                                                                                                                                            | —                                                                                                                                                                         | 第三步 |
+| `resource-catalog/composition/skillContentBinding.ts`                    | `Object.freeze`                                                                                                                                                                                                                                                                  | —                                                                                                                                                                         | 第三步 |
 | `resource-catalog/composition/skillOperations.ts`                        | `createFileSkillContentReader`、`createFileSkillCreationContentStore`、`createFileSkillDeletionContentStore`、`createFileSkillLifecycleContentStore`、`createFileSkillVersionContentReader`、`createFileSkillVersionContentStore`                                                | —                                                                                                                                                                         | 第三步 |
-| `resource-catalog/composition/skillVersionCommit.ts`                     | `createFileSkillTreeContentStore`                                                                                                                                                                                                                                                | —                                                                                                                                                                         | 第三步 |
+| `resource-catalog/composition/skillVersionCommit.ts`                     | `createFileSkillTreeContentStore`、`createSkillTreeVersionParticipant`                                                                                                                                                                                                           | —                                                                                                                                                                         | 第三步 |
 | `resource-catalog/composition/workflowOperations.ts`                     | `createFileSkillVersionPresenceQueries`                                                                                                                                                                                                                                          | —                                                                                                                                                                         | 第三步 |
 | `resource-catalog/composition/workgroupOperations.ts`                    | —                                                                                                                                                                                                                                                                                | `createWorkgroupEvents`（process-local） ×2                                                                                                                               | —      |
-| `source-control/composition.ts`                                          | `createFileEmployeeCaseWorkspaceEffectsFactory`                                                                                                                                                                                                                                  | —                                                                                                                                                                         | 第二步 |
-| `source-control/composition/conflictMerge.ts`                            | `createFileConflictMergeWorkspaceEffects`                                                                                                                                                                                                                                        | —                                                                                                                                                                         | 第二步 |
+| `source-control/composition.ts`                                          | `createFileEmployeeCaseWorkspaceEffectsFactory`                                                                                                                                                                                                                                  | `new WeakMap`（memo）                                                                                                                                                     | 第二步 |
+| `source-control/composition/cachedRepositoryOperations.ts`               | `refreshCachedRepo`                                                                                                                                                                                                                                                              | —                                                                                                                                                                         | 第二步 |
+| `source-control/composition/conflictMerge.ts`                            | `createFileConflictMergeWorkspaceEffects` ×2                                                                                                                                                                                                                                     | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/isolationWorkspaces.ts`                      | `createLocalIsolationWorkspaceFactory`                                                                                                                                                                                                                                           | —                                                                                                                                                                         | 第二步 |
-| `source-control/composition/repositoryCandidate.ts`                      | —                                                                                                                                                                                                                                                                                | `commitCandidate`（injected）、`deriveChangeCandidate`（injected）、`stageCandidateTree`（injected）                                                                      | —      |
+| `source-control/composition/repositoryCandidate.ts`                      | `createFileRepositoryCandidateEffectsFactory`、`pushCandidate`                                                                                                                                                                                                                   | `commitCandidate`（injected）、`deriveChangeCandidate`（injected）、`pushCandidate`（injected）、`stageCandidateTree`（injected）                                         | 第二步 |
 | `source-control/composition/repositoryCommit.ts`                         | `commitPreparedRepository`、`createFileRepositoryPreviewIndexPort`、`prepareRepositoryCommit`、`readRepositoryCommitPreview`                                                                                                                                                     | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/repositoryGitWorkspaces.ts`                  | `createFileRepositoryGitWorkspaceFactory`                                                                                                                                                                                                                                        | —                                                                                                                                                                         | 第二步 |
+| `source-control/composition/repositoryMirrors.ts`                        | `createLocalRepositoryMirrors`                                                                                                                                                                                                                                                   | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/repositoryPreparation.ts`                    | `composeLocalRepositoryPreparationEffects`、`composeLocalScratchWorkspaceEffects`                                                                                                                                                                                                | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/repositoryWorkspaceReadQueries.ts`           | `createFileRepositoryWorkspaceReadQueries`                                                                                                                                                                                                                                       | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/workspaceExcludeProfiles.ts`                 | `Object.freeze`                                                                                                                                                                                                                                                                  | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/workspaceMaintenance.ts`                     | `createNodeWorkspaceMaintenanceFilesystem`                                                                                                                                                                                                                                       | —                                                                                                                                                                         | 第二步 |
 | `source-control/composition/workspaceUploads.ts`                         | `createFileWorkspaceUploadContentFactory`                                                                                                                                                                                                                                        | —                                                                                                                                                                         | 第二步 |
-| `system-operations/composition.ts`                                       | `createFileDatabaseConfiguration().read`、`resolveDatabaseProviderRuntimeForRestore`                                                                                                                                                                                             | `Object.freeze`（injected）、`buildPostgresqlSchemaPlan`（pure）、`join`（path） ×3、`repositoryBackupPreparationFactory`（injected）、`sqliteRuntime.openClient`（memo） | 第六步 |
+| `system-operations/composition.ts`                                       | `createFileDatabaseConfiguration().read`、`prepareSelectedDatabasePreOpenRecovery`、`resolveDatabaseProviderRuntimeForRestore`                                                                                                                                                   | `Object.freeze`（injected）、`buildPostgresqlSchemaPlan`（pure）、`join`（path） ×3、`repositoryBackupPreparationFactory`（injected）、`sqliteRuntime.openClient`（memo） | 第六步 |
+| `system-operations/composition/daemonDatabase.ts`                        | `prepareDatabaseProviderForBoot`                                                                                                                                                                                                                                                 | —                                                                                                                                                                         | 第六步 |
 | `system-operations/composition/daemonHostLifecycle.ts`                   | `createFileDaemonRuntimeQueries`、`createNativeDaemonHostLifecycle`                                                                                                                                                                                                              | —                                                                                                                                                                         | 第六步 |
 | `system-operations/composition/databaseMigration.ts`                     | `createFileDatabaseConfiguration`                                                                                                                                                                                                                                                | —                                                                                                                                                                         | 第六步 |
 | `system-operations/composition/installationSeedCompletion.ts`            | `createFileInstallationSeedCompletion`                                                                                                                                                                                                                                           | —                                                                                                                                                                         | 第六步 |
 | `system-operations/composition/manualDatabaseMigration.ts`               | `createFileDatabaseConfiguration`                                                                                                                                                                                                                                                | —                                                                                                                                                                         | 第六步 |
 | `task-execution/composition/bootRecovery.ts`                             | `createLocalBootExecutionRecoveryFactory`                                                                                                                                                                                                                                        | `Date.now`（clock）                                                                                                                                                       | 第四步 |
+| `task-execution/composition/commitPushBinding.ts`                        | `createFileTaskOperationConfiguration`                                                                                                                                                                                                                                           | —                                                                                                                                                                         | 第四步 |
+| `task-execution/composition/crewstationSystemAgentRunFamily.ts`          | —                                                                                                                                                                                                                                                                                | `Object.freeze`（option）                                                                                                                                                 | —      |
 | `task-execution/composition/digitalEmployeeExecution.ts`                 | `createFileProgramToolSource`                                                                                                                                                                                                                                                    | —                                                                                                                                                                         | 第四步 |
+| `task-execution/composition/executionWorkspaceBinding.ts`                | —                                                                                                                                                                                                                                                                                | `createTaskWorkspaceSession`（memo）                                                                                                                                      | —      |
 | `task-execution/composition/launchConfiguration.ts`                      | `localRuntime` ×2、`localStart`                                                                                                                                                                                                                                                  | —                                                                                                                                                                         | 第四步 |
 | `task-execution/composition/nodeRunPrompts.ts`                           | `composeNodeRunPromptOperations`、`createFileNodeRunPromptContent`                                                                                                                                                                                                               | —                                                                                                                                                                         | 第四步 |
 | `task-execution/composition/portArtifacts.ts`                            | `composePortArtifactOperations` ×2、`createFilePortArtifactContent`                                                                                                                                                                                                              | —                                                                                                                                                                         | 第四步 |
 | `task-execution/composition/providerRuntime.ts`                          | `composeTaskWorkspaceExcludeProfilesFor`                                                                                                                                                                                                                                         | —                                                                                                                                                                         | 第四步 |
+| `task-execution/composition/runtimeConfigFreeze.ts`                      | `createFileTaskOperationConfiguration`                                                                                                                                                                                                                                           | —                                                                                                                                                                         | 第四步 |
 | `task-execution/composition/systemAgentObservations.ts`                  | —                                                                                                                                                                                                                                                                                | `ulid`（id）                                                                                                                                                              | —      |
 | `task-execution/composition/systemAgentRun.ts`                           | —                                                                                                                                                                                                                                                                                | `createLogger`（logger）                                                                                                                                                  | —      |
 | `task-execution/composition/taskArchiveMaintenance.ts`                   | `createFileTaskArchiveContent`                                                                                                                                                                                                                                                   | —                                                                                                                                                                         | 第四步 |
@@ -130,20 +144,23 @@ plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefine
 新增 `packages/backend/tests/architecture/rfc521-composition-adapter-fallbacks.test.ts`，登记 guard-manifest：
 
 - ① 实测语料（生产文件下限 2,000、组合文件下限 330）：判定结果没有清单外的回落与陈旧条目；登记的文件存在、是组合文件、按序排列，每个文件的条
-  目按序排列；类别都在封闭集合里；适配器回落 72 条，有适配器回落的模块与门里指定的后继逐个相等。
-- ② 负对照：D1 的每种写法各一条（`??`、`??=`、`||`、`||=`、两向的缺失判断、`== null`、`if` 赋值、参数与解构缺省值、调用链、`await` 与 `as`
-  包裹、可选调用后的时钟回落），都被认出且只认出那一个被调用者；不构造的回落与真值条件不判；组合层以外的文件（application、名叫
-  `composition.ts` 的 infrastructure 文件、bootstrap）不判；伪造的登记表两向都判（同名第二处算清单外，缺了的算陈旧）。
+  目按序排列；类别都在封闭集合里；适配器回落 83 条，有适配器回落的模块与门里指定的后继逐个相等。
+- ② 负对照：D1 的每种写法各一条（`??`、`??=`、`||`、`||=`、两向的缺失判断、`== null`、`if` 赋值、多语句缺失块里的赋值、两种守卫返回、条件回
+  落、参数与解构缺省值、调用链、`await` 与 `as` 包裹、可选调用后的时钟回落），都被认出且只认出那一个被调用者；不构造的回落、真值条件、没有构
+  造的守卫返回与 `throw` 不判；组合层以外的文件（application、名叫 `composition.ts` 的 infrastructure 文件、bootstrap）不判；伪造的登记表两
+  向都判（同名第二处算清单外，缺了的算陈旧）。
 
 ## 5. 失败模式
 
 - **并发改动**：别的会话新加一处回落，门红到登记为止——这是门的用意；改了被调用者名字的，同时出现一条清单外与一条陈旧，按新名字改登记。
-- **漏判**：D1 只认缺失判断与 `??` 一类；真值条件、`typeof x === 'undefined'` 等写法现在没有，出现时由后继补进 D1。
+- **漏判**：D1 不认真值与复合条件、`typeof x === 'undefined'`、展开覆盖的默认值（`{ x: create…(), ...input }`）；这些写法在现有组合层里都没
+  有回落构造（按正则另扫过），出现时由后继补进 D1。第一版漏掉的守卫返回与条件回落已补（§1）。
 - **误归类**：中性与适配器的界线由后继按模块复核（D3）；改类别要在该步的 design 写明理由。
 
 ## 6. 取舍（可推翻）
 
-1. **按构造检测，不按名字**：按名字数会漏掉 10 处适配器回落；按构造检测把中性默认也找出来，正好是 plan 要求后继 design 列明的那份清单。
+1. **按构造检测，不按名字**：按名字数会漏掉 15 处适配器回落，只按 `??` 与条件表达式数又会漏掉 11 处；按构造检测把中性默认也找出来，正好是
+   plan 要求后继 design 列明的那份清单。
 2. **登记按文件与被调用者**：并发改动下比按行号或外层函数稳定；同名多处按条数比，不会互相掩盖。
 3. **先立门再清偿**：门落地后新的回落立刻变红，后继各步只需删登记、下调总数；与 S10 的 RFC-515 一样用清单承接余项，只是这次先立门。
 4. **不进 `counts.json`**：门已是逐条相等的精确清单。
@@ -153,9 +170,9 @@ plan 的基线按名字数（`?? create… / compose…(` 50 处、`=== undefine
 - **C10**：不改生产代码；为 S12 第 1 项的退出门立结构锁。
 - **C11**：public 不变。
 - **C12**：门读全部模块的组合层（下限 330 个文件），语料下限 2,000。
-- **C13**：计数不升；适配器回落钉为实测 72，只减不增。
+- **C13**：计数不升；适配器回落钉为实测 83，只减不增。
 
 ## 8. 本步承担的演进与留下的债
 
-- **承担**：S12 第 1 项第一步：全模块结构锁与精确清单（中性默认 27 处带类别登记）。
-- **留下**：72 处适配器回落，由 D3 的六步后继清偿；S12 的第 3～6 项另立后继。
+- **承担**：S12 第 1 项第一步：全模块结构锁与精确清单（中性默认 31 处带类别登记）。
+- **留下**：83 处适配器回落，由 D3 的六步后继清偿；S12 的第 3～6 项另立后继。

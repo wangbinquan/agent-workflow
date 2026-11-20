@@ -12,7 +12,7 @@
 
 ## 验收清单
 
-- [x] AC-1 门覆盖全部模块的组合层，实测与登记表逐条相等，适配器回落 72 条、各模块指定后继
+- [x] AC-1 门覆盖全部模块的组合层，实测与登记表逐条相等，适配器回落 83 条、各模块指定后继
 - [x] AC-2 每种回落写法都有会红的负对照，不构造的回落与组合层以外的文件不判
 - [x] AC-3 生产代码不变；public surface 与计数不升
 - [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
@@ -24,8 +24,8 @@ HEAD（`e095916d2`）的树相同。集中验证没有查出本 RFC 的缺陷；
 
 - **静态**：backend `tsc` 退出码 0、无输出；eslint `--max-warnings 0`：新用例无告警；prettier：新用例、guard-manifest 与本 RFC 的三件套通
   过。
-- **清单的一致性**：登记表由与门相同的检测核心生成后逐条归类；用脚本把门里的登记表、design §3 的表与生成结果三方逐条比对，51 个文件全部相
-  同。
+- **清单的一致性**：登记表由与门相同的检测核心生成后逐条归类；用脚本把门里的登记表、design §3 的表与生成结果三方逐条比对，59 个文件全部相同
+  （补正后重比）。
 - **首批**（候选 = `e095916d2` 的树加本 RFC 的 2 个路径；按 CI 的跑法：两种 provider 同进程、默认 5 秒、`--randomize`，各 3 个 worker；与对
   照同时、同样跑法）：160 个文件——`tests/architecture/` 全部 142 个（含本 RFC 用例）、读 guard-manifest 的 17 个用例与
   `rfc294-architecture-preflight`。
@@ -40,6 +40,13 @@ HEAD（`e095916d2`）的树相同。集中验证没有查出本 RFC 的缺陷；
   guard-manifest 的行数），在候选 2 上重跑本 RFC 用例与读 guard-manifest 的 3 个账本用例
   （`rfc317-guard-negative-fixture`、`rfc317-architecture-ledgers`、`rfc317-guard-corpus-floor`），全过
   （2 / 2、17 / 17、15 / 15、24 / 24）。
+- **门的补正（实现提交 `bf0eb6971` 之后）**：起草 S12 第 1 项第二步时，在 source-control `repositoryCandidate.ts` 读到
+  `selectFactory`：`if (selected !== undefined) return selected` 之后才造本机文件实现——第一版的 D1 不认这种守卫返回。据此复核全部写法，补进
+  守卫返回、条件回落（`x ?? (p === undefined ? undefined : createFile…(p))`）与多语句的缺失块，按正则另扫真值条件、`typeof` 与展开覆盖的默认
+  值（没有回落构造）。实测 99 → 114 处、51 → 59 个文件：新增 11 处适配器回落（source-control 5、resource-catalog 2、system-operations
+  2、task-execution 2）与 4 处中性默认（惰性构造 2、注入形态 1、开关选路径 1），适配器回落 72 → 83；“开关选路径”一类的定义随之写准。design
+  §1 原先手写的按写法分项（54 / 41 / 1）没有实测依据、也加不到总数，换成脚本实测的分项。补正后 backend `tsc` 退出码 0、无输出，在候选上重跑
+  本 RFC 用例与读 guard-manifest 的 3 个账本用例全过（2 / 2、17 / 17、15 / 15、24 / 24），三方清单比对 59 个文件全部相同。
 - **收口文档**：plan、design 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 6 个用例，全过（33 / 33）。
 
 ## CI（AC-4）
@@ -54,7 +61,7 @@ HEAD（`e095916d2`）的树相同。集中验证没有查出本 RFC 的缺陷；
 - **检测**：D1 的四类回落位置与“构造”的判定逐条对照负对照：每种写法只认出那一个被调用者；字面量、已有对象、惰性函数与真值条件不判；组合层以
   外的文件（application、名叫 `composition.ts` 的 infrastructure 文件、bootstrap）不判。
 - **判定**：按文件逐条比，同名多处各算一条；清单外与陈旧两向都报；登记的文件存在、是组合文件、按序排列，每个文件的条目按序排列；类别封闭；适
-  配器回落 72 条，有回落的模块与门里指定的后继逐个相等。
+  配器回落 83 条，有回落的模块与门里指定的后继逐个相等。
 - **确定性**：检测结果与判定输出都排序、逐文件比较，不依赖语料遍历的次序（Linux 上目录次序随文件系统）；路径一律用正斜杠。
 - **账本**：guard-manifest 登记新用例（`assertsAbsence: true`，“不存在”写成 `toEqual([])` 的字面形态，带负对照）；`counts.json` 不变；生产代
   码不变。

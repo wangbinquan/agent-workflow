@@ -2,8 +2,9 @@
 //
 // RFC-294 plan §3 S12 第 1 项：模块 composition 的适配器回退改为必填注入，单机默认值只留在 standalone profile；日志器一类中性默认登记在案。
 // 本门覆盖全部模块的组合层（每个模块的 `composition/` 目录与模块根 `composition.ts`，判定与 RFC-515 门相同），按语法树找“回落时构造”：
-// `??` / `??=` / `||` / `||=` 的右侧，以 `=== undefined` / `== null` 一类为条件的条件表达式的回落分支，`if (x === undefined) x = …` 的赋值，
-// 参数与解构元素的缺省值——回落一侧是调用或 `new`（含挂在它们上的属性读取与调用链）。每个文件实测的被调用者与登记表逐条相等：中性默认带类别，
+// `??` / `??=` / `||` / `||=` 的右侧，以 `=== undefined` / `== null` 一类为条件的条件表达式的回落分支，`if (x === undefined) { … }` 里的赋值，
+// 守卫返回（`if (x === undefined) return …`；`if (x !== undefined) return x` 之后同一块里的下一个 `return`），参数与解构元素的缺省值——回落
+// 一侧是调用或 `new`（含挂在它们上的属性读取与调用链；回落本身是条件表达式时看它的两个分支）。每个文件实测的被调用者与登记表逐条相等：中性默认带类别，
 // 适配器回落由 S12 第 1 项按模块的后继清偿；清单外的回落与清单里已不存在的条目都报红。适配器回落的总数钉为实测，只减不增。
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
@@ -22,7 +23,7 @@ const NEUTRAL = {
   path: 'a path derived from an injected root',
   memo: 'memoised construction of an object this composition owns',
   injected: 'calls an injected factory, or picks between two injected shapes',
-  option: 'a business option decides which use case runs',
+  option: 'an option decides which path runs; the absent branch is the main path, not a stand-in',
   pure: 'a pure computation over the injected inputs',
   'process-local': 'an in-process push or limiter, the same in every profile',
 } as const
@@ -99,6 +100,7 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   'resource-catalog/composition/resourcePackageProvider.ts': [
     ['createFileSkillPackageContentReader', 'adapter'],
   ],
+  'resource-catalog/composition/skillContentBinding.ts': [['Object.freeze', 'adapter']],
   'resource-catalog/composition/skillOperations.ts': [
     ['createFileSkillContentReader', 'adapter'],
     ['createFileSkillCreationContentStore', 'adapter'],
@@ -109,6 +111,7 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   ],
   'resource-catalog/composition/skillVersionCommit.ts': [
     ['createFileSkillTreeContentStore', 'adapter'],
+    ['createSkillTreeVersionParticipant', 'adapter'],
   ],
   'resource-catalog/composition/workflowOperations.ts': [
     ['createFileSkillVersionPresenceQueries', 'adapter'],
@@ -117,8 +120,13 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['createWorkgroupEvents', 'process-local'],
     ['createWorkgroupEvents', 'process-local'],
   ],
-  'source-control/composition.ts': [['createFileEmployeeCaseWorkspaceEffectsFactory', 'adapter']],
+  'source-control/composition.ts': [
+    ['createFileEmployeeCaseWorkspaceEffectsFactory', 'adapter'],
+    ['new WeakMap', 'memo'],
+  ],
+  'source-control/composition/cachedRepositoryOperations.ts': [['refreshCachedRepo', 'adapter']],
   'source-control/composition/conflictMerge.ts': [
+    ['createFileConflictMergeWorkspaceEffects', 'adapter'],
     ['createFileConflictMergeWorkspaceEffects', 'adapter'],
   ],
   'source-control/composition/isolationWorkspaces.ts': [
@@ -126,7 +134,10 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   ],
   'source-control/composition/repositoryCandidate.ts': [
     ['commitCandidate', 'injected'],
+    ['createFileRepositoryCandidateEffectsFactory', 'adapter'],
     ['deriveChangeCandidate', 'injected'],
+    ['pushCandidate', 'adapter'],
+    ['pushCandidate', 'injected'],
     ['stageCandidateTree', 'injected'],
   ],
   'source-control/composition/repositoryCommit.ts': [
@@ -138,6 +149,7 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   'source-control/composition/repositoryGitWorkspaces.ts': [
     ['createFileRepositoryGitWorkspaceFactory', 'adapter'],
   ],
+  'source-control/composition/repositoryMirrors.ts': [['createLocalRepositoryMirrors', 'adapter']],
   'source-control/composition/repositoryPreparation.ts': [
     ['composeLocalRepositoryPreparationEffects', 'adapter'],
     ['composeLocalScratchWorkspaceEffects', 'adapter'],
@@ -159,9 +171,13 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['join', 'path'],
     ['join', 'path'],
     ['join', 'path'],
+    ['prepareSelectedDatabasePreOpenRecovery', 'adapter'],
     ['repositoryBackupPreparationFactory', 'injected'],
     ['resolveDatabaseProviderRuntimeForRestore', 'adapter'],
     ['sqliteRuntime.openClient', 'memo'],
+  ],
+  'system-operations/composition/daemonDatabase.ts': [
+    ['prepareDatabaseProviderForBoot', 'adapter'],
   ],
   'system-operations/composition/daemonHostLifecycle.ts': [
     ['createFileDaemonRuntimeQueries', 'adapter'],
@@ -180,8 +196,15 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['Date.now', 'clock'],
     ['createLocalBootExecutionRecoveryFactory', 'adapter'],
   ],
+  'task-execution/composition/commitPushBinding.ts': [
+    ['createFileTaskOperationConfiguration', 'adapter'],
+  ],
+  'task-execution/composition/crewstationSystemAgentRunFamily.ts': [['Object.freeze', 'option']],
   'task-execution/composition/digitalEmployeeExecution.ts': [
     ['createFileProgramToolSource', 'adapter'],
+  ],
+  'task-execution/composition/executionWorkspaceBinding.ts': [
+    ['createTaskWorkspaceSession', 'memo'],
   ],
   'task-execution/composition/launchConfiguration.ts': [
     ['localRuntime', 'adapter'],
@@ -199,6 +222,9 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   ],
   'task-execution/composition/providerRuntime.ts': [
     ['composeTaskWorkspaceExcludeProfilesFor', 'adapter'],
+  ],
+  'task-execution/composition/runtimeConfigFreeze.ts': [
+    ['createFileTaskOperationConfiguration', 'adapter'],
   ],
   'task-execution/composition/systemAgentObservations.ts': [['ulid', 'id']],
   'task-execution/composition/systemAgentRun.ts': [['createLogger', 'logger']],
@@ -228,7 +254,7 @@ const SUCCESSORS: Readonly<Record<string, string>> = {
   'event-center': 'S12 item 1, step 7',
 }
 /** Adapter fallbacks measured at RFC-521; each successor lowers it. */
-const ADAPTER_FALLBACKS = 72
+const ADAPTER_FALLBACKS = 83
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */
@@ -266,7 +292,7 @@ function calleeText(node: ts.Expression): string {
   return node.getText().replace(/\s+/g, '')
 }
 
-/** The callee when the fallback constructs (a call, `new`, or a property read off one), otherwise null. */
+/** The callee when the expression constructs (a call, `new`, or a property read off one), otherwise null. */
 function construction(node: ts.Expression): string | null {
   const expression = unwrap(node)
   if (ts.isNewExpression(expression)) return `new ${calleeText(expression.expression)}`
@@ -276,6 +302,15 @@ function construction(node: ts.Expression): string | null {
     return inner === null ? null : `${inner}().${expression.name.text}`
   }
   return null
+}
+
+/** The constructions a fallback makes: itself, or either branch of a conditional fallback (`x ?? (p ? undefined : create…())`). */
+function constructions(node: ts.Expression): string[] {
+  const expression = unwrap(node)
+  if (ts.isConditionalExpression(expression))
+    return [...constructions(expression.whenTrue), ...constructions(expression.whenFalse)]
+  const callee = construction(expression)
+  return callee === null ? [] : [callee]
 }
 
 const absent = (node: ts.Expression) =>
@@ -300,25 +335,46 @@ function absenceCheck(condition: ts.Expression): boolean | null {
   return null
 }
 
-/** The single assignment `x = …` an `if (x === undefined)` makes, if that is all it does. */
-function absentAssignment(node: ts.IfStatement): ts.Expression | undefined {
-  if (absenceCheck(node.expression) !== true) return undefined
+/** The statement an `if` branch reduces to when it holds a single statement. */
+const single = (body: ts.Statement): ts.Statement =>
+  ts.isBlock(body) && body.statements.length === 1 ? body.statements[0]! : body
+
+/**
+ * Guard returns: `if (x === undefined) return …` falls back in its own return; `if (x !== undefined) return x` falls back in the
+ * next `return` of the same block.
+ */
+function guardReturn(node: ts.IfStatement): ts.Expression | undefined {
+  const check = absenceCheck(node.expression)
+  if (check === null || node.elseStatement !== undefined) return undefined
+  const then = single(node.thenStatement)
+  if (!ts.isReturnStatement(then)) return undefined
+  if (check) return then.expression
+  const block = node.parent
+  if (!ts.isBlock(block) && !ts.isSourceFile(block)) return undefined
+  const after = block.statements.slice(block.statements.indexOf(node) + 1)
+  const next = after.find((statement) => ts.isReturnStatement(statement))
+  return next !== undefined && ts.isReturnStatement(next) ? next.expression : undefined
+}
+
+/** The values `if (x === undefined) { … }` assigns in its own statements (`x = …`). */
+function absentAssignments(node: ts.IfStatement): ts.Expression[] {
+  if (absenceCheck(node.expression) !== true) return []
   const body = node.thenStatement
-  const statement = ts.isBlock(body) && body.statements.length === 1 ? body.statements[0]! : body
-  if (!ts.isExpressionStatement(statement)) return undefined
-  const assignment = statement.expression
-  return ts.isBinaryExpression(assignment) &&
-    assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken
-    ? assignment.right
-    : undefined
+  const statements = ts.isBlock(body) ? body.statements : [body]
+  return statements.flatMap((statement) =>
+    ts.isExpressionStatement(statement) &&
+    ts.isBinaryExpression(statement.expression) &&
+    statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      ? [statement.expression.right]
+      : [],
+  )
 }
 
 /** Every construction in a fallback position, as sorted callees. */
 function fallbacks(unit: SourceUnit): string[] {
   const found: string[] = []
   const record = (node: ts.Expression | undefined) => {
-    const callee = node === undefined ? null : construction(node)
-    if (callee !== null) found.push(callee)
+    if (node !== undefined) found.push(...constructions(node))
   }
   const visit = (node: ts.Node) => {
     if (ts.isBinaryExpression(node) && FALLBACK_OPERATORS.has(node.operatorToken.kind))
@@ -327,7 +383,10 @@ function fallbacks(unit: SourceUnit): string[] {
       const check = absenceCheck(node.condition)
       if (check !== null) record(check ? node.whenTrue : node.whenFalse)
     }
-    if (ts.isIfStatement(node)) record(absentAssignment(node))
+    if (ts.isIfStatement(node)) {
+      for (const value of absentAssignments(node)) record(value)
+      record(guardReturn(node))
+    }
     if ((ts.isParameter(node) || ts.isBindingElement(node)) && node.initializer !== undefined)
       record(node.initializer)
     ts.forEachChild(node, visit)
@@ -416,6 +475,22 @@ test('negative fixtures: every fallback form is caught; fallbacks that do not co
     ['export const f = async (x?: object) => x ?? (await createLocalThing())', 'createLocalThing'],
     ['export const f = (x?: object) => x ?? (createLocalThing() as object)', 'createLocalThing'],
     ['export const f = (o: { now?: () => number }) => o.now?.() ?? Date.now()', 'Date.now'],
+    [
+      'export function f(x?: object) { if (x === undefined) return createLocalThing(); return x }',
+      'createLocalThing',
+    ],
+    [
+      "export function f(x?: object) { if (x !== undefined) return x; const root = '/'; return createFileThing(root) }",
+      'createFileThing',
+    ],
+    [
+      'export const f = (x?: object, p?: string) => x ?? (p === undefined ? undefined : createFileThing(p))',
+      'createFileThing',
+    ],
+    [
+      "export function f(o: { x?: object }) { if (o.x === undefined) { const root = '/'; o.x = createFileThing(root) } return o.x }",
+      'createFileThing',
+    ],
   ] as const)
     expect(found(body), body).toEqual([callee])
   for (const body of [
@@ -426,6 +501,8 @@ test('negative fixtures: every fallback form is caught; fallbacks that do not co
     'export const f = (x?: object) => (x === undefined ? undefined : createLocalThing())',
     'export const f = (x?: number) => (x === 1 ? createLocalThing() : x)',
     'export const f = (x?: object) => (x ? x : createLocalThing())',
+    'export function f(x?: object) { if (x !== undefined) return x; return undefined }',
+    "export function f(x?: object) { if (x === undefined) throw new Error('missing'); return x }",
     'export const f = (x: object) => createLocalThing(x)',
   ])
     expect(found(body), body).toEqual([])
