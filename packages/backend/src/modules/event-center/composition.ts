@@ -1,5 +1,6 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { EventCenterService } from './application/eventCenterService'
+import { createUnavailableEventObserverProgram } from './application/unavailableObserverProgram'
 import {
   createEventResponseDeliveryConsumer,
   createEventResponseRoutingDirectory,
@@ -251,13 +252,7 @@ export async function composeEventCenterWithPorts(
     store: eventStore,
     customSources,
     typePackageDescriptorJsons: options.typePackageDescriptorJsons,
-    observer: options.observer ?? {
-      async run(input) {
-        throw new Error(
-          `observer program unavailable: ${input.source.observerProgramRef?.id ?? input.source.sourceRef.id}`,
-        )
-      },
-    },
+    observer: options.observer ?? createUnavailableEventObserverProgram(),
     customObserver,
     routingSubscriptions: {
       async list() {

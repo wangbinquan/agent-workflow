@@ -761,7 +761,8 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   注入的调用与实现处的那一条，等价于原来那一行。
   RFC-514 再撞（2026-11-19）：驱动入口的 `runTask(createTaskRunPorts(opts, topology, runtimeComponents))` 一行被
   `rfc408-task-control-plane` 与 `rfc332-task-engine-contracts` 经 `source()` 一类辅助函数读原文钉着，按文件路径扫 `readFileSync` 找不
-  到；迁移前把被迁的每一行原文（不只是文件名）全仓搜一遍。
+  到；迁移前把被迁的每一行原文（不只是文件名）全仓搜一遍。同一次迁移又漏了 `rfc098-write-lock-registry`：它用正则钉原文，括号与点都转义
+  （`gcTaskWriteSem\(opts\.taskId\)`），按字面原文搜不到，`6be6ac4e3` 的 CI 因此红、`efdff656e` 补正——搜原文时连同转义写法一起搜。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
   RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
   `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。

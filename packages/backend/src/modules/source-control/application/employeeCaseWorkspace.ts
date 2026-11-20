@@ -15,6 +15,10 @@ import type {
 import { createSha256DigestBuilder } from '@/util/hash'
 import { redactSensitiveString } from '@/util/redact'
 import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
+import {
+  EMPLOYEE_CASE_WORKSPACE_OPERATIONS,
+  type EmployeeCaseWorkspaceOperationHost,
+} from './ports/employeeCaseWorkspaceOperations'
 import type { CandidatePublicationSubject, CandidatePublicationTransport } from './deliverCandidate'
 
 async function copyTree(
@@ -520,4 +524,17 @@ async function withEmployeeCaseEffects<T>(
   }
   if (!outcome.ok) throw outcome.error
   return outcome.value
+}
+
+/** RFC-516 — a hosted Case workspace scene carries every whole use case, or the assembly fails. */
+export function requireEmployeeCaseWorkspaceOperations(
+  selected: EmployeeCaseWorkspaceOperationHost,
+): void {
+  const operations = selected.operations as Partial<typeof selected.operations> | null
+  if (
+    operations === null ||
+    typeof operations !== 'object' ||
+    EMPLOYEE_CASE_WORKSPACE_OPERATIONS.some((name) => typeof operations[name] !== 'function')
+  )
+    throw new Error('employee-case-workspace-effects-incomplete')
 }

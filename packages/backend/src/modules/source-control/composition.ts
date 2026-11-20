@@ -3,14 +3,10 @@ import type { RepositoryOverviewQueries } from './public/queries'
 import type { RepositoryPublicationTransport } from './public/types'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
-import { type CodeHostProvider } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import { RepositoryTransportCredentials } from './application/repositoryTransportCredentials'
-import type {
-  RepositoryTransportConnectionProjectionInput,
-  RepositoryTransportCredentialRepository,
-} from './ports/repositoryTransportCredentialRepository'
-import { buildRepositoryTransportConnectionProjection } from './application/repositoryTransportConnectionProjection'
+import type { RepositoryTransportCredentialRepository } from './ports/repositoryTransportCredentialRepository'
+export { reconcileRepositoryTransportConnectionProjections } from './application/repositoryTransportConnectionProjection'
 import {
   checkpointEmployeeCaseWorkspace,
   discardEmployeeCaseWorkspace,
@@ -19,10 +15,10 @@ import {
   materializeEmployeeCaseWorkspace,
   rematerializeEmployeeCaseWorkspace,
   resolveEmployeeWorkspaceBaseline,
+  requireEmployeeCaseWorkspaceOperations,
   restoreEmployeeCaseWorkspace,
 } from './application/employeeCaseWorkspace'
 import {
-  EMPLOYEE_CASE_WORKSPACE_OPERATIONS,
   isEmployeeCaseWorkspaceOperationHost,
   type EmployeeCaseWorkspaceEffectsFactory,
 } from './application/ports/employeeCaseWorkspaceOperations'
@@ -152,25 +148,6 @@ export function composeRepositoryTransportCredentials(
   return module
 }
 
-/** Upgrade/boot convergence for the migration's ciphertext-only initial projection. */
-export async function reconcileRepositoryTransportConnectionProjections(
-  repository: RepositoryTransportCredentialRepository,
-  participant: {
-    synchronize(input: RepositoryTransportConnectionProjectionInput): Promise<void>
-    removeConnection(provider: CodeHostProvider): Promise<boolean>
-  },
-): Promise<void> {
-  const rows = await repository.listConfiguredConnections()
-  const present = new Set<CodeHostProvider>()
-  for (const row of rows) {
-    present.add(row.provider)
-    await participant.synchronize(buildRepositoryTransportConnectionProjection(row))
-  }
-  for (const provider of ['gitlab', 'github'] as const) {
-    if (!present.has(provider)) await participant.removeConnection(provider)
-  }
-}
-
 export { bindWorkspaceExcludeParticipant } from './infrastructure/workspaceExcludeBinding'
 
 export { bindRepositoryCommitParticipant } from './composition/repositoryCommit'
@@ -228,13 +205,7 @@ export function bindEmployeeCaseWorkspaceParticipant(
   // RFC-370 §9.2 V3: a hosted scene runs each whole use case in its volume,
   // fetching with the volume's own platform Git credentials.
   if (isEmployeeCaseWorkspaceOperationHost(selected)) {
-    const operations = selected.operations as Partial<typeof selected.operations> | null
-    if (
-      operations === null ||
-      typeof operations !== 'object' ||
-      EMPLOYEE_CASE_WORKSPACE_OPERATIONS.some((name) => typeof operations[name] !== 'function')
-    )
-      throw new Error('employee-case-workspace-effects-incomplete')
+    requireEmployeeCaseWorkspaceOperations(selected)
     return selected.operations
   }
   const effects = selected

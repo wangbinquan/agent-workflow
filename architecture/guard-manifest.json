@@ -1591,7 +1591,7 @@
       "corpusScanner": false,
       "file": "packages/backend/tests/rfc098-write-lock-registry.test.ts",
       "id": "rfc098-write-lock-registry",
-      "lines": 497,
+      "lines": 492,
       "mechanism": "source-text",
       "minCorpusFiles": null,
       "negativeFixture": false,
@@ -3895,9 +3895,21 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc515-composition-assembly-only.test.ts",
       "id": "rfc515-composition-assembly-only",
-      "lines": 213,
+      "lines": 211,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc516-module-root-runtime-logic-out-boundary.test.ts",
+      "id": "rfc516-module-root-runtime-logic-out-boundary",
+      "lines": 476,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
       "negativeFixture": true,
       "runner": "bun"
     }

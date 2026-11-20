@@ -12,7 +12,15 @@
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（同一提交把 RFC-511、RFC-512 转 Done），实现与验证后再提
   交。独立对账（plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是运行期部件与用例，落 application；C11 public 不变；C12 RFC-516 用例覆盖全部生产文
-  件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升。
+  件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升（60 项实测与对照逐项相同）。
+- **§14 不变量 / S10 第二十三步**：清单（design §3）的名字只在各自的位置声明；event-center、identity-access 与 source-control 的模块根
+  `composition.ts` 没有循环、switch、`try`、`throw`，不构造错误；新位置只取本模块的 application、端口与 public 的类型，不用进程全局。生产文
+  件 4,129 → 4,131；跨 context import 7,507 不变，public surface 不变，控制流计数不变。RFC-515 门的例外清单 33 → 30：RFC-370 的
+  `crewstation*` / `taskImage*` 27 个与 digital-employee、system-operations、task-execution 的模块根 3 个，另立后继。
+- **集中验证**（基于 `c5a6c2aeb`，详见 plan）：没有查出本 RFC 的缺陷。backend `tsc` 0 错，eslint 无告警。首批 171 个文件按 CI 的跑法与对照
+  A/B：候选 1,692 条通过、27 条红，对照 1,683 条通过、25 条红，本 RFC 用例 11 / 11；候选多出的红都是时限，放宽到 60 秒后两边各 69 / 69 全
+  过；直接覆盖三个模块根的用例两边全过。架构报告 60 项实测与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能；3 段代码与 HEAD 按词
+  法单元逐个相同）。
 
 ## 2026-11-19 RFC-515 组合层只装配的全模块门（In Progress；`design/RFC-515-composition-assembly-only-gate/`）
 

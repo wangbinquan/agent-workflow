@@ -40,9 +40,7 @@ const EXCEPTIONS: Readonly<Record<string, string>> = {
   [MODULES + 'development-automation/composition/taskImageWorkspace.ts']: RFC370,
   [MODULES + 'digital-employee/composition.ts']: ROOTS,
   [MODULES + 'digital-employee/composition/crewstationContent.ts']: RFC370,
-  [MODULES + 'event-center/composition.ts']: ROOTS,
   [MODULES + 'event-center/composition/taskImageObserver.ts']: RFC370,
-  [MODULES + 'identity-access/composition.ts']: ROOTS,
   [MODULES + 'integration/composition/crewstationDevelopmentAdapters.ts']: RFC370,
   [MODULES + 'integration/composition/taskImageDevelopmentAdapter.ts']: RFC370,
   [MODULES + 'intent/composition/crewstationArtifacts.ts']: RFC370,
@@ -54,7 +52,6 @@ const EXCEPTIONS: Readonly<Record<string, string>> = {
   [MODULES + 'runtime-management/composition/crewstationRuntimeManagement.ts']: RFC370,
   [MODULES + 'runtime-management/composition/crewstationSystemAgentMaterial.ts']: RFC370,
   [MODULES + 'runtime-management/composition/taskImageMaterial.ts']: RFC370,
-  [MODULES + 'source-control/composition.ts']: ROOTS,
   [MODULES + 'source-control/composition/crewstationWorkspace.ts']: RFC370,
   [MODULES + 'source-control/composition/taskImageIsolation.ts']: RFC370,
   [MODULES + 'source-control/composition/taskImageRepositoryEffects.ts']: RFC370,
@@ -142,7 +139,8 @@ test('live corpus: every module composition only assembles, outside the listed e
   expect(listed.filter((path) => !existsSync(resolve(ROOT, path)))).toEqual([])
   expect(listed.filter((path) => !isComposition(path))).toEqual([])
   expect([...listed].sort()).toEqual(listed)
-  expect(listed).toHaveLength(33)
+  // RFC-516 cleared the event-center, identity-access and source-control module roots.
+  expect(listed).toHaveLength(30)
 })
 
 test('negative fixtures: each rule is caught in composition files and module roots only; listed files are judged against the list', () => {

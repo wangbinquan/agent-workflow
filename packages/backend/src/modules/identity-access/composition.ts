@@ -1,6 +1,7 @@
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
+import { RuntimePresenceConnections } from './application/runtimePresenceConnections'
 import { GetUserPresence } from './application/queries/getUserPresence'
 import {
   InMemoryUserPresenceStore,
@@ -38,7 +39,6 @@ import type {
   DirectAuthorityBinding,
   DirectQueryContextFactory,
   PresenceConnectionTracker,
-  PresenceLease,
   PresenceQuery,
 } from './public/participants'
 import type {
@@ -60,36 +60,6 @@ interface RuntimeIdentityAccessEventSink {
 
 interface RuntimePresenceProjectionSink {
   publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
-}
-
-class RuntimePresenceConnections implements PresenceConnectionTracker {
-  private readonly live = new Set<PresenceLease>()
-
-  constructor(
-    private readonly direct: DirectAuthorityRuntime,
-    private readonly tracker: TrackUserPresence,
-  ) {}
-
-  open(authority: Parameters<PresenceConnectionTracker['open']>[0]): PresenceLease | null {
-    const actor = this.direct.legacyProjectionForAuthority(authority)
-    if (actor.source !== 'session') return null
-    this.tracker.opened(actor.userId)
-    let released = false
-    const lease = Object.freeze({
-      release: () => {
-        if (released) return
-        released = true
-        this.live.delete(lease)
-        this.tracker.closed(actor.userId)
-      },
-    }) as PresenceLease
-    this.live.add(lease)
-    return lease
-  }
-
-  shutdown(): void {
-    for (const lease of [...this.live]) lease.release()
-  }
 }
 
 export interface IdentityAccessRuntime {

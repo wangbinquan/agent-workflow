@@ -11,6 +11,7 @@ import { sha256Hex } from '@/util/hash'
 import type {
   RepositoryTransportConnectionProjectionInput,
   RepositoryTransportConnectionProjectionSource,
+  RepositoryTransportCredentialRepository,
 } from '../ports/repositoryTransportCredentialRepository'
 
 function parseTransportMappings(raw: string): RepositoryTransportMappingV1[] {
@@ -97,5 +98,24 @@ export function buildRepositoryTransportConnectionProjection(
     globalTokenHint: input.tokenHint,
     updatedAt: input.updatedAt,
     updatedBy: input.updatedBy,
+  }
+}
+
+/** Upgrade/boot convergence for the migration's ciphertext-only initial projection. */
+export async function reconcileRepositoryTransportConnectionProjections(
+  repository: RepositoryTransportCredentialRepository,
+  participant: {
+    synchronize(input: RepositoryTransportConnectionProjectionInput): Promise<void>
+    removeConnection(provider: CodeHostProvider): Promise<boolean>
+  },
+): Promise<void> {
+  const rows = await repository.listConfiguredConnections()
+  const present = new Set<CodeHostProvider>()
+  for (const row of rows) {
+    present.add(row.provider)
+    await participant.synchronize(buildRepositoryTransportConnectionProjection(row))
+  }
+  for (const provider of ['gitlab', 'github'] as const) {
+    if (!present.has(provider)) await participant.removeConnection(provider)
   }
 }
