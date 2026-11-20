@@ -219,9 +219,10 @@ const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
 const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
   [
     'createWorkerIdentity',
+    // RFC-517: the claim moved with the task execution module from the module root to infrastructure.
     new Set([
-      'packages/backend/src/modules/task-execution/composition.ts',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionModule.ts',
     ]),
   ],
   [

@@ -18,7 +18,7 @@
 - [x] AC-1 清单里的名字只在各自的位置声明；三个模块根不再有循环、`try` 与 `throw`；门的例外清单删去它们后仍绿
 - [x] AC-2 缺省观察者、登记表、收敛与核对的行为、错误与次序和此前一致
 - [x] AC-3 新位置的依赖面是闭集；public surface 与计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（实现提交 70 / 70）
 
 ## 集中验证
 
@@ -48,9 +48,10 @@ HEAD（`c5a6c2aeb`）的树相同。集中验证没有查出本 RFC 的缺陷：
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
-- 本 RFC 的落档提交 `c5a6c2aeb`（只改文档，同一提交记下 RFC-511、RFC-512 转 Done）：主 CI run 44653491871 在本提交时仍在运行，结果补记于本
-  RFC 转 Done 的提交。
+- `48dcc1cd0`（实现，父提交是 `efdff656e`）：exact SHA 主 CI run 44658531942 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与
+  `CI required`），未重跑。
+- 本 RFC 的落档提交 `c5a6c2aeb`（只改文档，同一提交记下 RFC-511、RFC-512 转 Done）：主 CI run 44653491871 的 70 个 job 第 1 次运行 68 个通
+  过；红的 backend 分片 10/44 是 RFC-514 漏改的`rfc098-write-lock-registry` 的源码守卫（`efdff656e` 补正），`CI required` 只因它红；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

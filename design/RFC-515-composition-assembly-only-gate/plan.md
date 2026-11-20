@@ -18,7 +18,7 @@
 - [x] AC-1 新门覆盖全部模块的组合层、例外清单与实测逐文件相等、带负对照
 - [x] AC-2 `loadSkillOperationState` 行为不变；组合文件不再取 `queryHelpers`
 - [x] AC-3 两条旧锁只留归属检查、仍通过；public surface 与计数不升；分支上限与 `counts.json` 一致
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 除外部服务的链接检查与 RFC-514 漏改的源码守卫外全绿（逐格归因见 §CI）
 
 ## 集中验证
 
@@ -56,8 +56,14 @@ HEAD（`3502d3875`）的树相同。集中验证查出本 RFC 的两处缺陷，
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
-- 本 RFC 的落档提交 `3502d3875`（只改文档）：主 CI run 44645578510 在本提交时仍在运行，结果补记于本 RFC 转 Done 的提交。
+- `6c1d87747`（实现，父提交是 `3502d3875`）：exact SHA 主 CI run 44651659068 的 70 个 job 第 1 次运行 67 个通过；红的 3 格都不是本 RFC 引入
+  的：design/ 的链接检查遇 GitHub 503（`design/RFC-371-run-observability/native-real-validation-20261007.md` 第 7 行的提交链接，外部服务暂时
+  不可用，该文件不在本提交里）；backend 分片 10/44 是 RFC-514 漏改的`rfc098-write-lock-registry` 的源码守卫（`efdff656e` 补
+  正）；`CI required` 只因它们红；未重跑。含本 RFC 代码与该补正的后继提交 `48dcc1cd0`：主 CI run 44658531942 的 70 个 job 全部通过（后继证
+  据）。
+- 本 RFC 的落档提交 `3502d3875`（只改文档）：主 CI run 44645578510 的 70 个 job 第 1 次运行 67 个通过；红的 3 格与本提交无关：backend 分片
+  13/44 的 RFC-243 DB rebuild（PostgreSQL）撞 5 秒（6,649 ms），分片 10/44 是 RFC-514 漏改的源码守卫，`CI required` 只因它们红。这次提交只改
+  文档；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

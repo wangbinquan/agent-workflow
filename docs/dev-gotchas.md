@@ -718,6 +718,19 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   `node:path` 取法逐例比对的用例（目录名带点、点文件、尾随斜杠、`..`）——这也让 domain 的结果不随 Windows / POSIX 的 `path` 语义变化；
   真要碰宿主的逻辑留在 `engine` / `infrastructure`。
 
+## 把代码挪出组合层：新文件的名字、依赖与新用例的字面清单都别带方言（RFC-517 实撞，2026-11-19）
+
+RFC-517 把 system-operations 模块根里一句 schema 计划核对挪进 `application/postgresqlSchemaPlanAdmission.ts`（取 platform 的
+`PostgresqlSchemaPlan` 类型），本地首批里三条看似无关的架构账本同时红：
+
+- `rfc359-w5-t17-provider-file-location`：`platform/persistence/` 之外多了一个带 `postgresql` 的文件名；
+- `rfc349-provider-cutover`：application 文件多了一条对方言模块（`platform/persistence/postgresqlSchema`）的依赖——同一条 import 在组合层里早
+  已登记，挪进 application 就是新增；
+- `rfc359-w5-t19d-coverage-parity`：新用例的字面 import 清单写出了方言侧的模块名与符号，成对适配器 postgresql 一侧的测试引用数 +1。
+
+**做法**：迁出的代码若只用到方言类型的一两个字段，参数按结构写（例如 `{ readonly contractDigest: string }`），文件名与函数名不带方言；新用例
+也别把方言模块名、方言符号写进字面清单。确实是方言实现的，落 `platform/persistence/`，或照 T17 的报错说明把新增写进账本并说明为什么。
+
 ## 删除一跳转出（facade）：守卫看见的是转出背后的真相（RFC-454 实撞，2026-11-05）
 
 RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证里 8 个文件红，没有一个是行为问题，全是转出遮住的东西露了出来：

@@ -28,7 +28,6 @@ const FORBIDDEN_IMPORTS = [
 /** RFC-414's list, verbatim: calls a composition file may not make. */
 const FORBIDDEN_CALLS = ['tablesOf(', 'Bun.spawn(']
 const RFC370 = 'RFC-370 余项：crewstation / taskImage 的托管实现归 infrastructure'
-const ROOTS = 'S10 后继：模块根 composition.ts 的运行期逻辑迁出'
 /** design §2 D1: every composition file that may still break a rule, and the successor that clears it. */
 const EXCEPTIONS: Readonly<Record<string, string>> = {
   [MODULES + 'development-automation/composition/crewstationEvidence.ts']: RFC370,
@@ -38,7 +37,6 @@ const EXCEPTIONS: Readonly<Record<string, string>> = {
   [MODULES + 'development-automation/composition/taskImageEvidence.ts']: RFC370,
   [MODULES + 'development-automation/composition/taskImageVerification.ts']: RFC370,
   [MODULES + 'development-automation/composition/taskImageWorkspace.ts']: RFC370,
-  [MODULES + 'digital-employee/composition.ts']: ROOTS,
   [MODULES + 'digital-employee/composition/crewstationContent.ts']: RFC370,
   [MODULES + 'event-center/composition/taskImageObserver.ts']: RFC370,
   [MODULES + 'integration/composition/crewstationDevelopmentAdapters.ts']: RFC370,
@@ -57,10 +55,8 @@ const EXCEPTIONS: Readonly<Record<string, string>> = {
   [MODULES + 'source-control/composition/taskImageRepositoryEffects.ts']: RFC370,
   [MODULES + 'source-control/composition/taskImageUploads.ts']: RFC370,
   [MODULES + 'source-control/composition/taskImageWorkspace.ts']: RFC370,
-  [MODULES + 'system-operations/composition.ts']: ROOTS,
   [MODULES + 'system-operations/composition/crewstationDatabaseRestore.ts']: RFC370,
   [MODULES + 'system-operations/composition/crewstationDeployment.ts']: RFC370,
-  [MODULES + 'task-execution/composition.ts']: ROOTS,
 }
 const UNITS = backendUnits(ROOT)
 
@@ -139,8 +135,8 @@ test('live corpus: every module composition only assembles, outside the listed e
   expect(listed.filter((path) => !existsSync(resolve(ROOT, path)))).toEqual([])
   expect(listed.filter((path) => !isComposition(path))).toEqual([])
   expect([...listed].sort()).toEqual(listed)
-  // RFC-516 cleared the event-center, identity-access and source-control module roots.
-  expect(listed).toHaveLength(30)
+  // RFC-516 and RFC-517 cleared every module root; only RFC-370's crewstation / taskImage files remain.
+  expect(listed).toHaveLength(27)
 })
 
 test('negative fixtures: each rule is caught in composition files and module roots only; listed files are judged against the list', () => {

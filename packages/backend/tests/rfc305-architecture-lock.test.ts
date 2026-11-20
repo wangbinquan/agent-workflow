@@ -350,7 +350,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/missionOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/inbound/http/employeeCaseRoutes.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/digital-employee/composition.ts -> @/modules/identity-access/public/participants',
+      // RFC-517: Intent's platform inventory participant moved from the module root to application.
+      'packages/backend/src/modules/digital-employee/application/platformInventoryParticipant.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/digital-employee/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/event-center/composition/required-ports.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/integration/application/ports/scheduledTaskPersistence.ts -> @/modules/identity-access/public/participants',

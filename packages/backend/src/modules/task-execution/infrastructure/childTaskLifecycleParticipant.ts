@@ -62,7 +62,7 @@ import type {
 } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
-import type { ProviderTaskExecutionModule } from '../composition'
+import type { ProviderTaskExecutionModule } from './taskExecutionModule'
 import { taskStopProjection, type ResourceReapStopCause } from '../domain/sourceTermination'
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { submitTaskContinuation } from './taskContinuationAdmission'

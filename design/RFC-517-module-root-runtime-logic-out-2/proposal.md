@@ -26,7 +26,7 @@
   - digital-employee：清单参与者连同它的文本 / 排序函数与两个类型迁入新的 `application/platformInventoryParticipant.ts`；员工定义视图投影迁
     入新的 `application/employeeDefinitionView.ts`（工厂收 authoring store，返回原投影函数）。
   - system-operations：文件库启动准备的持锁段迁入新的 `infrastructure/local/fileDatabaseProviderBoot.ts`（锁、epoch 准入、迁库恢复与运行时准
-    备都是单机 profile 的机制）；schema 计划核对迁入新的 `application/postgresqlSchemaPlanAdmission.ts`；暂存还原后释放工件迁入新的
+    备都是单机 profile 的机制）；schema 计划核对迁入新的 `application/schemaPlanAdmission.ts`；暂存还原后释放工件迁入新的
     `application/stageRestoreArtifactRelease.ts`。
   - task-execution：两个类、认领结果类型、两个归属期常量与关停控制器迁入新的 `infrastructure/taskExecutionModule.ts`（它们组装 application
     的认领闸门与 infrastructure 的运行时登记表、归属持久化，按 RFC-294 design §3 只能落 infrastructure）。

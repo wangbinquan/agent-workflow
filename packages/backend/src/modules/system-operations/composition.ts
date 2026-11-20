@@ -1,9 +1,9 @@
 import { selectedDatabaseConfiguration } from '@/platform/persistence/databaseProviderRuntime'
-import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { recoverEpoch2ProviderMove } from './infrastructure/local/epoch2ProviderMoveRecovery'
-import { admitEpochBoot } from './composition/epochBootAdmission'
-import { acquireLock } from '@/util/lock'
-import { dirname } from 'node:path'
+import {
+  prepareFileDatabaseProviderForBoot,
+  type FileDatabaseBootPreparation,
+  type PreparedFileDatabase,
+} from './infrastructure/local/fileDatabaseProviderBoot'
 import type {
   DaemonStartupLease,
   DaemonStartupLeasePort,
@@ -86,6 +86,8 @@ import { join } from 'node:path'
 import type { DatabaseConfigurationPort } from './application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from './application/ports/databaseInstallation'
 import { prepareDatabaseInstallation } from './application/prepareDatabaseInstallation'
+import { requireSchemaPlanForContract } from './application/schemaPlanAdmission'
+import { releaseArtifactAfterStageRestore } from './application/stageRestoreArtifactRelease'
 
 import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
 import { type SecretBox } from '@/auth/secretBox'
@@ -100,10 +102,6 @@ import {
   requireDatabaseConfig,
   requireDatabaseProviderRuntime,
 } from '@/platform/persistence/databaseProviderRuntime'
-import type {
-  prepareDatabaseSchemaUpgrade,
-  DatabaseSchemaUpgradeOptions,
-} from './infrastructure/databaseSchemaUpgradeCoordinator'
 import {
   type DatabaseProvider,
   type LogicalSchemaContract,
@@ -207,17 +205,6 @@ export interface SelectedDatabaseBootPreparation<TPrepared> {
   readonly installation: DatabaseInstallationPort<TPrepared>
 }
 
-type FileDatabaseBootPreparation = Omit<
-  DatabaseSchemaUpgradeOptions,
-  'readConfig' | 'writeConfig'
-> &
-  (
-    | { readonly configuration: DatabaseConfigurationPort; readonly configPath?: never }
-    | { readonly configuration?: never; readonly configPath?: string }
-  )
-
-type PreparedFileDatabase = Awaited<ReturnType<typeof prepareDatabaseSchemaUpgrade>>
-
 export function prepareDatabaseProviderForBoot<TPrepared>(
   input: SelectedDatabaseBootPreparation<TPrepared>,
 ): Promise<TPrepared>
@@ -235,20 +222,7 @@ export async function prepareDatabaseProviderForBoot<TPrepared>(
       effects: input.installation,
     })
   }
-  let held: ReturnType<typeof acquireLock> | undefined
-  const requireUpgradeLock = () => {
-    if (input.lock === undefined && held === undefined) held = acquireLock(input.lockPath)
-  }
-  try {
-    admitEpochBoot({
-      appHome: dirname(input.generationPointerPath),
-      provider: input.config.provider,
-    })
-    await recoverEpoch2ProviderMove({ ...input, requireUpgradeLock })
-    return await prepareEpoch2DatabaseProviderRuntime({ ...input, requireUpgradeLock })
-  } finally {
-    held?.release()
-  }
+  return await prepareFileDatabaseProviderForBoot(input)
 }
 
 export interface SystemOperationsModule {
@@ -352,9 +326,7 @@ export function composePostgresqlSystemOperations(deps: {
   const appHome = deps.appHome ?? Paths.root
   const contract = deps.contract
   const plan = deps.plan ?? buildPostgresqlSchemaPlan(contract)
-  if (plan.contractDigest !== contract.digest) {
-    throw new Error('postgresql-system-operations-schema-plan-mismatch')
-  }
+  requireSchemaPlanForContract(plan, contract)
   const artifacts = createRestoreArtifactIngress({
     uploadRoot: join(appHome, '.restore-upload'),
   })
@@ -583,18 +555,10 @@ function composeSystemOperationsWithArtifacts(deps: {
   const application = createSystemOperationsApplication(deps.adapter)
   const httpCommands: SystemOperationCommands = Object.freeze({
     ...application.commands,
-    stageRestore: Object.freeze({
-      async execute(
-        context: Parameters<StageRestoreCommand['execute']>[0],
-        input: Parameters<StageRestoreCommand['execute']>[1],
-      ) {
-        try {
-          return await application.commands.stageRestore.execute(context, input)
-        } finally {
-          deps.artifacts.release(input.artifactRef)
-        }
-      },
-    }),
+    stageRestore: releaseArtifactAfterStageRestore(
+      application.commands.stageRestore,
+      deps.artifacts,
+    ),
   })
   return Object.freeze({
     application,

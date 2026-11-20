@@ -29,8 +29,10 @@
   `prepareFileDatabaseProviderForBoot(input)`，函数体是 HEAD 第 238～251 行逐字。锁（`@/util/lock`）、epoch 准入
   （`infrastructure/epochSwitch/bootAdmission`，模块根经 `composition/epochBootAdmission` 取的就是它）、迁库恢复与运行时准备都是单机 profile
   的机制，落 `infrastructure/local/`。
-- **`system-operations/application/postgresqlSchemaPlanAdmission.ts`**（新）：`requirePostgresqlSchemaPlanForContract(plan, contract)`，函数
-  体是 HEAD 第 355～357 行逐字；只取 platform persistence 的两个类型（system-operations 的 application 已有同样的取法）。
+- **`system-operations/application/schemaPlanAdmission.ts`**（新）：`requireSchemaPlanForContract(plan, contract)`，函数体是 HEAD 第
+  355～357 行逐字；参数按结构只取计划的 `contractDigest` 与契约的 `digest`，不取任何模块——application 不新增带方言名的文件与对方言模块的依赖
+  （RFC-359 W5-T17 的方言文件名账本、RFC-349 provider cutover 的方言依赖账本；集中验证查出初稿 `postgresqlSchemaPlanAdmission.ts` 越账后改
+  定）。
 - **`system-operations/application/stageRestoreArtifactRelease.ts`**（新）：`releaseArtifactAfterStageRestore(command, artifacts)` 返回 HEAD
   第 586～597 行的命令对象（`application.commands.stageRestore` 换成参数 `command`，`deps.artifacts` 换成只带 `release` 的参数）；取本模块
   public 的两个类型。
@@ -44,7 +46,7 @@
 - digital-employee：转出清单参与者与授权面类型；`const employeeView = createEmployeeDefinitionViewProjection(store)`，其余不变。
 - system-operations：`prepareDatabaseProviderForBoot` 保留“托管安装 / 文件库”的二选一，文件库一支改为
   `return await prepareFileDatabaseProviderForBoot(input)`；`composePostgresqlSystemOperations` 在缺省计划之后调
-  `requirePostgresqlSchemaPlanForContract(plan, contract)`；暂存还原命令改为
+  `requireSchemaPlanForContract(plan, contract)`；暂存还原命令改为
   `releaseArtifactAfterStageRestore(application.commands.stageRestore, deps.artifacts)`。
 - task-execution：从新位置取两个类并照旧转出六个名字；进程级单例 `taskExecutionModule`、`createTaskExecutionTestModule` 与
   `createProviderTaskExecutionModule` 留在模块根。顺手把 `infrastructure/childTaskLifecycleParticipant.ts` 对 `ProviderTaskExecutionModule`
@@ -65,7 +67,7 @@
 | `digital-employee/application/platformInventoryParticipant.ts`（新）       | `composeDigitalEmployeePlatformInventoryParticipant`、`DigitalEmployeePlatformInventoryAccess`（另有不导出的 `inventoryText`、`sortInventoryRows`、`DigitalEmployeePlatformInventoryAclRow`） |
 | `digital-employee/application/employeeDefinitionView.ts`（新）             | `createEmployeeDefinitionViewProjection`                                                                                                                                                      |
 | `system-operations/infrastructure/local/fileDatabaseProviderBoot.ts`（新） | `prepareFileDatabaseProviderForBoot`、`FileDatabaseBootPreparation`、`PreparedFileDatabase`                                                                                                   |
-| `system-operations/application/postgresqlSchemaPlanAdmission.ts`（新）     | `requirePostgresqlSchemaPlanForContract`                                                                                                                                                      |
+| `system-operations/application/schemaPlanAdmission.ts`（新）               | `requireSchemaPlanForContract`                                                                                                                                                                |
 | `system-operations/application/stageRestoreArtifactRelease.ts`（新）       | `releaseArtifactAfterStageRestore`                                                                                                                                                            |
 | `task-execution/infrastructure/taskExecutionModule.ts`（新）               | `TaskExecutionModule`、`ProviderTaskExecutionModule`、`ClaimedTaskExecution`、`DEFAULT_OWNERSHIP_LEASE_MS`、`DEFAULT_OWNERSHIP_HEARTBEAT_MS`、`createTaskExecutionShutdownController`         |
 
@@ -94,7 +96,8 @@
 1. **任务执行模块落 infrastructure**：两个类同时组装 application 部件与 infrastructure 实现，只有 infrastructure 层合法；注入端口改落
    application 要改类的构造形状与几十个调用方，留待合并两份认领体时一并考虑。
 2. **文件库启动准备落 `infrastructure/local/`，二选一留在模块根**：持锁段只是单机 profile 的机制；托管安装与文件库的选择是装配。
-3. **两处核对与一个包装落 application**：schema 计划核对与暂存还原后的释放是装配时与命令执行的规则，不是 IO；只取类型。
+3. **两处核对与一个包装落 application**：schema 计划核对与暂存还原后的释放是装配时与命令执行的规则，不是 IO；只取类型（schema 计划核对连类型
+   也只按结构取，不带方言名）。
 4. **员工视图用工厂收 store**：投影只依赖 authoring store；工厂形状让函数体逐字保留，模块根里的使用点不变。
 
 ## 7. 对 RFC-294 刷新后规则的对账

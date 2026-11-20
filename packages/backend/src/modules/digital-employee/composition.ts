@@ -3,12 +3,12 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
-import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import {
   DigitalEmployeeAuthoringService,
   type AutomaticTypeUpgradeIssue,
 } from './application/authoringService'
 import { DigitalEmployeeRuntimeService } from './application/runtimeService'
+import { createEmployeeDefinitionViewProjection } from './application/employeeDefinitionView'
 import type {
   EmployeeInputArtifactPort,
   EmployeeRetryLimitsPort,
@@ -69,7 +69,6 @@ import type {
   DigitalEmployeeModule,
   DigitalEmployeeModuleWithRuntime,
   DigitalEmployeeQueries,
-  EmployeeDefinitionView,
   ExecutionPolicyView,
   JobTemplateView,
   ToolRegistrationView,
@@ -77,11 +76,6 @@ import type {
 import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/types'
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 import type { DigitalEmployeeMaintenanceCommands } from './public/commands'
-import type {
-  DigitalEmployeePlatformInventoryParticipant,
-  DigitalEmployeePlatformInventoryResourceType,
-  DigitalEmployeePlatformInventoryRow,
-} from './public/participants'
 import { createDigitalEmployeeIntegrationTriggerParticipantIn } from './infrastructure/integrationTriggerParticipant'
 
 export { createDigitalEmployeeIntegrationTriggerParticipantIn }
@@ -299,111 +293,11 @@ export function createDigitalEmployeeAuthoringReads(
   return createDigitalEmployeeAuthoringPersistence(db)
 }
 
-interface DigitalEmployeePlatformInventoryAclRow {
-  readonly id: string
-  readonly ownerUserId: string | null
-  readonly visibility: 'private' | 'public'
-}
-
-/** Selected-provider Resource Catalog authorization face used by this owner adapter. */
-export interface DigitalEmployeePlatformInventoryAccess {
-  filterVisibleRows<T extends DigitalEmployeePlatformInventoryAclRow>(
-    authority: DirectAuthenticatedAuthority,
-    type: DigitalEmployeePlatformInventoryResourceType,
-    rows: readonly T[],
-  ): Promise<T[]>
-}
-
-function inventoryText(value: unknown): string | null {
-  if (typeof value === 'string') return value.length === 0 ? null : value
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  for (const key of ['en', 'en-US', 'zh', 'zh-CN', ...Object.keys(record)]) {
-    const candidate = record[key]
-    if (typeof candidate === 'string' && candidate.length > 0) return candidate
-  }
-  return null
-}
-
-function sortInventoryRows(
-  rows: readonly DigitalEmployeePlatformInventoryRow[],
-): DigitalEmployeePlatformInventoryRow[] {
-  return [...rows].sort(
-    (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-  )
-}
-
-/**
- * Owner adapter for Intent's three Digital Employee inventory kinds. The
- * selected SQLite/PostgreSQL module supplies the rows and the selected
- * Resource Catalog authorization application filters them before projection.
- */
-export function composeDigitalEmployeePlatformInventoryParticipant(input: {
-  readonly queries: Pick<
-    DigitalEmployeeQueries,
-    'listTypes' | 'listTools' | 'listJobTemplates' | 'listEmployees'
-  >
-  readonly access: DigitalEmployeePlatformInventoryAccess
-}): DigitalEmployeePlatformInventoryParticipant {
-  const visible = async <T extends DigitalEmployeePlatformInventoryAclRow>(
-    type: DigitalEmployeePlatformInventoryResourceType,
-    authority: DirectAuthenticatedAuthority,
-    rows: readonly T[],
-    project: (row: T) => DigitalEmployeePlatformInventoryRow,
-  ): Promise<readonly DigitalEmployeePlatformInventoryRow[]> =>
-    sortInventoryRows((await input.access.filterVisibleRows(authority, type, rows)).map(project))
-
-  return Object.freeze({
-    async listVisibleRows(
-      type: DigitalEmployeePlatformInventoryResourceType,
-      authority: DirectAuthenticatedAuthority,
-    ) {
-      if (type === 'employee_definition') {
-        return await visible(type, authority, await input.queries.listEmployees(), (row) => {
-          return {
-            id: row.id,
-            name: row.name,
-            description: `type ${row.typeRef.typeId}@${row.typeRef.revision}`,
-          }
-        })
-      }
-
-      const packages = await input.queries.listTypes()
-      if (type === 'employee_job_template') {
-        const rows = (
-          await Promise.all(packages.map((item) => input.queries.listJobTemplates(item.typeRef)))
-        ).flat()
-        return await visible(type, authority, rows, (row) => {
-          return {
-            id: row.id,
-            name: row.name,
-            description:
-              inventoryText(row.draft.description) ??
-              `type ${row.typeRef.typeId}@${row.typeRef.revision}`,
-          }
-        })
-      }
-
-      const rows = new Map<string, ToolRegistrationView>()
-      await Promise.all(
-        packages.flatMap((item) =>
-          item.authoringManifest.workItems.map(async (workItem) => {
-            for (const tool of await input.queries.listTools(item.typeRef, workItem.workItemRef)) {
-              rows.set(tool.id, tool)
-            }
-          }),
-        ),
-      )
-      return await visible(type, authority, [...rows.values()], (row) => {
-        return {
-          id: row.id,
-          name: inventoryText(row.content.displayName) ?? row.id,
-          description: `${inventoryText(row.content.description) ?? (row.origin === 'platform' ? 'platform tool' : 'custom tool')} (${row.workItemRef})`,
-        }
-      })
-    },
-  })
-}
+// RFC-517: Intent's platform inventory participant (and its authorization face) lives in application.
+export {
+  composeDigitalEmployeePlatformInventoryParticipant,
+  type DigitalEmployeePlatformInventoryAccess,
+} from './application/platformInventoryParticipant'
 
 function runtimePackageOf(
   registration: EmployeeTypePackageRegistration,
@@ -590,47 +484,7 @@ function composeDigitalEmployeeFromPersistence(
     ...(options.id === undefined ? {} : { id: options.id }),
   })
 
-  const employeeView = async (
-    record: Awaited<ReturnType<DigitalEmployeeAuthoringService['getEmployeeDefinition']>>,
-  ): Promise<EmployeeDefinitionView> => {
-    if (record.currentRevision === null) {
-      throw new Error(`employee has no current revision: ${record.id}`)
-    }
-    const revision = await store.getEmployeeDefinitionRevision({
-      id: record.id,
-      revision: record.currentRevision,
-    })
-    if (revision === null) throw new Error(`employee revision is missing: ${record.id}`)
-    const workScope = await store.getWorkScopeRevision(revision.content.workScopeRef)
-    if (workScope === null) throw new Error(`employee work scope is missing: ${record.id}`)
-    const jobRevision = await store.getJobTemplateRevision(record.configuration.jobTemplateRef)
-    if (jobRevision === null) throw new Error(`employee job revision is missing: ${record.id}`)
-    const overrideKeys = new Set(
-      record.configuration.adapterOverrides.map(
-        (binding) => `${binding.laneId}\u0000${binding.slotRef}`,
-      ),
-    )
-    return {
-      id: record.id,
-      name: record.name,
-      typeRef: record.typeRef,
-      configuration: record.configuration,
-      revision: record.currentRevision,
-      definition: revision.content,
-      inheritedAdapterBindings: jobRevision.content.defaultAdapterBindings,
-      adapterBindingSources: revision.content.exactAdapterBindings.map((binding) => ({
-        ...binding,
-        source: overrideKeys.has(`${binding.laneId}\u0000${binding.slotRef}`)
-          ? 'employee-override'
-          : 'job-default',
-      })),
-      workScope: workScope.encodedScope,
-      ownerUserId: record.ownerUserId,
-      visibility: record.visibility,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-    }
-  }
+  const employeeView = createEmployeeDefinitionViewProjection(store)
 
   const policyView = async (): Promise<ExecutionPolicyView> => {
     const policy =

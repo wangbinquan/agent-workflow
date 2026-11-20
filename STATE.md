@@ -12,9 +12,18 @@
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先单独提交（同一提交把 RFC-513 转 Done），实现与验证后再提交。独立对账
   （plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **收口对账**（RFC-294 C10～C13，design §7）：C10 迁出的是运行期部件与用例，按层落 application 或 infrastructure；C11 public 不变；C12
-  RFC-517 用例覆盖全部生产文件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升。
+  RFC-517 用例覆盖全部生产文件、全部用例与 e2e 里的同名声明，RFC-515 门覆盖全模块；C13 计数不升（60 项实测与对照逐项相同）。
+- **§14 不变量 / S10 第二十四步**：清单（design §3）的名字只在各自的位置声明；digital-employee、system-operations 与 task-execution 的模块根
+  `composition.ts` 没有循环、switch、`try`、`throw`，不构造错误——至此全部模块根只装配。新文件的依赖面是闭集并服从层次（application 不取
+  infrastructure 与 composition、不新增方言文件名与方言依赖，infrastructure 不取 composition），进程全局只有任务执行模块原有的 `Date.now` 与
+  `ulid`。生产文件 4,131 → 4,137；跨 context import 7,507 → 7,509（新增两条类型边，见 plan），public surface 1,195 不变，60 项实测不
+  变。RFC-515 门的例外清单 30 → 27，只剩 RFC-370 的 `crewstation*` / `taskImage*`。
+- **集中验证**（基于 `eb72bb67e`，详见 plan）：查出本 RFC 两处缺陷并修正复验：用例里两处 `toEqual` 的类型（`tsc` 报错，改后 0 错）；schema
+  计划核对初稿的方言文件名与方言依赖（三条架构账本红，改为方言中立的 `application/schemaPlanAdmission.ts` 后两边全过）。首批 198 个文件按 CI
+  的跑法与对照 A/B，候选多出的红除这三条账本外都是时限；改定后 19 个文件放宽到 60 秒复验，只剩两边都跑不进自带时限的 2 条 preflight，交给
+  CI。架构报告 60 项实测与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能；9 段代码与 HEAD 按词法单元逐个相同）。
 
-## 2026-11-19 RFC-516 模块根装配文件的运行期逻辑迁出（一）：事件中心、身份访问与源码控制（In Progress；`design/RFC-516-module-root-runtime-logic-out-1/`）
+## 2026-11-19 RFC-516 模块根装配文件的运行期逻辑迁出（一）：事件中心、身份访问与源码控制（Done；`design/RFC-516-module-root-runtime-logic-out-1/`）
 
 - **来由**：RFC-515 的全模块门把 6 个模块根 `composition.ts` 登记为例外（后继：模块根收口）。其中 event-center、identity-access 与
   source-control 各只有一小段运行期逻辑：缺省观察者（一调就抛）、在线状态连接的登记表类、代码托管连接投影的收敛与员工案例操作宿主的核对。用
@@ -37,8 +46,13 @@
   A/B：候选 1,692 条通过、27 条红，对照 1,683 条通过、25 条红，本 RFC 用例 11 / 11；候选多出的红都是时限，放宽到 60 秒后两边各 69 / 69 全
   过；直接覆盖三个模块根的用例两边全过。架构报告 60 项实测与对照逐项相同。实现门 PASS（本会话按路径限定自审，只审功能；3 段代码与 HEAD 按词
   法单元逐个相同）。
+- **落地**：`48dcc1cd0`（13 个文件；父提交是 `efdff656e`）。
+- **CI**：`48dcc1cd0` 主 CI run 44658531942 的 70 个 job 第 1 次全部通过，未重跑。落档提交 `c5a6c2aeb`（只改文档）：主 CI run 44653491871 的
+  70 个 job 68 个通过，红的是 RFC-514 漏改的源码守卫与随之红的 `CI required`（`efdff656e` 补正），未重跑。转 Done 的提交（与 RFC-517 实现同
+  一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第二十三步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-517（余下 3 个模块根）。
 
-## 2026-11-19 RFC-515 组合层只装配的全模块门（In Progress；`design/RFC-515-composition-assembly-only-gate/`）
+## 2026-11-19 RFC-515 组合层只装配的全模块门（Done；`design/RFC-515-composition-assembly-only-gate/`）
 
 - **来由**：RFC-294 plan §3 S10 要求把 RFC-414 / RFC-423 的收口锁改写为一条覆盖全部模块的门（无循环与 switch、`try` / `throw` 只在登记清单
   内、不做 DB / FS / 进程 / git 工作），退出门是该门对全部模块为绿、例外清单为空、`composition-forbidden-import-files` = 0、各模块的分支计数
@@ -66,8 +80,14 @@
   2 的 backend `tsc` 0 错，eslint 无告警。首批 150 个文件按 CI 的跑法与对照 A/B：候选 1,525 条通过、13 条红，对照 1,528 条通过、9 条红，新门
   3 / 3；候选多出的红除缺陷外都是时限，对拍 `loadSkillOperationState` 的用例两边全过。修正后放宽到 60 秒复验 11 个文件两边全过。架构报告只差
   跨 context import 的一处改道。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`6c1d87747`（8 个文件；父提交是 `3502d3875`）。
+- **CI**：`6c1d87747` 主 CI run 44651659068 的 70 个 job 67 个通过：外部的链接检查（GitHub 503）、RFC-514 漏改的源码守卫（`efdff656e` 补正）
+  与随之红的 `CI required`，未重跑；含本 RFC 代码与补正的后继 `48dcc1cd0` 的 run 44658531942 全部通过。落档提交 `3502d3875`（只改文档）：主
+  CI run 44645578510 的 70 个 job 67 个通过，红的是一个与本 RFC 无关的 backend 时限、同一条源码守卫与 `CI required`，未重跑。转 Done 的提交
+  （与 RFC-517 实现同一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第二十二步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-516 与 RFC-517（模块根装配文件的运行期逻辑迁出）。
 
-## 2026-11-19 RFC-514 任务执行组合层余下的 try / throw 迁出 composition（In Progress；`design/RFC-514-task-execution-composition-try-throw-out/`）
+## 2026-11-19 RFC-514 任务执行组合层余下的 try / throw 迁出 composition（Done；`design/RFC-514-task-execution-composition-try-throw-out/`）
 
 - **来由**：RFC-294 plan §3 S10 的退出门要求组合层的 `try` / `throw` 只在登记清单内、例外清单最终为空。RFC-513 之后，RFC-370 之外的组合层
   `throw` 只剩 task-execution 的三处（`rfc423-composition-assembly-only` 的 throw 账本各记 1 条），另有驱动入口的 `try` / `finally`（该锁唯
@@ -98,6 +118,11 @@
   13 / 13；候选多出的红除上述 5 例外都是时限。修正后默认时限放宽到 60 秒复验 22 个文件：修正的三个用例、本 RFC 用例与驱动任务的用例两边全
   过，两边各余 2 条相同的红（`rfc400` 自带的 30 秒、`rfc167` 的批准一例在用例自己的等待后仍读到 `running`）。架构报告 60 项只差一项
   `composition-control-flow-task-execution`。实现门 PASS（本会话按路径限定自审，只审功能；迁移的代码与 HEAD 按词法单元逐段相同）。
+- **落地**：`6be6ac4e3`（20 个文件；父提交是 `fda04702a`）。
+- **CI**：`6be6ac4e3` 主 CI run 44644049015 的 70 个 job 68 个通过：backend 分片 10/44 红是本 RFC 漏改的`rfc098-write-lock-registry` 的源码
+  守卫（正则里转义的原文，预查没搜到），`CI required` 随之红；`efdff656e` 补正，其 run 44657983510 的 70 个 job 全部通过，未重跑。落档提交
+  `fda04702a`（只改文档）：主 CI run 44637250026 的 70 个 job 全部通过。转 Done 的提交（与 RFC-517 实现同一提交）：CI 结果补记于后继。
+- **下一步**：RFC-294 S10 第二十一步已关闭（plan §1.2 增一行、§3 S10 记后继）；后继是 RFC-515（组合层只装配的全模块门）。
 
 ## 2026-11-19 RFC-513 代码能力与资源目录组合层余下的 throw 迁出 composition（Done；`design/RFC-513-code-history-and-package-recovery-throws-out-of-composition/`）
 
