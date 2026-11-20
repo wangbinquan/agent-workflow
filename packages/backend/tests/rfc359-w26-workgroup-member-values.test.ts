@@ -38,6 +38,7 @@ import { composeResourceCatalogFor } from '@/modules/resource-catalog/compositio
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { workgroupMemberPersistenceValues } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 type MemberRow = PersistenceTables['workgroupMembers']['$inferInsert']
 type MemberValues = (
@@ -201,9 +202,12 @@ function composeFor(harness: ProviderHarness, appHome: string) {
     'http',
   )
   const operations = composeIntentApplyOperations({
+    ...composeStandaloneIntentApply({
+      db: harness.db,
+      appHome,
+      aclIdentities: composeResourceCatalogFor({ db: harness.db }).persistence.identities,
+    }),
     db: harness.db,
-    appHome,
-    aclIdentities: composeResourceCatalogFor({ db: harness.db }).persistence.identities,
   })
   return {
     apply(command: IntentApplyInput, faults?: ApplyIntentFaults) {

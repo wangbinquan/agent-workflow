@@ -27,7 +27,6 @@ import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'
 import { canonicalIntentJson } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { withAgentSidecarsFrom } from '@/modules/resource-catalog/domain/agentSidecarBackfill'
@@ -55,6 +54,7 @@ import type {
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createAgent } from './helpers/model/resourceWrites'
+import { applyIntentChangeset } from './helpers/intentApply'
 
 const OWNER = 'user_owner_rfc358_00000000'
 

@@ -53,7 +53,6 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
@@ -62,6 +61,7 @@ import { composeIntentPersistence } from '../src/modules/intent/composition/pers
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
+import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
 
 const PLAIN = 'user_plain_priv_0000000000'
 const BOSS = 'user_manager_priv_00000000'

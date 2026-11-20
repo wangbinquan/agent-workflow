@@ -43,6 +43,11 @@ import type { IntentArtifactStage } from '@/modules/resource-catalog/application
 import { encodeSkillToken } from '@/modules/resource-catalog/application/skills/skillToken'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  composeStandaloneIntentApply,
+  composeStandaloneIntentArtifacts,
+} from './helpers/intentApply'
+import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
 
 const ownerId = 'intent-storage-owner'
 const hash = 'a'.repeat(64)
@@ -354,11 +359,14 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         },
       })
       const operations = composeIntentApplyOperations({
+        ...composeStandaloneIntentApply({
+          db: harness.db,
+          appHome: f.appHome,
+          skillArtifacts: selected.skill,
+          pluginArtifacts: selected.plugin,
+          artifactContent,
+        }),
         db: harness.db,
-        appHome: f.appHome,
-        skillArtifacts: selected.skill,
-        pluginArtifacts: selected.plugin,
-        artifactContent,
       })
       const pending = operations.apply(f.request).then((receipt) => {
         settled = true
@@ -427,14 +435,17 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     })
     const publications: unknown[] = []
     const operations = composeIntentApplyOperations({
-      db: harness.db,
-      appHome: f.appHome,
-      skillArtifacts: selected.skill,
-      artifactContent: content({
-        async publishSkill(value) {
-          publications.push(value)
-        },
+      ...composeStandaloneIntentApply({
+        db: harness.db,
+        appHome: f.appHome,
+        skillArtifacts: selected.skill,
+        artifactContent: content({
+          async publishSkill(value) {
+            publications.push(value)
+          },
+        }),
       }),
+      db: harness.db,
     })
     const receipt = await operations.apply(f.request)
     expect(receipt.applied).toMatchObject([{ resourceId: f.existingSkillId, action: 'update' }])
@@ -490,16 +501,19 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       },
     })
     const operations = composeIntentApplyOperations({
-      db: harness.db,
-      appHome: f.appHome,
-      skillArtifacts: selected.skill,
-      artifactContent: content({
-        async discardSkill(request) {
-          expect(request.version).toBe(1)
-          contentEntered.release()
-          await contentRelease.pending
-        },
+      ...composeStandaloneIntentApply({
+        db: harness.db,
+        appHome: f.appHome,
+        skillArtifacts: selected.skill,
+        artifactContent: content({
+          async discardSkill(request) {
+            expect(request.version).toBe(1)
+            contentEntered.release()
+            await contentRelease.pending
+          },
+        }),
       }),
+      db: harness.db,
     })
     let settled = false
     const pending = operations.apply(f.request).then(
@@ -566,10 +580,13 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       },
     })
     const operations = composeIntentApplyOperations({
+      ...composeStandaloneIntentApply({
+        db: harness.db,
+        appHome: f.appHome,
+        skillArtifacts: selected.skill,
+        artifactContent,
+      }),
       db: harness.db,
-      appHome: f.appHome,
-      skillArtifacts: selected.skill,
-      artifactContent,
     })
     const receipt = await operations.apply(f.request)
     const before = await f.journal()
@@ -581,10 +598,13 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     unavailable = false
     const recovery = createAtomicApplyRecovery([
       composeIntentApplyRecoveryScene({
+        artifacts: composeStandaloneIntentArtifacts({
+          db: harness.db,
+          appHome: f.appHome,
+          pluginsDir: join(f.appHome, 'plugins'),
+          content: artifactContent,
+        }),
         db: harness.db,
-        appHome: f.appHome,
-        pluginsDir: join(f.appHome, 'plugins'),
-        content: artifactContent,
       }),
     ])
     let settled = false
@@ -636,6 +656,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
           publications.push(value)
         },
       }),
+      legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
     })
     const { skillVersions, skills } = tablesOf(harness.db)
     await harness.db.delete(skillVersions)
@@ -697,6 +718,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
           throw new Error('deleted skill cannot publish')
         },
       }),
+      legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
     })
     // RFC-395 II-a A6：已删除技能完成处置，暂存内容仍交给 storage owner 丢弃。
     const converted = intentApplyArtifactCodecs.decode(
@@ -768,44 +790,48 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     const calls: string[] = []
     const recovery = createAtomicApplyRecovery([
       composeIntentApplyRecoveryScene({
-        db: harness.db,
-        appHome: f.appHome,
-        pluginsDir: join(f.appHome, 'plugins'),
-        content: content({
-          async publishSkill() {
-            throw new Error('legacy publication must use the selected compatibility owner')
+        artifacts: composeStandaloneIntentArtifacts({
+          db: harness.db,
+          appHome: f.appHome,
+          pluginsDir: join(f.appHome, 'plugins'),
+          content: content({
+            async publishSkill() {
+              throw new Error('legacy publication must use the selected compatibility owner')
+            },
+          }),
+          legacySkillArtifacts: {
+            unmarkSkillBootVerified(skillId) {
+              calls.push(`unmark:${skillId}`)
+            },
+            async publishStagedSkillVersion(db, options, value) {
+              expect(db).toBe(harness.db)
+              expect(options).toEqual({ appHome: f.appHome })
+              const artifact =
+                artifacts.find(
+                  (entry) => entry.kind === 'skill-version-stage' && entry.staged === value,
+                ) ??
+                artifacts.find(
+                  (entry) =>
+                    entry.kind === 'skill-version-stage' &&
+                    JSON.stringify(entry.staged) === JSON.stringify(value),
+                )
+              if (artifact?.kind !== 'skill-version-stage')
+                throw new Error('unknown staged artifact')
+              calls.push(`publish:${artifact.staged.skillId}`)
+              if (artifact.staged.skillId === 'first') {
+                entered.release()
+                await release.pending
+              }
+            },
+            async loadSkillOperationState() {
+              throw new Error('null operation id must not query operation state')
+            },
+            async finishOperation() {
+              throw new Error('version-only replay must not finish create operations')
+            },
           },
         }),
-        legacySkillArtifacts: {
-          unmarkSkillBootVerified(skillId) {
-            calls.push(`unmark:${skillId}`)
-          },
-          async publishStagedSkillVersion(db, options, value) {
-            expect(db).toBe(harness.db)
-            expect(options).toEqual({ appHome: f.appHome })
-            const artifact =
-              artifacts.find(
-                (entry) => entry.kind === 'skill-version-stage' && entry.staged === value,
-              ) ??
-              artifacts.find(
-                (entry) =>
-                  entry.kind === 'skill-version-stage' &&
-                  JSON.stringify(entry.staged) === JSON.stringify(value),
-              )
-            if (artifact?.kind !== 'skill-version-stage') throw new Error('unknown staged artifact')
-            calls.push(`publish:${artifact.staged.skillId}`)
-            if (artifact.staged.skillId === 'first') {
-              entered.release()
-              await release.pending
-            }
-          },
-          async loadSkillOperationState() {
-            throw new Error('null operation id must not query operation state')
-          },
-          async finishOperation() {
-            throw new Error('version-only replay must not finish create operations')
-          },
-        },
+        db: harness.db,
       }),
     ])
     let settled = false

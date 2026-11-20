@@ -43,6 +43,7 @@ import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'rfc401-t5-owner'
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
@@ -171,9 +172,12 @@ describeEachProvider('RFC-401 T5 skill error matrix', (harness) => {
       db,
     ).contexts.fromAuthenticatedPrincipal({ userId: OWNER, source: 'session' }, 'http')
     return composeIntentApplyOperations({
+      ...composeStandaloneIntentApply({
+        db: db,
+        appHome,
+        aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+      }),
       db,
-      appHome,
-      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
     }).apply({
       actor,
       authority: requestAuthority,

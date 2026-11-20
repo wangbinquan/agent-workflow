@@ -50,6 +50,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, CL, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { runNode } from './helpers/runner'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 
 function held<T>() {
   let resolve!: (value: T) => void
@@ -351,6 +352,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       }
     }
     const memory = composeMemoryOperationsFor({
+      injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
       taskNodeRuns: createNodeRunQueries(db),
       taskNodeOutputs: createNodeOutputQueries(db),
       clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),

@@ -39,6 +39,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { agentFixture } from './helpers/model'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'rfc401-a3b-owner'
 const OTHER = 'rfc401-a3b-other'
@@ -295,9 +296,12 @@ describeEachProvider('RFC-401 A3b workgroup error matrix', (harness) => {
       db,
     ).contexts.fromAuthenticatedPrincipal({ userId: OWNER, source: 'session' }, 'http')
     return composeIntentApplyOperations({
+      ...composeStandaloneIntentApply({
+        db: db,
+        appHome,
+        aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+      }),
       db,
-      appHome,
-      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
     }).apply({
       actor,
       authority: requestAuthority,

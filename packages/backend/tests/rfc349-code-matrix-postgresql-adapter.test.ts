@@ -20,6 +20,7 @@ import type {
 import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
 import { errorHandler } from '@/util/errors'
+import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
 
 const REPO = 'repo-1'
 
@@ -113,7 +114,11 @@ describe('RFC-349 PostgreSQL code capability matrix adapter', () => {
       [['agent-1']],
     ])
     const app = appWithHistory(
-      composeCodeHistoryQueries(fake.db, createAgentExecutionQueries(fake.db)),
+      composeCodeHistoryQueries(
+        fake.db,
+        createAgentExecutionQueries(fake.db),
+        createUnboundCodeHistoryReader(),
+      ),
     )
 
     const response = await app.request(`/api/code/matrix/${REPO}`)

@@ -7,6 +7,9 @@
 // ③ 新文件的依赖面是闭集（import 逐条钉住），不用进程全局；增名字的 application 文件不取 infrastructure 与 composition（带负对照）。
 // ④ 行为：未绑定读取器的两个操作以原文错误拒绝；互斥核对在两项都给时抛原文错误，其余情形放行。
 //
+// RFC-523：代码历史的读取器改为必填参数，未绑定读取器只剩用例在用，移到 `tests/helpers/codeHistory.ts`；这里不再锁它的位置、调用与依赖，
+// ④ 的行为照旧（经测试助手），清单与新文件少它一项。
+//
 // 覆盖范围（C12）：① 与 ② 的调用方读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字文本筛、再逐个
 // 解析 AST；② ③ 另读两个模块的组合文件与新位置。
 import { describe, expect, test } from 'bun:test'
@@ -14,7 +17,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
-import { createUnboundCodeHistoryReader } from '@/modules/code-capability/application/unboundHistoryReader'
+import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
 import { CodeHistoryReadError } from '@/modules/code-capability/domain/codeHistoryPackage'
 import { requireExclusiveRecoverySelection } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 
@@ -27,21 +30,15 @@ const parse = (path: string, text: string) =>
 
 const CC = 'modules/code-capability'
 const RC = 'modules/resource-catalog'
-const READER = `${CC}/application/unboundHistoryReader`
 const MAINTENANCE = `${RC}/application/resourcePackageMaintenance`
 const HISTORY_ROOT = `${CC}/composition/historyQueries`
 const MAINTENANCE_ROOT = `${RC}/composition/resourcePackageMaintenance`
 /** design §3: every listed name with the one file that declares it. */
 const LISTED: readonly (readonly [string, string])[] = [
-  [READER, 'createUnboundCodeHistoryReader'],
   [MAINTENANCE, 'requireExclusiveRecoverySelection'],
 ]
 /** design §4 ③: the exact imports of the new file and of the file that gained a name. */
 const IMPORTS: Readonly<Record<string, readonly string[]>> = {
-  [READER]: [
-    `import ${CC}/domain/codeHistoryPackage: CodeHistoryReadError`,
-    `import ${CC}/application/ports/historyReader: CodeHistoryReader`,
-  ],
   [MAINTENANCE]: [
     'import platform/contracts/atomicApply: AtomicApplyRecoveryScene',
     `import ${RC}/public/queries: ResourcePackageApplyActivityQuery`,
@@ -264,17 +261,14 @@ describe('RFC-513 ① 清单里的名字只在各自的位置声明', () => {
           )
           .map(corpusPath)
           .sort()
-      expect(LISTED).toHaveLength(2)
+      expect(LISTED).toHaveLength(1)
       for (const [location, name] of LISTED)
         expect([name, declaring(name)]).toEqual([name, [`packages/backend/src/${location}.ts`]])
     },
     CORPUS_TIMEOUT,
   )
 
-  test('新文件恰好声明、交出未绑定读取器；维护文件交出互斥核对；两个组合文件不声明清单里的名字', () => {
-    const reader = sourceOf(READER)
-    expect(declaredNames(reader, text(reader))).toEqual(['createUnboundCodeHistoryReader'])
-    expect(offeredNames(reader, text(reader))).toEqual(['createUnboundCodeHistoryReader'])
+  test('维护文件交出互斥核对；两个组合文件不声明清单里的名字', () => {
     const maintenance = sourceOf(MAINTENANCE)
     expect(offeredNames(maintenance, text(maintenance))).toContain(
       'requireExclusiveRecoverySelection',
@@ -304,14 +298,11 @@ describe('RFC-513 ② composition 只装配', () => {
   })
 
   test(
-    '两个名字在生产代码里只被各自的组合文件调用一次，实参钉住',
+    '互斥核对在生产代码里只被维护组合文件调用一次，实参钉住',
     () => {
-      expect(productionCallers('createUnboundCodeHistoryReader')).toEqual([`${HISTORY_ROOT} x1`])
       expect(productionCallers('requireExclusiveRecoverySelection')).toEqual([
         `${MAINTENANCE_ROOT} x1`,
       ])
-      const history = sourceOf(HISTORY_ROOT)
-      expect(callArguments(history, text(history), 'createUnboundCodeHistoryReader')).toEqual([[]])
       const maintenance = sourceOf(MAINTENANCE_ROOT)
       expect(
         callArguments(maintenance, text(maintenance), 'requireExclusiveRecoverySelection'),
@@ -350,7 +341,8 @@ describe('RFC-513 ③ 新位置的依赖面是闭集、不用进程全局', () =
   })
 
   test('负对照：别的模块、基础设施、组合层与进程全局都会被认出', () => {
-    const file = sourceOf(READER)
+    // RFC-523: an application path in code-capability (the reader that used to live here moved to tests/helpers).
+    const file = sourceOf(`${CC}/application/probe`)
     const source = [
       `import type { CodeHistoryReader } from './ports/historyReader'`,
       `import { createCodeHistoryPackageReader } from '../infrastructure/history/packageReader'`,

@@ -3,15 +3,12 @@ import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createIntentApplyEngine,
-  type ApplyIntentFaults,
   type IntentApplyArtifactLifecycle,
   type IntentApplyEngine,
   type IntentApplyResourceBinding,
 } from '../infrastructure/intentApplyEngine'
 import { createIntentApplyArtifactLifecycle } from '../infrastructure/intentApplyArtifactLifecycle'
 import {
-  composeLegacyIntentSkillArtifactCompat,
-  composeIntentApplyResourceBinding,
   composePostgresqlSkillArtifactCompensation,
   createFileIntentPluginArtifactOwner,
   createFileIntentSkillArtifactOwner,
@@ -24,14 +21,8 @@ import type {
 import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
 import type { LegacyIntentSkillArtifactCompat } from '../ports/skillArtifactCompensation'
 import { createFileIntentArtifactContent } from '../infrastructure/local/fileIntentArtifactContent'
-import { createResourceCatalogAclIdentityReadPort } from '@/modules/resource-catalog/infrastructure/aclReadRepository'
-import type { ResourceCatalogAclIdentityReadPort } from '@/modules/resource-catalog/application/ports/providerResourceCatalogPersistence'
-import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 
 import type { IntentApplyOperations } from '../application/ports/intentApplyOperations'
-import type { Actor } from '@/auth/actor'
-import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import type { Logger } from '@/util/log'
 
 export type { ApplyIntentFaults } from '../infrastructure/intentApplyEngine'
 export type { IntentApplyReceipt } from '../application/ports/intentApplyOperations'
@@ -55,20 +46,10 @@ export {
  */
 export interface IntentApplyCompositionDependencies {
   readonly db: PersistenceDb
-  readonly appHome: string
-  /** ACL 归属读面。两个 bootstrap 根各自已有一份，测试装配可省略（按 db 现取）。 */
-  readonly aclIdentities?: ResourceCatalogAclIdentityReadPort
-  /** 已装配好的工件生命周期；省略时按 `db` + `appHome` 现装一份。 */
-  readonly artifacts?: IntentApplyArtifactLifecycle
-  readonly artifactContent?: IntentArtifactContentPort
-  readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
-  readonly pluginArtifacts?: IntentPluginArtifactOwner
-  readonly skillArtifacts?: IntentSkillArtifactOwner
-  /**
-   * 已装配好的资源会话绑定；省略时按 `db` + `appHome` + `aclIdentities` 现装一份。
-   * 用例用它在真实会话外面包一层观测（例：在 `prepare` 返回后放行一个并发 apply）。
-   */
-  readonly resources?: IntentApplyResourceBinding
+  /** RFC-523: the resource session binding the caller composed (the daemon in bootstrap, tests through their helper). */
+  readonly resources: IntentApplyResourceBinding
+  /** RFC-523: the artifact lifecycle the caller composed. */
+  readonly artifacts: IntentApplyArtifactLifecycle
   readonly id?: () => string
   readonly now?: () => number
 }
@@ -92,11 +73,19 @@ export function composeLocalIntentArtifacts(input: {
   return Object.freeze({
     pluginArtifacts: createFileIntentPluginArtifactOwner({ pluginsDir }),
     skillArtifacts: createFileIntentSkillArtifactOwner({ appHome: input.appHome, db: input.db }),
-    artifactContent: createFileIntentArtifactContent({
-      appHome: input.appHome,
-      pluginsDir,
-      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
-    }),
+    artifactContent: composeLocalIntentArtifactContent({ appHome: input.appHome, pluginsDir }),
+  })
+}
+
+/** RFC-523: the standalone artifact content (also the maintenance worker's when the deployment supplies no hosted one). */
+export function composeLocalIntentArtifactContent(input: {
+  readonly appHome: string
+  readonly pluginsDir: string
+}): IntentArtifactContentPort {
+  return createFileIntentArtifactContent({
+    appHome: input.appHome,
+    pluginsDir: input.pluginsDir,
+    skillArtifacts: composePostgresqlSkillArtifactCompensation(),
   })
 }
 
@@ -108,24 +97,18 @@ export function composeIntentApplyArtifactLifecycle(input: {
   readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir?: string
-  readonly content?: IntentArtifactContentPort
-  readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
+  /** RFC-523: the caller states the artifact content and the legacy skill artifact binding. */
+  readonly content: IntentArtifactContentPort
+  readonly legacySkillArtifacts: LegacyIntentSkillArtifactCompat
 }): IntentApplyArtifactLifecycle {
   const pluginsDir = input.pluginsDir ?? join(input.appHome, 'plugins')
-  const content =
-    input.content ??
-    createFileIntentArtifactContent({
-      appHome: input.appHome,
-      pluginsDir,
-      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
-    })
   return createIntentApplyArtifactLifecycle({
     db: input.db,
     appHome: input.appHome,
     pluginsDir,
-    content,
+    content: input.content,
     skillContentLocations: createSkillContentLocationQuery(input.db),
-    legacySkillArtifacts: input.legacySkillArtifacts ?? composeLegacyIntentSkillArtifactCompat(),
+    legacySkillArtifacts: input.legacySkillArtifacts,
   })
 }
 
@@ -133,35 +116,10 @@ export function composeIntentApplyArtifactLifecycle(input: {
 export function composeIntentApplyOperations(
   dependencies: IntentApplyCompositionDependencies,
 ): IntentApplyEngine {
-  const appHome = dependencies.appHome
   return createIntentApplyEngine({
     db: dependencies.db,
-    resources:
-      dependencies.resources ??
-      composeIntentApplyResourceBinding({
-        db: dependencies.db,
-        mcpLifecycle: createMcpTransactionLifecycle(),
-        pluginArtifacts:
-          dependencies.pluginArtifacts ??
-          createFileIntentPluginArtifactOwner({ pluginsDir: join(appHome, 'plugins') }),
-        skillArtifacts:
-          dependencies.skillArtifacts ??
-          createFileIntentSkillArtifactOwner({ appHome, db: dependencies.db }),
-        aclIdentities:
-          dependencies.aclIdentities ?? createResourceCatalogAclIdentityReadPort(dependencies.db),
-      }),
-    artifacts:
-      dependencies.artifacts ??
-      composeIntentApplyArtifactLifecycle({
-        db: dependencies.db,
-        appHome,
-        ...(dependencies.artifactContent === undefined
-          ? {}
-          : { content: dependencies.artifactContent }),
-        ...(dependencies.legacySkillArtifacts === undefined
-          ? {}
-          : { legacySkillArtifacts: dependencies.legacySkillArtifacts }),
-      }),
+    resources: dependencies.resources,
+    artifacts: dependencies.artifacts,
     ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   })
@@ -175,40 +133,6 @@ export function composeIntentApplyOperations(
  */
 export function narrowIntentApplyOperations(operations: IntentApplyEngine): IntentApplyOperations {
   return operations
-}
-
-/**
- * RFC-355 T7：原 `services/intent/applyChangeset.ts` 兼容门面的正身。历史调用方要的是
- * 「给我 db + appHome，替我把资源会话与工件生命周期装配好再跑 apply」——那是 composition
- * 的活，不是 service 层的活。门面已删除，调用方直接来这里。
- */
-export interface ApplyIntentDeps {
-  readonly db: PersistenceDb
-  readonly appHome: string
-  readonly actor: Actor
-  readonly authority: ResourceRequestContext
-  readonly aclIdentities?: ResourceCatalogAclIdentityReadPort
-  readonly faults?: ApplyIntentFaults
-  readonly log?: Logger
-}
-
-export function applyIntentChangeset(
-  dependencies: ApplyIntentDeps,
-  input: Parameters<IntentApplyEngine['apply']>[0]['command'],
-) {
-  return composeIntentApplyOperations({
-    db: dependencies.db,
-    appHome: dependencies.appHome,
-    ...(dependencies.aclIdentities === undefined
-      ? {}
-      : { aclIdentities: dependencies.aclIdentities }),
-  }).apply({
-    actor: dependencies.actor,
-    authority: dependencies.authority,
-    command: input,
-    ...(dependencies.faults === undefined ? {} : { faults: dependencies.faults }),
-    ...(dependencies.log === undefined ? {} : { log: dependencies.log }),
-  })
 }
 
 /**

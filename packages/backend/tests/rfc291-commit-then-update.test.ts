@@ -37,7 +37,6 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
   createIntentSessionForTest as createIntentSession,
@@ -52,6 +51,7 @@ import {
   validateDraftChangeset,
 } from '@/modules/intent/application/resolveChangeset'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
 
 const OWNER = 'user_owner_rfc291e2e_00000'
 

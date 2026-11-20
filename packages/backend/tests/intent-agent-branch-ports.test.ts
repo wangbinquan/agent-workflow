@@ -22,7 +22,6 @@ import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/share
 import type { Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
   intentResourceCatalogBinding,
@@ -36,6 +35,7 @@ import { composeIntentPersistence } from '../src/modules/intent/composition/pers
 import type { IntentDumpAuxiliaryQueries } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
 
 const OWNER = 'user_owner_bports_000000000'
 

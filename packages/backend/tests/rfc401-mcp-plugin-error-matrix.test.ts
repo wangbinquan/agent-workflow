@@ -36,6 +36,7 @@ import {
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'rfc401-a2-owner'
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
@@ -198,9 +199,12 @@ describeEachProvider('RFC-401 A2 MCP / plugin error matrix', (harness) => {
       'http',
     )
     return composeIntentApplyOperations({
+      ...composeStandaloneIntentApply({
+        db: db,
+        appHome,
+        aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+      }),
       db,
-      appHome,
-      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
     }).apply({
       actor,
       authority,

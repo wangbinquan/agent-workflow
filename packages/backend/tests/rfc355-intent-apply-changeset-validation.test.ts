@@ -37,6 +37,7 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'user_owner_rfc355_00000000'
 
@@ -61,9 +62,12 @@ function deps() {
     // SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话，PostgreSQL 走
     // `createIntentApplyEngine` + PG 资源会话。
     operations: composeIntentApplyOperations({
+      ...composeStandaloneIntentApply({
+        db: db,
+        appHome,
+        aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+      }),
       db,
-      appHome,
-      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
     }),
   }
 }

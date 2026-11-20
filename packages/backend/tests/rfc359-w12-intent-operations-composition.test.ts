@@ -47,6 +47,7 @@ import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catal
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'rfc359-intent-composition-owner'
 const SCRATCH_DIRECTORY = 'intent-scratch-composition'
@@ -86,8 +87,8 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
     aclIdentities: composeResourceCatalogFor({ db: harness.db }).persistence.identities,
   })
   const operations = composeIntentApplyOperations({
+    ...composeStandaloneIntentApply({ db: harness.db, appHome }),
     db: harness.db,
-    appHome,
     resources: {
       createSession(options) {
         // 引擎按 `Actor` 声明这个入参，绑定按 `DirectAuthenticatedAuthority` 收——运行期是

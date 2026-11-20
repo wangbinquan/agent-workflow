@@ -41,6 +41,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'rfc401-owner'
 const OTHER = 'rfc401-other'
@@ -305,9 +306,12 @@ describeEachProvider('RFC-401 A1 agent error matrix', (harness) => {
       db,
     ).contexts.fromAuthenticatedPrincipal({ userId: OWNER, source: 'session' }, 'http')
     return composeIntentApplyOperations({
+      ...composeStandaloneIntentApply({
+        db: db,
+        appHome,
+        aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+      }),
       db,
-      appHome,
-      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
     }).apply({
       actor,
       authority: requestAuthority,

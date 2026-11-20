@@ -18,7 +18,6 @@ import { ulid } from 'ulid'
 import { canonicalIntentJson, INTENT_REDACTED, parseIntentChangeset } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
   intentResourceCatalogBinding,
@@ -36,6 +35,7 @@ import type { IntentDumpAuxiliaryQueries } from '../src/modules/intent/applicati
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { getMcpFixtureById } from './helpers/mcpServiceBinding'
+import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
 
 const OWNER = 'user_owner_oauth_0000000000'
 

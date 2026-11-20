@@ -48,6 +48,7 @@ import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/infrastructure/history/packageReader'
 import type { CodeHistoryQueryTable } from '@/modules/code-capability/domain/codeHistoryPackage'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
+import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
 
 // Conversion through the sink and all four HTTP endpoints took 31.5 s on CI run 40433510287; a single
 // heavy case has spiked 2.7x on a CI runner (rfc359-w19, run 40449909314); allow 120 s.
@@ -524,7 +525,11 @@ describeEachProvider('RFC-395 history response parity', (h) => {
     ).toBe('ci-fix')
   })
   test('current capability GETs remain current and do not need a history binding', async () => {
-    const unbound = composeCodeHistoryQueries(h.db, createAgentExecutionQueries(h.db))
+    const unbound = composeCodeHistoryQueries(
+      h.db,
+      createAgentExecutionQueries(h.db),
+      createUnboundCodeHistoryReader(),
+    )
     const server = historyApp(unbound)
     expect((await server.request('/api/code/matrix/unknown')).status).toBe(200)
     expect((await server.request('/api/code/capabilities')).status).toBe(200)
@@ -673,7 +678,11 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
         const epoch1Db = (source.provider === 'sqlite'
           ? bindFrozenSqliteHandle(source.sqlite)
           : createFrozenPostgresqlClient(source.runtime)) as unknown as PersistenceDb
-        const current = composeCodeHistoryQueries(target.db, createAgentExecutionQueries(target.db))
+        const current = composeCodeHistoryQueries(
+          target.db,
+          createAgentExecutionQueries(target.db),
+          createUnboundCodeHistoryReader(),
+        )
         const oracleQueries = createEpoch1HistoryQueries(epoch1Db)
         const oracle = historyApp({ ...current, ...oracleQueries })
         const paths = [

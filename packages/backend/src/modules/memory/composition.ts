@@ -147,7 +147,8 @@ export interface ComposeMemoryOperationsOptions {
    * nor the runtime driver registry.
    */
   readonly runtimeProfiles: NativeMemoryDistillRuntimeResolver
-  readonly injectionQueries?: MemoryInjectionQueries
+  /** RFC-523: the caller states the injection queries. */
+  readonly injectionQueries: MemoryInjectionQueries
   readonly catalogBinding?: MemoryCatalogBinding
 }
 
@@ -182,8 +183,7 @@ export function composeMemoryOperationsFor(
     systemAgents: input.systemAgentBinding.family,
     reviewedArtifacts: input.reviewedArtifacts,
     nodeRunPrompts: input.nodeRunPrompts,
-    injectionQueries:
-      input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db, input.taskNodeRuns),
+    injectionQueries: input.injectionQueries,
     ...(input.catalogBinding === undefined
       ? {}
       : {

@@ -32,7 +32,6 @@ import {
   SQLiteRepositoryTransportCredentialRepository,
 } from '../src/modules/source-control/composition'
 import { watchExecutionTerminal } from './helpers/executionTerminal'
-import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { createIntentPersistence } from '../src/modules/intent/composition/persistence'
@@ -53,6 +52,7 @@ import { createWebhookDispatcher } from '../src/modules/integration/application/
 import { Paths } from '../src/util/paths'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createWorkflow } from './helpers/model/resourceWrites'
+import { applyIntentChangeset } from './helpers/intentApply'
 
 const TOKEN = 'aw-rfc269-local-fixture-token' // gitleaks:allow
 const INTENT_RUNTIME = 'rfc292-intent-opencode'

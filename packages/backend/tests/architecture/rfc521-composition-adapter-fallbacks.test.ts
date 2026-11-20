@@ -32,7 +32,6 @@ type Entry = readonly [callee: string, kind: Kind]
 
 /** design §3: every construction in a fallback position, per composition file (paths under `src/modules/`), sorted. */
 const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
-  'code-capability/composition/historyQueries.ts': [['createUnboundCodeHistoryReader', 'adapter']],
   'development-automation/composition.ts': [
     ['createAdmissionLookup', 'adapter'],
     ['new EvidenceStore', 'adapter'],
@@ -58,25 +57,9 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   ],
   'event-center/composition.ts': [['service.initialize', 'memo']],
   'integration/composition/webhookIngress.ts': [['createWebhookRateLimiters', 'process-local']],
-  'intent/composition/apply.ts': [
-    ['composeIntentApplyArtifactLifecycle', 'adapter'],
-    ['composeIntentApplyResourceBinding', 'adapter'],
-    ['composeLegacyIntentSkillArtifactCompat', 'adapter'],
-    ['createFileIntentArtifactContent', 'adapter'],
-    ['createFileIntentPluginArtifactOwner', 'adapter'],
-    ['createFileIntentSkillArtifactOwner', 'adapter'],
-    ['createResourceCatalogAclIdentityReadPort', 'adapter'],
-    ['join', 'path'],
-  ],
-  'intent/composition/applyMaintenance.ts': [
-    ['composeIntentApplyArtifactLifecycle', 'adapter'],
-    ['createLogger', 'logger'],
-  ],
-  'intent/composition/maintenance.ts': [
-    ['createFileIntentScratchStore', 'adapter'],
-    ['createLogger', 'logger'],
-  ],
-  'memory/composition.ts': [['composeMemoryInjectionQueriesFor', 'adapter']],
+  'intent/composition/apply.ts': [['join', 'path']],
+  'intent/composition/applyMaintenance.ts': [['createLogger', 'logger']],
+  'intent/composition/maintenance.ts': [['createLogger', 'logger']],
   'resource-catalog/composition/mcpProbeOperations.ts': [['probeMcp', 'adapter']],
   'resource-catalog/composition/pluginOperations.ts': [['createLocalPluginInstaller', 'adapter']],
   'resource-catalog/composition/postgresqlResourcePackageCatalog.ts': [
@@ -233,17 +216,14 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
 
 /** design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. */
 const SUCCESSORS: Readonly<Record<string, string>> = {
-  intent: 'S12 item 1, step 3',
-  'code-capability': 'S12 item 1, step 3',
-  memory: 'S12 item 1, step 3',
   'system-operations': 'S12 item 1, step 4',
   'development-automation': 'S12 item 1, step 4',
   'resource-catalog': 'S12 item 1, step 5',
   'task-execution': 'S12 item 1, step 6',
   'source-control': 'S12 item 1, step 7',
 }
-/** Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center. */
-const ADAPTER_FALLBACKS = 78
+/** Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center, RFC-523 intent, code-capability and memory. */
+const ADAPTER_FALLBACKS = 67
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */

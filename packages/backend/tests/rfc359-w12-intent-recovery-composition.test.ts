@@ -16,6 +16,7 @@ import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/inten
 import type { IntentApplyArtifact as IntentJournalArtifactV1 } from '@/modules/resource-catalog/public/types'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeStandaloneIntentArtifacts } from './helpers/intentApply'
 
 const pluginBytes = 'export default function recoveredPlugin() { return "published-generation" }\n'
 const staleTimestamp = () => Date.now() - 3_600_000
@@ -39,7 +40,11 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
   // RFC-359 —— 两个 provider 共用同一份恢复装配。此处此前是 `isolation === 'exclusive'` 的二分。
   function compose(input: { appHome: string; pluginsDir: string }) {
     return createAtomicApplyRecovery([
-      composeIntentApplyRecoveryScene({ ...input, db: harness.db, log }),
+      composeIntentApplyRecoveryScene({
+        db: harness.db,
+        artifacts: composeStandaloneIntentArtifacts({ db: harness.db, ...input }),
+        log,
+      }),
     ])
   }
 

@@ -30,11 +30,11 @@ import { ulid } from 'ulid'
 import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
 
 const OWNER = 'user_owner_rfc291_00000000'
 

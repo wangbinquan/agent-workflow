@@ -29,7 +29,7 @@ import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { applyIntentChangeset, type IntentApplyReceipt } from '@/modules/intent/composition/apply'
+import { type IntentApplyReceipt } from '@/modules/intent/composition/apply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
@@ -37,6 +37,7 @@ import { encodeZip } from '@/util/zip'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
+import { composeStandaloneIntentArtifacts, applyIntentChangeset } from './helpers/intentApply'
 
 const OWNER_ID = 'rfc294-apply-owner'
 
@@ -251,9 +252,12 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({
@@ -273,9 +277,12 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({

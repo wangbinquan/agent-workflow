@@ -2,7 +2,6 @@
 // database clients supply the same readers and application projections.
 
 import type { CodeHistoryReader } from '../application/ports/historyReader'
-import { createUnboundCodeHistoryReader } from '../application/unboundHistoryReader'
 import type { CapabilityAgentExistence } from '../application/ports/existingResources'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -42,7 +41,8 @@ export interface CodeHistoryQueries {
 export function composeCodeHistoryQueries(
   db: PersistenceDb,
   agents: CapabilityAgentExistence,
-  history: CodeHistoryReader = createUnboundCodeHistoryReader(),
+  /** RFC-523: the caller states the reader (the daemon binds the installation's package reader). */
+  history: CodeHistoryReader,
 ): CodeHistoryQueries {
   return Object.freeze({
     matrix: createCodeMatrixQuery(createCapabilityMatrixRead(db, agents)),

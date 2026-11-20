@@ -72,6 +72,7 @@ import { createHttpRequestApp, type AppHttpProviderCore } from '@/server'
 import { createProductionOverviewQuery } from './productionOverview'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { standaloneDigitalEmployeeSelections } from './digitalEmployeeSelections'
+import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 
 export interface ProductionPerformanceApplicationInput {
   readonly db: PersistenceDb
@@ -142,6 +143,7 @@ export async function createProductionPerformanceApplication(
     ],
   })
   const memoryOperations = composeMemoryOperationsFor({
+    injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
     taskNodeRuns: createNodeRunQueries(db),
     taskNodeOutputs: createNodeOutputQueries(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),

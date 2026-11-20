@@ -49,6 +49,7 @@ import {
 import { assertNameUnchangedForEditor } from '../src/modules/resource-catalog/application/resourceAccess'
 import type { Permission } from '@agent-workflow/shared'
 import { errorHandler } from '../src/util/errors'
+import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
 
 const NOW = 1_700_000_000_000
 
@@ -523,7 +524,11 @@ describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went w
         }),
     }
     mountCapabilityTemplateRoutes(app, {
-      codeHistoryQueries: composeCodeHistoryQueries(db, createAgentExecutionQueries(db)),
+      codeHistoryQueries: composeCodeHistoryQueries(
+        db,
+        createAgentExecutionQueries(db),
+        createUnboundCodeHistoryReader(),
+      ),
       capabilityTemplates: composeCapabilityTemplateOperations({
         db,
         access: {

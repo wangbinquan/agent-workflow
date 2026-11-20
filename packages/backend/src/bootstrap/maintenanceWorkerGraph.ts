@@ -26,9 +26,17 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { createTokenCallAudit } from '@/auth/composition'
 import { openDb } from '@/db/client'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
+import {
+  composeIntentApplyArtifactLifecycle,
+  composeLocalIntentArtifactContent,
+} from '@/modules/intent/composition/apply'
+import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
-import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
+import {
+  composeIntentMaintenanceCommandsForDatabase,
+  composeLocalIntentScratch,
+} from '@/modules/intent/composition/maintenance'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -267,18 +275,25 @@ export const composeMaintenanceWorkerGraph = async (
     objectPublications: workerEffects?.objectPublications,
     logsDir: join(appHome, 'logs'),
   })
+  // RFC-523: the worker states intent's scratch store and artifact content — the hosted ones, or intent's standalone selections.
   const intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
     db: client,
-    scratch: workerEffects?.intentScratch,
-    appHome,
+    scratch: workerEffects?.intentScratch ?? composeLocalIntentScratch({ appHome }),
     log: createLogger('intentMaintenance'),
   })
+  const intentPluginsDir = join(appHome, 'plugins')
   const atomicApply = createAtomicApplyRecovery([
     composeIntentApplyRecoveryScene({
       db: client,
-      appHome,
-      pluginsDir: join(appHome, 'plugins'),
-      content: workerEffects?.intentArtifactContent,
+      artifacts: composeIntentApplyArtifactLifecycle({
+        db: client,
+        appHome,
+        pluginsDir: intentPluginsDir,
+        content:
+          workerEffects?.intentArtifactContent ??
+          composeLocalIntentArtifactContent({ appHome, pluginsDir: intentPluginsDir }),
+        legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+      }),
       log: createLogger('intentMaintenance'),
     }),
     resourcePackageRecoveryScene,

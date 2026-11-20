@@ -49,6 +49,7 @@ import { encodeLineageSlotPath } from '@/modules/task-execution/domain/execution
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 
 const ulid = monotonicFactory()
 
@@ -83,6 +84,7 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
   const memoryOperations = composeMemoryOperationsFor({
+    injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
     taskNodeRuns: createNodeRunQueries(db),
     taskNodeOutputs: createNodeOutputQueries(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),

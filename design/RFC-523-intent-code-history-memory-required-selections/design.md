@@ -53,7 +53,9 @@ RFC-521 门登记的 11 处（`packages/backend/src/modules/` 下）与它们的
 ### D5 门与锁
 
 - RFC-521 门删去 11 条登记，`ADAPTER_FALLBACKS` 78 → 67，`SUCCESSORS` 删去 intent、code-capability 与 memory。
-- 按被删的名字、选项与回落原文全仓搜用例（`grep -l` 列出全部命中文件，不截断），钉旧形状的锁随改；新增 RFC-523 用例并登记 guard-manifest。
+- 按被删的名字、选项与回落原文全仓搜用例（`grep -l` 列出全部命中文件，不截断），钉旧形状的锁随改；intent 组合层不再取 resource-catalog 的两
+  个 infrastructure 文件与一个端口类型，preflight 与 `rfc376-structural-guards` 的跨 context 内部文件对各删 3 条，`counts.json` 的
+  `cross-context-internal-file-pairs` 上限按实测 21 → 18；新增 RFC-523 用例并登记 guard-manifest。
 
 ## 3. 清单（退出门）
 
@@ -90,7 +92,7 @@ RFC-521 门登记的 11 处（`packages/backend/src/modules/` 下）与它们的
 - **C10**：组合层不再替调用方造适配器；跨模块的装配在 bootstrap 显式完成。
 - **C11**：intent 组合层少一个便捷入口、多两个单机选择；public 不变。
 - **C12**：RFC-523 用例读全部生产文件；RFC-521 门覆盖全部模块的组合层。
-- **C13**：计数不升；适配器回落 78 → 67。
+- **C13**：计数不升；`cross-context-internal-file-pairs` 上限按实测 21 → 18；适配器回落 78 → 67。
 
 ## 8. 本步承担的演进与留下的债
 

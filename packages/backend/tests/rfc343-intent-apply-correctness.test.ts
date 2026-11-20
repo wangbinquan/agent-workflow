@@ -41,6 +41,7 @@ import {
 } from '@/modules/intent/infrastructure/migration/intentApplyLegacyCodec'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { type StagedSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { composeStandaloneIntentArtifacts } from './helpers/intentApply'
 
 const OWNER_ID = 'rfc343-intent-owner'
 
@@ -225,9 +226,12 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({
@@ -298,9 +302,12 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({
@@ -332,9 +339,12 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({
@@ -363,9 +373,12 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({

@@ -2,25 +2,19 @@ import { createIntentApplyRecoveryScene } from '../infrastructure/intentApplyRec
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger, type Logger } from '@/util/log'
 import type { IntentApplyArtifactLifecycle } from '../infrastructure/intentApplyEngine'
-import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
-import type { LegacyIntentSkillArtifactCompat } from '../ports/skillArtifactCompensation'
-import { composeIntentApplyArtifactLifecycle } from './apply'
 
 /** Recovery-only composition (both providers); it never constructs apply resources. */
 export function composeIntentApplyRecoveryScene(input: {
   readonly db: PersistenceDb
-  readonly appHome: string
-  readonly pluginsDir: string
-  readonly artifacts?: IntentApplyArtifactLifecycle
-  readonly content?: IntentArtifactContentPort
-  readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
+  /** RFC-523: the caller composes the artifact lifecycle (the worker with the hosted or the standalone content). */
+  readonly artifacts: IntentApplyArtifactLifecycle
   readonly now?: () => number
   readonly log?: Logger
 }) {
   const log = input.log ?? createLogger('intentApplyMaintenance')
   return createIntentApplyRecoveryScene({
     db: input.db,
-    artifacts: input.artifacts ?? composeIntentApplyArtifactLifecycle(input),
+    artifacts: input.artifacts,
     ...(input.now === undefined ? {} : { now: input.now }),
     log,
   })

@@ -67,8 +67,6 @@ describeEachProvider('RFC-370 retained scratch and remote writers', (harness) =>
     })
     const commands = composeIntentMaintenanceCommandsForDatabase({
       db: harness.db,
-      appHome: 'unused',
-      scratchDirectoryName: 'unused',
       scratch,
     })
     expect(await commands.scratch.sweep({ retentionHours: 24, now: 86_400_100 })).toEqual({

@@ -35,10 +35,14 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
+import {
+  composeStandaloneIntentArtifacts,
+  applyIntentChangeset,
+  type ApplyIntentDeps,
+} from './helpers/intentApply'
 
 const OWNER = 'user_owner_apply_0000000000'
 const APPROVER = 'user_approver_apply_000000'
@@ -663,9 +667,12 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
+            artifacts: composeStandaloneIntentArtifacts({
+              db: db,
+              appHome,
+              pluginsDir: join(appHome, 'plugins'),
+            }),
             db,
-            appHome,
-            pluginsDir: join(appHome, 'plugins'),
           }),
         ]).converge({ intent: [] }),
       ).toEqual({
@@ -702,9 +709,12 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       // …and convergence replays the idempotent tail.
       const converged = await createAtomicApplyRecovery([
         composeIntentApplyRecoveryScene({
+          artifacts: composeStandaloneIntentArtifacts({
+            db: db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
           db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
         }),
       ]).converge({ intent: [] })
       expect(converged.rolledForward).toBe(1)
@@ -713,9 +723,12 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       // tail complete, so the journal is no longer rolled forward at all.
       const again = await createAtomicApplyRecovery([
         composeIntentApplyRecoveryScene({
+          artifacts: composeStandaloneIntentArtifacts({
+            db: db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
           db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
         }),
       ]).converge({ intent: [] })
       expect(again).toEqual({ rolledForward: 0, failed: 0 })

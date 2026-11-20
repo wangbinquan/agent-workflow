@@ -23,6 +23,7 @@ import {
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import {
+  composeMemoryInjectionQueriesFor,
   composeMemoryOperationsFor,
   composePostgresqlMemoryOperations,
   composeSqliteMemoryOperations,
@@ -80,10 +81,12 @@ const runtime: NonNullable<DigitalEmployeeCompositionOptions['runtime']> = {
 
 describeEachProvider('RFC-359 W12 —— composition binding contracts', (harness) => {
   test('memory: a catalog binding yields a usable catalog through every composition name', async () => {
+    const taskNodeRuns = createNodeRunQueries(harness.db)
     const options = {
       db: harness.db,
       clarifyAnswers: createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
-      taskNodeRuns: createNodeRunQueries(harness.db),
+      taskNodeRuns,
+      injectionQueries: composeMemoryInjectionQueriesFor(harness.db, taskNodeRuns),
       taskNodeOutputs: createNodeOutputQueries(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
@@ -119,10 +122,12 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   })
 
   test('memory: omitted or optional bindings keep the distill-only contract', async () => {
+    const taskNodeRuns = createNodeRunQueries(harness.db)
     const options = {
       db: harness.db,
       clarifyAnswers: createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
-      taskNodeRuns: createNodeRunQueries(harness.db),
+      taskNodeRuns,
+      injectionQueries: composeMemoryInjectionQueriesFor(harness.db, taskNodeRuns),
       taskNodeOutputs: createNodeOutputQueries(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },

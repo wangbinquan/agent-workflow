@@ -35,6 +35,10 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
+import {
+  composeStandaloneIntentArtifacts,
+  composeStandaloneIntentApply,
+} from './helpers/intentApply'
 
 describeEachProvider('RFC-370 hosted resource production families', (harness) => {
   test('real skill and plugin Intent commits recover after authority loss using fresh content owners', async () => {
@@ -151,8 +155,11 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
       .where(eq(intentSessions.id, sessionId))
     const first = composeIntentApplyOperations({
       db: harness.db,
-      appHome: 'must-not-access-local-content',
-      ...composeCrewStationIntentArtifacts(create().intent),
+      ...composeStandaloneIntentApply({
+        db: harness.db,
+        appHome: 'must-not-access-local-content',
+        ...composeCrewStationIntentArtifacts(create().intent),
+      }),
     })
     await expect(
       first.apply({
@@ -183,10 +190,13 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
     const cold = create()
     const convergence = createAtomicApplyRecovery([
       composeIntentApplyRecoveryScene({
+        artifacts: composeStandaloneIntentArtifacts({
+          db: harness.db,
+          appHome: 'must-not-access-local-content',
+          pluginsDir: 'must-not-access-local-plugins',
+          content: composeCrewStationIntentArtifacts(cold.intent).artifactContent,
+        }),
         db: harness.db,
-        appHome: 'must-not-access-local-content',
-        pluginsDir: 'must-not-access-local-plugins',
-        content: composeCrewStationIntentArtifacts(cold.intent).artifactContent,
       }),
     ])
     await convergence.converge({ intent: [] })

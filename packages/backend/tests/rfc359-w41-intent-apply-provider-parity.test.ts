@@ -44,6 +44,7 @@ import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { composeStandaloneIntentApply } from './helpers/intentApply'
 
 const OWNER = 'user_rfc359_w41_owner'
 
@@ -139,9 +140,12 @@ async function applyDraft(sessionId: string, draft: { draftRevision: number; dra
     'http',
   )
   return await composeIntentApplyOperations({
+    ...composeStandaloneIntentApply({
+      db: db,
+      appHome,
+      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+    }),
     db,
-    appHome,
-    aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
   }).apply({
     actor,
     authority,

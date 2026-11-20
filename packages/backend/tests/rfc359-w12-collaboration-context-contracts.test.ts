@@ -70,9 +70,11 @@ import type { DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskE
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 
 function composeCapabilities(db: PersistenceDb, appHome: string) {
   const memory = composeMemoryOperationsFor({
+    injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
     taskNodeRuns: createNodeRunQueries(db),
     taskNodeOutputs: createNodeOutputQueries(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),

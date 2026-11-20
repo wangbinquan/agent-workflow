@@ -66,28 +66,20 @@ export function composeIntentMaintenanceCommands(
   return createIntentMaintenanceCommands({ ...dependencies, now: () => Date.now() })
 }
 
-export function composeIntentMaintenanceCommandsForAppHome(
-  input: Omit<IntentMaintenanceCompositionDependencies, 'scratch'> & {
-    readonly appHome: string
-    readonly scratchDirectoryName: string
-    readonly scratch?: IntentScratchStore
-  },
-): IntentMaintenanceCommands {
-  return composeIntentMaintenanceCommands({
-    ...input,
-    scratch:
-      input.scratch ??
-      createFileIntentScratchStore({
-        appHome: input.appHome,
-        directoryName: input.scratchDirectoryName,
-      }),
+/** RFC-523: the standalone scratch store under the app home (also the maintenance worker's when the deployment supplies no hosted one). */
+export function composeLocalIntentScratch(input: {
+  readonly appHome: string
+  readonly directoryName?: string
+}): IntentScratchStore {
+  return createFileIntentScratchStore({
+    appHome: input.appHome,
+    directoryName: input.directoryName ?? INTENT_SCRATCH_DIRNAME,
   })
 }
 
 interface ProviderIntentMaintenanceCompositionInput {
-  readonly appHome: string
-  readonly scratchDirectoryName?: string
-  readonly scratch?: IntentScratchStore
+  /** RFC-523: the caller states the scratch store (the worker takes the hosted one or the standalone selection). */
+  readonly scratch: IntentScratchStore
   readonly log?: Logger
 }
 
@@ -98,11 +90,9 @@ export function composeIntentMaintenanceCommandsForDatabase(
   },
 ): IntentMaintenanceCommands {
   const log = input.log ?? createLogger('intentMaintenance')
-  return composeIntentMaintenanceCommandsForAppHome({
+  return composeIntentMaintenanceCommands({
     persistence: createIntentPersistence(input.db),
-    appHome: input.appHome,
-    scratchDirectoryName: input.scratchDirectoryName ?? INTENT_SCRATCH_DIRNAME,
-    ...(input.scratch === undefined ? {} : { scratch: input.scratch }),
+    scratch: input.scratch,
     log,
   })
 }

@@ -20,6 +20,11 @@ import {
   createIntentWorkflowGraphValidation,
 } from '@/modules/intent/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
+import {
+  composeIntentApplyResourceBinding,
+  composeLegacyIntentSkillArtifactCompat,
+} from '@/modules/resource-catalog/composition/intentApply'
+import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
@@ -93,16 +98,23 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     workflowQueries: resources.workflowCatalog.queries,
     authorityFor,
   })
+  // RFC-523: the daemon composes what intent apply used to build when given none — the legacy skill artifact binding, and
+  // the resource session binding over the selected artifact owners (a fresh MCP transaction lifecycle, as before).
   const artifacts = composeIntentApplyArtifactLifecycle({
     db,
     appHome,
     content: input.adapters.intentArtifacts.artifactContent,
+    legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
   })
   const applyOperations = composeIntentApplyOperations({
     db,
-    appHome,
-    ...input.adapters.intentArtifacts,
-    aclIdentities: resources.resourceCatalog.persistence.identities,
+    resources: composeIntentApplyResourceBinding({
+      db,
+      mcpLifecycle: createMcpTransactionLifecycle(),
+      pluginArtifacts: input.adapters.intentArtifacts.pluginArtifacts,
+      skillArtifacts: input.adapters.intentArtifacts.skillArtifacts,
+      aclIdentities: resources.resourceCatalog.persistence.identities,
+    }),
     artifacts,
   })
   const platformInventory = createIntentPlatformInventoryParticipant({
