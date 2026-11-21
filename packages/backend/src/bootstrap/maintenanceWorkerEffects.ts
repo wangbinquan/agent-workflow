@@ -4,6 +4,8 @@ import type { TaskArchiveContentBinding } from '@/modules/task-execution/public/
 import type { IntentArtifactContentPort, IntentScratchStore } from '@/modules/intent/public/types'
 import type { WorkspaceMaintenanceEffects } from '@/modules/source-control/public/types'
 import type { PostgresqlDatabaseClientOptions } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { Logger } from '@/util/log'
 import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
 import type {
   DatabaseBackupMaintenance,
@@ -43,6 +45,46 @@ export interface MaintenanceWorkerEffectsSelections {
 }
 
 export type MaintenanceWorkerEffectsCapability = keyof MaintenanceWorkerEffectsSelections
+
+/** RFC-528: the families a standalone worker builds itself — the standalone profile has a constructor for each. */
+export type StandaloneMaintenanceWorkerFamily =
+  | 'contentStore'
+  | 'taskArchive'
+  | 'resourcePackageRecovery'
+  | 'workspaceMaintenance'
+  | 'pluginGenerationGc'
+  | 'intentScratch'
+  | 'intentArtifactContent'
+
+/** RFC-528: the worker's own database client and app home, over which the standalone families are built. */
+export interface MaintenanceWorkerScope {
+  readonly db: PersistenceDb
+  readonly appHome: string
+  /** The resource-package recovery log, as each database adapter passes it (PostgreSQL: none). */
+  readonly log?: Logger
+}
+
+/** RFC-528: the worker's one selection — every standalone family present; the hosted-only families as selected. */
+export type MaintenanceWorkerEffects = Required<
+  Pick<MaintenanceWorkerEffectsSelections, StandaloneMaintenanceWorkerFamily>
+> &
+  Pick<
+    MaintenanceWorkerEffectsSelections,
+    'databaseWrites' | 'eventsArchive' | 'databaseBackups' | 'objectPublications'
+  >
+
+/** RFC-528: the standalone profile's worker part (`bootstrap/standaloneMaintenanceWorker.ts`), one constructor per family. */
+export type StandaloneMaintenanceWorkerEffects = {
+  readonly [F in Exclude<StandaloneMaintenanceWorkerFamily, 'resourcePackageRecovery'>]: (
+    scope: MaintenanceWorkerScope,
+  ) => NonNullable<MaintenanceWorkerEffectsSelections[F]>
+} & {
+  /** A selected recovery-content effects factory stands in for the local file effects. */
+  readonly resourcePackageRecovery: (
+    scope: MaintenanceWorkerScope,
+    recoveryEffectsFactory: MaintenanceWorkerEffectsSelections['resourcePackageRecoveryContent'],
+  ) => NonNullable<MaintenanceWorkerEffectsSelections['resourcePackageRecovery']>
+}
 
 export type MaintenanceWorkerEffectsEnvironment =
   PlatformEffectsEnvironment<MaintenanceWorkerEffectsSelections>

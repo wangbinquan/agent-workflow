@@ -122,6 +122,8 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/bootstrap/maintenanceJobBindings.ts',
   'packages/backend/src/bootstrap/maintenanceWorkerEffects.ts',
   'packages/backend/src/bootstrap/maintenanceWorkerEntries.ts',
+  // RFC-528: the standalone profile's maintenance-worker part (the effects a standalone worker builds itself).
+  'packages/backend/src/bootstrap/standaloneMaintenanceWorker.ts',
   'packages/backend/src/bootstrap/executionInitialization.ts',
   'packages/backend/src/bootstrap/workspaceTaskImage.ts',
   // Development reload assembles the same daemon host and retains its lifetime.

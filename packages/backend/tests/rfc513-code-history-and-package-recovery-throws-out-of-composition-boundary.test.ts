@@ -305,7 +305,8 @@ describe('RFC-513 ② composition 只装配', () => {
       const graph = sourceOf(worker)
       expect(callArguments(graph, text(graph), 'requireExclusiveRecoverySelection')).toEqual([
         [
-          '{artifacts:input.workerEffects?.resourcePackageRecovery,recoveryEffectsFactory:input.workerEffects?.resourcePackageRecoveryContent,}',
+          // RFC-528: the worker's one selection (`selectWorkerEffects`) makes the check where it chooses.
+          '{artifacts:selected?.resourcePackageRecovery,recoveryEffectsFactory:selected?.resourcePackageRecoveryContent,}',
         ],
       ])
     },

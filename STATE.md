@@ -12,6 +12,16 @@
   任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-527 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
   §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 组合层不变，bootstrap 的 worker 图只装配，单机默认值在单机 profile 的 worker 部分；C11 public
+  不变；C12 RFC-528 用例覆盖 worker 一侧的全部本机构造与选择，RFC-389 的中立图锁照旧；C13 计数不变。
+- **§14 不变量 / S12 第九步**：单机维护 worker 的 7 族本机效果由单机 profile 的 worker 部分 `bootstrap/standaloneMaintenanceWorker.ts` 给出，
+  worker 打开数据库后只选一次（描述符没给的族取单机部分，惰性），装配图只读选好的完整效果、不再构造本机实现；生产的托管描述符列全这 7 族，
+  托管不混入本机实现；worker 线程不加载 `bootstrap/standalone.ts`。S12 第 1 项余项里维护 worker 的一半达成；daemon 一侧按托管能力是否为
+  `null` 选本机实现的几处随第 6 项。
+- **集中验证**（基于 `49c302647`，HEAD 前进到 `1551dda63` 后重同步，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；首批 320 个
+  文件与 HEAD 同时 A/B（含经监督者按路径起 worker 的用例），查出本人一处缺陷——新用例核对托管独有族时没顾到压缩写法会删去最后一个成员后的
+  逗号——修正后 4 / 4；候选多出的另一条是钩子时限，两边同时各以 1 个 worker 再跑都过；两边相同的 6 个是用例自带的时限与导出仓库没有 git
+  历史；终验 5 个文件 66 / 66；架构报告的计数都不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-21 RFC-527 源代码管理的适配器回落改为必填注入（Done；`design/RFC-527-source-control-required-selections/`）
 

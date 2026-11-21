@@ -307,7 +307,7 @@ describe('RFC-525 ③ 装配处的显式构造', () => {
     expect(runtime[0]![0]).not.toContain('pluginInstaller:')
   })
 
-  test('维护 worker：两处都经同一个选择；冲突检查照旧，本机恢复带选定的恢复内容', () => {
+  test('维护 worker：两处都经同一个选择；冲突检查照旧，本机恢复带选定的恢复内容（RFC-528：本机恢复在单机 profile 的 worker 部分）', () => {
     const maintenance = callArguments(
       WORKER,
       text(WORKER),
@@ -315,21 +315,26 @@ describe('RFC-525 ③ 装配处的显式构造', () => {
     )
     expect(maintenance).toHaveLength(2)
     for (const [argument] of maintenance)
-      expect(argument).toContain(
-        'artifacts:resourcePackageArtifactRecovery({db,appHome,workerEffects',
-      )
+      expect(argument).toContain('artifacts:effects.resourcePackageRecovery')
+    expect(callArguments(WORKER, text(WORKER), 'selectWorkerEffects')).toEqual([
+      ['{selected:workerEffects,db,appHome}'],
+      ['{selected:workerEffects,db,appHome,log:resourcePackageLog}'],
+    ])
     expect(callArguments(WORKER, text(WORKER), 'requireExclusiveRecoverySelection')).toEqual([
       [
-        '{artifacts:input.workerEffects?.resourcePackageRecovery,recoveryEffectsFactory:input.workerEffects?.resourcePackageRecoveryContent}',
+        '{artifacts:selected?.resourcePackageRecovery,recoveryEffectsFactory:selected?.resourcePackageRecoveryContent}',
       ],
     ])
+    expect(text(WORKER).replace(/\s+/g, '')).toContain(
+      'resourcePackageRecovery:selected?.resourcePackageRecovery??standalone.resourcePackageRecovery(scope,selected?.resourcePackageRecoveryContent)',
+    )
     expect(
       callArguments(WORKER, text(WORKER), 'composeLocalResourcePackageArtifactRecovery'),
-    ).toEqual([
-      [
-        "{db:input.db,appHome:input.appHome,pluginsDir:join(input.appHome,'plugins'),recoveryEffectsFactory:input.workerEffects?.resourcePackageRecoveryContent,log:input.log}",
-      ],
-    ])
+    ).toEqual([])
+    const standalone = at('bootstrap', 'standaloneMaintenanceWorker.ts')
+    expect(
+      callArguments(standalone, text(standalone), 'composeLocalResourcePackageArtifactRecovery'),
+    ).toEqual([["{db,appHome,pluginsDir:join(appHome,'plugins'),recoveryEffectsFactory,log}"]])
   })
 
   test('单机 MCP 诊断显式选进程内执行器', () => {

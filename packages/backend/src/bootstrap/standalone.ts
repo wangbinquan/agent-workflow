@@ -1,5 +1,7 @@
 // RFC-394: the standalone profile owns local dependency probes and their existing diagnostics.
 // RFC-431: it is also the standalone assembly root — it states every selection a standalone daemon uses.
+// RFC-528: the standalone maintenance worker's effects are the profile's worker part, ./standaloneMaintenanceWorker.ts
+// (a worker thread does not load this file).
 import { join } from 'node:path'
 import {
   detectGitCapabilities,

@@ -45,6 +45,8 @@ const MEMORY = at('modules', 'memory', 'composition.ts')
 const HISTORY = at('modules', 'code-capability', 'composition', 'historyQueries.ts')
 const DAEMON_INTENT = at('bootstrap', 'daemonModules', 'intent.ts')
 const WORKER = at('bootstrap', 'maintenanceWorkerGraph.ts')
+// RFC-528: the standalone worker's intent selections moved into the standalone profile's worker part.
+const STANDALONE_WORKER = at('bootstrap', 'standaloneMaintenanceWorker.ts')
 
 /** Property names and optionality of an interface, or of the first parameter's type literal of a function. */
 function members(path: string, source: string, name: string): Map<string, boolean> {
@@ -255,19 +257,31 @@ describe('RFC-523 ③ 显式构造用的是此前回落的同一组工厂', () =
     ])
   })
 
-  test('维护 worker：托管效果在时取托管的，否则取 intent 的单机选择', () => {
+  test('维护 worker：托管效果在时取托管的，否则取 intent 的单机选择（RFC-528：单机一支在单机 profile 的 worker 部分）', () => {
     const source = text(WORKER)
     const maintenance = callArguments(WORKER, source, 'composeIntentMaintenanceCommandsForDatabase')
     expect(maintenance).toHaveLength(1)
-    expect(maintenance[0]![0]).toContain(
-      'scratch:workerEffects?.intentScratch??composeLocalIntentScratch({appHome})',
-    )
+    expect(maintenance[0]![0]).toContain('scratch:effects.intentScratch')
     const lifecycle = callArguments(WORKER, source, 'composeIntentApplyArtifactLifecycle')
     expect(lifecycle).toEqual([
       [
-        '{db:client,appHome,pluginsDir:intentPluginsDir,content:workerEffects?.intentArtifactContent??composeLocalIntentArtifactContent({appHome,pluginsDir:intentPluginsDir}),legacySkillArtifacts:composeLegacyIntentSkillArtifactCompat()}',
+        '{db:client,appHome,pluginsDir:intentPluginsDir,content:effects.intentArtifactContent,legacySkillArtifacts:composeLegacyIntentSkillArtifactCompat()}',
       ],
     ])
+    const compact = source.replace(/\s+/g, '')
+    expect(compact).toContain(
+      'intentScratch:selected?.intentScratch??standalone.intentScratch(scope)',
+    )
+    expect(compact).toContain(
+      'intentArtifactContent:selected?.intentArtifactContent??standalone.intentArtifactContent(scope)',
+    )
+    const standalone = text(STANDALONE_WORKER)
+    expect(callArguments(STANDALONE_WORKER, standalone, 'composeLocalIntentScratch')).toEqual([
+      ['{appHome}'],
+    ])
+    expect(
+      callArguments(STANDALONE_WORKER, standalone, 'composeLocalIntentArtifactContent'),
+    ).toEqual([["{appHome,pluginsDir:join(appHome,'plugins')}"]])
   })
 
   test('两个单机选择：同一个工厂、同一组参数', () => {

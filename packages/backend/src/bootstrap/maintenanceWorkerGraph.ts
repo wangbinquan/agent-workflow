@@ -1,5 +1,9 @@
 import { createExecutionPermitRegistry } from '@/modules/task-execution/composition'
-import type { MaintenanceWorkerEffectsSelections } from './maintenanceWorkerEffects'
+import type {
+  MaintenanceWorkerEffects,
+  MaintenanceWorkerEffectsSelections,
+} from './maintenanceWorkerEffects'
+import { standaloneMaintenanceWorkerEffects } from './standaloneMaintenanceWorker'
 import {
   composeMaintenanceJobBindings,
   type MaintenanceOwnerCommands,
@@ -12,7 +16,6 @@ import {
 } from '@/platform/content/composition'
 import { persistenceSchema } from './persistenceSchema'
 import { composeContentBackupHorizon } from '@/modules/system-operations/composition/contentRetention'
-import { createLocalRuntimeContent } from './contentRuntime'
 import { createActiveHistoryRestrictionProvider } from '@/modules/system-operations/composition/epochInstallation'
 import { composeCrossContextClosure } from './crossContextClosure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -22,39 +25,23 @@ import {
   composeWorkspacePreparationMaintenance,
   createWorkerWorkspaceMaintenanceCommand,
 } from '@/modules/task-execution/composition/workspacePreparationMaintenance'
-import {
-  composeLocalRepositoryPreparationEffects,
-  composeLocalScratchWorkspaceEffects,
-  composeRepositoryPreparation,
-} from '@/modules/source-control/composition/repositoryPreparation'
-import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTokenCallAudit } from '@/auth/composition'
 import { openDb } from '@/db/client'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
-import {
-  composeIntentApplyArtifactLifecycle,
-  composeLocalIntentArtifactContent,
-} from '@/modules/intent/composition/apply'
+import { composeIntentApplyArtifactLifecycle } from '@/modules/intent/composition/apply'
 import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
-import {
-  composeIntentMaintenanceCommandsForDatabase,
-  composeLocalIntentScratch,
-} from '@/modules/intent/composition/maintenance'
+import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
-import {
-  createDrizzleTaskArchiveMaintenanceCommand,
-  createFileTaskArchiveContent,
-} from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import {
-  composeLocalResourcePackageArtifactRecovery,
   composeResourcePackageApplyMaintenance,
   requireExclusiveRecoverySelection,
-  type ResourcePackageApplyArtifactRecoveryPort,
 } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { composeSkillApplyRecoveryScene } from '@/modules/resource-catalog/composition/skillApplyMaintenance'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
@@ -70,8 +57,6 @@ import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persisten
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { createPluginGenerationFilesystemGcPort } from '@/modules/resource-catalog/composition/pluginGenerationGc'
-import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import { createLogger, type Logger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -87,6 +72,7 @@ type Request = GraphInput['request']
 type AdapterInput<R extends Request> = Omit<GraphInput, 'request'> & { readonly request: R }
 interface MaintenanceWorkerAdapter {
   readonly db: PersistenceDb
+  readonly effects: MaintenanceWorkerEffects
   readonly eventsArchiveStore: EventsArchiveStore
   readonly storage: MaintenanceSystemOperations['storage']
   readonly contentMaintenance: ReturnType<typeof createContentMaintenance>
@@ -96,38 +82,48 @@ interface MaintenanceWorkerAdapter {
 }
 
 /**
- * RFC-525 — the worker's resource-package recovery: the hosted selection, or the local versioned recovery the maintenance
- * composition used to build (a selected recovery-content effects factory stands in for the local file effects). Selecting
- * both is still the original conflict error, checked here where the choice is made.
+ * RFC-528 — the worker's one selection, made by each database adapter once its client is open: every family the effects
+ * descriptor gives, or (not given; a standalone worker has no descriptor) the standalone profile's, built only when used.
+ * Selecting both resource-package recovery forms is still the original conflict error, checked here where the choice is
+ * made (RFC-525). The hosted-only families have no standalone counterpart: not given means none.
  */
-function resourcePackageArtifactRecovery(input: {
+function selectWorkerEffects(input: {
+  readonly selected: GraphInput['effects']
   readonly db: PersistenceDb
   readonly appHome: string
-  readonly workerEffects: GraphInput['effects']
   readonly log?: Logger
-}): ResourcePackageApplyArtifactRecoveryPort {
+}): MaintenanceWorkerEffects {
+  const { selected } = input
+  const scope = { db: input.db, appHome: input.appHome, log: input.log }
+  const standalone = standaloneMaintenanceWorkerEffects
   requireExclusiveRecoverySelection({
-    artifacts: input.workerEffects?.resourcePackageRecovery,
-    recoveryEffectsFactory: input.workerEffects?.resourcePackageRecoveryContent,
+    artifacts: selected?.resourcePackageRecovery,
+    recoveryEffectsFactory: selected?.resourcePackageRecoveryContent,
   })
-  return (
-    input.workerEffects?.resourcePackageRecovery ??
-    composeLocalResourcePackageArtifactRecovery({
-      db: input.db,
-      appHome: input.appHome,
-      pluginsDir: join(input.appHome, 'plugins'),
-      recoveryEffectsFactory: input.workerEffects?.resourcePackageRecoveryContent,
-      log: input.log,
-    })
-  )
+  return Object.freeze({
+    contentStore: selected?.contentStore ?? standalone.contentStore(scope),
+    taskArchive: selected?.taskArchive ?? standalone.taskArchive(scope),
+    resourcePackageRecovery:
+      selected?.resourcePackageRecovery ??
+      standalone.resourcePackageRecovery(scope, selected?.resourcePackageRecoveryContent),
+    workspaceMaintenance: selected?.workspaceMaintenance ?? standalone.workspaceMaintenance(scope),
+    pluginGenerationGc: selected?.pluginGenerationGc ?? standalone.pluginGenerationGc(scope),
+    intentScratch: selected?.intentScratch ?? standalone.intentScratch(scope),
+    intentArtifactContent:
+      selected?.intentArtifactContent ?? standalone.intentArtifactContent(scope),
+    databaseWrites: selected?.databaseWrites,
+    eventsArchive: selected?.eventsArchive,
+    databaseBackups: selected?.databaseBackups,
+    objectPublications: selected?.objectPublications,
+  })
 }
 
 function composeWorkerContentMaintenance(
   db: PersistenceDb,
   appHome: string,
-  effects: GraphInput['effects'],
+  effects: MaintenanceWorkerEffects,
 ) {
-  const local = (effects?.contentStore?.policy.externalKind ?? 'local-file') === 'local-file'
+  const local = effects.contentStore.policy.externalKind === 'local-file'
   return createContentMaintenance({
     db,
     horizon: composeContentBackupHorizon(db, appHome),
@@ -165,18 +161,20 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     const db = createPostgresqlDatabaseClient(runtime, {
       beforeWrite: workerEffects?.databaseWrites?.assertHeld,
     })
+    const effects = selectWorkerEffects({ selected: workerEffects, db, appHome })
     const operational = createPostgresqlDatabaseOperationalAdapter({
       runtime,
       contract: logicalSchemaContract,
     })
     const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
-      artifacts: resourcePackageArtifactRecovery({ db, appHome, workerEffects }),
+      artifacts: effects.resourcePackageRecovery,
     })
     return {
       db,
+      effects,
       close,
-      contentMaintenance: composeWorkerContentMaintenance(db, appHome, workerEffects),
+      contentMaintenance: composeWorkerContentMaintenance(db, appHome, effects),
       eventsArchiveStore: createTaskNodeEventArchiveStore(db),
       storage: Object.freeze({
         async run() {
@@ -213,22 +211,24 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     }
     registerConnectionClose(close)
     const resourcePackageLog = createLogger('intentMaintenance')
+    const effects = selectWorkerEffects({
+      selected: workerEffects,
+      db,
+      appHome,
+      log: resourcePackageLog,
+    })
     const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
-      artifacts: resourcePackageArtifactRecovery({
-        db,
-        appHome,
-        workerEffects,
-        log: resourcePackageLog,
-      }),
+      artifacts: effects.resourcePackageRecovery,
       // The main thread supplies active journal ids with each converge payload.
       activitySource: { activeApplyIds: () => [] },
       log: resourcePackageLog,
     })
     return {
       db,
+      effects,
       close,
-      contentMaintenance: composeWorkerContentMaintenance(db, appHome, workerEffects),
+      contentMaintenance: composeWorkerContentMaintenance(db, appHome, effects),
       eventsArchiveStore: createTaskNodeEventArchiveStore(db),
       storage: Object.freeze({
         async run() {
@@ -253,7 +253,8 @@ export const composeMaintenanceWorkerGraph = async (
   input: GraphInput,
 ): Promise<MaintenanceWorkerGraph & { readonly ownerCommands: MaintenanceOwnerCommands }> => {
   const adapter = selectMaintenanceWorkerAdapter(input)
-  const { db: client, resourcePackageRecoveryScene } = adapter
+  // RFC-528: the effects the adapter selected once — the descriptor's families, or the standalone profile's.
+  const { db: client, resourcePackageRecoveryScene, effects } = adapter
   // RFC-526: the worker has no deployment presence selection — the local file presence its task persistence and human-gate
   // closure used to build when none was given, in both deployments as before.
   const workspacePresence = createFileWorkspacePresenceQueries()
@@ -262,28 +263,24 @@ export const composeMaintenanceWorkerGraph = async (
     createExecutionPermitRegistry(),
     workspacePresence,
   )
-  const { appHome, effects: workerEffects } = input
+  const { appHome } = input
   const store = createMaintenanceRunStore(client)
   const integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
     composeWebhookDeliveryPersistenceFor(client),
   )
   const taskExecution = createTaskExecutionPersistence(client, {
     humanGateOpen: closure.humanGateOpen,
-    content: workerEffects?.contentStore ?? createLocalRuntimeContent(client, appHome),
+    content: effects.contentStore,
     historyRestrictions: createActiveHistoryRestrictionProvider(),
     recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence,
   })
   const taskRecoveryOperations = taskExecution.recoveryAdministration
-  // RFC-526: the hosted archive binding, or the local archive content the command used to build (standalone: `null`).
   const taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(
     client,
     closure.collaborationReads.archive,
-    workerEffects?.taskArchive ?? { content: createFileTaskArchiveContent() },
+    effects.taskArchive,
   )
-  // RFC-527: the hosted workspace effects, or (standalone: none) the local preparation, scratch and maintenance
-  // filesystem the compositions used to build, with the same arguments.
-  const hostedWorkspaceEffects = workerEffects?.workspaceMaintenance
   const workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand(
     (isMaterializingTask) => {
       const preparationInput = {
@@ -296,22 +293,12 @@ export const composeMaintenanceWorkerGraph = async (
         appHome,
         repositoryPreparation: composeRepositoryPreparation({
           ...preparationInput,
-          scratchEffects:
-            hostedWorkspaceEffects?.scratch ??
-            composeLocalScratchWorkspaceEffects(preparationInput),
-          preparationEffects:
-            hostedWorkspaceEffects?.preparation ??
-            composeLocalRepositoryPreparationEffects(preparationInput),
+          scratchEffects: effects.workspaceMaintenance.scratch,
+          preparationEffects: effects.workspaceMaintenance.preparation,
         }),
         maintenance: composeWorkspaceMaintenanceCommand({
           ...composeSourceControlTaskPorts(client),
-          filesystem:
-            hostedWorkspaceEffects?.filesystem(isMaterializingTask) ??
-            createNodeWorkspaceMaintenanceFilesystem({
-              appHome,
-              isMaterializingTask,
-              invalidateWorkspacePath: invalidateCallGraphIndex,
-            }),
+          filesystem: effects.workspaceMaintenance.filesystem(isMaterializingTask),
           terminalMaintenance: taskExecution.terminalMaintenance,
         }),
       })
@@ -320,8 +307,7 @@ export const composeMaintenanceWorkerGraph = async (
   const tokenCallAudit = createTokenCallAudit(client)
   const pluginGenerationGcCommand = composePluginGenerationGcCommand(
     client,
-    workerEffects?.pluginGenerationGc ??
-      createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
+    effects.pluginGenerationGc,
   )
   const maintenanceExecutionFence = createMaintenanceExecutionFence(client)
   const developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(client)
@@ -329,20 +315,19 @@ export const composeMaintenanceWorkerGraph = async (
   const systemOperations = composeMaintenanceSystemOperations({
     retentionPhases: composeRetentionSweepPhases(client),
     eventsArchiveStore: adapter.eventsArchiveStore,
-    eventsArchiveContent: workerEffects?.eventsArchive,
+    eventsArchiveContent: effects.eventsArchive,
     storage: {
       async run() {
         return { ...(await adapter.storage.run()), ...(await adapter.contentMaintenance.run()) }
       },
     },
-    databaseBackups: workerEffects?.databaseBackups,
-    objectPublications: workerEffects?.objectPublications,
+    databaseBackups: effects.databaseBackups,
+    objectPublications: effects.objectPublications,
     logsDir: join(appHome, 'logs'),
   })
-  // RFC-523: the worker states intent's scratch store and artifact content — the hosted ones, or intent's standalone selections.
   const intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
     db: client,
-    scratch: workerEffects?.intentScratch ?? composeLocalIntentScratch({ appHome }),
+    scratch: effects.intentScratch,
     log: createLogger('intentMaintenance'),
   })
   const intentPluginsDir = join(appHome, 'plugins')
@@ -353,9 +338,7 @@ export const composeMaintenanceWorkerGraph = async (
         db: client,
         appHome,
         pluginsDir: intentPluginsDir,
-        content:
-          workerEffects?.intentArtifactContent ??
-          composeLocalIntentArtifactContent({ appHome, pluginsDir: intentPluginsDir }),
+        content: effects.intentArtifactContent,
         legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
       }),
       log: createLogger('intentMaintenance'),

@@ -355,12 +355,19 @@ ${name}(input)`,
     ])
       expect(runtime.text).toContain(literal)
     const graph = UNITS.find((unit) => unit.path === PREFIX + GRAPH)!
-    const fallback = calls(graph.source, 'createPluginGenerationFilesystemGcPort')
+    // RFC-528: the standalone constructors are the standalone profile's worker part; the graph selects them lazily,
+    // once, as the right side of `??`.
+    expect(calls(graph.source, 'createPluginGenerationFilesystemGcPort')).toHaveLength(0)
+    const fallback = calls(graph.source, 'standalone.pluginGenerationGc')
     expect(fallback).toHaveLength(1)
     expect(ts.isBinaryExpression(fallback[0]!.parent)).toBe(true)
     expect((fallback[0]!.parent as ts.BinaryExpression).operatorToken.kind).toBe(
       ts.SyntaxKind.QuestionQuestionToken,
     )
-    expect(graph.text).toContain('objectPublications: workerEffects?.objectPublications')
+    const standaloneWorker = UNITS.find(
+      (unit) => unit.path === PREFIX + 'bootstrap/standaloneMaintenanceWorker.ts',
+    )!
+    expect(calls(standaloneWorker.source, 'createPluginGenerationFilesystemGcPort')).toHaveLength(1)
+    expect(graph.text).toContain('objectPublications: effects.objectPublications')
   })
 })

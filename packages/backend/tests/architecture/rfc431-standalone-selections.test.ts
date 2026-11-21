@@ -28,11 +28,14 @@ const STATING_ROOTS = (path: string) =>
   path === STANDALONE || /^packages\/backend\/src\/bootstrap\/crewstation[A-Za-z]*\.ts$/.test(path)
 /**
  * The maintenance Worker thread composes its own effect families from the hosted descriptor it is started with
- * (`workerEffects`; none for standalone, which keeps the Worker's local families). Those are not deployment
- * selections, and RFC-431 leaves the Worker's own local assembly as is (design §3 non-goals).
+ * (`workerEffects`; none for standalone — RFC-528: the standalone profile's worker part,
+ * `bootstrap/standaloneMaintenanceWorker.ts`, builds those families). They are not deployment selections, and
+ * RFC-431 leaves the Worker's own assembly as is (design §3 non-goals).
  */
 const WORKER_ROOTS = (path: string) =>
-  /^packages\/backend\/src\/bootstrap\/maintenanceWorker[A-Za-z]*\.ts$/.test(path)
+  /^packages\/backend\/src\/bootstrap\/(maintenanceWorker[A-Za-z]*|standaloneMaintenanceWorker)\.ts$/.test(
+    path,
+  )
 const REQUIRED: readonly string[] = REQUIRED_SELECTIONS
 const NULLABLE: readonly string[] = NULLABLE_SELECTIONS
 const STATED = [...REQUIRED, ...NULLABLE]

@@ -446,14 +446,23 @@ describe('RFC-527 ③ 装配处的显式构造', () => {
     )
   })
 
-  test('维护 worker 在没有托管效果时显式给本机的草稿区、准备与维护文件系统（此前回落的同一组参数）', () => {
+  test('维护 worker 在没有托管效果时用本机的草稿区、准备与维护文件系统（此前回落的同一组参数；RFC-528：在单机 profile 的 worker 部分）', () => {
     const worker = squash(text(WORKER))
     for (const expected of [
-      'scratchEffects:hostedWorkspaceEffects?.scratch??composeLocalScratchWorkspaceEffects(preparationInput)',
-      'preparationEffects:hostedWorkspaceEffects?.preparation??composeLocalRepositoryPreparationEffects(preparationInput)',
-      'filesystem:hostedWorkspaceEffects?.filesystem(isMaterializingTask)??createNodeWorkspaceMaintenanceFilesystem({appHome,isMaterializingTask,invalidateWorkspacePath:invalidateCallGraphIndex})',
+      'scratchEffects:effects.workspaceMaintenance.scratch',
+      'preparationEffects:effects.workspaceMaintenance.preparation',
+      'filesystem:effects.workspaceMaintenance.filesystem(isMaterializingTask)',
+      'workspaceMaintenance:selected?.workspaceMaintenance??standalone.workspaceMaintenance(scope)',
     ])
       expect(worker).toContain(expected)
+    const standalone = squash(text(at('bootstrap', 'standaloneMaintenanceWorker.ts')))
+    for (const expected of [
+      'constpreparationInput={taskPorts:composeSourceControlTaskPorts(db),db,appHome}',
+      'scratch:composeLocalScratchWorkspaceEffects(preparationInput)',
+      'preparation:composeLocalRepositoryPreparationEffects(preparationInput)',
+      'createNodeWorkspaceMaintenanceFilesystem({appHome,isMaterializingTask,invalidateWorkspacePath:invalidateCallGraphIndex})',
+    ])
+      expect(standalone).toContain(expected)
   })
 
   test('daemon 的维护命令只交部署选择的文件系统；两项托管能力原样交入', () => {

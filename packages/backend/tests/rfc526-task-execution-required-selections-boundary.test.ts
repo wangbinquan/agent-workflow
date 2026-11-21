@@ -413,16 +413,16 @@ describe('RFC-526 ③ 装配处的显式构造', () => {
     )
   })
 
-  test('维护 worker：归档内容与工作区存在性显式给出本机实现（部署效果为 null 时）', () => {
+  test('维护 worker：归档内容与工作区存在性显式给出本机实现（部署效果为 null 时；RFC-528：归档内容在单机 profile 的 worker 部分）', () => {
     expect(
       callArguments(WORKER, text(WORKER), 'createDrizzleTaskArchiveMaintenanceCommand'),
-    ).toEqual([
-      [
-        'client',
-        'closure.collaborationReads.archive',
-        'workerEffects?.taskArchive??{content:createFileTaskArchiveContent()}',
-      ],
-    ])
+    ).toEqual([['client', 'closure.collaborationReads.archive', 'effects.taskArchive']])
+    expect(squash(text(WORKER))).toContain(
+      'taskArchive:selected?.taskArchive??standalone.taskArchive(scope)',
+    )
+    expect(squash(text(at('bootstrap', 'standaloneMaintenanceWorker.ts')))).toContain(
+      'taskArchive:()=>({content:createFileTaskArchiveContent()})',
+    )
     expect(squash(text(WORKER))).toContain(
       'constworkspacePresence=createFileWorkspacePresenceQueries()',
     )

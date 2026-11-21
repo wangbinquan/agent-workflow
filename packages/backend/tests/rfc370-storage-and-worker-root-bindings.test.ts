@@ -407,9 +407,9 @@ test('both real maintenance Worker composers bind the selected recovery content 
   for (const invocation of calls) {
     const call = objectArgument(invocation)
     // RFC-525: the worker chooses the recovery itself — the hosted selection, or the local one bound to the selected
-    // recovery content (see the helper below).
-    expect(compact(property(call, source, 'artifacts'), source)).toStartWith(
-      'resourcePackageArtifactRecovery({db,appHome,workerEffects',
+    // recovery content. RFC-528: chosen once with the worker's other effects (see the selection below).
+    expect(compact(property(call, source, 'artifacts'), source)).toBe(
+      'effects.resourcePackageRecovery',
     )
     expect(
       call.properties
@@ -417,8 +417,12 @@ test('both real maintenance Worker composers bind the selected recovery content 
         .map((node) => compact(node.name, source)),
     ).toContain('db')
   }
-  const helper = compact(source, source)
-  expect(helper).toContain(
-    "input.workerEffects?.resourcePackageRecovery??composeLocalResourcePackageArtifactRecovery({db:input.db,appHome:input.appHome,pluginsDir:join(input.appHome,'plugins'),recoveryEffectsFactory:input.workerEffects?.resourcePackageRecoveryContent,log:input.log,})",
+  const selection = compact(source, source)
+  expect(selection).toContain(
+    'selected?.resourcePackageRecovery??standalone.resourcePackageRecovery(scope,selected?.resourcePackageRecoveryContent)',
+  )
+  const standalone = load('bootstrap/standaloneMaintenanceWorker.ts')
+  expect(compact(standalone, standalone)).toContain(
+    "composeLocalResourcePackageArtifactRecovery({db,appHome,pluginsDir:join(appHome,'plugins'),recoveryEffectsFactory,log,})",
   )
 })
