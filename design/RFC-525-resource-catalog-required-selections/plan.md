@@ -19,7 +19,7 @@
 - [x] AC-1 16 处回落不再存在；RFC-521 门的实测与登记逐条相等，适配器回落 35 条
 - [x] AC-2 daemon、资源包命令、维护 worker 与 MCP 探测得到的对象不变；用例给出的选择与此前缺省相同
 - [x] AC-3 bootstrap 不深取 resource-catalog 的 infrastructure；public surface 不升；计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（实现提交 70 / 70）
 
 ## 集中验证
 
@@ -68,7 +68,8 @@ HEAD（`0d7412d52`）的树相同。开发期按 `tsc` 列出的调用逐处改�
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `b7c1ad51c`（实现，父提交是 `0d7412d52`）：exact SHA 主 CI run 44849251684 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与
+  `CI required`）；同一提交触发的 windows-platform（run 44849251608）与 maintenance-soak-nightly（run 44849251607）也通过；未重跑。
 - 本 RFC 的落档提交 `0d7412d52`（只改文档；同一提交记下 RFC-524 转 Done）：主 CI run 44821010955 的 70 个 job 第 1 次全部通过（含 design/ 的链接
   检查与 `CI required`）；未重跑。
 
