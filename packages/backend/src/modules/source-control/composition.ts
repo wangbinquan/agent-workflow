@@ -22,7 +22,6 @@ import {
   isEmployeeCaseWorkspaceOperationHost,
   type EmployeeCaseWorkspaceEffectsFactory,
 } from './application/ports/employeeCaseWorkspaceOperations'
-import { createFileEmployeeCaseWorkspaceEffectsFactory } from './infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 import type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 
@@ -45,6 +44,9 @@ export { createFileRepositoryGitWorkspaceFactory } from './infrastructure/local/
 export { createFileRepositoryWorkspaceReadQueries } from './infrastructure/local/fileRepositoryWorkspaceReadQueries'
 export { createNodeWorkspaceMaintenanceFilesystem } from './infrastructure/nodeWorkspaceMaintenanceFilesystem'
 export { createFileEmployeeCaseWorkspaceEffectsFactory } from './infrastructure/local/fileEmployeeCaseWorkspaceEffects'
+/** RFC-527: the standalone candidate and conflict-merge selections (the local effects the bindings used to build). */
+export { createLocalRepositoryCandidateEffects } from './composition/repositoryCandidate'
+export { createFileConflictMergeWorkspaceEffects } from './composition/conflictMerge'
 export { composeLocalWorkspaceExcludeProfiles } from './composition/workspaceExcludeProfiles'
 export { buildRepositoryTransportConnectionProjection } from './application/repositoryTransportConnectionProjection'
 // RFC-359 W4-B6：仓库工作区存储只有一份；两个 bootstrap 与存量调用方仍经各自的具名绑定装配。
@@ -185,13 +187,14 @@ type BoundEmployeeCaseOperation<F extends (...args: never[]) => unknown> = (
   request: Parameters<F>[0],
 ) => ReturnType<F>
 
-/** A complete effects factory for a durable, single-writer employee Case scene. */
-export function bindEmployeeCaseWorkspaceParticipant(
-  input: {
-    readonly publicationTransport?: RepositoryPublicationTransport
-    readonly effects?: EmployeeCaseWorkspaceEffectsFactory
-  } = {},
-): {
+/**
+ * A complete effects factory for a durable, single-writer employee Case scene. RFC-527: the effects are the deployment's
+ * selection (standalone: the local factory).
+ */
+export function bindEmployeeCaseWorkspaceParticipant(input: {
+  readonly publicationTransport?: RepositoryPublicationTransport
+  readonly effects: EmployeeCaseWorkspaceEffectsFactory
+}): {
   materialize: BoundEmployeeCaseOperation<typeof materializeEmployeeCaseWorkspace>
   rematerialize: BoundEmployeeCaseOperation<typeof rematerializeEmployeeCaseWorkspace>
   fetchRemoteHead: BoundEmployeeCaseOperation<typeof fetchEmployeeWorkspaceRemoteHead>
@@ -201,7 +204,7 @@ export function bindEmployeeCaseWorkspaceParticipant(
   resolveBaseline: BoundEmployeeCaseOperation<typeof resolveEmployeeWorkspaceBaseline>
   importCommit: BoundEmployeeCaseOperation<typeof importEmployeeWorkspaceCommit>
 } {
-  const selected = input.effects ?? createFileEmployeeCaseWorkspaceEffectsFactory()
+  const selected = input.effects
   // RFC-370 §9.2 V3: a hosted scene runs each whole use case in its volume,
   // fetching with the volume's own platform Git credentials.
   if (isEmployeeCaseWorkspaceOperationHost(selected)) {
@@ -245,8 +248,11 @@ export type {
   WorkspaceContentEffects,
   WorkspaceContentEffectsFactory,
 } from './application/ports/workspaceContentEffects'
-/** RFC-370 §10 V17: registered repositories' reads, registration and refresh. */
-export { composeRepositoryMirrors } from './composition/repositoryMirrors'
+/** RFC-370 §10 V17: registered repositories' reads, registration and refresh (RFC-527: local or remote, chosen by bootstrap). */
+export {
+  composeLocalRepositoryMirrors,
+  composeRemoteRepositoryMirrors,
+} from './composition/repositoryMirrors'
 /** RFC-447: repository-group management and the standalone URL import. */
 export { composeRepositoryGroups, localRepositoryUrlImport } from './composition/repositoryGroups'
 export {

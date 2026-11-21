@@ -21,6 +21,9 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  createFileConflictMergeWorkspaceEffects,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
 } from '@/modules/source-control/composition'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
 import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition/required-ports'
@@ -172,7 +175,9 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       createdAt: 1,
       updatedAt: 1,
     })
-    const sourceControl = bindEmployeeCaseWorkspaceParticipant()
+    const sourceControl = bindEmployeeCaseWorkspaceParticipant({
+      effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    })
     const workspace = await sourceControl.materialize({
       caseRoot: join(
         appHome,
@@ -259,7 +264,9 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
       directPublicationSubject: { kind: 'system' },
-      conflictMerge: bindConflictMergeParticipant(),
+      conflictMerge: bindConflictMergeParticipant({
+        effects: createFileConflictMergeWorkspaceEffects(),
+      }),
       sourceControl: {
         ...bindChangeCandidateParticipant({ candidateEffects: factory }),
         ...bindCandidateDeliveryParticipant({
@@ -426,7 +433,9 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     git(baselineRepo, 'checkout', '-q', 'main')
     git(baselineRepo, 'fetch', '-q', 'origin')
 
-    const sourceControl = bindEmployeeCaseWorkspaceParticipant()
+    const sourceControl = bindEmployeeCaseWorkspaceParticipant({
+      effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    })
     await expect(
       sourceControl.resolveBaseline({
         baselineRepoPath: baselineRepo,
@@ -651,7 +660,9 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       inputArtifacts: selectedInputArtifacts,
       repositoryPreparation: staticCachedRepositoryPreparation(db),
       sourceControl: bindEmployeeCaseWorkspaceParticipant({ effects: checkpointEffects.effects }),
-      conflictMerge: bindConflictMergeParticipant(),
+      conflictMerge: bindConflictMergeParticipant({
+        effects: createFileConflictMergeWorkspaceEffects(),
+      }),
       now: () => 10,
     })
     let firstSettled = false
@@ -1024,11 +1035,19 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       db,
       appHome,
       directPublicationSubject: { kind: 'system' },
-      conflictMerge: bindConflictMergeParticipant(),
+      conflictMerge: bindConflictMergeParticipant({
+        effects: createFileConflictMergeWorkspaceEffects(),
+      }),
       sourceControl: {
-        ...bindChangeCandidateParticipant(),
-        ...bindCandidateDeliveryParticipant(),
-        ...bindEmployeeCaseWorkspaceParticipant(),
+        ...bindChangeCandidateParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
+        ...bindCandidateDeliveryParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
+        ...bindEmployeeCaseWorkspaceParticipant({
+          effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+        }),
       },
       repoRemote: { resolve: () => ({ remoteUrl: remoteRepo, defaultBranch: 'main' }) },
       mrEffects: {

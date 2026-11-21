@@ -48,6 +48,7 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 import {
   composeWorkspaceMaintenanceCommand,
   createFileWorkspacePresenceQueries,
+  createNodeWorkspaceMaintenanceFilesystem,
 } from '@/modules/source-control/composition'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -166,12 +167,15 @@ export function composeTestTaskDriveFactory(input: {
       historyRestrictions: input.historyRestrictions,
       workspacePresence: input.deps.workspacePresence ?? createFileWorkspacePresenceQueries(),
     })
+  // RFC-527: the filesystem is required; the local one is what the command built from these arguments.
   const maintenance = composeWorkspaceMaintenanceCommand({
     ...composeSourceControlTaskPorts(input.deps.db),
-    appHome: input.appHome,
     terminalMaintenance: persistence.terminalMaintenance,
-    isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
-    invalidateWorkspacePath: () => {},
+    filesystem: createNodeWorkspaceMaintenanceFilesystem({
+      appHome: input.appHome,
+      isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
+      invalidateWorkspacePath: () => {},
+    }),
   })
   return createTaskDriveCoordinatorFactory({
     async runConfiguration() {

@@ -19,19 +19,12 @@ import {
 export function bindWorkspaceChangePublication(input: {
   readonly workspace: RepositoryGitWorkspaceScope
   readonly transport: RepositoryPublicationTransport
-  /**
-   * RFC-370: true when the caller selected a workspace factory — submodule
-   * commit policies then run on the selected sub-workspace; otherwise they bind
-   * by path.
-   */
-  readonly bindPoliciesToWorkspace: boolean
   readonly log: RepositoryPublicationLogger
 }): WorkspaceChangePublicationParticipant {
   requireRepositoryGitWorkspaceScope(input.workspace)
   const deps = Object.freeze({
     workspace: input.workspace,
     transport: input.transport,
-    bindPoliciesToWorkspace: input.bindPoliciesToWorkspace,
     log: input.log,
     commits: bindRepositoryCommitParticipant,
     subworkspace: bindRepositoryGitSubworkspace,

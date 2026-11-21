@@ -6,7 +6,8 @@
   Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S12（装配余项）第 1 项。
 - **前序**：[RFC-526](../RFC-526-task-execution-required-selections/proposal.md)（S12 第七步）清了 task-execution，RFC-521 门的适配器回落余
-  19 处，全在 source-control。本 RFC 是第 1 项的第七步，也是最后一步。
+  19 处，全在 source-control。本 RFC 是第 1 项的第七步，也是清适配器回落的最后一步（单机默认值收进 `bootstrap/standalone.ts` 另立
+  后继）。
 
 ## 1. 背景
 
@@ -25,9 +26,9 @@ S12 第 1 项点名的“装配处把可空选择项转回 `undefined` 的写法
 ## 2. 目标
 
 - **G1 必填注入**：上述回落改为调用方给出，只为回落存在的选项与参数一并删去；选择助手（source-control 的 public 合同）保留名字，选择必填、
-  只做核对。
-- **G2 装配处显式构造**：单机部署的候选交付与冲突合并的部署选择改为本机实现（不再是 `null`），daemon 删去这四处 `null` → `undefined` 的转换（输入文件留存与任务恢复的
-  消费方改取可空值、显式判 `null`，删去另两处）；
+  只做核对（排除档案的选择没有生产调用方，删去）。
+- **G2 装配处显式构造**：单机部署的候选交付与冲突合并的部署选择改为本机实现（不再是 `null`），daemon 删去这四处 `null` → `undefined` 的转换（输入文件留存、任务恢复与 HTTP 装配的
+  CrewStation 事件入口的消费方改取可空值、显式判 `null`，删去另三处）；
   仓库镜像由 bootstrap 按远端是否为 `null` 显式选本机或托管一支；维护 worker 在单机时显式给出本机的准备、草稿区与维护文件系统。同一组工厂、
   同一组参数、同样的构造时机。
 - **G3 门与用例**：RFC-521 门删去全部适配器回落登记，进程内提交用例的三处按 `option` 登记（design §6），适配器回落 19 → 0、`SUCCESSORS`

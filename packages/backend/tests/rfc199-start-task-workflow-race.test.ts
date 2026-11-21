@@ -1,6 +1,6 @@
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：版本 / 删除拒绝改接生产 participant；工作区补偿改接生产 materializer，提交后删除走真实内核。
 
@@ -116,7 +116,7 @@ function launch(harness: Harness, request: StartTask) {
 }
 function prepare(harness: Harness, task: StartTask) {
   return composeRepositoryPreparation(
-    withSourceControlTaskPorts({ db: harness.db, appHome: harness.appHome }),
+    withLocalRepositoryPreparation({ db: harness.db, appHome: harness.appHome }),
   ).legacy.prepare({
     task,
     taskId: ulid(),

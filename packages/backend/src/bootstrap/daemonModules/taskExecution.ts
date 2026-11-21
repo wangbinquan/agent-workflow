@@ -143,11 +143,11 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
       readonly workspaceUploads: NonNullable<
         ProviderDependencies['routeLaunch']['workspaceUploads']
       >
-      readonly inputFiles?: ProviderDependencies['routeLaunch']['inputFiles']
+      readonly inputFiles: ProviderDependencies['routeLaunch']['inputFiles']
       /** RFC-432: the deployment's session factories, called with this session's preparation input. */
       readonly preparationEffects: DeploymentSelections['repositoryPreparationEffects']
       readonly scratchEffects: DeploymentSelections['scratchWorkspaceEffects']
-      readonly recoverySelection?: ProviderDependencies['recoverySelection']
+      readonly recoverySelection: ProviderDependencies['recoverySelection']
       readonly fusionWorkspaces: ProviderDependencies['fusion']['workspaces']
     }
   readonly finalizeWorkspace: (taskId: string) => Promise<void>

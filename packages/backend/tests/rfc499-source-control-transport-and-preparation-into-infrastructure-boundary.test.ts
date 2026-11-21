@@ -7,7 +7,7 @@
 //    不取 `node:fs`；全部生产文件、用例与 e2e 不从旧位置取任何东西：命名 import、type-only、默认与副作用 import、re-export、命名空间
 //    成员与动态 import 都认（带负对照）。
 // ③ 准备：`composition/repositoryPreparation.ts` 只声明装配函数、只从本机文件转出三个名字，没有控制流语句；装配函数恰好一次调用
-//    `createRepositoryPreparationBridge`，交出的对象恰好是 `...input` 与两组 effect、各一处回落到对应的本机工厂；准备绑定的两组 effect
+//    `createRepositoryPreparationBridge`，原样交出调用方的输入（RFC-527：两组 effect 必填，不再回落到本机工厂）；准备绑定的两组 effect
 //    必填、文件里不出现本机工厂（带负对照）。
 // ④ 三个新文件不取任何模块的 composition（本模块 `composition/required-ports` 的 type-only import 除外，与同目录既有 infrastructure
 //    文件一致）；传输不取 `node:fs`（带负对照）。
@@ -95,12 +95,6 @@ const PINNED = new Map<string, string[]>([['sessionOf', [INTENT_PERSISTENCE]]])
 const DELETED = [
   'resolveRepositoryPublicationTransportFromKeyFile',
   'resolveRepositoryTransportCredentialsFromKeyFile',
-]
-/** design D2: what the assembly hands the binding, in source order (whitespace removed). */
-const ASSEMBLY_FIELDS = [
-  '...input',
-  'scratchEffects: input.scratchEffects??composeLocalScratchWorkspaceEffects(input)',
-  'preparationEffects: input.preparationEffects??composeLocalRepositoryPreparationEffects(input)',
 ]
 /** The tests below read every production file, test and e2e file; the first pays the cold read. */
 const CORPUS_TIMEOUT = 30_000
@@ -582,12 +576,11 @@ describe('RFC-499 ③ 准备的 composition 只留装配，准备绑定的两组
     expect(controlFlow(assemblyPath, text(assemblyPath))).toEqual([])
   })
 
-  test('装配函数恰好一次建绑定：交出 ...input 与两组 effect，各一处回落到对应的本机工厂；两组 effect 照旧可选', () => {
+  test('装配函数恰好一次建绑定：原样交出调用方的输入；两组 effect 必填（RFC-527），文件里不调用本机工厂', () => {
     const file = parse(assemblyPath, text(assemblyPath))
     const calls = callsOf(file, 'createRepositoryPreparationBridge')
     expect(calls).toHaveLength(1)
-    expect(calls[0]!.arguments).toHaveLength(1)
-    expect(literalShape(file, calls[0]!.arguments[0])).toEqual(ASSEMBLY_FIELDS)
+    expect(calls[0]!.arguments.map((argument) => argument.getText(file))).toEqual(['input'])
     const body = bodyOf(assemblyPath, text(assemblyPath), 'composeRepositoryPreparation')
     expect(body).toHaveLength(1)
     expect(body![0]!.startsWith('return createRepositoryPreparationBridge(')).toBe(true)
@@ -599,9 +592,9 @@ describe('RFC-499 ③ 准备的 composition 只留装配，准备绑定的两组
           'composeRepositoryPreparation',
           member,
         ),
-      ).toBe(true)
-    expect(callsOf(file, 'composeLocalScratchWorkspaceEffects')).toHaveLength(1)
-    expect(callsOf(file, 'composeLocalRepositoryPreparationEffects')).toHaveLength(1)
+      ).toBe(false)
+    expect(callsOf(file, 'composeLocalScratchWorkspaceEffects')).toHaveLength(0)
+    expect(callsOf(file, 'composeLocalRepositoryPreparationEffects')).toHaveLength(0)
   })
 
   test('准备绑定的两组 effect 必填，文件里不出现本机工厂', () => {

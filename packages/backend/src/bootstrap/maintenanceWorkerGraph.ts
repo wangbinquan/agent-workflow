@@ -22,7 +22,12 @@ import {
   composeWorkspacePreparationMaintenance,
   createWorkerWorkspaceMaintenanceCommand,
 } from '@/modules/task-execution/composition/workspacePreparationMaintenance'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import {
+  composeLocalRepositoryPreparationEffects,
+  composeLocalScratchWorkspaceEffects,
+  composeRepositoryPreparation,
+} from '@/modules/source-control/composition/repositoryPreparation'
+import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { createTokenCallAudit } from '@/auth/composition'
 import { openDb } from '@/db/client'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
@@ -276,27 +281,41 @@ export const composeMaintenanceWorkerGraph = async (
     closure.collaborationReads.archive,
     workerEffects?.taskArchive ?? { content: createFileTaskArchiveContent() },
   )
+  // RFC-527: the hosted workspace effects, or (standalone: none) the local preparation, scratch and maintenance
+  // filesystem the compositions used to build, with the same arguments.
+  const hostedWorkspaceEffects = workerEffects?.workspaceMaintenance
   const workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand(
-    (isMaterializingTask) =>
-      composeWorkspacePreparationMaintenance({
+    (isMaterializingTask) => {
+      const preparationInput = {
+        taskPorts: composeSourceControlTaskPorts(client),
+        db: client,
+        appHome,
+      }
+      return composeWorkspacePreparationMaintenance({
         db: client,
         appHome,
         repositoryPreparation: composeRepositoryPreparation({
-          taskPorts: composeSourceControlTaskPorts(client),
-          db: client,
-          appHome,
-          preparationEffects: workerEffects?.workspaceMaintenance?.preparation,
-          scratchEffects: workerEffects?.workspaceMaintenance?.scratch,
+          ...preparationInput,
+          scratchEffects:
+            hostedWorkspaceEffects?.scratch ??
+            composeLocalScratchWorkspaceEffects(preparationInput),
+          preparationEffects:
+            hostedWorkspaceEffects?.preparation ??
+            composeLocalRepositoryPreparationEffects(preparationInput),
         }),
         maintenance: composeWorkspaceMaintenanceCommand({
           ...composeSourceControlTaskPorts(client),
-          filesystem: workerEffects?.workspaceMaintenance?.filesystem(isMaterializingTask),
-          appHome,
+          filesystem:
+            hostedWorkspaceEffects?.filesystem(isMaterializingTask) ??
+            createNodeWorkspaceMaintenanceFilesystem({
+              appHome,
+              isMaterializingTask,
+              invalidateWorkspacePath: invalidateCallGraphIndex,
+            }),
           terminalMaintenance: taskExecution.terminalMaintenance,
-          isMaterializingTask,
-          invalidateWorkspacePath: invalidateCallGraphIndex,
         }),
-      }),
+      })
+    },
   )
   const tokenCallAudit = createTokenCallAudit(client)
   const pluginGenerationGcCommand = composePluginGenerationGcCommand(

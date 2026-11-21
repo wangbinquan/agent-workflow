@@ -1,12 +1,10 @@
 import type { RepositoryWorkspaceReadQueries } from '../application/ports/repositoryWorkspaceReadQueries'
 import { requireRepositoryWorkspaceReadQueries } from '../application/workspacePorts'
-import { createFileRepositoryWorkspaceReadQueries } from '../infrastructure/local/fileRepositoryWorkspaceReadQueries'
 
-/** Only absence chooses native. Preserve a selected object's complete receiver. */
+/** The caller's selection is required (RFC-527); preserve its complete receiver. */
 export function selectRepositoryWorkspaceReadQueries(
-  selected?: RepositoryWorkspaceReadQueries,
+  selected: RepositoryWorkspaceReadQueries,
 ): RepositoryWorkspaceReadQueries {
-  const queries = selected === undefined ? createFileRepositoryWorkspaceReadQueries() : selected
-  requireRepositoryWorkspaceReadQueries(queries)
-  return queries
+  requireRepositoryWorkspaceReadQueries(selected)
+  return selected
 }

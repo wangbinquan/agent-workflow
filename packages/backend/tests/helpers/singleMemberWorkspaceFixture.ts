@@ -1,4 +1,4 @@
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // Real repository-group launch fixture shared by the 9956ce39d checkpoint
 // regression and the 2026-10-21 single non-root workspace discriminator fix.
@@ -10,7 +10,10 @@ import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflo
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
+import {
+  composeRepositoryWorkspaceStore,
+  createFileWorkspaceUploadContentFactory,
+} from '@/modules/source-control/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createRootTaskLaunchKernel } from '@/modules/task-execution/application/launch/rootTaskLaunch'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
@@ -126,14 +129,18 @@ export async function singleMemberWorkspaceFixture(
   cleanup.push(() => execution.shutdown())
   const submitted: string[] = []
   const kernel = createRootTaskLaunchKernel({
-    ...createRootTaskLaunchKernelPorts({ db }),
+    ...createRootTaskLaunchKernelPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db,
+    }),
     gitCommitIdentity: execution.identityAccess.getUserGitCommitIdentity,
     workspace: createTaskRouteWorkspaceParticipant({
       db,
       appHome,
       sourceContexts: execution.identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation(
-        withSourceControlTaskPorts({ db, appHome }),
+        withLocalRepositoryPreparation({ db, appHome }),
       ),
     }),
     coordinator: {

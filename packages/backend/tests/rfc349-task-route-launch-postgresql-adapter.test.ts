@@ -1,5 +1,5 @@
 import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 // RFC-349 — direct Agent/Workgroup launch keeps the existing route contract
 // while the selected PostgreSQL provider owns the task row, collaborators,
 // launch intent, frozen resource closure and committed lifecycle event.
@@ -55,6 +55,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
 
 interface SqlResponse {
   readonly objects?: readonly Record<string, unknown>[]
@@ -264,7 +265,7 @@ async function workspaceParticipant(input: {
           db: input.db,
           appHome: root,
           repositoryPreparation: composeRepositoryPreparation(
-            withSourceControlTaskPorts({ db: input.db, appHome: root }),
+            withLocalRepositoryPreparation({ db: input.db, appHome: root }),
           ),
           sourceContexts: () => {
             throw new Error('scratch launch has no source seal')
@@ -434,7 +435,12 @@ async function harness(input: {
     })
   const ids = ['task-agent', 'intent-agent', 'task-workgroup', 'intent-workgroup']
   const dependencies: TaskRouteLaunchDependencies = {
-    ...createRootTaskLaunchPorts({ db: postgres.db, configPath: join(configRoot, 'config.json') }),
+    ...createRootTaskLaunchPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db: postgres.db,
+      configPath: join(configRoot, 'config.json'),
+    }),
     resourceAuthorityFor,
     gitCommitIdentity: {
       async execute(userId) {
@@ -827,7 +833,11 @@ function gitMetadataHarness(
   })
   let sequence = 0
   const dependencies: RootTaskLaunchDependencies = {
-    ...createRootTaskLaunchKernelPorts({ db: postgres.db }),
+    ...createRootTaskLaunchKernelPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db: postgres.db,
+    }),
     gitCommitIdentity: { execute: lookup },
     workspace: {
       async prepare(request) {

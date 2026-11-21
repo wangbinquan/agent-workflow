@@ -3,23 +3,18 @@ import type {
   RepositoryGitWorkspaceFactory,
   RepositoryGitWorkspaceScope,
 } from '../application/ports/repositoryGitWorkspace'
-import type { RepositoryGit } from '../application/repositoryCommit'
 import {
   requireRepositoryGitWorkspaceFactory,
   requireRepositoryGitWorkspaceScope,
 } from '../application/workspacePorts'
 export { requireRepositoryGitWorkspaceScope } from '../application/workspacePorts'
-import { createFileRepositoryGitWorkspaceFactory } from '../infrastructure/local/fileRepositoryGitWorkspace'
 
-/** Only an absent selection chooses native; an explicit selection is kept whole. */
+/** The caller's selection is required and kept whole; selection only checks it (RFC-527). */
 export function selectRepositoryGitWorkspaceFactory(
-  selected?: RepositoryGitWorkspaceFactory,
-  legacyRunGit?: RepositoryGit,
+  selected: RepositoryGitWorkspaceFactory,
 ): RepositoryGitWorkspaceFactory {
-  const factory =
-    selected === undefined ? createFileRepositoryGitWorkspaceFactory(legacyRunGit) : selected
-  requireRepositoryGitWorkspaceFactory(factory)
-  return factory
+  requireRepositoryGitWorkspaceFactory(selected)
+  return selected
 }
 
 export function bindRepositoryGitWorkspace(

@@ -1,11 +1,7 @@
-// RFC-370: preserve the full mutable native API; one Task-owned upload policy.
+// RFC-370: preserve the full mutable native API; one Task-owned upload policy. RFC-527: the native
+// `applyUploadsToWorktree` (only tests used it) moved to tests/helpers/nativeWorkspaceUploads.ts.
 import { resolve } from 'node:path'
 import type { UploadLimits } from '../../domain/uploads'
-import type {
-  WorkspaceUploadPlan,
-  WorkspaceUploadResult,
-} from '../../application/ports/workspaceUploads'
-import { applyWorkspaceUploads } from '../../composition/workspaceUploads'
 import { resolveUniqueUploadNameSync } from '../../application/workspaceUploads'
 import type { UploadInputDef, UploadFile } from '../../domain/uploads'
 import { entryExists } from '@/platform/content/local/uploadPaths'
@@ -37,23 +33,4 @@ export interface UploadResult {
 /** Pick the original name without creating a directory, using the single policy. */
 export function resolveUniqueName(dir: string, filename: string): string {
   return resolveUniqueUploadNameSync(filename, (candidate) => entryExists(resolve(dir, candidate)))
-}
-
-function isNativeUploadResult(value: WorkspaceUploadResult): value is UploadResult {
-  return value.packedByKey instanceof Map
-}
-
-export async function applyUploadsToWorktree(plan: UploadPlan): Promise<UploadResult> {
-  const request: WorkspaceUploadPlan = {
-    workspace: { workspaceRef: plan.worktreePath },
-    defs: plan.defs,
-    files: plan.files,
-    limits: plan.limits,
-    ...(plan.inputsSubdir === undefined ? {} : { inputsSubdir: plan.inputsSubdir }),
-    ...(plan.recovery === undefined ? {} : { recovery: plan.recovery }),
-  }
-  const result = await applyWorkspaceUploads(request)
-  if (!isNativeUploadResult(result))
-    throw new TypeError('Native uploads require their mutable result')
-  return result
 }

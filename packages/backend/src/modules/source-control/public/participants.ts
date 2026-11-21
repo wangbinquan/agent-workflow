@@ -189,10 +189,8 @@ export {
   requireIsolationWorkspaceScope,
 } from '../composition/isolationWorkspaces'
 
-export {
-  selectWorkspaceExcludeProfileFactory,
-  bindWorkspaceExcludeProfile,
-} from '../composition/workspaceExcludeProfiles'
+// RFC-527: the exclude-profile selection left with its only caller (a task-execution entry only tests used).
+export { bindWorkspaceExcludeProfile } from '../composition/workspaceExcludeProfiles'
 
 export type {
   AgentWorkspaceGitControlSnapshot,

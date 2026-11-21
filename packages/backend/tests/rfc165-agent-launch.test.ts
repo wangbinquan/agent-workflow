@@ -100,6 +100,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createAgent, renameAgent } from './helpers/model/resourceWrites'
 import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -440,7 +441,12 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       preparations = 0,
       drives = 0
     const launch = createAgentRouteLaunch({
-      ...createRootTaskLaunchPorts({ db, configPath: join(appHome, 'config.json') }),
+      ...createRootTaskLaunchPorts({
+        workspaceUploads: createFileWorkspaceUploadContentFactory(),
+        inputFiles: null,
+        db,
+        configPath: join(appHome, 'config.json'),
+      }),
       agent: {
         resources: {
           ...resources,

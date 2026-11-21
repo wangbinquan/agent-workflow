@@ -37,6 +37,7 @@ import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import { listOpenLifecycleAlertsForTask } from '@/modules/task-execution/application/lifecycleAlerts/openLifecycleAlerts'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
 
 const NOW = 1_788_600_000_000
 /** 宽到不会自己跳闸的断路器；测断路器的用例自己收窄。 */
@@ -110,6 +111,7 @@ function repairEngineFor(
     awaitReleasedSettled: async () => {},
   }
   const repairs = createTaskRouteRepairOperations({
+    workspaceReads: createFileRepositoryWorkspaceReadQueries(),
     db: harness.db,
     persistence,
     activity,

@@ -36,6 +36,7 @@ import {
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
 
 type Dependencies = Parameters<typeof createTaskRouteRepairOperations>[0]
 
@@ -119,7 +120,8 @@ export function createRepairEngine(
     awaitReleasedSettled: async () => {},
   }
   const repairs = createTaskRouteRepairOperations({
-    workspaceReads: options.workspaceReads,
+    // RFC-527: the repair operations' workspace reads are required — a test's own, else the local ones they used to build.
+    workspaceReads: options.workspaceReads ?? createFileRepositoryWorkspaceReadQueries(),
     db,
     persistence,
     activity,

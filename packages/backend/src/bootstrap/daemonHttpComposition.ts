@@ -65,7 +65,8 @@ import {
 import {
   composeCachedRepositoryOperations,
   composeRepositoryGroups,
-  composeRepositoryMirrors,
+  composeLocalRepositoryMirrors,
+  composeRemoteRepositoryMirrors,
   createWorkspaceContentScope,
 } from '@/modules/source-control/composition'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
@@ -430,10 +431,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       }),
       documentation: Object.freeze({ configuration }),
       webhookIngress: composeWebhookIngressTransport({
-        crewStationEvents:
-          integrationModules.crewStationEvents === null
-            ? undefined
-            : integrationModules.crewStationEvents,
+        crewStationEvents: integrationModules.crewStationEvents,
         webhookIngressPersistence: integrationModules.webhookIngressPersistence,
         secretBox: input.secretBox,
         digitalEmployeeEventCenter: eventCenter,
@@ -490,15 +488,18 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       }),
     })
 
-  const repositoryMirrors = composeRepositoryMirrors({
-    store: core.repositoryWorkspaceStore,
-    secretBox: input.secretBox,
-    appHome: input.appHome,
-    // RFC-433: a hosted remote reads in the system volume; standalone (null) keeps its own mirror clones.
-    ...(input.selections.repositoryRemote === null
-      ? {}
-      : { remote: input.selections.repositoryRemote }),
-  })
+  // RFC-433: a hosted remote reads in the system volume; standalone (null) keeps its own mirror clones. RFC-527: chosen
+  // here explicitly.
+  const repositoryRemote = input.selections.repositoryRemote
+  const repositoryMirrors =
+    repositoryRemote === null
+      ? composeLocalRepositoryMirrors({ store: core.repositoryWorkspaceStore })
+      : composeRemoteRepositoryMirrors({
+          store: core.repositoryWorkspaceStore,
+          remote: repositoryRemote,
+          secretBox: input.secretBox,
+          appHome: input.appHome,
+        })
   const resourceCatalogRoutes: ProviderAppCompositionInput<
     SelectedDaemonProviderCore<P>
   >['resourceCatalog'] = Object.freeze({

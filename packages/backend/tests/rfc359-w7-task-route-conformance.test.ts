@@ -72,6 +72,10 @@ import {
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 import { Paths } from '@/util/paths'
+import {
+  createFileRepositoryWorkspaceReadQueries,
+  createFileWorkspaceUploadContentFactory,
+} from '@/modules/source-control/composition'
 
 const ulid = monotonicFactory()
 
@@ -204,6 +208,8 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       // build (no app home here, so prompts under `Paths.runsDir`).
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
       effects: composeLocalTaskDeletionEffects(),
+      // RFC-527: the route operations' workspace reads are required — the local ones they used to build.
+      workspaceReads: createFileRepositoryWorkspaceReadQueries(),
       collaboration: {} as never,
       reviewers: composeTaskReviewersPort({} as never),
       owners: composeOwnerIdentityQueries(db),
@@ -262,7 +268,12 @@ function launchOperations(harness: ProviderHarness): LaunchArms {
   // RFC-486: the route launch takes ports instead of the raw db and config path; the C segment drives only the upload
   // limits and the replay visibility, so the composition-built ports are all it needs (same factory on both providers).
   return createTaskRouteLaunchOperations(
-    createRootTaskLaunchPorts({ db: harness.db, configPath }) as never,
+    createRootTaskLaunchPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db: harness.db,
+      configPath,
+    }) as never,
   )
 }
 

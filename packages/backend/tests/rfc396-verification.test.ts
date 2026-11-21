@@ -23,6 +23,7 @@ import { codeFeedbackProposal, limitationReviewCommand } from './helpers/graphLi
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import { createGraphDesignArtifacts } from '@/modules/development-automation/infrastructure/graph-development/designArtifacts'
+import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'
 
 const homes: string[] = []
 afterEach(() => {
@@ -192,7 +193,14 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
     })
     const verificationDependencies = {
       ...f,
-      candidates: { ...bindChangeCandidateParticipant(), ...bindCandidateDeliveryParticipant() },
+      candidates: {
+        ...bindChangeCandidateParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
+        ...bindCandidateDeliveryParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
+      },
       content: composeLocalRepositoryRevisionContent(),
       profiles,
       verification: createLocalVerificationCommandEffectsFactory(),
@@ -418,7 +426,9 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
           ]),
         }),
       }
-      const candidates = bindCandidateDeliveryParticipant()
+      const candidates = bindCandidateDeliveryParticipant({
+        candidateEffects: createLocalRepositoryCandidateEffects(),
+      })
       let crash = true,
         pushCount = 0
       const platform = createGraphPlatformWorkItems({
@@ -784,7 +794,9 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
       }
       const platform = createGraphPlatformWorkItems({
         ...f,
-        candidates: bindCandidateDeliveryParticipant(),
+        candidates: bindCandidateDeliveryParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
         workspace: { initialize: async () => f.workspace, state: async () => f.workspace },
       })
       const delivered = JSON.parse(await platform.execute(plan)).result

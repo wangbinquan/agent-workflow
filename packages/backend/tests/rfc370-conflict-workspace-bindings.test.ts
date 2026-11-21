@@ -107,11 +107,13 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
     )
     const bindings = calls(source, 'bindConflictMergeParticipant')
     expect(bindings).toHaveLength(1)
-    // RFC-433: standalone states null; the bundle hands the participant its own local effects then.
-    expect(source.text.replace(/\s+/g, ' ')).toContain(
-      'const conflictMergeEffects = input.conflictMergeWorkspaceEffects === null ? undefined : input.conflictMergeWorkspaceEffects',
+    // RFC-527: the deployment's selection is handed in as is (standalone: the local effects).
+    expect(source.text).not.toMatch(/conflictMergeWorkspaceEffects\s*===\s*null/)
+    expect(property(source, bindings[0]!, 'effects')).toBe(
+      path.endsWith('/digitalEmployee.ts')
+        ? 'input.conflictMergeWorkspaceEffects'
+        : 'conflictMergeEffects',
     )
-    expect(property(source, bindings[0]!, 'effects')).toBe('conflictMergeEffects')
     if (path.endsWith('/digitalEmployee.ts')) {
       for (const name of [
         'composeDevelopmentEmployeeWorkspace',

@@ -87,8 +87,8 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly workspaceExcludeProfilesFor: (
     request: Parameters<TaskExecutionDriveParticipant['drive']>[0],
   ) => WorkspaceExcludeProfileFactory
-  readonly isolationWorkspaces?: IsolationWorkspaceFactory
-  readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
+  readonly isolationWorkspaces: IsolationWorkspaceFactory
+  readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
   readonly operationConfiguration?: TaskOperationConfigurationQueries
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics

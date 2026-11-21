@@ -13,10 +13,14 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
-import { bindConflictMergeParticipant } from '../src/modules/source-control/composition'
+import {
+  bindConflictMergeParticipant,
+  createFileConflictMergeWorkspaceEffects,
+} from '../src/modules/source-control/composition'
 
-const { finish: finishConflictMerge, prepare: prepareConflictMerge } =
-  bindConflictMergeParticipant()
+const { finish: finishConflictMerge, prepare: prepareConflictMerge } = bindConflictMergeParticipant(
+  { effects: createFileConflictMergeWorkspaceEffects() },
+)
 
 setDefaultTimeout(120_000)
 

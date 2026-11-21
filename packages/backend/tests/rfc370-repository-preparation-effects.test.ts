@@ -1,4 +1,4 @@
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -112,7 +112,7 @@ describeEachProvider('RFC-370 selected repository preparation effects', (harness
         },
       }
       const composition = composeRepositoryPreparation(
-        withSourceControlTaskPorts({
+        withLocalRepositoryPreparation({
           db: harness.db,
           appHome: 'installation:selected',
           preparationEffects: factory,
@@ -160,7 +160,7 @@ describeEachProvider('RFC-370 selected repository preparation effects', (harness
     const before = await f.journal.operation(f.operation)
     const failure = new Error('selected workspace mechanism unavailable')
     const composition = composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db: harness.db,
         appHome: 'installation:selected',
         preparationEffects: {

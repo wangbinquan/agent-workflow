@@ -16,6 +16,9 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  createFileConflictMergeWorkspaceEffects,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
 } from '@/modules/source-control/composition'
 import {
   bindCandidateDeliveryParticipant,
@@ -147,7 +150,9 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
         'base',
       )
     }
-    const sourceControl = bindEmployeeCaseWorkspaceParticipant()
+    const sourceControl = bindEmployeeCaseWorkspaceParticipant({
+      effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    })
     const resolved = await sourceControl.resolveBaseline({
       baselineRepoPath: repo,
       preferredBranch: 'main',
@@ -309,8 +314,12 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       createdAt: 30,
     })
     const candidates = {
-      ...bindChangeCandidateParticipant(),
-      ...bindCandidateDeliveryParticipant(),
+      ...bindChangeCandidateParticipant({
+        candidateEffects: createLocalRepositoryCandidateEffects(),
+      }),
+      ...bindCandidateDeliveryParticipant({
+        candidateEffects: createLocalRepositoryCandidateEffects(),
+      }),
     }
     const verificationEffects = createLocalVerificationCommandEffectsFactory()
     let environmentGeneration = 1
@@ -2073,7 +2082,9 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
         '-qm',
         'target advanced',
       )
-      const conflict = await bindConflictMergeParticipant().prepare({
+      const conflict = await bindConflictMergeParticipant({
+        effects: createFileConflictMergeWorkspaceEffects(),
+      }).prepare({
         baselineRepoPath: f.repo,
         sourceSha: f.committed.commitSha,
         targetSha: git(f.repo, 'rev-parse', 'HEAD'),

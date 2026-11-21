@@ -30,7 +30,7 @@ import { buildActor } from '../src/auth/actor'
 import { mountRepoRoutes } from '../src/routes/repos'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import {
-  composeRepositoryMirrors,
+  composeRemoteRepositoryMirrors,
   composeRepositoryWorkspaceStore,
   type RepositoryRemoteEffects,
 } from '../src/modules/source-control/composition'
@@ -49,6 +49,15 @@ import { createRepoGroup } from '../src/modules/source-control/application/repos
 import { DomainError, errorHandler } from '../src/util/errors'
 import { runGit } from '../src/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
+
+import type { RepositoryMirrors } from '@/modules/source-control/public/types'
+
+/** RFC-527: the registration of a remote mirror (the hosted assembly states its kind). */
+function remoteOf(mirrors: RepositoryMirrors) {
+  const registration = mirrors.registration
+  if (registration.kind !== 'remote') throw new Error('expected a remote registration')
+  return registration
+}
 
 const IDENTITY = ['-c', 'user.email=v17@test', '-c', 'user.name=v17']
 
@@ -175,7 +184,7 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
     )
     return {
       store,
-      mirrors: composeRepositoryMirrors({
+      mirrors: composeRemoteRepositoryMirrors({
         store,
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 17)),
         appHome: home,
@@ -189,13 +198,13 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
     const calls: string[][] = []
     const { store, mirrors } = hosted(calls)
     const url = 'https://example.test/acme/app.git'
-    const first = await mirrors.remoteRegistration!.register(url)
+    const first = await remoteOf(mirrors).register(url)
     expect(first.created).toBe(true)
     expect(await store.findCachedRepoById(first.cachedRepoId)).toMatchObject({
       defaultBranch: 'trunk',
       lastFetchedAt: 1_700_000_000_000,
     })
-    expect(await mirrors.remoteRegistration!.register(url)).toEqual({
+    expect(await remoteOf(mirrors).register(url)).toEqual({
       cachedRepoId: first.cachedRepoId,
       created: false,
     })
@@ -216,9 +225,9 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
     let clock = 1_700_000_000_000
     const { mirrors } = hosted(calls, () => clock)
     const url = 'https://example.test/acme/refresh.git'
-    const { cachedRepoId } = await mirrors.remoteRegistration!.register(url)
+    const { cachedRepoId } = await remoteOf(mirrors).register(url)
     clock += 60_000
-    const refreshed = await mirrors.remoteRegistration!.refresh(cachedRepoId)
+    const refreshed = await remoteOf(mirrors).refresh(cachedRepoId)
     expect(refreshed).toMatchObject({
       fetchOk: true,
       fetchError: null,
@@ -231,7 +240,7 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
   test('an unreachable remote is never registered; an unknown id is a 404', async () => {
     const { store, mirrors } = hosted([])
     await expect(
-      mirrors.remoteRegistration!.register('https://example.test/acme/unreachable.git'),
+      remoteOf(mirrors).register('https://example.test/acme/unreachable.git'),
     ).rejects.toMatchObject({ code: 'repo-remote-unreadable' })
     expect(await store.listCachedRepos()).toEqual([])
     await expect(mirrors.refs('nope')).rejects.toMatchObject({
@@ -248,7 +257,7 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
       {
         store,
         importRepositoryUrl: async (value) =>
-          (await mirrors.remoteRegistration!.register(value)).cachedRepoId,
+          (await remoteOf(mirrors).register(value)).cachedRepoId,
       },
       {
         name: 'v17-group',
@@ -309,7 +318,7 @@ describe('RFC-370 V17 hosted picker route', () => {
         calls.push(`files:${id}`)
         return { files: ['README.md'] }
       },
-      remoteRegistration: { register: unused, refresh: unused },
+      registration: { kind: 'remote', register: unused, refresh: unused },
     })
     const refused = await app.request('/api/repos/refs?path=/mirrors/x')
     expect(refused.status).toBe(422)

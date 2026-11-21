@@ -1,7 +1,10 @@
-import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import {
+  composeRepositoryPreparationLookup,
+  createFileWorkspaceUploadContentFactory,
+} from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { deleteAgent, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // LOCKS: RFC-165 §9b (D11) — scheduled-task three-subject support
 // (design §11.16/.17/.19).
@@ -98,7 +101,12 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
   const identityAccess = createIdentityAccessRuntime({ db })
   const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
   const launches = createTaskExecutionLaunchParticipant({
-    ...createRootTaskLaunchPorts({ db, configPath }),
+    ...createRootTaskLaunchPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db,
+      configPath,
+    }),
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
     agent: Object.freeze({
       resources: composeAgentLaunchResourceOperations({ db }),
@@ -109,7 +117,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
       db,
       sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation(
-        withSourceControlTaskPorts({ db, appHome }),
+        withLocalRepositoryPreparation({ db, appHome }),
       ),
       appHome,
     }),
@@ -120,7 +128,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
       repositoryPreparation: composeDeferredRepositoryPreparation({
         repositoryPreparationLookup: composeRepositoryPreparationLookup(db),
         repositoryPreparation: composeRepositoryPreparation(
-          withSourceControlTaskPorts({ db, appHome }),
+          withLocalRepositoryPreparation({ db, appHome }),
         ),
         db,
         appHome,

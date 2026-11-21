@@ -52,13 +52,21 @@ export interface RepositoryMirrors {
     refs(path: string): Promise<RepoRefsResponse>
     files(path: string): Promise<RepoFilesResponse>
   }
-  /** Present when registration verifies a remote instead of cloning a mirror
-   * (hosted); absent, the mirror cache clones and fetches. */
-  readonly remoteRegistration?: {
-    register(url: string): Promise<RepositoryRegistration>
-    refresh(cachedRepoId: string): Promise<RepositoryRefresh>
-  }
+  /** How a repository is registered and refreshed (RFC-527: stated, not inferred from absence). */
+  readonly registration: RepositoryMirrorRegistration
 }
+
+/**
+ * `mirror-cache` (standalone): the daemon's own mirror cache clones on registration and fetches on refresh.
+ * `remote` (hosted): registration verifies a remote instead of cloning a mirror.
+ */
+export type RepositoryMirrorRegistration =
+  | { readonly kind: 'mirror-cache' }
+  | {
+      readonly kind: 'remote'
+      register(url: string): Promise<RepositoryRegistration>
+      refresh(cachedRepoId: string): Promise<RepositoryRefresh>
+    }
 
 /** RFC-512 — reads inside one repository directory on the daemon's own disk. */
 export type RepositoryDirectoryReads = NonNullable<RepositoryMirrors['local']>

@@ -8,11 +8,10 @@ import { resolveUniqueUploadNameSync } from '@/modules/task-execution/applicatio
 import type { WorkspaceUploadPlan } from '@/modules/task-execution/application/ports/workspaceUploads'
 import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
-import {
-  applyUploadsToWorktree,
-  resolveUniqueName,
-} from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
-import { applyUploadsToWorktree as nativeUpload } from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
+import { resolveUniqueName } from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
+// RFC-527: the native entry moved to a test helper (only tests used it).
+import { applyUploadsToWorktree } from './helpers/nativeWorkspaceUploads'
+import { applyUploadsToWorktree as nativeUpload } from './helpers/nativeWorkspaceUploads'
 import { held, callablePromise } from './helpers/portArtifactContent'
 import {
   MemoryWorkspaceUploadContent,

@@ -27,7 +27,7 @@ import {
   type ChangedPathSummary,
   type UploadLineageEntry,
 } from '../domain/changeCandidate'
-import { parseNameStatusZ, type RepositoryGit } from './repositoryCommit'
+import { parseNameStatusZ } from './repositoryCommit'
 
 export interface DeriveChangeCandidateInput {
   readonly repositoryBaseline?: RepositoryContentBaseline
@@ -44,7 +44,6 @@ export interface DeriveChangeCandidateInput {
   } | null
   /** Upload entries are already present in this platform-published baseline. */
   readonly uploadsAlreadyPublished?: boolean
-  readonly runGit?: RepositoryGit
 }
 
 export type DeriveChangeCandidateResult =
@@ -119,7 +118,6 @@ export interface StageCandidateTreeInput {
   readonly uploadPlan?: {
     readonly entries: readonly Pick<UploadLineageEntry, 'targetPath' | 'disposition' | 'fileMode'>[]
   } | null
-  readonly runGit?: RepositoryGit
 }
 
 export type StageCandidateTreeResult =

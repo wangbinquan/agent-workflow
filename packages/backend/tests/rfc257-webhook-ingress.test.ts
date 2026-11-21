@@ -109,6 +109,7 @@ async function harness(opts?: {
     app,
     composeWebhookIngressTransport({
       webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+      crewStationEvents: null,
       secretBox: box,
       digitalEmployeeEventCenter: eventCenter,
       ...(opts?.omitDispatcher ? {} : { webhookDispatcher: dispatcher }),
@@ -444,6 +445,7 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
           app,
           composeWebhookIngressTransport({
             webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+            crewStationEvents: null,
             secretBox: box,
             webhookDispatcher: fake.dispatcher,
             limiters,

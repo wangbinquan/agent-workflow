@@ -102,7 +102,7 @@ describe('RFC-308 shared repository commit engine', () => {
       calls.push({ args: [...args], options })
       return runGit(cwd, args, options)
     }
-    const preview = await bindRepositoryCommitParticipant({
+    const common = {
       repoPath: repo,
       configuredPatterns: ['*.tmp'],
       runGit: selectedGit,
@@ -115,6 +115,11 @@ describe('RFC-308 shared repository commit engine', () => {
         signal: controller.signal,
         timeoutMs: 3_000,
       },
+    }
+    // RFC-527: without a workspace scope the preview reads the index the caller gives (the one the binding used to build).
+    const preview = await bindRepositoryCommitParticipant({
+      ...common,
+      previewIndex: createFileRepositoryPreviewIndexPort(common),
     }).preview()
     expect(preview.ok).toBe(true)
     if (!preview.ok) return

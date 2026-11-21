@@ -34,6 +34,7 @@ import {
   bindEmployeeCaseWorkspaceParticipant,
   createRepositoryPublicationTransport,
   type RepositoryPublicationSession,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
 } from '../src/modules/source-control/composition'
 // RFC-475: the composition re-export only served the retired runner; the classifier lives in domain.
 import { classifyRepositoryPushFailure } from '../src/modules/source-control/domain/repositoryPushFailure'
@@ -649,7 +650,9 @@ describeEachProvider('RFC-321 repository publication transport', (harness) => {
     const networkCalls: string[][] = []
     const openedInputs: Parameters<CandidatePublicationTransport['open']>[0][] = []
     let closes = 0
-    const result = await bindEmployeeCaseWorkspaceParticipant().fetchRemoteHead({
+    const result = await bindEmployeeCaseWorkspaceParticipant({
+      effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    }).fetchRemoteHead({
       baselineRepoPath,
       remoteUrl: originalRemoteUrl,
       branch: 'main',

@@ -84,15 +84,17 @@ export type TaskRouteLaunchAssembly = Omit<
 > &
   Readonly<{
     configPath: string
-    workspaceUploads?: WorkspaceUploadContentFactory
-    inputFiles?: TaskInputFiles
+    workspaceUploads: WorkspaceUploadContentFactory
+    /** RFC-527: hosted input file retention; standalone states `null`. */
+    inputFiles: TaskInputFiles | null
   }>
 
 export function createRootTaskLaunchKernelPorts(
   input: Readonly<{
     db: PersistenceDb
-    workspaceUploads?: WorkspaceUploadContentFactory
-    inputFiles?: TaskInputFiles
+    workspaceUploads: WorkspaceUploadContentFactory
+    /** RFC-527: hosted input file retention; standalone states `null`. */
+    inputFiles: TaskInputFiles | null
   }>,
 ): RootTaskLaunchKernelPorts {
   return Object.freeze({
@@ -111,8 +113,9 @@ export function createRootTaskLaunchPorts(
   input: Readonly<{
     db: PersistenceDb
     configPath: string
-    workspaceUploads?: WorkspaceUploadContentFactory
-    inputFiles?: TaskInputFiles
+    workspaceUploads: WorkspaceUploadContentFactory
+    /** RFC-527: hosted input file retention; standalone states `null`. */
+    inputFiles: TaskInputFiles | null
   }>,
 ): TaskRouteLaunchPorts {
   return Object.freeze({

@@ -259,17 +259,13 @@ describeEachProvider('RFC-370 selected opaque recursive Git workspace', (harness
     store.locations.set(ref, parent)
     const factory = Object.freeze(new MappedGitWorkspaceFactory(store))
     const native = composeSqliteCommitPushDeps(harness.db)
-    let fallback = 0
     const result = await runCommitPush(
       { ...baseParams, worktreePath: ref, repositoryIdentity: 'opaque:nested-repository' },
       {
         ...native,
         repositoryGitWorkspaces: factory,
         publicationTransport: store.transport(native.publicationTransport),
-        runGit: async () => {
-          fallback += 1
-          throw new Error('legacy child hook used')
-        },
+        // RFC-527: the commit attempt has no legacy git runner any more; the selected factory is the only path.
       },
     )
     expect(result.meta.pushOutcome).toBe('pushed')
@@ -319,6 +315,5 @@ describeEachProvider('RFC-370 selected opaque recursive Git workspace', (harness
     expect(store.bindings).toEqual([
       { taskId: 't1', workspaceRef: ref, repositoryRef: 'opaque:nested-repository' },
     ])
-    expect(fallback).toBe(0)
   }, 120_000)
 })

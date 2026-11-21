@@ -74,7 +74,8 @@ export function resolveUniqueUploadNameSync(
 
 export function* workspaceUploadPolicy(
   plan: WorkspaceUploadPlan,
-  selected?: WorkspaceUploadContentFactory,
+  /** RFC-527: the deployment's upload content (required). */
+  selected: WorkspaceUploadContentFactory,
 ): Policy<WorkspaceUploadResult> {
   const { defs, files, limits } = plan
   validateUploadPlan({ defs, files, limits })

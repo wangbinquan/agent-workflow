@@ -353,7 +353,8 @@ const ACTIVITY_GATED_OPTIONS = new Set<RepairOptionId>([
 ])
 
 export interface TaskRouteRepairOperationsDependencies {
-  readonly workspaceReads?: RepositoryWorkspaceReadQueries
+  /** RFC-527: the deployment's workspace reads (required). */
+  readonly workspaceReads: RepositoryWorkspaceReadQueries
   /**
    * RFC-359 AC-1（第 8 刀）：句柄是**中立**的。这份实现合并前就已经在两个引擎上被驱动
    *（`rfc359-w8-auto-repair-conformance` 的两条 lane），合并后更是两个部署共用的唯一一份，

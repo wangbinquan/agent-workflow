@@ -142,6 +142,12 @@ export interface DeploymentSelections {
   readonly workspaceMaintenanceFilesystem: WorkspaceMaintenanceFilesystem
   workspaceExcludeProfiles: WorkspaceExcludeProfileFactory
   employeeCaseWorkspaceEffects: EmployeeCaseWorkspaceEffectsFactory
+  /**
+   * RFC-370 §9.2 V3: hosted remote-volume candidate execution and conflict merge. RFC-527: required — standalone selects
+   * the local effects the bindings used to build per request.
+   */
+  readonly repositoryCandidateEffects: RepositoryCandidateEffectsFactory
+  readonly conflictMergeWorkspaceEffects: ConflictMergeWorkspaceEffects
   /** RFC-370 §10 V16: code-review reads (hosted: of the task volumes). */
   repositoryRevisionContent: RepositoryRevisionContentFactory
   /** RFC-370 §10 V16: code-review artifacts (hosted: as object publications). */
@@ -195,9 +201,6 @@ export interface DeploymentSelections {
   /** RFC-370 §10 V17: hosted repository remote reads; standalone keeps the daemon's own mirror clones. */
   readonly repositoryRemote: RepositoryRemoteEffects | null
   readonly crewStationEvents: CrewStationEventIngress | null
-  /** RFC-370 §9.2 V3: hosted remote-volume candidate execution; standalone uses the module's per-request local effects. */
-  readonly repositoryCandidateEffects: RepositoryCandidateEffectsFactory | null
-  readonly conflictMergeWorkspaceEffects: ConflictMergeWorkspaceEffects | null
 
   // ── Required, session-scoped factories (RFC-432): each session calls them with its own graph ──
   readonly contentStore: (session: DeploymentSessionStorage) => ImportedContentStore

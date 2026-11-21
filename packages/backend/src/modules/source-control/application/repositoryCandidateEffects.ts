@@ -1,5 +1,5 @@
 // RFC-511 — the selected candidate effects are complete: an operation host carries its four operations, a step factory
-// can acquire. Absence keeps the native selection.
+// can acquire. RFC-527: the selection is required.
 import {
   isRepositoryCandidateOperationHost,
   type RepositoryCandidateEffectsFactory,
@@ -7,9 +7,8 @@ import {
 } from './ports/repositoryCandidateOperations'
 
 export function requireRepositoryCandidateEffectsFactory(
-  selected: RepositoryCandidateEffectsFactory | undefined,
+  selected: RepositoryCandidateEffectsFactory,
 ): void {
-  if (selected === undefined) return
   if (selected === null || typeof selected !== 'object')
     throw new Error('repository-candidate-effects-incomplete')
   if (isRepositoryCandidateOperationHost(selected)) {

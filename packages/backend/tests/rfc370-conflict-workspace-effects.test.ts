@@ -15,7 +15,10 @@ import { join } from 'node:path'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import { runGit as defaultRunGit } from '../src/util/git'
 import type { RepositoryGit } from '../src/modules/source-control/application/repositoryCommit'
-import { bindConflictMergeParticipant } from '../src/modules/source-control/composition'
+import {
+  bindConflictMergeParticipant,
+  createFileConflictMergeWorkspaceEffects,
+} from '../src/modules/source-control/composition'
 import type { ConflictMergeWorkspaceEffects } from '../src/modules/source-control/public/types'
 import {
   adoptActionWorkspace,
@@ -92,24 +95,25 @@ beforeAll(() => {
 afterAll(() => rmSync(home, { recursive: true, force: true }))
 
 describe('complete SC conflict workspace owner', () => {
-  test('native prepare, inspect and finish capture one original Git hook; discard never reads it', async () => {
-    const participant = bindConflictMergeParticipant()
+  // RFC-527: requests carry no per-operation Git runner; the local effects run Git through the one they were built with.
+  test('native prepare, inspect and finish run Git through the local effects runner; no request or discard reads one', async () => {
     let reads = 0
     let calls = 0
     const nativeGit: RepositoryGit = (cwd, args, options) => {
       calls += 1
       return defaultRunGit(cwd, args, options)
     }
-    const withHook = <T extends object>(input: T): T & { readonly runGit: RepositoryGit } => {
-      reads = 0
+    const participant = bindConflictMergeParticipant({
+      effects: createFileConflictMergeWorkspaceEffects(nativeGit),
+    })
+    const withHook = <T extends object>(input: T): T => {
       calls = 0
       return Object.defineProperty({ ...input }, 'runGit', {
         get(): RepositoryGit {
           reads += 1
-          if (reads !== 1) throw new Error('native operation reread its original Git hook')
-          return nativeGit
+          throw new Error('a request carries no Git runner')
         },
-      }) as T & { readonly runGit: RepositoryGit }
+      })
     }
     const prepared = await participant.prepare(
       withHook({
@@ -119,13 +123,13 @@ describe('complete SC conflict workspace owner', () => {
         workspacesRoot: join(home, 'native-hook-workspaces'),
       }),
     )
-    expect(reads).toBe(1)
+    expect(reads).toBe(0)
     expect(calls).toBeGreaterThan(0)
     if (!prepared.ok) throw new Error(prepared.detail)
     try {
       writeFileSync(join(prepared.workspacePath, 'X.txt'), 'resolved\n')
       expect(await participant.inspect(withHook(prepared))).toEqual({ ok: true })
-      expect(reads).toBe(1)
+      expect(reads).toBe(0)
       expect(calls).toBeGreaterThan(0)
       const finished = await participant.finish(
         withHook({
@@ -135,7 +139,7 @@ describe('complete SC conflict workspace owner', () => {
           missionId: 'native-hook-conflict',
         }),
       )
-      expect(reads).toBe(1)
+      expect(reads).toBe(0)
       expect(calls).toBeGreaterThan(0)
       expect(finished.ok).toBe(true)
       if (!finished.ok) throw new Error(finished.detail)
@@ -202,7 +206,7 @@ describe('complete SC conflict workspace owner', () => {
   }, 120_000)
 
   test.each(['allocate', 'cloneBaseline', 'run', 'installPlatformExclude'])(
-    'prepare awaits selected %s and ignores the native per-operation Git override',
+    'prepare awaits selected %s (RFC-527: requests carry no per-operation Git runner)',
     async (method) => {
       const held = heldEffect()
       let heldOnce = false
@@ -212,25 +216,15 @@ describe('complete SC conflict workspace owner', () => {
           await held.wait()
         }
       })
-      let overrideCalls = 0
       let returned = false
       const participant = bindConflictMergeParticipant({ effects })
-      const preparing = participant
-        .prepare({
-          ...prepareInput(),
-          runGit: async () => {
-            overrideCalls += 1
-            throw new Error('native fixture must not replace selected effects')
-          },
-        })
-        .then((value) => {
-          returned = true
-          return value
-        })
+      const preparing = participant.prepare(prepareInput()).then((value) => {
+        returned = true
+        return value
+      })
       await enteredBeforeOutcome(held, preparing)
       try {
         expect(returned).toBe(false)
-        expect(overrideCalls).toBe(0)
       } finally {
         held.release()
       }

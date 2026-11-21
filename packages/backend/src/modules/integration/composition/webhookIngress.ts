@@ -58,7 +58,8 @@ export function composeWebhookDeliveryRuntimeFor(db: PersistenceDb): WebhookDeli
  */
 export function composeWebhookIngressTransport(input: {
   readonly webhookIngressPersistence: WebhookIngressPersistence
-  readonly crewStationEvents?: CrewStationEventIngress
+  /** RFC-527: the deployment's selection, given explicitly; standalone states `null`. */
+  readonly crewStationEvents: CrewStationEventIngress | null
   readonly secretBox?: SecretBox
   readonly digitalEmployeeEventCenter?: EventCenterModule
   readonly webhookDispatcher?: WebhookDispatcher
@@ -68,7 +69,7 @@ export function composeWebhookIngressTransport(input: {
 }) {
   const eventCenter = input.digitalEmployeeEventCenter
   const enabled =
-    input.crewStationEvents === undefined &&
+    input.crewStationEvents === null &&
     !!input.secretBox &&
     !!input.webhookDispatcher &&
     supportsEventCenterCodeHostDelivery(input.webhookDispatcher) &&

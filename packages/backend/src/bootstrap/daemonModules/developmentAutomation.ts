@@ -69,10 +69,9 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     writerCutover,
   } = input
   const admissionLookup = composeDevelopmentAdmissionLookup(db)
-  const candidateEffects =
-    input.repositoryCandidateEffects === null ? undefined : input.repositoryCandidateEffects
-  const conflictMergeEffects =
-    input.conflictMergeWorkspaceEffects === null ? undefined : input.conflictMergeWorkspaceEffects
+  // RFC-527: the deployment's selections (standalone: the local effects).
+  const candidateEffects = input.repositoryCandidateEffects
+  const conflictMergeEffects = input.conflictMergeWorkspaceEffects
   const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db,
     async drive(missionId) {

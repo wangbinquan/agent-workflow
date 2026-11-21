@@ -13,11 +13,11 @@ import {
   classifyRepositoryCommitPath,
   publishRepositoryCommit,
   readRepositoryCommitPreview,
+  requireRepositoryPreviewIndex,
   resolvePushBase,
   updateRepositoryRef,
   type RepositoryGit,
 } from '../application/repositoryCommit'
-import { createFileRepositoryPreviewIndexPort } from '../infrastructure/local/fileRepositoryPreviewIndex'
 import type { RepositoryPreviewIndexPort } from '../application/ports/repositoryPreviewIndex'
 import type { RepositoryGitWorkspaceScope } from '../application/ports/repositoryGitWorkspace'
 import { requireRepositoryGitWorkspaceScope } from './repositoryGitWorkspaces'
@@ -26,6 +26,9 @@ import { requireRepositoryGitWorkspaceScope } from './repositoryGitWorkspaces'
  * RFC-308 temporary path binder. Consumers receive operations bound to one
  * repository and one immutable settings slice; Git mechanics stay private to
  * source-control. RFC-294 W5 replaces the absolute-path binding with WorkspaceRef.
+ *
+ * Without a workspace scope the commit use cases run in this process — the module's own path (a hosted scope runs the same
+ * use cases in its volume). RFC-527: the preview then reads the caller's `previewIndex`; none is built here.
  */
 export function bindRepositoryCommitParticipant(input: {
   repoPath: string
@@ -48,9 +51,9 @@ export function bindRepositoryCommitParticipant(input: {
     ...(runGit !== undefined ? { runGit } : {}),
     ...(input.gitOptions !== undefined ? { gitOptions: input.gitOptions } : {}),
   }
-  const previewIndex: RepositoryPreviewIndexPort =
+  const previewIndex: RepositoryPreviewIndexPort | undefined =
     workspace === undefined
-      ? (input.previewIndex ?? createFileRepositoryPreviewIndexPort(common))
+      ? input.previewIndex
       : { withIndex: (operation) => workspace.withPreviewIndex(operation, common.gitOptions) }
   // RFC-370 §9.2 V3: a scope whose repository lives in a remote volume runs
   // each commit use case there as one operation.
@@ -78,7 +81,10 @@ export function bindRepositoryCommitParticipant(input: {
     preview: () =>
       operations !== undefined
         ? operations.preview({ configuredPatterns: common.configuredPatterns, ...portableOptions })
-        : readRepositoryCommitPreview({ ...common, previewIndex }),
+        : readRepositoryCommitPreview({
+            ...common,
+            previewIndex: requireRepositoryPreviewIndex(previewIndex),
+          }),
     publish: (request: { baseSha: string; tipSha: string; mode: RepositoryPublishMode }) =>
       publishRepositoryCommit({
         ...common,

@@ -60,11 +60,6 @@ export type RepositoryGitSubworkspaceBinder = (
 export interface WorkspaceChangePublicationDeps {
   readonly workspace: RepositoryGitWorkspaceScope
   readonly transport: RepositoryPublicationTransport
-  /**
-   * RFC-370: submodule commit policies run on the selected sub-workspace only
-   * when the caller selected a workspace factory; otherwise they bind by path.
-   */
-  readonly bindPoliciesToWorkspace: boolean
   readonly log: RepositoryPublicationLogger
   readonly commits: RepositoryCommitBinder
   readonly subworkspace: RepositoryGitSubworkspaceBinder
@@ -178,7 +173,6 @@ export async function publishWorkspaceChanges(
     },
     writeLock: request.writeLock,
     workspace,
-    bindPoliciesToWorkspace: deps.bindPoliciesToWorkspace,
     publicationTransport,
     publicationSubject,
     commits: deps.commits,
@@ -675,7 +669,6 @@ async function commitPushSubmodules(args: {
   }) => void
   writeLock?: WorkspaceWriteLock | undefined
   workspace: RepositoryGitWorkspaceScope
-  bindPoliciesToWorkspace: boolean
   publicationTransport: RepositoryPublicationTransport
   publicationSubject: RepositoryPublicationSubject
   commits: RepositoryCommitBinder
@@ -734,7 +727,7 @@ async function commitPushSubmodules(args: {
     const relInParent = parent === null ? s.path : s.path.slice(parent.path.length + 1)
     const parentPolicy = args.commits({
       repoPath: parentDir,
-      ...(args.bindPoliciesToWorkspace ? { gitWorkspace: parentWorkspace } : {}),
+      gitWorkspace: parentWorkspace,
       configuredPatterns: args.excludePatterns,
     })
     const parentPathPolicy = await parentPolicy.classifyPath({
@@ -768,7 +761,7 @@ async function commitPushSubmodules(args: {
         const prepared = await args
           .commits({
             repoPath: dir,
-            ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
+            gitWorkspace: workspace,
             configuredPatterns: args.excludePatterns,
           })
           .prepare()
@@ -786,7 +779,7 @@ async function commitPushSubmodules(args: {
         const committed = await args
           .commits({
             repoPath: dir,
-            ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
+            gitWorkspace: workspace,
             configuredPatterns: args.excludePatterns,
           })
           .commitPrepared({
@@ -858,9 +851,7 @@ async function commitPushSubmodules(args: {
       publication = await args
         .commits({
           repoPath: dir,
-          ...(args.bindPoliciesToWorkspace
-            ? { gitWorkspace: workspace }
-            : { runGit: sessionRunGit }),
+          gitWorkspace: workspace,
           configuredPatterns: args.excludePatterns,
           runNetworkGit: sessionRunGit,
         })

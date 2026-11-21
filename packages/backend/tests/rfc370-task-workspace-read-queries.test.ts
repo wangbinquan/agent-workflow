@@ -38,6 +38,7 @@ import {
   composePortArtifactOperations,
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
+import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
 
 const TOKEN = 'w'.repeat(64)
 const MAX_DIFF = 1_048_576
@@ -63,7 +64,7 @@ class ReadStore {
 /** Frozen prototype methods use private receivers and real native Git behind opaque refs. */
 class MappedReads implements RepositoryWorkspaceReadQueries {
   #store: ReadStore
-  #native = selectRepositoryWorkspaceReadQueries()
+  #native = selectRepositoryWorkspaceReadQueries(createFileRepositoryWorkspaceReadQueries())
   constructor(store: ReadStore) {
     this.#store = store
   }
@@ -194,7 +195,9 @@ describeEachProviderHttpApplication(
       const body = (await response.json()) as Awaited<
         ReturnType<RepositoryWorkspaceReadQueries['worktreeDiff']>
       > & { baseCommit: string }
-      const native = await selectRepositoryWorkspaceReadQueries().worktreeDiff(repo.root, repo.base)
+      const native = await selectRepositoryWorkspaceReadQueries(
+        createFileRepositoryWorkspaceReadQueries(),
+      ).worktreeDiff(repo.root, repo.base)
       expect(body).toEqual({ ...native, baseCommit: repo.base })
       expect(body.diff).toContain('tracked change')
       expect(body.diff).toContain('中文未跟踪.txt')
@@ -467,11 +470,13 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     expect(f.store.calls).toEqual([])
     expect(
       await taskDiffProjection(
-        { db: provider.db },
+        { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: provider.db },
         await seedTask(provider.db, repo.root, repo.base),
       ),
     ).toEqual({
-      ...(await selectRepositoryWorkspaceReadQueries().worktreeDiff(repo.root, repo.base)),
+      ...(await selectRepositoryWorkspaceReadQueries(
+        createFileRepositoryWorkspaceReadQueries(),
+      ).worktreeDiff(repo.root, repo.base)),
       baseCommit: repo.base,
     })
   }, 60_000)
@@ -681,7 +686,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
 })
 
 test('native isolation derivation preserves persisted physical generation and legacy row fallback', async () => {
-  const native = selectRepositoryWorkspaceReadQueries(),
+  const native = selectRepositoryWorkspaceReadQueries(createFileRepositoryWorkspaceReadQueries()),
     root = temp()
   const input = {
     storageRootRef: root,

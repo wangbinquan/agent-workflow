@@ -55,6 +55,7 @@ import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { singleMemberWorkspaceFixture } from './helpers/singleMemberWorkspaceFixture'
 import { createProviderTaskExecutionTestTopology } from './helpers/providerTaskExecutionTestTopology'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/composition'
 
 const TIMEOUT = 60_000
 const shapes = [
@@ -119,7 +120,9 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       opts: {
         appHome,
         persistence: binding.persistence,
-        isolationWorkspaces: selectIsolationWorkspaceFactory(),
+        isolationWorkspaces: selectIsolationWorkspaceFactory(
+          createLocalIsolationWorkspaceFactory(),
+        ),
       },
       log: createLogger('iso-single-nonroot-test'),
       writeSem,

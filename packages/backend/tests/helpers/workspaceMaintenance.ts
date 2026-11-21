@@ -20,12 +20,11 @@ export function workspaceMaintenanceForTest(db: PersistenceDb, appHome = Paths.r
   }
   let command = byHome.get(appHome)
   if (command === undefined) {
+    // RFC-527: the filesystem is required; the local one is what the command built from these arguments.
     command = composeWorkspaceMaintenanceCommand({
       ...composeSourceControlTaskPorts(db),
-      appHome,
       terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
-      isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
-      invalidateWorkspacePath: () => {},
+      filesystem: workspaceMaintenanceFilesystemForTest(appHome),
     })
     byHome.set(appHome, command)
   }

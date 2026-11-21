@@ -1,4 +1,4 @@
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-359 AC-1（plan §5hi）—— 测试侧的「宿主任务启动内核」装配，和生产同形。
 //
@@ -23,6 +23,7 @@ import {
   type TaskDriveCoordinatorDependencies,
 } from './legacyTaskDrive'
 import { createRootTaskLaunchKernelPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
 
 export function createTestHostTaskLaunchKernel(input: {
   readonly humanGateOpen: Parameters<typeof createTestTaskDriveCoordinator>[0]['humanGateOpen']
@@ -65,7 +66,11 @@ export function createTestHostTaskLaunchKernel(input: {
   // RFC-382: the session bundle supplies this primitive in production; this legacy
   // fixture retains its explicit completion mode without a test-only production wrapper.
   return createRootTaskLaunchKernel({
-    ...createRootTaskLaunchKernelPorts({ db: input.db }),
+    ...createRootTaskLaunchKernelPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db: input.db,
+    }),
     gitCommitIdentity: input.gitCommitIdentity,
     coordinator: input.coordinator ?? coordinator,
     workspace:
@@ -75,7 +80,7 @@ export function createTestHostTaskLaunchKernel(input: {
         appHome: input.appHome,
         sourceContexts: createIdentityAccessRuntime({ db: input.db }).taskPreparationContext,
         repositoryPreparation: composeRepositoryPreparation(
-          withSourceControlTaskPorts({
+          withLocalRepositoryPreparation({
             db: input.db,
             appHome: input.appHome,
           }),

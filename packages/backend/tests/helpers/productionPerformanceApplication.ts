@@ -60,7 +60,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import {
   composeCachedRepositoryOperations,
-  composeRepositoryMirrors,
+  composeLocalRepositoryMirrors,
 } from '@/modules/source-control/composition'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountWellKnownRoutes } from '@/routes/docs'
@@ -233,7 +233,7 @@ export async function createProductionPerformanceApplication(
       webhookIngress: (app) =>
         mountWebhookIngressRoutes(
           app,
-          composeWebhookIngressTransport({ webhookIngressPersistence }),
+          composeWebhookIngressTransport({ webhookIngressPersistence, crewStationEvents: null }),
         ),
     },
     frontendMarker: null,
@@ -244,7 +244,7 @@ export async function createProductionPerformanceApplication(
         app,
         composeCachedRepositoryOperations({
           store: repositoryStore,
-          mirrors: composeRepositoryMirrors({ store: repositoryStore, appHome }),
+          mirrors: composeLocalRepositoryMirrors({ store: repositoryStore }),
           configuration: composeFileApplicationConfigurationQueries(configPath),
           appHome,
         }),

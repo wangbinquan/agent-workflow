@@ -340,6 +340,18 @@ type CommitPreviewResult =
   | { ok: true; diff: string; receipt: CommitExclusionReceipt }
   | { ok: false; error: string }
 
+/**
+ * RFC-527: without a workspace scope the preview reads the caller's index; none is built for it (no production caller reads
+ * an unscoped preview).
+ */
+export function requireRepositoryPreviewIndex(
+  previewIndex: RepositoryPreviewIndexPort | undefined,
+): RepositoryPreviewIndexPort {
+  if (previewIndex === undefined)
+    throw new TypeError('Repository commit preview requires a workspace scope or a preview index')
+  return previewIndex
+}
+
 export async function readRepositoryCommitPreview(input: {
   repoPath: string
   configuredPatterns?: readonly string[]

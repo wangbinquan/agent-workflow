@@ -76,7 +76,6 @@ export interface CommitCandidateInput {
       readonly fileMode: 'regular' | 'executable'
     }[]
   } | null
-  readonly runGit?: RepositoryGit
 }
 
 export type CommitCandidateResult =
@@ -193,7 +192,6 @@ export interface PushCandidateInput {
   readonly publicationSubject?: CandidatePublicationSubject
   /** Bootstrap-owned session factory. Omission is admitted only for local fixtures. */
   readonly publicationTransport?: CandidatePublicationTransport
-  readonly runGit?: RepositoryGit
 }
 
 export type CandidatePublicationSubject = RepositoryPublicationSubject

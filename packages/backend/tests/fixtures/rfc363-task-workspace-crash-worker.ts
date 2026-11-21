@@ -1,9 +1,9 @@
-import { withSourceControlTaskPorts } from '../helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from '../helpers/sourceControlTaskPorts'
 // Hosted real-process oracle: kill a production Task launch before its row is committed.
 
 import { readTaskFixtures, workflowFixture } from '../helpers/model'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import { applyUploadsToWorktree } from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
+import { applyUploadsToWorktree } from '../helpers/nativeWorkspaceUploads'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
@@ -33,6 +33,7 @@ import { compensateScratchWorkspace } from '@/modules/task-execution/infrastruct
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
+import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
 
 interface Input {
   root: string
@@ -83,7 +84,7 @@ try {
   if (identity === null) throw new Error('daemon identity missing')
   const actor = actorOfDirectAuthority(identity)
   const appHome = join(input.root, 'home')
-  const binding = composeRepositoryPreparation(withSourceControlTaskPorts({ db, appHome }))
+  const binding = composeRepositoryPreparation(withLocalRepositoryPreparation({ db, appHome }))
   const participant = createTaskRouteWorkspaceParticipant({
     db,
     appHome,
@@ -132,7 +133,9 @@ try {
           ? null
           : await identityAccess.getUserGitCommitIdentity.execute(actor.user.id),
     })
+    // RFC-527: the whole-writer substitution is this oracle's one writer (it replaces the upload content).
     await applyTaskWorkspaceUploads({
+      inputFiles: null,
       db,
       taskId: input.taskId,
       plan: {
@@ -166,7 +169,11 @@ try {
     })
   }
   const kernel = createRootTaskLaunchKernel({
-    ...createRootTaskLaunchKernelPorts({ db }),
+    ...createRootTaskLaunchKernelPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db,
+    }),
     id: () => input.taskId,
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
     workspace: {

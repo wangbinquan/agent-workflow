@@ -122,8 +122,6 @@ import { Paths } from '@/util/paths'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeLocalInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
-import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import type { createLogger } from '@/util/log'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
@@ -473,11 +471,10 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       reviewArtifacts,
       reviewRollbackSnapshots: input.reviewRollbackSnapshots,
       workspaceUploads,
-      inputFiles: input.taskInputFiles === null ? undefined : input.taskInputFiles,
+      inputFiles: input.taskInputFiles,
       preparationEffects: input.repositoryPreparationEffects,
       scratchEffects: input.scratchWorkspaceEffects,
-      recoverySelection:
-        input.taskRecovery === null ? undefined : input.taskRecovery(identityAccess),
+      recoverySelection: input.taskRecovery === null ? null : input.taskRecovery(identityAccess),
       fusionWorkspaces: input.fusionWorkspaceEffects,
     },
     alerts: {
@@ -510,10 +507,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
     ...composeSourceControlTaskPorts(input.db),
     filesystem: input.workspaceMaintenanceFilesystem,
-    appHome: input.appHome,
     terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
-    isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
-    invalidateWorkspacePath: invalidateCallGraphIndex,
   })
 
   const fusionModules: DaemonFusionModules = composeDaemonFusionModules({

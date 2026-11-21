@@ -24,10 +24,8 @@ import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
-import {
-  composeLegacyTaskRunDriveBinding,
-  composeTaskWorkspaceExcludeProfilesFor,
-} from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeLegacyTaskRunDriveBinding } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeTaskWorkspaceExcludeProfilesFor } from './helpers/taskWorkspaceExcludeProfiles'
 import {
   composePortArtifactOperations,
   createFilePortArtifactContent,
@@ -101,7 +99,11 @@ import {
 } from './helpers/taskExecutionTestTopology'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import {
+  createFileRepositoryGitWorkspaceFactory,
+  createFileWorkspacePresenceQueries,
+  createLocalIsolationWorkspaceFactory,
+} from '@/modules/source-control/composition'
 import type { ChildTaskLifecycleRuntimePorts } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
@@ -186,6 +188,9 @@ function sharedInput(
         composePortArtifactOperations(createFilePortArtifactContent(appHome)),
     }),
     workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
+    // RFC-527: the local workspace factories the drive participant used to build.
+    isolationWorkspaces: createLocalIsolationWorkspaceFactory(),
+    repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),

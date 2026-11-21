@@ -24,7 +24,6 @@ import {
   requireRepositoryGitWorkspaceScope,
   requireRepositoryWorkspaceReadQueries,
   requireWorkspaceExcludeParticipant,
-  requireWorkspaceExcludeProfileFactory,
   requireWorkspaceUploadContent,
   requireWorkspaceUploadContentFactory,
 } from '@/modules/source-control/application/workspacePorts'
@@ -48,7 +47,7 @@ const PORT_NAMES = [
   'requireRepositoryGitWorkspaceFactory',
   'requireWorkspaceUploadContent',
   'requireWorkspaceUploadContentFactory',
-  'requireWorkspaceExcludeProfileFactory',
+  // RFC-527: `requireWorkspaceExcludeProfileFactory` left with the exclude-profile selection (no caller).
   'requireWorkspaceExcludeParticipant',
   'requireRepositoryWorkspaceReadQueries',
 ]
@@ -65,7 +64,10 @@ const NEW_FILES: Readonly<Record<string, readonly string[]>> = {
   [CANDIDATE]: ['requireRepositoryCandidateEffectsFactory'],
 }
 const LOCATIONS = [PORTS, CANDIDATE, MERGE]
-/** design D2: each composition file's offered names (unchanged), its control flow and its edges to the new locations. */
+/**
+ * design D2: each composition file's offered names (unchanged; RFC-527 adds the two local factories the bindings used to build),
+ * its control flow and its edges to the new locations.
+ */
 const ROOTS: Readonly<
   Record<
     string,
@@ -106,15 +108,9 @@ const ROOTS: Readonly<
     ],
   },
   [root('workspaceExcludeProfiles')]: {
-    offers: [
-      'bindWorkspaceExcludeProfile',
-      'composeLocalWorkspaceExcludeProfiles',
-      'selectWorkspaceExcludeProfileFactory',
-    ],
+    offers: ['bindWorkspaceExcludeProfile', 'composeLocalWorkspaceExcludeProfiles'],
     shapes: [],
-    takes: [
-      `import ${PORTS}: requireWorkspaceExcludeParticipant, requireWorkspaceExcludeProfileFactory`,
-    ],
+    takes: [`import ${PORTS}: requireWorkspaceExcludeParticipant`],
   },
   [root('repositoryWorkspaceReadQueries')]: {
     offers: ['selectRepositoryWorkspaceReadQueries'],
@@ -122,17 +118,21 @@ const ROOTS: Readonly<
     takes: [`import ${PORTS}: requireRepositoryWorkspaceReadQueries`],
   },
   [root('conflictMerge')]: {
-    offers: ['bindConflictMergeParticipant'],
-    // The per-operation effects selection (native fixtures may pass their own Git runner).
-    shapes: ['if'],
+    // RFC-527: the effects are required; the composition hands out the local ones for standalone.
+    offers: ['bindConflictMergeParticipant', 'createFileConflictMergeWorkspaceEffects'],
+    shapes: [],
     takes: [
       `import ${MERGE}: discardConflictMergeWorkspace, finishConflictMerge, inspectConflictMerge, prepareConflictMerge, requireConflictMergeWorkspaceEffects`,
     ],
   },
   [root('repositoryCandidate')]: {
-    offers: ['bindCandidateDeliveryParticipant', 'bindChangeCandidateParticipant'],
-    // The step factory selection and the host-or-steps dispatch of push.
-    shapes: ['if', 'if', 'if'],
+    offers: [
+      'bindCandidateDeliveryParticipant',
+      'bindChangeCandidateParticipant',
+      'createLocalRepositoryCandidateEffects',
+    ],
+    // RFC-527: each binding branches once on host or steps (the selection is required).
+    shapes: ['if', 'if'],
     takes: [`import ${CANDIDATE}: requireRepositoryCandidateEffectsFactory`],
   },
 }
@@ -147,7 +147,8 @@ const CALLS: Readonly<
     ],
     null,
   ],
-  requireIsolationWorkspaceFactory: [[`${root('isolationWorkspaces')} x1`], [['factory']]],
+  // RFC-527: the selection helpers check the caller's required selection as given.
+  requireIsolationWorkspaceFactory: [[`${root('isolationWorkspaces')} x1`], [['selected']]],
   requireRepositoryGitWorkspaceScope: [
     [
       `${root('repositoryCommit')} x1`,
@@ -156,22 +157,18 @@ const CALLS: Readonly<
     ],
     null,
   ],
-  requireRepositoryGitWorkspaceFactory: [[`${root('repositoryGitWorkspaces')} x1`], [['factory']]],
+  requireRepositoryGitWorkspaceFactory: [[`${root('repositoryGitWorkspaces')} x1`], [['selected']]],
   requireWorkspaceUploadContent: [['modules/task-execution/application/workspaceUploads x1'], null],
-  requireWorkspaceUploadContentFactory: [[`${root('workspaceUploads')} x1`], [['factory']]],
-  requireWorkspaceExcludeProfileFactory: [
-    [`${root('workspaceExcludeProfiles')} x1`],
-    [['factory']],
-  ],
+  requireWorkspaceUploadContentFactory: [[`${root('workspaceUploads')} x1`], [['selected']]],
   requireWorkspaceExcludeParticipant: [
     [`${root('workspaceExcludeProfiles')} x1`],
     [['participant']],
   ],
   requireRepositoryWorkspaceReadQueries: [
     [`${root('repositoryWorkspaceReadQueries')} x1`],
-    [['queries']],
+    [['selected']],
   ],
-  requireConflictMergeWorkspaceEffects: [[`${root('conflictMerge')} x1`], [['selected']]],
+  requireConflictMergeWorkspaceEffects: [[`${root('conflictMerge')} x1`], [['effects']]],
   requireRepositoryCandidateEffectsFactory: [
     [`${root('repositoryCandidate')} x2`],
     [['selected'], ['selected']],
@@ -180,7 +177,7 @@ const CALLS: Readonly<
 /** design §4 ③: the exact imports of the two new files. */
 const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   [PORTS]: [
-    `import ${SC}/public/participants: WorkspaceExcludeParticipant, WorkspaceExcludeProfileFactory`,
+    `import ${SC}/public/participants: WorkspaceExcludeParticipant`,
     `import ${SC}/application/ports/isolationWorkspace: IsolationWorkspaceFactory, IsolationWorkspaceScope`,
     `import ${SC}/application/ports/repositoryGitWorkspace: RepositoryGitWorkspaceFactory, RepositoryGitWorkspaceScope`,
     `import ${SC}/application/ports/repositoryWorkspaceReadQueries: RepositoryWorkspaceReadQueries`,
@@ -405,7 +402,8 @@ describe('RFC-511 ① 清单里的名字只在各自的位置声明', () => {
           )
           .map(corpusPath)
           .sort()
-      expect(LISTED).toHaveLength(11)
+      // RFC-527: 11 → 10 (`requireWorkspaceExcludeProfileFactory` left with its selection).
+      expect(LISTED).toHaveLength(10)
       for (const [location, name] of LISTED)
         expect([name, declaring(name)]).toEqual([name, [`packages/backend/src/${location}.ts`]])
     },
@@ -615,11 +613,8 @@ describe('RFC-511 ④ 端口完整性核对', () => {
     )
   })
 
-  test('排除配置与只读查询：工厂的 bind、参与者的 ensure 与 5 个查询方法', () => {
-    expect(() => requireWorkspaceExcludeProfileFactory({ bind: fn } as never)).not.toThrow()
-    expect(() => requireWorkspaceExcludeProfileFactory(null as never)).toThrow(
-      new TypeError('Workspace exclude requires a complete profile factory'),
-    )
+  // RFC-527: the exclude-profile factory check left with its selection (no caller); the participant check stays.
+  test('排除配置与只读查询：参与者的 ensure 与 5 个查询方法', () => {
     expect(() => requireWorkspaceExcludeParticipant({ ensure: fn } as never)).not.toThrow()
     for (const participant of [null, {}, { ensure: 1 }])
       expect(() => requireWorkspaceExcludeParticipant(participant as never)).toThrow(
@@ -634,8 +629,11 @@ describe('RFC-511 ④ 端口完整性核对', () => {
       ).toThrow(new TypeError('Repository workspace reads require a complete query implementation'))
   })
 
-  test('冲突合并效果：未选定时放行，选定时 7 个方法缺一就抛', () => {
-    expect(() => requireConflictMergeWorkspaceEffects(undefined)).not.toThrow()
+  // RFC-527: the selection is required — an absent one no longer passes.
+  test('冲突合并效果：没给就抛，7 个方法缺一就抛', () => {
+    expect(() => requireConflictMergeWorkspaceEffects(undefined as never)).toThrow(
+      new Error('conflict-merge-workspace-effects-incomplete'),
+    )
     expect(() =>
       requireConflictMergeWorkspaceEffects(methods(MERGE_EFFECTS) as never),
     ).not.toThrow()
@@ -645,8 +643,11 @@ describe('RFC-511 ④ 端口完整性核对', () => {
       )
   })
 
-  test('候选效果工厂：未选定时放行；操作宿主要四个操作，分步工厂要 acquire', () => {
-    expect(() => requireRepositoryCandidateEffectsFactory(undefined)).not.toThrow()
+  // RFC-527: the selection is required — an absent one no longer passes.
+  test('候选效果工厂：没给就抛；操作宿主要四个操作，分步工厂要 acquire', () => {
+    expect(() => requireRepositoryCandidateEffectsFactory(undefined as never)).toThrow(
+      new Error('repository-candidate-effects-incomplete'),
+    )
     const operations = methods(['derive', 'stage', 'commit', 'push'])
     expect(() => requireRepositoryCandidateEffectsFactory({ operations } as never)).not.toThrow()
     expect(() => requireRepositoryCandidateEffectsFactory({ acquire: fn } as never)).not.toThrow()

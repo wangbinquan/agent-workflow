@@ -82,7 +82,7 @@ describe('RFC-451 —— 引用', () => {
 })
 
 function operations(input: {
-  readonly remote?: RepositoryMirrors['remoteRegistration']
+  readonly remote?: Omit<Extract<RepositoryMirrors['registration'], { kind: 'remote' }>, 'kind'>
   readonly configReads: { count: number }
 }) {
   const store = {
@@ -92,9 +92,10 @@ function operations(input: {
   } as unknown as RepositoryWorkspaceStore
   return composeCachedRepositoryOperations({
     store,
-    mirrors: (input.remote === undefined
-      ? {}
-      : { remoteRegistration: input.remote }) as unknown as RepositoryMirrors,
+    mirrors: {
+      registration:
+        input.remote === undefined ? { kind: 'mirror-cache' } : { kind: 'remote', ...input.remote },
+    } as unknown as RepositoryMirrors,
     configuration: {
       read() {
         input.configReads.count += 1

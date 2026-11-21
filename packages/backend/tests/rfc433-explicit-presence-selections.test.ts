@@ -21,13 +21,22 @@ function home(): string {
   return root
 }
 
-test('the standalone profile states the five hosted-only capabilities as null', () => {
+test('the standalone profile states the three hosted-only capabilities as null', () => {
   const selections = standaloneSelections({ appHome: home() })
   expect(selections.databaseInstallation).toBeNull()
   expect(selections.repositoryRemote).toBeNull()
   expect(selections.crewStationEvents).toBeNull()
-  expect(selections.repositoryCandidateEffects).toBeNull()
-  expect(selections.conflictMergeWorkspaceEffects).toBeNull()
+  // RFC-527: candidate delivery and conflict merge are required; standalone selects the local effects (the candidate
+  // steps carry the local fixture session their pushes open).
+  const candidate = selections.repositoryCandidateEffects as {
+    readonly acquire?: unknown
+    readonly localFixtureSession?: unknown
+  }
+  expect([typeof candidate.acquire, typeof candidate.localFixtureSession]).toEqual([
+    'function',
+    'function',
+  ])
+  expect(typeof selections.conflictMergeWorkspaceEffects.allocate).toBe('function')
 })
 
 test('the standalone execution authority is active and never gates a background factory', async () => {

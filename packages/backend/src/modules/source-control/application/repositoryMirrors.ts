@@ -49,6 +49,7 @@ export function createLocalRepositoryMirrors(input: {
     refs: (id) => local(id, (path) => input.reads.refs(path)),
     files: (id) => local(id, (path) => input.reads.files(path)),
     local: input.local,
+    registration: { kind: 'mirror-cache' },
   }
 }
 
@@ -85,7 +86,8 @@ export function createRemoteRepositoryMirrors(input: {
   return {
     refs: async (id) => remote.refs(remoteOf(await registered(id))),
     files: async (id) => remote.files(remoteOf(await registered(id))),
-    remoteRegistration: {
+    registration: {
+      kind: 'remote',
       async register(url) {
         const parsed = parseGitUrl(url)
         if (parsed === null)

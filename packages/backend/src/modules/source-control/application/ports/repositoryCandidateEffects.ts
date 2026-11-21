@@ -1,6 +1,7 @@
 // RFC-370 A4 — bound candidate repositories and content effects.
 // References are opaque to shared orchestration; relative business paths,
 // staging policy, upload lineage and commit decisions remain owned by AW.
+import type { RepositoryPublicationSession } from '../../public/types'
 
 type Completion<T> = T | Promise<T>
 
@@ -60,4 +61,9 @@ export interface RepositoryCandidateStepEffectsFactory {
     readonly baselineReference: string
     readonly overlayReference?: string
   }): Completion<RepositoryCandidateSession>
+  /**
+   * RFC-527: the local step factory's publication session for local paths and `file://` remotes, used when no hosted
+   * transport and durable subject publish (standalone). Step stand-ins in tests carry none.
+   */
+  readonly localFixtureSession?: (remoteUrl: string) => RepositoryPublicationSession | null
 }

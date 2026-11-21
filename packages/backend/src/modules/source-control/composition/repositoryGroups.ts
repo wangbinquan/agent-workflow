@@ -36,12 +36,12 @@ export function composeRepositoryGroups(input: {
   readonly cloneTimeoutMs: () => Promise<number | undefined>
 }): RepositoryGroups {
   const { store } = input
-  const remote = input.mirrors.remoteRegistration
+  const mirrors = input.mirrors.registration
   const writeDeps = async (): Promise<RepoGroupDeps> => {
-    if (remote !== undefined) {
+    if (mirrors.kind === 'remote') {
       return {
         store,
-        importRepositoryUrl: async (url) => (await remote.register(url)).cachedRepoId,
+        importRepositoryUrl: async (url) => (await mirrors.register(url)).cachedRepoId,
       }
     }
     const cloneTimeoutMs = await input.cloneTimeoutMs()

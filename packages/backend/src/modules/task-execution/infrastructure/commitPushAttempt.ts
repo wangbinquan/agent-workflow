@@ -25,7 +25,6 @@ import type {
   RepositoryPublicationTransport,
   WorkspaceChangeMessage,
 } from '@/modules/source-control/public/types'
-import type { runGit as realRunGit } from '@/util/git'
 import { sha256Hex } from '@/util/hash'
 import { createLogger, type Logger } from '@/util/log'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
@@ -37,8 +36,6 @@ import type { TaskExecutionEffectPersistence } from '../application/ports/taskEx
 import { commitPushNodeId } from '../domain/commitAgent'
 import { repositoryPublicationOrdinal } from '../domain/repositoryExecutionIdentity'
 
-type RunGit = typeof realRunGit
-
 export interface CommitPushParams extends AutoCommitPushRequest {
   /** Push remote. Default 'origin'. */
   pushRemote?: string
@@ -49,9 +46,8 @@ export interface CommitPushDeps {
   nodeRuns: NodeRunLifecyclePersistence
   nodeExecution: NodeExecutionPersistence
   effects: TaskExecutionEffectPersistence
-  /** Injectable for tests; defaults to the real git CLI. */
-  runGit?: RunGit
-  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
+  /** RFC-527: the drive's selected repository workspaces (required). */
+  repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
   log?: Logger
   /** RFC-321 exact publication transport selected by bootstrap. */
   publicationTransport: RepositoryPublicationTransport
@@ -69,10 +65,7 @@ export async function runCommitPush(
   params: CommitPushParams,
   deps: CommitPushDeps,
 ): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> {
-  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(
-    deps.repositoryGitWorkspaces,
-    deps.runGit,
-  )
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(deps.repositoryGitWorkspaces)
   const workspace = bindRepositoryGitWorkspace(repositoryGitWorkspaces, {
     taskId: params.taskId,
     workspaceRef: params.worktreePath,
@@ -155,7 +148,6 @@ export async function runCommitPush(
   const { meta, processUnreaped } = await bindWorkspaceChangePublication({
     workspace,
     transport: deps.publicationTransport,
-    bindPoliciesToWorkspace: deps.repositoryGitWorkspaces !== undefined,
     log,
   }).publish({
     nodeRunId,

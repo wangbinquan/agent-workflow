@@ -24,10 +24,8 @@ import {
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
-import {
-  composeLocalTaskRunSelection,
-  composeTaskWorkspaceExcludeProfilesFor,
-} from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeLocalTaskRunSelection } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeTaskWorkspaceExcludeProfilesFor } from './taskWorkspaceExcludeProfiles'
 import { bindTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import {
@@ -175,6 +173,12 @@ export function taskBundleInput(
       archivedEvents: standalone.archivedNodeEvents,
       reviewRollbackSnapshots: standalone.reviewRollbackSnapshots,
       workspaceUploads: standalone.workspaceUploads,
+      // RFC-527: the drive participant's workspace factories are required — the standalone profile's.
+      isolationWorkspaces: standalone.isolationWorkspaces,
+      repositoryGitWorkspaces: standalone.repositoryGitWorkspaces,
+      // RFC-527: the two hosted-only capabilities, stated as standalone states them.
+      inputFiles: standalone.taskInputFiles,
+      recoverySelection: null,
       preparationEffects: standalone.repositoryPreparationEffects,
       scratchEffects: standalone.scratchWorkspaceEffects,
       fusionWorkspaces: createFileFusionWorkspaceEffects({ appHome }),

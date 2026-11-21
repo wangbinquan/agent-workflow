@@ -17,17 +17,16 @@ import { ulid } from 'ulid'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import {
   bindWorkspaceExcludeProfile,
-  selectWorkspaceExcludeProfileFactory,
   type WorkspaceExcludeProfileFactory,
 } from '@/modules/source-control/public/participants'
 import type { WorkspaceExcludeProfileReceipt } from '@/modules/source-control/public/types'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createWorkerIdentity } from '@/modules/task-execution/domain/ownership'
-import {
-  composeTaskWorkspaceExcludeProfilesFor,
-  type ProviderTaskRunBindingSelection,
-  type LegacyTaskRunComposition,
+import type {
+  ProviderTaskRunBindingSelection,
+  LegacyTaskRunComposition,
 } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeTaskWorkspaceExcludeProfilesFor } from './helpers/taskWorkspaceExcludeProfiles'
 import type { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -470,10 +469,8 @@ describeEachProvider('RFC-370 selected workspace profiles in real Task drives', 
 })
 
 describe('RFC-370 profile bootstrap choice', () => {
-  test('explicit missing factory or participant fails without native completion', () => {
-    expect(() =>
-      selectWorkspaceExcludeProfileFactory({} as WorkspaceExcludeProfileFactory),
-    ).toThrow(TypeError)
+  // RFC-527: the exclude-profile selection left with its only (test-only) caller; an incomplete participant still fails.
+  test('explicit missing participant fails without native completion', () => {
     expect(() =>
       bindWorkspaceExcludeProfile(
         { bind: () => ({}) } as unknown as WorkspaceExcludeProfileFactory,

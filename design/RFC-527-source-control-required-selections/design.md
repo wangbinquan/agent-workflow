@@ -23,7 +23,7 @@ RFC-521 门登记的 19 处（路径在 `packages/backend/src/modules/source-con
 
 补充事实：
 
-- 五个 `select*` 都在 source-control 的 public 合同里（`public/participants.ts`、`public/queries.ts`），消费方全在 task-execution。
+- 五个 `select*` 都在 source-control 的 public 合同里（实施时查明排除档案的那个只有只服务用例的调用方，见 D1）（`public/participants.ts`、`public/queries.ts`），消费方全在 task-execution。
 - 驱动参与者每次驱动都把选好的隔离工作区与 git 工作区并进运行参数（`infrastructure/taskExecutionRuntimeParticipants.ts`），提交推送绑定与执行工作区
   绑定从运行参数取。
 - 单机推送走回落一支时带 `localFixtureSession: createFileRepositoryPublicationFixtureSession(url, runGit)`：没有托管传输与持久主体时，本机路径与
@@ -34,17 +34,20 @@ RFC-521 门登记的 19 处（路径在 `packages/backend/src/modules/source-con
 - 工作区改动发布的 `bindPoliciesToWorkspace` 只在提交推送执行没给工作区工厂时为假（只有用例），生产总为真：子仓的提交策略总在选定的
   子工作区上跑。
 - daemon 应用装配另有两处把托管能力的 `null` 转回 `undefined`：输入文件留存（`taskInputFiles`）与任务恢复（`taskRecovery`）。消费方（路由启动
-  的上传、provider 运行期的恢复消费者）把没给当作没有这项能力，不造本机实现。
+  的上传、provider 运行期的恢复消费者）把没给当作没有这项能力，不造本机实现。HTTP 装配还有一处：部署选择的 CrewStation 事件入口
+  （`crewStationEvents`）转回 `undefined` 交给 integration 的 `composeWebhookIngressTransport`，它把没给当作单机、开放直连的 webhook 入口。
 
 ## 2. 机制与落位
 
 ### D1 选择助手（public，保留名字）
 
 - `selectIsolationWorkspaceFactory(selected)`、`selectRepositoryGitWorkspaceFactory(selected)`、`selectRepositoryWorkspaceReadQueries(selected)`、
-  `selectWorkspaceUploadContentFactory(selected)`、`selectWorkspaceExcludeProfileFactory(selected)`：选择必填、只做核对；删去 `legacyRunGit` 与
-  `readLocalAppHome`。
+  `selectWorkspaceUploadContentFactory(selected)`：选择必填、只做核对；删去 `legacyRunGit`。
+- 排除档案的选择 `selectWorkspaceExcludeProfileFactory` 的生产调用方只有 task-execution 里只服务用例的 `composeTaskWorkspaceExcludeProfilesFor`；它
+  移进测试助手后选择没有调用方（架构报告的 source-control 未消费 public 符号会多一个），连同只为它存在的 `readLocalAppHome` 与核对
+  `requireWorkspaceExcludeProfileFactory` 一并删去。
 - task-execution 的消费方随之必填：驱动参与者输入的隔离工作区与 git 工作区（绑定后的运行参数本来就必填，驱动参与者每次都给）、提交推送执行依赖
-  里的 git 工作区（删去只为回落存在的 `runGit`；工作区改动发布只为“没给工厂”存在的 `bindPoliciesToWorkspace` 随之删去）、任务路由操作与修复操作的工作区读取、上传策略与路由启动的上传内容工厂。只服务用例的
+  里的 git 工作区（删去只为回落存在的 `runGit`；工作区改动发布只为“没给工厂”存在的 `bindPoliciesToWorkspace` 随之删去）、任务路由操作与修复操作的工作区读取、上传策略与路由启动的上传内容工厂。工作区上传（`applyTaskWorkspaceUploads`）的写入方改为二选一、必给：部署的上传内容工厂，或进程中断预言用的整体写入替身；都不给是类型错误，都给照旧被拒（类型与运行期）。只服务用例的
   `composeTaskWorkspaceExcludeProfilesFor` 与 `applyUploadsToWorktree` 移进测试助手。
 
 ### D2 排除档案
@@ -92,28 +95,32 @@ RFC-521 门登记的 19 处（路径在 `packages/backend/src/modules/source-con
 - RFC-521 门删去 19 条适配器登记，`repositoryCommit.ts` 的三处按 `option` 登记；适配器回落 19 → 0、`SUCCESSORS` 清空（门的“后继与模块逐个相
   等”随之为空集）。计数降的收紧到实测；新增 RFC-527 用例并登记 guard-manifest。
 
-### D9 两项托管能力
+### D9 托管能力与 CrewStation 事件入口
 
 - 输入文件留存与任务恢复只有托管部署才有（单机 `null`）：消费方改取 `X | null`、显式判 `null`——路由启动、启动上传与工作区上传的 `inputFiles`，
-  provider 运行期的 `recoverySelection`；daemon 应用装配原样交入（任务恢复照旧按身份访问构造），删去两处 `null` → `undefined`。至此 S12 第 1 项
-  点名的写法在 bootstrap 里清零。
+  provider 运行期的 `recoverySelection`；daemon 应用装配原样交入（任务恢复照旧按身份访问构造），删去两处 `null` → `undefined`。
+- integration 的 `composeWebhookIngressTransport` 的 `crewStationEvents` 改为可空、必给（单机 `null`，托管给入口；可用性判断改判 `null`），
+  HTTP 装配原样交入部署选择、删去这处转换；转出的 `crewStationEvents` 随之可空，`server.ts` 照旧以可选链挂载。至此 S12 第 1 项点名的写法在
+  bootstrap 里清零（用例按全部 bootstrap 文件扫）。
 
 ## 3. 清单（退出门）
 
-| 名字                                                                                                                                                                                                                              | 之后                        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| 五个 `select*`                                                                                                                                                                                                                    | 保留名字，选择必填          |
-| `legacyRunGit`、`readLocalAppHome`、`NativeGitFixture` 与请求上的 `runGit`、私有 `selectFactory`、`composeRepositoryMirrors`、维护命令只为回落存在的三项、提交推送执行依赖的 `runGit`、工作区改动发布的 `bindPoliciesToWorkspace` | 删去                        |
-| `composeTaskWorkspaceExcludeProfilesFor`、`applyUploadsToWorktree`                                                                                                                                                                | 移进测试助手                |
-| `composeLocalRepositoryMirrors`、`composeRemoteRepositoryMirrors`、`RepositoryMirrors.registration`、本机候选 effect 工厂的 `localFixtureSession`                                                                                 | 新增                        |
-| 路由启动与上传的 `inputFiles`、provider 运行期的 `recoverySelection`                                                                                                                                                              | 可空、必给（显式判 `null`） |
+| 名字                                                                                                                                                                                                                                                                                                                 | 之后                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 四个 `select*`                                                                                                                                                                                                                                                                                                       | 保留名字，选择必填          |
+| `selectWorkspaceExcludeProfileFactory` 与 `requireWorkspaceExcludeProfileFactory`、`legacyRunGit`、`readLocalAppHome`、`NativeGitFixture` 与请求上的 `runGit`、私有 `selectFactory`、`composeRepositoryMirrors`、维护命令只为回落存在的三项、提交推送执行依赖的 `runGit`、工作区改动发布的 `bindPoliciesToWorkspace` | 删去                        |
+| `composeTaskWorkspaceExcludeProfilesFor`、`applyUploadsToWorktree`                                                                                                                                                                                                                                                   | 移进测试助手                |
+| `composeLocalRepositoryMirrors`、`composeRemoteRepositoryMirrors`、`RepositoryMirrors.registration`、本机候选 effect 工厂的 `localFixtureSession`                                                                                                                                                                    | 新增                        |
+| 工作区上传的写入方（`TaskWorkspaceUploadWriter`）                                                                                                                                                                                                                                                                    | 二选一、必给                |
+| 路由启动与上传的 `inputFiles`、provider 运行期的 `recoverySelection`、webhook 入口的 `crewStationEvents`                                                                                                                                                                                                             | 可空、必给（显式判 `null`） |
 
 ## 4. 用例
 
 新增 `packages/backend/tests/rfc527-source-control-required-selections-boundary.test.ts`，登记 guard-manifest：
 
-- ① 选项必填：逐个钉住各入口的入参成员（可选标记一并钉）。
-- ② bootstrap 不取 source-control 的 infrastructure、不再把部署选择的 `null` 转回 `undefined`；删去的名字与选项在生产代码里不再出现（语料下限 3,000，先
+- ① 选项必填：逐个钉住各入口的入参成员（可选标记一并钉）；工作区上传的写入方是二选一的联合类型（两支逐个钉）；webhook 入口的
+  `crewStationEvents` 可空、必给。
+- ② bootstrap 不取 source-control 的 infrastructure、不再把部署选择的 `null` 转回 `undefined`（扫全部 bootstrap 文件）；删去的名字与选项在生产代码里不再出现（语料下限 3,000，先
   按名字文本筛、给语料用例时限）。
 - ③ 装配处的显式构造逐处钉住：单机部署的候选与冲突合并选择、镜像按 `repositoryRemote` 选一支、维护 worker 的三项本机效果。
 - ④ 行为：镜像两支的登记方式、手动刷新按 `kind` 分支；本机候选推送带夹具会话、步骤替身不带；没有作用域时预览要求给出索引；选择助手只核对、原样交
@@ -127,6 +134,8 @@ RFC-521 门登记的 19 处（路径在 `packages/backend/src/modules/source-con
 - **单机推送丢了夹具会话**：夹具会话挂在本机 effect 工厂上，推送从工厂取；用例覆盖本机路径远端的推送。
 - **按原文或按 AST 钉住旧形状的锁、共享测试助手盖掉用例的值**：RFC-524 / RFC-525 / RFC-526 的教训（`docs/dev-gotchas.md`）。
 - **移走或删去后成为不可达文件、未消费符号**：架构报告对照。
+- **整体写入替身与必填的内容工厂并存**：两者都给会被拒，进程中断预言的替身就无从使用——写入方改为二选一的联合类型，预言只给替身；用例钉住类型
+  拒绝两者（`@ts-expect-error`）、运行期照旧拒绝未经检查的调用方。
 
 ## 6. 取舍（可推翻）
 
@@ -135,11 +144,12 @@ RFC-521 门登记的 19 处（路径在 `packages/backend/src/modules/source-con
 2. **镜像的登记方式改为显式的 `kind`，而不是让本机镜像也实现远端登记**：本机的登记由批量导入自己克隆、刷新要读配置里的克隆时限，硬套成同一组方法会把
    配置读取搬进镜像；显式的 `kind` 与 RFC-526 启动配置的处理一致。
 3. **本机候选 effect 工厂自带夹具会话**：夹具会话只对本机步骤有意义；挂在工厂上，单机选择与回落一支等价，绑定不再需要“没给工厂”这一支。
+4. **工作区上传的写入方二选一，而不是让整体写入优先于内容工厂**：同时给两者自 RFC-370 起就被显式拒绝，静默的优先级会掩盖调用错误。
 
 ## 7. 对 RFC-294 刷新后规则的对账
 
 - **C10**：组合层只装配；单机选择经组合层交出，bootstrap 选择（镜像一支由 bootstrap 按部署选择显式选）。
-- **C11**：public 不新增符号；五个 `select*` 的签名收紧。
+- **C11**：public 不新增符号；四个 `select*` 的签名收紧，没有调用方的排除档案选择删去（未消费符号不升）。
 - **C12**：RFC-527 用例覆盖全部生产文件里的同名选项与 bootstrap 的取用；RFC-521 门覆盖全部组合层。
 - **C13**：计数不升，降的收紧到实测；适配器回落 19 → 0。
 

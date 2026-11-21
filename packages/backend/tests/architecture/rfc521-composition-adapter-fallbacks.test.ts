@@ -51,49 +51,13 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['createWorkgroupEvents', 'process-local'],
     ['createWorkgroupEvents', 'process-local'],
   ],
-  'source-control/composition.ts': [
-    ['createFileEmployeeCaseWorkspaceEffectsFactory', 'adapter'],
-    ['new WeakMap', 'memo'],
-  ],
-  'source-control/composition/cachedRepositoryOperations.ts': [['refreshCachedRepo', 'adapter']],
-  'source-control/composition/conflictMerge.ts': [
-    ['createFileConflictMergeWorkspaceEffects', 'adapter'],
-    ['createFileConflictMergeWorkspaceEffects', 'adapter'],
-  ],
-  'source-control/composition/isolationWorkspaces.ts': [
-    ['createLocalIsolationWorkspaceFactory', 'adapter'],
-  ],
-  'source-control/composition/repositoryCandidate.ts': [
-    ['commitCandidate', 'injected'],
-    ['createFileRepositoryCandidateEffectsFactory', 'adapter'],
-    ['deriveChangeCandidate', 'injected'],
-    ['pushCandidate', 'adapter'],
-    ['pushCandidate', 'injected'],
-    ['stageCandidateTree', 'injected'],
-  ],
+  'source-control/composition.ts': [['new WeakMap', 'memo']],
+  // RFC-527 design §6 trade-off 1: without a workspace scope the commit use cases run in this process — the module's
+  // own path (a hosted scope runs the same use cases in its volume), not a stand-in.
   'source-control/composition/repositoryCommit.ts': [
-    ['commitPreparedRepository', 'adapter'],
-    ['createFileRepositoryPreviewIndexPort', 'adapter'],
-    ['prepareRepositoryCommit', 'adapter'],
-    ['readRepositoryCommitPreview', 'adapter'],
-  ],
-  'source-control/composition/repositoryGitWorkspaces.ts': [
-    ['createFileRepositoryGitWorkspaceFactory', 'adapter'],
-  ],
-  'source-control/composition/repositoryMirrors.ts': [['createLocalRepositoryMirrors', 'adapter']],
-  'source-control/composition/repositoryPreparation.ts': [
-    ['composeLocalRepositoryPreparationEffects', 'adapter'],
-    ['composeLocalScratchWorkspaceEffects', 'adapter'],
-  ],
-  'source-control/composition/repositoryWorkspaceReadQueries.ts': [
-    ['createFileRepositoryWorkspaceReadQueries', 'adapter'],
-  ],
-  'source-control/composition/workspaceExcludeProfiles.ts': [['Object.freeze', 'adapter']],
-  'source-control/composition/workspaceMaintenance.ts': [
-    ['createNodeWorkspaceMaintenanceFilesystem', 'adapter'],
-  ],
-  'source-control/composition/workspaceUploads.ts': [
-    ['createFileWorkspaceUploadContentFactory', 'adapter'],
+    ['commitPreparedRepository', 'option'],
+    ['prepareRepositoryCommit', 'option'],
+    ['readRepositoryCommitPreview', 'option'],
   ],
   'system-operations/composition.ts': [
     ['Object.freeze', 'injected'],
@@ -114,16 +78,17 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   'task-execution/composition/taskEngineApplication.ts': [['createLogger', 'logger']],
 }
 
-/** design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. */
-const SUCCESSORS: Readonly<Record<string, string>> = {
-  'source-control': 'S12 item 1, step 7',
-}
+/**
+ * design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. RFC-527
+ * cleared the last module (source-control): no successor remains.
+ */
+const SUCCESSORS: Readonly<Record<string, string>> = {}
 /**
  * Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center,
  * RFC-523 intent, code-capability and memory, RFC-524 system-operations and development-automation, RFC-525 resource-catalog,
- * RFC-526 task-execution.
+ * RFC-526 task-execution, RFC-527 source-control.
  */
-const ADAPTER_FALLBACKS = 19
+const ADAPTER_FALLBACKS = 0
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */

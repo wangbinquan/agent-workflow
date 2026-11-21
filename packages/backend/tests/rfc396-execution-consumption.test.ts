@@ -14,6 +14,7 @@ import { GRAPH_CONTEXT_TYPE } from '@/modules/development-automation/application
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture, bookingView } from './helpers/graphDesign'
 import { createEmployeeExecutionArtifactQueries } from '@/modules/task-execution/infrastructure/employeeExecutionArtifacts'
+import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'
 
 describeEachProvider('RFC-396 committed execution consumption', (harness) => {
   test('the production artifact reader exposes completed node outputs before the human gate completes the Task', async () => {
@@ -428,7 +429,9 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
           throw new Error('not called')
         },
       },
-      candidates: bindCandidateDeliveryParticipant(),
+      candidates: bindCandidateDeliveryParticipant({
+        candidateEffects: createLocalRepositoryCandidateEffects(),
+      }),
     })
     const plan = { ...f.plan, workItemRef: 'understand-request' }
     const result = await platform.execute(plan)

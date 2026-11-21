@@ -1,7 +1,10 @@
 import { testExecutionPermits } from './helpers/executionPermits'
-import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import {
+  composeRepositoryPreparationLookup,
+  createFileWorkspaceUploadContentFactory,
+} from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 
@@ -1115,7 +1118,12 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const scheduleLaunch = createBuildScheduleLaunch(
       createTaskExecutionTriggerParticipant({
         launches: createTaskExecutionLaunchParticipant({
-          ...createRootTaskLaunchPorts({ db: db2, configPath: cfgPath }),
+          ...createRootTaskLaunchPorts({
+            workspaceUploads: createFileWorkspaceUploadContentFactory(),
+            inputFiles: null,
+            db: db2,
+            configPath: cfgPath,
+          }),
           gitCommitIdentity: identityAccess2.getUserGitCommitIdentity,
           agent: Object.freeze({
             resources: composeAgentLaunchResourceOperations({ db: db2 }),
@@ -1129,7 +1137,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             db: db2,
             sourceContexts: identityAccess2.taskPreparationContext,
             repositoryPreparation: composeRepositoryPreparation(
-              withSourceControlTaskPorts({ db: db2, appHome: home }),
+              withLocalRepositoryPreparation({ db: db2, appHome: home }),
             ),
             appHome: home,
           }),
@@ -1140,7 +1148,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             repositoryPreparation: composeDeferredRepositoryPreparation({
               repositoryPreparationLookup: composeRepositoryPreparationLookup(db2),
               repositoryPreparation: composeRepositoryPreparation(
-                withSourceControlTaskPorts({
+                withLocalRepositoryPreparation({
                   db: db2,
                   appHome: home,
                   cloneTimeoutMs: 3000,

@@ -554,7 +554,10 @@ describe('RFC-437 —— 入站绑定的结果映射', () => {
   test('装配：缺密钥箱或已验证接收时不构造接收器', () => {
     const persistence = {} as unknown as WebhookIngressPersistence
     expect(
-      composeWebhookIngressTransport({ webhookIngressPersistence: persistence }).receiver,
+      composeWebhookIngressTransport({
+        webhookIngressPersistence: persistence,
+        crewStationEvents: null,
+      }).receiver,
     ).toBe(undefined)
   })
 })

@@ -65,21 +65,19 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
     }
     for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant'])
       expect(calls(source, name)).toHaveLength(0)
-    // RFC-433: a hosted-only capability; the standalone profile states null.
-    expectDeploymentSelection(
-      'repositoryCandidateEffects',
-      'RepositoryCandidateEffectsFactory | null',
-    )
+    // RFC-527: required — the standalone profile selects the local candidate effects.
+    expectDeploymentSelection('repositoryCandidateEffects', 'RepositoryCandidateEffectsFactory')
   }
   for (const path of [
     'bootstrap/daemonModules/digitalEmployee.ts',
     'bootstrap/daemonModules/developmentAutomation.ts',
   ]) {
     const source = load(path)
-    // RFC-433: standalone states null; the bundle hands both participants their own per-request local effects.
+    // RFC-527: the deployment's selection is handed in as is (standalone: the local effects).
     expect(source.text.replace(/\s+/g, ' ')).toContain(
-      'const candidateEffects = input.repositoryCandidateEffects === null ? undefined : input.repositoryCandidateEffects',
+      'const candidateEffects = input.repositoryCandidateEffects',
     )
+    expect(source.text).not.toMatch(/repositoryCandidateEffects\s*===\s*null/)
     for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant']) {
       const bindings = calls(source, name)
       expect(bindings).toHaveLength(1)

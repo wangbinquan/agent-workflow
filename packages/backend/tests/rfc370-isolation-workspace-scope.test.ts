@@ -33,7 +33,7 @@ const binding: IsolationWorkspaceBinding = {
 
 describe('RFC-370 isolation scope selection', () => {
   test('native construction and scene binding perform no IO', async () => {
-    const factory = selectIsolationWorkspaceFactory()
+    const factory = selectIsolationWorkspaceFactory(createLocalIsolationWorkspaceFactory())
     const scope = await factory.bind(binding)
     requireIsolationWorkspaceScope(scope)
     expect(Object.isFrozen(factory)).toBe(true)

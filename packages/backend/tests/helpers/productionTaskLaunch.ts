@@ -1,9 +1,12 @@
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
-import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import {
+  composeRepositoryPreparationLookup,
+  createFileWorkspaceUploadContentFactory,
+} from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：既有启动夹具改走生产根启动内核 / workflow 参与者；这里只装配依赖与工作区租约。
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -308,7 +311,7 @@ export async function launchTestTask(
   const repositoryPreparation =
     options.repositoryPreparation ??
     composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db,
         appHome,
         secretBox: options.secretBox,
@@ -417,6 +420,8 @@ export async function launchTestTask(
     const participant = createTaskExecutionLaunchParticipant({
       ...dependencies,
       ...createRootTaskLaunchPorts({
+        workspaceUploads: createFileWorkspaceUploadContentFactory(),
+        inputFiles: null,
         db,
         configPath: options.configPath ?? `${appHome}/config.json`,
       }),

@@ -1,6 +1,6 @@
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import {
-  withSourceControlTaskPorts,
+  withLocalRepositoryPreparation,
   withWorkspaceMaintenancePorts,
 } from './helpers/sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -330,7 +330,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       const entered = Promise.withResolvers<void>(),
         release = Promise.withResolvers<void>()
       const binding = composeRepositoryPreparation(
-        withSourceControlTaskPorts({ db: harness.db, appHome }),
+        withLocalRepositoryPreparation({ db: harness.db, appHome }),
       )
       let preparations = 0
       const prepare = async () => {

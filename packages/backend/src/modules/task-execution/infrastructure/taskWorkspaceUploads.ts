@@ -14,17 +14,32 @@ import { withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskInputFiles } from '../application/ports/taskInputFiles'
 import type { TaskLaunchUploads } from '../application/ports/taskLaunchUploads'
 
+/**
+ * RFC-527: the upload writer is one explicit choice — the deployment's upload content or, for the process interruption
+ * oracle, a whole-writer substitution. Neither has a default; giving both is rejected by the type and at runtime.
+ */
+type TaskWorkspaceUploadWriter =
+  | {
+      readonly workspaceUploads: WorkspaceUploadContentFactory
+      readonly write?: undefined
+    }
+  | {
+      /** Effect substitution is used by the process interruption oracle. */
+      readonly write: (plan: UploadPlan) => Promise<UploadResult>
+      readonly workspaceUploads?: undefined
+    }
+
 /** Preserve the original upload writer and record its complete packed-path receipt
  * before admission. A resumed launch must not turn the same upload into "file (1)". */
-export async function applyTaskWorkspaceUploads(input: {
-  db: PersistenceDb
-  taskId: string
-  plan: UploadPlan
-  workspaceUploads?: WorkspaceUploadContentFactory
-  inputFiles?: TaskInputFiles
-  /** Effect substitution is used by the process interruption oracle. */
-  write?: (plan: UploadPlan) => Promise<UploadResult>
-}): Promise<WorkspaceUploadResult> {
+export async function applyTaskWorkspaceUploads(
+  input: {
+    db: PersistenceDb
+    taskId: string
+    plan: UploadPlan
+    /** RFC-527: hosted input file retention; standalone states `null`. */
+    inputFiles: TaskInputFiles | null
+  } & TaskWorkspaceUploadWriter,
+): Promise<WorkspaceUploadResult> {
   const requestDigest = sha256Hex(
     canonicalJson({
       worktreePath: input.plan.worktreePath,
@@ -59,12 +74,13 @@ export async function applyTaskWorkspaceUploads(input: {
     throw new ConflictError('workspace-upload-request-mismatch', 'workspace upload request changed')
   if (receipt.uploadPlan !== undefined && receipt.uploadPlan.requestDigest !== requestDigest)
     throw new ConflictError('workspace-upload-request-mismatch', 'workspace upload request changed')
-  await input.inputFiles?.retain({
-    taskId: input.taskId,
-    requestDigest,
-    files: input.plan.files,
-    limits: input.plan.limits,
-  })
+  if (input.inputFiles !== null)
+    await input.inputFiles.retain({
+      taskId: input.taskId,
+      requestDigest,
+      files: input.plan.files,
+      limits: input.plan.limits,
+    })
   if (receipt.uploads !== undefined) {
     if (receipt.uploads.requestDigest !== requestDigest)
       throw new ConflictError(
@@ -144,8 +160,8 @@ export async function applyTaskWorkspaceUploads(input: {
 export function createTaskLaunchUploads(
   dependencies: Readonly<{
     db: PersistenceDb
-    workspaceUploads?: WorkspaceUploadContentFactory
-    inputFiles?: TaskInputFiles
+    workspaceUploads: WorkspaceUploadContentFactory
+    inputFiles: TaskInputFiles | null
   }>,
 ): TaskLaunchUploads {
   return Object.freeze<TaskLaunchUploads>({

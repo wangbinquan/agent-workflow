@@ -609,8 +609,7 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
       writeFileSync(join(f.repo, 'b.txt'), 'selected content\n')
       writeFileSync(join(f.repo, 'trace.tmp'), 'excluded content\n')
       const locks: string[] = []
-      let generated = 0,
-        fallbackCalls = 0
+      let generated = 0
       const native = composeSqliteCommitPushDeps(f.db)
       const pending = runCommitPush(
         baseParams(f, {
@@ -632,10 +631,7 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
           ...native,
           repositoryGitWorkspaces: factory,
           publicationTransport: store.transport(native.publicationTransport),
-          runGit: async () => {
-            fallbackCalls += 1
-            throw new Error('legacy hook used')
-          },
+          // RFC-527: the commit attempt has no legacy git runner any more; the selected factory is the only path.
         },
       )
       try {
@@ -658,7 +654,6 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
       expect(result.meta.filesChanged).toBe(1)
       expect(result.meta.exclusions?.paths).toEqual(['trace.tmp'])
       expect(generated).toBe(1)
-      expect(fallbackCalls).toBe(0)
       expect(locks).toEqual(['acquire', 'release', 'acquire', 'release'])
       expect(store.bindings).toEqual([
         { taskId: f.taskId, workspaceRef: ref, repositoryRef: 'opaque:repository' },

@@ -3,7 +3,7 @@ import { composeRepositoryPreparationLookup } from '@/modules/source-control/com
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动留下的准备日志由同一生产 repositoryPreparation 装配继续重试。
 // RFC-359 AC-1（第 9 刀）—— `retry` 的**唯一**测试装配点。
 //
@@ -199,7 +199,7 @@ export function createRetryEngine(
                     repositoryPreparation:
                       options.resumeWith.repositoryPreparation ??
                       composeRepositoryPreparation(
-                        withSourceControlTaskPorts({
+                        withLocalRepositoryPreparation({
                           db,
                           appHome: options.resumeWith.appHome ?? appHome,
                           secretBox: options.resumeWith.secretBox,

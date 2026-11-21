@@ -1,6 +1,6 @@
 // RFC-370 §10 V17 — the selected repository mirrors (see the port). RFC-512: the reads, the registration and the
 // refresh are application use cases (application/repositoryMirrors.ts); this assembly selects standalone or
-// hosted and hands each its effects.
+// hosted and hands each its effects. RFC-527: two explicit assemblies; bootstrap picks one by the deployment's remote.
 import type { SecretBox } from '@/auth/secretBox'
 import {
   ensureCachedRepoIdentity,
@@ -23,29 +23,31 @@ import {
   createRemoteRepositoryMirrors,
 } from '../application/repositoryMirrors'
 
-export function composeRepositoryMirrors(input: {
+/** Standalone: the daemon's own mirror clones, read by directory (RFC-527: bootstrap selects it for a null remote). */
+export function composeLocalRepositoryMirrors(input: {
   readonly store: RepositoryWorkspaceStore
+}): RepositoryMirrors {
+  return createLocalRepositoryMirrors({
+    store: input.store,
+    reads: { refs: (path) => getRepoRefs(path), files: getRepoFiles },
+    // RFC-446: the `?path=` form reads only inside a registered mirror (the
+    // check routes/repos.ts used to make before calling these).
+    local: createKnownPathRepositoryReads(() => input.store.listKnownRepositoryPaths()),
+  })
+}
+
+/** Hosted: remote reads in the release's system volume (RFC-527: bootstrap selects it for a hosted remote). */
+export function composeRemoteRepositoryMirrors(input: {
+  readonly store: RepositoryWorkspaceStore
+  readonly remote: RepositoryRemoteEffects
   readonly secretBox?: SecretBox
   readonly appHome?: string
   readonly now?: () => number
-  /** Hosted: remote reads in the release's system volume. Absent: the
-   * daemon's own mirror clones. */
-  readonly remote?: RepositoryRemoteEffects
 }): RepositoryMirrors {
-  const remote = input.remote
-  if (remote === undefined) {
-    return createLocalRepositoryMirrors({
-      store: input.store,
-      reads: { refs: (path) => getRepoRefs(path), files: getRepoFiles },
-      // RFC-446: the `?path=` form reads only inside a registered mirror (the
-      // check routes/repos.ts used to make before calling these).
-      local: createKnownPathRepositoryReads(() => input.store.listKnownRepositoryPaths()),
-    })
-  }
   const now = input.now ?? Date.now
   return createRemoteRepositoryMirrors({
     store: input.store,
-    remote,
+    remote: input.remote,
     now,
     cache: {
       unsealUrl: (row) => unsealRepoUrl(row, input.secretBox, input.store),

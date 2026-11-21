@@ -181,11 +181,11 @@ const ROOTS: Readonly<
       'bindProviderTaskRunParticipantsInput',
       'composeLegacyTaskRunDriveBinding',
       'composeLocalTaskRunSelection',
-      'composeTaskWorkspaceExcludeProfilesFor',
     ],
-    // The exclude-profile and run-binding selections; RFC-514 moved the local configuration bridge's lookup (and its
-    // throw) to application/taskRunSelection.ts as createTaskRunConfigurationReferences.
-    shapes: ['if', 'if'],
+    // The run-binding selection; RFC-514 moved the local configuration bridge's lookup (and its throw) to
+    // application/taskRunSelection.ts as createTaskRunConfigurationReferences. RFC-527 moved the exclude-profile
+    // selection, which only tests used, to tests/helpers/taskWorkspaceExcludeProfiles.ts.
+    shapes: ['if'],
     takes: [
       `import ${RUN_PORTS}: TaskRunContentNamespace, TaskRunFamilyBinding`,
       `import ${RUNS}: createTaskRunConfigurationReferences, requireTaskRunDriveBinding`,

@@ -225,7 +225,8 @@ export interface TaskRouteOperationsDependencies {
   readonly historyRestrictions: HistoryRestrictionPort
   readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archivedEvents?: TaskArchivedEventsReader
-  readonly workspaceReads?: RepositoryWorkspaceReadQueries
+  /** RFC-527: the deployment's workspace reads (required). */
+  readonly workspaceReads: RepositoryWorkspaceReadQueries
   /** RFC-526: the deployment's prompt operations (required; the daemon gives its task run selection's). */
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly db: PersistenceDb
@@ -1253,7 +1254,8 @@ export async function nodeRunStdoutProjection(
 export async function taskDiffProjection(
   dependencies: Readonly<{
     db: PersistenceDb
-    workspaceReads?: RepositoryWorkspaceReadQueries
+    /** RFC-527: required (the route operations give theirs). */
+    workspaceReads: RepositoryWorkspaceReadQueries
   }>,
   taskId: string,
 ): Promise<TaskDiff> {

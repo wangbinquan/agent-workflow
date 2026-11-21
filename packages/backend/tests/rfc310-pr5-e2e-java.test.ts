@@ -43,6 +43,7 @@ import { createVerificationProfilePersistence } from '../src/modules/development
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
+  createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
 import { createDevelopmentMrEffects } from '../src/modules/integration/application/developmentCodeHostDelivery'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
@@ -200,8 +201,12 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,
-    changeCandidate: bindChangeCandidateParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
     repoRemote: {
       resolve: (repositoryId) =>
         repositoryId === 'repo-1' ? { remoteUrl: repoHttpUrl, defaultBranch: 'main' } : null,

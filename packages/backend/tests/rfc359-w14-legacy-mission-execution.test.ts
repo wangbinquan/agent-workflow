@@ -52,7 +52,10 @@ import { createActionTemplatePersistence } from '@/modules/development-automatio
 import { createMissionPersistence } from '@/modules/development-automation/infrastructure/missionStore'
 import { createFactSnapshotReader } from '@/modules/development-automation/infrastructure/reconcilerReaders'
 import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import { bindChangeCandidateParticipant } from '@/modules/source-control/composition'
+import {
+  bindChangeCandidateParticipant,
+  createLocalRepositoryCandidateEffects,
+} from '@/modules/source-control/composition'
 import {
   DIGITAL_EMPLOYEE_AGENT_NODE_ID,
   DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
@@ -361,7 +364,9 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           verificationCommands: createLocalVerificationCommandEffectsFactory(),
           db,
           appHome,
-          changeCandidate: bindChangeCandidateParticipant(),
+          changeCandidate: bindChangeCandidateParticipant({
+            candidateEffects: createLocalRepositoryCandidateEffects(),
+          }),
           ...launchers,
         })
         const store = createMissionPersistence(db)

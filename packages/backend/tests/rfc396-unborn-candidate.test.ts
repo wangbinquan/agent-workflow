@@ -5,7 +5,11 @@ import { tmpdir } from 'node:os'
 import { executeTaskImageRepositoryOperation } from '@/modules/source-control/infrastructure/crewstation/taskImageRepositoryEffects'
 import { createHostedEmployeeCaseWorkspaceOperations } from '@/modules/source-control/infrastructure/crewstation/employeeCaseWorkspace'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { bindEmployeeCaseWorkspaceParticipant } from '@/modules/source-control/composition'
+import {
+  bindEmployeeCaseWorkspaceParticipant,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
+} from '@/modules/source-control/composition'
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
@@ -32,7 +36,9 @@ test('unborn content baseline is deterministic, leaves branches untouched and pr
     remote = directory()
   git(baseline, 'init', '-q', '-b', 'main')
   git(remote, 'init', '--bare', '-q', '-b', 'main')
-  const workspace = bindEmployeeCaseWorkspaceParticipant()
+  const workspace = bindEmployeeCaseWorkspaceParticipant({
+    effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+  })
   const request = {
     baselineRepoPath: baseline,
     preferredBranch: 'main',
@@ -52,7 +58,9 @@ test('unborn content baseline is deterministic, leaves branches untouched and pr
   expect(git(materialized.workspacePath, 'rev-parse', 'HEAD')).toBe(first.baselineSha)
   mkdirSync(join(overlay, 'src'))
   writeFileSync(join(overlay, 'src', 'hello.ts'), 'export const hello = "world"\n')
-  const derived = await bindChangeCandidateParticipant().derive({
+  const derived = await bindChangeCandidateParticipant({
+    candidateEffects: createLocalRepositoryCandidateEffects(),
+  }).derive({
     baselineRepoPath: baseline,
     baselineSha: first.baselineSha,
     repositoryBaseline: first.contentBaseline,
@@ -62,7 +70,9 @@ test('unborn content baseline is deterministic, leaves branches untouched and pr
   })
   if (!derived.ok) throw new Error(derived.detail)
   expect(derived.receipt.repositoryBaseline?.kind).toBe('unborn')
-  const delivery = bindCandidateDeliveryParticipant()
+  const delivery = bindCandidateDeliveryParticipant({
+    candidateEffects: createLocalRepositoryCandidateEffects(),
+  })
   const input = {
     baselineRepoPath: baseline,
     baselineSha: first.baselineSha,
@@ -115,7 +125,9 @@ test('ordinary committed repositories keep commit parent semantics; unresolved r
     '-qm',
     'baseline',
   )
-  const resolved = await bindEmployeeCaseWorkspaceParticipant().resolveBaseline({
+  const resolved = await bindEmployeeCaseWorkspaceParticipant({
+    effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+  }).resolveBaseline({
     baselineRepoPath: root,
     preferredBranch: 'main',
     sourceBranch: null,
@@ -123,14 +135,18 @@ test('ordinary committed repositories keep commit parent semantics; unresolved r
   })
   expect(resolved.contentBaseline?.kind).toBe('commit')
   expect(resolved.baselineSha).toBe(git(root, 'rev-parse', 'HEAD'))
-  const legacy = await bindEmployeeCaseWorkspaceParticipant().resolveBaseline({
+  const legacy = await bindEmployeeCaseWorkspaceParticipant({
+    effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+  }).resolveBaseline({
     baselineRepoPath: root,
     preferredBranch: 'main',
     sourceBranch: null,
   })
   expect(legacy).not.toHaveProperty('contentBaseline')
   await expect(
-    bindEmployeeCaseWorkspaceParticipant().resolveBaseline({
+    bindEmployeeCaseWorkspaceParticipant({
+      effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    }).resolveBaseline({
       baselineRepoPath: directory(),
       preferredBranch: 'main',
       sourceBranch: null,

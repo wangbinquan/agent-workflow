@@ -40,6 +40,8 @@ import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
+  createFileConflictMergeWorkspaceEffects,
+  createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -181,9 +183,15 @@ async function seedLaneDatabase(
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,
-    changeCandidate: bindChangeCandidateParticipant(),
-    conflictMerge: bindConflictMergeParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
+    conflictMerge: bindConflictMergeParticipant({
+      effects: createFileConflictMergeWorkspaceEffects(),
+    }),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
     repoRemote: {
       resolve: () => ({ remoteUrl: remotePath, defaultBranch: 'main' }),
     },
@@ -481,7 +489,9 @@ describeEachProvider(
           automationWorkspaceEffects: contents,
           actionWorkspaceEffects: action,
           agentLauncher: scripted,
-          changeCandidate: bindChangeCandidateParticipant(),
+          changeCandidate: bindChangeCandidateParticipant({
+            candidateEffects: createLocalRepositoryCandidateEffects(),
+          }),
           conflictMerge: bindConflictMergeParticipant({ effects: conflict }),
           candidateDelivery: new OpaqueCandidateDelivery(codec),
           repoRemote: { resolve: () => ({ remoteUrl: remotePath, defaultBranch: 'main' }) },

@@ -95,6 +95,9 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  createFileConflictMergeWorkspaceEffects,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
 } from '@/modules/source-control/composition'
 import { mountWebhookIngressRoutes } from '@/modules/integration/inbound/http/webhookIngressRoutes'
 import { createUser } from './helpers/userFixture'
@@ -295,8 +298,12 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           reactionRounds: createEmployeeReactionRoundQueries(db),
           inputArtifacts,
           repositoryPreparation: staticCachedRepositoryPreparation(db),
-          sourceControl: bindEmployeeCaseWorkspaceParticipant(),
-          conflictMerge: bindConflictMergeParticipant(),
+          sourceControl: bindEmployeeCaseWorkspaceParticipant({
+            effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+          }),
+          conflictMerge: bindConflictMergeParticipant({
+            effects: createFileConflictMergeWorkspaceEffects(),
+          }),
         })
         const webhookSecret = 'rfc310-issue-ingress-secret'
         const webhookSecretBox = createSecretBoxFromKey(Buffer.alloc(32, 27))
@@ -378,6 +385,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           webhookApp,
           composeWebhookIngressTransport({
             webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+            crewStationEvents: null,
             secretBox: webhookSecretBox,
             webhookDispatcher,
             digitalEmployeeEventCenter: eventCenter,
@@ -812,11 +820,19 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           appHome,
           approvalGateway,
           pipelineEvidence,
-          conflictMerge: bindConflictMergeParticipant(),
+          conflictMerge: bindConflictMergeParticipant({
+            effects: createFileConflictMergeWorkspaceEffects(),
+          }),
           sourceControl: {
-            ...bindChangeCandidateParticipant(),
-            ...bindCandidateDeliveryParticipant(),
-            ...bindEmployeeCaseWorkspaceParticipant(),
+            ...bindChangeCandidateParticipant({
+              candidateEffects: createLocalRepositoryCandidateEffects(),
+            }),
+            ...bindCandidateDeliveryParticipant({
+              candidateEffects: createLocalRepositoryCandidateEffects(),
+            }),
+            ...bindEmployeeCaseWorkspaceParticipant({
+              effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+            }),
           },
           repoRemote: {
             resolve(repositoryId) {

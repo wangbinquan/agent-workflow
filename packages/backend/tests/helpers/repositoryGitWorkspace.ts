@@ -9,6 +9,7 @@ import type {
 } from '@/modules/source-control/public/types'
 import type { RepositoryPreviewIndexScope } from '@/modules/source-control/application/ports/repositoryPreviewIndex'
 import { selectRepositoryGitWorkspaceFactory } from '@/modules/source-control/public/participants'
+import { createFileRepositoryGitWorkspaceFactory } from '@/modules/source-control/composition'
 import { runGit } from '@/util/git'
 
 export interface GitWorkspaceCall {
@@ -94,10 +95,13 @@ export class MappedGitWorkspaceFactory implements RepositoryGitWorkspaceFactory 
     readonly store: GitWorkspaceStore,
     git: RepositoryGit = runGit,
   ) {
-    this.#native = selectRepositoryGitWorkspaceFactory(undefined, (cwd, args, options) => {
-      store.nativeCalls.push({ cwd, args: [...args], options })
-      return git(cwd, args, options)
-    })
+    // RFC-527: the local factory over the recording runner (what the removed `legacyRunGit` selection built).
+    this.#native = selectRepositoryGitWorkspaceFactory(
+      createFileRepositoryGitWorkspaceFactory((cwd, args, options) => {
+        store.nativeCalls.push({ cwd, args: [...args], options })
+        return git(cwd, args, options)
+      }),
+    )
   }
 
   bind(binding: RepositoryGitWorkspaceBinding): RepositoryGitWorkspaceScope {

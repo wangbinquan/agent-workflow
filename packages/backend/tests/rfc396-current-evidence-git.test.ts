@@ -25,6 +25,7 @@ import {
 } from '@/modules/source-control/composition/repositoryCandidate'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
+import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'
 
 type Input = Parameters<typeof composeGraphDevelopment>[0]
 type Stage = Extract<Awaited<ReturnType<Input['candidates']['stage']>>, { ok: true }>
@@ -144,8 +145,12 @@ describeEachProvider('RFC-396 published evidence uses the actual Git tree', (har
         },
       }
       const realCandidates = {
-        ...bindChangeCandidateParticipant(),
-        ...bindCandidateDeliveryParticipant(),
+        ...bindChangeCandidateParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
+        ...bindCandidateDeliveryParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
       }
       const candidates: Input['candidates'] = {
         ...realCandidates,

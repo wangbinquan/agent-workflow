@@ -36,13 +36,16 @@ import { createRepositoryEndpointDiscovery } from '../src/modules/integration/ap
 import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
+  createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { bindCandidateDeliveryParticipant } from '../src/modules/source-control/composition/repositoryCandidate'
 import { createUser } from './helpers/userFixture'
 import { runGit } from '../src/util/git'
 
-const { push: pushCandidate } = bindCandidateDeliveryParticipant()
+const { push: pushCandidate } = bindCandidateDeliveryParticipant({
+  candidateEffects: createLocalRepositoryCandidateEffects(),
+})
 
 const ENDPOINT_BINDING_DIGEST = '3'.repeat(64)
 const INVALID_PERSONAL_TOKEN = 'system-mock-invalid-personal-token' // gitleaks:allow

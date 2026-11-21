@@ -7,7 +7,7 @@ import type {
 
 export function applyWorkspaceUploads(
   plan: WorkspaceUploadPlan,
-  selected?: WorkspaceUploadContentFactory,
+  selected: WorkspaceUploadContentFactory,
 ): Promise<WorkspaceUploadResult> {
   return runWorkspaceUploadPolicy(workspaceUploadPolicy(plan, selected))
 }

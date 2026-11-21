@@ -277,9 +277,11 @@ test('the partition lists are disjoint and cover the contract once', () => {
   expect(new Set(STATED).size).toBe(STATED.length)
   // RFC-432: the ten session-scoped selections joined the required group (39 → 49; optional 17 → 7).
   // RFC-433: the last seven left the optional group — two required (49 → 51), five nullable (6 → 11).
+  // RFC-527: candidate delivery and conflict merge left the nullable group — standalone selects the local effects
+  // (51 → 53, 11 → 9).
   expect(STATED).toHaveLength(62)
-  expect(REQUIRED).toHaveLength(51)
-  expect(NULLABLE).toHaveLength(11)
+  expect(REQUIRED).toHaveLength(53)
+  expect(NULLABLE).toHaveLength(9)
   expect(SESSION_FACTORIES).toHaveLength(10)
   expect(FACTORIES).toHaveLength(11)
   for (const name of FACTORIES) expect(REQUIRED).toContain(name)

@@ -1,7 +1,7 @@
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-359 AC-1（plan §5hn 批次二 ⑧）—— 测试侧的**启动参与者**装配，和生产同形。
 //
@@ -38,6 +38,7 @@ import {
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
 
 /**
  * 给一个**普通构造的 actor**（`buildActor({...})`）配一份任务执行鉴权句柄。
@@ -130,7 +131,12 @@ export function createTestTaskExecutionLaunchParticipant(
     },
   })
   return createTaskExecutionLaunchParticipant({
-    ...createRootTaskLaunchPorts({ db: input.db, configPath }),
+    ...createRootTaskLaunchPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db: input.db,
+      configPath,
+    }),
     gitCommitIdentity: composeIdentityAccess(input.db).getUserGitCommitIdentity,
     agent: { resources: composeAgentLaunchResourceOperations({ db: input.db }), integrity },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
@@ -138,7 +144,7 @@ export function createTestTaskExecutionLaunchParticipant(
       db: input.db,
       sourceContexts: composeIdentityAccess(input.db).taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation(
-        withSourceControlTaskPorts({
+        withLocalRepositoryPreparation({
           db: input.db,
           appHome: input.appHome,
           ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),

@@ -14,7 +14,7 @@ import { join, relative, resolve } from 'node:path'
 import type { RepoRefsResponse } from '@agent-workflow/shared'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
-import { composeRepositoryMirrors } from '@/modules/source-control/composition'
+import { composeLocalRepositoryMirrors } from '@/modules/source-control/composition'
 import {
   createKnownPathRepositoryReads,
   isKnownRepoPath,
@@ -180,7 +180,7 @@ describe('RFC-446 —— ?path= 读取（createKnownPathRepositoryReads）', () 
 
   test('单机 mirrors 的 local 由它装配，已登记目录取自仓库存储', async () => {
     let lookups = 0
-    const mirrors = composeRepositoryMirrors({
+    const mirrors = composeLocalRepositoryMirrors({
       store: {
         listKnownRepositoryPaths: async () => {
           lookups += 1
@@ -229,6 +229,7 @@ describe('RFC-446 —— 路由', () => {
   test('?path= 原样交给 mirrors.local；cachedRepoId 优先；缺参仍是 cached-repo-id-required', async () => {
     const calls: string[] = []
     const app = appWith({
+      registration: { kind: 'mirror-cache' },
       refs: async (id) => {
         calls.push(`refs:${id}`)
         return REFS
@@ -267,6 +268,7 @@ describe('RFC-446 —— 路由', () => {
 
   test('local 的拒绝原样透到响应：未登记目录 → 422 repo-path-unknown', async () => {
     const app = appWith({
+      registration: { kind: 'mirror-cache' },
       refs: async () => REFS,
       files: async () => ({ files: [] }),
       local: createKnownPathRepositoryReads(async () => [MIRROR]),

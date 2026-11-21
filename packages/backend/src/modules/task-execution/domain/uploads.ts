@@ -131,8 +131,9 @@ export function acceptMatches(
  * multipart route can reject a bad upload BEFORE it resolves/clones the repo
  * or materializes a worktree. Without this, a valid `repoUrl` + an oversized /
  * wrong-MIME / wrong-count upload would clone the repo and leave an orphan
- * worktree on disk before failing. `applyUploadsToWorktree` re-runs it as its
- * own pre-write guard so direct callers stay safe regardless of route ordering.
+ * worktree on disk before failing. `applyUploadsToWorktree` re-ran it as its
+ * own pre-write guard; RFC-527 moved that writer (only tests used it) to
+ * tests/helpers/nativeWorkspaceUploads.ts.
  */
 export function validateUploadPlan(args: {
   defs: ReadonlyMap<string, UploadInputDef>

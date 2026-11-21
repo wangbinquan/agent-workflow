@@ -138,6 +138,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     app,
     composeWebhookIngressTransport({
       webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+      crewStationEvents: null,
       secretBox: box,
       digitalEmployeeEventCenter: eventCenter,
       webhookDispatcher: dispatcher,

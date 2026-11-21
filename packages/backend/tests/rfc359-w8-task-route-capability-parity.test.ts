@@ -114,6 +114,7 @@ import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workfl
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
@@ -257,6 +258,8 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       // build (no app home here, so prompts under `Paths.runsDir`).
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
       effects: composeLocalTaskDeletionEffects(),
+      // RFC-527: the route operations' workspace reads are required — the local ones they used to build.
+      workspaceReads: createFileRepositoryWorkspaceReadQueries(),
       collaboration: {} as never,
       reviewers: composeTaskReviewersPort({} as never),
       owners: composeOwnerIdentityQueries(db),

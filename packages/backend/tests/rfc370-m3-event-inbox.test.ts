@@ -886,6 +886,8 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     })
     const common = {
       webhookIngressPersistence: composeWebhookIngressPersistenceFor(harness.db),
+      // RFC-527: standalone states the absent CrewStation ingress explicitly.
+      crewStationEvents: null,
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 3)),
       digitalEmployeeEventCenter: eventCenter,
       webhookDispatcher: { dispatch: async () => {}, dispatchSubscription: async () => {} },

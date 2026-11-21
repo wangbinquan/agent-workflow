@@ -1,9 +1,6 @@
 // RFC-511 — workspace port completeness checks: a selected isolation, Git, upload, exclude or read implementation is complete,
 // or the assembly fails. Selection itself stays in composition.
-import type {
-  WorkspaceExcludeParticipant,
-  WorkspaceExcludeProfileFactory,
-} from '../public/participants'
+import type { WorkspaceExcludeParticipant } from '../public/participants'
 import type { IsolationWorkspaceFactory, IsolationWorkspaceScope } from './ports/isolationWorkspace'
 import type {
   RepositoryGitWorkspaceFactory,
@@ -98,14 +95,6 @@ export function requireWorkspaceUploadContent(
 export function requireWorkspaceUploadContentFactory(factory: WorkspaceUploadContentFactory): void {
   if (factory === null || typeof factory !== 'object' || typeof factory.bind !== 'function') {
     throw new TypeError('Workspace uploads require a complete content factory')
-  }
-}
-
-export function requireWorkspaceExcludeProfileFactory(
-  factory: WorkspaceExcludeProfileFactory,
-): void {
-  if (factory === null || typeof factory !== 'object' || typeof factory.bind !== 'function') {
-    throw new TypeError('Workspace exclude requires a complete profile factory')
   }
 }
 

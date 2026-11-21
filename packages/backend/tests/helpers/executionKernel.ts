@@ -3,6 +3,7 @@ import type { TaskExecutionContextRef } from '@/modules/task-execution/applicati
 import { bindIsolationKernel } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { createIsolationWorkspacePort } from '@/modules/task-execution/infrastructure/isolationWorkspaceView'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
+import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/composition'
 
 /** Direct primitive tests select the native adapter explicitly, at the original lazy bind site. */
 export function createTestIsolationBinding(input: {
@@ -16,7 +17,7 @@ export function createTestIsolationBinding(input: {
     ...bindIsolationKernel({
       ...input.persistence,
       workspace: createIsolationWorkspacePort((binding) =>
-        selectIsolationWorkspaceFactory().bind(binding),
+        selectIsolationWorkspaceFactory(createLocalIsolationWorkspaceFactory()).bind(binding),
       ),
       ...(input.executionContext === undefined ? {} : { executionContext: input.executionContext }),
     }),

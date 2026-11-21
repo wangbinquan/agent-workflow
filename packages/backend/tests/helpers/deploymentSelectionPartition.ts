@@ -16,6 +16,9 @@ export const REQUIRED_SELECTIONS = [
   'workspaceMaintenanceFilesystem',
   'workspaceExcludeProfiles',
   'employeeCaseWorkspaceEffects',
+  // RFC-527: standalone selects the local candidate and conflict-merge effects.
+  'repositoryCandidateEffects',
+  'conflictMergeWorkspaceEffects',
   'repositoryRevisionContent',
   'codeReviewArtifacts',
   'taskRunSelection',
@@ -96,8 +99,6 @@ export const NULLABLE_SELECTIONS = [
   'databaseInstallation',
   'repositoryRemote',
   'crewStationEvents',
-  'repositoryCandidateEffects',
-  'conflictMergeWorkspaceEffects',
 ] as const
 
 export type DeploymentSelectionGroup = 'required' | 'nullable'

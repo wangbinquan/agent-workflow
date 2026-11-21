@@ -386,8 +386,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/util/log#Logger',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: unsafe/open type FunctionType',
   'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type FunctionType',
-  'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type TypeQuery',
-  'modules/source-control/composition/workspaceExcludeProfiles.ts#selectWorkspaceExcludeProfileFactory: unsafe/open type FunctionType',
   'modules/source-control/infrastructure/crewstation/workspaceOwnership.ts#readHostedWorkspaceOwnerForBusinessTask: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/source-control/infrastructure/repositoryIdentityQueries.ts#existingRepositoryIds: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/source-control/infrastructure/repositoryIdentityQueries.ts#repositoryExistsExpression: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',

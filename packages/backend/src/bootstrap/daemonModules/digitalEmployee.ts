@@ -216,11 +216,11 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const writerCutover = composeDigitalEmployeeWriterCutoverFor(db, input.writerInstallation)
   const employeeInputArtifacts = input.adapters.employeeInputArtifacts
   const reactionRounds = createEmployeeReactionRoundQueries(db)
-  const conflictMergeEffects =
-    input.conflictMergeWorkspaceEffects === null ? undefined : input.conflictMergeWorkspaceEffects
-  const conflictMerge = bindConflictMergeParticipant({ effects: conflictMergeEffects })
-  const candidateEffects =
-    input.repositoryCandidateEffects === null ? undefined : input.repositoryCandidateEffects
+  // RFC-527: the deployment's selections (standalone: the local effects).
+  const conflictMerge = bindConflictMergeParticipant({
+    effects: input.conflictMergeWorkspaceEffects,
+  })
+  const candidateEffects = input.repositoryCandidateEffects
   const sourceControl = bindEmployeeCaseWorkspaceParticipant({
     publicationTransport: repository.repositoryPublicationTransport,
     effects: input.adapters.employeeCaseWorkspaceEffects,

@@ -128,6 +128,7 @@ const standaloneMirrors: RepositoryMirrors = {
   files: async () => {
     throw new Error('unused')
   },
+  registration: { kind: 'mirror-cache' },
 }
 
 describe('RFC-447 —— 位置与引用', () => {
@@ -225,7 +226,8 @@ describe('RFC-447 —— URL 现场登记的装配', () => {
       store,
       mirrors: {
         ...standaloneMirrors,
-        remoteRegistration: {
+        registration: {
+          kind: 'remote',
           register: async (url) => {
             registered.push(url)
             return { cachedRepoId: 'cr-hosted', created: true }

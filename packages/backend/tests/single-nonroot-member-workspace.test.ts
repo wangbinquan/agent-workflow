@@ -85,6 +85,10 @@ import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { singleMemberWorkspaceFixture, workspaceGit } from './helpers/singleMemberWorkspaceFixture'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import {
+  createLocalIsolationWorkspaceFactory,
+  createFileRepositoryWorkspaceReadQueries,
+} from '@/modules/source-control/composition'
 
 const TIMEOUT = 60_000
 const log = createLogger('single-nonroot-workspace-test')
@@ -468,7 +472,9 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           opts: {
             appHome,
             persistence: binding.persistence,
-            isolationWorkspaces: selectIsolationWorkspaceFactory(),
+            isolationWorkspaces: selectIsolationWorkspaceFactory(
+              createLocalIsolationWorkspaceFactory(),
+            ),
           },
           log,
           writeSem,
@@ -490,7 +496,10 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
       async () => {
         const { task } = await fixture(shape)
         change(task)
-        const diff = await taskDiffProjection({ db: harness.db }, task.id)
+        const diff = await taskDiffProjection(
+          { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: harness.db },
+          task.id,
+        )
         expect(diff.diff).toContain('+export function value() { return 2 }')
         expect(diff.baseCommit).toBe(shape.scalar ? task.baseCommit : null)
         expect(diff.diff.includes('# === Repo:')).toBe(!shape.scalar)

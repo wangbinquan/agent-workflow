@@ -14,6 +14,7 @@ import { Paths } from '@/util/paths'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import {
   composeLocalWorkspaceExcludeProfiles,
+  createFileConflictMergeWorkspaceEffects,
   createFileEmployeeCaseWorkspaceEffectsFactory,
   createFileFusionWorkspaceEffects,
   createFileRepositoryGitWorkspaceFactory,
@@ -22,6 +23,7 @@ import {
   createFileWorkspacePresenceQueries,
   createFileWorkspaceUploadContentFactory,
   createLocalIsolationWorkspaceFactory,
+  createLocalRepositoryCandidateEffects,
   createNodeWorkspaceMaintenanceFilesystem,
   createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
@@ -116,6 +118,10 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     }),
     workspaceExcludeProfiles: composeLocalWorkspaceExcludeProfiles({ appHome }),
     employeeCaseWorkspaceEffects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+    // RFC-527: the local candidate steps (their pushes open the local fixture session) and conflict-merge effects the
+    // bindings used to build per request.
+    repositoryCandidateEffects: createLocalRepositoryCandidateEffects(),
+    conflictMergeWorkspaceEffects: createFileConflictMergeWorkspaceEffects(),
     repositoryRevisionContent: composeLocalRepositoryRevisionContent(),
     codeReviewArtifacts: composeLocalCodeReviewArtifacts(),
     taskRunSelection: composeLocalTaskRunSelection({
@@ -178,12 +184,10 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     maintenanceEffectsBootstrap: null,
     initializeExecution: null,
     // RFC-433: hosted-only capabilities. Standalone runs its local epoch installation path, keeps its own
-    // mirror clones, has no CrewStation events, and uses the participants' per-request local effects.
+    // mirror clones and has no CrewStation events.
     databaseInstallation: null,
     repositoryRemote: null,
     crewStationEvents: null,
-    repositoryCandidateEffects: null,
-    conflictMergeWorkspaceEffects: null,
   }
 }
 

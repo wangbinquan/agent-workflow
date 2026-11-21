@@ -279,22 +279,22 @@ export async function finishConflictMerge(
   return { ok: true, mergeCommitSha: head.stdout.trim(), treeOid: tree.stdout.trim() }
 }
 
-/** RFC-511 — a selected conflict-merge effect set is complete; absence keeps the native effects. */
+/** RFC-511 — a selected conflict-merge effect set is complete. RFC-527: the selection is required. */
 export function requireConflictMergeWorkspaceEffects(
-  selected: ConflictMergeWorkspaceEffects | undefined,
+  selected: ConflictMergeWorkspaceEffects,
 ): void {
   if (
-    selected !== undefined &&
-    (selected === null ||
-      [
-        'allocate',
-        'cloneBaseline',
-        'run',
-        'installPlatformExclude',
-        'readConflictFile',
-        'mergeHeadExists',
-        'discard',
-      ].some((name) => typeof selected[name as keyof ConflictMergeWorkspaceEffects] !== 'function'))
+    selected === null ||
+    typeof selected !== 'object' ||
+    [
+      'allocate',
+      'cloneBaseline',
+      'run',
+      'installPlatformExclude',
+      'readConflictFile',
+      'mergeHeadExists',
+      'discard',
+    ].some((name) => typeof selected[name as keyof ConflictMergeWorkspaceEffects] !== 'function')
   ) {
     throw new Error('conflict-merge-workspace-effects-incomplete')
   }

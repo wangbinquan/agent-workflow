@@ -5,10 +5,18 @@ import { DrizzleTaskExecutionEffectPersistence } from '../../src/modules/task-ex
 import { COMMIT_PUSH_NODE_PREFIX } from '@agent-workflow/shared'
 import type { CommitPushDeps } from '../../src/modules/task-execution/infrastructure/commitPushAttempt'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
+import { createFileRepositoryGitWorkspaceFactory } from '@/modules/source-control/composition'
+import type { runGit } from '@/util/git'
 
 type CommitPushTestOverrides = Partial<
-  Pick<CommitPushDeps, 'log' | 'publicationTransport' | 'runGit'>
->
+  Pick<CommitPushDeps, 'log' | 'publicationTransport' | 'repositoryGitWorkspaces'>
+> & {
+  /**
+   * RFC-527: a test's git runner — the local repository workspaces run it (what the removed `legacyRunGit` fallback
+   * built) and the test publication transport opens its sessions over it.
+   */
+  readonly runGit?: typeof runGit
+}
 
 /**
  * Test topology for the same provider-selected ports daemon bootstrap injects.
@@ -28,7 +36,9 @@ export function composeSqliteCommitPushDeps(
     effects: new DrizzleTaskExecutionEffectPersistence(db),
     publicationTransport:
       overrides.publicationTransport ?? createTestRepositoryPublicationTransport(overrides.runGit),
-    ...(overrides.runGit === undefined ? {} : { runGit: overrides.runGit }),
+    repositoryGitWorkspaces:
+      overrides.repositoryGitWorkspaces ??
+      createFileRepositoryGitWorkspaceFactory(overrides.runGit),
     ...(overrides.log === undefined ? {} : { log: overrides.log }),
   }
 }

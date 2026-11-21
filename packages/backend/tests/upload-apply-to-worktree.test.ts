@@ -15,10 +15,11 @@ import {
   type UploadInputDef,
 } from '../src/modules/task-execution/domain/uploads'
 import {
-  applyUploadsToWorktree,
   resolveUniqueName,
   type UploadPlan,
 } from '../src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
+// RFC-527: the native entry moved to a test helper (only tests used it).
+import { applyUploadsToWorktree } from './helpers/nativeWorkspaceUploads'
 import { assertInsideWorktree } from '../src/platform/content/local/uploadPaths'
 import { ValidationError } from '../src/util/errors'
 

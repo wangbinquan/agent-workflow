@@ -12,7 +12,11 @@ import {
 import { createFileRepositoryCandidateEffectsFactory } from '@/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects'
 import type { RepositoryCandidateStepEffectsFactory } from '@/modules/source-control/application/ports/repositoryCandidateEffects'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import { bindEmployeeCaseWorkspaceParticipant } from '@/modules/source-control/composition'
+import {
+  bindEmployeeCaseWorkspaceParticipant,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
+} from '@/modules/source-control/composition'
 import {
   CandidatePublicationStore,
   MappedCandidateFactory,
@@ -310,6 +314,7 @@ describe('RFC-370 selected candidate publication', () => {
           if (rejectClose) throw failure
         })
         const employee = bindEmployeeCaseWorkspaceParticipant({
+          effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
           publicationTransport: Object.freeze(new MappedCandidatePublicationTransport(f.store)),
         })
         pending = employee.fetchRemoteHead({
@@ -351,21 +356,32 @@ describe('RFC-370 selected candidate publication', () => {
     120_000,
   )
 
-  test('native derive, stage, commit and publication each capture the original Git hook once', async () => {
+  // RFC-527: requests carry no per-operation Git runner; the local effects run Git through the one they were built with.
+  test('native derive, stage, commit and publication run Git through the local effects runner; requests carry none', async () => {
     const f = await fixture()
+    let calls = 0
+    const nativeGit: typeof runGit = (cwd, args, options) => {
+      calls += 1
+      return runGit(cwd, args, options)
+    }
     const reads: number[] = []
-    const hook = <T extends object>(request: T): T & { readonly runGit: typeof runGit } => {
+    const trap = <T extends object>(request: T): T => {
       const index = reads.push(0) - 1
       return Object.defineProperty(request, 'runGit', {
         enumerable: true,
         get() {
           reads[index]! += 1
-          if (reads[index] !== 1) throw new Error('native Git hook captured twice')
-          return runGit
+          throw new Error('a request carries no Git runner')
         },
-      }) as T & { readonly runGit: typeof runGit }
+      })
+    }
+    const ran = (): number => {
+      const now = calls
+      calls = 0
+      return now
     }
     try {
+      const candidateEffects = createLocalRepositoryCandidateEffects({ runGit: nativeGit })
       const request = {
         baselineRepoPath: f.baseline,
         overlayRoot: f.overlay,
@@ -373,11 +389,14 @@ describe('RFC-370 selected candidate publication', () => {
         excludePolicyDigest: 'a'.repeat(64),
         agentOutcomeRef: 'native-once',
       }
-      const derived = await bindChangeCandidateParticipant().derive(hook({ ...request }))
+      const derived = await bindChangeCandidateParticipant({ candidateEffects }).derive(
+        trap({ ...request }),
+      )
       expect(derived.ok).toBe(true)
       if (!derived.ok) throw new Error(derived.code)
-      const delivery = bindCandidateDeliveryParticipant()
-      const staged = await delivery.stage(hook({ ...request }))
+      expect(ran()).toBeGreaterThan(0)
+      const delivery = bindCandidateDeliveryParticipant({ candidateEffects })
+      const staged = await delivery.stage(trap({ ...request }))
       expect(staged.ok).toBe(true)
       if (!staged.ok) throw new Error(staged.code)
       try {
@@ -385,18 +404,20 @@ describe('RFC-370 selected candidate publication', () => {
       } finally {
         await staged.cleanup()
       }
+      expect(ran()).toBeGreaterThan(0)
       const committed = await delivery.commit(
-        hook({
+        trap({
           ...request,
           expectedTreeOid: derived.receipt.treeOid,
           missionId: 'rfc370-native-once',
-          summarySource: 'native getter once',
+          summarySource: 'native runner',
         }),
       )
       expect(committed.ok).toBe(true)
       if (!committed.ok) throw new Error(committed.code)
+      expect(ran()).toBeGreaterThan(0)
       const pushed = await delivery.push(
-        hook({
+        trap({
           ...f.input,
           baselineRepoPath: f.baseline,
           remoteUrl: f.remote,
@@ -405,8 +426,9 @@ describe('RFC-370 selected candidate publication', () => {
         }),
       )
       expect(pushed.ok).toBe(true)
+      expect(ran()).toBeGreaterThan(0)
       expect(await f.git(f.remote, ['rev-parse', 'refs/heads/candidate'])).toBe(committed.commitSha)
-      expect(reads).toEqual([1, 1, 1, 1])
+      expect(reads).toEqual([0, 0, 0, 0])
     } finally {
       f.cleanup()
     }

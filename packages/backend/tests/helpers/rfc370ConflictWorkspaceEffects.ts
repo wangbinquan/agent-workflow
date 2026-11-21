@@ -7,7 +7,10 @@ import type {
 } from '@/modules/development-automation/application/ports/automationWorkspaceEffects'
 import { createFileActionWorkspaceEffects } from '@/modules/development-automation/infrastructure/local/fileActionWorkspaceEffects'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
-import { bindCandidateDeliveryParticipant } from '@/modules/source-control/composition'
+import {
+  bindCandidateDeliveryParticipant,
+  createLocalRepositoryCandidateEffects,
+} from '@/modules/source-control/composition'
 import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
 import { createFileConflictMergeWorkspaceEffects } from '@/modules/source-control/infrastructure/local/fileConflictMergeWorkspaceEffects'
 import type {
@@ -252,7 +255,9 @@ export class OpaqueEvidenceArtifacts extends GatedEvidenceArtifacts {
 
 /** The remaining native delivery fixture executes actual Git/CAS through translated refs. */
 export class OpaqueCandidateDelivery implements CandidateDeliveryPort {
-  readonly #native = bindCandidateDeliveryParticipant()
+  readonly #native = bindCandidateDeliveryParticipant({
+    candidateEffects: createLocalRepositoryCandidateEffects(),
+  })
   constructor(readonly codec: WorkspaceReferenceCodec) {
     Object.freeze(this)
   }

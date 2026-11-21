@@ -956,6 +956,16 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 - **按“行首是 `import `”找新 import 的插入点，会插进模板字面量里生成的脚本**（RFC-526 实撞）：`rfc310` 的 e2e 用例在模板字面量里拼一段
   子进程脚本，脚本里有行首 `import` 的行，按文本找“最后一行 import”把新 import 插进了那段脚本。插入点取语法树里最后一个
   `ImportDeclaration` 的末尾；改完再按语法树逐文件核对 import 声明（同名重复、落在模板里的都报出来）。
+- **codemod 的规则表按被调用名查时只认自有键**（RFC-527 实撞）：规则写成普通对象 `RULES[name]`，`x.toString()` 一类调用的名字命中
+  `Object.prototype` 上的同名成员，取到的“规则”是函数，于是往 21 个用例的 `toString()` 里插了 `undefined()`、往 import 里加了空名。规则表用
+  `Map` 或 `Object.hasOwn(RULES, name)`；跑完按插入的文本（`undefined()`、`, ,`）全目录扫一遍再格式化。
+- **给每个调用补上新必填成员的 codemod，会撞上“二选一、都给就拒”的输入**（RFC-527 实撞）：工作区上传的内容工厂改为必填后，脚本给
+  整体写入替身的两处调用（用例与 RFC-363 的进程中断预言）也补上了工厂，而这两项自 RFC-370 起同时给就抛错——替身从此无从使用，`tsc` 0 错。
+  补成员前先查目标函数里有没有与它互斥的选项；有就把输入改成联合类型（每支各自必填），用 `@ts-expect-error` 钉住类型拒绝两者。
+- **按 import 选受影响用例会漏掉子进程夹具与两跳的测试助手**（RFC-527 实撞）：首批按“直接 import 被改模块或被改测试助手”选了 475 个
+  文件，没选到 spawn 被改夹具的 `rfc363-task-workspace-process-recovery`（夹具按文件路径传给 `Bun.spawn`），也没选到经未改的助手
+  （`providerHttpApplicationScope.ts` → `providerHttpApplication.ts` → `bootstrap/standalone.ts`）到达被改文件的 231 个用例。选用例时在
+  `tests/` 里按 import 求传递闭包（不穿过 `src/`），并把用例里以字符串引用的 `.ts` 文件当作依赖。
 - **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
   删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
   没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import

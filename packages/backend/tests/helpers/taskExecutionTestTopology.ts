@@ -23,7 +23,11 @@ import {
   requireNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import {
+  createFileRepositoryGitWorkspaceFactory,
+  createFileWorkspacePresenceQueries,
+  createLocalIsolationWorkspaceFactory,
+} from '@/modules/source-control/composition'
 import {
   selectIsolationWorkspaceFactory,
   selectRepositoryGitWorkspaceFactory,
@@ -40,10 +44,8 @@ import { createTaskExecutionPersistence } from '../../src/modules/task-execution
 import { createTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
-import {
-  composeLegacyTaskRunDriveBinding,
-  composeTaskWorkspaceExcludeProfilesFor,
-} from '../../src/modules/task-execution/composition/localTaskRunSelection'
+import { composeLegacyTaskRunDriveBinding } from '../../src/modules/task-execution/composition/localTaskRunSelection'
+import { composeTaskWorkspaceExcludeProfilesFor } from './taskWorkspaceExcludeProfiles'
 import type { RunTaskOptions } from '../../src/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { pickInheritableRunConfig } from '../../src/modules/task-execution/application/ports/taskExecutionTopology'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
@@ -186,6 +188,9 @@ export function composeTaskExecutionTestRuntime(
           composePortArtifactOperations(createFilePortArtifactContent(appHome)),
       }),
       workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
+      // RFC-527: the local workspace factories the drive participant used to build.
+      isolationWorkspaces: createLocalIsolationWorkspaceFactory(),
+      repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
       db,
       ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
@@ -361,9 +366,12 @@ export function runTaskWithRealTestTopology(
   const workspaceExcludeProfiles = workspaceExcludeProfilesFor(options)
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
-  const isolationWorkspaces = selectIsolationWorkspaceFactory(options.isolationWorkspaces)
+  // RFC-527: the local workspace factories the selections used to build when a test gave none.
+  const isolationWorkspaces = selectIsolationWorkspaceFactory(
+    options.isolationWorkspaces ?? createLocalIsolationWorkspaceFactory(),
+  )
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(
-    options.repositoryGitWorkspaces,
+    options.repositoryGitWorkspaces ?? createFileRepositoryGitWorkspaceFactory(),
   )
   const dynamicWorkflow =
     options.dynamicWorkflow ??

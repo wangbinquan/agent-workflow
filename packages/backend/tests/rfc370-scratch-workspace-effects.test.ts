@@ -1,4 +1,4 @@
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // Scratch launch and replay must use one selected effect adapter. The real
 // Task journal advances only after its preparation/restoration/cleanup ACK.
@@ -78,7 +78,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
       const selected: ScratchWorkspaceEffects =
         receiver === 'prototype' ? Object.create(methods) : methods
       const binding = composeRepositoryPreparation(
-        withSourceControlTaskPorts({
+        withLocalRepositoryPreparation({
           db: harness.db,
           appHome: 'installation:selected',
           scratchEffects: selected,
@@ -162,7 +162,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
       },
     }
     const binding = composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db: harness.db,
         appHome: 'installation:selected',
         scratchEffects: selected,
@@ -226,7 +226,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
       },
     }
     const binding = composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db: harness.db,
         appHome: 'installation:selected',
         scratchEffects: selected,
@@ -264,7 +264,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
     const failure = new Error('selected-prepare-failed')
     let cleanups = 0
     const binding = composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db: harness.db,
         appHome: 'installation:selected',
         scratchEffects: {
@@ -304,7 +304,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
     const failure = new Error('selected-restore-failed')
     let cleanups = 0
     const binding = composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db: harness.db,
         appHome: 'installation:selected',
         scratchEffects: {
@@ -342,7 +342,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
     const taskId = ulid()
     let restorations = 0
     const binding = composeRepositoryPreparation(
-      withSourceControlTaskPorts({
+      withLocalRepositoryPreparation({
         db: harness.db,
         appHome: 'installation:selected',
         scratchEffects: {

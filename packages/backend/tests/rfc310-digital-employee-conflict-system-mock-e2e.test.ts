@@ -53,6 +53,9 @@ import {
   bindEmployeeCaseWorkspaceParticipant,
   createRepositoryPublicationTransport,
   SQLiteRepositoryTransportCredentialRepository,
+  createFileConflictMergeWorkspaceEffects,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
 } from '@/modules/source-control/composition'
 import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
@@ -150,8 +153,13 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           reactionRounds: createEmployeeReactionRoundQueries(db),
           inputArtifacts,
           repositoryPreparation: staticCachedRepositoryPreparation(db),
-          sourceControl: bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
-          conflictMerge: bindConflictMergeParticipant(),
+          sourceControl: bindEmployeeCaseWorkspaceParticipant({
+            effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+            publicationTransport,
+          }),
+          conflictMerge: bindConflictMergeParticipant({
+            effects: createFileConflictMergeWorkspaceEffects(),
+          }),
         })
         const eventCenter = await composeEventCenter({
           ...standaloneEventCenterSelections(),
@@ -184,9 +192,17 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
             candidateRepositoryId === repositoryId ? hostBinding : null,
         })
         const sourceControl = {
-          ...bindChangeCandidateParticipant(),
-          ...bindCandidateDeliveryParticipant({ publicationTransport }),
-          ...bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
+          ...bindChangeCandidateParticipant({
+            candidateEffects: createLocalRepositoryCandidateEffects(),
+          }),
+          ...bindCandidateDeliveryParticipant({
+            candidateEffects: createLocalRepositoryCandidateEffects(),
+            publicationTransport,
+          }),
+          ...bindEmployeeCaseWorkspaceParticipant({
+            effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+            publicationTransport,
+          }),
         }
         const platform = composeDevelopmentEmployeePlatformWorkItems({
           evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),
@@ -194,7 +210,9 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           appHome,
           reactionRounds: createEmployeeReactionRoundQueries(db),
           sourceControl,
-          conflictMerge: bindConflictMergeParticipant(),
+          conflictMerge: bindConflictMergeParticipant({
+            effects: createFileConflictMergeWorkspaceEffects(),
+          }),
           repoRemote: {
             resolve(candidateRepositoryId) {
               return candidateRepositoryId === repositoryId

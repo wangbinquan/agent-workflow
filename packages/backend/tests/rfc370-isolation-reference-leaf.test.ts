@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import * as leaf from '@/platform/workspace/local/isolationReferences'
 import * as native from '@/platform/workspace/local/isolation'
 import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
+import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
 
 test('native isolation addresses retain one shared leaf function identity', () => {
   expect(native.isoKeyOf).toBe(leaf.isoKeyOf)
@@ -12,7 +13,7 @@ test('native isolation addresses retain one shared leaf function identity', () =
 })
 
 test('the real selected native reader preserves persisted generation and pre-column fallback references', async () => {
-  const queries = selectRepositoryWorkspaceReadQueries()
+  const queries = selectRepositoryWorkspaceReadQueries(createFileRepositoryWorkspaceReadQueries())
   const storageRootRef = join(tmpdir(), 'aw-rfc370-reference-only')
   const taskId = 'task-中文'
   for (const entry of [

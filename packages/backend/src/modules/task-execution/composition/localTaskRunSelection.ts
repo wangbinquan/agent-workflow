@@ -18,25 +18,10 @@ import {
   type LocalTaskAgentRunProviders,
 } from './localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from './localTaskScriptRunFamily'
-import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
-import { selectWorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
-import { Paths } from '@/util/paths'
 import {
   createTaskRunConfigurationReferences,
   requireTaskRunDriveBinding,
 } from '../application/taskRunSelection'
-
-/** The Task bootstrap bridge alone translates the legacy application-home override. */
-export function composeTaskWorkspaceExcludeProfilesFor(
-  selected?: WorkspaceExcludeProfileFactory,
-): (request: Pick<TaskDriveRequest, 'appHome'>) => WorkspaceExcludeProfileFactory {
-  if (selected !== undefined) {
-    const factory = selectWorkspaceExcludeProfileFactory(selected)
-    return () => factory
-  }
-  return (request) =>
-    selectWorkspaceExcludeProfileFactory(undefined, () => request.appHome ?? Paths.root)
-}
 
 /** Legacy direct compositions retain their complete native factory vocabulary here. */
 export interface LegacyTaskRunComposition {

@@ -1,9 +1,9 @@
 // RFC-512 — 源码控制的已登记仓库读取与远端登记用例迁出 composition（RFC-294 S10 第十九步）。
 //
 // 锁四件事（design §3 的清单即退出门）：
-// ① 清单里的名字在全部生产文件、用例与 e2e 里只在各自的位置声明；新文件恰好声明、交出清单列的名字；端口文件在原有的名字之外只多两个；组合
-//    文件只声明、只交出 `composeRepositoryMirrors`。
-// ② 组合文件只剩一处选择：控制流只有一个 `if`、没有错误的构造；两个工厂各被它调用一次；它不再从共享包与 `@/util` 取东西（带负对照）。
+// ① 清单里的名字在全部生产文件、用例与 e2e 里只在各自的位置声明；新文件恰好声明、交出清单列的名字；端口文件在原有的名字之外只多两个（RFC-527
+//    另加显式的登记方式）；组合文件只声明、只交出两个装配入口（RFC-527：本机与托管各一，由 bootstrap 按部署选择选一支）。
+// ② 组合文件不再选择（RFC-527）：没有控制流、没有错误的构造；两个工厂各被它调用一次；它不再从共享包与 `@/util` 取东西（带负对照）。
 // ③ 新文件的依赖面是闭集：import 逐条钉住；不用进程全局，时钟由装配注入（带负对照）。
 // ④ 行为（直接调用两个工厂，effect 用记录调用的替身）：单机的未知 id、读失败的错误改写、非领域错误原样抛、读的是镜像目录；托管的地址拆不开、
 //    登记的地址不合法、登记与刷新的 effect 次序、`created` 两种取值、刷新投影的缺省值。
@@ -22,6 +22,7 @@ import {
   readRegisteredRepository,
 } from '@/modules/source-control/application/repositoryMirrors'
 import type { CachedRepositoryRecord } from '@/modules/source-control/ports/repositoryWorkspaceStore'
+import type { RepositoryMirrorRegistration } from '@/modules/source-control/application/ports/repositoryMirrors'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha1Hex } from '@/util/hash'
 
@@ -42,6 +43,8 @@ const APP_NAMES = [
   'createRemoteRepositoryMirrors',
 ]
 const PORT_NEW = ['RepositoryDirectoryReads', 'RepositoryMirrorCache']
+/** RFC-527: the registration kind the mirrors state explicitly. */
+const PORT_RFC527 = ['RepositoryMirrorRegistration']
 /** The port file's names before RFC-512 (kept). */
 const PORT_KEPT = [
   'RepositoryMirrors',
@@ -263,6 +266,13 @@ function checkShapes(path: string, source: string): string[] {
   return out
 }
 
+/** RFC-527: the registration of a remote mirror (the hosted factory states its kind). */
+function remoteOf(mirrors: { readonly registration: RepositoryMirrorRegistration }) {
+  const registration = mirrors.registration
+  if (registration.kind !== 'remote') throw new Error('expected a remote registration')
+  return registration
+}
+
 describe('RFC-512 ① 清单里的名字只在各自的位置声明', () => {
   test(
     '全部生产文件、用例与 e2e 里每个清单名字只在它的位置声明（语料下限 3,000 / 2,500）',
@@ -291,18 +301,28 @@ describe('RFC-512 ① 清单里的名字只在各自的位置声明', () => {
     expect(declaredNames(app, text(app)).sort()).toEqual([...APP_NAMES].sort())
     expect(offeredNames(app, text(app)).sort()).toEqual([...APP_NAMES].sort())
     const port = sourceOf(PORT)
-    expect(declaredNames(port, text(port)).sort()).toEqual([...PORT_KEPT, ...PORT_NEW].sort())
-    expect(offeredNames(port, text(port)).sort()).toEqual([...PORT_KEPT, ...PORT_NEW].sort())
+    expect(declaredNames(port, text(port)).sort()).toEqual(
+      [...PORT_KEPT, ...PORT_NEW, ...PORT_RFC527].sort(),
+    )
+    expect(offeredNames(port, text(port)).sort()).toEqual(
+      [...PORT_KEPT, ...PORT_NEW, ...PORT_RFC527].sort(),
+    )
     const root = sourceOf(ROOT_FILE)
-    expect(declaredNames(root, text(root))).toEqual(['composeRepositoryMirrors'])
-    expect(offeredNames(root, text(root))).toEqual(['composeRepositoryMirrors'])
+    expect(declaredNames(root, text(root))).toEqual([
+      'composeLocalRepositoryMirrors',
+      'composeRemoteRepositoryMirrors',
+    ])
+    expect(offeredNames(root, text(root))).toEqual([
+      'composeLocalRepositoryMirrors',
+      'composeRemoteRepositoryMirrors',
+    ])
   })
 })
 
 describe('RFC-512 ② composition 只装配', () => {
-  test('组合文件的控制流只有一处选择、没有错误的构造；从新位置取两个工厂，不再取用例的词汇', () => {
+  test('组合文件没有控制流（RFC-527：bootstrap 选一支）、没有错误的构造；从新位置取两个工厂，不再取用例的词汇', () => {
     const root = sourceOf(ROOT_FILE)
-    expect(checkShapes(root, text(root))).toEqual(['if'])
+    expect(checkShapes(root, text(root))).toEqual([])
     const edges = moduleEdges(root, text(root))
     expect(edges.filter((edge) => edge.startsWith(`import ${APP}:`))).toEqual([
       `import ${APP}: createLocalRepositoryMirrors, createRemoteRepositoryMirrors`,
@@ -438,7 +458,7 @@ describe('RFC-512 ④ 单机：已登记仓库在镜像目录上读', () => {
       'files /mirrors/secret-token-slug',
     ])
     expect(mirrors.local).toBe(known as never)
-    expect(mirrors.remoteRegistration).toBeUndefined()
+    expect(mirrors.registration).toEqual({ kind: 'mirror-cache' })
   })
 
   test('未知 id 是 404，不读镜像目录', async () => {
@@ -568,7 +588,7 @@ describe('RFC-512 ④ 托管：远端读取、登记与刷新', () => {
 
   test('登记：地址不合法是 422、不核验；合法地址先核验、再查旧行、记身份行、记核验结果并作废切面缓存', async () => {
     const invalid = remoteFixture()
-    const error = await caught(() => invalid.mirrors.remoteRegistration!.register(''))
+    const error = await caught(() => remoteOf(invalid.mirrors).register(''))
     expect(error).toBeInstanceOf(ValidationError)
     expect(fields(error)).toEqual({
       code: 'repo-url-invalid',
@@ -579,7 +599,7 @@ describe('RFC-512 ④ 托管：远端读取、登记与刷新', () => {
     expect(invalid.calls).toEqual([])
     const hash = gitUrlCacheKeyWith(parseGitUrl(URL)!, sha1Hex).hash
     const fresh = remoteFixture()
-    expect(await fresh.mirrors.remoteRegistration!.register(URL)).toEqual({
+    expect(await remoteOf(fresh.mirrors).register(URL)).toEqual({
       cachedRepoId: 'repo-7',
       created: true,
     })
@@ -591,7 +611,7 @@ describe('RFC-512 ④ 托管：远端读取、登记与刷新', () => {
       'invalidate',
     ])
     const again = remoteFixture({ existing: true })
-    expect(await again.mirrors.remoteRegistration!.register(URL)).toEqual({
+    expect(await remoteOf(again.mirrors).register(URL)).toEqual({
       cachedRepoId: 'repo-7',
       created: false,
     })
@@ -600,7 +620,7 @@ describe('RFC-512 ④ 托管：远端读取、登记与刷新', () => {
   test('刷新：再核验一次、记结果、重读并投影；子模块字段缺省为通过、无错误、无子模块', async () => {
     const plain = remoteFixture()
     // The projection is the recording stand-in's `{ id, count }`, not a wire row.
-    const refreshed: unknown = await plain.mirrors.remoteRegistration!.refresh('repo-1')
+    const refreshed: unknown = await remoteOf(plain.mirrors).refresh('repo-1')
     expect(refreshed).toEqual({
       item: { id: 'repo-1', count: 3 },
       fetchOk: true,
@@ -626,13 +646,13 @@ describe('RFC-512 ④ 托管：远端读取、登记与刷新', () => {
         lastSubmoduleSyncError: 'sub failed',
       },
     })
-    expect(await recorded.mirrors.remoteRegistration!.refresh('repo-1')).toMatchObject({
+    expect(await remoteOf(recorded.mirrors).refresh('repo-1')).toMatchObject({
       submoduleSyncOk: false,
       submoduleSyncError: 'sub failed',
       hasSubmodules: true,
     })
-    expect(
-      await caught(() => recorded.mirrors.remoteRegistration!.refresh('repo-9')),
-    ).toBeInstanceOf(NotFoundError)
+    expect(await caught(() => remoteOf(recorded.mirrors).refresh('repo-9'))).toBeInstanceOf(
+      NotFoundError,
+    )
   })
 })

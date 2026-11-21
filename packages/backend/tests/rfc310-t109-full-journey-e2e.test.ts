@@ -60,6 +60,7 @@ import { createCutoverStore } from '../src/modules/development-automation/infras
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
+  createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
 import { createDevelopmentMrEffects } from '../src/modules/integration/application/developmentCodeHostDelivery'
 import { collectMergeRequestFacts } from '../src/modules/integration/application/mrFacts'
@@ -298,8 +299,12 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,
-    changeCandidate: bindChangeCandidateParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
     repoRemote: {
       resolve: (repositoryId) =>
         repositoryId === 'repo-1' ? { remoteUrl: repoUrl, defaultBranch: 'main' } : null,

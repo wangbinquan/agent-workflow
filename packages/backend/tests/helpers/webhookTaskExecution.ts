@@ -1,8 +1,11 @@
-import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import {
+  composeRepositoryPreparationLookup,
+  createFileWorkspaceUploadContentFactory,
+} from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 import {
   createRootTaskLaunchPorts,
   createTaskRouteWorkspaceParticipant,
@@ -72,7 +75,12 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       : { gitBaselineSyncWindowMs: launchRuntime.gitBaselineSyncWindowMs }),
   })
   const launches = createTaskExecutionLaunchParticipant({
-    ...createRootTaskLaunchPorts({ db: input.db, configPath: input.configPath }),
+    ...createRootTaskLaunchPorts({
+      workspaceUploads: createFileWorkspaceUploadContentFactory(),
+      inputFiles: null,
+      db: input.db,
+      configPath: input.configPath,
+    }),
     gitCommitIdentity: input.identityAccess.getUserGitCommitIdentity,
     agent: {
       resources: composeAgentLaunchResourceOperations({ db: input.db }),
@@ -83,7 +91,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       db: input.db,
       sourceContexts: input.identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation(
-        withSourceControlTaskPorts({
+        withLocalRepositoryPreparation({
           db: input.db,
           appHome: appHome,
           secretBox: input.secretBox,
@@ -133,7 +141,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       repositoryPreparation: composeDeferredRepositoryPreparation({
         repositoryPreparationLookup: composeRepositoryPreparationLookup(input.db),
         repositoryPreparation: composeRepositoryPreparation(
-          withSourceControlTaskPorts({
+          withLocalRepositoryPreparation({
             db: input.db,
             appHome: appHome,
             secretBox: input.secretBox,

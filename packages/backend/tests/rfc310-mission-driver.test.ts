@@ -15,7 +15,10 @@ import { join } from 'node:path'
 
 import { composeDevelopmentAutomation } from '../src/modules/development-automation/composition'
 import type { AgentActionLauncherPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
-import { bindChangeCandidateParticipant } from '../src/modules/source-control/composition'
+import {
+  bindChangeCandidateParticipant,
+  createLocalRepositoryCandidateEffects,
+} from '../src/modules/source-control/composition'
 import { createDeferredMissionDrive } from '../src/modules/development-automation/application/missionDriver'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -76,7 +79,9 @@ describeEachProvider('rfc310 mission driver', (harness) => {
       db: fx.db,
       appHome: home,
       agentLauncher: launcher,
-      changeCandidate: bindChangeCandidateParticipant(),
+      changeCandidate: bindChangeCandidateParticipant({
+        candidateEffects: createLocalRepositoryCandidateEffects(),
+      }),
     })
     const missionId = await fx.launchDirect('driver-direct')
     const stashed = await automation.materializer.stashDirectSubmission({

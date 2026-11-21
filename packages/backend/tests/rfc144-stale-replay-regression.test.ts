@@ -73,6 +73,7 @@ import {
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/composition'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -468,7 +469,9 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       ],
       opts: {
         appHome: h.appHome,
-        isolationWorkspaces: selectIsolationWorkspaceFactory(),
+        isolationWorkspaces: selectIsolationWorkspaceFactory(
+          createLocalIsolationWorkspaceFactory(),
+        ),
         persistence: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),

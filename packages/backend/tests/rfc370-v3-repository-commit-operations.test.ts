@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
 import { bindRepositoryCommitParticipant } from '@/modules/source-control/composition'
+import { createFileRepositoryPreviewIndexPort } from '@/modules/source-control/infrastructure/local/fileRepositoryPreviewIndex'
 import { createHostedWorkspaceEffects } from '@/modules/source-control/infrastructure/crewstation/workspaceEffects'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
@@ -88,9 +89,11 @@ test('prepare, commit and preview are one volume command each with native outcom
       configuredPatterns: ['*.log'],
       gitOptions: { timeoutMs: 60_000, signal: new AbortController().signal },
     })
+    // RFC-527: without a workspace scope the preview reads the index the caller gives (the one the binding used to build).
     const native = bindRepositoryCommitParticipant({
       repoPath: twin,
       configuredPatterns: ['*.log'],
+      previewIndex: createFileRepositoryPreviewIndexPort({ repoPath: twin }),
     })
     const preview = await hosted.preview()
     expect(preview).toEqual(await native.preview())

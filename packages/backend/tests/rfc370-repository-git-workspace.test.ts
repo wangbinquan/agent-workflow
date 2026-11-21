@@ -6,7 +6,10 @@ import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { bindRepositoryCommitParticipant } from '@/modules/source-control/composition'
+import {
+  bindRepositoryCommitParticipant,
+  createFileRepositoryGitWorkspaceFactory,
+} from '@/modules/source-control/composition'
 import {
   bindRepositoryGitWorkspace,
   selectRepositoryGitWorkspaceFactory,
@@ -223,10 +226,13 @@ describe('RFC-370 complete selected repository Git workspace', () => {
       }
     const result = { stdout: 'raw\0output', stderr: 'raw error', exitCode: 37 }
     const calls: unknown[][] = []
-    const native = selectRepositoryGitWorkspaceFactory(undefined, async (...input) => {
-      calls.push(input)
-      return result
-    })
+    // RFC-527: the local factory over the test runner (what the removed `legacyRunGit` selection built).
+    const native = selectRepositoryGitWorkspaceFactory(
+      createFileRepositoryGitWorkspaceFactory(async (...input) => {
+        calls.push(input)
+        return result
+      }),
+    )
     const root = bindRepositoryGitWorkspace(native, {
       taskId: 'a',
       workspaceRef: '/native/root',
@@ -244,9 +250,11 @@ describe('RFC-370 complete selected repository Git workspace', () => {
         throw new Error('unprintable')
       },
     })
-    const rejecting = selectRepositoryGitWorkspaceFactory(undefined, async () => {
-      throw raw
-    })
+    const rejecting = selectRepositoryGitWorkspaceFactory(
+      createFileRepositoryGitWorkspaceFactory(async () => {
+        throw raw
+      }),
+    )
     await expect<unknown>(
       bindRepositoryGitWorkspace(rejecting, {
         taskId: 'b',

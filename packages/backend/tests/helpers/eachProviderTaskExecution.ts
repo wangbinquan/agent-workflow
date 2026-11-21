@@ -10,7 +10,7 @@ import {
 } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './o2Closure'
-import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 
 import { readAgentFixtures } from './model'
@@ -27,15 +27,18 @@ import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/comp
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import type { LegacyTaskRunComposition } from '@/modules/task-execution/composition/localTaskRunSelection'
-import { composeTaskWorkspaceExcludeProfilesFor } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeTaskWorkspaceExcludeProfilesFor } from './taskWorkspaceExcludeProfiles'
 import {
   bindTaskRunRootSelection,
   type TaskRunRootSelection,
 } from '@/modules/task-execution/composition/taskRunSelection'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import {
+  createFileRepositoryGitWorkspaceFactory,
   createFileRepositoryWorkspaceReadQueries,
   createFileWorkspacePresenceQueries,
+  createLocalIsolationWorkspaceFactory,
+  createFileWorkspaceUploadContentFactory,
 } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
@@ -300,7 +303,11 @@ export async function createEachProviderTaskExecution(
     if (workflow === undefined) throw new Error('kernel-launch fixture workflow missing')
     const submitted: string[] = []
     const kernel = createRootTaskLaunchKernel({
-      ...createRootTaskLaunchKernelPorts({ db }),
+      ...createRootTaskLaunchKernelPorts({
+        workspaceUploads: createFileWorkspaceUploadContentFactory(),
+        inputFiles: null,
+        db,
+      }),
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       // 借用工作区的启动走 `internal.workspace`，这个物化面不会被调用到。
       workspace: { prepare: () => unavailable('kernel workspace.prepare') },
@@ -334,6 +341,8 @@ export async function createEachProviderTaskExecution(
         archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
         // RFC-526: the archive binding is required — the local archive content the provider runtime used to build.
         archive: { content: createFileTaskArchiveContent() },
+        // RFC-527: hosted task recovery is a nullable capability; this harness is standalone.
+        recoverySelection: null,
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -363,9 +372,10 @@ export async function createEachProviderTaskExecution(
           processConcurrencyScope: sqlite,
           ...runBinding,
           workspaceExcludeProfilesFor,
-          ...(options.isolationWorkspaces === undefined
-            ? {}
-            : { isolationWorkspaces: options.isolationWorkspaces }),
+          // RFC-527: the local workspace factories the drive participant used to build when a test gave none.
+          isolationWorkspaces:
+            options.isolationWorkspaces ?? createLocalIsolationWorkspaceFactory(),
+          repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
           workspacePresence,
           identityAccess: runtimeIdentity,
           memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
@@ -382,6 +392,9 @@ export async function createEachProviderTaskExecution(
         },
         routeLaunch: {
           configPath,
+          // RFC-527: the upload content is required (the local one); no hosted input file retention.
+          workspaceUploads: createFileWorkspaceUploadContentFactory(),
+          inputFiles: null,
           // RFC-359 AC-1（plan §5hn 批次一）：单代理启动臂现在也要根内核的那套依赖。
           // 本 harness 不经路由启动 agent（它直接用 `launch` / `launchViaKernel`），
           // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
@@ -401,7 +414,7 @@ export async function createEachProviderTaskExecution(
           sourceContexts: identityAccess.taskPreparationContext,
           appHome,
           repositoryPreparation: composeRepositoryPreparation(
-            withSourceControlTaskPorts({ db, appHome }),
+            withLocalRepositoryPreparation({ db, appHome }),
           ),
         },
         // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
@@ -523,6 +536,8 @@ export async function createEachProviderTaskExecution(
       archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
       // RFC-526: the archive binding is required — the local archive content the provider runtime used to build.
       archive: { content: createFileTaskArchiveContent() },
+      // RFC-527: hosted task recovery is a nullable capability; this harness is standalone.
+      recoverySelection: null,
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -548,9 +563,9 @@ export async function createEachProviderTaskExecution(
         memorySnapshots: composeTaskMemorySnapshotPort(),
         ...runBinding,
         workspaceExcludeProfilesFor,
-        ...(options.isolationWorkspaces === undefined
-          ? {}
-          : { isolationWorkspaces: options.isolationWorkspaces }),
+        // RFC-527: the local workspace factories the drive participant used to build when a test gave none.
+        isolationWorkspaces: options.isolationWorkspaces ?? createLocalIsolationWorkspaceFactory(),
+        repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
         workspacePresence,
         observationInvocations: composeRunObservationCalls(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
@@ -570,6 +585,9 @@ export async function createEachProviderTaskExecution(
       },
       routeLaunch: {
         configPath,
+        // RFC-527: the upload content is required (the local one); no hosted input file retention.
+        workspaceUploads: createFileWorkspaceUploadContentFactory(),
+        inputFiles: null,
         gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
         resourceAuthorityFor: () => launchResources,
         coordinator: {
@@ -586,7 +604,7 @@ export async function createEachProviderTaskExecution(
         sourceContexts: identityAccess.taskPreparationContext,
         appHome,
         repositoryPreparation: composeRepositoryPreparation(
-          withSourceControlTaskPorts({ db, appHome }),
+          withLocalRepositoryPreparation({ db, appHome }),
         ),
       },
       routes: () => ({

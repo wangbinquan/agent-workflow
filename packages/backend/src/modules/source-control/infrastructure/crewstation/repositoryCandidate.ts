@@ -26,15 +26,13 @@ export function createHostedRepositoryCandidateOperations(input: {
   return {
     operations: {
       derive(request) {
-        const { runGit: _local, ...rest } = request
         const volume = hostedVolumePaths({
           baselineRepoPath: request.baselineRepoPath,
           overlayRoot: request.overlayRoot,
         })
-        return input.helper.call(volume.owner, 'candidate-derive', { ...rest, ...volume.paths })
+        return input.helper.call(volume.owner, 'candidate-derive', { ...request, ...volume.paths })
       },
       async stage(request) {
-        const { runGit: _local, ...rest } = request
         const volume = hostedVolumePaths({
           baselineRepoPath: request.baselineRepoPath,
           overlayRoot: request.overlayRoot,
@@ -42,7 +40,7 @@ export function createHostedRepositoryCandidateOperations(input: {
         const staged = await input.helper.call<
           | { readonly ok: true; readonly ws: string; readonly treeOid: string }
           | Extract<StageCandidateTreeResult, { ok: false }>
-        >(volume.owner, 'candidate-stage', { ...rest, ...volume.paths })
+        >(volume.owner, 'candidate-stage', { ...request, ...volume.paths })
         if (!staged.ok) return staged
         const ws = hostedWorkspaceReference(volume.owner, staged.ws)
         let discarded = false
@@ -60,15 +58,14 @@ export function createHostedRepositoryCandidateOperations(input: {
         }
       },
       commit(request) {
-        const { runGit: _local, ...rest } = request
         const volume = hostedVolumePaths({
           baselineRepoPath: request.baselineRepoPath,
           overlayRoot: request.overlayRoot,
         })
-        return input.helper.call(volume.owner, 'candidate-commit', { ...rest, ...volume.paths })
+        return input.helper.call(volume.owner, 'candidate-commit', { ...request, ...volume.paths })
       },
       push(request) {
-        const { runGit: _local, publicationTransport: _transport, ...rest } = request
+        const { publicationTransport: _transport, ...rest } = request
         // The volume authenticates with the platform's Git credential bindings;
         // a credential must never travel inside the persisted command request.
         assertHostedRepositoryUrl(request.remoteUrl)

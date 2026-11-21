@@ -35,9 +35,9 @@ export function composeCachedRepositoryOperations(input: {
   readonly secretBox?: SecretBox | undefined
 }): CachedRepositoryOperations {
   const { store, configuration } = input
-  const remote = input.mirrors.remoteRegistration
+  const mirrors = input.mirrors.registration
   const registration =
-    remote === undefined ? {} : { register: (url: string) => remote.register(url) }
+    mirrors.kind === 'remote' ? { register: (url: string) => mirrors.register(url) } : {}
   const local = {
     store,
     ...(input.appHome === undefined ? {} : { appHome: input.appHome }),
@@ -47,7 +47,8 @@ export function composeCachedRepositoryOperations(input: {
     list: () => listCachedRepos(store),
     page: (query) => listCachedReposPage(store, query),
     async refresh(id) {
-      if (remote !== undefined) return await remote.refresh(id)
+      if (mirrors.kind === 'remote') return await mirrors.refresh(id)
+      // The mirror cache fetches the clone (RFC-527: the `mirror-cache` registration).
       // RFC-208: `gitCloneTimeoutMs` was dead config — the schema accepted it but
       // nothing ever passed it to `cloneTimeoutMs`, so an operator tightening the
       // window had no effect. Manual refresh shells out to `git fetch` against a

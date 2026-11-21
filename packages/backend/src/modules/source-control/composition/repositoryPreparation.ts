@@ -1,13 +1,9 @@
 // RFC-499 (RFC-294 S10 step 6): the standalone effects moved to infrastructure/local/repositoryPreparation.ts and
-// the preparation binding to infrastructure/repositoryPreparationBridge.ts. This file only assembles: without
-// supplied effects it picks the local ones (a fallback RFC-294 S12 replaces with required injection).
+// the preparation binding to infrastructure/repositoryPreparationBridge.ts. This file only assembles and hands out the
+// local effects; RFC-527 (RFC-294 S12): both effect selections are required — standalone callers give the local ones.
 import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
 import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
-import {
-  composeLocalRepositoryPreparationEffects,
-  composeLocalScratchWorkspaceEffects,
-  type RepositoryPreparationInput,
-} from '../infrastructure/local/repositoryPreparation'
+import type { RepositoryPreparationInput } from '../infrastructure/local/repositoryPreparation'
 import { createRepositoryPreparationBridge } from '../infrastructure/repositoryPreparationBridge'
 
 export {
@@ -16,16 +12,12 @@ export {
 } from '../infrastructure/local/repositoryPreparation'
 export type { RepositoryPreparationInput } from '../infrastructure/local/repositoryPreparation'
 
-/** The preparation binding; the local effects stand in for any selection the caller did not supply. */
+/** The preparation binding over the caller's effect selections. */
 export function composeRepositoryPreparation(
   input: RepositoryPreparationInput & {
-    readonly preparationEffects?: RepositoryPreparationEffectFactory
-    readonly scratchEffects?: ScratchWorkspaceEffects
+    readonly preparationEffects: RepositoryPreparationEffectFactory
+    readonly scratchEffects: ScratchWorkspaceEffects
   },
 ) {
-  return createRepositoryPreparationBridge({
-    ...input,
-    scratchEffects: input.scratchEffects ?? composeLocalScratchWorkspaceEffects(input),
-    preparationEffects: input.preparationEffects ?? composeLocalRepositoryPreparationEffects(input),
-  })
+  return createRepositoryPreparationBridge(input)
 }

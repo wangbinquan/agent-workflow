@@ -1,6 +1,8 @@
 // RFC-370 A4 — candidate effects are selected only at composition.
 // RFC-370 §9.2 V3 — a hosted selection is an operation host: each whole use
 // case runs in the remote volume instead of one round trip per step.
+// RFC-527 — the selection is required: standalone selects the local step factory below, which carries the local
+// fixture session its pushes use (no hosted transport or durable subject: local paths and `file://` remotes).
 import {
   deriveChangeCandidate,
   stageCandidateTree,
@@ -11,12 +13,12 @@ import {
   commitCandidate,
   pushCandidate,
   type CommitCandidateInput,
+  type PushCandidateInput,
 } from '../application/deliverCandidate'
 import type { RepositoryCandidateStepEffectsFactory } from '../application/ports/repositoryCandidateEffects'
 import {
   isRepositoryCandidateOperationHost,
   type RepositoryCandidateEffectsFactory,
-  type RepositoryCandidateOperationHost,
 } from '../application/ports/repositoryCandidateOperations'
 import type { RepositoryGit } from '../application/repositoryCommit'
 import { requireRepositoryCandidateEffectsFactory } from '../application/repositoryCandidateEffects'
@@ -24,71 +26,59 @@ import { createFileRepositoryCandidateEffectsFactory } from '../infrastructure/l
 import { createFileRepositoryPublicationFixtureSession } from '../infrastructure/local/fileRepositoryPublicationFixture'
 import type { RepositoryPublicationTransport } from '../public/types'
 
-function hostOf(
-  selected: RepositoryCandidateEffectsFactory | undefined,
-): RepositoryCandidateOperationHost | undefined {
-  return selected !== undefined && isRepositoryCandidateOperationHost(selected)
-    ? selected
-    : undefined
-}
-
-function selectFactory(
-  request: { readonly runGit?: RepositoryGit },
-  selected: RepositoryCandidateStepEffectsFactory | undefined,
+/** RFC-527: the standalone selection — local candidate steps whose pushes open the local fixture session. */
+export function createLocalRepositoryCandidateEffects(
+  input: { readonly runGit?: RepositoryGit } = {},
 ): RepositoryCandidateStepEffectsFactory {
-  if (selected !== undefined) return selected
-  const runGit = request.runGit
-  return createFileRepositoryCandidateEffectsFactory({ runGit })
+  const runGit = input.runGit
+  return Object.freeze({
+    ...createFileRepositoryCandidateEffectsFactory({ runGit }),
+    localFixtureSession: (remoteUrl: string) =>
+      createFileRepositoryPublicationFixtureSession(remoteUrl, runGit),
+  })
 }
 
-export function bindChangeCandidateParticipant(
-  input: { readonly candidateEffects?: RepositoryCandidateEffectsFactory } = {},
-) {
+export function bindChangeCandidateParticipant(input: {
+  readonly candidateEffects: RepositoryCandidateEffectsFactory
+}): { derive: (request: DeriveChangeCandidateInput) => ReturnType<typeof deriveChangeCandidate> } {
   const selected = input.candidateEffects
   requireRepositoryCandidateEffectsFactory(selected)
-  const host = hostOf(selected)
-  const steps =
-    host === undefined ? (selected as RepositoryCandidateStepEffectsFactory | undefined) : undefined
-  return {
-    derive: (request: DeriveChangeCandidateInput) =>
-      host !== undefined
-        ? host.operations.derive(request)
-        : deriveChangeCandidate(request, selectFactory(request, steps)),
+  if (isRepositoryCandidateOperationHost(selected)) {
+    const { operations } = selected
+    return { derive: (request) => operations.derive(request) }
   }
+  return { derive: (request) => deriveChangeCandidate(request, selected) }
 }
 
-export function bindCandidateDeliveryParticipant(
-  input: {
-    readonly candidateEffects?: RepositoryCandidateEffectsFactory
-    readonly publicationTransport?: RepositoryPublicationTransport
-  } = {},
-) {
+export function bindCandidateDeliveryParticipant(input: {
+  readonly candidateEffects: RepositoryCandidateEffectsFactory
+  readonly publicationTransport?: RepositoryPublicationTransport
+}): {
+  stage: (request: StageCandidateTreeInput) => ReturnType<typeof stageCandidateTree>
+  commit: (request: CommitCandidateInput) => ReturnType<typeof commitCandidate>
+  push: (request: PushCandidateInput) => ReturnType<typeof pushCandidate>
+} {
   const selected = input.candidateEffects
   requireRepositoryCandidateEffectsFactory(selected)
-  const host = hostOf(selected)
-  const steps =
-    host === undefined ? (selected as RepositoryCandidateStepEffectsFactory | undefined) : undefined
+  if (isRepositoryCandidateOperationHost(selected)) {
+    // The remote volume runs each whole use case and publishes with its own platform Git credentials.
+    const { operations } = selected
+    return {
+      stage: (request) => operations.stage(request),
+      commit: (request) => operations.commit(request),
+      push: (request) => operations.push(request),
+    }
+  }
+  const steps = selected
+  const publication = {
+    transport: input.publicationTransport,
+    ...(steps.localFixtureSession === undefined
+      ? {}
+      : { localFixtureSession: steps.localFixtureSession }),
+  }
   return {
-    stage: (request: StageCandidateTreeInput) =>
-      host !== undefined
-        ? host.operations.stage(request)
-        : stageCandidateTree(request, selectFactory(request, steps)),
-    commit: (request: CommitCandidateInput) =>
-      host !== undefined
-        ? host.operations.commit(request)
-        : commitCandidate(request, selectFactory(request, steps)),
-    push: (request: Parameters<typeof pushCandidate>[0]) => {
-      // The remote volume publishes with its own platform Git credentials.
-      if (host !== undefined) return host.operations.push(request)
-      if (steps !== undefined) {
-        return pushCandidate(request, steps, { transport: input.publicationTransport })
-      }
-      const runGit = request.runGit
-      return pushCandidate(request, createFileRepositoryCandidateEffectsFactory({ runGit }), {
-        transport: input.publicationTransport,
-        localFixtureSession: (remoteUrl) =>
-          createFileRepositoryPublicationFixtureSession(remoteUrl, runGit),
-      })
-    },
+    stage: (request) => stageCandidateTree(request, steps),
+    commit: (request) => commitCandidate(request, steps),
+    push: (request) => pushCandidate(request, steps, publication),
   }
 }

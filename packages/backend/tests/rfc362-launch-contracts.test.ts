@@ -1,4 +1,4 @@
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -310,7 +310,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
     const materializer = createTaskWorkspaceMaterializer({
       sourceContexts: f.runtime.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation(
-        withSourceControlTaskPorts({
+        withLocalRepositoryPreparation({
           db: harness.db,
           appHome: f.options.appHome,
         }),

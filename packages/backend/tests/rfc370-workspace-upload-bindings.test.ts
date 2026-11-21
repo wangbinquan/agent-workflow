@@ -1,4 +1,4 @@
-import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
 // RFC-370: selected upload ACKs must precede the real journal receipt and Task admission in both providers.
 import { readTaskFixtures, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
@@ -89,6 +89,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
     )
     const factory = Object.freeze(new MemoryWorkspaceUploadFactory(content))
     const pending = applyTaskWorkspaceUploads({
+      inputFiles: null,
       db: harness.db,
       taskId: f.taskId,
       plan: plan(),
@@ -110,6 +111,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
     expect(
       (
         await applyTaskWorkspaceUploads({
+          inputFiles: null,
           db: harness.db,
           taskId: f.taskId,
           plan: plan(),
@@ -120,6 +122,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
     expect(factory.bindings).toHaveLength(1)
     await expect(
       applyTaskWorkspaceUploads({
+        inputFiles: null,
         db: harness.db,
         taskId: f.taskId,
         plan: { ...plan(), files: [{ ...plan().files[0]!, bytes: Uint8Array.of(66) }] },
@@ -144,7 +147,13 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
     }
     const content = Object.freeze(new CommitThenReject()),
       factory = Object.freeze(new MemoryWorkspaceUploadFactory(content))
-    const input = { db: harness.db, taskId: f.taskId, plan: plan(), workspaceUploads: factory }
+    const input = {
+      db: harness.db,
+      taskId: f.taskId,
+      plan: plan(),
+      workspaceUploads: factory,
+      inputFiles: null,
+    }
     await expect(applyTaskWorkspaceUploads(input)).rejects.toBe(reason)
     expect(JSON.parse((await f.journal.read(f.taskId))!.artifactJson!).uploads).toBeUndefined()
     expect(content.entries.has(content.key('inputs', 'a.txt'))).toBe(true)
@@ -167,20 +176,15 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
       await request.recovery!.reserve(0, 'a.txt')
       return result
     }
+    const base = () => ({ inputFiles: null, db: harness.db, taskId: f.taskId, plan: plan() })
+    const both = { workspaceUploads: factory, write }
     await expect(
-      applyTaskWorkspaceUploads({
-        db: harness.db,
-        taskId: f.taskId,
-        plan: plan(),
-        workspaceUploads: factory,
-        write,
-      }),
+      // @ts-expect-error RFC-527: the writer is one explicit choice; the type rejects both, the runtime check an unchecked caller
+      applyTaskWorkspaceUploads({ ...base(), ...both }),
     ).rejects.toThrow('whole writer override')
     expect(calls).toBe(0)
     expect(factory.bindings).toHaveLength(0)
-    expect(
-      await applyTaskWorkspaceUploads({ db: harness.db, taskId: f.taskId, plan: plan(), write }),
-    ).toBe(result)
+    expect(await applyTaskWorkspaceUploads({ ...base(), write })).toBe(result)
     expect(calls).toBe(1)
     expect(JSON.parse((await f.journal.read(f.taskId))!.artifactJson!).uploads.packedByKey).toEqual(
       [['refs', ['inputs/a.txt']]],
@@ -213,7 +217,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         appHome: home,
         sourceContexts: identityAccess.taskPreparationContext,
         repositoryPreparation: composeRepositoryPreparation(
-          withSourceControlTaskPorts({ db: harness.db, appHome: home }),
+          withLocalRepositoryPreparation({ db: harness.db, appHome: home }),
         ),
       })
       const content = Object.freeze(
@@ -227,7 +231,11 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         factory = Object.freeze(new MemoryWorkspaceUploadFactory(content))
       const submitted: string[] = []
       const kernel = createRootTaskLaunchKernel({
-        ...createRootTaskLaunchKernelPorts({ db: harness.db, workspaceUploads: factory }),
+        ...createRootTaskLaunchKernelPorts({
+          inputFiles: null,
+          db: harness.db,
+          workspaceUploads: factory,
+        }),
         workspace,
         gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
         coordinator: {

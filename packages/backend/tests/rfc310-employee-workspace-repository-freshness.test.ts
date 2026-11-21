@@ -18,6 +18,8 @@ import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
   composeSqliteRepositoryWorkspaceStore,
+  createFileConflictMergeWorkspaceEffects,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
 } from '@/modules/source-control/composition'
 import {
   assertDevelopmentWorkspaceRepositoryFreshness,
@@ -242,8 +244,12 @@ describeEachProvider('RFC-310 Digital Employee workspace repository freshness', 
           return await productionPreparation.prepare(request)
         },
       },
-      sourceControl: bindEmployeeCaseWorkspaceParticipant(),
-      conflictMerge: bindConflictMergeParticipant(),
+      sourceControl: bindEmployeeCaseWorkspaceParticipant({
+        effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+      }),
+      conflictMerge: bindConflictMergeParticipant({
+        effects: createFileConflictMergeWorkspaceEffects(),
+      }),
       now: () => 10,
     }
     const workspace = composeDevelopmentEmployeeWorkspace(workspaceInput)

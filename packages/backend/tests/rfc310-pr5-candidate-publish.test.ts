@@ -20,9 +20,14 @@ import {
 } from '../src/modules/source-control/composition/repositoryCandidate'
 import { missionCandidateRef } from '../src/modules/source-control/application/deliverCandidate'
 import { missionSourceBranch } from '../src/modules/source-control/domain/deliveryPolicy'
+import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'
 
-const { derive: deriveChangeCandidate } = bindChangeCandidateParticipant()
-const { commit: commitCandidate, push: pushCandidate } = bindCandidateDeliveryParticipant()
+const { derive: deriveChangeCandidate } = bindChangeCandidateParticipant({
+  candidateEffects: createLocalRepositoryCandidateEffects(),
+})
+const { commit: commitCandidate, push: pushCandidate } = bindCandidateDeliveryParticipant({
+  candidateEffects: createLocalRepositoryCandidateEffects(),
+})
 
 setDefaultTimeout(120_000)
 

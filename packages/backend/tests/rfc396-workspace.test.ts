@@ -6,7 +6,11 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
-import { bindEmployeeCaseWorkspaceParticipant } from '@/modules/source-control/composition'
+import {
+  bindEmployeeCaseWorkspaceParticipant,
+  createFileEmployeeCaseWorkspaceEffectsFactory,
+  createLocalRepositoryCandidateEffects,
+} from '@/modules/source-control/composition'
 import { createHostedEmployeeCaseWorkspaceOperations } from '@/modules/source-control/infrastructure/crewstation/employeeCaseWorkspace'
 import {
   hostedWorkspaceReference,
@@ -109,7 +113,9 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
             }).automationWorkspaceEffects
       const sourceControl =
         deployment === 'standalone'
-          ? bindEmployeeCaseWorkspaceParticipant()
+          ? bindEmployeeCaseWorkspaceParticipant({
+              effects: createFileEmployeeCaseWorkspaceEffectsFactory(),
+            })
           : createHostedEmployeeCaseWorkspaceOperations({ helper }).operations
       const repoRef = deployment === 'standalone' ? repository : 'cs-workspace:task/repo'
       const resolved = await sourceControl.resolveBaseline({
@@ -231,7 +237,9 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
       const state = await workspace.state(work.designId)
       expect(state.uploadPlan?.entries[0]?.targetPath).toBe('explicit-upload.txt')
       const candidateEffects =
-        deployment === 'hosted' ? createHostedRepositoryCandidateOperations({ helper }) : undefined
+        deployment === 'hosted'
+          ? createHostedRepositoryCandidateOperations({ helper })
+          : createLocalRepositoryCandidateEffects()
       const candidate = bindChangeCandidateParticipant({ candidateEffects })
       const baselineSha =
         resolved.contentBaseline!.kind === 'commit'

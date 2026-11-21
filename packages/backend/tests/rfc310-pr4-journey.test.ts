@@ -33,6 +33,7 @@ import type {
 import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
+  createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
 import { createFileAutomationWorkspaceEffectsFactory } from '../src/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import {
@@ -122,7 +123,9 @@ async function seedLaneDatabase(db: PersistenceDb, repoPath: string): Promise<vo
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,
-    changeCandidate: bindChangeCandidateParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: createLocalRepositoryCandidateEffects(),
+    }),
   })
 }
 
@@ -328,7 +331,9 @@ describeEachProvider(
         actionWorkspaceEffects: action,
         agentLauncher: scripted,
         conflictMerge: bindConflictMergeParticipant({ effects: conflict }),
-        changeCandidate: bindChangeCandidateParticipant(),
+        changeCandidate: bindChangeCandidateParticipant({
+          candidateEffects: createLocalRepositoryCandidateEffects(),
+        }),
       })
       let returned = false
       const pending = automation.reconcile(first.missionId).then((value) => {

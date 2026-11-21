@@ -188,7 +188,8 @@ export interface TaskExecutionProviderRuntimeDependencies {
   readonly clarifyNav: TaskNodeRunClarifyNavPort
   /** RFC-526: the deployment's archive content binding (required; the daemon always gives it). */
   readonly archive: TaskArchiveContentBinding
-  readonly recoverySelection?: TaskRecoveryProviderSelection
+  /** RFC-527: hosted task recovery; standalone states `null`. */
+  readonly recoverySelection: TaskRecoveryProviderSelection | null
   /** RFC-431: the deployment's selection, never re-defaulted here. */
   readonly workspaceReads: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
@@ -357,15 +358,19 @@ export function composeTaskExecutionProviderRuntime(
       : { now: dependencies.lifecycleRepair.now }),
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
-  const recoveryConsumer = dependencies.recoverySelection?.({
-    db,
-    assertManualExecutionAllowed: taskRoutes.assertManualExecutionAllowed,
-    async resumeTaskAs(actor, taskId) {
-      await taskRoutes.resume({ actor, taskId })
-    },
-  })
+  const recoverySelection = dependencies.recoverySelection
+  const recoveryConsumer =
+    recoverySelection === null
+      ? null
+      : recoverySelection({
+          db,
+          assertManualExecutionAllowed: taskRoutes.assertManualExecutionAllowed,
+          async resumeTaskAs(actor, taskId) {
+            await taskRoutes.resume({ actor, taskId })
+          },
+        })
   const background = composeTaskExecutionProviderBackground({
-    ...(recoveryConsumer === undefined ? {} : { recoveryConsumer }),
+    ...(recoveryConsumer === null ? {} : { recoveryConsumer }),
     module: executionModule,
     lifecycleRepair,
     autoResume,
