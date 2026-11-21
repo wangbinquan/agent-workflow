@@ -23,7 +23,7 @@
 - [x] AC-1 16 处回落不再存在；RFC-521 门的实测与登记逐条相等，适配器回落 19 条
 - [x] AC-2 daemon、维护 worker 与单机部署得到的对象不变；改取部署选择的路径不查询存在性；用例给出的选择与此前缺省相同
 - [x] AC-3 bootstrap 不深取 task-execution 的 infrastructure；public surface 不升；计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -90,7 +90,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `4de910ff9`（实现，父提交是 `931582bfb`）：exact SHA 主 CI run 44883467213 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与
+  `CI required`）；同一提交触发的 windows-platform（run 44883467233）、maintenance-soak-nightly（run 44883467222）与 integration-opencode
+  （run 44883467189）也通过；未重跑。
+- 本 RFC 的落档提交 `931582bfb`（只改文档；同一提交记下 RFC-525 转 Done）：主 CI run 44852957372 的 70 个 job 第 1 次全部通过（含 design/ 的链接
+  检查与 `CI required`）；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 
