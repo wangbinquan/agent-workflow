@@ -23,6 +23,7 @@
 import type { ChildTaskBudgetQueries } from '../application/ports/childTaskBudgetQueries'
 import { DrizzleChildTaskBudgetQueries } from './childTaskBudgetQueries'
 import { createLogger } from '@/util/log'
+import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 import type { TaskStatus } from '@agent-workflow/shared'
 
 const log = createLogger('child-budget')
@@ -74,7 +75,7 @@ export class ChildTaskBudget {
   /** Pre-insert reservations (no task id yet). Never ancestor-exempt. */
   private held = new Set<symbol>()
   private waiters: Waiter[] = []
-  private warnTimer: ReturnType<typeof setInterval> | null = null
+  private warnTimer: IntervalTimer | null = null
 
   private readonly queries: ChildTaskBudgetQueries
 
@@ -213,24 +214,28 @@ export class ChildTaskBudget {
 
   private ensureWarnTimer(): void {
     if (this.warnTimer !== null) return
-    this.warnTimer = setInterval(() => {
-      const now = Date.now()
-      for (const w of this.waiters) {
-        if (!w.warned && now - w.enqueuedAt >= LONG_WAIT_WARN_MS) {
-          w.warned = true
-          log.warn('child-task slot wait exceeded 60s', {
-            waiters: this.waiters.length,
-            active: this.activeCount(),
-            capacity: this.capacity(),
-          })
+    this.warnTimer = startInterval({
+      owner: 'task-execution.child-budget-wait-warning',
+      everyMs: LONG_WAIT_WARN_MS / 4,
+      tick: () => {
+        const now = Date.now()
+        for (const w of this.waiters) {
+          if (!w.warned && now - w.enqueuedAt >= LONG_WAIT_WARN_MS) {
+            w.warned = true
+            log.warn('child-task slot wait exceeded 60s', {
+              waiters: this.waiters.length,
+              active: this.activeCount(),
+              capacity: this.capacity(),
+            })
+          }
         }
-      }
-    }, LONG_WAIT_WARN_MS / 4)
+      },
+    })
   }
 
   private stopWarnTimerIfIdle(): void {
     if (this.waiters.length === 0 && this.warnTimer !== null) {
-      clearInterval(this.warnTimer)
+      this.warnTimer.stop()
       this.warnTimer = null
     }
   }

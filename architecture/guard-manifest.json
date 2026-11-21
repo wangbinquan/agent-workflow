@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1060
+      "lines": 1056
     },
     {
       "assertsAbsence": true,
@@ -3163,7 +3163,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc404-child-call-executors.test.ts",
       "id": "rfc404-child-call-executors",
-      "lines": 297,
+      "lines": 300,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -4054,6 +4054,18 @@
       "lines": 244,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc529-module-interval-timers-boundary.test.ts",
+      "id": "rfc529-module-interval-timers-boundary",
+      "lines": 166,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
       "negativeFixture": true,
       "runner": "bun"
     }

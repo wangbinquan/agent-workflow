@@ -12,6 +12,7 @@ import type {
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { createLogger } from '@/util/log'
+import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 
 const log = createLogger('webhook-mr-terminal-control')
 const LEASE_MS = 30_000
@@ -35,7 +36,7 @@ export class MrTerminalControlWorker {
   private running: Promise<void> | null = null
   private requested = false
   private stopped = false
-  private timer: ReturnType<typeof setInterval> | null = null
+  private timer: IntervalTimer | null = null
 
   constructor(
     private readonly persistence: MrTerminalEffectPersistencePort,
@@ -46,8 +47,12 @@ export class MrTerminalControlWorker {
 
   start(): void {
     if (this.timer !== null) return
-    this.timer = setInterval(() => this.wake(), RECOVERY_SCAN_MS)
-    this.timer.unref?.()
+    this.timer = startInterval({
+      owner: 'integration.mr-terminal-control',
+      everyMs: RECOVERY_SCAN_MS,
+      tick: () => this.wake(),
+    })
+    this.timer.unref()
   }
 
   wake(_effectId?: string | null): void {
@@ -86,7 +91,7 @@ export class MrTerminalControlWorker {
 
   async stop(): Promise<void> {
     this.stopped = true
-    if (this.timer !== null) clearInterval(this.timer)
+    this.timer?.stop()
     this.timer = null
     this.launchGuards.supervisor.abortAll()
     await this.running

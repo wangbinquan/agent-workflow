@@ -34,6 +34,7 @@ import {
   transcodeOpencodeRowsToEvents,
 } from './sessionCapture'
 import { walkOpencodeSessions } from './sessionWalk'
+import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 import {
   openReadonlySqliteDatabase,
   type ReadonlySqliteDatabase,
@@ -219,7 +220,7 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
     if (stopped) return
     stopped = true
     if (intervalHandle !== null) {
-      clearInterval(intervalHandle)
+      intervalHandle.stop()
       intervalHandle = null
     }
     close()
@@ -238,21 +239,25 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
   // Schedule periodic ticks. Pending tickOnce promises are NOT awaited by
   // the interval — re-entry is guarded above so concurrent timer fires
   // collapse into the next slot.
-  let intervalHandle: ReturnType<typeof setInterval> | null = setInterval(() => {
-    if (stopped || disabled) {
-      if (intervalHandle !== null) {
-        clearInterval(intervalHandle)
-        intervalHandle = null
+  let intervalHandle: IntervalTimer | null = startInterval({
+    owner: 'runtime-management.subagent-live-capture',
+    everyMs: opts.pollMs,
+    tick: () => {
+      if (stopped || disabled) {
+        if (intervalHandle !== null) {
+          intervalHandle.stop()
+          intervalHandle = null
+        }
+        return
       }
-      return
-    }
-    void tickOnce().catch((err) => {
-      log.warn('subagent-live-poll-tick-unhandled', {
-        nodeRunId: opts.nodeRunId,
-        err: err instanceof Error ? err.message : String(err),
+      void tickOnce().catch((err) => {
+        log.warn('subagent-live-poll-tick-unhandled', {
+          nodeRunId: opts.nodeRunId,
+          err: err instanceof Error ? err.message : String(err),
+        })
       })
-    })
-  }, opts.pollMs)
+    },
+  })
 
   if (opts.signal !== undefined) {
     if (opts.signal.aborted) {

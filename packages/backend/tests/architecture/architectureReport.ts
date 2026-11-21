@@ -2901,6 +2901,8 @@ export function backgroundDefinitions(units: readonly SourceUnit[]): DefinitionS
         const callee = calleeName(node.expression)
         if (/^define(?:BackgroundJob|ManagedWorker)$/.test(callee)) kind = 'managed-definition'
         if (/^(?:globalThis\.)?setInterval$/.test(callee)) kind = 'setInterval'
+        // RFC-529: a business module's fixed-rate timer goes through the platform primitive (owner + stop).
+        if (callee === 'startInterval') kind = 'platform-interval'
         if (/^(?:globalThis\.)?setTimeout$/.test(callee)) {
           // A timer is a loop only if it reschedules its enclosing callable, directly or via its callback.
           const owner = nearestCallable(node)

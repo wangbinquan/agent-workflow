@@ -11,6 +11,14 @@
 - **不做**：`setTimeout` 一类的单次计时；心跳句柄的模块级 `Map`（S12 第 4 项）；S12 的第 3、4、6 项；任何行为变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-528 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
   §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 组合层不变；C11 public 不变；C12 RFC-529 用例覆盖全部生产代码的直接全局定时器；C13 计数不升，
+  `direct-setinterval-sites` 按实测 14 → 7。
+- **§14 不变量 / S12 第十步**：直接 `setInterval` 只出现在平台定时原语（`platform/background/intervalTimer.ts` 与 `platform/background` 的既有
+  4 个文件）；业务模块的 8 处周期计时都经 `startInterval`、带 owner 与 stop，回调、周期、`unref` 与停止时机不变：S12 第 5 项达成。
+- **集中验证**（基于 `b675fc097`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；首批 222 个文件与 HEAD 同时 A/B，查出本人两处缺陷——
+  新用例的负对照碰了真实语料（RFC-317 的判据认不出），子调用共享体改调原语后撞 RFC-404 的叶子规则——修正后 7 个文件 273 / 273；两边相同的 3 个
+  是用例自带的时限，其中 `rfc238` 的两个文件两边同时各以 1 个 worker 再跑都全过；架构报告只有收紧的一项计数变化。实现门 PASS（本会话按路径限定
+  自审，只审功能）。
 
 ## 2026-11-21 RFC-528 维护 worker 的单机效果收进单机 profile（Done；`design/RFC-528-standalone-maintenance-worker-effects/`）
 

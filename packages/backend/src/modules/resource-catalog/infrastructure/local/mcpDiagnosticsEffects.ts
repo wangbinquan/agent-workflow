@@ -6,6 +6,7 @@ import {
   type StaleRunKillOutcome,
 } from '@/util/process'
 import { ValidationError } from '@/util/errors'
+import { startInterval } from '@/platform/background/intervalTimer'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import {
   AGENT_NAME,
@@ -102,8 +103,13 @@ export function createLocalMcpDiagnosticsEffects(
       return { cancel: () => clearTimeout(timer), unref: () => timer.unref() }
     },
     setInterval(callback, delay) {
-      const timer = setInterval(callback, delay)
-      return { cancel: () => clearInterval(timer), unref: () => timer.unref() }
+      // RFC-529: the platform's fixed-rate timer.
+      const timer = startInterval({
+        owner: 'resource-catalog.mcp-diagnostics',
+        everyMs: delay,
+        tick: callback,
+      })
+      return { cancel: () => timer.stop(), unref: () => timer.unref() }
     },
     workspaceReference: (id) => join(deps.appHome, 'mcp-runtime-tests', id),
     workspaceExists: (reference) => existsSync(reference),

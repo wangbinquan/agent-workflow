@@ -16,6 +16,7 @@
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { TaskStatusProjectionReadModel } from '../public/types'
 import { createTaskExecutionReadModels } from './taskExecutionReadModels'
+import { startInterval } from '@/platform/background/intervalTimer'
 
 export type TerminalWatchResult =
   | { kind: 'terminal'; status: TaskStatus }
@@ -99,19 +100,23 @@ export async function watchTaskTerminal(
       watchers.set(taskId, set)
     }
     set.add(entry)
-    const timer = setInterval(() => {
-      void readTerminal(reader, taskId)
-        .then((r) => {
-          if (r !== null) finish(r)
-        })
-        .catch(() => {
-          // transient read failure — next poll retries
-        })
-    }, pollMs)
+    const timer = startInterval({
+      owner: 'task-execution.execution-watch',
+      everyMs: pollMs,
+      tick: () => {
+        void readTerminal(reader, taskId)
+          .then((r) => {
+            if (r !== null) finish(r)
+          })
+          .catch(() => {
+            // transient read failure — next poll retries
+          })
+      },
+    })
     const onAbort = (): void => finish({ kind: 'aborted' })
     opts.signal?.addEventListener('abort', onAbort, { once: true })
     cleanup = () => {
-      clearInterval(timer)
+      timer.stop()
       opts.signal?.removeEventListener('abort', onAbort)
       const s = watchers.get(taskId)
       if (s !== undefined) {

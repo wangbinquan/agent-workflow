@@ -23,13 +23,14 @@ import {
 } from '../composition'
 import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
+import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 import {
   releaseTaskDriverAndFinalize,
   type TaskDriverReleaseDependencies,
 } from './taskDriverRelease'
 
 const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
-const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
+const ownerHeartbeatTimers = new Map<string, IntervalTimer>()
 
 /**
  * RFC-359 AC-1（plan §5hm）—— 驱动生命周期端口**一份实现，两个引擎共用**。
@@ -133,24 +134,28 @@ function startOwnerHeartbeat(
 ): void {
   const key = ownershipTokenKey(token)
   const existing = ownerHeartbeatTimers.get(key)
-  if (existing !== undefined) clearInterval(existing)
+  existing?.stop()
   // RFC-359 AC-1（plan §5hm）：心跳走中立归属持久化。合一前这里是
   // `taskExecutionModule.ownershipFor(db)`、PG 那份是 `persistence.ownership`——
   // 而 `ownershipFor(db)` 的函数体就是 `new DrizzleTaskOwnershipPersistence(db)`，
   // 与 `createTaskExecutionPersistence(db).ownership` 同一个东西。装配方交哪个都一样。
-  const timer = setInterval(() => {
-    void persistence.ownership
-      .heartbeat({ token, now: Date.now(), leaseMs: DEFAULT_OWNERSHIP_LEASE_MS })
-      .catch((error: unknown) => {
-        controller.abort('task-execution-stale-owner')
-        log.warn('durable task owner heartbeat was fenced', {
-          taskId: token.taskId,
-          epoch: token.epoch,
-          error: error instanceof Error ? error.message : String(error),
+  const timer = startInterval({
+    owner: 'task-execution.owner-heartbeat',
+    everyMs: DEFAULT_OWNERSHIP_HEARTBEAT_MS,
+    tick: () => {
+      void persistence.ownership
+        .heartbeat({ token, now: Date.now(), leaseMs: DEFAULT_OWNERSHIP_LEASE_MS })
+        .catch((error: unknown) => {
+          controller.abort('task-execution-stale-owner')
+          log.warn('durable task owner heartbeat was fenced', {
+            taskId: token.taskId,
+            epoch: token.epoch,
+            error: error instanceof Error ? error.message : String(error),
+          })
         })
-      })
-  }, DEFAULT_OWNERSHIP_HEARTBEAT_MS)
-  timer.unref?.()
+    },
+  })
+  timer.unref()
   ownerHeartbeatTimers.set(key, timer)
 }
 
@@ -166,7 +171,7 @@ function releaseDependencies(
     persistence: deps.persistence,
     stopHeartbeat: (tokenKey) => {
       const timer = ownerHeartbeatTimers.get(tokenKey)
-      if (timer !== undefined) clearInterval(timer)
+      timer?.stop()
       ownerHeartbeatTimers.delete(tokenKey)
     },
     finalizeWorkspace: deps.finalizeWorkspace,
@@ -205,7 +210,7 @@ export async function awaitTaskDriverIdle(taskId: string): Promise<void> {
 
 /** Test isolation for the module-owned heartbeat/runtime handles. */
 export function clearTaskDriverLifecycleForTesting(): void {
-  for (const timer of ownerHeartbeatTimers.values()) clearInterval(timer)
+  for (const timer of ownerHeartbeatTimers.values()) timer.stop()
   ownerHeartbeatTimers.clear()
   taskExecutionModule.runtimeRegistry.clearForTesting()
 }

@@ -1,3 +1,4 @@
+import { startInterval } from '@/platform/background/intervalTimer'
 import { DAEMON_RESTART_ERROR_SUMMARY, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import type {
@@ -345,9 +346,13 @@ export async function runChildCallNode(
   let resumeAttempted = false
   let outcomeStatus: string
   for (;;) {
-    const obsTimer = setInterval(() => {
-      void observeChild().catch(() => {})
-    }, CALL_CHILD_OBSERVE_MS)
+    const obsTimer = startInterval({
+      owner: 'task-execution.child-call-observation',
+      everyMs: CALL_CHILD_OBSERVE_MS,
+      tick: () => {
+        void observeChild().catch(() => {})
+      },
+    })
     let watched: ChildCallTerminalWatch
     try {
       const signal = ports.policy.signal
@@ -356,7 +361,7 @@ export async function runChildCallNode(
         pollMs: 20_000,
       })
     } finally {
-      clearInterval(obsTimer)
+      obsTimer.stop()
       await observeChild().catch(() => {})
     }
     if (watched.kind === 'aborted') {

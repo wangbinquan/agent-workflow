@@ -176,14 +176,10 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-466：`services/workgroups.ts` 随其唯一的生产消费者（`legacyCallClosure`，迁入用例 helper）删除（销账）。
   ],
   'direct-setinterval-sites': [
-    'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker.start#setInterval#1',
-    'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts#createCrewStationMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
-    'packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
-    'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/subagentLiveCapture.ts#startLiveSubagentCapture.intervalHandle#setInterval#1',
-    'packages/backend/src/modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts#runChildCallNode.obsTimer#setInterval#1',
-    'packages/backend/src/modules/task-execution/infrastructure/childBudget.ts#ChildTaskBudget.ensureWarnTimer#setInterval#1',
-    'packages/backend/src/modules/task-execution/infrastructure/executionWatch.ts#watchTaskTerminal.timer#setInterval#1',
-    'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat.timer#setInterval#1',
+    // RFC-529: the eight business-module timers (MR terminal control, both MCP diagnostics effects, subagent live
+    // capture, child-call observation, child budget warning, execution watch, owner heartbeat) start the platform's
+    // fixed-rate timer instead (销账); the primitive itself is the one new site.
+    'packages/backend/src/platform/background/intervalTimer.ts#startInterval.handle#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.checkpointTimer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.eventLoopTimer#setInterval#1',
     // RFC-457: moved unchanged from services/maintenanceTicker.ts.

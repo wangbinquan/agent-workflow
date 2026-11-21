@@ -2,6 +2,7 @@
 // selected execution factory, and a standby service slot leaves the durable invalidation to the active owner.
 import type { McpDiagnosticExecutionFactory } from '../../application/ports/mcpDiagnosticExecution'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { startInterval } from '@/platform/background/intervalTimer'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { DEFAULT_CONFIG_DIR_PROFILE, verifyStartup } from '@agent-workflow/shared'
@@ -98,8 +99,13 @@ export function createCrewStationMcpDiagnosticsEffects(
       return { cancel: () => clearTimeout(timer), unref: () => timer.unref() }
     },
     setInterval(callback, delay) {
-      const timer = setInterval(callback, delay)
-      return { cancel: () => clearInterval(timer), unref: () => timer.unref() }
+      // RFC-529: the platform's fixed-rate timer.
+      const timer = startInterval({
+        owner: 'resource-catalog.hosted-mcp-diagnostics',
+        everyMs: delay,
+        tick: callback,
+      })
+      return { cancel: () => timer.stop(), unref: () => timer.unref() }
     },
     workspaceReference: runner.workspaceReference,
     async workspaceExists(reference) {

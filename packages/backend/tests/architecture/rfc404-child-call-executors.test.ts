@@ -87,6 +87,9 @@ function boundaryViolations(units: readonly SourceUnit[]): string[] {
       ].some((prefix) => target.startsWith(prefix)) &&
       target !== NODE + 'nodeExecutor.ts' &&
       target !== NODE + 'nodeExecutor' &&
+      // RFC-529: the platform's fixed-rate timer, in place of the global setInterval the shared body used.
+      target !== PREFIX + 'platform/background/intervalTimer.ts' &&
+      target !== PREFIX + 'platform/background/intervalTimer' &&
       target !== '@agent-workflow/shared' &&
       !target.startsWith('packages/shared/src/') &&
       !target.startsWith('node:')
