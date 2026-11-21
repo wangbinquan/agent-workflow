@@ -17,7 +17,7 @@
 - [x] AC-1 业务模块里没有直接的 `setInterval` / `clearInterval`；8 处经平台定时原语、带 owner、停止点调 `stop()`
 - [x] AC-2 回调、周期、`unref` 与停止时机不变；原语语义与 `setInterval` 相同
 - [x] AC-3 直接全局定时器的清单只含平台定时原语与 `platform/background` 的既有几处；计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -45,7 +45,11 @@ HEAD 的树相同。集中验证查出本人两处缺陷，修正并复验：
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `e031a55dd`（实现，父提交是 `c0820153e`）：exact SHA 主 CI run 44934784612 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与 `CI required`）；
+  同一提交触发的 windows-platform（run 44934784575）、integration-opencode（run 44934784673）与 maintenance-soak-nightly（run 44934784700）也通过；
+  未重跑。
+- 本 RFC 的落档提交 `c0820153e`（只改文档；同一提交记下 RFC-528 转 Done）：主 CI run 44934649895 的 70 个 job 第 1 次运行 68 个通过；红的是 design/
+  链接检查里 RFC-371 文档那条既有 GitHub 提交链接的外部 503（不是本 RFC 的文件）与随之红的 `CI required`；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

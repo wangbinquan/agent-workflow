@@ -1,0 +1,41 @@
+# RFC-530 任务执行模块不在 import 期构造（RFC-294 S12 第十一步）
+
+- **状态**：In Progress（2026-11-21）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09、2026-11-17 再次下达），2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」，2026-11-19「你加速推
+  进RFC294」：本会话按 2026-11-09 刷新后的 RFC-294 总纲调研、设计、实施与集中验证，按授权记为已批准（取舍见 design §6，可推翻）；不派
+  Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
+- **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S12（装配余项）第 3 项；design §10.2（唯一模块工厂图）
+  与 §5.6 的现状偏差。前置 W4-E1 与 `services/task.ts` 退役都已完成。
+- **前序**：[RFC-529](../RFC-529-module-interval-timers/proposal.md)（S12 第十步）。
+
+## 1. 背景
+
+`modules/task-execution/composition.ts` 在 import 期构造 `taskExecutionModule = new TaskExecutionModule(DAEMON_GENERATION)`：一个进程级的
+认领闸门与内存驱动登记表。导入 task-execution 组合层的进程（daemon、每个 CLI 命令、维护 worker 线程）都会造一份。生产里真正用它的只有 SQLite
+的执行绑定（`composeProcessTaskExecutionBinding`），下游都经注入拿到它；PostgreSQL 的会话绑定本来就每个会话造一份。其余读它的地方在生产里走不到：
+任务取消组合的唯一路由被数字员工装配覆盖；源终止参与者“没给登记表就用单例”的回落生产总是给；任务驱动生命周期的 6 个自由函数没有生产调用方
+（只为已退役的 `services/task.ts` 存在）。用例大量经测试助手取这个单例。
+
+## 2. 目标
+
+- **G1 绑定时构造**：SQLite 的执行绑定在绑定时用 bootstrap 交入的 daemon 代次构造执行模块（每个会话一份，与 PostgreSQL 一致）；`composition.ts`
+  不再在 import 期构造、也不再导出单例。
+- **G2 只服务用例的入口移进测试助手**：任务驱动生命周期里没有生产调用方的自由函数、`createTaskExecutionTestModule` 与任务取消组合移进测试助手，
+  用例取测试助手自己的执行模块；源终止参与者的登记表必填。
+- **G3 门与用例**：新增 RFC-530 用例（生产代码里没有模块级的 `new TaskExecutionModule(`、组合层不导出执行模块、SQLite 绑定每次构造一份）；钉住单例的
+  锁随改。
+
+## 3. 非目标
+
+- 任务驱动生命周期的模块级心跳 `Map` 与其余模块级可变单例（S12 第 4 项）；S12 第 6 项；任何行为、接口与界面变化。
+
+## 4. 用户可见变化
+
+无。
+
+## 5. 验收标准
+
+- **AC-1**：生产代码里不在 import 期构造执行模块；组合层不导出单例；SQLite 的执行绑定在绑定时构造，每个会话一份。
+- **AC-2**：daemon 两种部署得到的执行模块与此前的用法相同（同一会话里认领、驱动、停止与后台共用同一份）；源终止参与者照旧用会话的登记表。
+- **AC-3**：只服务用例的入口不在生产代码里；计数不升。
+- **AC-4**：受影响用例全部通过；推送后 exact SHA 的 GitHub Actions 全绿（环境性红格逐格归因、如实记录）。
