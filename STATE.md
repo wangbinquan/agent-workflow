@@ -1,4 +1,18 @@
-## 2026-11-21 RFC-528 维护 worker 的单机效果收进单机 profile（In Progress；`design/RFC-528-standalone-maintenance-worker-effects/`）
+## 2026-11-21 RFC-529 业务模块的周期定时器改走平台定时原语（In Progress；`design/RFC-529-module-interval-timers/`）
+
+- **来由**：S12 第 5 项点名业务模块里 4 处直接 `setInterval`；按源码复核共 8 处（MR 终止控制、两个 MCP 诊断 effect、子任务预算告警，另有子会话
+  实时抓取、子调用观测、执行看门与 owner 心跳 4 处执行局部的计时），各有停止点、没有共同的形状；已有账本（架构报告的“直接 `setInterval` 位置”
+  与 `rfc376-structural-guards` 的 `KNOWN`）只数 `setInterval`、不区分业务模块与平台。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优
+  架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、
+  2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`platform/background/intervalTimer.ts` 的固定频率原语 `startInterval({ owner, everyMs, tick })`（语义同 `setInterval`，`stop` 幂等）；
+  8 处改调原语、各带 owner；账本按实测收紧（`direct-setinterval-sites` 14 → 7），架构报告的后台作业清单认出原语；新增 RFC-529 用例（直接全局
+  定时器只在平台定时原语与 `platform/background` 的既有几处，owner 是字面量）。
+- **不做**：`setTimeout` 一类的单次计时；心跳句柄的模块级 `Map`（S12 第 4 项）；S12 的第 3、4、6 项；任何行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-528 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-21 RFC-528 维护 worker 的单机效果收进单机 profile（Done；`design/RFC-528-standalone-maintenance-worker-effects/`）
 
 - **来由**：RFC-527 之后组合层的适配器回落清零，S12 第 1 项余下“单机默认值只在单机 profile”。单机维护 worker 没有效果描述符，
   `maintenanceWorkerGraph.ts` 逐项回落到本机实现（内容存储、任务归档内容、资源包工件恢复、工作区准备 / 草稿区 / 维护文件系统、插件代际
@@ -22,6 +36,11 @@
   文件与 HEAD 同时 A/B（含经监督者按路径起 worker 的用例），查出本人一处缺陷——新用例核对托管独有族时没顾到压缩写法会删去最后一个成员后的
   逗号——修正后 4 / 4；候选多出的另一条是钩子时限，两边同时各以 1 个 worker 再跑都过；两边相同的 6 个是用例自带的时限与导出仓库没有 git
   历史；终验 5 个文件 66 / 66；架构报告的计数都不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`b675fc097`（17 个文件；父提交是 `07d6542d3`）。
+- **CI**：实现提交 70 / 70 全过（含 design/ 链接检查与 `CI required`）；落档提交 `07d6542d3` 68 / 70（macOS e2e 分片 3/4 撞 job 的时限被取消，
+  环境；`CI required` 随之红）。都未重跑。
+- **下一步**：S12 第 5 项（业务模块的周期定时器，RFC-529）；第 6 项（部署选择合同改为每模块一份类型化的适配器集合，连同 daemon 一侧按托管能力是否
+  为 `null` 选本机实现的几处）；第 3、4 项。
 
 ## 2026-11-21 RFC-527 源代码管理的适配器回落改为必填注入（Done；`design/RFC-527-source-control-required-selections/`）
 

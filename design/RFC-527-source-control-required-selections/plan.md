@@ -87,7 +87,7 @@
 - **架构报告**（`scripts/architecture-report.ts`，最终的树与对照各出一份）：60 项实测里只有三项变化，均已按实测收紧——source-control 组合层控制流
   9 → 6（冲突合并不再按请求选本机夹具、候选绑定只按操作宿主分一次支、镜像一支改由 bootstrap 选）、task-execution 组合层控制流 11 → 10（只服务
   用例的排除档案选择移进测试助手）、public surface 偏差 56 → 54（仓库 git 工作区选择的 `legacyRunGit`、排除档案选择本身）；跨上下文导入
-  7,518 → 7,517——删去 6 条（被删的本机助手与 `commitPushAttempt` 取 `@/util` 的类型），新增 7 条，都是 bootstrap 取 source-control 组合层
+  7,517 → 7,518——删去 6 条（被删的本机助手与 `commitPushAttempt` 取 `@/util` 的类型），新增 7 条，都是 bootstrap 取 source-control 组合层
   （单机候选与冲突合并、两支镜像、维护 worker 的本机准备与维护文件系统）；各模块符号属主只有删去与新增的名字。最终的树与较早的一份候选相比只有
   integration 组合层一处分支的行号随新增的注释下移一行（webhook 入口的改动只改类型）。
 - **旧位置全仓扫描**（最终的工作树；全部包、`e2e`、`scripts`、`architecture/` 与 `docs/`，按词边界）：`selectWorkspaceExcludeProfileFactory`、
@@ -109,6 +109,9 @@
   backend 分片 41/44 通过；backend 分片 39/44 在测试步骤里撞 job 的 15 分钟上限被取消——取消前 0 条红，正跑
   `rfc398-auto-upgrade-resume-rollback-pointer-restored`；同一分片在父提交上 7 分 19 秒全过、这条约 60 秒，本提交只改一个用例与文档，属 runner
   环境——`CI required` 随之红；同一提交触发的 windows-platform（run 44925746976）通过；未重跑。
+- 后继证据：`07d6542d3`（RFC-528 落档，只改文档，父提交是 `1551dda63`）的主 CI run 44928972265 里 backend 的 45 个 job 全过（含分片 39/44
+  与 41/44）；红的只有 macOS e2e 分片 3/4 在测试步骤里撞 job 的时限被取消（同一分片在 `49c302647` 上 17 分 33 秒通过）与随之红的
+  `CI required`，属 runner 环境。
 - 本 RFC 的落档提交 `c088b5060`（只改文档；同一提交记下 RFC-526 转 Done）：主 CI run 44886605498 的 70 个 job 第 1 次全部通过（含 design/ 的链接
   检查与 `CI required`）；未重跑。
 
