@@ -28,7 +28,7 @@
 - [x] AC-1 回落不再存在；RFC-521 门的实测与登记逐条相等，适配器回落 0 条、`SUCCESSORS` 为空；bootstrap 不再把部署选择的 `null` 转回 `undefined`
 - [x] AC-2 daemon、维护 worker 与单机部署得到的对象不变；单机候选推送照旧带夹具会话；用例给出的选择与此前缺省相同
 - [x] AC-3 bootstrap 不深取 source-control 的 infrastructure；public surface 不升；计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -99,7 +99,16 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `49c302647`（实现，父提交是 `c088b5060`）：exact SHA 主 CI run 44919244054 的 70 个 job 第 1 次运行 68 个通过，未重跑。红的两格：backend
+  分片 41/44 是 `rfc412-port-bindings` 的 2 条（TypeError“Repository Git requires a complete workspace factory”）——本人缺陷：用例经没改的
+  `commitPushBinding.ts` 调到改为必填的 `selectRepositoryGitWorkspaceFactory`，状态以强转伪造、没给仓库 git 工作区，`tsc` 看不出；集中验证按
+  tests 侧的传递闭包选用例、不穿过 `src/`，没选到它。补正提交给出此前缺省的本机工厂；`CI required` 随之红。同一提交触发的 windows-platform
+  （run 44919243958）红同样的 2 条；maintenance-soak-nightly（run 44919243948）、integration-opencode（run 44919552472）、git-protocols-e2e
+  （run 44921318599）、evidence-soak-nightly（run 44923919921）与 Release upgrade nightly（run 44919305280）通过。
+- `1551dda63`（用例补正，父提交是 `49c302647`）：exact SHA 主 CI run 44925747013 的 70 个 job 第 1 次运行 68 个通过（含 design/ 的链接检查），
+  backend 分片 41/44 通过；backend 分片 39/44 在测试步骤里撞 job 的 15 分钟上限被取消——取消前 0 条红，正跑
+  `rfc398-auto-upgrade-resume-rollback-pointer-restored`；同一分片在父提交上 7 分 19 秒全过、这条约 60 秒，本提交只改一个用例与文档，属 runner
+  环境——`CI required` 随之红；同一提交触发的 windows-platform（run 44925746976）通过；未重跑。
 - 本 RFC 的落档提交 `c088b5060`（只改文档；同一提交记下 RFC-526 转 Done）：主 CI run 44886605498 的 70 个 job 第 1 次全部通过（含 design/ 的链接
   检查与 `CI required`）；未重跑。
 
