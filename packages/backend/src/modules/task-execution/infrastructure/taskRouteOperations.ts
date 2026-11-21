@@ -76,6 +76,7 @@ import { ulid } from 'ulid'
 import type { TaskDeletionCollaborationInTx } from '../application/ports/taskDeletionCollaboration'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
+import { cancelAndReadTask } from '../application/digitalEmployeeExecution'
 import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
 import {
   definitionHost,
@@ -2547,12 +2548,16 @@ export function createTaskRouteOperations(
         actor,
       ),
     // 取消 / 复活：共用实现返回 void，路由契约要的是任务行，所以都要重读一遍。
-    async cancel(taskId) {
-      await dependencies.children.cancel({ taskId, cause: { kind: 'user' } })
-      const task = await loadTask(dependencies.db, taskId)
-      if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      return task
-    },
+    // RFC-530 correction: the one cancel-then-read use case (RFC-514), now that the digital-employee ports' `tasks`
+    // default that also called it is gone — the daemon's digital employees cancel through this route.
+    cancel: (taskId) =>
+      cancelAndReadTask(
+        {
+          cancel: (id) => dependencies.children.cancel({ taskId: id, cause: { kind: 'user' } }),
+          read: (id) => loadTask(dependencies.db, id),
+        },
+        taskId,
+      ),
     delete: (taskId) =>
       deleteTask(dependencies.db, taskId, {
         executionPermits: dependencies.executionPermits,

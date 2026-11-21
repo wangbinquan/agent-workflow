@@ -974,6 +974,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   review-system-mock-e2e` 里有一段写进磁盘的 mock 脚本源码（模板字符串，里面也有 `import` 行），新 import 插进了模板、顶层反而缺，`tsc` 报找不到
   名字，若名字碰巧已在作用域里还会静默改坏生成的脚本。插入点按 TypeScript 语法树取最后一个顶层 `ImportDeclaration`；批量改完再扫一遍模板字面量
   里有没有新插的 import。
+- **按被改文件的路径找“读其源码的用例”，要按去掉扩展名的路径与被删调用点的函数名都搜一遍**（RFC-530 实撞，补正提交修）：集中验证按
+  `composition/digitalEmployeeExecution\.ts` 这样带扩展名的路径筛读源码的用例，漏掉了把文件写成 `modules/…/digitalEmployeeExecution`（不带 `.ts`）
+  的 `rfc514`；它按名字钉 `cancelAndReadTask` 在生产里只被那个文件调用一次，删去那处调用后 CI 红。筛读源码的用例时按文件的路径主干（不带
+  扩展名）匹配；删去或挪走一处生产调用时，再全仓搜被调函数的名字，找“钉生产调用方”的锁。
 - **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
   删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
   没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import

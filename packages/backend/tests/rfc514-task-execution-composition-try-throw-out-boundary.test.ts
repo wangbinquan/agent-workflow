@@ -65,7 +65,7 @@ const SAME_MODULE = (file: string, specifier: string): boolean => {
     !resolved.endsWith('/composition')
   )
 }
-/** The production calls of every listed name (file and count) and, where short, the arguments. */
+/** The production calls of every listed name (file and count) and, where short, the arguments (RFC-530: task routes). */
 const CALLS: Readonly<
   Record<string, readonly [readonly string[], readonly (readonly string[])[] | null]>
 > = {
@@ -75,7 +75,7 @@ const CALLS: Readonly<
     [['opts.dynamicWorkflow']],
   ],
   createTaskRunConfigurationReferences: [[`${root('localTaskRunSelection')} x1`], [[]]],
-  cancelAndReadTask: [[`${root('digitalEmployeeExecution')} x1`], null],
+  cancelAndReadTask: [[`${TE}/infrastructure/taskRouteOperations x1`], null],
 }
 /** The tests below read every production file, test and e2e file; the first pays the cold read. */
 const CORPUS_TIMEOUT = 30_000
