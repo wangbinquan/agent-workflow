@@ -48,14 +48,21 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
   expect(calls(bundle, 'composePluginCatalog')[0]!.getText(bundle)).toContain(
     'installer: input.pluginInstaller',
   )
+  // RFC-525: the installer is a required selection — the composition passes the caller's on and builds no local default.
   const composition = load('modules/resource-catalog/composition/pluginOperations.ts')
-  const defaults = calls(composition, 'createLocalPluginInstaller')
-  expect(defaults).toHaveLength(1)
-  const selection = defaults[0]!.parent
-  expect(ts.isBinaryExpression(selection)).toBe(true)
-  if (!ts.isBinaryExpression(selection)) throw new Error('installer selection is missing')
-  expect(selection.left.getText(composition)).toBe('input.installer')
-  expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
+  expect(calls(composition, 'createLocalPluginInstaller')).toHaveLength(0)
+  const applications = calls(composition, 'createPluginApplication')
+  expect(applications).toHaveLength(1)
+  const applicationArgument = applications[0]!.arguments[0]!
+  if (!ts.isObjectLiteralExpression(applicationArgument))
+    throw new Error('plugin application root is missing')
+  const installers = applicationArgument.properties.filter(
+    (p): p is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(p) && p.name.getText(composition) === 'installer',
+  )
+  expect(installers).toHaveLength(1)
+  expect(installers[0]!.initializer.getText(composition)).toBe('input.installer')
+  expect(composition.text).toContain('  readonly installer: PluginInstallerPort\n')
   const start = load('bootstrap/daemonStart.ts')
   expectDeploymentSelection('pluginInstaller')
   for (const expression of ['composeDaemonResourceCatalogModules']) {

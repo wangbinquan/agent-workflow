@@ -9,7 +9,7 @@ export function composeDaemonFusionModules(
     Parameters<typeof composeFusionOperationsFor>[0],
     'memoryMembership' | 'skillVersionCommit' | 'resourceSeed'
   > & {
-    readonly skillContent?: NonNullable<
+    readonly skillContent: NonNullable<
       Parameters<typeof composeSkillVersionCommitParticipantFactory>[0]
     >['skillContent']
   },

@@ -23,6 +23,8 @@ import { composeApplicationConfigurationBinding } from '@/modules/system-operati
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { buildStartTaskDeps } from './helpers/startTaskDeps'
 import { describeEachProvider, type ProviderApplicationBinding } from './helpers/eachProvider'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
+import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
 
 function graph(
   binding: ProviderApplicationBinding,
@@ -91,7 +93,9 @@ function graph(
   })
   const resourceCatalogModules: DaemonResourceCatalogModules = composeDaemonResourceCatalogModules({
     db,
-    skillContentRoot: appHome,
+    // RFC-525: the standalone deployment's binding and installer (what the standalone daemon passes).
+    skillContent: createFileSkillContentBinding(db, appHome),
+    pluginInstaller: createLocalPluginInstaller(),
     runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },
     mcpRuntime: {
       prepareDelete: (id) => observationModules.mcpRuntimeTests.prepareMcpDelete(id),

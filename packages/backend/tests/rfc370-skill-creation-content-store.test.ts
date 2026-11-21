@@ -25,6 +25,7 @@ import { createFileSkillCreationContentStore } from '@/modules/resource-catalog/
 import { createFileSkillVersionContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillVersionContentStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { standaloneSkillCatalogContent } from './helpers/resourceCatalog'
 
 function barrier() {
   let release!: () => void
@@ -298,25 +299,28 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
     const localVersions = createFileSkillVersionContentStore(appHome)
     const staged: string[] = []
     const catalog = composeSkillCatalog({
+      ...standaloneSkillCatalogContent({
+        appHome: appHome,
+        creationContent: localCreation,
+        versionContent: {
+          ...localVersions,
+          async stage(...args) {
+            await Promise.resolve()
+            staged.push(args[1].kind)
+            return localVersions.stage(...args)
+          },
+          async captureVersion(...args) {
+            await Promise.resolve()
+            await localVersions.captureVersion(...args)
+          },
+          async publish(...args) {
+            await Promise.resolve()
+            await localVersions.publish(...args)
+          },
+        },
+      }),
       db: harness.db,
       appHome,
-      creationContent: localCreation,
-      versionContent: {
-        ...localVersions,
-        async stage(...args) {
-          await Promise.resolve()
-          staged.push(args[1].kind)
-          return localVersions.stage(...args)
-        },
-        async captureVersion(...args) {
-          await Promise.resolve()
-          await localVersions.captureVersion(...args)
-        },
-        async publish(...args) {
-          await Promise.resolve()
-          await localVersions.publish(...args)
-        },
-      },
       restoreMembership: { unfuseForRestore: async () => [] },
     })
     const created = await catalog.operations.create.invoke(admitted.actor, {

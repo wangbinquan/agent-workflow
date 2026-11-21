@@ -110,11 +110,19 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
     for (const factory of [
       'createPostgresqlResourcePackageMutationSessionFactory',
       'composePostgresqlResourcePackageProvider',
-      'createFileResourcePackagePluginArtifactOwner',
-      'createFileResourcePackageSkillArtifactOwner',
     ]) {
       expect(source).toContain(`${factory}(`)
     }
+    // RFC-525: both artifact owners are the caller's selections — the composition offers the local ones and builds neither.
+    for (const owner of [
+      'createFileResourcePackagePluginArtifactOwner',
+      'createFileResourcePackageSkillArtifactOwner',
+    ]) {
+      expect(source).toContain(`export { ${owner} }`)
+      expect(source).not.toContain(`${owner}(`)
+    }
+    expect(source).toContain('pluginArtifacts: input.pluginArtifacts,')
+    expect(source).toContain('skillArtifacts: input.skillArtifacts,')
     expect(source).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(source).toContain('readonly provider: PostgresqlResourcePackageProviderComposition')
     expect(source).toContain('execution: input.execution')
@@ -127,9 +135,8 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
     expect(source).toContain('...composeResourcePackageProvider(input)')
     expect(sharedReads).toContain('createResourcePackageReadPort(input.db)')
     expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId, content)')
-    expect(sharedReads).toContain(
-      'input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)',
-    )
+    // RFC-525: the package content is required (the package command gives the local reader).
+    expect(sharedReads).toContain('const content = input.skillPackageContent\n')
     expect(source).not.toMatch(
       /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,
     )
@@ -142,12 +149,16 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
     // RFC-427: the package command bootstrap moved from main.ts to bootstrap/.
     const source = readFileSync(resolve(backendRoot, 'src/bootstrap/commandBootstraps.ts'), 'utf8')
     // RFC-520: the package command and the daemon routes share the module's one resource-package graph; this root only
-    // states its local selections (capability template owner, MCP lifecycle, local plugin installer).
+    // states its local selections (capability template owner, MCP lifecycle, local plugin installer). RFC-525: also the
+    // local package content and the two local artifact owners the provider used to build when they were left out.
     for (const factory of [
       'composeResourcePackageRuntime',
       'createPostgresqlCapabilityTemplatePackageMutationOwner',
       'createMcpTransactionLifecycle',
       'createResourcePackagePluginInstaller',
+      'createFileSkillPackageContentReader',
+      'createFileResourcePackageSkillArtifactOwner',
+      'createFileResourcePackagePluginArtifactOwner',
     ]) {
       expect(source).toContain(`${factory}(`)
     }

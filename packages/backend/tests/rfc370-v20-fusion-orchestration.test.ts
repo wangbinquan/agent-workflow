@@ -143,7 +143,7 @@ describeEachProvider(
           },
         },
       }
-      const skill = await createManagedSkill(db, selectSkillContentDependencies(binding, appHome), {
+      const skill = await createManagedSkill(db, selectSkillContentDependencies(binding), {
         name: 'lint',
         description: 'd',
         bodyMd: 'SNAPSHOT-BODY',

@@ -29,6 +29,7 @@ import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastr
 import { restoreSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeStandaloneSkillVersionCommitParticipantFactory } from './helpers/resourceCatalog'
 
 const enc = (text: string) => new TextEncoder().encode(text)
 const dec = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -56,16 +57,17 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       roots.push(appHome)
       const binding =
         storage === 'database' ? createDatabaseSkillContent({ db: harness.db }) : undefined
-      const opts =
-        binding === undefined ? { appHome } : selectSkillContentDependencies(binding, appHome)
+      const opts = binding === undefined ? { appHome } : selectSkillContentDependencies(binding)
       const skill = await createManagedSkill(harness.db, opts, {
         name: `v20-${storage}-${ulid().toLowerCase()}`,
         description: 'd',
         bodyMd: 'SNAPSHOT-BODY',
         frontmatterExtra: {},
       })
-      const trees = composeSkillVersionCommitParticipantFactory(
-        binding === undefined ? {} : { skillContent: binding },
+      const trees = (
+        binding === undefined
+          ? composeStandaloneSkillVersionCommitParticipantFactory()
+          : composeSkillVersionCommitParticipantFactory({ skillContent: binding })
       ).bind({ db: harness.db, appHome })
       return { appHome, opts, skill, trees }
     }

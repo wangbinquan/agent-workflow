@@ -30,6 +30,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workflowValidation'
 import { staleConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneSkillVersionPresence } from './helpers/resourceCatalog'
 
 const T0 = 1_700_000_000_000
 
@@ -317,7 +318,9 @@ describeEachProvider('RFC-359 W4-D15 —— Workflow 仓库', (harness) => {
 test('managed skill 可用性判据：权威版本目录缺失即不可用，目录到位即可用', async () => {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-availability-'))
   try {
-    const availability = composeSkillContentAvailability({ appHome })
+    const availability = composeSkillContentAvailability({
+      versionPresence: standaloneSkillVersionPresence(appHome),
+    })
     const skill = { id: `skill-${ulid()}`, contentVersion: 3 } as Parameters<
       typeof availability.isAvailable
     >[0]

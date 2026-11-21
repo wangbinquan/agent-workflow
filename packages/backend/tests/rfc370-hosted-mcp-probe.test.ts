@@ -156,9 +156,12 @@ describe('hosted probe selection wiring', () => {
     // RFC-448: the selection moved with the probe use cases from routes/mcps.ts into
     // resource-catalog's composition; the route only delegates.
     const composition = await read('modules/resource-catalog/composition/mcpProbeOperations.ts')
-    expect(composition).toContain('runner === undefined')
-    expect(composition).toContain('? probeMcp(mcp, { ...probeOptionsOverride, startedAt })')
-    expect(composition).toContain(': runner.probe(mcp, { startedAt })')
+    // RFC-525: the runner is required; the in-process probe is a named selection that reads the test seam per probe.
+    expect(composition).not.toContain('runner === undefined')
+    expect(composition).toContain(
+      'runProbe: (mcp, { startedAt }) => runner.probe(mcp, { startedAt }),',
+    )
+    expect(composition).toContain(') => probeMcp(mcp, { ...probeOptionsOverride, startedAt }),')
     const route = await read('routes/mcps.ts')
     expect(route).toContain('module.probes.probe(')
     expect(route).not.toContain('probeRunner')
@@ -172,7 +175,7 @@ describe('hosted probe selection wiring', () => {
       'probeRunner: mcpRuntimeTests.probeRunner,',
     )
     expect(await read('modules/resource-catalog/composition/mcpDiagnostics.ts')).toContain(
-      'probeRunner: undefined as McpProbeRunner | undefined,',
+      'probeRunner: createInProcessMcpProbeRunner() as McpProbeRunner,',
     )
     expect(
       await read('modules/resource-catalog/composition/crewstationMcpDiagnostics.ts'),

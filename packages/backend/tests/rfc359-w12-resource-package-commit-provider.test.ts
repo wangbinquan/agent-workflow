@@ -46,6 +46,7 @@ import { errorHandler } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 const OWNER = 'rfc359-package-owner'
 const NOW = 1_788_278_400_000
@@ -410,19 +411,23 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     } {
       const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: db,
+          appHome: appHome,
+          pluginInstaller: {
+            plannedGenerationDirectory() {
+              throw new Error('skill fixture must not plan a plugin installation')
+            },
+            async install() {
+              throw new Error('skill fixture must not install a plugin')
+            },
+          },
+        }),
         db,
         appHome,
         authorityResolver: { resolve: () => actor },
         mcpLifecycle: createMcpTransactionLifecycle(),
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
-        pluginInstaller: {
-          plannedGenerationDirectory() {
-            throw new Error('skill fixture must not plan a plugin installation')
-          },
-          async install() {
-            throw new Error('skill fixture must not install a plugin')
-          },
-        },
       })
       return {
         provider,

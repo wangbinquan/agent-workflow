@@ -31,6 +31,7 @@ import { createFileSkillVersionContentReader } from '@/modules/resource-catalog/
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { standaloneSkillCatalogContent } from './helpers/resourceCatalog'
 
 function barrier() {
   let release!: () => void
@@ -113,9 +114,9 @@ describeEachProvider('RFC-370 skill version reader', (harness) => {
       },
     }
     const catalog = composeSkillCatalog({
+      ...standaloneSkillCatalogContent({ appHome: unused, versionReader: reader }),
       db: harness.db,
       appHome: unused,
-      versionReader: reader,
       restoreMembership: { unfuseForRestore: async () => [] },
     })
     let settled = false
@@ -167,9 +168,12 @@ describeEachProvider('RFC-370 skill version reader', (harness) => {
       },
     }
     const catalog = composeSkillCatalog({
+      ...standaloneSkillCatalogContent({
+        appHome: join(appHome, 'absent-home'),
+        versionReader: reader,
+      }),
       db: harness.db,
       appHome: join(appHome, 'absent-home'),
-      versionReader: reader,
       restoreMembership: { unfuseForRestore: async () => [] },
     })
     let settled = false

@@ -29,6 +29,7 @@ import { createFileSkillVersionPresenceQueries } from '@/modules/resource-catalo
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { standaloneSkillVersionPresence } from './helpers/resourceCatalog'
 
 function barrier() {
   let release!: () => void
@@ -206,15 +207,14 @@ test('boot availability still rejects before storage and rechecks after an async
   const ready = barrier()
   let queries = 0
   const availability = composeSkillContentAvailability({
-    appHome: 'unused',
-    versionPresence: {
+    versionPresence: standaloneSkillVersionPresence('unused', {
       async exists() {
         queries += 1
         entered.release()
         await ready.pending
         return true
       },
-    },
+    }),
   })
   expect(await availability.isAvailable(skill)).toBe(false)
   expect(queries).toBe(0)

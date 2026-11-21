@@ -31,6 +31,7 @@ import {
   unmarkSkillBootVerified,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
 
 function gate() {
   let release!: () => void
@@ -320,7 +321,7 @@ const CONTENT_HASH = createHash('sha256').update('SKILL.md\x00v2\x00').digest('h
 describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
   const compose = (effectsFactory: ResourcePackageRecoveryEffectsFactory, legacy = false) =>
     harness.capabilities.isolation === 'exclusive' || legacy
-      ? composeResourcePackageApplyMaintenance({
+      ? composeStandaloneResourcePackageApplyMaintenance({
           db: harness.db,
           appHome: 'logical:aw-home',
           pluginsDir: 'logical:plugins',
@@ -328,7 +329,7 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
           activitySource: { activeApplyIds: () => [] },
           now: () => NOW,
         })
-      : composeResourcePackageApplyMaintenance({
+      : composeStandaloneResourcePackageApplyMaintenance({
           db: harness.db,
           appHome: 'logical:aw-home',
           pluginsDir: 'logical:plugins',
@@ -577,7 +578,7 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
     })
     expect(calls).toEqual([])
     expect(() =>
-      composeResourcePackageApplyMaintenance({
+      composeStandaloneResourcePackageApplyMaintenance({
         db: harness.db,
         appHome: 'logical:home',
         pluginsDir: input.pluginsDir,

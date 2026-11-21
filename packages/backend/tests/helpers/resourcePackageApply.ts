@@ -20,15 +20,16 @@ import { createResourcePackageAtomicApplyOperations } from '../../src/modules/re
 import type { BundleReceipt } from '../../src/modules/resource-catalog/domain/bundlePlan'
 import { createResourcePackagePluginInstaller } from '../../src/modules/resource-catalog/composition/resourcePackagePluginInstaller'
 import type { ParsedPackage } from '../../src/modules/resource-catalog/application/package/parse'
-
-type ProviderInput = Parameters<typeof composePostgresqlResourcePackageProvider>[0]
+import { standaloneResourcePackageProviderSelections } from './resourceCatalog'
 
 export interface ResourcePackageApplyTestDeps {
   readonly db: PersistenceDb
   readonly appHome: string
   readonly box: SecretBox
   /** 省略即用真实安装器（与生产同一条）；要挡住装插件的用例自己传一个会抛的。 */
-  readonly pluginInstaller?: ProviderInput['pluginInstaller']
+  readonly pluginInstaller?: Parameters<
+    typeof standaloneResourcePackageProviderSelections
+  >[0]['pluginInstaller']
   readonly id?: () => string
   readonly now?: () => number
 }
@@ -59,7 +60,12 @@ export async function commitResourcePackageForTest(
     authorityResolver: { resolve: () => actor },
     mcpLifecycle: createMcpTransactionLifecycle(),
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: deps.db }),
-    pluginInstaller: deps.pluginInstaller ?? createResourcePackagePluginInstaller(),
+    // RFC-525: the provider takes the standalone selections it used to default to.
+    ...standaloneResourcePackageProviderSelections({
+      db: deps.db,
+      appHome: deps.appHome,
+      pluginInstaller: deps.pluginInstaller ?? createResourcePackagePluginInstaller(),
+    }),
     ...(deps.id === undefined ? {} : { id: deps.id }),
     ...(deps.now === undefined ? {} : { now: deps.now }),
   })

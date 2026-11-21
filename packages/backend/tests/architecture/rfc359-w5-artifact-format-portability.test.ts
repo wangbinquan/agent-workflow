@@ -83,7 +83,6 @@ import { ZodError } from 'zod'
 import { reencodeBundleApplyArtifacts } from '@/modules/resource-catalog/infrastructure/migration/bundleAppliesRule'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createResourcePackageOperationArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/resourcePackageOperationRecovery'
-import { composeResourcePackageApplyMaintenance } from '../../src/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { opStagedDir } from '../../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 import {
   skillFilesAbs,
@@ -95,6 +94,7 @@ import { createAtomicApplyRecovery } from '../../src/platform/atomic-apply/conve
 import { tablesOf } from '../../src/platform/persistence/sessionTables'
 import { insertOne } from '../../src/platform/persistence/singleInsert'
 import { describeEachProvider } from '../helpers/eachProvider'
+import { composeStandaloneResourcePackageApplyMaintenance } from '../helpers/resourceCatalog'
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
@@ -301,7 +301,7 @@ describeEachProvider(
           updatedAt: 1,
         })
         const warnings: unknown[] = []
-        const selected = composeResourcePackageApplyMaintenance({
+        const selected = composeStandaloneResourcePackageApplyMaintenance({
           db: harness.db,
           appHome,
           pluginsDir,
@@ -365,7 +365,7 @@ describeEachProvider(
     })
     test('unknown kinds reject before effects on this provider', async () => {
       await withScratch(async (appHome, pluginsDir) => {
-        const selected = composeResourcePackageApplyMaintenance({
+        const selected = composeStandaloneResourcePackageApplyMaintenance({
           db: harness.db,
           appHome,
           pluginsDir,

@@ -331,11 +331,11 @@ describeEachProviderHttpApplication(
 
       const boot = composeSkillCatalogBoot({
         db: scope.harness.db,
-        ...selectSkillContentDependencies(selection, appHome),
+        ...selectSkillContentDependencies(selection),
       })
       await createSkillCatalogBootAdapter({
         db: scope.harness.db,
-        ...selectSkillContentDependencies(selection, appHome),
+        ...selectSkillContentDependencies(selection),
       }).recoverOperations()
       await boot.reconcileLiveFiles()
       expect(await boot.reverifySnapshots()).toEqual({ verified: 1, quarantined: 0 })

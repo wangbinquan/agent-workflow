@@ -26,6 +26,7 @@ import {
 import { createFileSkillContentReader } from '@/modules/resource-catalog/infrastructure/local/fileSkillContentReader'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { standaloneSkillCatalogContent } from './helpers/resourceCatalog'
 
 function barrier() {
   let release!: () => void
@@ -92,10 +93,10 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
       },
     }
     const catalog = composeSkillCatalog({
+      ...standaloneSkillCatalogContent({ appHome: join(appHome, 'unused-home'), content }),
       db: harness.db,
       // Deliberately contains no local content. Reads must use the selected adapter.
       appHome: join(appHome, 'unused-home'),
-      content,
       restoreMembership: { unfuseForRestore: async () => [] },
     })
     const pending = catalog.queries.content(authority, { id: skill.id })

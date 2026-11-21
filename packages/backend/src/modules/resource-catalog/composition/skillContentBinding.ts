@@ -21,19 +21,16 @@ type BootContent = Required<Omit<Parameters<typeof composeSkillCatalogBoot>[0], 
 /** One complete store selection serves editing, availability and restart recovery. */
 export interface SkillContentBinding extends CatalogContent, BootContent {
   /** Logical namespace for the owner's existing persisted content references. */
-  readonly packageContent?: SkillPackageContentReader
+  readonly packageContent: SkillPackageContentReader
   readonly rootReference: string
-  /** RFC-370 §10 V20: strict version trees and fusion candidates; absent → the
-   * local store under `rootReference`. */
-  readonly treeContent?: SkillTreeContentStore
+  /** RFC-370 §10 V20: strict version trees and fusion candidates (RFC-525: required — both bindings give it). */
+  readonly treeContent: SkillTreeContentStore
 }
 
 /** Read every capability explicitly; complete bindings may expose prototype getters. */
 export function selectSkillContentDependencies(
-  binding: SkillContentBinding | undefined,
-  defaultRootReference: string,
-): Pick<ClassicCatalogCompositionDependencies, 'appHome'> & Partial<CatalogContent & BootContent> {
-  if (binding === undefined) return Object.freeze({ appHome: defaultRootReference })
+  binding: SkillContentBinding,
+): Pick<ClassicCatalogCompositionDependencies, 'appHome'> & CatalogContent & BootContent {
   return Object.freeze({
     appHome: binding.rootReference,
     content: binding.content,

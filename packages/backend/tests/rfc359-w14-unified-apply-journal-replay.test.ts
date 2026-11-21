@@ -68,6 +68,7 @@ import { dropAbortTrigger, installAbortTrigger } from './helpers/faultTrigger'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 const OWNER = 'w14-journal-owner'
 const T0 = 1_700_000_000_000
@@ -266,19 +267,23 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
         wrap: (session: PackageMutationSession) => PackageMutationSession,
       ) {
         const provider = composePostgresqlResourcePackageProvider({
+          ...standaloneResourcePackageProviderSelections({
+            db: db,
+            appHome: appHome,
+            pluginInstaller: {
+              plannedGenerationDirectory() {
+                throw new Error('journal fixture must not install plugins')
+              },
+              async install() {
+                throw new Error('journal fixture must not install plugins')
+              },
+            },
+          }),
           db,
           appHome,
           authorityResolver: { resolve: () => actor },
           mcpLifecycle: createMcpTransactionLifecycle(),
           capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
-          pluginInstaller: {
-            plannedGenerationDirectory() {
-              throw new Error('journal fixture must not install plugins')
-            },
-            async install() {
-              throw new Error('journal fixture must not install plugins')
-            },
-          },
         })
         const atomicApply = createResourcePackageAtomicApplyOperations({
           db,

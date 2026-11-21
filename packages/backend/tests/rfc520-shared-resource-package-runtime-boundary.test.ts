@@ -166,7 +166,10 @@ describe('RFC-520 ② 授权登记', () => {
       box: unused,
       mcpLifecycle: unused,
       capabilityTemplates: unused,
-      pluginInstaller: unused,
+      // RFC-525: the package content and both artifact owners are the caller's selections.
+      skillPackageContent: unused,
+      skillArtifacts: unused,
+      pluginArtifacts: unused,
     }
     const first = composeResourcePackageRuntime(input)
     const second = composeResourcePackageRuntime(input)

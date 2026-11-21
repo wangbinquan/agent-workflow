@@ -43,35 +43,9 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
   'intent/composition/apply.ts': [['join', 'path']],
   'intent/composition/applyMaintenance.ts': [['createLogger', 'logger']],
   'intent/composition/maintenance.ts': [['createLogger', 'logger']],
-  'resource-catalog/composition/mcpProbeOperations.ts': [['probeMcp', 'adapter']],
-  'resource-catalog/composition/pluginOperations.ts': [['createLocalPluginInstaller', 'adapter']],
-  'resource-catalog/composition/postgresqlResourcePackageCatalog.ts': [
-    ['createFileResourcePackagePluginArtifactOwner', 'adapter'],
-    ['createFileResourcePackageSkillArtifactOwner', 'adapter'],
-    ['join', 'path'],
-  ],
   'resource-catalog/composition/resourcePackageMaintenance.ts': [
     ['createLogger', 'logger'],
-    ['createVersionedResourcePackageArtifactRecovery', 'adapter'],
-  ],
-  'resource-catalog/composition/resourcePackageProvider.ts': [
-    ['createFileSkillPackageContentReader', 'adapter'],
-  ],
-  'resource-catalog/composition/skillContentBinding.ts': [['Object.freeze', 'adapter']],
-  'resource-catalog/composition/skillOperations.ts': [
-    ['createFileSkillContentReader', 'adapter'],
-    ['createFileSkillCreationContentStore', 'adapter'],
-    ['createFileSkillDeletionContentStore', 'adapter'],
-    ['createFileSkillLifecycleContentStore', 'adapter'],
-    ['createFileSkillVersionContentReader', 'adapter'],
-    ['createFileSkillVersionContentStore', 'adapter'],
-  ],
-  'resource-catalog/composition/skillVersionCommit.ts': [
-    ['createFileSkillTreeContentStore', 'adapter'],
-    ['createSkillTreeVersionParticipant', 'adapter'],
-  ],
-  'resource-catalog/composition/workflowOperations.ts': [
-    ['createFileSkillVersionPresenceQueries', 'adapter'],
+    ['createLogger', 'logger'],
   ],
   'resource-catalog/composition/workgroupOperations.ts': [
     ['createWorkgroupEvents', 'process-local'],
@@ -180,15 +154,14 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
 
 /** design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. */
 const SUCCESSORS: Readonly<Record<string, string>> = {
-  'resource-catalog': 'S12 item 1, step 5',
   'task-execution': 'S12 item 1, step 6',
   'source-control': 'S12 item 1, step 7',
 }
 /**
  * Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center,
- * RFC-523 intent, code-capability and memory, RFC-524 system-operations and development-automation.
+ * RFC-523 intent, code-capability and memory, RFC-524 system-operations and development-automation, RFC-525 resource-catalog.
  */
-const ADAPTER_FALLBACKS = 51
+const ADAPTER_FALLBACKS = 35
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */

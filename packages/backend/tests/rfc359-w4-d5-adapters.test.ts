@@ -20,9 +20,8 @@ import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/compo
 import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 
-import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
-
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeStandaloneSkillVersionCommitParticipantFactory } from './helpers/resourceCatalog'
 
 const roots: string[] = []
 afterEach(() => {
@@ -147,7 +146,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
       db: harness.db,
       appHome,
       memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-      skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
+      skillVersionCommit: composeStandaloneSkillVersionCommitParticipantFactory(),
     })
 
   test('apply：技能版本、记忆成员关系、提案发布与操作账本一个序列落地；重复操作锁经能力矩阵归类', async () => {

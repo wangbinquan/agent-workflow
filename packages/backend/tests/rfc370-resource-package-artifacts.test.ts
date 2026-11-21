@@ -32,6 +32,10 @@ import { parseResourcePackage } from '@/modules/resource-catalog/application/pac
 import { buildPackagePreviewFromReadPort } from '@/modules/resource-catalog/application/package/preview'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  composeStandaloneResourcePackageApplyMaintenance,
+  standaloneResourcePackageProviderSelections,
+} from './helpers/resourceCatalog'
 
 function barrier() {
   let release!: () => void
@@ -148,6 +152,12 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       pluginArtifacts: ResourcePackagePluginArtifactOwner,
     ) => {
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: harness.db,
+          appHome: appHome,
+          skillArtifacts,
+          pluginArtifacts,
+        }),
         db: harness.db,
         appHome,
         authorityResolver: { resolve: () => actor },
@@ -155,8 +165,6 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
           db: harness.db,
         }),
-        skillArtifacts,
-        pluginArtifacts,
       })
       const pkg = await parseResourcePackage(packageBytes(kind))
       const preview = PackagePreviewSchema.parse(
@@ -451,7 +459,7 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
     const { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toHaveLength(1)
     let recovered = 0
-    const maintenance = composeResourcePackageApplyMaintenance({
+    const maintenance = composeStandaloneResourcePackageApplyMaintenance({
       db: harness.db,
       appHome: f.appHome,
       pluginsDir: join(f.appHome, 'plugins'),

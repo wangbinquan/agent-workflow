@@ -39,6 +39,7 @@ import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resou
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 const OWNER = 'mcp-publication-owner'
 const T0 = 1_700_000_000_000
@@ -380,19 +381,23 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
       // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
       const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: db,
+          appHome: appHome,
+          pluginInstaller: {
+            plannedGenerationDirectory() {
+              throw new Error('MCP publication must not install plugins')
+            },
+            async install() {
+              throw new Error('MCP publication must not install plugins')
+            },
+          },
+        }),
         db,
         appHome,
         authorityResolver: { resolve: () => actor },
         mcpLifecycle: createMcpTransactionLifecycle(),
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
-        pluginInstaller: {
-          plannedGenerationDirectory() {
-            throw new Error('MCP publication must not install plugins')
-          },
-          async install() {
-            throw new Error('MCP publication must not install plugins')
-          },
-        },
       })
       return composePostgresqlResourcePackageCatalog({
         provider,

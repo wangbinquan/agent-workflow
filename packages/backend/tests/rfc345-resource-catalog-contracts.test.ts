@@ -1186,7 +1186,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain(
       "import { createLocalPluginInstaller } from '../infrastructure/local/localPluginInstaller'",
     )
-    expect(composition).toContain('installer: input.installer ?? createLocalPluginInstaller()')
+    // RFC-525: the installer is required; the composition no longer builds the local one.
+    expect(composition).toContain('installer: input.installer,')
+    expect(composition).not.toContain('?? createLocalPluginInstaller()')
     expect(composition).not.toContain("from '@/services/pluginInstaller'")
     expect(composition).toContain('application.commands')
     expect(composition).toContain('application.updateCommands')
@@ -1822,9 +1824,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(providerComposition).toContain(
       'readPackageSkillTree(input.db, input.appHome, skillId, content)',
     )
-    expect(providerComposition).toContain(
-      'input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)',
-    )
+    // RFC-525: the package content is required (the package command gives the local reader).
+    expect(providerComposition).toContain('const content = input.skillPackageContent\n')
     for (const source of [composition, providerComposition]) {
       expect(source).not.toMatch(
         /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,

@@ -10,12 +10,12 @@
 
 import { composeFusionResourceSeedParticipant } from '../../src/modules/resource-catalog/composition/fusionResourceSeed'
 import { composeSkillMemoryFusionParticipantFactory } from '../../src/modules/memory/composition'
-import { composeSkillVersionCommitParticipantFactory } from '../../src/modules/resource-catalog/composition/skillVersionCommit'
+import { composeStandaloneSkillVersionCommitParticipantFactory } from './resourceCatalog'
 
 export const TEST_FUSION_PARTICIPANTS = Object.freeze({
   resourceSeed: composeFusionResourceSeedParticipant(),
   memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-  skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
+  skillVersionCommit: composeStandaloneSkillVersionCommitParticipantFactory(),
 })
 
 export const TEST_SQLITE_FUSION_PARTICIPANTS = TEST_FUSION_PARTICIPANTS

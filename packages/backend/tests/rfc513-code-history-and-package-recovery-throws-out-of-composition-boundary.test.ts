@@ -298,15 +298,16 @@ describe('RFC-513 ② composition 只装配', () => {
   })
 
   test(
-    '互斥核对在生产代码里只被维护组合文件调用一次，实参钉住',
+    '互斥核对在生产代码里只被维护 worker 的选择处调用一次，实参钉住（RFC-525：组合层不再收第二个选项）',
     () => {
-      expect(productionCallers('requireExclusiveRecoverySelection')).toEqual([
-        `${MAINTENANCE_ROOT} x1`,
+      const worker = 'bootstrap/maintenanceWorkerGraph'
+      expect(productionCallers('requireExclusiveRecoverySelection')).toEqual([`${worker} x1`])
+      const graph = sourceOf(worker)
+      expect(callArguments(graph, text(graph), 'requireExclusiveRecoverySelection')).toEqual([
+        [
+          '{artifacts:input.workerEffects?.resourcePackageRecovery,recoveryEffectsFactory:input.workerEffects?.resourcePackageRecoveryContent,}',
+        ],
       ])
-      const maintenance = sourceOf(MAINTENANCE_ROOT)
-      expect(
-        callArguments(maintenance, text(maintenance), 'requireExclusiveRecoverySelection'),
-      ).toEqual([['input']])
     },
     CORPUS_TIMEOUT,
   )

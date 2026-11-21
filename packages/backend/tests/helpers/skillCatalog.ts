@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import type { SkillCatalogModule } from '@/modules/resource-catalog/public/operations'
+import { standaloneSkillCatalogContent } from './resourceCatalog'
 
 /** 回滚时「哪些记忆退回待用」在一致性场景里不参与判据，给空实现。 */
 const restoreMembership = Object.freeze({
@@ -41,6 +42,11 @@ export function composeTestSkillCatalog(db: PersistenceDb): SkillCatalogFixture 
   roots.push(appHome)
   return {
     appHome,
-    catalog: composeSkillCatalog({ db, appHome, restoreMembership }),
+    catalog: composeSkillCatalog({
+      ...standaloneSkillCatalogContent({ appHome: appHome }),
+      db,
+      appHome,
+      restoreMembership,
+    }),
   }
 }

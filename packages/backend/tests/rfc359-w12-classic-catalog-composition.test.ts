@@ -21,6 +21,10 @@ import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastr
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import type { AgentOperationContext } from '@/modules/resource-catalog/public/participants'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  standaloneSkillCatalogContent,
+  standaloneSkillVersionPresence,
+} from './helpers/resourceCatalog'
 
 const homes: string[] = []
 afterEach(() => {
@@ -50,6 +54,8 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
       { ...actor, userId: owner },
     )
     const catalog = composeClassicCatalogs({
+      ...standaloneSkillCatalogContent({ appHome: home }),
+      versionPresence: standaloneSkillVersionPresence(home),
       taskReferences: composeSubjectTaskReferencePort,
       db: harness.db,
       appHome: home,
@@ -154,6 +160,8 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
     const resourceCatalog = composeResourceCatalogFor({ db: harness.db })
     const compose = (appHome: string) =>
       composeClassicCatalogs({
+        ...standaloneSkillCatalogContent({ appHome: appHome }),
+        versionPresence: standaloneSkillVersionPresence(appHome),
         taskReferences: composeSubjectTaskReferencePort,
         db: harness.db,
         appHome,

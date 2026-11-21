@@ -52,6 +52,7 @@ import type { DbClient } from '@/db/client'
 import type { ResolvedTaskDriveConfig } from '@/modules/task-execution/composition/taskDriveLegacy'
 import { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
 import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -227,6 +228,8 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
         const fusionModules: DaemonFusionModules = composeDaemonFusionModules({
           db: harness.db,
           appHome,
+          // RFC-525: the standalone deployment's content binding (what the standalone daemon passes).
+          skillContent: createFileSkillContentBinding(harness.db, appHome),
           tasks,
           memories: composeMemoryCatalogOperations({
             db: harness.db,

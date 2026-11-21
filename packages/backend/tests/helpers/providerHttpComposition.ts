@@ -24,6 +24,7 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplicationInput,
 } from './providerHttpApplication'
+import { createFileSkillPackageContentReader } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 
 export async function createProviderHttpCompositionFixture(
   harness: ProviderDatabaseHarness,
@@ -100,6 +101,8 @@ export async function createProviderHttpCompositionFixture(
             db: harness.db,
             appHome: application.appHome,
           }),
+          // RFC-525: the package content the resource-package provider used to default to.
+          resourcePackageSkillContent: createFileSkillPackageContentReader(application.appHome),
         },
       })
       return {

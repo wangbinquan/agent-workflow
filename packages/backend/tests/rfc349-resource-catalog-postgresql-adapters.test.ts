@@ -122,9 +122,8 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(sharedReads).toContain('createResourcePackageOwnedResourceLookup(input.db)')
     expect(sharedReads).toContain('createResourcePackageReadPort(input.db)')
     expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId, content)')
-    expect(sharedReads).toContain(
-      'input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)',
-    )
+    // RFC-525: the package content is required (the package command gives the local reader).
+    expect(sharedReads).toContain('const content = input.skillPackageContent\n')
     expect(postgresqlComposition).toContain('composePostgresqlResourcePackageProvider')
     expect(postgresqlComposition).toContain('...composeResourcePackageProvider(input)')
     expect(postgresqlComposition).toContain('createPostgresqlResourcePackageMutationSessionFactory')

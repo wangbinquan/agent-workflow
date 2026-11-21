@@ -398,7 +398,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     observationModules
   const resourceCatalogModules = composeDaemonResourceCatalogModules({
     db: input.db,
-    skillContentRoot: input.appHome,
     skillContent,
     pluginInstaller: input.pluginInstaller,
     runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },

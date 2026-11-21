@@ -794,6 +794,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `deps.evidenceArtifacts ?? new EvidenceStore(…)`，`rfc349-development-admission-postgresql-adapter` 钉
   `deps.admissionLookup ?? createAdmissionLookup(deps.db)`。回落里构造的是仍在的名字，按删去的名字搜不到，首批才红；改回落前把每处回落那一行
   的原文片段（`?? new X(`、`deps.x ??` 一类）也全仓搜一遍。
+  RFC-525 再撞（2026-11-20）：名字与回落原文片段都搜过，仍漏了两条不写原文的锁：`rfc370-plugin-installer-roots` 按 AST 数
+  `createLocalPluginInstaller` 的调用（要求恰 1 次、父节点是 `??`、左侧是 `input.installer`），`rfc349-postgresql-resource-package-bootstrap`
+  把两个本机工件属主列进“组合层源码必须含 `X(`”的清单，首批才红。按名字筛完，再按被改文件的路径（`'…/pluginOperations'` 一类字面量与
+  `readDaemonGraphSource`）筛出读取其源码的全部用例一起跑；这一步筛出的用例数常是按名字筛的数倍。
 - **把组合层的回落挪进共享测试助手时，别盖掉用例自己给的值**（RFC-524 实撞，2026-11-20）：`providerHttpApplication` 先 `...selections` 展开
   用例给的选择，RFC-524 在后面显式写 `daemonRuntime: createFileDaemonRuntimeQueries(…)`，把 `rfc370-daemon-runtime-query-bindings` 经
   `scope.open({ daemonRuntime })` 给的查询盖掉，CI 分片 21/44 才红（`fa52dfdfc`）。此前组合层做的是“给了用给的，没给才造”，助手里要写成同样

@@ -63,7 +63,7 @@ describeEachProvider('RFC-395 composition local skill binding', (h) => {
           }
         })
         const binding = createFileSkillContentBinding(h.db, root)
-        const selected = selectSkillContentDependencies(binding, '/unused-default-home')
+        const selected = selectSkillContentDependencies(binding)
         const reference = { id, name: id, contentVersion: 1 }
         expect(selected.appHome).toBe(root)
         expect(selected.content).toBe(binding.content)

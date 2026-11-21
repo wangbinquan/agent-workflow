@@ -15,6 +15,7 @@ import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoo
 import { standaloneSelections } from '@/bootstrap/standalone'
 import { taskExecutionResourceBinding } from './integrationTriggerResourceBinding'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 
 type IntegrationInput = Parameters<typeof composeDaemonIntegrationModules>[0]
 export function integrationBundleFixture(
@@ -80,6 +81,8 @@ export function integrationBundleFixture(
   const fusionModules = composeDaemonFusionModules({
     db,
     appHome,
+    // RFC-525: the standalone deployment's content binding (what the standalone daemon passes).
+    skillContent: createFileSkillContentBinding(db, appHome),
     memories: composeMemoryCatalogOperations({
       db,
       contexts: identityAccess.contexts,

@@ -31,7 +31,8 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/resource-c
 
 ### D2 资源包
 
-- `composeResourcePackageProvider` 的 `skillPackageContent` 必填。
+- `composeResourcePackageProvider` 的 `skillPackageContent` 必填；daemon HTTP 装配的会话选择 `resourcePackageSkillContent` 随之必填（daemon 一直交
+  部署选择的内容绑定自带的包读取，两种绑定都给）。
 - `composePostgresqlResourcePackageProvider` 的 `pluginArtifacts` 与 `skillArtifacts` 必填；只为回落存在的 `pluginInstaller` 与 `pluginsDir` 删去。
   资源包命令在原来回落的位置显式给出同样的本机实现（组合层转出 `createFileResourcePackagePluginArtifactOwner`、
   `createFileResourcePackageSkillArtifactOwner` 与 `createFileSkillPackageContentReader`，参数与此前回落相同：插件目录是 `<appHome>/plugins`，
@@ -52,10 +53,17 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/resource-c
 - `tests/helpers/resourceCatalog.ts`（新）：按此前回落逐项构造单机选择（只在用例没给时造），供直接调用技能目录、资源包与维护场景的用例使用。
 - tsc 列出的调用逐处改为显式给出；钉旧形状与回落原文的锁随改（按被删的名字、选项与回落原文片段全仓扫描；改共享测试助手时不盖掉用例经展开
   传入的同名值）。
+- 四处 daemon 模块装配的用例（`tests/helpers/daemonTaskExecutionBundle.ts`、`tests/helpers/daemonIntegrationBundles.ts`、
+  `rfc380-daemon-module-bundles`、`rfc319-cfg45-default-runtime-hot-read`）改给单机部署的生产绑定 `createFileSkillContentBinding(db, appHome)`，即 daemon
+  单机部署实际交给装配的那一个。此前不给绑定时缺省分两支：技能目录取根目录下单参数的本机文件存储，版本推进在绑定时只带 `appHome` 造参与者与树
+  存储。一个绑定无法逐项复刻这两支；这些用例本来测的是 daemon 装配，改给生产绑定后走的正是生产路径（同一根目录、带数据库句柄的本机实现）。直接调
+  用技能目录的用例仍经测试助手逐项给出与此前缺省相同的单参数存储。
 
 ### D5 门与锁
 
 - RFC-521 门删去 16 条登记，适配器回落 51 → 35；`SUCCESSORS` 删去 resource-catalog。计数降的收紧到实测；新增 RFC-525 用例并登记 guard-manifest。
+- 中立登记随实测改：PostgreSQL 资源包 provider（`postgresqlResourcePackageCatalog.ts`）的 `join` 随插件目录回落一并删去；维护场景多一条日志器登记——新增的本机工件恢复与维护场景各自在没给日志
+  器时造同名日志器（中立类，不计入适配器回落）。
 
 ## 3. 清单（退出门）
 
@@ -80,6 +88,8 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/resource-c
 - **按原文钉住旧形状的锁、共享测试助手盖掉用例的值**：RFC-524 的两条教训（`docs/dev-gotchas.md`），按名字、选项与回落原文片段扫描，改助手前跑经它
   传入被改项的用例。
 - **移走或删去后成为不可达文件、未消费符号**：架构报告对照。
+- **按名字扫描漏掉的锁**：钉回落的锁不一定写出被删的选项名，也有按 AST 数回落调用（调用数为 1、父节点是 `??`）或把本机实现列进“组合层必须
+  调用”清单的。受影响用例除按名字筛，还要按被改文件的路径筛出读取其源码的全部用例。
 
 ## 6. 取舍（可推翻）
 

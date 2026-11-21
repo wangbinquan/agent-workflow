@@ -22,6 +22,8 @@ import { createFileSkillSnapshotInspector } from '@/modules/resource-catalog/inf
 import { createFileSkillVersionRecoveryContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillVersionRecoveryContentStore'
 import { createFileSkillIdentityContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore'
 import { createFileSkillIdentityInspector } from '@/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector'
+import { createFileSkillPackageContentReader } from '@/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader'
+import { createFileSkillTreeContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillTreeContentStore'
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -39,6 +41,9 @@ function binding(rootReference: string): SkillContentBinding {
     versionRecovery: createFileSkillVersionRecoveryContentStore(rootReference),
     identityContent: createFileSkillIdentityContentStore(rootReference),
     identityInspector: createFileSkillIdentityInspector(rootReference),
+    // RFC-525: both are required members of a binding.
+    packageContent: createFileSkillPackageContentReader(rootReference),
+    treeContent: createFileSkillTreeContentStore(rootReference),
   })
 }
 function inheritedBinding(store: SkillContentBinding): SkillContentBinding {
@@ -90,6 +95,14 @@ function inheritedBinding(store: SkillContentBinding): SkillContentBinding {
     get identityInspector() {
       expect<SkillContentBinding>(this).toBe(receiver)
       return store.identityInspector
+    }
+    get packageContent() {
+      expect<SkillContentBinding>(this).toBe(receiver)
+      return store.packageContent
+    }
+    get treeContent() {
+      expect<SkillContentBinding>(this).toBe(receiver)
+      return store.treeContent
     }
   }
   const receiver: SkillContentBinding = Object.freeze(new InheritedBinding())
@@ -213,7 +226,7 @@ describeEachProviderHttpApplication(
           ).toBe(true)
           const boot = composeSkillCatalogBoot({
             db: scope.harness.db,
-            ...selectSkillContentDependencies(selection, appHome),
+            ...selectSkillContentDependencies(selection),
           })
           await boot.recoverOperations()
           await boot.reconcileLiveFiles()

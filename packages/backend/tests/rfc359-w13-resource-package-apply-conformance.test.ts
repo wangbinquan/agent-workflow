@@ -66,6 +66,7 @@ import { encodeZip } from '@/util/zip'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 
@@ -274,19 +275,23 @@ describeEachProvider(
       const box = createSecretBoxFromKey(randomBytes(32))
       const client = harness.db
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: client,
+          appHome: appHome,
+          pluginInstaller: {
+            plannedGenerationDirectory() {
+              throw new Error('workgroup apply must not install plugins')
+            },
+            async install() {
+              throw new Error('workgroup apply must not install plugins')
+            },
+          },
+        }),
         db: client,
         appHome,
         authorityResolver: { resolve: () => actor },
         mcpLifecycle: createMcpTransactionLifecycle(),
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: client }),
-        pluginInstaller: {
-          plannedGenerationDirectory() {
-            throw new Error('workgroup apply must not install plugins')
-          },
-          async install() {
-            throw new Error('workgroup apply must not install plugins')
-          },
-        },
       })
       const catalog: ComposedResourcePackageCatalog = composePostgresqlResourcePackageCatalog({
         provider,

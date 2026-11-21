@@ -15,6 +15,7 @@ import { createResourcePackagePluginInstaller } from '../../src/modules/resource
 import { walkExportClosureFromReadPort } from '../../src/modules/resource-catalog/application/package/closure'
 import { exportResourcePackageFromReadPort } from '../../src/modules/resource-catalog/application/package/export'
 import { buildPackagePreviewFromReadPort } from '../../src/modules/resource-catalog/application/package/preview'
+import { standaloneResourcePackageProviderSelections } from './resourceCatalog'
 
 type ClosureParameters = Parameters<typeof walkExportClosureFromReadPort>
 type PreviewParameters = Parameters<typeof buildPackagePreviewFromReadPort>
@@ -49,7 +50,12 @@ export function composeSqliteResourcePackageCatalogForTest(input: {
     },
     mcpLifecycle: createMcpTransactionLifecycle(),
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: input.db }),
-    pluginInstaller: createResourcePackagePluginInstaller(),
+    // RFC-525: the provider takes the standalone selections it used to default to.
+    ...standaloneResourcePackageProviderSelections({
+      db: input.db,
+      appHome: input.appHome,
+      pluginInstaller: createResourcePackagePluginInstaller(),
+    }),
   })
   return composePostgresqlResourcePackageCatalog({
     provider,

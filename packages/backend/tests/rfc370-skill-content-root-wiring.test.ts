@@ -63,7 +63,8 @@ function selectedCatalog(
     `constsession=Object.freeze({db:${receiver}.db,appHome:${fallback}})`,
   )
   expect(compact(node, file)).toContain(`constskillContent=${receiver}.skillContent(session)`)
-  expect(input).toContain(`skillContentRoot:${fallback},`)
+  // RFC-525: the binding is required, so the root no longer passes a default content root.
+  expect(input).not.toContain('skillContentRoot')
 }
 
 test('daemon preserves the same complete skill content binding across provider sessions', () => {
@@ -103,7 +104,7 @@ test('RFC-380 shared bundle passes the complete selection once to editing and on
     const selected = calls(root, bundle, name)
     expect(selected).toHaveLength(1)
     expect(compact(selected[0]!.arguments[0]!, bundle)).toContain(
-      '...selectSkillContentDependencies(input.skillContent,input.skillContentRoot),',
+      '...selectSkillContentDependencies(input.skillContent),',
     )
   }
 })

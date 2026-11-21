@@ -3,7 +3,6 @@ import type {
   ResourcePackagePluginArtifactOwner,
   ResourcePackageSkillArtifactOwner,
 } from '../application/package/artifactOwners'
-import { join } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ResourceCurrentAuthorityResolver } from '../application/participants/resourceAuthorization'
@@ -17,7 +16,6 @@ import { currentPluginSpecReader } from '../infrastructure/pluginPersistence'
 import {
   createFileResourcePackagePluginArtifactOwner,
   createFileResourcePackageSkillArtifactOwner,
-  type FileResourcePackagePluginInstaller,
 } from '../infrastructure/local/fileResourcePackageArtifacts'
 import { composeResourcePackageProvider } from './resourcePackageProvider'
 import { createResourcePackageAtomicApplyOperations } from './resourcePackageAtomicApply'
@@ -39,36 +37,27 @@ export type {
 export { createFileResourcePackagePluginArtifactOwner }
 /** RFC-432: the standalone session factory — package skill artifacts in the session's database and app home. */
 export { createFileResourcePackageSkillArtifactOwner }
+/** RFC-525: the standalone package content — the local skill package reader under an app home. */
+export { createFileSkillPackageContentReader } from '../infrastructure/local/fileSkillPackageContentReader'
 
 export interface PostgresqlResourcePackageProviderComposition extends ResourcePackageProviderComposition {
   readonly mutationSessionFactory: PostgresqlResourcePackageMutationSessionFactory
 }
 
-interface PostgresqlResourcePackageProviderBaseDependencies {
+/** RFC-525: the package content and both artifact owners are the caller's selections (daemon: the deployment's; the
+ * package command: the local ones this file offers). */
+export interface PostgresqlResourcePackageProviderDependencies {
   readonly db: PersistenceDb
   readonly appHome: string
-  readonly skillPackageContent?: SkillPackageContentReader
-  readonly skillArtifacts?: ResourcePackageSkillArtifactOwner
+  readonly skillPackageContent: SkillPackageContentReader
+  readonly skillArtifacts: ResourcePackageSkillArtifactOwner
+  readonly pluginArtifacts: ResourcePackagePluginArtifactOwner
   readonly authorityResolver: ResourceCurrentAuthorityResolver
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
-  readonly pluginsDir?: string
   readonly id?: () => string
   readonly now?: () => number
 }
-
-export type PostgresqlResourcePackageProviderDependencies =
-  PostgresqlResourcePackageProviderBaseDependencies &
-    (
-      | Readonly<{
-          pluginArtifacts: ResourcePackagePluginArtifactOwner
-          pluginInstaller?: FileResourcePackagePluginInstaller
-        }>
-      | Readonly<{
-          pluginArtifacts?: undefined
-          pluginInstaller: FileResourcePackagePluginInstaller
-        }>
-    )
 
 export interface PostgresqlResourcePackageCatalogDependencies {
   readonly provider: PostgresqlResourcePackageProviderComposition
@@ -80,25 +69,12 @@ export interface PostgresqlResourcePackageCatalogDependencies {
 export function composePostgresqlResourcePackageProvider(
   input: PostgresqlResourcePackageProviderDependencies,
 ): PostgresqlResourcePackageProviderComposition {
-  const pluginsDir = input.pluginsDir ?? join(input.appHome, 'plugins')
-  const pluginArtifacts =
-    input.pluginArtifacts !== undefined
-      ? input.pluginArtifacts
-      : createFileResourcePackagePluginArtifactOwner({
-          pluginsDir,
-          installer: input.pluginInstaller,
-        })
   const mutationSessionFactory = createPostgresqlResourcePackageMutationSessionFactory({
     authorityResolver: input.authorityResolver,
     currentPluginSpec: currentPluginSpecReader(input.db),
     mcpLifecycle: input.mcpLifecycle,
-    pluginArtifacts,
-    skillArtifacts:
-      input.skillArtifacts ??
-      createFileResourcePackageSkillArtifactOwner({
-        db: input.db,
-        appHome: input.appHome,
-      }),
+    pluginArtifacts: input.pluginArtifacts,
+    skillArtifacts: input.skillArtifacts,
     capabilityTemplates: input.capabilityTemplates,
     ...(input.id === undefined ? {} : { id: input.id }),
     ...(input.now === undefined ? {} : { now: input.now }),

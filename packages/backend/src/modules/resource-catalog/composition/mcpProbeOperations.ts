@@ -23,14 +23,24 @@ export function mcpProbeNow(): number {
   return (probeOptionsOverride?.now ?? Date.now)()
 }
 
+/** RFC-525 — the in-process probe: each probe reads the test seam, then runs `probeMcp` here (what an absent runner meant). */
+export function createInProcessMcpProbeRunner(): McpProbeRunner {
+  return Object.freeze({
+    probe: (
+      mcp: Parameters<McpProbeRunner['probe']>[0],
+      { startedAt }: { readonly startedAt: number },
+    ) => probeMcp(mcp, { ...probeOptionsOverride, startedAt }),
+  })
+}
+
 export function composeMcpProbeOperations(input: {
   readonly queries: McpQueries
   readonly aclIdentity: McpAclIdentityParticipant
   readonly store: McpProbeStore
   /** The shared process-wide MCP operation coordinator. */
   readonly coordinator: McpProbeCoordinatorPort
-  /** Where the deployment runs its Agents' MCP servers; absent, in-process. */
-  readonly probeRunner?: McpProbeRunner
+  /** Where the deployment runs its Agents' MCP servers (standalone: `createInProcessMcpProbeRunner()`). */
+  readonly probeRunner: McpProbeRunner
 }): McpProbeOperations {
   const runner = input.probeRunner
   return createMcpProbeOperations({
@@ -39,9 +49,6 @@ export function composeMcpProbeOperations(input: {
     store: input.store,
     coordinator: input.coordinator,
     now: mcpProbeNow,
-    runProbe: (mcp, { startedAt }) =>
-      runner === undefined
-        ? probeMcp(mcp, { ...probeOptionsOverride, startedAt })
-        : runner.probe(mcp, { startedAt }),
+    runProbe: (mcp, { startedAt }) => runner.probe(mcp, { startedAt }),
   })
 }

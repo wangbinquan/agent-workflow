@@ -2,11 +2,10 @@
 //
 // 工厂与数据库无关：调用方（knowledge-evolution 的融合仓库）用自己的数据库句柄 `bind`，拿到绑在
 // **选定内容绑定**上的 participant——本地部署走文件存储，托管部署走 `skill_content_entries`。
-// 不传选择即本地文件存储，根目录取 `bind` 时给的 appHome。
+// RFC-525：选择必填（daemon 交部署选择的内容绑定，两种绑定都带树存储）。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { createFileSkillTreeContentStore } from '../infrastructure/local/fileSkillTreeContentStore'
 import {
   createSkillTreeVersionParticipant,
   type SkillTreeVersionParticipant,
@@ -19,18 +18,12 @@ export interface SkillVersionCommitParticipantFactory {
   bind(input: { readonly db: PersistenceDb; readonly appHome: string }): SkillTreeVersionParticipant
 }
 
-export function composeSkillVersionCommitParticipantFactory(
-  selection: { readonly skillContent?: SkillContentBinding } = {},
-): SkillVersionCommitParticipantFactory {
+export function composeSkillVersionCommitParticipantFactory(selection: {
+  readonly skillContent: SkillContentBinding
+}): SkillVersionCommitParticipantFactory {
   return Object.freeze({
     bind(input: { readonly db: PersistenceDb; readonly appHome: string }) {
       const binding = selection.skillContent
-      if (binding === undefined)
-        return createSkillTreeVersionParticipant({
-          db: input.db,
-          fs: { appHome: input.appHome },
-          trees: createFileSkillTreeContentStore(input.appHome),
-        })
       return createSkillTreeVersionParticipant({
         db: input.db,
         fs: {
@@ -40,7 +33,7 @@ export function composeSkillVersionCommitParticipantFactory(
           lifecycleContent: binding.lifecycleContent,
           deletionContent: binding.deletionContent,
         },
-        trees: binding.treeContent ?? createFileSkillTreeContentStore(binding.rootReference),
+        trees: binding.treeContent,
       })
     },
   })

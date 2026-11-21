@@ -152,7 +152,8 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
     > & {
       /** RFC-432: the deployment's package skill artifact owner, built for this session. */
       resourcePackageSkillArtifacts: ResourcePackageSkillArtifactOwner
-      resourcePackageSkillContent?: SkillPackageContentReader
+      /** RFC-525: the selected skill content's own package reader (both bindings give it). */
+      resourcePackageSkillContent: SkillPackageContentReader
     }
   >
   readonly testSeams?: Readonly<{

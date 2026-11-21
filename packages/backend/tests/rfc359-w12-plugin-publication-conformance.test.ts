@@ -44,6 +44,7 @@ import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resou
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 const OWNER = 'rfc359-plugin-publication-owner'
 const T0 = 1_700_000_000_000
@@ -163,34 +164,38 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
       // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
       const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: db,
+          appHome: appHome,
+          pluginInstaller: {
+            plannedGenerationDirectory(input) {
+              return plannedGenerationDir(
+                input.pluginId,
+                input.spec,
+                input.generationId,
+                input.pluginsDir,
+              )
+            },
+            async install(input) {
+              installs.push(input.spec)
+              const installed = await installPlugin(input.pluginId, input.spec, {
+                generationId: input.generationId,
+                pluginsDir: input.pluginsDir,
+              })
+              return {
+                cachedPath: installed.cachedPath,
+                resolvedVersion: installed.resolvedVersion,
+                sourceKind: installed.sourceKind,
+                generationDirectory: installed.generationDir,
+              }
+            },
+          },
+        }),
         db,
         appHome,
         authorityResolver: { resolve: () => actor },
         mcpLifecycle: createMcpTransactionLifecycle(),
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
-        pluginInstaller: {
-          plannedGenerationDirectory(input) {
-            return plannedGenerationDir(
-              input.pluginId,
-              input.spec,
-              input.generationId,
-              input.pluginsDir,
-            )
-          },
-          async install(input) {
-            installs.push(input.spec)
-            const installed = await installPlugin(input.pluginId, input.spec, {
-              generationId: input.generationId,
-              pluginsDir: input.pluginsDir,
-            })
-            return {
-              cachedPath: installed.cachedPath,
-              resolvedVersion: installed.resolvedVersion,
-              sourceKind: installed.sourceKind,
-              generationDirectory: installed.generationDir,
-            }
-          },
-        },
       })
       return composePostgresqlResourcePackageCatalog({
         provider,

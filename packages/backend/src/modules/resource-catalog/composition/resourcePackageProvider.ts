@@ -10,7 +10,6 @@ import {
 } from '../infrastructure/packageResourceRows'
 import { readPackageSkillTree } from '../infrastructure/packageSkillTree'
 import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
-import { createFileSkillPackageContentReader } from '../infrastructure/local/fileSkillPackageContentReader'
 
 /** Read capabilities consumed by the external package execution owner. */
 export interface ResourcePackageProviderComposition {
@@ -24,9 +23,10 @@ export interface ResourcePackageProviderComposition {
 export function composeResourcePackageProvider(input: {
   readonly db: PersistenceDb
   readonly appHome: string
-  readonly skillPackageContent?: SkillPackageContentReader
+  /** RFC-525: the deployment's package content (the package command gives the local reader). */
+  readonly skillPackageContent: SkillPackageContentReader
 }): ResourcePackageProviderComposition {
-  const content = input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)
+  const content = input.skillPackageContent
   return Object.freeze({
     resources: createResourcePackageOwnedResourceLookup(input.db),
     reads: createResourcePackageReadPort(input.db),

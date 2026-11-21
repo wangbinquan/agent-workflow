@@ -43,11 +43,11 @@ import {
 } from '@/modules/resource-catalog/composition/intentApply'
 import { createResourcePackageApplyActivityRegistry } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeStandaloneIntentApply } from './helpers/intentApply'
+import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
 
 const OWNER = 'rfc359-intent-composition-owner'
 const SCRATCH_DIRECTORY = 'intent-scratch-composition'
@@ -120,13 +120,13 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
       scratchDirectoryName: SCRATCH_DIRECTORY,
       resourcePackages:
         harness.capabilities.isolation === 'exclusive'
-          ? composeResourcePackageApplyMaintenance({
+          ? composeStandaloneResourcePackageApplyMaintenance({
               db: harness.db as DbClient,
               appHome,
               pluginsDir,
               activitySource: createResourcePackageApplyActivityRegistry().query,
             }).scene
-          : composeResourcePackageApplyMaintenance({
+          : composeStandaloneResourcePackageApplyMaintenance({
               db: harness.db as PostgresqlDatabaseClient,
               appHome,
               pluginsDir,

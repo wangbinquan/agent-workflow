@@ -23,7 +23,6 @@ import { developmentEmployeeTypePackage } from '@/modules/development-automation
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
@@ -31,6 +30,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
+import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
 
 const T0 = 1_700_000_000_000
 
@@ -151,14 +151,14 @@ describeEachProvider('RFC-359 W7 —— 资源包 apply 维护面组合根', (ha
     const appHome = tmpRoot('aw-rfc359-w7-pkg-')
     const pluginsDir = join(appHome, 'plugins')
     const active: string[] = []
-    const sqlite = composeResourcePackageApplyMaintenance({
+    const sqlite = composeStandaloneResourcePackageApplyMaintenance({
       db: asSqlite(harness.db),
       appHome,
       pluginsDir,
       activitySource: { activeApplyIds: () => active },
       now: () => T0,
     })
-    const postgresql = composeResourcePackageApplyMaintenance({
+    const postgresql = composeStandaloneResourcePackageApplyMaintenance({
       db: asPostgresql(harness.db),
       appHome,
       pluginsDir,

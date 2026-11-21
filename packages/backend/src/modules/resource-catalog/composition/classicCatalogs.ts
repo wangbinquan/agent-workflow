@@ -56,16 +56,13 @@ export interface ClassicCatalogCompositionDependencies extends Omit<
   readonly taskReferences: SubjectTaskReferencePort
   readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
-  readonly versionPresence?: SkillVersionPresenceQueries
+  readonly versionPresence: SkillVersionPresenceQueries
 }
 
 export function composeClassicCatalogs(
   input: ClassicCatalogCompositionDependencies,
 ): ClassicCatalogBundle {
-  const skillContent = composeSkillContentAvailability({
-    appHome: input.appHome,
-    versionPresence: input.versionPresence,
-  })
+  const skillContent = composeSkillContentAvailability({ versionPresence: input.versionPresence })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: input.db,
     authorization: input.resourceCatalog.authorization,

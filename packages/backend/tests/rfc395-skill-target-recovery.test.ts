@@ -114,7 +114,7 @@ describeEachProvider('RFC-395 skill target recovery', (harness) => {
       roots.push(appHome)
       const database = createDatabaseSkillContent({ db: harness.db })
       const options =
-        profile === 'database' ? selectSkillContentDependencies(database, appHome) : { appHome }
+        profile === 'database' ? selectSkillContentDependencies(database) : { appHome }
       const main = new Uint8Array([
         239,
         187,
@@ -193,7 +193,7 @@ describeEachProvider('RFC-395 skill target recovery', (harness) => {
 
   test('ordinary reconciliation restores missing live bytes from the committed snapshot without legacy backfill', async () => {
     const database = createDatabaseSkillContent({ db: harness.db })
-    const options = selectSkillContentDependencies(database, 'unused')
+    const options = selectSkillContentDependencies(database)
     const bytes = new Uint8Array([239, 187, 191, ...Buffer.from('retained snapshot')])
     const skill = await createManagedSkillWithFiles(
       harness.db,
@@ -215,7 +215,7 @@ describeEachProvider('RFC-395 skill target recovery', (harness) => {
 
   test('an uncommitted staged version rolls back without deleting the live or prior snapshot', async () => {
     const database = createDatabaseSkillContent({ db: harness.db })
-    const options = selectSkillContentDependencies(database, 'unused')
+    const options = selectSkillContentDependencies(database)
     const skill = await createManagedSkillWithFiles(
       harness.db,
       options,
@@ -457,7 +457,7 @@ describeV2Providers('RFC-395 X2 converted skill runtime-reader parity', (source)
         expect(await content.treeContent!.readVersion({ skillId: 'frozen', version: 1 })).toEqual(
           [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
         )
-        const options = selectSkillContentDependencies(content, join(root, 'unused-native-home'))
+        const options = selectSkillContentDependencies(content)
         const boot = createSkillCatalogBootAdapter({ db: target.db, ...options })
         boot.activateAvailabilityGate()
         expect(await boot.reverifySnapshots()).toEqual({ verified: 1, quarantined: 0 })
@@ -525,7 +525,7 @@ describeV2Providers('RFC-395 X2 converted skill runtime-reader parity', (source)
 describeEachProvider('RFC-395 native reserve proof before retirement', (harness) => {
   test('awaits the selected storage proof and preserves the operation until it completes', async () => {
     const content = createDatabaseSkillContent({ db: harness.db })
-    const options = selectSkillContentDependencies(content, 'unused-proof-home')
+    const options = selectSkillContentDependencies(content)
     const skill = await createManagedSkillWithFiles(
       harness.db,
       options,

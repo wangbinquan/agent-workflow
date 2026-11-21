@@ -57,9 +57,9 @@ type DigitalEmployeeAclResourceType = Extract<
 
 export function composeDaemonResourceCatalogModules(input: {
   readonly db: PersistenceDb
-  readonly skillContentRoot: string
-  readonly skillContent?: Parameters<typeof selectSkillContentDependencies>[0]
-  readonly pluginInstaller?: PluginInstallerPort
+  /** RFC-525: the deployment's content binding and plugin installer (both always selected). */
+  readonly skillContent: Parameters<typeof selectSkillContentDependencies>[0]
+  readonly pluginInstaller: PluginInstallerPort
   readonly runtimeProfiles: Parameters<typeof composeClassicCatalogs>[0]['runtimeProfiles']
   readonly mcpRuntime: Parameters<typeof composeMcpCatalog>[0]['runtime']
 }) {
@@ -71,7 +71,7 @@ export function composeDaemonResourceCatalogModules(input: {
   const classicCatalogs = composeClassicCatalogs({
     taskReferences: composeSubjectTaskReferencePort,
     db,
-    ...selectSkillContentDependencies(input.skillContent, input.skillContentRoot),
+    ...selectSkillContentDependencies(input.skillContent),
     runtimeProfiles: input.runtimeProfiles,
     // The owner of memory membership supplies the same restore participant to
     // both providers; constructing this bundle performs no database or file IO.
@@ -82,7 +82,7 @@ export function composeDaemonResourceCatalogModules(input: {
   })
   const skillCatalogBoot: SkillCatalogBootParticipant = composeSkillCatalogBoot({
     db,
-    ...selectSkillContentDependencies(input.skillContent, input.skillContentRoot),
+    ...selectSkillContentDependencies(input.skillContent),
   })
   const digitalEmployeeAgentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
     db,

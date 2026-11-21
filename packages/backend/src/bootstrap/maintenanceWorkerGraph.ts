@@ -42,7 +42,12 @@ import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-emp
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
-import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import {
+  composeLocalResourcePackageArtifactRecovery,
+  composeResourcePackageApplyMaintenance,
+  requireExclusiveRecoverySelection,
+  type ResourcePackageApplyArtifactRecoveryPort,
+} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { composeSkillApplyRecoveryScene } from '@/modules/resource-catalog/composition/skillApplyMaintenance'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
@@ -58,7 +63,7 @@ import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgres
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPluginGenerationFilesystemGcPort } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
-import { createLogger } from '@/util/log'
+import { createLogger, type Logger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MaintenanceWorkerGraph,
@@ -79,6 +84,33 @@ interface MaintenanceWorkerAdapter {
   readonly resourcePackageRecoveryScene: AtomicApplyRecoveryScene<'resource-package'>
   readonly busyDeferralCounter: MaintenanceWorkerGraph['busyDeferralCounter']
   close(): Promise<void>
+}
+
+/**
+ * RFC-525 — the worker's resource-package recovery: the hosted selection, or the local versioned recovery the maintenance
+ * composition used to build (a selected recovery-content effects factory stands in for the local file effects). Selecting
+ * both is still the original conflict error, checked here where the choice is made.
+ */
+function resourcePackageArtifactRecovery(input: {
+  readonly db: PersistenceDb
+  readonly appHome: string
+  readonly workerEffects: GraphInput['effects']
+  readonly log?: Logger
+}): ResourcePackageApplyArtifactRecoveryPort {
+  requireExclusiveRecoverySelection({
+    artifacts: input.workerEffects?.resourcePackageRecovery,
+    recoveryEffectsFactory: input.workerEffects?.resourcePackageRecoveryContent,
+  })
+  return (
+    input.workerEffects?.resourcePackageRecovery ??
+    composeLocalResourcePackageArtifactRecovery({
+      db: input.db,
+      appHome: input.appHome,
+      pluginsDir: join(input.appHome, 'plugins'),
+      recoveryEffectsFactory: input.workerEffects?.resourcePackageRecoveryContent,
+      log: input.log,
+    })
+  )
 }
 
 function composeWorkerContentMaintenance(
@@ -130,10 +162,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     })
     const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
-      appHome,
-      pluginsDir: join(appHome, 'plugins'),
-      artifacts: workerEffects?.resourcePackageRecovery,
-      recoveryEffectsFactory: workerEffects?.resourcePackageRecoveryContent,
+      artifacts: resourcePackageArtifactRecovery({ db, appHome, workerEffects }),
     })
     return {
       db,
@@ -174,15 +203,18 @@ const MAINTENANCE_WORKER_ADAPTERS = {
       ;(db as unknown as { $client: { close(): void } }).$client.close()
     }
     registerConnectionClose(close)
+    const resourcePackageLog = createLogger('intentMaintenance')
     const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
-      appHome,
-      pluginsDir: join(appHome, 'plugins'),
-      artifacts: workerEffects?.resourcePackageRecovery,
-      recoveryEffectsFactory: workerEffects?.resourcePackageRecoveryContent,
+      artifacts: resourcePackageArtifactRecovery({
+        db,
+        appHome,
+        workerEffects,
+        log: resourcePackageLog,
+      }),
       // The main thread supplies active journal ids with each converge payload.
       activitySource: { activeApplyIds: () => [] },
-      log: createLogger('intentMaintenance'),
+      log: resourcePackageLog,
     })
     return {
       db,

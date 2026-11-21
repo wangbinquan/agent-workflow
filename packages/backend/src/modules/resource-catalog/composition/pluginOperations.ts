@@ -31,7 +31,8 @@ export interface PluginCatalogAdapterCompositionDependencies {
   readonly access: PluginAccessPort
   readonly acl: PluginAclOperationApplication
   readonly coordinator: PluginOperationCoordinatorPort
-  readonly installer?: PluginInstallerPort
+  /** RFC-525: the deployment's installer (required; the daemon always gives it). */
+  readonly installer: PluginInstallerPort
   readonly id?: () => string
   readonly now?: () => number
 }
@@ -60,7 +61,7 @@ export function composePluginCatalogFromAdapters(
     projection: input.projection,
     access: input.access,
     coordinator: input.coordinator,
-    installer: input.installer ?? createLocalPluginInstaller(),
+    installer: input.installer,
     clock,
     id: input.id ?? ulid,
     now: input.now ?? Date.now,

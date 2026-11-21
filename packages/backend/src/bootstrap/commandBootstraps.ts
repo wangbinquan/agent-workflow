@@ -2,6 +2,7 @@
 // selects the deployment and dispatches. `bootstrap/` never imports `cli/` (RFC-393), so the CLI handler types
 // (`UserCommandIdentityHandle`, `PackageCommandBootstrap`) are checked structurally where `main.ts` hands these results
 // to the handlers.
+import { join } from 'node:path'
 import { composeRepositoryBackupPreparation } from './repositoryBackupPreparation'
 import { createLocalDoctorDiagnosticsFactory } from './doctorDiagnostics'
 import { logicalSchemaContract } from './persistenceSchema'
@@ -24,7 +25,12 @@ import {
 import { composeLocalDatabaseMigrationOperations } from '@/modules/system-operations/composition/databaseMigration'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
-import { composeResourcePackageRuntime } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import {
+  composeResourcePackageRuntime,
+  createFileResourcePackagePluginArtifactOwner,
+  createFileResourcePackageSkillArtifactOwner,
+  createFileSkillPackageContentReader,
+} from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
@@ -126,7 +132,17 @@ export async function composePackageCommandBootstrap() {
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
       db: provider.db,
     }),
-    pluginInstaller: createResourcePackagePluginInstaller(),
+    // RFC-525: the package command is standalone — the local package content and artifact owners, built with the
+    // arguments the provider used to default to.
+    skillPackageContent: createFileSkillPackageContentReader(Paths.root),
+    skillArtifacts: createFileResourcePackageSkillArtifactOwner({
+      db: provider.db,
+      appHome: Paths.root,
+    }),
+    pluginArtifacts: createFileResourcePackagePluginArtifactOwner({
+      pluginsDir: join(Paths.root, 'plugins'),
+      installer: createResourcePackagePluginInstaller(),
+    }),
   })
   const catalog = packages.catalog
   const identity = Object.freeze({

@@ -47,6 +47,8 @@ import type { ProviderDatabaseHarness } from './eachProvider'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
+import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
 
 function unused<T>(name: string): T {
   return new Proxy(
@@ -79,7 +81,9 @@ export function taskBundleInput(
   const runtimeRegistry = composeRuntimeRegistryOperations(db)
   const resourceCatalog = composeDaemonResourceCatalogModules({
     db,
-    skillContentRoot: appHome,
+    // RFC-525: the standalone deployment's binding and installer (what the standalone daemon passes).
+    skillContent: createFileSkillContentBinding(db, appHome),
+    pluginInstaller: createLocalPluginInstaller(),
     runtimeProfiles: { get: (name) => runtimeRegistry.getRuntime(name) },
     mcpRuntime: { prepareDelete: async () => {}, reconcileDurableIntents: async () => {} },
   })

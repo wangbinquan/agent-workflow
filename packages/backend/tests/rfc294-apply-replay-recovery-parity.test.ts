@@ -31,13 +31,13 @@ import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { type IntentApplyReceipt } from '@/modules/intent/composition/apply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { encodeZip } from '@/util/zip'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 import { composeStandaloneIntentArtifacts, applyIntentChangeset } from './helpers/intentApply'
+import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
 
 const OWNER_ID = 'rfc294-apply-owner'
 
@@ -132,7 +132,7 @@ async function replayPackageApply(importId: string): Promise<unknown> {
 }
 
 function convergePackageApplies(): Promise<{ failed: number; rolledForward: number }> {
-  const maintenance = composeResourcePackageApplyMaintenance({
+  const maintenance = composeStandaloneResourcePackageApplyMaintenance({
     db,
     appHome,
     pluginsDir: join(appHome, 'plugins'),

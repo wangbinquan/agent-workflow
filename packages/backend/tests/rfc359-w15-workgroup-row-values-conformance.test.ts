@@ -45,6 +45,7 @@ import { encodeZip } from '@/util/zip'
 import { ValidationError } from '@/util/errors'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 const OWNER = 'workgroup-row-owner'
 const HUMAN = 'workgroup-row-human'
@@ -415,19 +416,23 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
       const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: db,
+          appHome: appHome,
+          pluginInstaller: {
+            plannedGenerationDirectory() {
+              throw new Error('workgroup fixture has no plugin installation')
+            },
+            async install() {
+              throw new Error('workgroup fixture has no plugin installation')
+            },
+          },
+        }),
         db,
         appHome,
         authorityResolver: { resolve: () => actor },
         mcpLifecycle: createMcpTransactionLifecycle(),
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
-        pluginInstaller: {
-          plannedGenerationDirectory() {
-            throw new Error('workgroup fixture has no plugin installation')
-          },
-          async install() {
-            throw new Error('workgroup fixture has no plugin installation')
-          },
-        },
       })
       return composePostgresqlResourcePackageCatalog({
         provider,

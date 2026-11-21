@@ -61,6 +61,7 @@ import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resou
 import { ValidationError } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 
 type Row = PersistenceTables['workgroups']['$inferSelect']
 type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
@@ -421,19 +422,23 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
     function compose(): ComposedResourcePackageCatalog {
       const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
+        ...standaloneResourcePackageProviderSelections({
+          db: db,
+          appHome: appHome,
+          pluginInstaller: {
+            plannedGenerationDirectory() {
+              throw new Error('Workgroup must not install plugin files')
+            },
+            async install() {
+              throw new Error('Workgroup must not install a plugin')
+            },
+          },
+        }),
         db,
         appHome,
         authorityResolver: { resolve: () => actor },
         mcpLifecycle: createMcpTransactionLifecycle(),
         capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
-        pluginInstaller: {
-          plannedGenerationDirectory() {
-            throw new Error('Workgroup must not install plugin files')
-          },
-          async install() {
-            throw new Error('Workgroup must not install a plugin')
-          },
-        },
       })
       return composePostgresqlResourcePackageCatalog({
         provider,
