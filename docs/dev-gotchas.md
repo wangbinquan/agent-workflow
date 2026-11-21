@@ -966,6 +966,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   文件，没选到 spawn 被改夹具的 `rfc363-task-workspace-process-recovery`（夹具按文件路径传给 `Bun.spawn`），也没选到经未改的助手
   （`providerHttpApplicationScope.ts` → `providerHttpApplication.ts` → `bootstrap/standalone.ts`）到达被改文件的 231 个用例。选用例时在
   `tests/` 里按 import 求传递闭包（不穿过 `src/`），并把用例里以字符串引用的 `.ts` 文件当作依赖。
+- **只按 `tests/` 侧闭包选用例，还会漏掉经未改的生产模块调到契约收紧的函数、输入是伪造的用例**（RFC-527 实撞）：
+  `rfc412-port-bindings` 经没改的 `commitPushBinding.ts` 调到改为必填的 `selectRepositoryGitWorkspaceFactory`，状态用
+  `raw as unknown as TaskMechanicsState` 伪造、没给仓库 git 工作区，`tsc` 0 错，推送后 Windows 平台与后端分片 41 各红 2 条。把可选改为必填
+  或删去缺省时，再按被改函数在 `src/` 里的调用方选一遍直接导入这些调用方的用例，并全仓搜对被改类型的 `as unknown as` 伪造。
 - **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
   删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
   没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import

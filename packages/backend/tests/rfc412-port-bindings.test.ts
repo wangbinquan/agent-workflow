@@ -10,6 +10,7 @@ import {
   createReadonlyInspectionPorts,
 } from '@/modules/task-execution/composition/commitPushBinding'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
+import { createFileRepositoryGitWorkspaceFactory } from '@/modules/source-control/composition'
 import { inspectReadonlyRepos } from '@/modules/task-execution/engine/task/readonlyInspection'
 
 const log = { info() {}, warn() {}, error() {}, debug() {}, child: () => log } as never
@@ -25,6 +26,8 @@ function state() {
       executionContext: undefined as unknown,
       commitPushLang: 'zh-CN' as string | undefined,
       commitPushMaxRepairRetries: 2 as number | undefined,
+      // RFC-527: the repository Git workspaces are required — the local factory the selection used to default to.
+      repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
       persistence: {
         scheduler: {
           recordReadonlyDirty: async (input: unknown) => {
