@@ -11,10 +11,7 @@ import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  createProviderTaskExecutionModule,
-  taskExecutionModule,
-} from '@/modules/task-execution/composition'
+import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
@@ -26,6 +23,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
 
 const homes: string[] = []
 function home() {

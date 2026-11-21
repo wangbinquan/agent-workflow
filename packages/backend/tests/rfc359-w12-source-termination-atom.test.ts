@@ -22,7 +22,6 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskSourceTerminationEffectInput } from '@/modules/task-execution/application/applySourceTerminationEffect'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import {
   createOwnershipToken,
   createWorkerIdentity,
@@ -38,6 +37,7 @@ import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/i
 import { __hasTaskReviewMutationQueueForTesting } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
 
 const BINDING = 'gitlab:rfc359/atom!7'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -172,7 +172,10 @@ function effect(kind: TaskSourceTerminationEffectInput['kind'] = 'fence-closed')
 
 async function apply(harness: ProviderHarness, input = effect()) {
   // RFC-359 AC-1（第 14 刀）：两条泳道同一个工厂。
-  const participant = createTaskSourceTerminationParticipant({ db: harness.db })
+  const participant = createTaskSourceTerminationParticipant({
+    db: harness.db,
+    runtimeRegistry: taskExecutionModule.runtimeRegistry,
+  })
   return await participant.apply(mintSourceTerminationEffectCapability(input), input)
 }
 

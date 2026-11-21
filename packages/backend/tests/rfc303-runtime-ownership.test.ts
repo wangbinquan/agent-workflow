@@ -24,6 +24,7 @@ import type {
   SourceTerminationEffectCapability,
   TaskSourceTerminationEffectInput,
 } from '@/modules/task-execution/public/participants'
+import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 
 const cause = {
   kind: 'webhook-terminal',
@@ -219,10 +220,10 @@ describe('RFC-303 source termination capability', () => {
         },
       ])
 
-      const receipts = await createTaskSourceTerminationParticipant({ db }).apply(
-        mintSourceTerminationEffectCapability(input),
-        input,
-      )
+      const receipts = await createTaskSourceTerminationParticipant({
+        db,
+        runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+      }).apply(mintSourceTerminationEffectCapability(input), input)
 
       expect(receipts).toEqual([
         expect.objectContaining({

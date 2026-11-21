@@ -11,6 +11,7 @@ import {
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 describeEachProvider('RFC-396 workflow result belongs to the task output', (harness) => {
   for (const terminal of ['done', 'inactive', 'skipped', 'missing'] as const)
@@ -90,7 +91,8 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
       ])
       const validated: (string | null)[] = []
       const core = composeDigitalEmployeeExecutionCore({
-        ...composeDatabaseDigitalEmployeeExecutionPorts(
+        ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+        ...composeDigitalEmployeeTestTasks(
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),

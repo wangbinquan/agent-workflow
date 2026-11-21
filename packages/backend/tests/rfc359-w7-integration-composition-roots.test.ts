@@ -59,6 +59,7 @@ import { composeTaskSourceTermination } from '@/modules/task-execution/compositi
 import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 
 const T0 = 1_700_000_000_000
 
@@ -547,7 +548,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     // 任务终止参与者也是本轮要还的债；PostgreSQL 侧的事务体只在 wake/drain 时才走，
     // 这里驱动的是预留路径（中立持久化 + 引擎的 advisory lock）。
     // RFC-359 AC-1（第 14 刀）：源终止的装配两个引擎合成一份。
-    const taskTermination = composeTaskSourceTermination({ db: harness.db })
+    const taskTermination = composeTaskSourceTermination({
+      db: harness.db,
+      runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+    })
     const control = composeMrTerminalControl({
       db: asPostgresql(harness.db),
       taskTermination,

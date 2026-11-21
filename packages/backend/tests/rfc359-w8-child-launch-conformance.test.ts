@@ -76,10 +76,7 @@ import {
   type ChildWorkgroupLaunchResources,
 } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubject'
-import {
-  createDatabaseTaskDriverLifecyclePort,
-  createTaskDriverLifecyclePort,
-} from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type {
   ChildExecutionLaunchOperations,
   ChildWorkflowLaunchRequest,
@@ -93,6 +90,7 @@ import type { MaterializedSpace } from '@/modules/source-control/infrastructure/
 
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createDatabaseTaskDriverLifecyclePort } from './helpers/taskDriverLifecycle'
 
 const NOW = 1_788_278_400_000
 const PARENT_TASK_ID = 'parent-task-0001'

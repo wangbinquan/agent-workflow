@@ -64,6 +64,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
@@ -336,7 +337,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
             throw new Error('human-review e2e does not launch a selected workflow')
           },
         },
-        ...composeDatabaseDigitalEmployeeExecutionPorts(
+        ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+        ...composeDigitalEmployeeTestTasks(
           db,
           epoch2RuntimeTestPorts(db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),

@@ -970,6 +970,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `rfc412-port-bindings` 经没改的 `commitPushBinding.ts` 调到改为必填的 `selectRepositoryGitWorkspaceFactory`，状态用
   `raw as unknown as TaskMechanicsState` 伪造、没给仓库 git 工作区，`tsc` 0 错，推送后 Windows 平台与后端分片 41 各红 2 条。把可选改为必填
   或删去缺省时，再按被改函数在 `src/` 里的调用方选一遍直接导入这些调用方的用例，并全仓搜对被改类型的 `as unknown as` 伪造。
+- **按正则给几十个用例补 import，会插进模板字符串里**（RFC-530 实撞）：脚本按“最后一行 `^import …`”定位插入点，`rfc310-digital-employee-human-
+  review-system-mock-e2e` 里有一段写进磁盘的 mock 脚本源码（模板字符串，里面也有 `import` 行），新 import 插进了模板、顶层反而缺，`tsc` 报找不到
+  名字，若名字碰巧已在作用域里还会静默改坏生成的脚本。插入点按 TypeScript 语法树取最后一个顶层 `ImportDeclaration`；批量改完再扫一遍模板字面量
+  里有没有新插的 import。
 - **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
   删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
   没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import

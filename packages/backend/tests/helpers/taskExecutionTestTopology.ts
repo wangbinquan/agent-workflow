@@ -7,7 +7,6 @@ import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
@@ -61,7 +60,6 @@ import { composeWorkgroupTurnsOperations } from '../../src/modules/task-executio
 import { composeWorkgroupHostLedgerParticipantFactory } from '../../src/modules/task-execution/composition/workgroupHostLedger'
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
 import { createChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/childExecutionLaunchOperations'
-import { createDatabaseTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createTaskExecutionPersistence as createChildPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
@@ -72,6 +70,8 @@ import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execut
 import { composeDynamicWorkflowLayerOneValidation } from '../../src/modules/resource-catalog/composition/workflowOperations'
 import type { CodeHostConnectionsService } from '../../src/modules/integration/application/ports/codeHostConnections'
 import { codeHostNodeRequests } from '../../src/modules/integration/composition'
+import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
+import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 

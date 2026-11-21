@@ -20,7 +20,7 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, afterEach, expect, test } from 'bun:test'
-import { taskExecutionModule, type TaskExecutionModule } from '@/modules/task-execution/composition'
+import { type TaskExecutionModule } from '@/modules/task-execution/composition'
 import type { Hono } from 'hono'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -38,8 +38,8 @@ import {
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
 import { createUser } from './helpers/userFixture'
-import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
+import { clearTaskDriverLifecycleForTesting } from './helpers/taskDriverLifecycle'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
@@ -76,10 +76,9 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<H> {
   return {
     db,
     app: application.app,
-    execution:
-      application.taskExecution.provider === 'sqlite'
-        ? taskExecutionModule
-        : application.taskExecution.selected.executionModule,
+    // RFC-530: both deployments read the session's own execution module (the process deployment no longer shares a
+    // process-level instance).
+    execution: application.taskExecution.selected.executionModule,
     adminToken: (await createSession({ db, userId: admin.id })).token,
     userToken: (await createSession({ db, userId: user.id })).token,
     managerToken: (await createSession({ db, userId: manager.id })).token,

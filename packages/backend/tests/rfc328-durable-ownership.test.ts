@@ -39,7 +39,6 @@ import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { submitCanonicalTaskExecutionIntent } from '@/modules/task-execution/infrastructure/taskContinuationAdmission'
-import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import {
@@ -72,6 +71,7 @@ import { buildCodeHostRecoveryDescriptor } from '@/modules/task-execution/domain
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },

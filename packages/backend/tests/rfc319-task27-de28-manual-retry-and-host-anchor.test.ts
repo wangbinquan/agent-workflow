@@ -51,6 +51,7 @@ import {
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 // RFC-387 moves the retry command into the neutral session implementation.
@@ -125,12 +126,15 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
     const host = TASK_DEFINITION_HOSTS['digital-employee']
     const taskId = 'employee-review',
       runId = 'employee-review-run'
-    const ports = composeDatabaseDigitalEmployeeExecutionPorts(
-      db,
-      epoch2RuntimeTestPorts(db).historyRestrictions,
-      composeHumanGateOpenParticipantFactory(),
-      createFileWorkspacePresenceQueries(),
-    )
+    const ports = {
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDigitalEmployeeTestTasks(
+        db,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
+      ),
+    }
     expect(ports).not.toHaveProperty('hostWorkflow')
     await taskFixture(db, {
       id: taskId,

@@ -31,13 +31,13 @@ import type { StartTask } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { launchTestTask } from './helpers/productionTaskLaunch'
-import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { clearTaskDriverLifecycleForTesting } from './helpers/taskDriverLifecycle'
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 

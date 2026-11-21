@@ -33,6 +33,7 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 async function seedExecution(
   db: PersistenceDb,
@@ -124,12 +125,15 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
     const taskId = await seedExecution(db, { planPrompt: true })
     // 种成 `waiting` 那一格——正是 PG 侧此前报不出来的那一格。桩会答不出它。
     await seedReviewRun(db, taskId, 'awaiting_review')
-    const ports = composeDatabaseDigitalEmployeeExecutionPorts(
-      db,
-      epoch2RuntimeTestPorts(db).historyRestrictions,
-      composeHumanGateOpenParticipantFactory(),
-      createFileWorkspacePresenceQueries(),
-    )
+    const ports = {
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDigitalEmployeeTestTasks(
+        db,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
+      ),
+    }
     const execution = composeDigitalEmployeeExecutionCore({
       // 只看端口在不在 / 通不通——别的依赖一个都不碰，所以全给 never。
       programs: createFileProgramToolSource('/tmp/rfc359-human-review'),

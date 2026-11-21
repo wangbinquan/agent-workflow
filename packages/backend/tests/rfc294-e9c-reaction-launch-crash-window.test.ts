@@ -36,13 +36,11 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DigitalEmployeeExecutionCore } from '@/modules/task-execution/application/ports/digitalEmployeeExecutionCore'
 import { composeReactionExecutionPortV1 } from '@/modules/task-execution/application/adapters/reaction-execution-adapter'
-import {
-  composeDatabaseDigitalEmployeeExecutionPorts,
-  digitalEmployeeExecutionIsLive,
-} from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { digitalEmployeeExecutionIsLive } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 async function insertTask(db: PersistenceDb, taskId: string): Promise<void> {
   await workflowFixture(
@@ -141,7 +139,7 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
      */
     function tePort(crash: 'none' | 'before-task' | 'after-task') {
       const db = harness.db
-      const tasksPort = composeDatabaseDigitalEmployeeExecutionPorts(
+      const tasksPort = composeDigitalEmployeeTestTasks(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),

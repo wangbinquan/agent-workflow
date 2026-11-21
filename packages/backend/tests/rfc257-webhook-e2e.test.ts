@@ -50,6 +50,7 @@ import {
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
 import { createUser } from './helpers/userFixture'
+import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
 const SECRET = 'e2e-secret'
@@ -72,7 +73,10 @@ async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
  * 合并之前这里按能力分派（`isolation === 'exclusive'` 即 SQLite）——那条分派现在没有了。
  */
 function taskSourceTerminationFor(providerHarness: ProviderHarness) {
-  return composeTaskSourceTermination({ db: providerHarness.db })
+  return composeTaskSourceTermination({
+    db: providerHarness.db,
+    runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+  })
 }
 
 async function seedFixture(providerHarness: ProviderHarness) {

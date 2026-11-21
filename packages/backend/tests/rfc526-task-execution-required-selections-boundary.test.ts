@@ -199,9 +199,10 @@ describe('RFC-526 ① 选项的形状', () => {
     ])
     const employee = members(EMPLOYEE, text(EMPLOYEE), 'DigitalEmployeeExecutionDependencies')
     expect([employee.get('programs'), employee.has('appHome')]).toEqual([false, false])
+    // RFC-530: the always-overridden `tasks` default (and the three parameters only it used) left the ports.
     expect(
       signatures(EMPLOYEE, text(EMPLOYEE), 'composeDatabaseDigitalEmployeeExecutionPorts'),
-    ).toEqual([['db', 'historyRestrictions', 'humanGateOpen', 'workspacePresence']])
+    ).toEqual([['db']])
   })
 
   test('操作配置：提交排除模式与可执行文件冻结只取给的配置，`configPath` 不在', () => {
@@ -270,9 +271,8 @@ describe('RFC-526 ① 选项的形状', () => {
     expect(
       signatures(PERSISTENCE, text(PERSISTENCE), 'createTaskRuntimeLifecyclePersistence'),
     ).toEqual([['db', 'dependencies']])
-    expect(signatures(CANCELLATION, text(CANCELLATION), 'composeTaskCancellation')).toEqual([
-      ['db', 'historyRestrictions', 'humanGateOpen', 'workspacePresence'],
-    ])
+    // RFC-530: the cancellation composer only tests used is a test helper now (composition/taskCancellation.ts is gone).
+    expect(existsSync(CANCELLATION)).toBe(false)
   })
 
   test('collaboration 与路由：参与者绑定带工作区存在性，端口工件读取必填', () => {
@@ -378,16 +378,10 @@ describe('RFC-526 ③ 装配处的显式构造', () => {
     expect(callArguments(DAEMON_TE, text(DAEMON_TE), 'composeCrossContextClosure')).toEqual([
       ['db', 'executionPermits', 'observation.workspacePresence'],
     ])
+    // RFC-530: the daemon's task get / cancel are its routes; the ports take only the database.
     expect(
       callArguments(DAEMON_DE, text(DAEMON_DE), 'composeDatabaseDigitalEmployeeExecutionPorts'),
-    ).toEqual([
-      [
-        'db',
-        'input.historyRestrictions',
-        'composeHumanGateOpenParticipantFactory()',
-        'input.workspacePresence',
-      ],
-    ])
+    ).toEqual([['db']])
     expect(callArguments(HTTP, text(HTTP), 'composeTaskExecutionParticipantBindings')).toEqual([
       ['taskExecutionProvider.executionPermits', 'input.selections.workspacePresence'],
     ])

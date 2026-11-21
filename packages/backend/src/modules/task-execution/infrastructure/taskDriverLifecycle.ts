@@ -1,6 +1,3 @@
-import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
-import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withTaskReviewMutationLock } from './reviewMutationQueue'
@@ -13,15 +10,12 @@ import type {
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import { createTaskExecutionContext } from '../application/taskExecutionContext'
-import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
-  taskExecutionModule,
   type ClaimedTaskExecution,
   type TaskExecutionModule,
 } from '../composition'
-import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
 import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 import {
@@ -179,40 +173,10 @@ function releaseDependencies(
   }
 }
 
-export function activeTaskDriverController(taskId: string): AbortController | undefined {
-  const registry = taskExecutionModule.runtimeRegistry
-  const token = registry.tokenForTask(taskId)
-  return token === null ? undefined : (registry.controllerFor(token) ?? undefined)
-}
-
-export function isTaskDriverActive(taskId: string): boolean {
-  return taskExecutionModule.runtimeRegistry.hasTask(taskId)
-}
-
-/** 两阶段停机：driver 已停但库里 owner 行 / intent 还在转移时等它 settle（准入前调用）。 */
-export async function awaitTaskDriverReleasedSettled(taskId: string): Promise<void> {
-  await taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId)
-}
-
-/** Wait for the current process-local owner to release without requesting a stop. */
-export async function awaitTaskDriverIdle(taskId: string): Promise<void> {
-  const registry = taskExecutionModule.runtimeRegistry
-  const token = registry.tokenForTask(taskId)
-  if (token === null) return
-  const result = await registry.awaitStopped({ token, tokenKey: ownershipTokenKey(token) })
-  if (result.kind === 'unreaped') {
-    throw new TaskExecutionError(
-      'task-execution-recovery-required',
-      `task '${taskId}' owner stopped with unreaped work (${result.code})`,
-    )
-  }
-}
-
-/** Test isolation for the module-owned heartbeat/runtime handles. */
+/** Test isolation for the module-owned heartbeat handles (RFC-530: each session builds its own execution module). */
 export function clearTaskDriverLifecycleForTesting(): void {
   for (const timer of ownerHeartbeatTimers.values()) timer.stop()
   ownerHeartbeatTimers.clear()
-  taskExecutionModule.runtimeRegistry.clearForTesting()
 }
 
 export function createTaskDriverLifecyclePort(
@@ -227,31 +191,4 @@ export function createTaskDriverLifecyclePort(
       }),
   }
   return Object.freeze(port)
-}
-
-/**
- * SQLite 组合根的装配：进程级单例 + 从 db 造的持久化 + legacy 连接。
- *
- * 这一层存在只是因为 `services/task` 那条启动路还没退役（plan §5hn）——
- * 它手上只有一个 `db`，拿不到模块实例。退役之后这个便利构造也一并消失。
- */
-export function createDatabaseTaskDriverLifecyclePort(options: {
-  readonly humanGateOpen: HumanGateOpenParticipantFactory
-  readonly historyRestrictions: HistoryRestrictionPort
-  readonly db: PersistenceDb
-  readonly persistence?: TaskExecutionPersistence
-  /** RFC-526: required (the persistence built here, and the per-claim execution context, need the presence). */
-  readonly workspacePresence: WorkspacePresenceQueries
-  readonly log: TaskExecutionTopologyLogger
-  readonly finalizeWorkspace: (taskId: string) => Promise<void>
-}): TaskDriverLifecyclePort {
-  return createTaskDriverLifecyclePort({
-    db: options.db,
-    module: taskExecutionModule,
-    claim: (intentId) => taskExecutionModule.claim({ db: options.db, intentId }),
-    persistence: options.persistence ?? createTaskExecutionPersistence(options.db, options),
-    log: options.log,
-    finalizeWorkspace: options.finalizeWorkspace,
-    legacyConnection: options.db,
-  })
 }

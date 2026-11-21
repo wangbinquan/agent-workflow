@@ -25,15 +25,14 @@ import type {
 } from '../application/applySourceTerminationEffect'
 import { sourceTerminationCapabilityMatches } from '../application/sourceTerminationCapability'
 import { executeSourceTermination } from '../application/sourceTerminationExecution'
-import { taskExecutionModule } from '../composition'
 import type { InMemoryTaskRuntimeRegistry } from './inMemoryTaskRuntimeRegistry'
 import { applySourceTerminationTarget } from './sourceTerminationTarget'
 import { listSourceTerminationTargets } from './sourceTerminationTargets'
 
 export interface TaskSourceTerminationParticipantInput {
   readonly db: PersistenceDb
-  /** 停机票据注册表。缺省是进程级单例（单进程部署形态）。 */
-  readonly runtimeRegistry?: InMemoryTaskRuntimeRegistry
+  /** 停机票据注册表：会话的驱动登记表（RFC-530 起必填，没有进程级的模块可回落）。 */
+  readonly runtimeRegistry: InMemoryTaskRuntimeRegistry
   /**
    * 没有本地 driver 时的工作区收尾。两个 provider 的生产装配都交 source-control 的
    * `finalizeClaimedWorkspace`；具体收尾行为由注入端口提供。
@@ -46,7 +45,7 @@ export function createTaskSourceTerminationParticipant(
   input: TaskSourceTerminationParticipantInput,
 ): TaskSourceTerminationParticipant {
   const db = input.db
-  const runtimeRegistry = input.runtimeRegistry ?? taskExecutionModule.runtimeRegistry
+  const runtimeRegistry = input.runtimeRegistry
   return {
     async apply(
       capability: SourceTerminationEffectCapability,

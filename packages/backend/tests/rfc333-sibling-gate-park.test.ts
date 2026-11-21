@@ -3,10 +3,7 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
-import {
-  composeHumanGateTaskLockPort,
-  createTaskExecutionTestModule,
-} from '@/modules/task-execution/composition'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-333 TaskParkTx — sibling human gates of one scheduler wave all park.
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -61,6 +58,7 @@ import { createClarifyRound } from '../src/modules/collaboration/infrastructure/
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 const NOW = 1_788_969_900_000
 

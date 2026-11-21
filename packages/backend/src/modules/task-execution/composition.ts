@@ -13,9 +13,7 @@ import type {
 } from './application/ports/workspaceLaunch'
 // RFC-328 — the daemon-owned task-execution composition root.
 
-import { ulid } from 'ulid'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import type { TaskExecutionPersistence } from './application/ports/taskExecutionPersistence'
 import type { NodeRunQueries } from './application/ports/nodeRunQueries'
 import { createNodeRunQueries as createNodeRunQueriesWithContent } from './infrastructure/nodeRunQueries'
@@ -24,7 +22,7 @@ import {
   TaskExecutionModule,
 } from './infrastructure/taskExecutionModule'
 // RFC-517: the module classes, their claim result, the ownership lease constants and the shutdown controller live in
-// infrastructure; the root keeps the process-level instance and the two module factories.
+// infrastructure; the root keeps the two module factories (RFC-530: no process-level instance).
 export {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
@@ -34,14 +32,9 @@ export {
   type ClaimedTaskExecution,
 } from './infrastructure/taskExecutionModule'
 
-// One production module per JS daemon generation.  Tests that need isolated
-// registries call createTaskExecutionTestModule explicitly; production
-// adapters only import this instance.
-export const taskExecutionModule = new TaskExecutionModule(DAEMON_GENERATION)
-
-export function createTaskExecutionTestModule(
-  daemonGeneration: string = `test-${ulid()}`,
-): TaskExecutionModule {
+// RFC-530: no instance at import time — the SQLite execution binding builds one per session from the daemon generation
+// bootstrap passes, as the PostgreSQL session binding always has.
+export function createProcessTaskExecutionModule(daemonGeneration: string): TaskExecutionModule {
   return new TaskExecutionModule(daemonGeneration)
 }
 

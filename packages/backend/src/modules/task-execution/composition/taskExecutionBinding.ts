@@ -1,7 +1,7 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
+  createProcessTaskExecutionModule,
   createProviderTaskExecutionModule,
-  taskExecutionModule,
   type ClaimedTaskExecution,
   type TaskExecutionModule,
 } from '../composition'
@@ -15,10 +15,16 @@ export interface TaskExecutionBinding {
   readonly legacyConnection?: PersistenceDb
 }
 
-export function composeProcessTaskExecutionBinding(db: PersistenceDb): TaskExecutionBinding {
+/** RFC-530: the process deployment's module is built here, once per session binding (as the PostgreSQL one is). */
+export function composeProcessTaskExecutionBinding(input: {
+  readonly db: PersistenceDb
+  readonly daemonGeneration: string
+}): TaskExecutionBinding {
+  const { db } = input
+  const module = createProcessTaskExecutionModule(input.daemonGeneration)
   return Object.freeze({
-    module: taskExecutionModule,
-    claim: (intentId: string) => taskExecutionModule.claim({ db, intentId }),
+    module,
+    claim: (intentId: string) => module.claim({ db, intentId }),
     legacyConnection: db,
   })
 }

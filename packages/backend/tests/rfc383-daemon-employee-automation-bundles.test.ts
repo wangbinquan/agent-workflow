@@ -23,8 +23,8 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { seedBundleTask } from './helpers/daemonTaskExecutionBundle'
-import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeTaskCancellation } from './helpers/taskCancellation'
 const homes: string[] = []
 function home() {
   const p = mkdtempSync(join(tmpdir(), 'rfc383-'))
@@ -276,7 +276,8 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
       const token = registry.tokenForTask(seeded.taskId)!
       const cancellation = spyOn(f.taskExecution.cancellation, 'cancel')
       try {
-        // Former SQLite constructed the facade per call, but it already reached the same registry.
+        // Former SQLite constructed the facade per call, but it already reached the same registry (RFC-530: the
+        // facade is a test helper now, handed the session's registry — there is no process-level one to reach).
         // Former PG used its session cancellation participant directly.
         const formerFacade = former && harness.applicationBinding.provider === 'sqlite'
         if (formerFacade)
@@ -285,6 +286,7 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
             epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             composeHumanGateOpenParticipantFactory(),
             createFileWorkspacePresenceQueries(),
+            registry,
           ).cancel(seeded.taskId)
         else if (former)
           await f.taskExecution.cancellation.cancel({

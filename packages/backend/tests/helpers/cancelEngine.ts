@@ -15,13 +15,13 @@ import { o2Ports } from './o2Closure'
 // RFC-388: live controllers use the execution module registry and its normal stop tickets.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { Task } from '@agent-workflow/shared'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
 
 const log = createLogger('task')
 

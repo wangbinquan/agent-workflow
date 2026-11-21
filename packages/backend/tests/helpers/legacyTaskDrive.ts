@@ -34,11 +34,6 @@ import {
   createGateContinuationDriver,
   composeWorktreeResumePreflight,
 } from '@/modules/task-execution/public/participants'
-import {
-  awaitTaskDriverIdle,
-  createDatabaseTaskDriverLifecyclePort,
-  isTaskDriverActive,
-} from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
 import { resolveTaskSubagentLiveCapture } from '@/modules/task-execution/application/launchConfiguration'
@@ -58,6 +53,11 @@ import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriv
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
+import {
+  awaitTaskDriverIdle,
+  createDatabaseTaskDriverLifecyclePort,
+  isTaskDriverActive,
+} from './taskDriverLifecycle'
 
 const log = createLogger('task')
 

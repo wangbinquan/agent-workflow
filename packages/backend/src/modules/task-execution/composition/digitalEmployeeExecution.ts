@@ -1,5 +1,3 @@
-import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
-import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { Actor } from '@/auth/actor'
 import {
   inspectDigitalEmployeeHumanReviewSnapshot,
@@ -7,14 +5,10 @@ import {
 } from '../infrastructure/digitalEmployeeExecutionReads'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { projectExecutionOutcome } from '../infrastructure/executionOutcome'
-import { getTask } from '../infrastructure/taskDetailRead'
 
 import { composeReactionExecutionAdmissionParticipantInTx } from '../application/adapters/reaction-admission-adapter'
 import { composeReactionExecutionPortV1 } from '../application/adapters/reaction-execution-adapter'
-import {
-  cancelAndReadTask,
-  createDigitalEmployeeExecutionCore,
-} from '../application/digitalEmployeeExecution'
+import { createDigitalEmployeeExecutionCore } from '../application/digitalEmployeeExecution'
 import type { DigitalEmployeeExecutionCore } from '../application/ports/digitalEmployeeExecutionCore'
 import type { DigitalEmployeeExecutionPorts } from '../application/ports/digitalEmployeeExecution'
 import type { ProgramToolSource } from '../application/ports/scriptFixture'
@@ -24,8 +18,6 @@ import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionRe
 import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
 import type { RootTaskLaunchKernel } from '../application/launch/rootTaskLaunch'
 import { launchDigitalEmployeeHost } from '../infrastructure/hostTaskLaunch'
-import { composeTaskCancellation } from './taskCancellation'
-import type { TaskExecutionPersistenceDependencies } from './taskExecutionPersistence'
 
 // RFC-415: the execution core and its pure helpers are task-execution application; these exports keep their callers.
 export {
@@ -126,31 +118,13 @@ export function composeReactionExecutionProvider(
  */
 export function composeDatabaseDigitalEmployeeExecutionPorts(
   db: PersistenceDb,
-  historyRestrictions: HistoryRestrictionPort,
-  humanGateOpen: HumanGateOpenParticipantFactory,
-  workspacePresence: TaskExecutionPersistenceDependencies['workspacePresence'],
 ): Pick<
   DigitalEmployeeExecutionDependencies,
-  'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
+  'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
 > {
+  // RFC-530: the task get / cancel pair is the daemon's task routes (`taskExecution.routes.tasks`); the default built
+  // here was always overridden and is gone (with the cancellation composer only it used).
   return Object.freeze({
-    tasks: {
-      get: (taskId: string) => getTask(db, taskId),
-      cancel: (taskId: string) =>
-        cancelAndReadTask(
-          {
-            cancel: (id) =>
-              composeTaskCancellation(
-                db,
-                historyRestrictions,
-                humanGateOpen,
-                workspacePresence,
-              ).cancel(id),
-            read: (id) => getTask(db, id),
-          },
-          taskId,
-        ),
-    },
     readModels: createTaskExecutionReadModels(db),
     resourceUsage: {
       read: (taskId: string) => readTaskResourceUsage(createTaskResourceLimitFacts(db), taskId),

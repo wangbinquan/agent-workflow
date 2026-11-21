@@ -25,14 +25,14 @@ import {
   createRuntimeSessionLeaseOperations,
   createTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { createLogger } from '@/util/log'
 import { NotFoundError } from '@/util/errors'
 import type { Task } from '@agent-workflow/shared'
+import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
+import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
 
 export interface ResumeEngineOptions {
   readonly workspacePresence?: WorkspacePresenceQueries

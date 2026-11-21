@@ -684,7 +684,9 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
     resolve(import.meta.dir, '../src/modules/task-execution/composition/taskExecutionBinding.ts'),
     'utf8',
   )
-  expect(binding).toContain('taskExecutionModule.claim({ db, intentId })')
+  // RFC-530: the SQLite binding claims through the module it builds per session.
+  expect(binding).toContain('module.claim({ db, intentId })')
+  expect(binding).not.toContain('taskExecutionModule')
   expect(binding).toContain('module.claimPersisted({ intentId })')
   expect(provider).toContain('executionModule.runtimeRegistry.hasTask(taskId)')
   expect(provider).toContain('executionModule.runtimeRegistry.awaitReleasedSettled(taskId)')

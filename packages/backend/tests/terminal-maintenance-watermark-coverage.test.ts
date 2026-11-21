@@ -32,7 +32,6 @@ import { join, resolve } from 'node:path'
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
 import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
-import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import {
@@ -44,6 +43,7 @@ import { createVerifiedStopProof } from '@/modules/task-execution/domain/ownersh
 import { retainedWatermarkCoversSettledEffect } from '@/modules/task-execution/domain/terminalMaintenance'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },

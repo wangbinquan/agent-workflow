@@ -4,12 +4,11 @@ import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
-import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskBundleInput, seedBundleTask } from './helpers/daemonTaskExecutionBundle'
 import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
+import { clearTaskDriverLifecycleForTesting } from './helpers/taskDriverLifecycle'
 
 const homes: string[] = []
 function home() {
@@ -49,15 +48,10 @@ describeEachProvider('RFC-388 neutral task execution runtime', (harness) => {
       expect(first.runtime.schedulerDriver).toBe(fixture.schedulerDriver)
       expect(first.runtime.topology.schedulerDriver).toBe(fixture.schedulerDriver)
       expect(first.persistence.reads).toBe(first.readModels)
-      if (binding.provider === 'sqlite') {
-        expect(first.executionModule).toBe(taskExecutionModule)
-        expect(first.executionModule).toBe(second.executionModule)
-      } else {
-        expect(first.executionModule).not.toBe(second.executionModule)
-        expect(first.executionModule.runtimeRegistry).not.toBe(
-          second.executionModule.runtimeRegistry,
-        )
-      }
+      // RFC-530: both deployments build the execution module with each session binding (the process deployment no
+      // longer uses a process-level instance), so two compositions never share a claim gate or registry.
+      expect(first.executionModule).not.toBe(second.executionModule)
+      expect(first.executionModule.runtimeRegistry).not.toBe(second.executionModule.runtimeRegistry)
     } finally {
       statements.stop()
       interval.mockRestore()

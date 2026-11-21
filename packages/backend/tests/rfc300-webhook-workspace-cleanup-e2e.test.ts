@@ -49,6 +49,7 @@ import { sha1Hex } from '../src/util/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { createUser } from './helpers/userFixture'
 import { createWorkflow } from './helpers/model/resourceWrites'
+import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 
 setDefaultTimeout(30_000)
 
@@ -537,7 +538,10 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
 
   const terminalControl = composeMrTerminalControl({
     db,
-    taskTermination: composeTaskSourceTermination({ db }),
+    taskTermination: composeTaskSourceTermination({
+      db,
+      runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+    }),
   })
   await terminalControl.reconcileOnBoot()
   terminalControl.resume()

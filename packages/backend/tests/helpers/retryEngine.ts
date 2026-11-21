@@ -23,14 +23,9 @@ import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { retryNodeProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
-import {
-  awaitTaskDriverReleasedSettled,
-  isTaskDriverActive,
-} from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import type { RepositoryPreparationLookup } from '@/modules/task-execution/application/ports/repositoryPreparationLookup'
 import type { TaskRepositoryPreparationBinding } from '@/modules/task-execution/infrastructure/repositoryPreparationBinding'
@@ -39,6 +34,8 @@ import { composeTestTaskDriveFactory } from './legacyTaskDrive'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
 import type { Task } from '@agent-workflow/shared'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
+import { awaitTaskDriverReleasedSettled, isTaskDriverActive } from './taskDriverLifecycle'
 
 export interface RetryEngineOptions {
   readonly appHome?: string

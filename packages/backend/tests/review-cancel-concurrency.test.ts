@@ -25,8 +25,6 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { queryRows } from '@/platform/persistence/queryHelpers'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
-import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 // Review mutations and user cancellation share one task-scoped FIFO.  These
 // tests put an explicit holder in front of both operations so the winner order
 // is deterministic rather than an accident of Promise scheduling.
@@ -79,6 +77,8 @@ import {
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { drainCommittedEventDeliveriesForTests } from './helpers/committedEventHarness'
 import { describeEachProvider } from './helpers/eachProvider'
+import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
+import { clearTaskDriverLifecycleForTesting } from './helpers/taskDriverLifecycle'
 
 interface Harness<Database extends PersistenceDb = PersistenceDb> {
   db: Database

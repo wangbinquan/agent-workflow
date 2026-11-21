@@ -52,7 +52,6 @@ import { resolve } from 'node:path'
 import type { packageCommand } from '@/cli/package'
 import {
   createProviderTaskExecutionModule,
-  createTaskExecutionTestModule,
   ProviderTaskExecutionModule,
   TaskExecutionModule,
 } from '@/modules/task-execution/composition'
@@ -60,6 +59,7 @@ import type { driveTaskEngineApplication } from '@/modules/task-execution/compos
 import type { TaskExecutionProviderRuntimeDependencies } from '@/modules/task-execution/composition/providerRuntime'
 import type { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import type { RunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 

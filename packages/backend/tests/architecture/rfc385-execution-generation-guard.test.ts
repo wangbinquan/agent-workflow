@@ -20,7 +20,8 @@ function executionGenerationViolations(source: string, expectedSites: number): s
 
 test('execution module, provider runtime, fusion, run configuration and standalone proof use the process generation', () => {
   for (const [path, sites] of [
-    ['bootstrap/daemonModules/adapters.ts', 1],
+    // RFC-530: the SQLite execution binding takes the process generation too (it builds the module per session).
+    ['bootstrap/daemonModules/adapters.ts', 2],
     ['bootstrap/daemonModules/taskExecution.ts', 1],
   ] as const) {
     const source = read(path)
@@ -30,7 +31,7 @@ test('execution module, provider runtime, fusion, run configuration and standalo
   const adapters = compact(read('bootstrap/daemonModules/adapters.ts'))
   expect(adapters).not.toContain('generationId')
   expect(adapters).toContain(
-    "sqlite:({db})=>({provider:'sqlite',execution:()=>composeProcessTaskExecutionBinding(db)",
+    "sqlite:({db})=>({provider:'sqlite',execution:()=>composeProcessTaskExecutionBinding({db,daemonGeneration:DAEMON_GENERATION})",
   )
   expect(adapters).toContain(
     "postgresql:({runtime})=>({provider:'postgresql',execution:(persistence)=>composeSessionTaskExecutionBinding(",
@@ -73,8 +74,15 @@ test('negative fixtures reject the former database/adapter wiring and missing si
 })
 
 test('SQLite, child runtime inheritance and CrewStation keep their existing generation sources', () => {
-  expect(read('modules/task-execution/composition.ts')).toContain(
+  // RFC-530: no module at import time — the SQLite binding builds one from the generation bootstrap passes.
+  expect(read('modules/task-execution/composition.ts')).not.toContain(
     'new TaskExecutionModule(DAEMON_GENERATION)',
+  )
+  expect(read('modules/task-execution/composition.ts')).toContain(
+    'return new TaskExecutionModule(daemonGeneration)',
+  )
+  expect(read('modules/task-execution/composition/taskExecutionBinding.ts')).toContain(
+    'const module = createProcessTaskExecutionModule(input.daemonGeneration)',
   )
   expect(read('bootstrap/daemonSessionAdapters.ts')).toContain(
     'recoveryProofGeneration: () => DAEMON_GENERATION',

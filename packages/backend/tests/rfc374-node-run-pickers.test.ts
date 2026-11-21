@@ -58,6 +58,7 @@ import { buildHarness, insertAlert, readNodeRunStatus } from './lifecycle-repair
 import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 const frame = { containerRunId: null, iteration: 0 }
 function row(
@@ -410,7 +411,8 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     ])
     const core = composeDigitalEmployeeExecutionCore({
       programs: createFileProgramToolSource('/tmp/rfc374'),
-      ...composeDatabaseDigitalEmployeeExecutionPorts(
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDigitalEmployeeTestTasks(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),

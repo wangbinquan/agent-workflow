@@ -3,10 +3,7 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
-import {
-  composeHumanGateTaskLockPort,
-  createTaskExecutionTestModule,
-} from '@/modules/task-execution/composition'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-333 T5 — human-gate park/decision participants share one SQLite
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
@@ -56,6 +53,7 @@ import {
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 const NOW = 1_788_969_900_000
 

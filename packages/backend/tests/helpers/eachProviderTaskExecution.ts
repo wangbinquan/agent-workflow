@@ -17,10 +17,9 @@ import { readAgentFixtures } from './model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTask } from './productionTaskLaunch'
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
-import {
-  composeProcessTaskExecutionBinding,
-  composeSessionTaskExecutionBinding,
-} from '@/modules/task-execution/composition/taskExecutionBinding'
+import { composeSessionTaskExecutionBinding } from '@/modules/task-execution/composition/taskExecutionBinding'
+// RFC-530: the SQLite runtime here drives the tests' shared execution module (as it drove the process-level instance).
+import { testProcessTaskExecutionBinding } from './taskExecutionModule'
 
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
@@ -349,7 +348,7 @@ export async function createEachProviderTaskExecution(
         // RFC-431: the provider runtime takes the deployment's workspace reads as stated.
         workspaceReads: createFileRepositoryWorkspaceReadQueries(),
         persistence,
-        execution: composeProcessTaskExecutionBinding(sqlite),
+        execution: testProcessTaskExecutionBinding(sqlite),
         log: createLogger('task'),
         finalizeWorkspace: async (taskId) => {
           await workspaceMaintenanceForTest(sqlite).finalizeClaimedWorkspace(taskId)

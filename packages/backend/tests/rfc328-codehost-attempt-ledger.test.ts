@@ -13,7 +13,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -38,6 +37,7 @@ import { submitTaskContinuation as submitTaskContinuationInTransaction } from '@
 // 这里改指两个引擎共用的那一份。
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 async function fixture(
   db: PersistenceDb,

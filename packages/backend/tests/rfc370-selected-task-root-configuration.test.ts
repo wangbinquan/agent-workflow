@@ -25,8 +25,8 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import { createSession } from './helpers/auth/sessionStore'
 import { chosenTaskRuns, unusedTaskRunContents } from './helpers/taskRunSelection'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
-import { awaitTaskDriverIdle } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { ownershipTokenKey } from '@/modules/task-execution/domain/ownership'
+import { awaitTaskDriverIdle } from './helpers/taskDriverLifecycle'
 
 function held() {
   return { entered: Promise.withResolvers<void>(), release: Promise.withResolvers<void>() }

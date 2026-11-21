@@ -60,6 +60,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 const roots: string[] = []
 
@@ -1091,7 +1092,8 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       launch: null as never,
       agents: null as never,
       workflows: null as never,
-      ...composeDatabaseDigitalEmployeeExecutionPorts(
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDigitalEmployeeTestTasks(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),
@@ -1145,7 +1147,8 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       launch: null as never,
       agents: null as never,
       workflows: null as never,
-      ...composeDatabaseDigitalEmployeeExecutionPorts(
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDigitalEmployeeTestTasks(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),

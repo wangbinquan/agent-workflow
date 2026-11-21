@@ -42,6 +42,7 @@ import type {
   ReactionRetryFeedbackRef,
 } from '@/modules/digital-employee/composition/required-ports'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const ROUND = 'round-adapter'
@@ -337,7 +338,8 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
 
     function core() {
       return composeDigitalEmployeeExecutionCore({
-        ...composeDatabaseDigitalEmployeeExecutionPorts(
+        ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+        ...composeDigitalEmployeeTestTasks(
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),

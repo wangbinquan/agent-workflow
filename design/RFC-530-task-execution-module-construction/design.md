@@ -43,15 +43,15 @@ composeProcessTaskExecutionBinding(db)`，PostgreSQL 一支交 `composeSessionTa
   （心跳 `Map` 属 S12 第 4 项，照旧），测试助手的同名函数另清测试模块的登记表。
 - `composeDatabaseDigitalEmployeeExecutionPorts` 删去被覆盖的 `tasks` 与只为它存在的三个参数，`composeTaskCancellation` 随之删去；函数体原样移进
   测试助手，另给依赖此前 `tasks` 缺省的用例一份同样的组合。
-- 源终止参与者的 `runtimeRegistry` 必填，删去回落到单例。
+- 源终止参与者的 `runtimeRegistry` 必填，删去回落到单例（daemon 集成装配的同名字段随之去掉多余的 `NonNullable`）。
 
 ### D3 用例与锁
 
 - 测试助手持有一份测试用的执行模块（用例照旧按文件在 `afterEach` 里重置）与一份建在它上面的 SQLite 执行绑定：直接组合运行期的测试助手驱动与观察
-  同一份模块，与此前用单例时相同；组合真实 daemon 的用例改取会话自己的执行模块（`application.taskExecution.selected.executionModule`）。直接取单例的
-  用例改取测试助手的；靠源终止回落的用例显式给登记表。
+  同一份模块，与此前用单例时相同；组合真实 daemon 的用例改取会话自己的执行模块（`application.taskExecution.selected.executionModule`），把测试助手里的
+  取消组合用在已装配会话上的用例显式交入会话的登记表（缺省是测试模块的）。直接取单例的用例改取测试助手的；靠源终止回落的用例显式给登记表。
 - 锁随改：rfc385 改钉绑定按交入的代次构造、bootstrap 两支交同一个 `DAEMON_GENERATION`；rfc388 改钉 SQLite 每次装配一份（与 PostgreSQL 一致）、同一装配里
-  下游共用；rfc359-w8、rfc517 随源码改。
+  下游共用；rfc359-w8 改钉绑定经自己的模块认领；rfc526 的三处随删去的参数与文件改。
 - 新增 `packages/backend/tests/rfc530-task-execution-module-construction-boundary.test.ts`，登记 guard-manifest：生产代码里没有模块级的
   `new TaskExecutionModule(`（只在函数体里）；task-execution 组合层不导出执行模块；删去与移走的名字不在生产代码里；SQLite 绑定每次构造、两次绑定
   的模块不同；带负对照。
@@ -69,7 +69,8 @@ composeProcessTaskExecutionBinding(db)`，PostgreSQL 一支交 `composeSessionTa
 
 ## 4. 用例
 
-- ① 门（D3）；② 行为：SQLite 绑定按交入的代次构造、每次一份，认领经该份模块；③ 既有用例覆盖认领、驱动、停止、后台与源终止（经测试助手）。
+- ① 门（D3）；② 行为：SQLite 绑定按交入的代次构造、每次一份，认领经该份模块；关停一个会话（`dispose()`）只封存它自己的模块，之后的绑定拿到
+  未封存的闸门（单例缺陷的回归用例：此前第二次绑定拿到的是已封存的同一份）；③ 既有用例覆盖认领、驱动、停止、后台与源终止（经测试助手）。
 
 ## 5. 失败模式
 

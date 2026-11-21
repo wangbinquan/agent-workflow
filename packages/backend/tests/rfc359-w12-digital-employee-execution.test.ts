@@ -50,6 +50,7 @@ import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecu
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const CONTRACT = { contractId: 'development.analyze-implement', version: 1 }
@@ -239,7 +240,8 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
                     persistence: provider.persistence,
                     completionMode: 'await-settle',
                   }),
-            ...composeDatabaseDigitalEmployeeExecutionPorts(
+            ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+            ...composeDigitalEmployeeTestTasks(
               harness.db,
               epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               composeHumanGateOpenParticipantFactory(),

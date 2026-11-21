@@ -29,7 +29,6 @@ import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { submitTaskContinuation } from '@/modules/task-execution/application/submitTaskContinuation'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/domain/humanGateContinuation'
-import { awaitTaskDriverIdle } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { TaskDriveRequest } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { DefaultTaskDriveCoordinatorOptions } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
 import type { TaskLaunchConfigurationQueries } from '@/modules/task-execution/application/ports/taskLaunchConfiguration'
@@ -41,6 +40,7 @@ import type { RepositoryPreparationEffectFactory } from '@/modules/source-contro
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { awaitTaskDriverIdle } from './helpers/taskDriverLifecycle'
 
 const homes: string[] = []
 afterEach(() => {

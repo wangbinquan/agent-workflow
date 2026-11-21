@@ -26,13 +26,15 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { gracefulShutdown } from '../src/modules/task-execution/application/recovery/gracefulShutdown'
 import {
-  taskExecutionModule,
   createTaskExecutionShutdownController,
   createProviderTaskExecutionModule,
-  createTaskExecutionTestModule,
 } from '../src/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import {
+  testTaskExecutionModule as taskExecutionModule,
+  createTaskExecutionTestModule,
+} from './helpers/taskExecutionModule'
 
 interface Harness {
   db: PersistenceDb

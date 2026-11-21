@@ -80,6 +80,7 @@ import type { CommittedEventEnvelopeV1 } from '@/platform/events/committed/types
 import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 
 const BINDING = 'gitlab:group/proj!42'
 const DELIVERY = 'dlv-rfc359-w8'
@@ -87,7 +88,10 @@ const DELIVERY = 'dlv-rfc359-w8'
 // RFC-359 AC-1（第 14 刀）：参与者两个引擎合成一份，两条泳道从此是**同一个工厂**，
 // 唯一按引擎变的是库句柄（由 harness 给）。
 function participantFor(harness: ProviderHarness): TaskSourceTerminationParticipant {
-  return createTaskSourceTerminationParticipant({ db: harness.db })
+  return createTaskSourceTerminationParticipant({
+    db: harness.db,
+    runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+  })
 }
 
 /**

@@ -1,4 +1,3 @@
-import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { DigitalEmployeeWriterInstallation as ImportedDigitalEmployeeWriterInstallation } from '@/modules/digital-employee/composition'
 // RFC-383: one digital-employee module and its satellites per provider session.
@@ -305,12 +304,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     graphDelivery: graph.care,
   })
   const reactionExecution = composeReactionExecutionProvider({
-    ...composeDatabaseDigitalEmployeeExecutionPorts(
-      db,
-      input.historyRestrictions,
-      composeHumanGateOpenParticipantFactory(),
-      input.workspacePresence,
-    ),
+    ...composeDatabaseDigitalEmployeeExecutionPorts(db),
     ...taskExecution.hostTasks,
     programs: programToolSource,
     tasks: taskExecution.routes.tasks,

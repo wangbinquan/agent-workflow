@@ -65,9 +65,8 @@ export function composeDaemonIntegrationModules(input: {
   readonly bindEventAutomationContexts: (
     delegatedRequests: WebhookDispatchDeps['identityAccess']['delegatedRequests'],
   ) => EventAutomationContexts
-  readonly runtimeRegistry: NonNullable<
-    Parameters<typeof composeTaskSourceTermination>[0]['runtimeRegistry']
-  >
+  // RFC-530: required at the participant too (no process-level registry to fall back to).
+  readonly runtimeRegistry: Parameters<typeof composeTaskSourceTermination>[0]['runtimeRegistry']
   readonly workspaceMaintenance: WorkspaceClaimFinalizationCommand
   readonly taskExecutions: Parameters<
     typeof createWebhookDispatchExecutionRuntime

@@ -56,7 +56,6 @@ import {
 } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { prepareClarifyDecision } from '../src/modules/collaboration/infrastructure/clarifyDecision'
 import { composeGateContinuationPreDrive as createGateContinuationPreDriveStep } from '../src/modules/task-execution/composition/gateContinuationPreDrive'
-import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
 import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
@@ -72,6 +71,7 @@ import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 
 const ulid = monotonicFactory()
 

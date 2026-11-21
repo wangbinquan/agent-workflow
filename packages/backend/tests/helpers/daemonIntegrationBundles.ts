@@ -9,13 +9,13 @@ import {
   createEventAutomationDelegatedContextBinding,
 } from '@/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
-import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import { taskExecutionResourceBinding } from './integrationTriggerResourceBinding'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
+import { createTaskExecutionTestModule } from './taskExecutionModule'
 
 type IntegrationInput = Parameters<typeof composeDaemonIntegrationModules>[0]
 export function integrationBundleFixture(

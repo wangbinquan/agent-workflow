@@ -63,7 +63,8 @@ type TaskAdapterInput = {
 export const DAEMON_TASK_EXECUTION_ADAPTERS = {
   sqlite: ({ db }) => ({
     provider: 'sqlite',
-    execution: () => composeProcessTaskExecutionBinding(db),
+    execution: () =>
+      composeProcessTaskExecutionBinding({ db, daemonGeneration: DAEMON_GENERATION }),
     processConcurrencyScope: db,
   }),
   postgresql: ({ runtime }) => ({

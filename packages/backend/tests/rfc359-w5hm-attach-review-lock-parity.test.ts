@@ -26,13 +26,11 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import type { TaskDriverLifecyclePort } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
 import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
-import {
-  createDatabaseTaskDriverLifecyclePort,
-  createTaskDriverLifecyclePort,
-} from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { withTaskReviewMutationLock } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createDatabaseTaskDriverLifecyclePort } from './helpers/taskDriverLifecycle'
 
 const silentLog: TaskExecutionTopologyLogger = {
   info: () => {},

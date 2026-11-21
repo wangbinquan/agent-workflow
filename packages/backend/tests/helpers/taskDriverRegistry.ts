@@ -1,6 +1,6 @@
+import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
+import { isTaskDriverActive } from './taskDriverLifecycle'
 // RFC-478 —— 原 `services/task.ts` 的两个测试专用出口（生产零调用方），函数体原样迁来。
-import { taskExecutionModule } from '@/modules/task-execution/composition'
-import { isTaskDriverActive } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's

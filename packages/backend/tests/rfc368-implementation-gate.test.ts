@@ -42,10 +42,11 @@ import {
   composeDigitalEmployeeExecutionCore,
   type DigitalEmployeeExecutionDependencies,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { taskStopProjection } from '@/modules/task-execution/domain/sourceTermination'
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { composeTaskCancellation } from './helpers/taskCancellation'
+import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -311,7 +312,8 @@ describe('RFC-368 实现门 findings', () => {
         errorMessage: 'task ran 61000ms, exceeding configured limit 60000ms',
       })
       const core = composeDigitalEmployeeExecutionCore({
-        ...composeDatabaseDigitalEmployeeExecutionPorts(
+        ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+        ...composeDigitalEmployeeTestTasks(
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),
