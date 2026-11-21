@@ -57,6 +57,7 @@ import { TASK_FACTS } from '@/platform/persistence/migration/conversion/lookups/
 import type { LookupResolver } from '@/platform/persistence/migration/conversion/lookups'
 import type { StagedReader } from '@/platform/persistence/migration/conversion/staging'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const TASK = '01M6AGQ96V0PCZBMMPMT67KNH7'
 const WORKER_SLOT = '59a068716e39443b05c5fc457b4a7706722d655a4060a1a1754933555c679042'
@@ -233,6 +234,7 @@ const docSlot = defaultContinuationSlotKey({ nodeId: 'doc', iteration: 0, shardK
 /** A claimed task and the real local effect observer the isolation step uses. */
 async function claimedTask(h: ProviderHarness, taskId: string) {
   const persistence = createTaskExecutionPersistence(h.db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
     recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

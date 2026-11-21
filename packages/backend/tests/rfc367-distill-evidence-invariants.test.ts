@@ -4,7 +4,10 @@ import { readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 closeout — the three acceptance items that had no named lock yet.
 //
@@ -180,7 +183,9 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
     ),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(appHome(), 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome()),

@@ -23,7 +23,10 @@ import { createActionTemplatePersistence } from '@/modules/development-automatio
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTokenCallAudit } from '@/auth/composition'
 import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
@@ -32,6 +35,7 @@ import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMain
 import { gcDeliveriesSlice } from '@/modules/integration/application/webhookDeliveryStore'
 import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/application-home') => ({
   workspace: {
@@ -68,6 +72,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   },
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
   taskRecovery: createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -75,6 +80,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   taskArchive: createDrizzleTaskArchiveMaintenanceCommand(
     db,
     o2Ports(db).collaborationReads.archive,
+    { content: createFileTaskArchiveContent() },
   ),
   tokenAudit: createTokenCallAudit(db),
   system: {

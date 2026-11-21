@@ -31,6 +31,11 @@ import {
   type TaskRepairOperations,
 } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/types'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 type Dependencies = Parameters<typeof createTaskRouteRepairOperations>[0]
 
@@ -103,6 +108,7 @@ export function createRepairEngine(
 ): RepairEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-repair-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -124,6 +130,8 @@ export function createRepairEngine(
     collaborationRuntime:
       options.collaborationRuntime ??
       createCollaborationRuntimeMechanics(db, {
+        portArtifactReaderFor: (appHome: string) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
         taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),

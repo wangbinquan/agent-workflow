@@ -48,6 +48,10 @@ import {
 } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 
 test('object pin replay is idempotent for one owner lifetime and release is idempotent', async () => {
   const f = objectFixture()
@@ -274,6 +278,8 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     })
     let failFinalization = true
     const mechanics = createCollaborationRuntimeMechanics(db, {
+      portArtifactReaderFor: (appHome: string) =>
+        composePortArtifactOperations(createFilePortArtifactContent(appHome)),
       taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),

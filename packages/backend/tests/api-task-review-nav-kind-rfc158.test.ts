@@ -26,6 +26,11 @@ import { SYSTEM_DECIDER } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -136,7 +141,13 @@ async function seedDocVersion(
 }
 
 async function navKind(db: PersistenceDb, taskId: string, runId: string): Promise<unknown> {
-  const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+  const res = await taskNodeRunsProjection(
+    withO2Closure({
+      nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+      db,
+    }),
+    taskId,
+  )
   return res.runs.find((r) => r.id === runId)!.reviewNavKind ?? null
 }
 

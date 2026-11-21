@@ -58,6 +58,8 @@ import {
 import { inspectDigitalEmployeeHumanReviewSnapshot } from '@/modules/task-execution/infrastructure/digitalEmployeeExecutionReads'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent, updateAgent } from './helpers/model/resourceWrites'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 
 const roots: string[] = []
 
@@ -1083,7 +1085,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，库读收成端口。
       // 这条用例只走 `inspect`，所以启动面给 never、库内端口取缺省实现
       // （生产的两个 SQLite 组合根用的是同一个 `composeDatabaseDigitalEmployeeExecutionPorts`）。
-      appHome: '/tmp',
+      programs: createFileProgramToolSource('/tmp'),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
@@ -1093,6 +1095,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
       ),
       executionContracts: null as never,
     })
@@ -1136,7 +1139,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，库读收成端口。
       // 这条用例只走 `inspect`，所以启动面给 never、库内端口取缺省实现
       // （生产的两个 SQLite 组合根用的是同一个 `composeDatabaseDigitalEmployeeExecutionPorts`）。
-      appHome: '/tmp',
+      programs: createFileProgramToolSource('/tmp'),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
@@ -1146,6 +1149,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
       ),
       executionContracts: null as never,
     })

@@ -19,13 +19,13 @@ import type { DigitalEmployeeExecutionCore } from '../application/ports/digitalE
 import type { DigitalEmployeeExecutionPorts } from '../application/ports/digitalEmployeeExecution'
 import type { ProgramToolSource } from '../application/ports/scriptFixture'
 import { readTaskResourceUsage } from '../application/taskResourceUsage'
-import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
 import { createReactionAdmissionStore } from '../infrastructure/reactionExecutionAdmissions'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
 import type { RootTaskLaunchKernel } from '../application/launch/rootTaskLaunch'
 import { launchDigitalEmployeeHost } from '../infrastructure/hostTaskLaunch'
 import { composeTaskCancellation } from './taskCancellation'
+import type { TaskExecutionPersistenceDependencies } from './taskExecutionPersistence'
 
 // RFC-415: the execution core and its pure helpers are task-execution application; these exports keep their callers.
 export {
@@ -42,10 +42,8 @@ export interface DigitalEmployeeExecutionDependencies extends Omit<
   DigitalEmployeeExecutionPorts,
   'programs' | 'launchHost' | 'projectOutcome'
 > {
-  readonly appHome: string
-  /** RFC-370 §10 V19: the selected program artifact store; standalone reads
-   * the application home when omitted. */
-  readonly programs?: ProgramToolSource
+  /** RFC-370 §10 V19 / RFC-526: the selected program artifact store (required; the daemon gives the deployment's). */
+  readonly programs: ProgramToolSource
   /**
    * **惰性**取 actor：只有 `launch` 用得到它，而 SQLite 那个组合根
    * （`server.ts` 的 `composeSqliteApiRouteMounts`）是**同步**函数，
@@ -63,10 +61,10 @@ export interface DigitalEmployeeExecutionDependencies extends Omit<
 function digitalEmployeeExecutionPorts(
   deps: DigitalEmployeeExecutionDependencies,
 ): DigitalEmployeeExecutionPorts {
-  const { appHome, programs, resolveActor, resourceAuthorityFor, launch, ...reads } = deps
+  const { programs, resolveActor, resourceAuthorityFor, launch, ...reads } = deps
   return {
     ...reads,
-    programs: programs ?? createFileProgramToolSource(appHome),
+    programs,
     projectOutcome: projectExecutionOutcome,
     launchHost: (request) =>
       launchDigitalEmployeeHost({ resolveActor, resourceAuthorityFor, launch }, request),
@@ -130,6 +128,7 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
   db: PersistenceDb,
   historyRestrictions: HistoryRestrictionPort,
   humanGateOpen: HumanGateOpenParticipantFactory,
+  workspacePresence: TaskExecutionPersistenceDependencies['workspacePresence'],
 ): Pick<
   DigitalEmployeeExecutionDependencies,
   'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
@@ -141,7 +140,12 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
         cancelAndReadTask(
           {
             cancel: (id) =>
-              composeTaskCancellation(db, historyRestrictions, humanGateOpen).cancel(id),
+              composeTaskCancellation(
+                db,
+                historyRestrictions,
+                humanGateOpen,
+                workspacePresence,
+              ).cancel(id),
             read: (id) => getTask(db, id),
           },
           taskId,

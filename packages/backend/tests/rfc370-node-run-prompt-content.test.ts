@@ -5,9 +5,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PromptStorage } from '../src/modules/task-execution/public/types'
+// RFC-526: the composition takes the caller's content (no native root to ignore); the former `select*` helper is gone —
+// consumers check the selected operations with `requireNodeRunPromptOperations` and use them as given.
 import {
   composeNodeRunPromptOperations,
-  selectNodeRunPromptOperations,
+  requireNodeRunPromptOperations,
 } from '../src/modules/task-execution/composition/nodeRunPrompts'
 import type {
   NodeRunPromptContentEffects,
@@ -18,10 +20,10 @@ import {
   nodeRunPromptRelPath as publicNodeRunPromptRelPath,
   storeNodeRunPrompt as publicStoreNodeRunPrompt,
   readNodeRunPrompt as publicReadNodeRunPrompt,
-  selectNodeRunPromptOperations as publicSelectNodeRunPromptOperations,
   nodeRunPromptRelPath,
   storeNodeRunPrompt,
   readNodeRunPrompt,
+  createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 
 function held<T>() {
@@ -79,7 +81,7 @@ class PrivateContent implements NodeRunPromptContentEffects {
 describe('RFC-370 node-run prompt content', () => {
   test('a complete frozen prototype receiver retains private state and opaque references', async () => {
     const content = Object.freeze(new PrivateContent())
-    const operations = composeNodeRunPromptOperations(content, '/unused-native-root')
+    const operations = composeNodeRunPromptOperations(content)
     const prompt = 'x'.repeat(4096)
     const stored = await operations.store('task', 'run', prompt)
     expect(stored).toEqual({ promptText: null, promptPath: 'object:task/run' })
@@ -206,7 +208,7 @@ describe('RFC-370 node-run prompt content', () => {
     }
     for (const value of [null, {}, { read: async () => 'partial' }]) {
       expect(() =>
-        selectNodeRunPromptOperations(value as unknown as NodeRunPromptOperations),
+        requireNodeRunPromptOperations(value as unknown as NodeRunPromptOperations),
       ).toThrow('complete operations')
     }
   })
@@ -223,8 +225,8 @@ describe('RFC-370 node-run prompt content', () => {
       }
     }
     const receiver = Object.freeze(new PrivateOperations())
-    const selected = selectNodeRunPromptOperations(receiver)
-    expect(selected).toBe(receiver)
+    expect(() => requireNodeRunPromptOperations(receiver)).not.toThrow()
+    const selected: NodeRunPromptOperations = receiver
     expect(await selected.store('task', 'run', 'body')).toEqual({
       promptText: 'body',
       promptPath: null,
@@ -327,7 +329,7 @@ describe('RFC-370 node-run prompt content', () => {
       expect(stored.promptPath).toBe(join('task', 'prompts', 'run.md'))
       expect(readFileSync(join(runs, stored.promptPath!), 'utf-8')).toBe(prompt)
       expect(readNodeRunPrompt(stored, runs)).toBe(prompt)
-      const operations = composeNodeRunPromptOperations(undefined, runs)
+      const operations = composeNodeRunPromptOperations(createFileNodeRunPromptContent(runs))
       expect(await operations.read(stored)).toBe(prompt)
       rmSync(join(runs, stored.promptPath!))
       expect(await operations.read(stored)).toBeNull()
@@ -350,7 +352,6 @@ test('public prompt contracts retain legacy function and complete operations ide
   expect(publicNodeRunPromptRelPath).toBe(nodeRunPromptRelPath)
   expect(publicStoreNodeRunPrompt).toBe(storeNodeRunPrompt)
   expect(publicReadNodeRunPrompt).toBe(readNodeRunPrompt)
-  expect(publicSelectNodeRunPromptOperations).toBe(selectNodeRunPromptOperations)
   const storeAck = held<PromptStorage>()
   const readAck = held<string | null>()
   class PublicOperations implements NodeRunPromptOperations {
@@ -366,8 +367,8 @@ test('public prompt contracts retain legacy function and complete operations ide
     }
   }
   const receiver = Object.freeze(new PublicOperations())
-  const operations = publicSelectNodeRunPromptOperations(receiver, '/unused-public-root')
-  expect(operations).toBe(receiver)
+  expect(() => requireNodeRunPromptOperations(receiver)).not.toThrow()
+  const operations: NodeRunPromptOperations = receiver
   let storeSettled = false
   let readSettled = false
   const storing = operations.store('task', 'run', 'prompt').then((result) => {
@@ -392,10 +393,10 @@ test('public prompt contracts retain legacy function and complete operations ide
     expect(await storing).toBe(stored)
     expect(await reading).toBe('public body')
     expect(() =>
-      publicSelectNodeRunPromptOperations(null as unknown as NodeRunPromptOperations),
+      requireNodeRunPromptOperations(null as unknown as NodeRunPromptOperations),
     ).toThrow(TypeError)
     expect(() =>
-      publicSelectNodeRunPromptOperations({ store: receiver.store } as NodeRunPromptOperations),
+      requireNodeRunPromptOperations({ store: receiver.store } as NodeRunPromptOperations),
     ).toThrow(TypeError)
   } finally {
     storeAck.resolve({ promptText: null, promptPath: 'released' })

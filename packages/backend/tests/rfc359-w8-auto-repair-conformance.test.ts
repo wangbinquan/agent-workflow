@@ -36,6 +36,7 @@ import { createTaskRouteRepairOperations } from '@/modules/task-execution/infras
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import { listOpenLifecycleAlertsForTask } from '@/modules/task-execution/application/lifecycleAlerts/openLifecycleAlerts'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const NOW = 1_788_600_000_000
 /** 宽到不会自己跳闸的断路器；测断路器的用例自己收窄。 */
@@ -92,6 +93,7 @@ function repairEngineFor(
   } = {},
 ) {
   const persistence = createTaskExecutionPersistence(harness.db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
     recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

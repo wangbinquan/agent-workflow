@@ -23,6 +23,7 @@ import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { gracefulShutdown } from '@/modules/task-execution/application/recovery/gracefulShutdown'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedBundleTask, taskBundleInput } from './helpers/daemonTaskExecutionBundle'
+import { createLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 
 const homes: string[] = []
 function home() {
@@ -87,6 +88,7 @@ describeEachProvider('RFC-385 process execution generation', (harness) => {
       },
       recover: (generation: string) =>
         runTaskExecutionBootRecovery({
+          recoveryEffects: createLocalBootExecutionRecoveryFactory(),
           persistence,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(harness.db),
           lockProof: createDaemonLockProof({

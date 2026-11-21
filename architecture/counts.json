@@ -99,8 +99,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 18,
-      "reason": "max=18: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); RFC-491 moves the contract-test-only native task agent run out of production (22 -> 21: its source-control git observation pair); RFC-523 drops intent apply's resource-catalog ACL read repository, MCP transaction lifecycle and persistence-port pairs once the daemon composes the resource binding (21 -> 18); no growth authorized."
+      "max": 17,
+      "reason": "max=17: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); RFC-491 moves the contract-test-only native task agent run out of production (22 -> 21: its source-control git observation pair); RFC-523 drops intent apply's resource-catalog ACL read repository, MCP transaction lifecycle and persistence-port pairs once the daemon composes the resource binding (21 -> 18); RFC-526 drops task-execution's lifecycle persistence -> source-control local workspace presence pair once the presence is a required selection (18 -> 17); no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,

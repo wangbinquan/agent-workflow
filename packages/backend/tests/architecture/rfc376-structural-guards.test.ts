@@ -94,7 +94,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-489：task-execution 的运行族根、本机调用与本机兼容运行的协议不再取 runtime-management、resource-catalog、source-control 的
     // 内部（bootstrap 绑定提供者，运行时管理由 runtime-management 自己装配），21 对销账。
     'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
-    'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
+    // RFC-526：运行生命周期持久化的工作区存在性改为必填选择，不再取 source-control 组合层的本机实现，一对销账。
     // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
     // RFC-491：只供契约用例的本机兼容运行迁入 tests/helpers，它指向 source-control 的一对销账。
     'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',

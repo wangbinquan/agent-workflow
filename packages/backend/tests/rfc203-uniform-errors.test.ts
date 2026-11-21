@@ -24,6 +24,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 async function seedFailedTask(
   db: PersistenceDb,
@@ -114,7 +119,15 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
 
   test('taskNodeRunsProjection surfaces per-run failureCode', async () => {
     const { taskId } = await seedFailedTask(db, 'clarify-required')
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     const coded = res.runs.find((r) => r.failureCode === 'clarify-required')
     expect(coded).toBeDefined()
   })

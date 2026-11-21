@@ -37,6 +37,7 @@ import { join } from 'node:path'
 import { parseDeleteCleanupPlan } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
 import { Paths } from '@/util/paths'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 
 function member(taskId: string): MaintenanceMemberSnapshot {
   return {
@@ -73,7 +74,11 @@ test('v1 计划（PG 形状：无 directories）能被解析，directories 按 m
     taskIds: ['task_root', 'task_child'],
     worktrees: [{ taskId: 'task_root', ...WORKTREE }],
   })
-  const plan = parseDeleteCleanupPlan(json, [member('task_root'), member('task_child')])
+  const plan = parseDeleteCleanupPlan(
+    json,
+    [member('task_root'), member('task_child')],
+    composeLocalTaskDeletionEffects().content,
+  )
 
   expect(plan).not.toBeNull()
   expect(plan?.taskId).toBe('task_root')
@@ -94,7 +99,11 @@ test('v1 的 worktrees 原样保留（PG 的条目多带一个 taskId 字段也�
       { taskId: 'task_child', repoPath: '/b/repo', worktreePath: '/b/wt' },
     ],
   })
-  const plan = parseDeleteCleanupPlan(json, [member('task_root')])
+  const plan = parseDeleteCleanupPlan(
+    json,
+    [member('task_root')],
+    composeLocalTaskDeletionEffects().content,
+  )
 
   expect(plan?.worktrees).toEqual([
     { taskId: 'task_root', repoPath: '/a/repo', worktreePath: '/a/wt' },
@@ -104,7 +113,7 @@ test('v1 的 worktrees 原样保留（PG 的条目多带一个 taskId 字段也�
 
 test('v1 + 零成员 → 解析成功且 directories 为空（不是 null）', () => {
   const json = JSON.stringify({ v: 1, taskId: 'task_root', taskIds: [], worktrees: [] })
-  const plan = parseDeleteCleanupPlan(json, [])
+  const plan = parseDeleteCleanupPlan(json, [], composeLocalTaskDeletionEffects().content)
 
   expect(plan).not.toBeNull()
   expect(plan?.directories).toEqual([])
@@ -119,7 +128,11 @@ test('v1 不消费 directories 字段：即便带了个畸形的也照样按 mem
     worktrees: [],
     directories: 42,
   })
-  const plan = parseDeleteCleanupPlan(json, [member('task_root')])
+  const plan = parseDeleteCleanupPlan(
+    json,
+    [member('task_root')],
+    composeLocalTaskDeletionEffects().content,
+  )
 
   expect(plan?.directories).toEqual(expectedDirs(['task_root']))
 })
@@ -137,7 +150,11 @@ test('v2 计划：directories 用计划里写死的那份，完全忽略 members
     directories: ['/planned/one', '/planned/two'],
   })
   // 故意给一组与计划无关的 members：v2 必须完全不看它们。
-  const plan = parseDeleteCleanupPlan(json, [member('task_unrelated')])
+  const plan = parseDeleteCleanupPlan(
+    json,
+    [member('task_unrelated')],
+    composeLocalTaskDeletionEffects().content,
+  )
 
   expect(plan).toEqual({
     v: 2,
@@ -156,7 +173,11 @@ test('v2 计划：空 directories 保持为空，不回退到 members 推导', (
     worktrees: [],
     directories: [],
   })
-  const plan = parseDeleteCleanupPlan(json, [member('task_root')])
+  const plan = parseDeleteCleanupPlan(
+    json,
+    [member('task_root')],
+    composeLocalTaskDeletionEffects().content,
+  )
 
   expect(plan?.directories).toEqual([])
 })
@@ -170,7 +191,9 @@ test('v2 计划：parentTaskId 非串时归一为 null', () => {
     directories: [],
   })
 
-  expect(parseDeleteCleanupPlan(json, [])?.parentTaskId).toBeNull()
+  expect(
+    parseDeleteCleanupPlan(json, [], composeLocalTaskDeletionEffects().content)?.parentTaskId,
+  ).toBeNull()
 })
 
 // ---------------------------------------------------------------------------
@@ -198,10 +221,22 @@ const REJECTED: ReadonlyArray<readonly [string, unknown]> = [
 
 for (const [label, payload] of REJECTED) {
   test(`坏计划仍返回 null：${label}`, () => {
-    expect(parseDeleteCleanupPlan(JSON.stringify(payload), [member('task_root')])).toBeNull()
+    expect(
+      parseDeleteCleanupPlan(
+        JSON.stringify(payload),
+        [member('task_root')],
+        composeLocalTaskDeletionEffects().content,
+      ),
+    ).toBeNull()
   })
 }
 
 test('非 JSON 串返回 null', () => {
-  expect(parseDeleteCleanupPlan('not json at all', [member('task_root')])).toBeNull()
+  expect(
+    parseDeleteCleanupPlan(
+      'not json at all',
+      [member('task_root')],
+      composeLocalTaskDeletionEffects().content,
+    ),
+  ).toBeNull()
 })

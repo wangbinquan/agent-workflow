@@ -12,7 +12,10 @@ import type {
   ExecutionFence,
 } from '@/modules/system-operations/application/ports/executionAuthority'
 
-function bootInput(factory: BootExecutionRecoveryFactory): TaskExecutionBootRecoveryInput {
+// RFC-526: the composition entry's input is the family input plus the required execution recovery.
+function bootInput(
+  factory: BootExecutionRecoveryFactory,
+): TaskExecutionBootRecoveryInput & { readonly recoveryEffects: BootExecutionRecoveryFactory } {
   return {
     persistence: {
       get recovery(): never {

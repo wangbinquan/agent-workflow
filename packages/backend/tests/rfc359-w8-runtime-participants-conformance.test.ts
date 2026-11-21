@@ -28,8 +28,14 @@ import {
   composeLegacyTaskRunDriveBinding,
   composeTaskWorkspaceExcludeProfilesFor,
 } from '@/modules/task-execution/composition/localTaskRunSelection'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 —— `TaskExecutionRuntimeParticipants` 的双引擎对拍。
@@ -175,12 +181,14 @@ function sharedInput(
         composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders),
       taskScriptRunsFor: composeLocalTaskScriptRunFamily,
       nodeRunPromptsFor: (appHome) =>
-        composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-      portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+        composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(appHome, 'runs'))),
+      portArtifactsFor: (appHome) =>
+        composePortArtifactOperations(createFilePortArtifactContent(appHome)),
     }),
     workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -191,6 +199,8 @@ function sharedInput(
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+      portArtifactReaderFor: (appHome: string) =>
+        composePortArtifactOperations(createFilePortArtifactContent(appHome)),
       taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),

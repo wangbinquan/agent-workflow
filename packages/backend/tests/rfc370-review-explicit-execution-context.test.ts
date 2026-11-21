@@ -51,6 +51,11 @@ import {
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const APP_HOME = mkdtempSync(join(tmpdir(), 'aw-rfc370-review-context-'))
 afterAll(() => rmSync(APP_HOME, { recursive: true, force: true }))
@@ -141,6 +146,7 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
     kind: 'markdown',
   })
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -174,6 +180,8 @@ describeEachProvider(
     test('the owner context passed by the scheduler parks the gate without an ambient context', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        portArtifactReaderFor: (appHome: string) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
         taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(harness.db),
@@ -226,6 +234,8 @@ describeEachProvider(
       const seeded = await seedClaimedReviewTask(harness.db)
       expect(seeded.context.legacyConnection).toBeUndefined()
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        portArtifactReaderFor: (appHome: string) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
         taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(harness.db),
@@ -256,6 +266,8 @@ describeEachProvider(
     test('without any context the claimed owner still refuses the ownerless write', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        portArtifactReaderFor: (appHome: string) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
         taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(harness.db),

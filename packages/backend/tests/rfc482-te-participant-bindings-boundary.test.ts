@@ -25,6 +25,7 @@ import { o2Ports } from './helpers/o2Closure'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 const TE = 'modules/task-execution/'
@@ -348,6 +349,7 @@ describeEachProvider('RFC-482 —— 持久化包的指令读取', (harness) => 
     const taskId = freshTaskId()
     await seedTask(db, taskId)
     const bundle = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

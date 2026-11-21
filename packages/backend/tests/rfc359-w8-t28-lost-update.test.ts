@@ -82,6 +82,7 @@ import type { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import type { StatementRecording } from './helpers/statementRecorder'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 
 const NOW = 1_788_364_800_000
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -716,6 +717,7 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     const releaseSecond = await getTaskWriteSem(secondChild).acquire()
     const deletingFirst = observe(
       deleteTask(legacy(db), firstChild, {
+        effects: composeLocalTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -723,6 +725,7 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     )
     const deletingSecond = observe(
       deleteTask(legacy(db), secondChild, {
+        effects: composeLocalTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },

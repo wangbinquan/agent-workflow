@@ -31,6 +31,8 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { createTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/providerRuntime'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 
 const NOW = 1_788_278_400_000
 
@@ -107,6 +109,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       const recovered = await createTaskArchiveMaintenanceCommand(
         db,
         o2Ports(db).collaborationReads.archive,
+        { content: createFileTaskArchiveContent() },
       ).recover(dirs)
       expect(recovered.promoted).toEqual([gone])
       expect(recovered.discarded).toEqual([stillHere])
@@ -126,6 +129,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       const taskId = `t15b_${ulid()}`
       await seedTask(db, taskId)
       const maintenance = createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -151,6 +155,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       const recovered = await createTaskArchiveMaintenanceCommand(
         db,
         o2Ports(db).collaborationReads.archive,
+        { content: createFileTaskArchiveContent() },
       ).recover(dirs)
       expect(recovered.promoted).toEqual([taskId])
       expect(existsSync(join(dirs.archiveDir, taskId, 'manifest.json'))).toBe(true)
@@ -178,6 +183,7 @@ describeEachProvider(
           db,
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -49,7 +49,10 @@ import {
   ARCHIVED_TABLES,
   ARCHIVE_EXEMPT_TABLES,
 } from '@/modules/task-execution/infrastructure/taskArchiveContentCoordinator'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -193,6 +196,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
         await createDrizzleTaskArchiveMaintenanceCommand(
           db,
           o2Ports(db).collaborationReads.archive,
+          { content: createFileTaskArchiveContent() },
         ).runSweep({ enabled: false, retentionDays: 90 }, { ...dirs, now: NOW })
       ).archived,
     ).toHaveLength(0)
@@ -201,6 +205,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
         await createDrizzleTaskArchiveMaintenanceCommand(
           db,
           o2Ports(db).collaborationReads.archive,
+          { content: createFileTaskArchiveContent() },
         ).runSweep({ enabled: true, retentionDays: 0 }, { ...dirs, now: NOW })
       ).archived,
     ).toHaveLength(0)
@@ -234,6 +239,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     const trees = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).preview({
       retentionDays: 90,
       maxTrees: 10,
@@ -286,6 +292,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     const archived = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(archived.archived).toHaveLength(1)
     const publications = await db.select().from(tablesOf(db).contentPublications)
@@ -400,6 +407,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     const recovered = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).recover(dirs)
     expect(recovered.promoted).toEqual(['gone'])
     expect(recovered.discarded).toEqual(['still-here'])
@@ -420,6 +428,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     const result = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: true, retentionDays: 90, maxTreesPerSweep: 2 }, { ...dirs, now: NOW })
     expect(result.archived).toHaveLength(2)
     expect(result.skipped).toBe(0)
@@ -588,17 +597,15 @@ describeEachProvider('ordinary sweep audit persistence', (harness) => {
     await seedBase(db)
     // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
     await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
-    await createDrizzleTaskArchiveMaintenanceCommand(
-      db,
-      o2Ports(db).collaborationReads.archive,
-    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+    await createDrizzleTaskArchiveMaintenanceCommand(db, o2Ports(db).collaborationReads.archive, {
+      content: createFileTaskArchiveContent(),
+    }).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(await auditRows(db)).toHaveLength(0)
 
     await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-    await createDrizzleTaskArchiveMaintenanceCommand(
-      db,
-      o2Ports(db).collaborationReads.archive,
-    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+    await createDrizzleTaskArchiveMaintenanceCommand(db, o2Ports(db).collaborationReads.archive, {
+      content: createFileTaskArchiveContent(),
+    }).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     const audit = await auditRows(db)
     expect(audit).toHaveLength(1)
     expect(audit[0]!.source).toBe('sweep')

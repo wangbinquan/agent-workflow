@@ -15,11 +15,13 @@ import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/compos
 import { join } from 'node:path'
 import {
   composePortArtifactOperations,
-  selectPortArtifactOperations,
+  requirePortArtifactOperations,
+  createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
 import {
   composeNodeRunPromptOperations,
-  selectNodeRunPromptOperations,
+  requireNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import {
@@ -138,6 +140,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
     coordinatorFactory: testDriveFactory(
       db,
       createDatabaseTaskDriverLifecyclePort({
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,
@@ -163,6 +166,7 @@ export function composeTaskExecutionTestRuntime(
 ) {
   const identity = createTaskExecutionTestIdentity(db)
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -177,8 +181,9 @@ export function composeTaskExecutionTestRuntime(
           composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders),
         taskScriptRunsFor: composeLocalTaskScriptRunFamily,
         nodeRunPromptsFor: (appHome) =>
-          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+          composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(appHome, 'runs'))),
+        portArtifactsFor: (appHome) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
       }),
       workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
       db,
@@ -188,6 +193,8 @@ export function composeTaskExecutionTestRuntime(
       observationInvocations: composeRunObservationCalls(db),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        portArtifactReaderFor: (appHome: string) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
         taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),
@@ -317,17 +324,22 @@ export function runTaskWithRealTestTopology(
   const persistence =
     options.persistence ??
     createTaskExecutionPersistence(options.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
     })
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
-  const nodeRunPrompts = selectNodeRunPromptOperations(
-    options.nodeRunPrompts,
-    join(options.appHome, 'runs'),
-  )
-  const portArtifacts = selectPortArtifactOperations(options.portArtifacts, options.appHome)
+  // RFC-526: the case's operations, or the local ones the removed `select*` helpers built (same roots, same check).
+  const nodeRunPrompts =
+    options.nodeRunPrompts ??
+    composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(options.appHome, 'runs')))
+  requireNodeRunPromptOperations(nodeRunPrompts)
+  const portArtifacts =
+    options.portArtifacts ??
+    composePortArtifactOperations(createFilePortArtifactContent(options.appHome))
+  requirePortArtifactOperations(portArtifacts)
   const nodeRunRuntime = options.nodeRunRuntime ?? composeNodeRunRuntimePersistence(options.db)
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const taskAgentRuns =
@@ -458,6 +470,7 @@ export function runTaskWithRealTestTopology(
         createChildExecutionLaunchOperations({
           db: options.db,
           persistence: createChildPersistence(options.db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
             recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
@@ -465,6 +478,7 @@ export function runTaskWithRealTestTopology(
           coordinatorFactory: testDriveFactory(
             options.db,
             createDatabaseTaskDriverLifecyclePort({
+              workspacePresence: createFileWorkspacePresenceQueries(),
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
               db: options.db,

@@ -31,6 +31,8 @@ import {
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function seedExecution(
   db: PersistenceDb,
@@ -126,10 +128,11 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       db,
       epoch2RuntimeTestPorts(db).historyRestrictions,
       composeHumanGateOpenParticipantFactory(),
+      createFileWorkspacePresenceQueries(),
     )
     const execution = composeDigitalEmployeeExecutionCore({
       // 只看端口在不在 / 通不通——别的依赖一个都不碰，所以全给 never。
-      appHome: '/tmp/rfc359-human-review',
+      programs: createFileProgramToolSource('/tmp/rfc359-human-review'),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
@@ -148,7 +151,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
   test('端口确实被转交（装什么就读到什么）', async () => {
     const calls: string[] = []
     const execution = composeDigitalEmployeeExecutionCore({
-      appHome: '/tmp/rfc359-human-review',
+      programs: createFileProgramToolSource('/tmp/rfc359-human-review'),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,

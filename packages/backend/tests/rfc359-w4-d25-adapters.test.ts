@@ -30,6 +30,7 @@ import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/i
 import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const NOW = 1_788_969_900_000
 
@@ -102,7 +103,9 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -182,7 +185,9 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     try {
       await new DatabaseHumanGateTaskLifecyclePersistence(
         db,
-        createTaskRuntimeLifecyclePersistence(db),
+        createTaskRuntimeLifecyclePersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
+        }),
         {
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -220,7 +225,9 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -242,7 +249,9 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,

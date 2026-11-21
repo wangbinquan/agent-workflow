@@ -113,6 +113,13 @@ import { createLogger } from '@/util/log'
 import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { Paths } from '@/util/paths'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')
@@ -246,6 +253,10 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
+      // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
+      // build (no app home here, so prompts under `Paths.runsDir`).
+      nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+      effects: composeLocalTaskDeletionEffects(),
       collaboration: {} as never,
       reviewers: composeTaskReviewersPort({} as never),
       owners: composeOwnerIdentityQueries(db),
@@ -260,6 +271,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
       launches: { launch: async () => ({}) } as never,
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

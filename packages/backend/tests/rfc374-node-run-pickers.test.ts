@@ -56,6 +56,8 @@ import { isTargetNodeConsumed } from '@/modules/collaboration/infrastructure/cla
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { buildHarness, insertAlert, readNodeRunStatus } from './lifecycle-repair-harness'
 import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 
 const frame = { containerRunId: null, iteration: 0 }
 function row(
@@ -407,11 +409,12 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
       },
     ])
     const core = composeDigitalEmployeeExecutionCore({
-      appHome: '/tmp/rfc374',
+      programs: createFileProgramToolSource('/tmp/rfc374'),
       ...composeDatabaseDigitalEmployeeExecutionPorts(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
       ),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
@@ -476,6 +479,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     })
     const rows = await readNodeRunFixtures(db, { taskId }),
       persistence = createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -516,6 +520,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: 'out', status: 'failed' })
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

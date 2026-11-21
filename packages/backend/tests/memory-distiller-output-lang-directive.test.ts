@@ -1,7 +1,10 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-050 — locks the output-language directive plumbing in the distiller.
 //
@@ -124,7 +127,9 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
           createNodeRunQueries(db),
           createNodeOutputQueries(db),
         ),
-        nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(join(root, 'runs')),
+        ),
         reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
           db,
           createFileReviewArtifactContent(root),

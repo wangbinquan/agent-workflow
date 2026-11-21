@@ -9,7 +9,10 @@ import {
   type TaskExecutionContext,
 } from '../application/taskExecutionContext'
 import type { OwnershipToken } from '../domain/ownership'
-import { createTaskExecutionPersistence } from './taskExecutionPersistence'
+import {
+  createTaskExecutionPersistence,
+  type TaskExecutionPersistenceDependencies,
+} from './taskExecutionPersistence'
 
 /**
  * RFC-359 AC-6：`db` 放宽到中立客户端。这份「兼容上下文」本来就只是把 db 原样别在
@@ -27,6 +30,7 @@ export function createTaskExecutionContext(input: {
   readonly db: PersistenceDb
   readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
+  readonly workspacePresence: TaskExecutionPersistenceDependencies['workspacePresence']
 }): SqliteTaskExecutionContext {
   const context = createProviderTaskExecutionContext({
     intentId: input.intentId,

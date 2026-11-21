@@ -21,6 +21,11 @@ import { ulid } from 'ulid'
 import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 
 import { describeEachProvider } from './helpers/eachProvider'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
 describe('RFC-182 — pending 帧源级锁', () => {
@@ -91,7 +96,15 @@ describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCau
         },
       }),
     )
-    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const { runs } = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     const run = runs.find((r) => r.id === runId)
     expect(run?.rerunCause).toBe('wg-message-turn')
   })

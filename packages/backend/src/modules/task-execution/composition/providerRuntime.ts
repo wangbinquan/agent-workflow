@@ -7,9 +7,6 @@ import type { TaskDriveCoordinatorFactory } from '../application/drive/taskDrive
 import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import type { TaskRecoveryProviderSelection } from '../infrastructure/taskRecoverySelection'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
-import { composePortArtifactOperations } from './portArtifacts'
-import { join } from 'node:path'
-import { composeNodeRunPromptOperations } from './nodeRunPrompts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import type { CollaborationRepairPorts } from '../application/ports/collaborationRepair'
@@ -44,7 +41,6 @@ import {
   type TaskExecutionRuntimeParticipantsInput,
 } from '../infrastructure/taskExecutionRuntimeParticipants'
 import {
-  composeTaskWorkspaceExcludeProfilesFor,
   bindProviderTaskRunParticipantsInput,
   type ProviderTaskRunBindingSelection,
 } from './localTaskRunSelection'
@@ -190,7 +186,8 @@ export interface TaskExecutionProviderRuntimeDependencies {
   readonly schedulerDriver?: SchedulerDriverPort
   readonly archiveCollaboration: TaskArchiveCollaborationSectionsPort
   readonly clarifyNav: TaskNodeRunClarifyNavPort
-  readonly archive?: TaskArchiveContentBinding
+  /** RFC-526: the deployment's archive content binding (required; the daemon always gives it). */
+  readonly archive: TaskArchiveContentBinding
   readonly recoverySelection?: TaskRecoveryProviderSelection
   /** RFC-431: the deployment's selection, never re-defaulted here. */
   readonly workspaceReads: RepositoryWorkspaceReadQueries
@@ -208,7 +205,7 @@ export interface TaskExecutionProviderRuntimeDependencies {
       Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections' | 'codeHostRequests'>
     > &
     ProviderTaskRunBindingSelection &
-    Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'workspaceExcludeProfilesFor'>>
+    Pick<TaskExecutionRuntimeParticipantsInput, 'workspaceExcludeProfilesFor'>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
   readonly routeLaunch: TaskRouteLaunchAssembly
   readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
@@ -250,28 +247,17 @@ export function composeTaskExecutionProviderRuntime(
       executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
   })
   const participants = createTaskExecutionRuntimeParticipants(
-    bindProviderTaskRunParticipantsInput(
-      {
-        ...dependencies.runtime,
-        workspaceExcludeProfilesFor:
-          dependencies.runtime.workspaceExcludeProfilesFor === undefined
-            ? composeTaskWorkspaceExcludeProfilesFor()
-            : dependencies.runtime.workspaceExcludeProfilesFor,
-        db,
-        historyRestrictions: dependencies.historyRestrictions,
-        persistence,
-        log,
-        childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
-        coordinatorFactory: dependencies.coordinatorFactory,
-        activity,
-        stop: executionModule.runtimeRegistry,
-      },
-      {
-        nodeRunPromptsFor: (appHome) =>
-          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
-      },
-    ),
+    bindProviderTaskRunParticipantsInput({
+      ...dependencies.runtime,
+      db,
+      historyRestrictions: dependencies.historyRestrictions,
+      persistence,
+      log,
+      childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
+      coordinatorFactory: dependencies.coordinatorFactory,
+      activity,
+      stop: executionModule.runtimeRegistry,
+    }),
   )
   const composedRuntime = composeTaskExecutionRuntime({
     participants,
@@ -442,7 +428,7 @@ export function composeTaskExecutionProviderRuntime(
 export function createTaskArchiveMaintenanceCommand(
   db: PersistenceDb,
   collaboration: TaskArchiveCollaborationSectionsPort,
-  archive?: TaskArchiveContentBinding,
+  archive: TaskArchiveContentBinding,
 ): TaskArchiveMaintenanceCommand {
   return createDrizzleTaskArchiveMaintenanceCommand(db, collaboration, archive)
 }

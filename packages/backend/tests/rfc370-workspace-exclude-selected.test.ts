@@ -38,6 +38,14 @@ import {
   unusedScriptFamily,
   unusedTaskRunContents,
 } from './helpers/taskRunSelection'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 async function fixture(
   harness: ProviderHarness,
@@ -260,7 +268,14 @@ describeEachProvider('RFC-370 selected workspace profiles in real Task drives', 
                 return contents.portArtifacts
               },
             }
-          : {}),
+          : {
+              // RFC-526: the legacy arm gives its prompt and artifact owners — here the local ones the provider runtime
+              // used to default to (no receiver trace, as before).
+              nodeRunPromptsFor: (root: string) =>
+                composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(root, 'runs'))),
+              portArtifactsFor: (root: string) =>
+                composePortArtifactOperations(createFilePortArtifactContent(root)),
+            }),
         taskAgentRunsFor(
           this: Receiver,
           binding: Parameters<LegacyTaskRunComposition['taskAgentRunsFor']>[0],

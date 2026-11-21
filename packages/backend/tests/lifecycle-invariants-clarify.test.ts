@@ -23,6 +23,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { runLifecycleInvariants } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 interface Harness {
   db: PersistenceDb
@@ -122,6 +123,7 @@ describeEachProvider(
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -137,6 +139,7 @@ describeEachProvider(
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -155,6 +158,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -174,6 +178,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -199,6 +204,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -214,6 +220,7 @@ describeEachProvider(
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -224,6 +231,7 @@ describeEachProvider(
       await patchNodeRunFixture(h.db, { id: run }, { status: 'done', finishedAt: Date.now() })
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

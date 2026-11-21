@@ -291,7 +291,9 @@ describe('RFC-370 selected boot recovery family', () => {
         return factory
       },
     })
-    expect((await runTaskExecutionBootRecovery(input)).finalization).toBe(family.finalization)
+    // RFC-526: the composition entry takes the family input plus the required selection (defined as a getter above).
+    const selected = input as Parameters<typeof runTaskExecutionBootRecovery>[0]
+    expect((await runTaskExecutionBootRecovery(selected)).finalization).toBe(family.finalization)
     expect(reads).toBe(1)
     expect(factory.creates).toBe(1)
   })

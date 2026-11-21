@@ -33,6 +33,7 @@ import { createExclusiveDaemonLockProof } from '@/modules/task-execution/domain/
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const snapshot = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
 const lease = { epoch: 2, leaseId: 'lease-new', instanceId: 'daemon-new' }
@@ -103,6 +104,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
       leasedAt: 1,
     })
     const persistence = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

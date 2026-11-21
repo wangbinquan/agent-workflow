@@ -8,7 +8,10 @@ import {
   runtimeManagementDistillRuntimes,
   type RunDistillOptions,
 } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // 记忆蒸馏超时：默认值 + 可配置 + 全链路接线。
 //
@@ -57,7 +60,9 @@ function createContext(db: PersistenceDb) {
       createNodeOutputQueries(db),
     ),
     runtimeResolver: runtimeManagementDistillRuntimes(db),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(root, 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(root),

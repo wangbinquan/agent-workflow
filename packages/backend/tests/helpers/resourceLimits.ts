@@ -5,6 +5,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeResourceLimitOperations } from '@/bootstrap/resourceLimits'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { enforceLimits as enforceLimitsWithPorts } from '@/modules/task-execution/application/resourceLimitEnforcement'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 export function enforceLimits(db: PersistenceDb, now?: number) {
   return enforceLimitsWithPorts(
@@ -15,6 +16,7 @@ export function enforceLimits(db: PersistenceDb, now?: number) {
           db,
           epoch2RuntimeTestPorts(db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),
+          createFileWorkspacePresenceQueries(),
         ).cancel(taskId, {
           kind: 'resource-reaped',
           ...reason,

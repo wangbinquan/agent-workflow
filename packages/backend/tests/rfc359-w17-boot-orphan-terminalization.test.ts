@@ -29,6 +29,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const ID = 'boot-orphan'
 const INPUT_NOW = 1_700_000_000_200
@@ -234,6 +235,7 @@ describeEachProvider(
         const clock = spyOn(Date, 'now').mockReturnValue(WALL_NOW)
         try {
           const won = await createTaskExecutionPersistence(harness.db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -289,6 +291,7 @@ describeEachProvider(
       })
       expect(
         await createTaskExecutionPersistence(harness.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -308,6 +311,7 @@ describeEachProvider(
         await withWriteTrigger(harness, mode, async () => {
           await expect(
             createTaskExecutionPersistence(harness.db, {
+              workspacePresence: createFileWorkspacePresenceQueries(),
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

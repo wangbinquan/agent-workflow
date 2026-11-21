@@ -9,7 +9,10 @@ import {
 import type { ContentStore } from '@/platform/content/contentStore'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { composeCrossContextClosure } from '../crossContextClosure'
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  createFileTaskOperationConfiguration,
+} from '@/modules/task-execution/composition'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 // RFC-382: one passive task-execution graph and one live configuration source per session.
 import { type Actor } from '@/auth/actor'
@@ -170,7 +173,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     memory,
   } = input
   const executionPermits = createExecutionPermitRegistry()
-  const closure = composeCrossContextClosure(db, executionPermits)
+  const closure = composeCrossContextClosure(db, executionPermits, observation.workspacePresence)
   const log = createLogger('task')
   const resourceSnapshots = composeTaskExecutionResourceBinding(taskExecutionResourceDependencies)
   const resources = createTaskExecutionResourceBinding(db, resourceSnapshots)
@@ -325,6 +328,9 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       isolationWorkspaces: selection.isolationWorkspaces,
       repositoryGitWorkspaces: selection.repositoryGitWorkspaces,
       workspacePresence: observation.workspacePresence,
+      // RFC-526: every drive (root, child, resume) carries the local configuration file's operation settings, read at each
+      // commit and each binary freeze — what the commit and freeze paths used to build from the run's `configPath`.
+      operationConfiguration: createFileTaskOperationConfiguration(configPath),
       observationInvocations: observation.observationCalls,
       memorySnapshots: memory.memorySnapshots,
       memoryInjectionQueries: memory.memoryInjectionQueries,

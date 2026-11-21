@@ -28,6 +28,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 import { describeEachProvider } from './helpers/eachProvider'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -87,7 +92,15 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
       content: 'out/report.md',
       kind: 'markdown_file',
     })
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     const out = res.outputs.find((o) => o.port === 'doc')
     expect(out).toBeDefined()
     expect(out?.kind).toBe('markdown_file')
@@ -103,7 +116,15 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
       content: 'all good',
       kind: null,
     })
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(res.outputs.find((o) => o.port === 'summary')?.kind).toBeNull()
   })
 
@@ -135,7 +156,15 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
     const task = await loadTaskProjection(db, taskId)
     expect(task?.codeRoundId).toBe(codeRoundId)
     expect(taskExecutionKind(task!)).toBe('code-round')
-    const projection = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const projection = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(projection.runs.map((run) => run.nodeId)).toEqual([CODE_ROUND_NODE_ID])
     expect(projection.outputs).toEqual([
       {

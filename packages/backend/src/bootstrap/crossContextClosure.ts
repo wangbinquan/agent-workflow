@@ -1,4 +1,5 @@
 import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import {
   createTaskNodeStatusEventsParticipantInTx,
   createHumanGateNodeRunStateParticipantInTx,
@@ -37,9 +38,14 @@ import { composeHumanGateTaskLockPort } from '@/modules/task-execution/compositi
 export function composeCrossContextClosure(
   db: PersistenceDb,
   executionPermits: TaskExecutionPermits,
+  /** RFC-526: the session's workspace presence (the daemon: its deployment's; the maintenance worker: the local one). */
+  workspacePresence: WorkspacePresenceQueries,
 ) {
   const taskRolePolicy = composeCollaborationTaskRolePolicy()
-  const taskExecutionParticipants = composeTaskExecutionParticipantBindings(executionPermits)
+  const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
+    executionPermits,
+    workspacePresence,
+  )
   return {
     taskRolePolicy,
     taskExecutionParticipants,
@@ -52,9 +58,13 @@ export function composeCrossContextClosure(
 }
 
 /** Factory references only: participants are constructed at the original call sites. */
-export function composeTaskExecutionParticipantBindings(executionPermits: TaskExecutionPermits) {
+export function composeTaskExecutionParticipantBindings(
+  executionPermits: TaskExecutionPermits,
+  workspacePresence: WorkspacePresenceQueries,
+) {
   return Object.freeze({
     executionPermits,
+    workspacePresence,
     createTaskNodeStatusEventsParticipantInTx,
     createHumanGateNodeRunStateParticipantInTx,
     createTaskDecisionParticipantInTx,

@@ -60,6 +60,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const NOW = 1_788_969_900_000
 
@@ -183,6 +184,7 @@ async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
     token: claimed.token,
     // The scheduler hands gate opens the driver's registered execution context.
     executionContext: createTaskExecutionContext({
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: intent.intentId,
@@ -232,7 +234,9 @@ async function prepareSiblingGate(
 function parker(db: PersistenceDb): DatabaseHumanGateTaskLifecyclePersistence {
   return new DatabaseHumanGateTaskLifecyclePersistence(
     db,
-    createTaskRuntimeLifecyclePersistence(db),
+    createTaskRuntimeLifecyclePersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
+    }),
     {
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,

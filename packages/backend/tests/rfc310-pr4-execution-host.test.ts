@@ -50,6 +50,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 setDefaultTimeout(120_000)
 
@@ -162,6 +163,7 @@ async function buildHarness(): Promise<Harness> {
     identityAccess,
     launchResources,
     persistence: createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

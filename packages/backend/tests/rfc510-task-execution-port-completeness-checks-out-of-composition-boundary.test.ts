@@ -100,44 +100,40 @@ const ROOTS: Readonly<
       'archivePortArtifacts',
       'composePortArtifactOperations',
       'readPortArtifact',
+      'createFilePortArtifactContent',
       'requirePortArtifactContentEffects',
       'requirePortArtifactOperations',
-      'selectPortArtifactOperations',
       'selectPortArtifactReader',
     ],
     shapes: [],
     takes: [
-      `import ${ARTIFACTS}: archivePortArtifactPolicy, readPortArtifactPolicy, requirePortArtifactContentEffects, requirePortArtifactOperations, requirePortArtifactReader, runNativePortArtifactPolicy, runPortArtifactPolicy`,
+      // RFC-526: `selectPortArtifactOperations` is gone (its check now runs where the selection is used).
+      `import ${ARTIFACTS}: archivePortArtifactPolicy, readPortArtifactPolicy, requirePortArtifactContentEffects, requirePortArtifactReader, runNativePortArtifactPolicy, runPortArtifactPolicy`,
       `export ${ARTIFACTS}: requirePortArtifactContentEffects, requirePortArtifactOperations`,
     ],
   },
   [root('taskDeletionEffects')]: {
-    offers: [
-      'composeLocalTaskDeletionEffects',
-      'requireTaskDeletionContentEffects',
-      'selectedTaskDeletionEffects',
-    ],
+    offers: ['composeLocalTaskDeletionEffects', 'requireTaskDeletionContentEffects'],
     shapes: [],
-    takes: [
-      `import ${DELETION}: requireTaskDeletionEffects`,
-      `export ${DELETION}: requireTaskDeletionContentEffects`,
-    ],
+    // RFC-526: `selectedTaskDeletionEffects` is gone; its consumers check with the application's `requireTaskDeletionEffects`.
+    takes: [`export ${DELETION}: requireTaskDeletionContentEffects`],
   },
   [root('nodeRunPrompts')]: {
     offers: [
       'PromptStorage',
       'composeLocalNodeRunPromptOperations',
       'composeNodeRunPromptOperations',
+      'createFileNodeRunPromptContent',
       'nodeRunPromptRelPath',
       'readNodeRunPrompt',
       'requireNodeRunPromptContentEffects',
       'requireNodeRunPromptOperations',
-      'selectNodeRunPromptOperations',
       'storeNodeRunPrompt',
     ],
     shapes: [],
     takes: [
-      `import ${PROMPTS}: readNodeRunPromptContent, requireNodeRunPromptContentEffects, requireNodeRunPromptOperations, storeNodeRunPromptContent`,
+      // RFC-526: `selectNodeRunPromptOperations` is gone (its check now runs where the selection is used).
+      `import ${PROMPTS}: readNodeRunPromptContent, requireNodeRunPromptContentEffects, storeNodeRunPromptContent`,
       `export ${PROMPTS}: requireNodeRunPromptContentEffects, requireNodeRunPromptOperations`,
     ],
   },
@@ -199,15 +195,23 @@ const ROOTS: Readonly<
 /** The production calls of every listed check (file and count) and the arguments of the single assembly call. */
 const CALLS: Readonly<Record<string, readonly [readonly string[], readonly string[] | null]>> = {
   requirePortArtifactContentEffects: [[`${root('portArtifacts')} x1`], ['content']],
-  requirePortArtifactOperations: [[`${root('portArtifacts')} x1`], ['operations']],
-  requirePortArtifactReader: [[`${root('portArtifacts')} x1`], ['reader']],
+  // RFC-526: the operations `select*` is gone and the reader selection only checks the given reader; the prompt and
+  // deletion checks now run where task-execution's infrastructure receives its required selections.
+  requirePortArtifactOperations: [[], null],
+  requirePortArtifactReader: [[`${root('portArtifacts')} x1`], ['selected']],
   requireTaskDeletionContentEffects: [
     [`${DELETION} x1`, `${TE}/infrastructure/taskDeleteRecovery x1`],
     null,
   ],
-  requireTaskDeletionEffects: [[`${root('taskDeletionEffects')} x1`], ['effects']],
+  requireTaskDeletionEffects: [
+    [`${TE}/infrastructure/taskDelete x1`, `${TE}/infrastructure/taskDeleteRecovery x2`],
+    null,
+  ],
   requireNodeRunPromptContentEffects: [[`${root('nodeRunPrompts')} x1`], null],
-  requireNodeRunPromptOperations: [[`${root('nodeRunPrompts')} x1`], null],
+  requireNodeRunPromptOperations: [
+    [`${TE}/infrastructure/sessionTreeRead x1`, `${TE}/infrastructure/taskRouteOperations x2`],
+    null,
+  ],
   requireTaskRunRootSelection: [[`${root('taskRunSelection')} x1`], ['selected']],
   requireTaskRunConfiguration: [[`${root('taskRunSelection')} x1`], ['configuration']],
   requireTaskRunDriveBinding: [[`${root('localTaskRunSelection')} x1`], ['selected']],

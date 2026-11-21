@@ -38,7 +38,8 @@ export function createCollaborationRuntimeMechanics(
     taskRolePolicy: CollaborationTaskRolePolicy
     taskLock: HumanGateTaskLockPort
     upstreamAgents: ReviewUpstreamAgentPort
-    portArtifactReaderFor?: (appHome: string) => PortArtifactReader
+    /** RFC-526: the deployment's port artifact reader per app home (required; the daemon always gives it). */
+    portArtifactReaderFor: (appHome: string) => PortArtifactReader
     reviewArtifacts?: ReviewArtifactSelection
   }>,
 ): CollaborationRuntimeMechanics {
@@ -55,9 +56,7 @@ export function createCollaborationRuntimeMechanics(
         content: dependencies.content,
         ...input,
         reviewArtifacts: dependencies.reviewArtifacts,
-        ...(dependencies.portArtifactReaderFor === undefined
-          ? {}
-          : { portArtifactReader: dependencies.portArtifactReaderFor(input.appHome) }),
+        portArtifactReader: dependencies.portArtifactReaderFor(input.appHome),
       })
     },
     async inspectCrossClarify(input) {

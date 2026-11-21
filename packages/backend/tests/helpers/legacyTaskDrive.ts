@@ -164,7 +164,7 @@ export function composeTestTaskDriveFactory(input: {
     createTaskExecutionPersistence(input.deps.db, {
       humanGateOpen: input.humanGateOpen,
       historyRestrictions: input.historyRestrictions,
-      workspacePresence: input.deps.workspacePresence,
+      workspacePresence: input.deps.workspacePresence ?? createFileWorkspacePresenceQueries(),
     })
   const maintenance = composeWorkspaceMaintenanceCommand({
     ...composeSourceControlTaskPorts(input.deps.db),
@@ -207,7 +207,7 @@ export function composeTestTaskDriveFactory(input: {
       historyRestrictions: input.historyRestrictions,
       db: input.deps.db,
       persistence,
-      workspacePresence: input.deps.workspacePresence,
+      workspacePresence: input.deps.workspacePresence ?? createFileWorkspacePresenceQueries(),
       log,
       finalizeWorkspace: (taskId) => maintenance.finalizeClaimedWorkspace(taskId),
     }),

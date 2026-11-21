@@ -149,6 +149,7 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
       | 'repositoryRevisionContent'
       | 'codeReviewArtifacts'
       | 'repositoryRemote'
+      | 'workspacePresence'
     > & {
       /** RFC-432: the deployment's package skill artifact owner, built for this session. */
       resourcePackageSkillArtifacts: ResourcePackageSkillArtifactOwner
@@ -252,6 +253,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   // RFC-482 / RFC-485: one set of task-execution factory references for collaboration's task access and route operations.
   const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
     taskExecutionProvider.executionPermits,
+    input.selections.workspacePresence,
   )
   const collaborationTaskAccess = createCollaborationTaskAccessPort(
     input.db,

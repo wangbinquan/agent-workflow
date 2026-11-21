@@ -31,6 +31,7 @@ import { DrizzleGateContinuationEffectPersistence } from '@/modules/task-executi
 import { DrizzleNodeActivationSnapshotReader } from '@/modules/task-execution/infrastructure/nodeActivationSnapshotReader'
 import { DrizzleTaskArtifactPathQueries } from '@/modules/task-execution/infrastructure/taskArtifactPathQueries'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -186,6 +187,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 人工门 continuation 的 eff
     const db = harness.db
     const taskId = await seedTask(db)
     const persistence = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -35,7 +35,10 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { chosenTaskRuns } from './helpers/taskRunSelection'
 import { parseArchiveJson } from '@/modules/task-execution/domain/portArtifacts'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
@@ -133,7 +136,7 @@ function invoke(
     skills: [],
     appHome: h.root,
     db,
-    portArtifacts: composePortArtifactOperations(content, h.root),
+    portArtifacts: composePortArtifactOperations(content),
     binaryOverride: ['bun', 'run', resolve(import.meta.dir, 'fixtures/mock-opencode.ts')],
   })
 }
@@ -319,7 +322,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       }),
     )
     content.archives.set('object:review-source', Buffer.from('# selected review body'))
-    const operations = composePortArtifactOperations(content, h.root),
+    const operations = composePortArtifactOperations(content),
       selectedHomes: string[] = []
     const collaboration = createCollaborationRuntimeMechanics(db, {
       taskExecutionParticipants,
@@ -430,8 +433,10 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       dbVersion: 17,
       // RFC-428: only a selected task-run root carries non-file artifact content in production.
       taskRunSelection: chosenTaskRuns({
-        nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(h.root, 'runs')),
-        portArtifacts: composePortArtifactOperations(content, h.root),
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(join(h.root, 'runs')),
+        ),
+        portArtifacts: composePortArtifactOperations(content),
       }).selection,
     })
     const headers = { Authorization: 'Bearer tok' },
@@ -562,13 +567,13 @@ test('CLI initial and replacement sessions carry raw content selection into the 
   const sf = source('bootstrap/daemonStart.ts')
   // RFC-428: no deployment selects artifact content. RFC-431: the standalone profile composes the module's
   // file default inside its task-run selection; the daemon graph binds whichever selection it is given.
+  // RFC-526: the composer takes the artifact content it is given; standalone names the file content explicitly.
   expect(calls(sf, sf, 'composePortArtifactOperations')).toHaveLength(0)
   const standalone = source('bootstrap/standalone.ts')
   const local = calls(standalone, standalone, 'composePortArtifactOperations')
   expect(local).toHaveLength(1)
   expect(local[0]!.arguments.map((arg) => arg.getText(standalone))).toEqual([
-    'undefined',
-    'appHome',
+    'createFilePortArtifactContent(appHome)',
   ])
   const pg = calls(sf, sf, 'composeDaemonApplication')
   expect(pg).toHaveLength(1)
@@ -623,8 +628,7 @@ test('ordinary scheduler and repair dispatch use the selected factory; body read
   expect(review.text).toContain(
     'withTaskReviewMutationLock(args.taskId, () => dispatchReviewNodeUnlocked(args))',
   )
-  expect(review.text).toContain(
-    'await selectPortArtifactReader(args.portArtifactReader, appHome).read(',
-  )
+  // RFC-526: the reader is a required selection — validated, never replaced by a local default.
+  expect(review.text).toContain('await selectPortArtifactReader(args.portArtifactReader).read(')
   expect(review.text).toContain('fallbackWorkspaceRef: scopeRoot')
 })

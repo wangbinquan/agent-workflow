@@ -5,7 +5,10 @@ import { withO2Closure, o2Ports } from './o2Closure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { memorySystemAgentBindingForTest, runtimeManagementDistillRuntimes } from './memoryDistill'
 import { join } from 'node:path'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
@@ -150,7 +153,9 @@ export async function createProductionPerformanceApplication(
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),
     db,
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(appHome, 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome),

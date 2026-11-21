@@ -21,6 +21,7 @@ import {
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
@@ -48,6 +49,7 @@ describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) =
     const db = harness.db
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -81,6 +83,7 @@ describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) =
     const db = harness.db
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

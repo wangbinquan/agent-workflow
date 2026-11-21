@@ -491,7 +491,6 @@ describeEachProvider('RFC-396 MR catalog and runtime wiring', (harness) => {
       const prepared: string[] = []
       const launchBoundary = new Error('captured task launch boundary')
       const core = composeDigitalEmployeeExecutionCore({
-        appHome: home,
         resolveActor: async () => actor,
         resourceAuthorityFor: () => ({
           actor,

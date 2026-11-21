@@ -33,6 +33,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/providerRuntime'
 import type { TaskArchiveMaintenanceOptions } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
@@ -187,6 +188,7 @@ describeEachProvider(
       createTaskArchiveMaintenanceCommand(
         harness.db,
         o2Ports(harness.db).collaborationReads.archive,
+        { content: createFileTaskArchiveContent() },
       )
 
     test('disabled config and zero retention touch nothing', async () => {

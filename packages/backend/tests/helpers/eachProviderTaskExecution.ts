@@ -57,6 +57,17 @@ import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { eq } from 'drizzle-orm'
 import { join } from 'node:path'
+import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
+import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -194,12 +205,15 @@ export async function createEachProviderTaskExecution(
             options.taskAgentRunsFor ??
             ((binding) => composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders)),
           taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
-          ...(options.nodeRunPromptsFor === undefined
-            ? {}
-            : { nodeRunPromptsFor: options.nodeRunPromptsFor }),
-          ...(options.portArtifactsFor === undefined
-            ? {}
-            : { portArtifactsFor: options.portArtifactsFor }),
+          // RFC-526: the legacy arm gives its prompt and artifact owners — the local ones the provider runtime used to
+          // default to, unless the case gave its own.
+          nodeRunPromptsFor:
+            options.nodeRunPromptsFor ??
+            ((root: string) =>
+              composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(root, 'runs')))),
+          portArtifactsFor:
+            options.portArtifactsFor ??
+            ((root: string) => composePortArtifactOperations(createFilePortArtifactContent(root))),
         }
       : { taskRunBinding: taskRunRoot.drive }
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
@@ -233,6 +247,8 @@ export async function createEachProviderTaskExecution(
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
   const collaborationRuntime = createCollaborationRuntimeMechanics(db, {
+    portArtifactReaderFor: (appHome: string) =>
+      composePortArtifactOperations(createFilePortArtifactContent(appHome)),
     taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
@@ -316,6 +332,8 @@ export async function createEachProviderTaskExecution(
       withO2Closure({
         collaborationRepair: composeCollaborationRepairPorts(db, taskExecutionParticipants),
         archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
+        // RFC-526: the archive binding is required — the local archive content the provider runtime used to build.
+        archive: { content: createFileTaskArchiveContent() },
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -337,6 +355,8 @@ export async function createEachProviderTaskExecution(
           () => ({ configPath, ...runConfig }),
         ),
         runtime: {
+          // RFC-526: every drive carries the configuration file's operation settings, as the daemon gives them.
+          operationConfiguration: createFileTaskOperationConfiguration(configPath),
           memorySnapshots: composeTaskMemorySnapshotPort(),
           taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
           executionPermits: testExecutionPermits,
@@ -400,7 +420,15 @@ export async function createEachProviderTaskExecution(
           owners: composeOwnerIdentityQueries(db),
           assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
           appHome,
-          ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+          // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used
+          // to build (prompts under `<appHome>/runs`), unless the run root selected its own prompts.
+          nodeRunPrompts:
+            taskRunRoot === undefined
+              ? composeNodeRunPromptOperations(
+                  createFileNodeRunPromptContent(join(appHome, 'runs')),
+                )
+              : taskRunRoot.nodeRunPrompts,
+          effects: composeLocalTaskDeletionEffects(),
         }),
         lifecycleRepair: {},
         fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
@@ -493,6 +521,8 @@ export async function createEachProviderTaskExecution(
     withO2Closure({
       collaborationRepair: composeCollaborationRepairPorts(db, taskExecutionParticipants),
       archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
+      // RFC-526: the archive binding is required — the local archive content the provider runtime used to build.
+      archive: { content: createFileTaskArchiveContent() },
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -513,6 +543,8 @@ export async function createEachProviderTaskExecution(
         () => ({ configPath, ...runConfig }),
       ),
       runtime: {
+        // RFC-526: every drive carries the configuration file's operation settings, as the daemon gives them.
+        operationConfiguration: createFileTaskOperationConfiguration(configPath),
         memorySnapshots: composeTaskMemorySnapshotPort(),
         ...runBinding,
         workspaceExcludeProfilesFor,
@@ -571,7 +603,12 @@ export async function createEachProviderTaskExecution(
         membershipEvents: unusedCapability('task member events'),
         deletionEvents: unusedCapability('task deletion events'),
         appHome,
-        ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+        // RFC-526: as above — the route operations' prompt operations and deletion effects are required.
+        nodeRunPrompts:
+          taskRunRoot === undefined
+            ? composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(appHome, 'runs')))
+            : taskRunRoot.nodeRunPrompts,
+        effects: composeLocalTaskDeletionEffects(),
       }),
       lifecycleRepair: {},
       fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },

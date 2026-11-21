@@ -23,6 +23,7 @@ import {
   recoveryCountersSnapshot,
 } from '../src/platform/health/recoveryCounters'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function seedRunningTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
@@ -59,6 +60,7 @@ describeEachProvider('RFC-108 T3 — recordRecoveryEvent + counters', (harness) 
     const db = harness.db
     const taskId = await seedRunningTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -87,6 +89,7 @@ describeEachProvider('RFC-108 T3 — actors record recovery_events', (harness) =
     const db = harness.db
     const taskId = await seedRunningTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -25,6 +25,7 @@ import {
   taskExecutionResourceBinding,
 } from './helpers/integrationTriggerResourceBinding'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const directories: string[] = []
 afterEach(() => {
@@ -47,6 +48,7 @@ function fixture(
   const module = new TaskExecutionModule('rfc370-background')
   const scheduled = scheduledTaskRuntime(db)
   const recovery = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -24,6 +24,8 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function seedTask(
   db: PersistenceDb,
@@ -69,6 +71,7 @@ function plan(taskId: string, over: Partial<Record<'worktrees', unknown>> = {}):
 
 async function claimTree(db: PersistenceDb, rootTaskId: string, cleanupPlanJson: string) {
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -111,7 +114,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const { persistence, claim } = await claimTree(db, root, plan(root))
     await persistence.terminalMaintenance.transition({ claim, to: 'io-complete', now: 51 })
 
-    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
+    expect(
+      await recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        undefined,
+        composeLocalTaskDeletionEffects(),
+      ),
+    ).toEqual({
       completed: [root],
       cleanupPending: [],
       recoveryRequired: [],
@@ -137,7 +147,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const root = `t7c_${ulid()}`
     await seedTask(db, root)
     const { claim } = await claimTree(db, root, plan(root))
-    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
+    expect(
+      await recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        undefined,
+        composeLocalTaskDeletionEffects(),
+      ),
+    ).toEqual({
       completed: [root],
       cleanupPending: [],
       recoveryRequired: [],
@@ -154,7 +171,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     await persistence.terminalMaintenance.transition({ claim, to: 'recovery-required', now: 51 })
     const { tasks } = tablesOf(db)
     await db.delete(tasks).where(eq(tasks.id, root))
-    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
+    expect(
+      await recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        undefined,
+        composeLocalTaskDeletionEffects(),
+      ),
+    ).toEqual({
       completed: [root],
       cleanupPending: [],
       recoveryRequired: [],
@@ -167,7 +191,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const root = `t7c_${ulid()}`
     await seedTask(db, root)
     const { claim } = await claimTree(db, root, '{"v":9}')
-    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
+    expect(
+      await recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        undefined,
+        composeLocalTaskDeletionEffects(),
+      ),
+    ).toEqual({
       completed: [],
       cleanupPending: [],
       recoveryRequired: [root],
@@ -175,7 +206,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     expect(await claimState(db, claim.claimId)).toBe('recovery-required')
     expect(await taskExists(db, root)).toBe(true)
     expect(
-      (await recoverInterruptedTaskDeletes(db, testExecutionPermits)).recoveryRequired,
+      (
+        await recoverInterruptedTaskDeletes(
+          db,
+          testExecutionPermits,
+          undefined,
+          composeLocalTaskDeletionEffects(),
+        )
+      ).recoveryRequired,
     ).toEqual([root])
     expect(await claimState(db, claim.claimId)).toBe('recovery-required')
   })
@@ -187,7 +225,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const { persistence, claim } = await claimTree(db, root, plan(root))
     await persistence.terminalMaintenance.transition({ claim, to: 'io-complete', now: 51 })
     await seedTask(db, `${root}_late`, { parentTaskId: root })
-    await expect(recoverInterruptedTaskDeletes(db, testExecutionPermits)).rejects.toMatchObject({
+    await expect(
+      recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        undefined,
+        composeLocalTaskDeletionEffects(),
+      ),
+    ).rejects.toMatchObject({
       code: 'task-terminal-maintenance-conflict',
     })
     expect(await taskExists(db, root)).toBe(true)
@@ -206,7 +251,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         worktrees: [{ repoPath: missingRepo, worktreePath: `${missingRepo}/wt` }],
       }),
     )
-    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
+    expect(
+      await recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        undefined,
+        composeLocalTaskDeletionEffects(),
+      ),
+    ).toEqual({
       completed: [],
       cleanupPending: [root],
       recoveryRequired: [],

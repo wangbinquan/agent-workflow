@@ -104,64 +104,26 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['repositoryBackupPreparationFactory', 'injected'],
     ['sqliteRuntime.openClient', 'memo'],
   ],
-  'task-execution/composition/bootRecovery.ts': [
-    ['Date.now', 'clock'],
-    ['createLocalBootExecutionRecoveryFactory', 'adapter'],
-  ],
-  'task-execution/composition/commitPushBinding.ts': [
-    ['createFileTaskOperationConfiguration', 'adapter'],
-  ],
+  'task-execution/composition/bootRecovery.ts': [['Date.now', 'clock']],
   'task-execution/composition/crewstationSystemAgentRunFamily.ts': [['Object.freeze', 'option']],
-  'task-execution/composition/digitalEmployeeExecution.ts': [
-    ['createFileProgramToolSource', 'adapter'],
-  ],
   'task-execution/composition/executionWorkspaceBinding.ts': [
     ['createTaskWorkspaceSession', 'memo'],
   ],
-  'task-execution/composition/launchConfiguration.ts': [
-    ['localRuntime', 'adapter'],
-    ['localRuntime', 'adapter'],
-    ['localStart', 'adapter'],
-  ],
-  'task-execution/composition/nodeRunPrompts.ts': [
-    ['composeNodeRunPromptOperations', 'adapter'],
-    ['createFileNodeRunPromptContent', 'adapter'],
-  ],
-  'task-execution/composition/portArtifacts.ts': [
-    ['composePortArtifactOperations', 'adapter'],
-    ['composePortArtifactOperations', 'adapter'],
-    ['createFilePortArtifactContent', 'adapter'],
-  ],
-  'task-execution/composition/providerRuntime.ts': [
-    ['composeTaskWorkspaceExcludeProfilesFor', 'adapter'],
-  ],
-  'task-execution/composition/runtimeConfigFreeze.ts': [
-    ['createFileTaskOperationConfiguration', 'adapter'],
-  ],
   'task-execution/composition/systemAgentObservations.ts': [['ulid', 'id']],
   'task-execution/composition/systemAgentRun.ts': [['createLogger', 'logger']],
-  'task-execution/composition/taskArchiveMaintenance.ts': [
-    ['createFileTaskArchiveContent', 'adapter'],
-  ],
-  'task-execution/composition/taskDeletionEffects.ts': [
-    ['composeLocalTaskDeletionEffects', 'adapter'],
-  ],
   'task-execution/composition/taskEngineApplication.ts': [['createLogger', 'logger']],
-  'task-execution/composition/taskExecutionPersistence.ts': [
-    ['createFileWorkspacePresenceQueries', 'adapter'],
-  ],
 }
 
 /** design D3 (reordered by RFC-522 design D4): the S12 item 1 step that clears each module's adapter fallbacks. */
 const SUCCESSORS: Readonly<Record<string, string>> = {
-  'task-execution': 'S12 item 1, step 6',
   'source-control': 'S12 item 1, step 7',
 }
 /**
  * Adapter fallbacks measured at RFC-521 (83); each successor lowers it — RFC-522 cleared digital-employee and event-center,
- * RFC-523 intent, code-capability and memory, RFC-524 system-operations and development-automation, RFC-525 resource-catalog.
+ * RFC-523 intent, code-capability and memory, RFC-524 system-operations and development-automation, RFC-525 resource-catalog,
+ * RFC-526 task-execution.
  */
-const ADAPTER_FALLBACKS = 35
+const ADAPTER_FALLBACKS = 19
 const UNITS = backendUnits(ROOT)
 
 /** A `composition/` file or a module root `composition.ts` (the RFC-515 gate's rule). */

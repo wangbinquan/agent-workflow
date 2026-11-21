@@ -42,6 +42,7 @@ import {
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const HOUR_MS = 3_600_000
 
@@ -168,6 +169,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -187,6 +189,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -219,6 +222,7 @@ describeEachProvider(
       // First scan: warning + 'new' callback
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -237,6 +241,7 @@ describeEachProvider(
       calls = []
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -254,6 +259,7 @@ describeEachProvider(
       calls = []
       const r3 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -272,6 +278,7 @@ describeEachProvider(
       calls = []
       const r4 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -295,6 +302,7 @@ describeEachProvider(
       // First scan: R1 violates (T1 also satisfied — there *is* an awaiting_review run).
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -309,6 +317,7 @@ describeEachProvider(
       // Second scan: R1 row resolved; no new R1 inserted.
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -344,6 +353,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -363,6 +373,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -379,6 +390,7 @@ describeEachProvider(
       await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -394,6 +406,7 @@ describeEachProvider(
       // Two scans without fixing the violation: still 1 open row, no dup insert.
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -403,6 +416,7 @@ describeEachProvider(
       expect(r1.newAlerts).toBe(1)
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

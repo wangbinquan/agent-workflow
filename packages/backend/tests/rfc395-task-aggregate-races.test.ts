@@ -283,6 +283,7 @@ describeEachProvider('RFC-395 W1 owner fence and aggregate lock order', (harness
       intentId: 'race-intent',
       token,
       persistence: createTaskExecutionPersistence(harness.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       }),
@@ -321,6 +322,7 @@ describeEachProvider('RFC-395 W1 owner fence and aggregate lock order', (harness
 import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
 import { sha256Hex } from '@/util/hash'
 import type { HistoryRestrictionRequest } from '@/platform/contracts/historyRestriction'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 describeEachProvider('RFC-395 W1 Task gate restriction injection', (harness) => {
   test('each lifecycle instance forwards its own provider and an absent provider still refuses replay', async () => {

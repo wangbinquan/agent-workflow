@@ -311,8 +311,8 @@ export interface DispatchReviewArgs {
   content?: ContentStore
   upstreamAgents: ReviewUpstreamAgentPort
   reviewArtifacts?: ReviewArtifactSelection
-  /** Selected by the collaboration factory, outside the public dispatch business input. */
-  portArtifactReader?: PortArtifactReader
+  /** Selected by the collaboration factory, outside the public dispatch business input (RFC-526: required). */
+  portArtifactReader: PortArtifactReader
   db: PersistenceDb
   taskId: string
   appHome: string
@@ -540,7 +540,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // worktree GC), then the SCOPE root as the legacy fallback (pre-RFC-193
   // rows), then missing. Never resolve against a worktree here directly —
   // that re-creates the wrapper-review deadlock this RFC exists to kill.
-  const artifactRead = await selectPortArtifactReader(args.portArtifactReader, appHome).read({
+  const artifactRead = await selectPortArtifactReader(args.portArtifactReader).read({
     taskId,
     archiveJson: portRow.archiveJson ?? null,
     content: portRow.content,
@@ -946,6 +946,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         db,
         prepared: prepared.prepared,
         historyRestrictions: args.historyRestrictions,
+        workspacePresence: args.taskExecutionParticipants.workspacePresence,
         content: args.content,
         ...(executionContext === undefined ? {} : { executionContext }),
       })

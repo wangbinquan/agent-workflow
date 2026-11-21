@@ -38,6 +38,7 @@ import {
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import type { IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const ROOT = mkdtempSync(join(tmpdir(), 'aw-rfc370-iso-cleanup-'))
 afterAll(() => rmSync(ROOT, { recursive: true, force: true }))
@@ -100,6 +101,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     iteration: 0,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -162,6 +164,7 @@ describeEachProvider(
     test('the SQLite daemon context still records the cleanup receipt', async () => {
       const seeded = await seedClaimedTask(harness.db)
       const context = createSqliteDaemonContext({
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         intentId: seeded.intentId,

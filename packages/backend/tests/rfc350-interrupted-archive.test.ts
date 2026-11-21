@@ -1,4 +1,7 @@
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
@@ -119,6 +122,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     const result = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived.map((tree) => tree.rootTaskId)).toEqual(['orphaned'])
     expect(await taskCount(db)).toBe(0)
@@ -134,6 +138,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     const result = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived).toHaveLength(0)
     expect(await taskCount(db)).toBe(1)
@@ -172,6 +177,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     const result = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived.map((tree) => tree.rootTaskId)).toEqual(['c-root'])
     expect(await taskCount(db)).toBe(4)
@@ -186,6 +192,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     const result = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: false, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived).toHaveLength(0)
     expect(await taskCount(db)).toBe(1)

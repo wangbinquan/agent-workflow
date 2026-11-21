@@ -38,6 +38,7 @@ import { Paths } from '@/util/paths'
 import { composeTestTaskDriveFactory } from './legacyTaskDrive'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
 import type { Task } from '@agent-workflow/shared'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 export interface RetryEngineOptions {
   readonly appHome?: string
@@ -114,6 +115,7 @@ async function driveInBackground(
   now?: () => number,
 ): Promise<void> {
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -157,6 +159,7 @@ export function createRetryEngine(
 ): RetryEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-retry-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

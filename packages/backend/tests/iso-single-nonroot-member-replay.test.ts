@@ -54,6 +54,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { singleMemberWorkspaceFixture } from './helpers/singleMemberWorkspaceFixture'
 import { createProviderTaskExecutionTestTopology } from './helpers/providerTaskExecutionTestTopology'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const TIMEOUT = 60_000
 const shapes = [
@@ -102,6 +103,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
     })
     const binding = createTestIsolationBinding({
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

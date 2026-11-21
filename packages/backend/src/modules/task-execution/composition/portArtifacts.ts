@@ -1,4 +1,3 @@
-import { Paths } from '@/util/paths'
 import type {
   ArchivePortArtifactsResult,
   NativeArchivePortArtifactsOptions,
@@ -15,7 +14,6 @@ import {
   archivePortArtifactPolicy,
   readPortArtifactPolicy,
   requirePortArtifactContentEffects,
-  requirePortArtifactOperations,
   requirePortArtifactReader,
   runNativePortArtifactPolicy,
   runPortArtifactPolicy,
@@ -25,13 +23,13 @@ export {
   requirePortArtifactContentEffects,
   requirePortArtifactOperations,
 } from '../application/portArtifacts'
+/** RFC-526: the standalone selection's port artifact content — local archive files under an app home. */
+export { createFilePortArtifactContent }
 
-/** Undefined alone selects one complete native binding without performing IO. */
+/** RFC-526: the caller's port artifact content (standalone: `createFilePortArtifactContent(appHome)`; no IO here). */
 export function composePortArtifactOperations(
-  selected?: PortArtifactContentEffects,
-  appHome: string = Paths.root,
+  content: PortArtifactContentEffects,
 ): PortArtifactOperations {
-  const content = selected === undefined ? createFilePortArtifactContent(appHome) : selected
   requirePortArtifactContentEffects(content)
   return Object.freeze({
     async archive(request: PortArtifactArchiveRequest) {
@@ -43,25 +41,13 @@ export function composePortArtifactOperations(
   })
 }
 
-export function selectPortArtifactOperations(
-  selected?: PortArtifactOperations,
-  appHome: string = Paths.root,
-): PortArtifactOperations {
-  const operations =
-    selected === undefined ? composePortArtifactOperations(undefined, appHome) : selected
-  requirePortArtifactOperations(operations)
-  return operations
-}
-
-/** Read-only consumers receive the original selected reader, with no per-method fallback. */
-export function selectPortArtifactReader(
-  selected?: PortArtifactReader,
-  appHome: string = Paths.root,
-): PortArtifactReader {
-  const reader =
-    selected === undefined ? composePortArtifactOperations(undefined, appHome) : selected
-  requirePortArtifactReader(reader)
-  return reader
+/**
+ * Read-only consumers receive the original selected reader, with no per-method fallback. RFC-526: the selection is
+ * required (the daemon always gives it); this only checks it is complete.
+ */
+export function selectPortArtifactReader(selected: PortArtifactReader): PortArtifactReader {
+  requirePortArtifactReader(selected)
+  return selected
 }
 
 /** Preserve every original native input location without exposing it to the neutral policy. */

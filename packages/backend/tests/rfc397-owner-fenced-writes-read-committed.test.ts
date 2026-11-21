@@ -56,6 +56,7 @@ import { statementFailureCode, type StatementRecording } from './helpers/stateme
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const normalized = (text: string) => text.toLowerCase().replaceAll('"agent_workflow".', '')
 const effects = (db: PersistenceDb) => new DrizzleTaskExecutionEffectPersistence(db)
@@ -122,6 +123,7 @@ async function seed(db: PersistenceDb, taskId = 't', lineage = 'lineage') {
     updatedAt: 1,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -72,6 +72,7 @@ import {
   MemoryIsolationStore,
   unprintableErrors,
 } from './helpers/isolationWorkspace'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const EMPTY = { $schema_version: 6 as const, inputs: [], nodes: [], edges: [] }
 const TIMEOUT = 30_000
@@ -116,6 +117,7 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
     })),
   })
   const original = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

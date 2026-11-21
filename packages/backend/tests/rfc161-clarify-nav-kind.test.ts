@@ -27,6 +27,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getClarifyRoundDetail } from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 type TaskStatus = 'running' | 'awaiting_human' | 'canceled' | 'failed' | 'interrupted' | 'done'
 
@@ -139,7 +144,13 @@ async function navKindOf(
       createdAt: Date.now(),
     })
   }
-  const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+  const { runs } = await taskNodeRunsProjection(
+    withO2Closure({
+      nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+      db,
+    }),
+    taskId,
+  )
   return runs.find((r) => r.id === runId)?.clarifyNavKind
 }
 
@@ -187,7 +198,15 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
   test('non-clarify run (agent, no round) → null', async () => {
     const taskId = await seedTask(db, 'running')
     await seedRun(db, taskId, { nodeId: 'agent', status: 'done' })
-    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const { runs } = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(runs[0]?.clarifyNavKind).toBe(null)
   })
 
@@ -208,7 +227,15 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
       status: 'awaiting_human',
       createdAt: t0 + 5000,
     })
-    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const { runs } = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(runs.find((r) => r.id === runId)?.clarifyNavKind).toBe('awaiting')
   })
 
@@ -260,7 +287,15 @@ describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)'
       status: 'answered',
       createdAt: Date.now(),
     })
-    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const { runs } = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     const stamp = runs.find((r) => r.id === runId)?.clarifyNavKind
     expect(stamp).not.toBe(null)
     // The safety property: a non-null stamp implies the bare /clarify/{run} route resolves.

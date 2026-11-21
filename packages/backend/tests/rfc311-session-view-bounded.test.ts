@@ -25,6 +25,11 @@ import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/modules/task-execution/infrastructure/sessionTreeRead'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 const PARENT = 'ses_parent'
 const CHILD = 'ses_child'
@@ -189,10 +194,16 @@ describeEachProvider('RFC-311 T13 — 会话树 DB 读有界且根不退化', (h
     const db = harness.db
     await seed(db, 120)
     // 压到远小于事件总数：前缀 5 条、尾巴 10 条，中间那段必然被舍弃。
-    const { tree } = await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr1', {
-      rootPrefix: 5,
-      tail: 10,
-    })
+    const { tree } = await getSessionTree(
+      createTaskExecutionReadModels(db).sessions,
+      't1',
+      'nr1',
+      {
+        rootPrefix: 5,
+        tail: 10,
+      },
+      composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+    )
 
     const serialized = JSON.stringify(tree)
     expect(serialized).toContain('LAST-EVENT')
@@ -204,11 +215,23 @@ describeEachProvider('RFC-311 T13 — 会话树 DB 读有界且根不退化', (h
     const db = harness.db
     await seed(db, 5)
     const sessions = createTaskExecutionReadModels(db).sessions
-    const bounded = await getSessionTree(sessions, 't1', 'nr1', {
-      rootPrefix: 500,
-      tail: 20_000,
-    })
-    const tight = await getSessionTree(sessions, 't1', 'nr1', { rootPrefix: 5, tail: 10 })
+    const bounded = await getSessionTree(
+      sessions,
+      't1',
+      'nr1',
+      {
+        rootPrefix: 500,
+        tail: 20_000,
+      },
+      composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+    )
+    const tight = await getSessionTree(
+      sessions,
+      't1',
+      'nr1',
+      { rootPrefix: 5, tail: 10 },
+      composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+    )
     // 9 条事件 < 5 + 10，两种上限下应当得到同一棵树
     expect(JSON.stringify(tight)).toBe(JSON.stringify(bounded))
   })

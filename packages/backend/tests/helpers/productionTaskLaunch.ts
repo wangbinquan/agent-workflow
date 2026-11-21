@@ -54,6 +54,7 @@ import { Paths } from '@/util/paths'
 import { NotFoundError } from '@/util/errors'
 import type { WorktreeCleanupProvenance } from '@/util/git'
 import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 export interface TestTaskLaunchOptions extends Omit<
   TaskContinuationDependencies,
@@ -253,6 +254,7 @@ export async function launchTestTask(
   // build their options with `as never` get the same production factory here instead of `undefined`.
   const humanGateOpen = options.humanGateOpen ?? composeHumanGateOpenParticipantFactory()
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen,
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

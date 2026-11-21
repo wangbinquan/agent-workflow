@@ -24,6 +24,11 @@ import { TASK_EXECUTION_GENERATION_CAUSES } from '@/modules/task-execution/appli
 import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture } from './helpers/model'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 const nodeSlot: RunSlot = {
   kind: 'node',
@@ -376,6 +381,9 @@ describeEachProvider('RFC-395 target run mint identities', (h) => {
     ).toEqual([{ id: 'unknown', retryIndex: 7, promptText: null }])
     const display = await taskNodeRunsProjection(
       {
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
         memorySnapshots: composeTaskMemorySnapshotPort(),
         db: h.db,
         clarifyNav: { latestRoundStatusByRun: async () => new Map() },

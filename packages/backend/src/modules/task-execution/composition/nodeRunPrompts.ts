@@ -8,7 +8,6 @@ import type {
 import {
   readNodeRunPromptContent,
   requireNodeRunPromptContentEffects,
-  requireNodeRunPromptOperations,
   storeNodeRunPromptContent,
 } from '../application/nodeRunPrompt'
 export {
@@ -18,13 +17,13 @@ export {
 import { createFileNodeRunPromptContent } from '../infrastructure/local/fileNodeRunPromptContent'
 
 export type { PromptStorage } from '../application/ports/nodeRunPromptContent'
+/** RFC-526: the standalone selection's prompt content — local prompt files under a runs directory. */
+export { createFileNodeRunPromptContent }
 
-/** Undefined alone selects the complete native receiver for this runs namespace. */
+/** RFC-526: the caller's prompt content (standalone: `createFileNodeRunPromptContent(<appHome>/runs)`). */
 export function composeNodeRunPromptOperations(
-  selected?: NodeRunPromptContentEffects,
-  runsDir: string = Paths.runsDir,
+  content: NodeRunPromptContentEffects,
 ): NodeRunPromptOperations {
-  const content = selected === undefined ? createFileNodeRunPromptContent(runsDir) : selected
   requireNodeRunPromptContentEffects(content)
   return Object.freeze({
     async store(taskId: string, nodeRunId: string, prompt: string) {
@@ -34,17 +33,6 @@ export function composeNodeRunPromptOperations(
       return await readNodeRunPromptContent(content, row)
     },
   })
-}
-
-/** Compatibility construction; an explicit operations receiver is never partly replaced. */
-export function selectNodeRunPromptOperations(
-  selected?: NodeRunPromptOperations,
-  runsDir: string = Paths.runsDir,
-): NodeRunPromptOperations {
-  const operations =
-    selected === undefined ? composeNodeRunPromptOperations(undefined, runsDir) : selected
-  requireNodeRunPromptOperations(operations)
-  return operations
 }
 
 /** Only the existing native helpers use this synchronous composition. */

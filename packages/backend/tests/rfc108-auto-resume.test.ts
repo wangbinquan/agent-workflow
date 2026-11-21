@@ -23,6 +23,7 @@ import {
   recordAutoRecoveryAttempt,
 } from '../src/modules/task-execution/application/recovery/autoRecoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
@@ -76,6 +77,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     await seedTask(db, 'interrupted', 'node-timeout') // other errorSummary → skipped
     await seedTask(db, 'failed', 'daemon-restart') // other status → skipped
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -110,6 +112,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
       mode: 'dynamic_workflow',
     })
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -130,6 +133,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -160,6 +164,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
     const operations = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

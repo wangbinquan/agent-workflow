@@ -1,3 +1,4 @@
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { testExecutionPermits } from './helpers/executionPermits'
 import type { TaskExecutionParticipantBindings } from '@/modules/collaboration/infrastructure/taskExecutionParticipantBindings'
 import { expect, test } from 'bun:test'
@@ -15,6 +16,8 @@ function unusedParticipant(): never {
 }
 const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   executionPermits: testExecutionPermits,
+  // RFC-526: the human-gate parks take the session's workspace presence (the local one in these tests).
+  workspacePresence: createFileWorkspacePresenceQueries(),
   createTaskNodeStatusEventsParticipantInTx: unusedParticipant,
   createHumanGateNodeRunStateParticipantInTx: unusedParticipant,
   createTaskDecisionParticipantInTx: unusedParticipant,

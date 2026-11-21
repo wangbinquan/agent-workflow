@@ -55,6 +55,7 @@ import {
   encodeLineageSlotPath,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const NOW = 1_788_969_900_000
 
@@ -261,7 +262,9 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
     const prepared = opening.prepared
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -354,7 +357,9 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
       await expect(
         new DatabaseHumanGateTaskLifecyclePersistence(
           db,
-          createTaskRuntimeLifecyclePersistence(db),
+          createTaskRuntimeLifecyclePersistence(db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
+          }),
           {
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -501,7 +506,9 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -537,7 +544,9 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -574,7 +583,9 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -610,7 +621,9 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -640,7 +653,9 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     await createManual(db, taskId)
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
-      createTaskRuntimeLifecyclePersistence(db),
+      createTaskRuntimeLifecyclePersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
+      }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -921,6 +936,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       executor,
     )
     const execution = createTaskExecutionContext({
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: decision.continuationRef,
@@ -994,6 +1010,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       taskId,
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: submitted.intentId,

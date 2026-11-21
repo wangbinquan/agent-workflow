@@ -18,7 +18,10 @@ import { createLogger } from '@/util/log'
 
 import { cancelTaskProjection } from '../infrastructure/childTaskLifecycleParticipant'
 import { taskExecutionModule } from '../composition'
-import { createTaskExecutionPersistence } from './taskExecutionPersistence'
+import {
+  createTaskExecutionPersistence,
+  type TaskExecutionPersistenceDependencies,
+} from './taskExecutionPersistence'
 
 const log = createLogger('task')
 
@@ -34,10 +37,16 @@ export function composeTaskCancellation(
   db: PersistenceDb,
   historyRestrictions: HistoryRestrictionPort,
   humanGateOpen: HumanGateOpenParticipantFactory,
+  /** RFC-526: the deployment's presence (cancelling never revives a task, so it is not consulted here). */
+  workspacePresence: TaskExecutionPersistenceDependencies['workspacePresence'],
 ): TaskCancellation {
   const dependencies = {
     db,
-    persistence: createTaskExecutionPersistence(db, { historyRestrictions, humanGateOpen }),
+    persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions,
+      humanGateOpen,
+      workspacePresence,
+    }),
     stop: taskExecutionModule.runtimeRegistry,
     log,
   }

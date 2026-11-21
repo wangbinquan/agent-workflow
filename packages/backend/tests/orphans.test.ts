@@ -27,6 +27,7 @@ import {
 } from '../src/modules/task-execution/application/runtimeSessionLease'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 interface Harness {
   db: PersistenceDb
@@ -94,6 +95,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
   test('no-op when no running rows exist', async () => {
     const r = await reapOrphanRuns(
       createTaskExecutionPersistence(h.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -106,6 +108,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     const { taskId, runId } = await seedRunning(h.db)
     const r = await reapOrphanRuns(
       createTaskExecutionPersistence(h.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -125,6 +128,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await expect(
       reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -159,6 +163,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
 
     await reapOrphanRuns(
       createTaskExecutionPersistence(h.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -203,6 +208,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await expect(
       reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -236,6 +242,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await expect(
       reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

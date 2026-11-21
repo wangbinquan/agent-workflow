@@ -1,7 +1,10 @@
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
 import { join } from 'node:path'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
@@ -164,7 +167,9 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
       createNodeOutputQueries(db),
     ),
     runtimeResolver: runtimeManagementDistillRuntimes(db),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(root, 'runs')),
+    ),
     reviewedArtifacts,
   })
 }

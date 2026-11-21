@@ -50,6 +50,11 @@ import { createTaskObservationFacts } from '@/modules/task-execution/infrastruct
 import { contentRefColumns } from '@/platform/content/contentStore'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 const frame = { containerRunId: null, iteration: 0 }
 const log = createLogger('rfc395-w2fix-nb-test')
@@ -522,6 +527,9 @@ describeEachProvider('RFC-395 N-b wave-2 functional regressions', (h) => {
     const display = TaskNodeRunsSchema.parse(
       await taskNodeRunsProjection(
         {
+          nodeRunPrompts: composeNodeRunPromptOperations(
+            createFileNodeRunPromptContent(Paths.runsDir),
+          ),
           memorySnapshots: composeTaskMemorySnapshotPort(),
           db: h.db,
           clarifyNav: { latestRoundStatusByRun: async () => new Map() },

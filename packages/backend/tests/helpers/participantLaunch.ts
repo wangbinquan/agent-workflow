@@ -37,6 +37,7 @@ import {
   createTaskRouteWorkspaceParticipant,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 /**
  * 给一个**普通构造的 actor**（`buildActor({...})`）配一份任务执行鉴权句柄。
@@ -93,6 +94,7 @@ export function createTestTaskExecutionLaunchParticipant(
     authorization: resourceCatalog.authorization,
   }).launch
   const persistence = createTaskExecutionPersistence(input.db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions,
     recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,

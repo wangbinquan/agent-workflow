@@ -54,6 +54,7 @@ import {
 } from '@/modules/task-execution/domain/executionIntent'
 import type { OwnershipToken } from '@/modules/task-execution/domain/ownership'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -135,6 +136,7 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
     lineageSlotPathJson: slotPathJson,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

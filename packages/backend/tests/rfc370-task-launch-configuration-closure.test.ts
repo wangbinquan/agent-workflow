@@ -40,6 +40,7 @@ import { repositoryPreparationFactsJson } from '@/modules/source-control/domain/
 import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const homes: string[] = []
 afterEach(() => {
@@ -444,6 +445,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       startedAt: 1,
     })
     const persistence = createTaskExecutionPersistence(harness.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

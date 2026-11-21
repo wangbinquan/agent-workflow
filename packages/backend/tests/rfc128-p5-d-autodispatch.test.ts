@@ -71,6 +71,7 @@ import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const ulid = monotonicFactory()
 
@@ -311,6 +312,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       taskId,
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: intent.id,
@@ -322,6 +324,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     }
     const step = createGateContinuationPreDriveStep({
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -394,6 +397,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     module.claimGate.leave(claimed.permit)
     const step = createGateContinuationPreDriveStep({
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -410,6 +414,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         taskId,
         intentKind: claimed.intentKind,
         execution: createTaskExecutionContext({
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           intentId: intent.id,

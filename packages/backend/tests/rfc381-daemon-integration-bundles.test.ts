@@ -25,6 +25,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const homes: string[] = []
 function home() {
@@ -236,6 +237,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('MR close requests stop on the session registry and waits for released before succeeding', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -311,6 +313,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('cleanup failure keeps the claim, completes the MR job and lets the next same-stream effect run', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

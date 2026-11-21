@@ -3,7 +3,10 @@ import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-ex
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-043 T3 — locks the new capture-side behaviour added to runDistill:
 //   1. attempts === 0 path writes user_prompt_md + dedup_snapshot_ids_json
@@ -50,7 +53,9 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
     ),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(appHome(), 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome()),

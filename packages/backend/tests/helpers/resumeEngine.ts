@@ -69,6 +69,7 @@ export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptio
           db,
           workspacePresence: options.workspacePresence ?? createFileWorkspacePresenceQueries(),
           persistence: createTaskExecutionPersistence(db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -86,6 +87,7 @@ export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptio
           coordinatorFactory: testDriveFactory(
             db,
             createDatabaseTaskDriverLifecyclePort({
+              workspacePresence: createFileWorkspacePresenceQueries(),
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               db,

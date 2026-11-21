@@ -192,7 +192,9 @@ test('every daemon root reads program tools from the selected store', () => {
     join(import.meta.dir, '../src/modules/task-execution/application/digitalEmployeeExecution.ts'),
     'utf8',
   )
-  expect(binding).toContain('programs: programs ?? createFileProgramToolSource(appHome),')
+  // RFC-526: the program source is a required selection (no local fallback in the composition).
+  expect(binding).toContain('    programs,\n')
+  expect(binding).not.toContain('createFileProgramToolSource')
   expect(core).toContain('await ports.programs.read(implementation)')
   expect(`${binding}\n${core}`).not.toContain('readFileSync')
   const postgresql = readFileSync(

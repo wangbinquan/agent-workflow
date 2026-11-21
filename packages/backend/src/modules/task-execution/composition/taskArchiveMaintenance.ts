@@ -40,16 +40,13 @@ export interface TaskArchiveContentBinding {
 export function createDrizzleTaskArchiveMaintenanceCommand(
   db: PersistenceDb,
   collaboration: TaskArchiveCollaborationSectionsPort,
+  /** RFC-526: the deployment's archive binding (required; standalone: `{ content: createFileTaskArchiveContent() }`). */
   input: {
-    readonly content?: TaskArchiveContentPort
+    readonly content: TaskArchiveContentPort
     readonly locations?: TaskArchiveContentBinding['locations']
-  } = {},
+  },
 ): TaskArchiveMaintenanceCommand {
-  const command = createTaskArchiveContentCoordinator(
-    db,
-    collaboration,
-    input.content ?? createFileTaskArchiveContent(),
-  )
+  const command = createTaskArchiveContentCoordinator(db, collaboration, input.content)
   if (input.locations === undefined) return command
   // Freeze the selected roots once. Request timestamps and archive policy remain caller-owned.
   const locations = Object.freeze({

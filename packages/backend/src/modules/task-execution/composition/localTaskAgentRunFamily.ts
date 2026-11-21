@@ -32,7 +32,6 @@ export interface LocalTaskAgentRunFamilyBinding {
   readonly request: {
     readonly appHome: string
     readonly binaryOverride?: readonly string[]
-    readonly configPath?: string
     readonly operationConfiguration?: TaskOperationConfigurationQueries
   }
   readonly nodeRunRuntime: NodeRunRuntimePersistence
@@ -57,9 +56,6 @@ export function composeLocalTaskAgentRunFamilyFor(
       ...(binding.request.binaryOverride === undefined
         ? {}
         : { binaryOverride: binding.request.binaryOverride }),
-      ...(binding.request.configPath === undefined
-        ? {}
-        : { configPath: binding.request.configPath }),
       nodeRunRuntime: binding.nodeRunRuntime,
       runtimeRegistry: binding.runtimeRegistry,
       nodeRunPrompts: binding.nodeRunPrompts,
@@ -82,7 +78,6 @@ export function composeLocalTaskAgentRunFamily(
     readonly nodeRunPrompts: NodeRunPromptOperations
     readonly portArtifacts: PortArtifactOperations
     readonly binaryOverride?: readonly string[]
-    readonly configPath?: string
     readonly operationConfiguration?: TaskOperationConfigurationQueries
   },
   providers: LocalTaskAgentRunProviders,
@@ -91,8 +86,7 @@ export function composeLocalTaskAgentRunFamily(
     runtimes: providers.runtimes({
       persistence: input.nodeRunRuntime,
       registry: input.runtimeRegistry,
-      readBinaryConfiguration: () =>
-        freezeBinaryConfig(input.configPath, input.operationConfiguration),
+      readBinaryConfiguration: () => freezeBinaryConfig(input.operationConfiguration),
     }),
     resources: providers.resources({ appHome: input.appHome }),
     workspaceContents: providers.workspaceContents,

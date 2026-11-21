@@ -30,8 +30,14 @@ import {
 } from '@/modules/task-execution/composition/localTaskRunSelection'
 import { bindTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import { standaloneSelections } from '@/bootstrap/standalone'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { composeDaemonResourceCatalogModules } from '@/bootstrap/daemonModules/resourceCatalog'
 import {
@@ -88,8 +94,10 @@ export function taskBundleInput(
     mcpRuntime: { prepareDelete: async () => {}, reconcileDurableIntents: async () => {} },
   })
   const standalone = standaloneSelections({ appHome })
-  const nodeRunPrompts = composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
-  const portArtifacts = composePortArtifactOperations(undefined, appHome)
+  const nodeRunPrompts = composeNodeRunPromptOperations(
+    createFileNodeRunPromptContent(join(appHome, 'runs')),
+  )
+  const portArtifacts = composePortArtifactOperations(createFilePortArtifactContent(appHome))
   const driven: TaskDriveRequest[] = []
   const listeners = new Set<() => void>()
   const schedulerDriver: SchedulerDriverPort = {

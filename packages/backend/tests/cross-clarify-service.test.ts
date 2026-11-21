@@ -68,6 +68,7 @@ import type {
   WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 interface SeedOptions {
   taskId?: string
@@ -726,6 +727,7 @@ describeEachProvider(
       await patchTaskFixture(db, { id: taskId }, { status: 'failed' })
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

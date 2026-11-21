@@ -17,7 +17,9 @@ import type {
   TaskDeletionEffects,
 } from '@/modules/task-execution/application/ports/taskDeletionContentEffects'
 import type { TaskDeletionRepositoryParticipant } from '@/modules/source-control/public/participants'
-import { selectedTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+// RFC-526: the internal `selectedTaskDeletionEffects` is gone — consumers check the required selection with
+// `requireTaskDeletionEffects` and use it as given.
+import { requireTaskDeletionEffects } from '@/modules/task-execution/application/taskDeletionEffects'
 import { createFileTaskDeletionContentEffects } from '@/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects'
 import { createGitTaskDeletionRepositoryEffects } from '@/modules/source-control/composition'
 import {
@@ -32,6 +34,7 @@ import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collab
 import { Paths } from '@/util/paths'
 import { snapshotRefPrefix } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 function gate() {
   let release!: () => void
@@ -117,9 +120,7 @@ function plan(taskId = 'task'): DeleteCleanupPlanV2 {
 test('complete frozen private receivers retain their identity; incomplete choices never fall back', () => {
   const trace: string[] = [],
     chosen = effects(trace)
-  expect(selectedTaskDeletionEffects(chosen)).toBe(chosen)
-  expect(selectedTaskDeletionEffects(chosen).content).toBe(chosen.content)
-  expect(selectedTaskDeletionEffects(chosen).repositories).toBe(chosen.repositories)
+  expect(() => requireTaskDeletionEffects(chosen)).not.toThrow()
   for (const value of [
     null,
     {},
@@ -135,7 +136,7 @@ test('complete frozen private receivers retain their identity; incomplete choice
     },
     { content: chosen.content, repositories: { removeWorktree() {} } },
   ]) {
-    expect(() => selectedTaskDeletionEffects(value as unknown as TaskDeletionEffects)).toThrow(
+    expect(() => requireTaskDeletionEffects(value as unknown as TaskDeletionEffects)).toThrow(
       TypeError,
     )
   }
@@ -324,6 +325,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     })
     await entered.promise
     const claims = await createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -373,6 +375,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     await seed(db, taskId)
     await seed(db, childId, taskId)
     const persistence = createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -434,6 +437,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
       }),
     ).toEqual({ taskId, cleanup: 'pending' })
     const persistence = createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

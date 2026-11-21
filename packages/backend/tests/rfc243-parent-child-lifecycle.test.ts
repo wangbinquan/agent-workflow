@@ -58,6 +58,7 @@ import type { MaterializedSpace } from '@/modules/source-control/infrastructure/
 
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
@@ -250,6 +251,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     await seedTask(db, wf, { status: 'running', parentTaskId: child })
     await expect(
       deleteTask(db, parent, {
+        effects: composeLocalTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -266,6 +268,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     const child = await seedTask(db, wf, { status: 'done', parentTaskId: parent })
     await expect(
       deleteTask(db, child, {
+        effects: composeLocalTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -286,6 +289,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
       worktreePath: isoDir,
     })
     const result = await deleteTask(db, child, {
+      effects: composeLocalTaskDeletionEffects(),
       executionPermits: testExecutionPermits,
       collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },

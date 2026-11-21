@@ -14,6 +14,11 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -95,7 +100,15 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
       },
     ])
     await seedRun(db, taskId, payload)
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(res.runs.length).toBe(1)
     const im = res.runs[0]!.injectedMemories
     expect(im).not.toBeNull()
@@ -109,21 +122,45 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
   test('A2: legacy row with NULL column surfaces as injectedMemories=null', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, null)
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A3: corrupted JSON in column degrades to null (no 5xx)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '{not-an-array')
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A4: empty-array payload surfaces as [] (distinct from null)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '[]')
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(res.runs[0]!.injectedMemories).toEqual([])
   })
 })

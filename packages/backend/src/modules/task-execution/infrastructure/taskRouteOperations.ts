@@ -178,9 +178,8 @@ import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { killStaleRunProcessTree } from '@/util/process'
-import { join } from 'node:path'
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
-import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
+import { requireNodeRunPromptOperations } from '../application/nodeRunPrompt'
 
 import { assertFrozenTaskTriggerPreflight } from './frozenTaskTriggerPreflight'
 import { createRunSelectionReader } from './runSelection/table/reader'
@@ -227,7 +226,8 @@ export interface TaskRouteOperationsDependencies {
   readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archivedEvents?: TaskArchivedEventsReader
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
-  readonly nodeRunPrompts?: NodeRunPromptOperations
+  /** RFC-526: the deployment's prompt operations (required; the daemon gives its task run selection's). */
+  readonly nodeRunPrompts: NodeRunPromptOperations
   readonly db: PersistenceDb
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
@@ -254,7 +254,8 @@ export interface TaskRouteOperationsDependencies {
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
-  readonly effects?: TaskDeletionEffects
+  /** RFC-526: the deployment's deletion effects (required; the daemon gives its selection's). */
+  readonly effects: TaskDeletionEffects
   /** RFC-476: collaboration's in-transaction deletion participant, injected by the composition root. */
   readonly taskDeletionCollaboration: TaskDeletionCollaborationInTx
   readonly topology: SchedulerRuntimeTopology
@@ -939,13 +940,15 @@ function commitPush(raw: string | null) {
 export async function taskNodeRunsProjection(
   dependencies: Readonly<{
     db: PersistenceDb
-    nodeRunPrompts?: NodeRunPromptOperations
+    /** RFC-526: the deployment's prompt operations (required; the route operations give theirs). */
+    nodeRunPrompts: NodeRunPromptOperations
     memorySnapshots: TaskMemorySnapshotPort
     clarifyNav: TaskNodeRunClarifyNavPort
   }>,
   taskId: string,
 ) {
-  const nodeRunPrompts = selectNodeRunPromptOperations(dependencies.nodeRunPrompts)
+  const nodeRunPrompts = dependencies.nodeRunPrompts
+  requireNodeRunPromptOperations(nodeRunPrompts)
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const { docVersions } = tablesOf(dependencies.db)
@@ -2460,10 +2463,8 @@ export function createTaskRouteOperations(
   dependencies: TaskRouteOperationsDependencies,
 ): TaskRouteOperations & Pick<TaskRepairOperations, 'automaticRepair'> {
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
-  const nodeRunPrompts = selectNodeRunPromptOperations(
-    dependencies.nodeRunPrompts,
-    dependencies.appHome === undefined ? Paths.runsDir : join(dependencies.appHome, 'runs'),
-  )
+  const nodeRunPrompts = dependencies.nodeRunPrompts
+  requireNodeRunPromptOperations(nodeRunPrompts)
   const resumeTaskAs = async (actor: Actor, taskId: string): Promise<void> => {
     await dependencies.children.resume(
       { taskId, runtime: await dependencies.resumeRuntimeFor(actor, taskId) },

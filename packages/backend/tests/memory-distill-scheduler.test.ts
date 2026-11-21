@@ -24,7 +24,10 @@ import {
   runtimeManagementDistillRuntimes,
   type RunDistillOptions,
 } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -84,7 +87,9 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
       createNodeOutputQueries(db),
     ),
     runtimeResolver: runtimeManagementDistillRuntimes(db),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(root, 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(root),

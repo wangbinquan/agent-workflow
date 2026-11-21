@@ -92,6 +92,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const NOW = 1_788_278_400_000
 const PARENT_TASK_ID = 'parent-task-0001'
@@ -396,6 +397,7 @@ function operationsFor(
 ): LaunchTarget {
   const db = harness.db as unknown as PostgresqlDatabaseClient
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -410,6 +412,7 @@ function operationsFor(
         coordinatorFactory: testDriveFactory(
           db,
           createDatabaseTaskDriverLifecyclePort({
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             db,

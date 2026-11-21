@@ -32,6 +32,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { withTaskReviewMutationLock } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const silentLog: TaskExecutionTopologyLogger = {
   info: () => {},
@@ -72,6 +73,7 @@ describeEachProvider('RFC-359 AC-1 —— attach 与评审变更共用一个临�
     const db = harness.db
     const taskId = await seedTerminalTask(db)
     const persistence = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -95,6 +97,7 @@ describeEachProvider('RFC-359 AC-1 —— attach 与评审变更共用一个临�
             })
           })()
         : createDatabaseTaskDriverLifecyclePort({
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             db,

@@ -235,7 +235,8 @@ export function createDatabaseTaskDriverLifecyclePort(options: {
   readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly persistence?: TaskExecutionPersistence
-  readonly workspacePresence?: WorkspacePresenceQueries
+  /** RFC-526: required (the persistence built here, and the per-claim execution context, need the presence). */
+  readonly workspacePresence: WorkspacePresenceQueries
   readonly log: TaskExecutionTopologyLogger
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
 }): TaskDriverLifecyclePort {

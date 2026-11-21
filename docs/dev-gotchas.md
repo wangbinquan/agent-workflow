@@ -906,7 +906,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   按 gate id：`cross-context-internal-file-pairs`、`off-dag-offered-file-context-pairs`、`module-layer-violations`、
   `unreachable-production-files` 等 12 项），判据双向（stale 条目也红）。所以减少这些项时，`KNOWN` 里对应的行与专项账本（如越 DAG 边的
   `OFF_DAG_OFFERED_EDGE_DEBT`）必须同改，`counts.json` 按上一条收紧（`BASELINE_SOURCE` 不必动）。RFC-481 实撞：销了 8 条越 DAG 边，只改了
-  `counts.json` 与专项账本，`KNOWN` 留下 8 条 stale，全量里那条用例 6 毫秒就红。
+  `counts.json` 与专项账本，`KNOWN` 留下 8 条 stale，全量里那条用例 6 毫秒就红。`cross-context-internal-file-pairs` 另有两份逐条清
+  单：`rfc294-architecture-preflight.test.ts` 的 in-file 文件对清单（“cross-context internals match the in-file file-pair allowlist
+  exactly”）与 `rfc328-architecture-guards.test.ts` 的 provider 桥清单（`crossContextProviderBridges`，“has no legacy/raw authority
+  bypass”），减少这一项时四处同改（RFC-526 实撞：只改了 `counts.json` 与 `KNOWN`，preflight 与 rfc328 两条到集中验证才红）。改前按被销那
+  一对的两端路径全仓搜一遍。
 
 ## 撤 public 符号：迭代到零、先修判据的盲区，留意豁免入口藏起来的旧债（RFC-480，2026-11-10）
 
@@ -949,6 +953,14 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   故意传可能为 `undefined` 的 `historyRestrictions`，期望它那一行类型不符；插入 `createNodeRunQueries(tx)` 后注释跑到新参数头上，`tsc` 报
   这条指令未被使用（TS2578），原来被期望的类型错误也漏了出来。插完逐处看前导注释里有没有这类指令，把它们留在原目标行之上（或者插在
   `getFullStart()`，让新参数排在注释前面）。
+- **按“行首是 `import `”找新 import 的插入点，会插进模板字面量里生成的脚本**（RFC-526 实撞）：`rfc310` 的 e2e 用例在模板字面量里拼一段
+  子进程脚本，脚本里有行首 `import` 的行，按文本找“最后一行 import”把新 import 插进了那段脚本。插入点取语法树里最后一个
+  `ImportDeclaration` 的末尾；改完再按语法树逐文件核对 import 声明（同名重复、落在模板里的都报出来）。
+- **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
+  删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
+  没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import
+  被改的模块，按名字、回落原文与“读源码的路径”三种筛法都筛不到，首批也没跑到，第二批里碰巧跑了两个才红。删回落后逐处核对 `require*` 的实参
+  在类型上是否必填；受影响用例再按“直接 import 被改模块”补筛一轮。
 - **依赖接口新增必填成员时，`tsc` 看不到被 `as never` / `as unknown as` 断言过的装配点**（RFC-486 实撞）：启动依赖改收端口后 `tsc` 0 错，
   但 `rfc359-w7-task-route-conformance` 用 `{ db, configPath } as never` 造路由启动操作，运行时才在 `dependencies.fileUploadLimits()` 上抛
   `TypeError`；`eachProviderTaskExecution` 的 `launchViaKernel` 也是 `{ db, … } as unknown as Parameters<…>[0]`，跑到就会同样炸。改依赖形状后

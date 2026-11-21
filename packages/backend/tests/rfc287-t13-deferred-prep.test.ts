@@ -67,6 +67,7 @@ import { composeAgentLaunchResourceOperations } from '../src/modules/resource-ca
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 
 // RFC-359 AC-6：`TestTaskLaunchOptions.db` 放宽到中立句柄之后，这里**仍然要窄回 `DbClient`**——
 // 本夹具驱动的是 SQLite 那台执行引擎（`composeTaskExecutionTestRuntime`，W5-T19f 的
@@ -2414,6 +2415,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     let code = ''
     try {
       await deleteTask(db, task.id, {
+        effects: composeLocalTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },

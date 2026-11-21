@@ -20,7 +20,7 @@ import {
 import type { TaskSessionReadModel, TaskSessionRunSource } from '../public/types'
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import type { NodeRunPromptOperations } from '../public/types'
-import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
+import { requireNodeRunPromptOperations } from '../application/nodeRunPrompt'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
@@ -51,10 +51,11 @@ export async function getSessionTree(
   nodeRunId: string,
   /** 测试注入:把两段上限调到几十条，才测得出「超限时根还对不对」。 */
   caps: { rootPrefix?: number; tail?: number } = {},
-  selectedNodeRunPrompts?: NodeRunPromptOperations,
+  /** RFC-526: the deployment's prompt operations (required). */
+  nodeRunPrompts: NodeRunPromptOperations,
   selectedArchivedEvents?: TaskArchivedEventsReader,
 ): Promise<{ tree: SessionTree }> {
-  const nodeRunPrompts = selectNodeRunPromptOperations(selectedNodeRunPrompts)
+  requireNodeRunPromptOperations(nodeRunPrompts)
   const prefixCap = caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP
   const tailCap = caps.tail ?? SESSION_TAIL_CAP
   const source = await readModel.find({

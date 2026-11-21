@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { applyConfigPatch, saveConfigRaw } from '../src/config'
 import { readCommitExcludePatterns } from '../src/modules/task-execution/composition/commitPushBinding'
+import { createFileTaskOperationConfiguration } from '../src/modules/task-execution/composition'
 
 const roots: string[] = []
 afterEach(() => {
@@ -17,10 +18,11 @@ describe('RFC-308 operation config projection', () => {
     roots.push(root)
     const configPath = join(root, 'config.json')
     saveConfigRaw(configPath, { ...DEFAULT_CONFIG, taskCommitExcludePatterns: ['first/**'] })
+    // RFC-526: bootstrap gives every drive the configuration file's operation settings (no `configPath` fallback).
     const opts = {
       taskId: 'task',
       appHome: root,
-      configPath,
+      operationConfiguration: createFileTaskOperationConfiguration(configPath),
       commitPushExcludePatterns: ['launch-fallback/**'],
     }
 

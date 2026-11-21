@@ -45,6 +45,7 @@ import {
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { taskStopProjection } from '@/modules/task-execution/domain/sourceTermination'
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -291,6 +292,7 @@ describe('RFC-368 实现门 findings', () => {
         harness.db,
         epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
       ).cancel('task-reaped', {
         kind: 'resource-reaped',
         summary: 'task-time-limit-exceeded',
@@ -313,6 +315,7 @@ describe('RFC-368 实现门 findings', () => {
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),
+          createFileWorkspacePresenceQueries(),
         ),
       } as unknown as DigitalEmployeeExecutionDependencies)
       expect((await core.inspect('task-reaped')).kind).toBe('failed')

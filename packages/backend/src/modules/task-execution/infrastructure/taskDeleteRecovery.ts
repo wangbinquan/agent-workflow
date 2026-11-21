@@ -16,9 +16,8 @@ import type {
 } from '../application/ports/taskDeletionContentEffects'
 import {
   requireTaskDeletionContentEffects,
-  selectedTaskDeletionEffects,
-} from '../composition/taskDeletionEffects'
-export { selectedTaskDeletionEffects } from '../composition/taskDeletionEffects'
+  requireTaskDeletionEffects,
+} from '../application/taskDeletionEffects'
 
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -61,10 +60,9 @@ export interface DeleteRecoveryResult {
 export function parseDeleteCleanupPlan(
   value: string,
   members: readonly MaintenanceMemberSnapshot[],
-  contentEffects?: TaskDeletionContentEffects,
+  /** RFC-526: the deployment's deletion content effects (required; recovery passes its selection's). */
+  content: TaskDeletionContentEffects,
 ): DeleteCleanupPlanV2 | null {
-  const content =
-    contentEffects === undefined ? selectedTaskDeletionEffects().content : contentEffects
   requireTaskDeletionContentEffects(content)
   try {
     const parsed = JSON.parse(value) as {
@@ -114,9 +112,9 @@ export function parseDeleteCleanupPlan(
 /** Best-effort disk cleanup after the row is gone: worktrees + snapshot refs + scratch dirs. */
 export async function cleanupDeletedTaskResources(
   plan: DeleteCleanupPlanV2,
-  selected?: TaskDeletionEffects,
+  effects: TaskDeletionEffects,
 ): Promise<'done' | 'pending'> {
-  const effects = selectedTaskDeletionEffects(selected)
+  requireTaskDeletionEffects(effects)
   let cleanup: 'done' | 'pending' = 'done'
   const fail = (what: string, err: unknown): void => {
     cleanup = 'pending'
@@ -287,9 +285,10 @@ export async function recoverInterruptedTaskDeletes(
   db: PersistenceDb,
   executionPermits: TaskExecutionPermitRegistry,
   terminalMaintenance: TerminalMaintenanceStore = new DrizzleTerminalMaintenancePersistence(db),
-  selected?: TaskDeletionEffects,
+  /** RFC-526: the deployment's deletion effects (required; the daemon gives its selection's). */
+  effects: TaskDeletionEffects,
 ): Promise<DeleteRecoveryResult> {
-  const effects = selectedTaskDeletionEffects(selected)
+  requireTaskDeletionEffects(effects)
   const completed: string[] = []
   const cleanupPending: string[] = []
   const recoveryRequired: string[] = []

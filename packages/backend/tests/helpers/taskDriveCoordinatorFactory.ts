@@ -16,6 +16,7 @@ import {
   type TaskDriverLifecyclePort,
 } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 export function testDriveFactory(
   db: PersistenceDb,
@@ -29,6 +30,7 @@ export function testDriveFactory(
     lifecycle,
     gateContinuationPreDrive: composeGateContinuationPreDrive({
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -45,6 +47,7 @@ export function testDriveFactory(
       throw new Error('direct fixture must select its scheduler in the drive profile')
     },
     failures: createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

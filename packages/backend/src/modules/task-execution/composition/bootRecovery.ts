@@ -13,10 +13,10 @@
 import { sha256Hex } from '@/util/hash'
 import { runBootExecutionRecovery } from '../application/bootExecutionRecovery'
 import type {
+  BootExecutionRecoveryFactory,
   TaskExecutionBootRecoveryInput,
   TaskExecutionBootRecoveryReport,
 } from '../application/ports/bootExecutionRecovery'
-import { createLocalBootExecutionRecoveryFactory } from './localBootExecutionRecovery'
 
 export type {
   BootExecutionRecoveryFactory,
@@ -64,11 +64,11 @@ export function createDaemonRecoveryAuthorityProof(input: {
  * 必须在 HTTP 与任何自动续跑之前跑完。
  */
 export async function runTaskExecutionBootRecovery(
-  input: TaskExecutionBootRecoveryInput,
+  input: TaskExecutionBootRecoveryInput & {
+    /** RFC-526: the deployment's execution recovery (required; the daemon always gives it). */
+    readonly recoveryEffects: BootExecutionRecoveryFactory
+  },
 ): Promise<TaskExecutionBootRecoveryReport> {
-  // RFC-431: the daemon always passes its deployment's selection; direct module callers keep the local family.
-  return runBootExecutionRecovery(
-    input.recoveryEffects ?? createLocalBootExecutionRecoveryFactory(),
-    input,
-  )
+  // RFC-431 / RFC-526: the caller's selection (the daemon gives its deployment's; standalone: the local family).
+  return runBootExecutionRecovery(input.recoveryEffects, input)
 }

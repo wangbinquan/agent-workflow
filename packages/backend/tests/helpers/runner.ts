@@ -10,6 +10,7 @@ import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-exec
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 /**
  * Provider-selected test composition for the production-required memory read participant.
@@ -46,6 +47,7 @@ export async function runNode(options: RunNodeOptions) {
       persistence:
         options.persistence ??
         createTaskExecutionPersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

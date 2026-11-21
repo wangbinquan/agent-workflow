@@ -39,7 +39,10 @@ import {
 } from '@/modules/intent/composition/maintenance'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import {
@@ -52,6 +55,7 @@ import { composeSkillApplyRecoveryScene } from '@/modules/resource-catalog/compo
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createMaintenanceExecutionFence } from '@/modules/task-execution/composition/maintenanceExecutionFence'
 import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
@@ -245,7 +249,14 @@ export const composeMaintenanceWorkerGraph = async (
 ): Promise<MaintenanceWorkerGraph & { readonly ownerCommands: MaintenanceOwnerCommands }> => {
   const adapter = selectMaintenanceWorkerAdapter(input)
   const { db: client, resourcePackageRecoveryScene } = adapter
-  const closure = composeCrossContextClosure(client, createExecutionPermitRegistry())
+  // RFC-526: the worker has no deployment presence selection — the local file presence its task persistence and human-gate
+  // closure used to build when none was given, in both deployments as before.
+  const workspacePresence = createFileWorkspacePresenceQueries()
+  const closure = composeCrossContextClosure(
+    client,
+    createExecutionPermitRegistry(),
+    workspacePresence,
+  )
   const { appHome, effects: workerEffects } = input
   const store = createMaintenanceRunStore(client)
   const integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
@@ -256,12 +267,14 @@ export const composeMaintenanceWorkerGraph = async (
     content: workerEffects?.contentStore ?? createLocalRuntimeContent(client, appHome),
     historyRestrictions: createActiveHistoryRestrictionProvider(),
     recoveryHumanGates: closure.collaborationReads.recovery,
+    workspacePresence,
   })
   const taskRecoveryOperations = taskExecution.recoveryAdministration
+  // RFC-526: the hosted archive binding, or the local archive content the command used to build (standalone: `null`).
   const taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(
     client,
     closure.collaborationReads.archive,
-    workerEffects?.taskArchive,
+    workerEffects?.taskArchive ?? { content: createFileTaskArchiveContent() },
   )
   const workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand(
     (isMaterializingTask) =>

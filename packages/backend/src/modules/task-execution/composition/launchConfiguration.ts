@@ -14,7 +14,10 @@ import type {
   TaskLaunchConfigurationSnapshot,
 } from '../application/ports/taskLaunchConfiguration'
 
-/** Root selection validates the reader without reading it or starting any effect. */
+/**
+ * Root selection validates the reader without reading it or starting any effect. RFC-526: each read follows the mode the
+ * caller selected (`kind`) — local synchronous reads or the selected queries; neither is a default for the other.
+ */
 export function composeTaskLaunchConfiguration(
   input:
     | {
@@ -45,29 +48,29 @@ export function composeTaskLaunchConfiguration(
     initialRuntime: localRuntime,
     initialStart: localStart,
     runtime: () =>
-      selectedQueries === undefined
+      input.kind === 'local-sync'
         ? localRuntime()
-        : resolveTaskLaunchRuntimeConfiguration(selectedQueries),
+        : resolveTaskLaunchRuntimeConfiguration(input.queries),
     start: () =>
-      selectedQueries === undefined
+      input.kind === 'local-sync'
         ? localStart()
-        : resolveTaskStartLaunchConfiguration(selectedQueries),
+        : resolveTaskStartLaunchConfiguration(input.queries),
     drive: ():
       | Awaited<ReturnType<typeof resolveTaskStartLaunchConfiguration>>
       | Promise<Awaited<ReturnType<typeof resolveTaskStartLaunchConfiguration>>> =>
-      selectedQueries === undefined
+      input.kind === 'local-sync'
         ? localRuntime()
         : (async () => {
-            const runtime = await resolveTaskLaunchRuntimeConfiguration(selectedQueries)
-            const subagentLiveCapture = await resolveTaskSubagentLiveCapture(selectedQueries)
+            const runtime = await resolveTaskLaunchRuntimeConfiguration(input.queries)
+            const subagentLiveCapture = await resolveTaskSubagentLiveCapture(input.queries)
             return { ...runtime, subagentLiveCapture }
           })(),
-    ...(selectedQueries === undefined
+    ...(input.kind === 'local-sync'
       ? {}
       : {
           preparationConfiguration: Object.freeze({
             async read() {
-              const runtime = await resolveTaskLaunchRuntimeConfiguration(selectedQueries)
+              const runtime = await resolveTaskLaunchRuntimeConfiguration(input.queries)
               return runtime.cloneTimeoutMs === undefined
                 ? {}
                 : { cloneTimeoutMs: runtime.cloneTimeoutMs }

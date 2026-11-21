@@ -28,6 +28,7 @@ import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { createLogger } from '@/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
   for (const runtime of ['opencode', 'claude-code'] as const)
@@ -230,6 +231,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             templateMeta: { taskId, repoPath: 'repo:declared', baseBranch: 'main' },
             runtime,
             persistence: createTaskExecutionPersistence(db, {
+              workspacePresence: createFileWorkspacePresenceQueries(),
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

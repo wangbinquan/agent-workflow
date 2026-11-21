@@ -45,6 +45,10 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 
 const SRC = (path: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
@@ -144,6 +148,8 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     test('SQLite composition owns live suppression and closes orphaned clarify rounds', async () => {
       const taskId = await seedTask(db, { members: [{ memberType: 'agent' }] })
       const runtime = createCollaborationRuntimeMechanics(db, {
+        portArtifactReaderFor: (appHome: string) =>
+          composePortArtifactOperations(createFilePortArtifactContent(appHome)),
         taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),

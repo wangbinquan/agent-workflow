@@ -37,7 +37,8 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/task-execu
 
 ### D1 启动恢复与数字员工执行
 
-- `TaskExecutionBootRecoveryInput.recoveryEffects` 必填（application 的端口类型）；`runTaskExecutionBootRecovery` 只取给的工厂。
+- `runTaskExecutionBootRecovery` 的入参是执行恢复族自己的 `TaskExecutionBootRecoveryInput` 加必填的 `recoveryEffects`，只取给的工厂；application 端口
+  类型里那个只为回落存在的可选 `recoveryEffects` 删去（各执行恢复族的 `create(input)` 照旧只收族自己的入参）。
 - 数字员工执行的 `programs` 必填，只为回落存在的 `appHome` 删去（daemon 的装配随之不再交它）。
 
 ### D2 操作配置
@@ -58,9 +59,11 @@ RFC-521 门登记的 16 处（路径在 `packages/backend/src/modules/task-execu
 - `composeNodeRunPromptOperations(content)` 与 `composePortArtifactOperations(content)` 只收必填的内容效果（删去缺省目录参数）；两个组合层转出本机内
   容实现（`createFileNodeRunPromptContent` / `createFilePortArtifactContent`），单机部署在 `bootstrap/standalone.ts` 用同一组参数显式构造。
 - 删去 task-execution 内部的 `selectNodeRunPromptOperations`、`selectPortArtifactOperations` 与 `selectedTaskDeletionEffects`：调用方（infrastructure
-  里的会话树读取、任务路由操作、任务删除与删除恢复）的选择改为必填，在原来的位置照旧用 application 的 `require*` 核对。
-- public 的 `selectPortArtifactReader` 保留名字，`selected` 必填、只做核对（删去缺省目录参数）；collaboration 的评审与端口工件路由的选择改为必填
-  （daemon 一直给）。
+  里的会话树读取、任务路由操作与它的 node-runs 投影、任务删除与删除恢复）的选择改为必填，在原来的位置照旧用 application 的 `require*` 核对。
+- public 的 `selectPortArtifactReader` 保留名字，`selected` 必填、只做核对（删去缺省目录参数）；collaboration 的评审、评审调度的
+  `portArtifactReaderFor` 与端口工件路由的选择改为必填（daemon 一直给）。两个组合层随之不再导入只给 `select*` 用的核对。
+- 任务路由操作的删除效果（`effects`）必填（daemon 交部署选择的）；只服务用例的入口（`createTaskExecutionContext`、
+  `createDatabaseTaskDriverLifecyclePort`）的工作区存在性随类型必填。
 - 任务删除恢复里“内容效果没给就取本机的”一支的唯一调用方总给内容效果，改为必填。
 
 ### D5 provider 运行期与归档
@@ -76,19 +79,26 @@ createFileTaskArchiveContent() }`（组合层已经转出它；单机部署的�
 - 维护 worker 显式给本机文件存在性（经 source-control 组合层，与此前回落相同的对象，两种部署照旧）。
 - 任务取消：`composeTaskCancellation` 与数字员工执行的 `composeDatabaseDigitalEmployeeExecutionPorts` 收必填的 `workspacePresence`，daemon 的数字员工装
   配交部署选择的。
-- 人审停靠：`TaskExecutionParticipantBindings` 增一项 `workspacePresence`，由 `composeCrossContextClosure` 的调用方交入（daemon 交部署选择的，维护
-  worker 交本机文件的）；澄清与评审的两处停靠从绑定里取。
+- 人审停靠：`TaskExecutionParticipantBindings` 增一项 `workspacePresence`（类型取 public 命令 `parkPreparedHumanGate` 的入参，collaboration 不新增对
+  source-control 的依赖）；装配这份绑定的三处都交入：`composeCrossContextClosure` 的调用方（daemon 的任务执行装配交部署选择的，维护 worker 交本机
+  文件的）、daemon HTTP 装配（会话选择里增 `workspacePresence`，由 daemon 应用交部署选择的）与 daemon 会话（会话入参本来就带部署选择）。澄清与评审的
+  两处停靠从绑定里取。
 - 取消与停靠不做复活转移，存在性不会被查询，改交部署选择的不改变行为；daemon 之外的形态（托管部署）此后在这几条路径上也拿到自己的存在性。
 
 ### D7 用例与测试助手
 
-- 测试助手按此前回落逐项构造单机选择（只在用例没给时造）；tsc 列出的调用逐处改为显式给出（量大的按 AST 脚本改）；钉旧形状与回落原文的锁随
+- 测试助手按此前回落逐项构造单机选择（只在用例没给时造）；tsc 列出的调用逐处改为显式给出（量大的按 AST 脚本改：在原来回落的位置给同一个工厂与参
+  数）。共享助手里：直接装 provider 运行期的 `eachProviderTaskExecution` 像 daemon 一样把本机配置文件的操作配置交给驱动入口（此前经运行参数的
+  `configPath` 回落读同一个文件），并给出归档、旧版一支的提示与工件、路由的提示与删除效果；`withO2Closure` 给出评审按用例自己的 app home 造的本机
+  端口工件读取（放在用例的展开之前，用例给了就用用例的）；钉旧形状与回落原文的锁随
   改：按被删的名字、选项与回落原文片段扫描，再按被改文件的路径筛出读取其源码的全部用例（RFC-525 的教训）；改共享测试助手时不盖掉用例经展开
   传入的同名值。
 
 ### D8 门与锁
 
 - RFC-521 门删去 16 条登记，适配器回落 35 → 19；`SUCCESSORS` 删去 task-execution。计数降的收紧到实测；新增 RFC-526 用例并登记 guard-manifest。
+- 跨上下文内部文件对 18 → 17（生命周期持久化不再取 source-control 组合层的本机存在性）：`counts.json`、`rfc376-structural-guards` 的 `KNOWN`、
+  preflight 的文件对清单与 `rfc328-architecture-guards` 的 `crossContextProviderBridges` 四处同删这一对。
 
 ## 3. 清单（退出门）
 

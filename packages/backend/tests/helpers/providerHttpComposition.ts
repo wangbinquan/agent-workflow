@@ -15,7 +15,10 @@ import {
 } from '@/modules/system-operations/composition/databaseMigration'
 import { createFileDaemonRuntimeQueries } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { composeLocalExecutionAuthority } from '@/modules/system-operations/composition'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 import { join } from 'node:path'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
@@ -85,7 +88,9 @@ export async function createProviderHttpCompositionFixture(
           infoPath: join(application.appHome, '.daemon.info'),
         }),
         databaseMigration,
-        portArtifacts: composePortArtifactOperations(undefined, application.appHome),
+        portArtifacts: composePortArtifactOperations(
+          createFilePortArtifactContent(application.appHome),
+        ),
         integrationIdentityAccess: {
           ...modules.core.identityAccess,
           integrationTriggerResources:

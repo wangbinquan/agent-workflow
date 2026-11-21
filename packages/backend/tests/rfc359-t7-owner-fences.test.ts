@@ -39,6 +39,7 @@ import {
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
@@ -98,6 +99,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     iteration: 0,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

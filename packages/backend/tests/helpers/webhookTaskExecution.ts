@@ -39,6 +39,7 @@ import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 import { cancelViaEngine } from './cancelEngine'
 import type { IntegrationTriggerIdentityAccess } from '../../src/server'
 import { Paths } from '../../src/util/paths'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 /** SQLite test composition for Integration's closed TaskExecution participant. */
 export function createSqliteWebhookTaskExecutionParticipant(input: {
@@ -56,6 +57,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
     authorization: resourceCatalog.authorization,
   }).launch
   const persistence = createTaskExecutionPersistence(input.db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions,
     recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,

@@ -100,6 +100,8 @@ import type { DeploymentSelections } from '../deploymentProfile'
 type EmployeeOptions = Parameters<typeof composeDigitalEmployee>[0]
 export interface DaemonDigitalEmployeeInput {
   readonly historyRestrictions: HistoryRestrictionPort
+  /** RFC-526: the deployment's workspace presence, for the task cancellation the reaction execution runs. */
+  readonly workspacePresence: DeploymentSelections['workspacePresence']
   readonly graphAssist: Parameters<typeof composeDesignAssistGeneration>[0]
   // RFC-431: the deployment's selections arrive stated; this bundle substitutes no default.
   readonly verificationCommands: DeploymentSelections['verificationCommands']
@@ -307,9 +309,9 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       db,
       input.historyRestrictions,
       composeHumanGateOpenParticipantFactory(),
+      input.workspacePresence,
     ),
     ...taskExecution.hostTasks,
-    appHome,
     programs: programToolSource,
     tasks: taskExecution.routes.tasks,
     workspace: {

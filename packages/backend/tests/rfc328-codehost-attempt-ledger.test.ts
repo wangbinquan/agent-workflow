@@ -37,6 +37,7 @@ import { submitTaskContinuation as submitTaskContinuationInTransaction } from '@
 // RFC-359 W10：同步 store 上的 `closeOutcomeUnknownAndRelease` 生产零调用方、已删除；
 // 这里改指两个引擎共用的那一份。
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function fixture(
   db: PersistenceDb,
@@ -86,6 +87,7 @@ async function fixture(
   const claim = await module.claim({ db, intentId: intent.intentId })
   module.claimGate.leave(claim.permit)
   const context = createTaskExecutionContext({
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     intentId: intent.intentId,
@@ -110,6 +112,7 @@ async function fixture(
   } as const
   const observer = createCodeHostEffectAttemptObserver({
     persistence: createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -499,11 +502,13 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     })
     const nextObserver = createCodeHostEffectAttemptObserver({
       persistence: createTaskExecutionPersistence(h.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).effects,
       context: createTaskExecutionContext({
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         db: h.db,

@@ -333,7 +333,7 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
   // runtime-management, resource-catalog or source-control internals (bootstrap binds the providers) — 21 pairs settled.
   'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
-  'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
+  // RFC-526: the lifecycle persistence's workspace presence is a required selection — its source-control pair settled.
   // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
   // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers — its source-control pair settled.
   'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',

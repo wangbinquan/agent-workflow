@@ -44,6 +44,7 @@ import {
   transitionNodeRunStatus,
 } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 /** 断言拒绝的是**错误码**而不是消息文本：消息在合一中改过措辞，码没变。 */
 async function expectRejectionCode(run: Promise<unknown>, code: string): Promise<void> {
@@ -115,6 +116,7 @@ async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done')
     iteration: 0,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

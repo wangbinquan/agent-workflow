@@ -41,7 +41,10 @@ import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/application/worktreeResumePreflight'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 import { inheritedCallSpace } from '@/modules/task-execution/engine/node/shared/child-call/launchChildCall'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 // RFC-413: the wrapper iso rebuild moved into engine/kernel/wrapperIsolation.ts; it runs on the isolation
@@ -81,6 +84,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { singleMemberWorkspaceFixture, workspaceGit } from './helpers/singleMemberWorkspaceFixture'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const TIMEOUT = 60_000
 const log = createLogger('single-nonroot-workspace-test')
@@ -273,6 +277,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const handle = await createIsoUnderLock({
           binding: createTestIsolationBinding({
             persistence: createTaskExecutionPersistence(harness.db, {
+              workspacePresence: createFileWorkspacePresenceQueries(),
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -420,6 +425,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
         const binding = createTestIsolationBinding({
           persistence: createTaskExecutionPersistence(harness.db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -652,7 +658,9 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         expect(found.status).toBe('found')
         if (found.status !== 'found') throw new Error(found.status)
         const { artifact } = found
-        const result = await composePortArtifactOperations(undefined, appHome).read({
+        const result = await composePortArtifactOperations(
+          createFilePortArtifactContent(appHome),
+        ).read({
           ...artifact,
           fallbackWorkspaceRef: artifact.worktreePath,
           only: 0,
@@ -740,6 +748,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           db: harness.db,
           persistence: createTaskExecutionPersistence(harness.db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

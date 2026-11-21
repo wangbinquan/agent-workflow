@@ -48,10 +48,12 @@ export interface LegacyTaskRunComposition {
 
 export type ProviderTaskRunBindingSelection =
   | { readonly taskRunBinding: TaskRunDriveBinding }
-  | (Pick<LegacyTaskRunComposition, 'taskAgentRunsFor' | 'taskScriptRunsFor'> &
-      Partial<Pick<LegacyTaskRunComposition, 'nodeRunPromptsFor' | 'portArtifactsFor'>> & {
-        readonly taskRunBinding?: undefined
-      })
+  | (Pick<
+      LegacyTaskRunComposition,
+      'taskAgentRunsFor' | 'taskScriptRunsFor' | 'nodeRunPromptsFor' | 'portArtifactsFor'
+    > & {
+      readonly taskRunBinding?: undefined
+    })
 
 function localConfigurationBridge(
   input: Pick<LegacyTaskRunComposition, 'taskAgentRunsFor' | 'taskScriptRunsFor'>,
@@ -133,9 +135,9 @@ export function composeLegacyTaskRunDriveBinding(
 }
 
 /** The freshly assembled provider input remains the receiver of all legacy factories. */
+/** RFC-526: the legacy arm (fixtures only) gives its prompt and artifact owners too; nothing is defaulted here. */
 export function bindProviderTaskRunParticipantsInput<Input extends object>(
   input: Input & ProviderTaskRunBindingSelection,
-  defaults: Pick<LegacyTaskRunComposition, 'nodeRunPromptsFor' | 'portArtifactsFor'>,
 ): Input & { readonly taskRunBinding: TaskRunDriveBinding } {
   if (input.taskRunBinding !== undefined) {
     const selected = input.taskRunBinding
@@ -145,10 +147,8 @@ export function bindProviderTaskRunParticipantsInput<Input extends object>(
   const receiver = Object.assign(input, {
     taskAgentRunsFor: input.taskAgentRunsFor,
     taskScriptRunsFor: input.taskScriptRunsFor,
-    nodeRunPromptsFor:
-      input.nodeRunPromptsFor === undefined ? defaults.nodeRunPromptsFor : input.nodeRunPromptsFor,
-    portArtifactsFor:
-      input.portArtifactsFor === undefined ? defaults.portArtifactsFor : input.portArtifactsFor,
+    nodeRunPromptsFor: input.nodeRunPromptsFor,
+    portArtifactsFor: input.portArtifactsFor,
   })
   return Object.assign(receiver, { taskRunBinding: composeLegacyTaskRunDriveBinding(receiver) })
 }

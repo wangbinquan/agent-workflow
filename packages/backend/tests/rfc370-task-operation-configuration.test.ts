@@ -100,7 +100,7 @@ describeEachProvider('RFC-370 Task operation configuration', (harness) => {
         },
         configDir: DEFAULT_CONFIG_DIR_PROFILE[protocol],
       }
-      const pending = freezeBinaryConfig(configPath, configuration)
+      const pending = freezeBinaryConfig(configuration)
         .then((settings) =>
           resolveFrozenRuntimeWith(persistence, first, null, null, inherited, settings),
         )
@@ -124,7 +124,7 @@ describeEachProvider('RFC-370 Task operation configuration', (harness) => {
           runtimeBinary: '/selected/first',
         })
         binary = '/selected/second'
-        const current = await freezeBinaryConfig(configPath, configuration)
+        const current = await freezeBinaryConfig(configuration)
         expect(
           await resolveFrozenRuntimeWith(persistence, first, null, null, undefined, current),
         ).toMatchObject({ protocol, binary: '/selected/first' })
@@ -202,7 +202,7 @@ test('commit settings are awaited and copied per operation; selected failures us
     const projectedFallback = await readCommitExcludePatterns(opts)
     fallback[0] = 'later/**'
     expect(projectedFallback).toEqual(['launch/**'])
-    expect(await freezeBinaryConfig(configPath, configuration)).toBeUndefined()
+    expect(await freezeBinaryConfig(configuration)).toBeUndefined()
     expect(existsSync(configPath)).toBe(false)
     expect(pickInheritableRunConfig(opts)).not.toHaveProperty('operationConfiguration')
   } finally {
@@ -212,8 +212,8 @@ test('commit settings are awaited and copied per operation; selected failures us
 })
 
 test('absent standalone paths retain no-query and launch fallback behavior', async () => {
+  // RFC-526: the freeze takes only the selected configuration (bootstrap gives it every drive); none selected → no query.
   expect(await freezeBinaryConfig(undefined)).toBeUndefined()
-  expect(await freezeBinaryConfig('')).toBeUndefined()
   expect(
     // RFC-412: the reader takes only the three option fields it reads.
     await readCommitExcludePatterns({

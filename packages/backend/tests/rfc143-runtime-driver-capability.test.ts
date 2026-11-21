@@ -459,7 +459,8 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
       "from './runtimeConfigFreeze'",
     )
     expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
-      'freezeBinaryConfig(input.configPath, input.operationConfiguration)',
+      // RFC-526: the freeze takes only the configuration bootstrap gives every drive (no `configPath` fallback).
+      'freezeBinaryConfig(input.operationConfiguration)',
     )
     // RFC-412: services/scheduler.ts is deleted.
     expect(() => SRC('services/scheduler.ts')).toThrow()

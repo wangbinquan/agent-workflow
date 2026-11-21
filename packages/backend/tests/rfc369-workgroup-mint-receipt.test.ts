@@ -30,6 +30,7 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid(),
@@ -189,6 +190,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
         ownerRevision: 1,
       }),
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

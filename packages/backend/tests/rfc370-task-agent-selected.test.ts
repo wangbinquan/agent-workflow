@@ -38,6 +38,7 @@ import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { createLogger } from '../src/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 function agent(): Agent {
   return {
@@ -162,6 +163,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime: 'opencode',
         persistence: createTaskExecutionPersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -428,6 +430,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime,
         persistence: createTaskExecutionPersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

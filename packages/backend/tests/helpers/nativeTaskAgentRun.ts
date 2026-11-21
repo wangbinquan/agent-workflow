@@ -12,8 +12,16 @@ import type { RunNodeOptions } from './nativeTaskAgentRunOptions'
 import { bindLocalAgentExecutionParticipants } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import { detectPluginLoadFailure } from '@/modules/runtime-management/infrastructure/local/pluginLoadDiagnostics'
-import { selectNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { selectPortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+  requireNodeRunPromptOperations,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+  requirePortArtifactOperations,
+} from '@/modules/task-execution/composition/portArtifacts'
 import { resolveNativePortContentDetailed } from '@/modules/task-execution/infrastructure/local/filePortOutputValidation'
 import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import type { NativeMaterialDefinitions } from '@/modules/task-execution/infrastructure/local/nativeRunFamilyProviders'
@@ -41,11 +49,20 @@ export function bindNativeTaskAgentRunPurpose(
   let materialWorkspace: ReturnType<typeof bindNativeAgentMaterialWorkspace>
   let runRoot: string
   return {
+    // RFC-526: the case's operations, or the local ones the removed `select*` helpers built (same roots, same check).
     get nodeRunPrompts() {
-      return selectNodeRunPromptOperations(opts.nodeRunPrompts, join(opts.appHome, 'runs'))
+      const operations =
+        opts.nodeRunPrompts ??
+        composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(opts.appHome, 'runs')))
+      requireNodeRunPromptOperations(operations)
+      return operations
     },
     get portArtifacts() {
-      return selectPortArtifactOperations(opts.portArtifacts, opts.appHome)
+      const operations =
+        opts.portArtifacts ??
+        composePortArtifactOperations(createFilePortArtifactContent(opts.appHome))
+      requirePortArtifactOperations(operations)
+      return operations
     },
     get workspace() {
       materialWorkspace = bindNativeAgentMaterialWorkspace({

@@ -31,6 +31,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { describeEachProvider } from './helpers/eachProvider'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const T0 = 1_700_000_000_000
 
@@ -199,6 +200,7 @@ describeEachProvider('RFC-359 W7 —— 数字员工动作执行器组合根', (
   test('agent / script 两个执行器：缺 executionRef 是 not-found，终态任务读出 exited 快照', async () => {
     const actor = await seedActor(harness.db)
     const persistence = createTaskExecutionPersistence(asSqlite(harness.db), {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
       recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,

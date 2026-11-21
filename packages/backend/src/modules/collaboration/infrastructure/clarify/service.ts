@@ -428,6 +428,7 @@ export async function createClarifyRound(
       humanGateOpen: createHumanGateOpenParticipantScope,
       db: args.db,
       historyRestrictions: args.historyRestrictions,
+      workspacePresence: args.taskExecutionParticipants.workspacePresence,
       content: args.content,
       prepared: prepared.prepared,
       ...(executionContext === undefined ? {} : { executionContext }),

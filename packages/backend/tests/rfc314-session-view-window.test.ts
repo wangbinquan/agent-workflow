@@ -27,6 +27,11 @@ import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/ea
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/modules/task-execution/infrastructure/sessionTreeRead'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 const SESSION = 'ses_parent'
 
@@ -155,6 +160,7 @@ describeEachProvider('RFC-314 D2 —— 窗口成员', (harness) => {
       't1',
       'nr_a',
       { rootPrefix: 2, tail: 3 },
+      composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
     )
 
     // 逐 run 各取各的窗口：A 与 B 的头 2 条 + 尾 3 条都在，中段（*-2 … *-16）被舍弃。
@@ -188,6 +194,7 @@ describeEachProvider('RFC-314 D2 —— 窗口成员', (harness) => {
       't1',
       'nr_a',
       { rootPrefix: 1, tail: 2 },
+      composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
     )
 
     // 尾窗按 id 取 ⇒ 回灌那条在窗口内（旧的按 ts 取会把它排到最前、落在 tail 之外）；
@@ -215,10 +222,16 @@ async function capture(
     database?.recordStatements() ??
     recordStatements((db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client)
   try {
-    await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr_a', {
-      rootPrefix: 3,
-      tail: 5,
-    })
+    await getSessionTree(
+      createTaskExecutionReadModels(db).sessions,
+      't1',
+      'nr_a',
+      {
+        rootPrefix: 3,
+        tail: 5,
+      },
+      composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+    )
   } finally {
     rec.stop()
   }

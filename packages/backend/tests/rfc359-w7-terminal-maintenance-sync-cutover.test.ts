@@ -47,13 +47,17 @@ import {
 } from './helpers/model'
 
 import type { DbClient } from '@/db/client'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const NOW = 1_788_364_800_000
@@ -197,6 +201,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     })
 
     const result = await deleteTask(legacy(db), childId, {
+      effects: composeLocalTaskDeletionEffects(),
       executionPermits: testExecutionPermits,
       collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -244,6 +249,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     // 卡住每任务写锁：`deleteTask` 会先铸认领 + 推进到 io-complete，然后阻塞在这把锁上。
     const release = await getTaskWriteSem(taskId).acquire()
     const pending = deleteTask(legacy(db), taskId, {
+      effects: composeLocalTaskDeletionEffects(),
       executionPermits: testExecutionPermits,
       collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -294,6 +300,7 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
     const sweep = await createDrizzleTaskArchiveMaintenanceCommand(
       legacy(db),
       o2Ports(legacy(db)).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runManual(
       { retentionDays: 1, maxTrees: 1, actorUserId: null },
       {
@@ -351,6 +358,7 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
     const recovered = await createDrizzleTaskArchiveMaintenanceCommand(
       legacy(db),
       o2Ports(legacy(db)).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).recover({
       archiveDir,
       now: NOW + 2,

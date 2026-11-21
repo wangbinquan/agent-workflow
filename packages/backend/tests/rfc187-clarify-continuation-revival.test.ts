@@ -37,6 +37,7 @@ import { autoResumeInterruptedTasks } from '../src/modules/task-execution/applic
 import { isKilledClarifyContinuation } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '@agent-workflow/shared'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
 // recovery counters. bun shares the module registry across test files under CI's
@@ -126,6 +127,7 @@ describeEachProvider('RFC-187 T13 — auto-resume sweeps the answer-handoff wedg
     const resumed: string[] = []
     const res = await autoResumeInterruptedTasks({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

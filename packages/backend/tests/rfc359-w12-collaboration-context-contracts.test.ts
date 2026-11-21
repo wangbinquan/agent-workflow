@@ -8,7 +8,10 @@ import {
   memorySystemAgentBindingForTest,
   runtimeManagementDistillRuntimes,
 } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 AC12: command contexts must retain the capabilities actually supplied at
 // construction. Complete routes cannot accept a base or partially composed context;
@@ -81,7 +84,9 @@ function composeCapabilities(db: PersistenceDb, appHome: string) {
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),
     db,
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(appHome, 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome),

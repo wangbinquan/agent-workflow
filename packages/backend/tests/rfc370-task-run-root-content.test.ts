@@ -52,7 +52,7 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
         return prompts.get(row.promptPath) ?? null
       },
     })
-    const portArtifacts = composePortArtifactOperations(content, appHome)
+    const portArtifacts = composePortArtifactOperations(content)
     const chosen = chosenTaskRuns({ nodeRunPrompts, portArtifacts })
     let application: Awaited<ReturnType<typeof createProviderHttpApplication>> | undefined
     let pending: Promise<Response> | undefined

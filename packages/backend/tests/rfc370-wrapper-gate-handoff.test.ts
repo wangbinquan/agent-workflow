@@ -28,6 +28,7 @@ import { WrapperRuntime } from '../src/modules/task-execution/engine/wrapper/wra
 import type { TaskMechanicsState } from '../src/modules/task-execution/composition/taskMechanicsState'
 import { createLogger } from '../src/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 function unexpected(operation: string): never {
   throw new Error(`unexpected effect during handoff: ${operation}`)
@@ -566,6 +567,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
       taskId,
       opts: {
         persistence: createTaskExecutionPersistence(harness.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

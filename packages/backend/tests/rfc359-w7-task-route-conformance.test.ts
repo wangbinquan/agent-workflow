@@ -65,6 +65,13 @@ import {
 } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { Paths } from '@/util/paths'
 
 const ulid = monotonicFactory()
 
@@ -193,6 +200,10 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
+      // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
+      // build (no app home here, so prompts under `Paths.runsDir`).
+      nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
+      effects: composeLocalTaskDeletionEffects(),
       collaboration: {} as never,
       reviewers: composeTaskReviewersPort({} as never),
       owners: composeOwnerIdentityQueries(db),
@@ -211,6 +222,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       resourceAuthorityFor: resourceAuthorityFor(db),
       launches: { launch: async () => unusedDependency('launches.launch') } as never,
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

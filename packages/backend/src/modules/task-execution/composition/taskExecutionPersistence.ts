@@ -4,7 +4,6 @@ import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestric
 import type { TaskRecoveryHumanGateFactsPort } from './required-ports'
 import { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'
@@ -49,17 +48,15 @@ export interface TaskExecutionPersistenceDependencies {
   readonly historyRestrictions: HistoryRestrictionPort
   readonly content?: Pick<ContentStore, 'read'>
   readonly recoveryHumanGates?: TaskRecoveryHumanGateFactsPort
-  readonly workspacePresence?: WorkspacePresenceQueries
+  /** RFC-526: the deployment's workspace presence (required; only a revival of a terminal task consults it). */
+  readonly workspacePresence: WorkspacePresenceQueries
 }
 
 export function createTaskRuntimeLifecyclePersistence(
   db: PersistenceDb,
-  dependencies: Pick<TaskExecutionPersistenceDependencies, 'workspacePresence'> = {},
+  dependencies: Pick<TaskExecutionPersistenceDependencies, 'workspacePresence'>,
 ): DrizzleTaskRuntimeLifecyclePersistence {
-  return new DrizzleTaskRuntimeLifecyclePersistence(
-    db,
-    dependencies.workspacePresence ?? createFileWorkspacePresenceQueries(),
-  )
+  return new DrizzleTaskRuntimeLifecyclePersistence(db, dependencies.workspacePresence)
 }
 
 export function createTaskExecutionPersistence(

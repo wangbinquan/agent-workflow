@@ -562,6 +562,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const { webhookTerminalControl, eventCenter } = integrationModules
   const digitalEmployeeModules = composeDaemonDigitalEmployeeModules({
     historyRestrictions: nodeRunHistoryRestrictions,
+    workspacePresence: input.workspacePresence,
     graphAssist: {
       registry: core.runtimeRegistry,
       getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
@@ -696,6 +697,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       repositoryRevisionContent: input.repositoryRevisionContent,
       codeReviewArtifacts: input.codeReviewArtifacts,
       repositoryRemote: input.repositoryRemote,
+      workspacePresence: input.workspacePresence,
     },
     testSeams: {
       codeHostRuntime: { codeHostFetch: input.testSeams?.codeHostFetch },

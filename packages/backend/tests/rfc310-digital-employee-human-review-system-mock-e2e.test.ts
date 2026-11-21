@@ -1,5 +1,6 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -66,6 +67,7 @@ import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const roots: string[] = []
 const taskIds: string[] = []
@@ -303,7 +305,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       if (admitted === null) throw new Error('human-review e2e daemon identity unavailable')
       const actor = actorOfDirectAuthority(admitted)
       const execution = composeDigitalEmployeeExecutionCore({
-        appHome,
+        // RFC-526: the program tool source is required — the local one the execution used to build from the app home.
+        programs: createFileProgramToolSource(appHome),
         resolveActor: async () => actor,
         resourceAuthorityFor: () => ({
           actor,
@@ -320,6 +323,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           coordinatorDeps: startDeps,
           persistence: createTaskExecutionPersistence(db, {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -336,6 +340,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           db,
           epoch2RuntimeTestPorts(db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),
+          createFileWorkspacePresenceQueries(),
         ),
         executionContracts,
       })

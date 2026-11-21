@@ -1,4 +1,5 @@
 import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
+import type { parkPreparedHumanGate } from '@/modules/task-execution/public/commands'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 import type { AnyColumn, SQL } from 'drizzle-orm'
@@ -27,6 +28,11 @@ import type {
 /** Assembly input: bootstrap passes owner factory references, never prebuilt participants. */
 export interface TaskExecutionParticipantBindings {
   readonly executionPermits: TaskExecutionPermits
+  /**
+   * RFC-526: the deployment's workspace presence, for the human-gate parks collaboration runs (a park never revives a
+   * task, so it is not consulted there; the lifecycle persistence still takes the deployment's own).
+   */
+  readonly workspacePresence: Parameters<typeof parkPreparedHumanGate>[0]['workspacePresence']
   readonly createTaskNodeStatusEventsParticipantInTx: (
     tx: PersistenceTx,
   ) => TaskNodeStatusEventsParticipantInTx

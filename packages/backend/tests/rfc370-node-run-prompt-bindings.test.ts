@@ -51,6 +51,7 @@ import { DESIGNER, CL, freshTaskId, seedTask } from './helpers/questionDispatchF
 import { runNode } from './helpers/runner'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 function held<T>() {
   let resolve!: (value: T) => void
@@ -432,6 +433,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       reviewIteration: 0,
     })
     const original = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -714,13 +716,13 @@ function factoryResult(value: ts.Expression): ts.Expression {
   return returns[0]!.expression
 }
 
-/** RFC-431: the standalone profile's task-run selection composes the module's file prompt default once. */
+/** RFC-431: the standalone profile's task-run selection composes the module's file prompt default once.
+ *  RFC-526: the composer takes the prompt content it is given; standalone names the file content explicitly. */
 function expectStandalonePromptSelection(): void {
   const standalone = source('bootstrap/standalone.ts')
   const selected = onlyCall(standalone, standalone, 'composeNodeRunPromptOperations')
   expect(selected.arguments.map((value) => compact(value, standalone))).toEqual([
-    'undefined',
-    "join(appHome,'runs')",
+    "createFileNodeRunPromptContent(join(appHome,'runs'))",
   ])
   const member = selected.parent
   if (!ts.isPropertyAssignment(member) || member.name.getText(standalone) !== 'nodeRunPrompts')

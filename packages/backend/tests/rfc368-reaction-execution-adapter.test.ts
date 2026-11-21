@@ -41,6 +41,7 @@ import type {
   ReactionExecutionAdmissionReceiptV1,
   ReactionRetryFeedbackRef,
 } from '@/modules/digital-employee/composition/required-ports'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const ROUND = 'round-adapter'
@@ -340,6 +341,7 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           composeHumanGateOpenParticipantFactory(),
+          createFileWorkspacePresenceQueries(),
         ),
       } as unknown as DigitalEmployeeExecutionDependencies)
     }

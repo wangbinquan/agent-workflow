@@ -38,6 +38,7 @@ import { createLogger } from '../src/util/log'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const GRACE_MS = 24 * 3_600_000
 
@@ -302,6 +303,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
   async function detectThenPromote(db: PersistenceDb, taskId: string): Promise<void> {
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -312,6 +314,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     captured = '' // ignore the first (warning) scan; assert on the promoting scan only
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -353,6 +356,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     // Scan 1: detect (newAlerts=1 → stateChanged=true → logs)
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -363,6 +367,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     // Scan 2: promote (promotedAlerts=1 → stateChanged=true → logs ERROR)
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -374,6 +379,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     // Scan 3: nothing changed (newAlerts=0, promotedAlerts=0, resolvedAlerts=0)
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

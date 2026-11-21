@@ -83,6 +83,8 @@ const isTaskClarifySuppressed = (
   shardKey?: string | null,
 ): Promise<boolean> =>
   createCollaborationRuntimeMechanics(db, {
+    portArtifactReaderFor: (appHome: string) =>
+      composePortArtifactOperations(createFilePortArtifactContent(appHome)),
     taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
@@ -102,6 +104,8 @@ const dismissOpenClarifyParksForAutonomous = (
   ReturnType<typeof createCollaborationRuntimeMechanics>['dismissOpenClarifyParksForAutonomous']
 > =>
   createCollaborationRuntimeMechanics(db, {
+    portArtifactReaderFor: (appHome: string) =>
+      composePortArtifactOperations(createFilePortArtifactContent(appHome)),
     taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
@@ -113,6 +117,10 @@ const dismissOpenClarifyParksForAutonomous = (
   })
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { createWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 const PLANNER_AGENT_ID = '01HPLANNERAGENT000000000000'

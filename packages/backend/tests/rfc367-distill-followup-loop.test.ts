@@ -3,7 +3,10 @@ import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-ex
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 T6 — runDistill's protocol follow-up loop.
 //
@@ -159,7 +162,9 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
         markTerminal: async () => {},
       }),
     ),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(appHome(), 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome()),

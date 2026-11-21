@@ -4,10 +4,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
+// RFC-526: the composition takes the caller's content (no native home to ignore); the internal operations `select*` is
+// gone (consumers check with `requirePortArtifactOperations`), and the public reader selection only checks a given reader.
 import {
   composePortArtifactOperations,
-  selectPortArtifactOperations,
+  requirePortArtifactOperations,
   selectPortArtifactReader,
+  createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
 import type {
   PortArtifactArchiveRequest,
@@ -68,7 +71,7 @@ describe('RFC-370 port artifact content', () => {
     const content = Object.freeze(new MemoryPortArtifactContent())
     const bytes = Buffer.from('selected UTF-8 内容\0binary')
     content.put(source, bytes)
-    const operations = composePortArtifactOperations(content, '/never-used-native-home')
+    const operations = composePortArtifactOperations(content)
     const stored = await operations.archive(archiveRequest())
     const roster = parseArchiveJson(stored.archiveJson)!
     expect(roster).toEqual({
@@ -355,7 +358,7 @@ describe('RFC-370 port artifact content', () => {
     }
     for (const value of [null, {}, { read: async () => ({ items: [] }) }]) {
       expect(() =>
-        selectPortArtifactOperations(value as unknown as PortArtifactOperations),
+        requirePortArtifactOperations(value as unknown as PortArtifactOperations),
       ).toThrow('complete operations')
     }
     expect(() => selectPortArtifactReader(null as unknown as PortArtifactReader)).toThrow(
@@ -382,7 +385,7 @@ describe('RFC-370 port artifact content', () => {
       }
     }
     const receiver = Object.freeze(new Operations())
-    expect(selectPortArtifactOperations(receiver)).toBe(receiver)
+    expect(() => requirePortArtifactOperations(receiver)).not.toThrow()
     expect(selectPortArtifactReader(receiver)).toBe(receiver)
     expect((await selectPortArtifactReader(receiver).read(readRequest(null))).items[0]!.body).toBe(
       'receiver body',
@@ -394,7 +397,7 @@ describe('RFC-370 port artifact content', () => {
     try {
       const appHome = join(root, 'not-created'),
         wt = join(root, 'wt')
-      const selected = composePortArtifactOperations(undefined, appHome)
+      const selected = composePortArtifactOperations(createFilePortArtifactContent(appHome))
       expect(existsSync(appHome)).toBe(false)
       mkdirSync(wt)
       const original = join(root, 'actual-source.md')

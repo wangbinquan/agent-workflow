@@ -20,6 +20,11 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { Paths } from '@/util/paths'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -143,7 +148,15 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
       decision: 'pending',
     })
 
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     const rev = res.runs.find((r) => r.id === revId)!
     const agent = res.runs.find((r) => r.id === 'AGENT0')!
 
@@ -181,7 +194,15 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
       decidedAt: 9600,
     })
 
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     const rev = res.runs.find((r) => r.id === revId)!
     expect(rev.reviewRoundStartedAt).toBe(9000)
     expect(rev.reviewDecidedAt).toBe(9600)
@@ -192,7 +213,15 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, { id: 'A', nodeId: 'a', startedAt: 1000 })
     await seedRun(db, taskId, { id: 'B', nodeId: 'b', startedAt: 2000 })
-    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
+    const res = await taskNodeRunsProjection(
+      withO2Closure({
+        nodeRunPrompts: composeNodeRunPromptOperations(
+          createFileNodeRunPromptContent(Paths.runsDir),
+        ),
+        db,
+      }),
+      taskId,
+    )
     expect(res.runs.every((r) => (r.reviewRoundStartedAt ?? null) === null)).toBe(true)
     expect(res.runs.map((r) => r.id)).toEqual(['A', 'B'])
   })

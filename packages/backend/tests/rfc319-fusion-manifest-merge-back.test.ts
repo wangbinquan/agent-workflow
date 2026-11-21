@@ -63,6 +63,7 @@ import {
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
 } from './helpers/resourceScopeAuthority'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const VALID_OPENCODE_RUNTIME = 'rfc319-test-opencode'
 
@@ -230,6 +231,7 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     expect(
       await forcedPortPathsForTask(
         createTaskExecutionPersistence(h.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

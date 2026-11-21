@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
 import { reapOrphanRuns } from '@/modules/task-execution/infrastructure/local/orphanRunReap'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const NOW = 1_788_969_900_000
 
@@ -100,6 +101,7 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
     expect(
       await reapOrphanRuns(
         createTaskExecutionPersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -172,6 +174,7 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
     expect(
       await reapOrphanRuns(
         createTaskExecutionPersistence(db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

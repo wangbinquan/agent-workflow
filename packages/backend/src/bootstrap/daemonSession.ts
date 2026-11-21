@@ -408,6 +408,7 @@ export async function composeDaemonSession(
   // RFC-482 / RFC-485: one set of task-execution factory references for the collaboration projection and terminal sweep.
   const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
     runtime.taskExecutionModules.executionPermits,
+    input.workspacePresence,
   )
   const committedEventProjectors = [
     runtime.taskExecution.lifecycleProjector,

@@ -39,6 +39,7 @@ import {
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const actor = buildActor({
   user: {
@@ -186,6 +187,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
         nudge() {},
       })
       const persistence = createTaskExecutionPersistence(fixture.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(fixture.db).historyRestrictions,
         recoveryHumanGates: o2Ports(fixture.db).collaborationReads.recovery,

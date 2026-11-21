@@ -26,7 +26,6 @@ export interface TaskExecutionBootRecoveryInput {
   readonly lockProof: ExclusiveDaemonLockProof
   readonly codeHostProbe?: (descriptor: CodeHostRecoveryDescriptor) => Promise<CodeHostProbeOutcome>
   readonly log: BootRecoveryLogger
-  readonly recoveryEffects?: BootExecutionRecoveryFactory
 }
 
 export interface TaskExecutionBootRecoveryReport {

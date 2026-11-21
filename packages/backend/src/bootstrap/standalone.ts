@@ -31,8 +31,14 @@ import {
   invalidateCallGraphIndex,
 } from '@/modules/workspace-insight/composition'
 import { composeLocalTaskRunSelection } from '@/modules/task-execution/composition/localTaskRunSelection'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 import { createLocalTaskRuntimeInventoryContent } from '@/modules/runtime-management/composition/taskRuntimeInventoryContent'
@@ -113,8 +119,11 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     repositoryRevisionContent: composeLocalRepositoryRevisionContent(),
     codeReviewArtifacts: composeLocalCodeReviewArtifacts(),
     taskRunSelection: composeLocalTaskRunSelection({
-      nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-      portArtifacts: composePortArtifactOperations(undefined, appHome),
+      // RFC-526: the local prompt and port artifact content, built with the roots the compositions used to default to.
+      nodeRunPrompts: composeNodeRunPromptOperations(
+        createFileNodeRunPromptContent(join(appHome, 'runs')),
+      ),
+      portArtifacts: composePortArtifactOperations(createFilePortArtifactContent(appHome)),
       taskAgentProviders: localTaskAgentRunProviders,
     }),
     taskArchive: { content: createFileTaskArchiveContent() },

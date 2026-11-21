@@ -43,6 +43,8 @@ import {
 import { reconcileDeadRunningRuns } from '@/modules/task-execution/infrastructure/local/deadRunReconcile'
 import { listRecoveryEventsForTask } from '@/modules/task-execution/application/recovery/recoveryEvents'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
@@ -108,6 +110,7 @@ async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<strin
 /** 上一代 daemon（gen-old）认领了任务并挂上 runtime，然后整个进程被 SIGKILL。 */
 async function crashPreviousDaemon(db: PersistenceDb, taskId: string) {
   const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -138,6 +141,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     // Do not consume a report here. A missing historical root call must fail
     // on the real durable state, not on reading a property from undefined.
     await runTaskExecutionBootRecovery({
+      recoveryEffects: createLocalBootExecutionRecoveryFactory(),
       persistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       lockProof: createDaemonLockProof({
@@ -229,6 +233,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     expect((await persistence.ownership.read(taskId))?.state).toBe('claimed')
 
     const report = await runTaskExecutionBootRecovery({
+      recoveryEffects: createLocalBootExecutionRecoveryFactory(),
       persistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       lockProof: createDaemonLockProof({
@@ -286,11 +291,13 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
   test('没有孤儿时四步都是 no-op', async () => {
     const db = harness.db
     const persistence = createTaskExecutionPersistence(db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
     const report = await runTaskExecutionBootRecovery({
+      recoveryEffects: createLocalBootExecutionRecoveryFactory(),
       persistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       lockProof: createDaemonLockProof({

@@ -20,22 +20,18 @@ import {
   commitPushNodeId,
 } from '../domain/commitAgent'
 import type { TaskRepositoryMount } from '../domain/taskRepository'
-import { createFileTaskOperationConfiguration } from '../infrastructure/local/fileTaskOperationConfiguration'
 import { runTaskAgentWithFamily } from './taskAgentRunFamily'
 import type { TaskMechanicsState } from './taskMechanicsState'
 
-/** RFC-308: one immutable settings slice per commit/freeze operation. */
+/**
+ * RFC-308: one immutable settings slice per commit/freeze operation. RFC-526: the configuration is the one bootstrap gives
+ * every drive (absent: no operation configuration, only the run's own patterns).
+ */
 export function readCommitExcludePatterns(
-  opts: Pick<
-    TaskMechanicsState['opts'],
-    'operationConfiguration' | 'configPath' | 'commitPushExcludePatterns'
-  >,
+  opts: Pick<TaskMechanicsState['opts'], 'operationConfiguration' | 'commitPushExcludePatterns'>,
 ): Promise<readonly string[]> {
   return readTaskCommitExcludePatterns(
-    opts.operationConfiguration ??
-      (opts.configPath === undefined || opts.configPath === ''
-        ? undefined
-        : createFileTaskOperationConfiguration(opts.configPath)),
+    opts.operationConfiguration,
     opts.commitPushExcludePatterns ?? [],
   )
 }

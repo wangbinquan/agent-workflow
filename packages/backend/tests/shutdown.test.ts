@@ -32,6 +32,7 @@ import {
   createTaskExecutionTestModule,
 } from '../src/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 interface Harness {
   db: PersistenceDb
@@ -93,6 +94,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
   test('returns immediately when no tasks are running', async () => {
     const t0 = Date.now()
     const persistence = createTaskExecutionPersistence(h.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -118,6 +120,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
     // the row stays running. After the short budget, the survivor path
     // marks it interrupted.
     const persistence = createTaskExecutionPersistence(h.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -145,6 +148,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
   test('session shutdown bounds a stuck provider driver then persists its survivor', async () => {
     const taskId = await seedRunning(h.db)
     const persistence = createTaskExecutionPersistence(h.db, {
+      workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

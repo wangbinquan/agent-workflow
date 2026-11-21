@@ -7,7 +7,10 @@ import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } fro
 import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { rawExec } from '@/platform/persistence/queryHelpers'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-044 — distiller source-context loader + builder unit tests.
 //
@@ -56,7 +59,9 @@ function createMemoryDistillTestContext(db: PersistenceDb, root = appHome()) {
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
     ),
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(root, 'runs')),
+    ),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(root),

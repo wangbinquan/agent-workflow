@@ -37,6 +37,7 @@ import type { MaterializedSpace } from '@/modules/source-control/infrastructure/
 import { deleteTask } from '../src/modules/task-execution/infrastructure/taskDelete'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
@@ -180,6 +181,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       await patchTaskFixture(db, { id: parentId }, { status: 'done', finishedAt: Date.now() })
       clearTaskDriverLifecycleForTesting()
       await deleteTask(db, childId, {
+        effects: composeLocalTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },

@@ -57,11 +57,11 @@ import type { TaskDeletionCollaborationInTx } from '../application/ports/taskDel
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import type { TaskExecutionPermits } from '../application/ports/taskExecutionPermits'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
+import { requireTaskDeletionEffects } from '../application/taskDeletionEffects'
 import { createTaskDeletionParticipantInTx } from './taskDeletionParticipant'
 import { createTaskDeletionQueries } from './taskDeletionQueries'
 import {
   cleanupDeletedTaskResources,
-  selectedTaskDeletionEffects,
   type DeleteCleanupPlanV2,
   type DeleteWorktreeTarget as WorktreeTarget,
 } from './taskDeleteRecovery'
@@ -95,11 +95,13 @@ export async function deleteTask(
   options: Readonly<{
     executionPermits: TaskExecutionPermits
     activity: ActiveTaskExecutionParticipant
-    effects?: TaskDeletionEffects
+    /** RFC-526: the deployment's deletion effects (required; the daemon gives its selection's). */
+    effects: TaskDeletionEffects
     collaboration: TaskDeletionCollaborationInTx
   }>,
 ): Promise<DeleteTaskResult> {
-  const effects = selectedTaskDeletionEffects(options.effects)
+  const effects = options.effects
+  requireTaskDeletionEffects(effects)
   const queries = createTaskDeletionQueries(db)
   const row = await queries.read(taskId)
   if (row === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)

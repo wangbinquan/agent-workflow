@@ -29,6 +29,7 @@ import { runStuckTaskDetector } from '../src/modules/task-execution/application/
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const MIN_MS = 60_000
 const T0 = Date.UTC(2026, 0, 1, 12, 0, 0)
@@ -144,6 +145,7 @@ describeEachProvider(
       // Run only invariants. R1 should be inserted; S1 must NOT be resolved.
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(env.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -179,6 +181,7 @@ describeEachProvider(
 
       await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(env.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -294,6 +297,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
 
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -368,6 +372,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -387,6 +392,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -408,6 +414,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     await seedTask(env.db, 'done', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -423,6 +430,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     await seedTask(env.db, 'canceled', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,

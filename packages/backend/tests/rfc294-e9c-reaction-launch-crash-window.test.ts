@@ -42,6 +42,7 @@ import {
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 async function insertTask(db: PersistenceDb, taskId: string): Promise<void> {
   await workflowFixture(
@@ -144,6 +145,7 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeHumanGateOpenParticipantFactory(),
+        createFileWorkspacePresenceQueries(),
       ).tasks
       const kernelLaunches: string[] = []
       let reachedCrash!: () => void

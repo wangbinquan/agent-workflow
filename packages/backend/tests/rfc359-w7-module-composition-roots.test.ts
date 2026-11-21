@@ -43,6 +43,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const T0 = 1_700_000_000_000
 
@@ -323,6 +324,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
           db: harness.db,
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db), {
+            workspacePresence: createFileWorkspacePresenceQueries(),
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
             recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,

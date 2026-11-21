@@ -34,6 +34,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { held } from './helpers/portArtifactContent'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createRepairEngine } from './helpers/repairEngine'
+import {
+  composePortArtifactOperations,
+  createFilePortArtifactContent,
+} from '@/modules/task-execution/composition/portArtifacts'
 
 const TOKEN = 'w'.repeat(64)
 const MAX_DIFF = 1_048_576
@@ -529,6 +533,8 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
     const appHome = temp(),
       dispatched: string[] = []
     const native = createCollaborationRuntimeMechanics(provider.db, {
+      portArtifactReaderFor: (appHome: string) =>
+        composePortArtifactOperations(createFilePortArtifactContent(appHome)),
       taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(provider.db),

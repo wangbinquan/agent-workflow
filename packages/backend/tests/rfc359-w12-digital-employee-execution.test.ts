@@ -48,6 +48,8 @@ import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const CONTRACT = { contractId: 'development.analyze-implement', version: 1 }
@@ -215,7 +217,8 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         // RFC-361: resource and fixture providers are identical for both database bindings.
         const compose = () =>
           composeDigitalEmployeeExecutionCore({
-            appHome,
+            // RFC-526: the program tool source is required — the local one the execution used to build from the app home.
+            programs: createFileProgramToolSource(appHome),
             resolveActor: async () => actor,
             resourceAuthorityFor: () => launchResources,
             launch:
@@ -240,6 +243,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
               harness.db,
               epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               composeHumanGateOpenParticipantFactory(),
+              createFileWorkspacePresenceQueries(),
             ),
             tasks: provider.routes.tasks,
             readModels: provider.readModels,

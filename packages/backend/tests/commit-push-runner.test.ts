@@ -38,6 +38,7 @@ import {
   completionBarrier,
   enteredBeforeOutcome,
 } from './helpers/repositoryCandidatePublication'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 interface Fixture {
   repo: string
@@ -716,6 +717,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
       async () => {
         const f = await build(harness)
         const persistence = createTaskExecutionPersistence(f.db, {
+          workspacePresence: createFileWorkspacePresenceQueries(),
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(f.db).historyRestrictions,
           recoveryHumanGates: o2Ports(f.db).collaborationReads.recovery,

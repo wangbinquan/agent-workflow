@@ -1,4 +1,7 @@
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import {
@@ -247,6 +250,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
         await createDrizzleTaskArchiveMaintenanceCommand(
           db,
           o2Ports(db).collaborationReads.archive,
+          { content: createFileTaskArchiveContent() },
         ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: finishedAt + 10 * DAY })
       ).archived,
     ).toHaveLength(0)
@@ -256,6 +260,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     const archived = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: finishedAt + 91 * DAY })
     expect(archived.archived.map((tree) => tree.rootTaskId)).toEqual(['root'])
     expect(await taskCount()).toBe(0)
@@ -271,6 +276,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     const archived = await createDrizzleTaskArchiveMaintenanceCommand(
       db,
       o2Ports(db).collaborationReads.archive,
+      { content: createFileTaskArchiveContent() },
     ).runSweep({ enabled: false, retentionDays: 90 }, { ...dirs, now: NOW + 999 * DAY })
     expect(archived.archived).toHaveLength(0)
     expect(await taskCount()).toBe(1)

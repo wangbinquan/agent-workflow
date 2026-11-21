@@ -20,7 +20,10 @@ import {
 import { composeDaemonObservationModules } from '@/bootstrap/daemonModules/observation'
 import { composeDaemonMemoryModules } from '@/bootstrap/daemonModules/memory'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import {
+  composeNodeRunPromptOperations,
+  createFileNodeRunPromptContent,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { buildStartTaskDeps } from './helpers/startTaskDeps'
 import { describeEachProvider, type ProviderApplicationBinding } from './helpers/eachProvider'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
@@ -120,7 +123,9 @@ function graph(
   })
   const memoryModules = composeDaemonMemoryModules({
     db,
-    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+    nodeRunPrompts: composeNodeRunPromptOperations(
+      createFileNodeRunPromptContent(join(appHome, 'runs')),
+    ),
     systemAgentBinding: observationModules.memorySystemAgentBinding,
     // RFC-487: bound as daemonApplication binds it.
     runtimeProfiles: {

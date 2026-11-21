@@ -1,3 +1,4 @@
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { testExecutionPermits } from './executionPermits'
 import type { TaskExecutionParticipantBindings } from '@/modules/collaboration/infrastructure/taskExecutionParticipantBindings'
 import {
@@ -25,6 +26,8 @@ import {
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
   executionPermits: testExecutionPermits,
+  // RFC-526: the human-gate parks take the session's workspace presence (the local one in these tests).
+  workspacePresence: createFileWorkspacePresenceQueries(),
   createTaskNodeStatusEventsParticipantInTx,
   createHumanGateNodeRunStateParticipantInTx,
   createTaskDecisionParticipantInTx,

@@ -122,6 +122,8 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   })
   const employeeInput: DaemonDigitalEmployeeInput = {
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+    // RFC-526: the task cancellation's presence is the deployment's (standalone: the local file presence).
+    workspacePresence: standalone.workspacePresence,
     content: epoch2RuntimeTestPorts(db).content,
     writerInstallation: { activeGeneration: 2, updatedAt: 0 },
     graphAssist: {

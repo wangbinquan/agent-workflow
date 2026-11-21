@@ -13,7 +13,10 @@ import {
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  createFileTaskArchiveContent,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-328 core correctness matrix. These fixtures use the real migration and the
 // provider-neutral persistence adapters; no clock sleeps or process-global task
 // map is involved.
@@ -67,6 +70,8 @@ import { createLocalEffectAttemptObserver } from '@/modules/task-execution/appli
 import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { buildCodeHostRecoveryDescriptor } from '@/modules/task-execution/domain/codeHostRecovery'
 import { describeEachProvider } from './helpers/eachProvider'
+import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
@@ -401,6 +406,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       const claim = await module.claim({ db: database, intentId: intent.intentId })
       module.claimGate.leave(claim.permit)
       const context = createTaskExecutionContext({
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(database).historyRestrictions,
         db: database,
@@ -1465,7 +1471,14 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         now: 51,
       })
 
-      expect(await recoverInterruptedTaskDeletes(database, testExecutionPermits)).toEqual({
+      expect(
+        await recoverInterruptedTaskDeletes(
+          database,
+          testExecutionPermits,
+          undefined,
+          composeLocalTaskDeletionEffects(),
+        ),
+      ).toEqual({
         completed: ['task-delete-recovery'],
         cleanupPending: [],
         recoveryRequired: [],
@@ -1563,6 +1576,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         const sweep = await createDrizzleTaskArchiveMaintenanceCommand(
           database,
           o2Ports(database).collaborationReads.archive,
+          { content: createFileTaskArchiveContent() },
         ).runSweep({ enabled: true, retentionDays: 1 }, { ...dirs, now: Date.now() })
         expect(sweep.archived).toHaveLength(1)
         const archived = sweep.archived[0]!

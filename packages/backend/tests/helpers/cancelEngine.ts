@@ -21,6 +21,7 @@ import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { Task } from '@agent-workflow/shared'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
 const log = createLogger('task')
 
@@ -43,6 +44,7 @@ export async function cancelViaEngine(
     {
       db,
       persistence: createTaskExecutionPersistence(db, {
+        workspacePresence: createFileWorkspacePresenceQueries(),
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -24,6 +24,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { seedBundleTask } from './helpers/daemonTaskExecutionBundle'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 const homes: string[] = []
 function home() {
   const p = mkdtempSync(join(tmpdir(), 'rfc383-'))
@@ -226,7 +227,7 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         })
         const reactionInput = reaction.mock.calls[0]![0],
           fixtureInput = fixtures.mock.calls[0]![0]
-        expect(reactionInput.programs).toBe(fixtureInput.programs)
+        expect(fixtureInput.programs).toBe(reactionInput.programs)
         const implementation = {
           kind: 'program' as const,
           runtimeKind: 'node' as const,
@@ -283,6 +284,7 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
             harness.db,
             epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             composeHumanGateOpenParticipantFactory(),
+            createFileWorkspacePresenceQueries(),
           ).cancel(seeded.taskId)
         else if (former)
           await f.taskExecution.cancellation.cancel({
