@@ -22,7 +22,7 @@
 - [x] AC-1 `executionWatch.ts` 没有模块级状态与 reset；看门每会话一份，子调用节点、动作执行与已提交事件消费者用同一份
 - [x] AC-2 参与者、对照范围、工作区读取与材料引用不再有进程级侧表；解读与判定不变
 - [x] AC-3 模块级可变单例 66 → 61、计数不升；锁随改；新增 RFC-535 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -59,7 +59,14 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `8b625e2a8`（实现，父提交是 `bc4b011e5`）：exact SHA 主 CI run 45049480664 的 70 个 job 里，后端分片 15/44 红在
+  `rfc294-architecture-preflight` 的“module capability ownership cannot be structurally forged or serialized”——多出
+  `workspaceRead.ts#createWorkspaceReadCapability: no private runtime registry`。本人缺陷：RFC-294 的能力伪造门要求返回能力的工厂所在文件有私有的
+  运行期登记表，D4 初版把它当成多余删了；集中验证里这条用例在候选与对照上都撞 180 秒时限，违例被时限盖住。`CI required` 随之红，其余 68 个
+  通过；同一提交触发的 windows-platform（run 45049480718）与 maintenance-soak-nightly（run 45049480717）通过。未重跑。
+- `bd3b4a323`（补正：登记表归每个读取作用域；在对照导出仓库里放大该用例写死的时限跑到底 14 / 14；`docs/dev-gotchas.md` 记两条）：主 CI run
+  45056132100 的 70 个 job 第 1 次全部通过。
+- 本 RFC 的落档提交 `bc4b011e5`（只改文档；同一提交记下 RFC-534 转 Done）：主 CI run 45028927975 的 70 个 job 第 1 次全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
