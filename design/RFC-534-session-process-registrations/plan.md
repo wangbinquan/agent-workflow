@@ -20,7 +20,7 @@
 - [x] AC-1 两个文件没有模块级可变状态与导出的登记函数；策略每会话一份；维护 Worker 交从不回收
 - [x] AC-2 登记步与 `beforeResume` 删去；回收与蒸馏准入不变
 - [x] AC-3 模块级可变单例 71 → 66、计数不升；锁随改；新增 RFC-534 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -67,7 +67,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `252c54a28`（实现，父提交是 `0087aa491`）：exact SHA 主 CI run 45025842387 的 70 个 job 第 1 次全部通过；同一提交触发的 windows-platform
+  （run 45025842457）、maintenance-soak-nightly（run 45025842392）与 git-protocols-e2e（run 45025842368）通过。未重跑。
+- 本 RFC 的落档提交 `0087aa491`（只改文档；同一提交记下 RFC-533 转 Done）：主 CI run 45006946653 的 70 个 job 第 1 次全部通过。
+- 另记：每周定时的 postgresql-evidence 在 `0087aa491` 上红在 “PostgreSQL crash matrix + 100-client full seed”（run 45018727371，
+  “PostgreSQL maintenance stalled for 300s”）。同一错误 2026-11-01 起每周都有（run 41298472643、42472198662、43708200444），早于本 RFC、
+  也不在本 RFC 改动的路径上，归属不明；未重跑、未处理。
 
 ## 实现门（本会话自审，只审功能）
 
