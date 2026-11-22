@@ -18,10 +18,14 @@ export interface TaskWorkspaceReadDependencies {
   }
 }
 
-// RFC-535: the scope itself decides whether a capability is live (not closed, and the very object it issued); there is
-// no process-level set of live capabilities.
-function createWorkspaceReadCapability(): WorkspaceReadCapability {
-  return Object.freeze({}) as WorkspaceReadCapability
+// RFC-535: each read scope keeps its own private registry of the capabilities it minted (the capability owner's
+// runtime registry, RFC-294's capability gate); there is no process-level set shared by every scope.
+function createWorkspaceReadCapability(
+  issued: WeakSet<WorkspaceReadCapability>,
+): WorkspaceReadCapability {
+  const capability = Object.freeze({}) as WorkspaceReadCapability
+  issued.add(capability)
+  return capability
 }
 
 export async function bindTaskWorkspaceReadScope(
@@ -33,10 +37,11 @@ export async function bindTaskWorkspaceReadScope(
   if (isTaskWorkspaceUnbound(binding.worktreePath))
     throw new NotFoundError('task-worktree-missing', `task '${taskId}' has no worktree`)
   const content = input.contentScope(binding.worktreePath)
-  const capability = createWorkspaceReadCapability()
+  const issued = new WeakSet<WorkspaceReadCapability>()
+  const capability = createWorkspaceReadCapability(issued)
   let live = true
   function assertBound(candidate: WorkspaceReadCapability) {
-    if (!live || candidate !== capability)
+    if (!live || candidate !== capability || !issued.has(candidate))
       throw new Error('task-workspace-read-scope-ended-or-mismatched')
   }
   const port = Object.freeze<TaskWorkspaceReadPort>({
@@ -58,6 +63,7 @@ export async function bindTaskWorkspaceReadScope(
     capability,
     close() {
       live = false
+      issued.delete(capability)
       content.close()
     },
   }

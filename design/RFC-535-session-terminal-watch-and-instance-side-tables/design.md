@@ -52,10 +52,11 @@
   从数组本身读，没有这个属性的数组照旧按完整任务处理。`node` 范围的逐行校验不变。`snapshot.ts` 的两处调用不变（函数改名为
   `scopeOracleSnapshotRows`，表明它给数组盖范围）。
 
-### D4 删去多余的能力集合
+### D4 能力登记表归读取作用域
 
-- `workspaceRead.ts` 删去 `liveWorkspaceReads` 与它的增删；`assertBound` 只判 `!live || candidate !== capability`（与此前等价：集合那一项只在
-  `close()` 后为假，而那时 `live` 已为假）。
+- `workspaceRead.ts` 删去模块级的 `liveWorkspaceReads`：每个读取作用域建一张私有的 `WeakSet`，作用域发出的能力记进去、`close()` 时删去，
+  `assertBound` 照旧判“未关闭、是同一个对象、在登记表里”。RFC-294 的能力伪造门要求能力的工厂所在文件有私有的运行期登记表
+  （`new WeakMap` / `new WeakSet`），登记表因此挪进作用域、不删（补正：初版把它当成多余删了，CI 的能力伪造门红，见 plan 的 CI 一节）。
 
 ### D5 材料引用归材料定义
 
@@ -86,7 +87,7 @@
 | `watchers` / `notifyTaskTerminal` / `watchTaskTerminal` / `resetTaskTerminalWatchersForTests`       | 删去；`createTaskTerminalWatch()`，每会话一份               |
 | `nativeTaskParticipants`                                                                            | 删去；参与者是带私有字段的实例                              |
 | `scopes` / `bindOracleSnapshotScope`                                                                | 删去；`scopeOracleSnapshotRows` 把范围盖在数组上            |
-| `liveWorkspaceReads`                                                                                | 删去                                                        |
+| `liveWorkspaceReads`                                                                                | 删去；每个读取作用域一张私有登记表                          |
 | `nativeMaterialReferences` / `bindNativeAgentMaterialReference` / `getNativeAgentMaterialReference` | 删去；`createNativeAgentMaterialReferences()`，每份定义一张 |
 
 ## 4. 用例

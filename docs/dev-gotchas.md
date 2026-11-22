@@ -992,6 +992,14 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   读以源码文本钉实参或字段的断言：实参清单随改；新字段放在被钉的那一段之后，不打乱既有的相邻顺序。
 - **新用例文件不要直接建 SQLite 库**（RFC-534 实撞）：`rfc359-w5-t19f` 按文件记 `createInMemoryDb(` 与 `new Database(` 的调用点数（高水位，
   只降不升），账本里没有的新文件一出现即红。需要库的断言放进 `describeEachProvider`，取 `harness.db`，两个 provider 各跑一遍。
+- **两边都撞时限的长扫描用例，要跑到底再归因**（RFC-535 实撞，补正提交修）：`rfc294-architecture-preflight` 的能力伪造门在本机高负载下
+  候选与对照都撞 180 秒时限，A/B 记成环境性；推送后 CI 的后端分片 15 红在这条用例上——候选独有的一条违例（`workspaceRead.ts` 删去能力的
+  模块级 WeakSet 后，`createWorkspaceReadCapability: no private runtime registry`）被时限盖住了。被改文件落在其扫描范围里的长扫描用例
+  （`rfc294-architecture-preflight`、`rfc376-report` 一类）两边都超时时，在导出仓库里临时放大它自己写死的时限、跑到底再比，不能凭两边同名
+  超时就归为环境性。
+- **能力的工厂要有私有的运行期登记表**（RFC-294 能力伪造门，RFC-535 实撞）：返回敏感能力类型（`WorkspaceReadCapability`、`OwnedTaskTx`
+  一类）的 `create*` / `mint*` 工厂所在文件必须有 `new WeakMap` / `new WeakSet`（门按文本判）。拆模块级登记表时把它挪进实例（每个作用域
+  一张），不要当成多余删掉。
 - **往测试助手的分组清单里加成员，要逐个读遍历这份清单的用例循环，不能只改计数**（RFC-531 实撞）：给 `deploymentSelectionPartition.ts` 的
   `SESSION_FACTORY_SELECTIONS` 加了镜像与镜像刷新两个键，改了 `rfc394` / `rfc431` 的键数，却没读 `rfc394` 里遍历这份清单的循环——它按 RFC-432
   要求托管的会话工厂每次交出同一个对象（`factory(undefined)` 两次相同），而托管的镜像要按调用它的会话的仓库存储构造、刷新闭包每次新建

@@ -8,7 +8,7 @@
   task-execution 装配建一份交给运行期参与者、`hostTasks` 与模块集合，会话的已提交事件消费者调它（design D1）。
 - **RFC-535-T2 参与者**：`agentExecutionEffect.ts` 的参与者改为带私有字段的实例，删去模块级表（design D2）。
 - **RFC-535-T3 对照范围**：`scope.ts` 把范围盖在快照的行数组上，删去模块级表（design D3）。
-- **RFC-535-T4 工作区读取**：`workspaceRead.ts` 删去多余的能力集合（design D4）。
+- **RFC-535-T4 工作区读取**：`workspaceRead.ts` 的能力登记表归每个读取作用域（design D4）。
 - **RFC-535-T5 材料引用**：`createNativeAgentMaterialReferences()`；每份材料定义一张、交给它建的编译器，遗留编译自建一张；删去模块级表、
   `bindNativeAgentMaterialReference` 与别名（design D5）。
 - **RFC-535-T6 用例与锁**：新增 RFC-535 用例并登记 guard-manifest；读旧形状的用例与测试拓扑随改（design D6）。
@@ -76,7 +76,8 @@
   伪造对象照旧抛 `agent-execution-task-participant-unavailable`，没给参与者照旧得 `undefined`。
 - **对照范围不变**：快照给自己建的每个任务行数组（含按需补建的空数组）盖一次范围，两个 `require*` 从数组本身读；没盖范围的数组照旧按完整任务，
   `node` 范围的逐行校验与不全时的拒绝逐字不变。属性不可枚举，数组的内容与相等性不变。
-- **工作区读取不变**：能力只在本作用域里发、只在 `close()` 时作废，而 `close()` 同时把 `live` 置假——删去的集合那一项从不单独决定结果。
+- **工作区读取不变**：能力只在本作用域里发、记进本作用域的登记表，`close()` 时作废并把 `live` 置假，判定照旧三项都看（补正后；初版删了
+  登记表，见 CI 一节）。
 - **材料引用不变**：引用表归每份材料定义，它建的编译器编出计划时记进去、`materialReference` 从里面查；生产里每次运行只取一份定义、编译与查引用
   都走它（任务代理运行族、系统代理运行、冒烟与系统代理运行族），取值规则（记过的、源计划的、否则新发并记下）逐字不变。走旧 `buildSpawn` 的
   系统代理运行：遗留编译自建的表只用于它交出计划，此后的引用由本次运行的定义发、同一计划同一引用——此前那张进程表里遗留编译记下的引用没有
