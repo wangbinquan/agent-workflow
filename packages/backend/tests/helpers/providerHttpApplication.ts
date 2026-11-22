@@ -103,6 +103,8 @@ export interface ProviderHttpApplication extends Pick<
   readonly executionPermits: TaskExecutionPermitRegistry
   /** RFC-533: the session's child-task budget (the settings hot apply's third receiver). */
   readonly childTaskBudget: ChildTaskBudgetRuntime
+  /** RFC-536: the application configuration's applied listeners (saving the settings notifies them). */
+  readonly configApplied: ApplicationConfigurationBinding['listeners']
   readonly processConcurrencyScope: object
   readonly repositoryWorkspaceStore: DaemonApplication['core']['repositoryWorkspaceStore']
   readonly taskExecutionReadModels: DaemonApplication['runtime']['taskExecution']['readModels']
@@ -377,6 +379,7 @@ export async function createProviderHttpApplicationFromBinding(
       lifecycleSteps: application.lifecycleSteps,
       executionPermits: runtime.taskExecutionModules.executionPermits,
       childTaskBudget: runtime.taskExecutionModules.childTaskBudget,
+      configApplied: applicationConfiguration.listeners,
       processConcurrencyScope: runtime.taskExecutionModules.processConcurrencyScope,
       repositoryWorkspaceStore: core.repositoryWorkspaceStore,
       taskExecutionReadModels: runtime.taskExecution.readModels,

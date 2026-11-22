@@ -2,10 +2,7 @@
 // retaining immediate synchronous notification and best-effort error isolation.
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
-import {
-  notifyConfigApplied,
-  registerConfigAppliedListener,
-} from '@/platform/configuration/configAppliedListeners'
+import { createConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
 
 function barrier() {
   let resolve!: () => void
@@ -18,15 +15,14 @@ function barrier() {
 describe('RFC-370 configuration hot-apply acknowledgements', () => {
   test('legacy void callbacks with implicit synchronous return values keep notify synchronous', () => {
     const key = 'rfc370-implicit-void-notification' // gitleaks:allow -- listener namespace, not a credential
+    // RFC-536: the listener set of one application configuration.
+    const listeners = createConfigAppliedListeners(key)
     const calls: string[] = []
     const implicitNumber: (config: Config) => void = () => calls.push('number')
     const implicitNull: (config: Config) => void = () => null
-    const unregister = [
-      registerConfigAppliedListener(key, implicitNumber),
-      registerConfigAppliedListener(key, implicitNull),
-    ]
+    const unregister = [listeners.register(implicitNumber), listeners.register(implicitNull)]
     try {
-      expect(notifyConfigApplied(key, DEFAULT_CONFIG)).toBeUndefined()
+      expect(listeners.notify(DEFAULT_CONFIG)).toBeUndefined()
       expect(calls).toEqual(['number'])
     } finally {
       for (const close of unregister) close()
@@ -36,22 +32,24 @@ describe('RFC-370 configuration hot-apply acknowledgements', () => {
   test('synchronous consumers are still called immediately and notify stays synchronous', () => {
     const calls: string[] = []
     const key = 'rfc370-sync-notification'
+    // RFC-536: the listener set of one application configuration.
+    const listeners = createConfigAppliedListeners(key)
     const unregister = [
-      registerConfigAppliedListener(key, (config) => {
+      listeners.register((config) => {
         expect(config).toBe(DEFAULT_CONFIG)
         calls.push('first')
       }),
-      registerConfigAppliedListener(key, () => {
+      listeners.register(() => {
         calls.push('second')
       }),
     ]
     try {
-      expect(notifyConfigApplied(key, DEFAULT_CONFIG)).toBeUndefined()
+      expect(listeners.notify(DEFAULT_CONFIG)).toBeUndefined()
       expect(calls).toEqual(['first', 'second'])
     } finally {
       for (const close of unregister) close()
     }
-    notifyConfigApplied(key, DEFAULT_CONFIG)
+    listeners.notify(DEFAULT_CONFIG)
     expect(calls).toEqual(['first', 'second'])
   })
 
@@ -59,20 +57,22 @@ describe('RFC-370 configuration hot-apply acknowledgements', () => {
     const entered = barrier(),
       release = barrier()
     const key = 'rfc370-async-notification'
+    // RFC-536: the listener set of one application configuration.
+    const listeners = createConfigAppliedListeners(key)
     const calls: string[] = []
     const unregister = [
-      registerConfigAppliedListener(key, async (config) => {
+      listeners.register(async (config) => {
         expect(config).toBe(DEFAULT_CONFIG)
         entered.resolve()
         await release.promise
         calls.push('ack')
       }),
-      registerConfigAppliedListener(key, () => {
+      listeners.register(() => {
         calls.push('next')
       }),
     ]
     let settled = false
-    const pending = Promise.resolve(notifyConfigApplied(key, DEFAULT_CONFIG)).then(() => {
+    const pending = Promise.resolve(listeners.notify(DEFAULT_CONFIG)).then(() => {
       settled = true
     })
     try {
@@ -93,22 +93,24 @@ describe('RFC-370 configuration hot-apply acknowledgements', () => {
   test('sync and async failures keep best-effort delivery without skipping another pending ACK', async () => {
     const release = barrier()
     const key = 'rfc370-failed-notification'
+    // RFC-536: the listener set of one application configuration.
+    const listeners = createConfigAppliedListeners(key)
     const calls: string[] = []
     const unregister = [
-      registerConfigAppliedListener(key, () => {
+      listeners.register(() => {
         throw new Error('synchronous hot apply failed')
       }),
-      registerConfigAppliedListener(key, async () => {
+      listeners.register(async () => {
         throw new Error('asynchronous hot apply failed')
       }),
-      registerConfigAppliedListener(key, async () => {
+      listeners.register(async () => {
         calls.push('entered')
         await release.promise
         calls.push('ack')
       }),
     ]
     let settled = false
-    const pending = Promise.resolve(notifyConfigApplied(key, DEFAULT_CONFIG)).then(() => {
+    const pending = Promise.resolve(listeners.notify(DEFAULT_CONFIG)).then(() => {
       settled = true
     })
     try {

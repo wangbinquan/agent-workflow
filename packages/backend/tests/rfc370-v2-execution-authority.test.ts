@@ -15,7 +15,7 @@ import { lookupDeclaredHttpOperation } from '../src/platform/operations/catalog'
 import { createBoundOperationInvoker } from '../src/platform/operations/boundOperationInvoker'
 import {
   assertExecutionAvailable,
-  bindExecutionAvailability,
+  attachExecutionAvailability,
   readExecutionStatus,
 } from '../src/platform/http/executionAvailability'
 import {
@@ -41,7 +41,7 @@ const STANDBY: ExecutionStatus = { mode: 'crewstation', state: 'standby', reason
 function gatedApp(read?: () => ExecutionStatus): Hono {
   const app = new Hono()
   app.onError(errorHandler)
-  if (read !== undefined) bindExecutionAvailability(app, read)
+  if (read !== undefined) attachExecutionAvailability(app, read)
   registerRoute(
     app,
     {
@@ -138,7 +138,7 @@ describe('RFC-370 v2 execution availability gate', () => {
 
   test('only grouped requests are refused while the instance is not active', () => {
     const app = new Hono()
-    bindExecutionAvailability(app, () => STANDBY)
+    attachExecutionAvailability(app, () => STANDBY)
     expect(() => assertExecutionAvailable(app, undefined)).not.toThrow()
     let refused: unknown
     try {
@@ -156,8 +156,8 @@ describe('RFC-370 v2 execution availability gate', () => {
 
   test('an app binds exactly one reader', () => {
     const app = new Hono()
-    bindExecutionAvailability(app, () => STANDBY)
-    expect(() => bindExecutionAvailability(app, () => STANDBY)).toThrow(
+    attachExecutionAvailability(app, () => STANDBY)
+    expect(() => attachExecutionAvailability(app, () => STANDBY)).toThrow(
       'execution-availability-already-bound',
     )
   })
@@ -199,7 +199,7 @@ describe('RFC-370 v2 execution availability gate', () => {
     const runtime = { readCurrent: async () => null }
     const standalone = new Hono()
     standalone.onError(errorHandler)
-    bindExecutionAvailability(standalone, () =>
+    attachExecutionAvailability(standalone, () =>
       executionStatusOf(composeLocalExecutionAuthority(), 'standalone'),
     )
     mountDaemonRoutes(standalone, { runtime })
@@ -213,7 +213,7 @@ describe('RFC-370 v2 execution availability gate', () => {
 
     const hosted = new Hono()
     hosted.onError(errorHandler)
-    bindExecutionAvailability(hosted, () => STANDBY)
+    attachExecutionAvailability(hosted, () => STANDBY)
     mountDaemonRoutes(hosted, { runtime })
     const standby = await hosted.request('/api/execution/status')
     expect(standby.status).toBe(200)

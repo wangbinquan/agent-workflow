@@ -12,7 +12,7 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { composeHttpAuthenticationMiddleware } from '@/modules/identity-access/composition/authentication'
 import type { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
-import { bindExecutionAvailability } from '@/platform/http/executionAvailability'
+import { attachExecutionAvailability } from '@/platform/http/executionAvailability'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import type { ExecutionStatus } from '@agent-workflow/shared'
 import { Hono } from 'hono'
@@ -609,7 +609,7 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
  * closed bindings, but cannot add, remove or reorder route domains.
  */
 export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
-  bindExecutionAvailability(app, () =>
+  attachExecutionAvailability(app, () =>
     executionStatusOf(deps.executionAuthority, deps.deploymentKind),
   )
   const routes = deps.apiRoutes

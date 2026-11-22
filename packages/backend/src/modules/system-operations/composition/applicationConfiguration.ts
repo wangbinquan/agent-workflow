@@ -10,7 +10,10 @@ import { createFileApplicationConfiguration } from '../infrastructure/local/file
 import type { ApplicationConfigurationCommands } from '../public/commands'
 import type { ApplicationConfigurationQueries } from '../public/queries'
 import type { Config } from '@agent-workflow/shared'
-import { notifyConfigApplied } from '@/platform/configuration/configAppliedListeners'
+import {
+  createConfigAppliedListeners,
+  type ConfigAppliedListeners,
+} from '@/platform/configuration/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
 export interface ApplicationConfigurationBinding {
@@ -19,6 +22,9 @@ export interface ApplicationConfigurationBinding {
   readonly synchronousQueries?: Readonly<{ read(): Config }>
   readonly databaseConfiguration: DatabaseConfigurationPort
   readonly notificationKey: string
+  /** RFC-536: this configuration's applied listeners — saving notifies them; the daemon session and the maintenance
+   * service register here. */
+  readonly listeners: Pick<ConfigAppliedListeners, 'register'>
   composeCommands(
     dependencies: Omit<ApplicationConfigurationDependencies, 'persistence' | 'applied'>,
   ): ApplicationConfigurationCommands
@@ -52,6 +58,7 @@ export function composeApplicationConfigurationBinding(
         })()
   const { persistence } = source
   const notificationKey = input.kind === 'selected' ? input.notificationKey : input.configPath
+  const listeners = createConfigAppliedListeners(notificationKey)
   const queries =
     input.kind === 'file' && input.queries !== undefined
       ? input.queries
@@ -68,6 +75,7 @@ export function composeApplicationConfigurationBinding(
       },
     } satisfies DatabaseConfigurationPort),
     notificationKey,
+    listeners: Object.freeze({ register: listeners.register }),
     composeCommands(
       dependencies: Omit<ApplicationConfigurationDependencies, 'persistence' | 'applied'>,
     ) {
@@ -75,7 +83,7 @@ export function composeApplicationConfigurationBinding(
         ...dependencies,
         persistence,
         applied: {
-          notify: (config) => notifyConfigApplied(notificationKey, config),
+          notify: (config) => listeners.notify(config),
           setLogLevel: (level) => configureLogger({ level }),
         },
       })

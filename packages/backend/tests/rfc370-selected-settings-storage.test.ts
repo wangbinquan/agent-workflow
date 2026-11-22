@@ -11,7 +11,6 @@ import {
   mergeValidatedConfigurationPatch,
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
-import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -103,7 +102,7 @@ describeEachProviderHttpApplication(
       const applying = { entered: barrier(), release: barrier() }
       storage.gate = writing
       const applied: Config[] = []
-      const unregister = registerConfigAppliedListener(key, async (config) => {
+      const unregister = applicationConfiguration.listeners.register(async (config) => {
         applied.push(config)
         applying.entered.resolve()
         await applying.release.promise
@@ -167,13 +166,12 @@ describeEachProviderHttpApplication(
     test('selected read/write failures stay visible and leave file settings and hot consumers unchanged', async () => {
       const storage = new SelectedStorage()
       const key = `rfc370-failed-settings-${crypto.randomUUID()}`
-      const opened = await scope.open({
-        applicationConfiguration: composeApplicationConfigurationBinding({
-          kind: 'selected',
-          persistence: storage,
-          notificationKey: key,
-        }),
+      const applicationConfiguration = composeApplicationConfigurationBinding({
+        kind: 'selected',
+        persistence: storage,
+        notificationKey: key,
       })
+      const opened = await scope.open({ applicationConfiguration })
       const user = await createUser(scope.harness.db, {
         username: 'failed-settings-admin',
         displayName: 'Failed Settings Admin',
@@ -189,7 +187,7 @@ describeEachProviderHttpApplication(
       const fileBefore = readFileSync(configPath, 'utf8')
       const selectedBefore = structuredClone(storage.current)
       let notifications = 0
-      const unregister = registerConfigAppliedListener(key, () => {
+      const unregister = applicationConfiguration.listeners.register(() => {
         notifications += 1
       })
       try {

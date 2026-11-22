@@ -14,11 +14,21 @@ import {
 } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'
 
-const readers = new WeakMap<object, () => ExecutionStatus>()
+// RFC-536: the reader rides on the app it serves (a non-enumerable, read-only own symbol property) — there is no
+// process-level table from apps to readers.
+const EXECUTION_STATUS_READER = Symbol('execution-status-reader')
 
-export function bindExecutionAvailability(app: object, read: () => ExecutionStatus): void {
-  if (readers.has(app)) throw new Error('execution-availability-already-bound')
-  readers.set(app, read)
+function readerOf(app: object): (() => ExecutionStatus) | undefined {
+  return Object.hasOwn(app, EXECUTION_STATUS_READER)
+    ? (app as { readonly [EXECUTION_STATUS_READER]: () => ExecutionStatus })[
+        EXECUTION_STATUS_READER
+      ]
+    : undefined
+}
+
+export function attachExecutionAvailability(app: object, read: () => ExecutionStatus): void {
+  if (readerOf(app) !== undefined) throw new Error('execution-availability-already-bound')
+  Object.defineProperty(app, EXECUTION_STATUS_READER, { value: read })
 }
 
 /**
@@ -26,14 +36,14 @@ export function bindExecutionAvailability(app: object, read: () => ExecutionStat
  * no status to report (the deployment kind comes from the profile, never from a fallback here).
  */
 export function readExecutionStatus(app: object): ExecutionStatus {
-  const read = readers.get(app)
+  const read = readerOf(app)
   if (read === undefined) throw new Error('execution-availability-unbound')
   return read()
 }
 
 export function assertExecutionAvailable(app: object, group: ExecutionGroup | undefined): void {
   if (group === undefined) return
-  const read = readers.get(app)
+  const read = readerOf(app)
   // RFC-426: a test or tool root without a bound reader has no execution gate (as before, without inventing a status).
   if (read === undefined) return
   const status = read()

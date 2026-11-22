@@ -25,6 +25,7 @@ import type { MaintenanceRunStore } from '@/platform/background/maintenanceRunSt
 import type { MaintenanceWorkerDelta } from '@/platform/background/maintenanceProtocol'
 import type { MaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import { eventually } from './helpers/eventually'
+import { createConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
 
 function configFixture(): { path: string; config: Config } {
   const dir = mkdtempSync(join(tmpdir(), 'rfc359-ac10-maintenance-'))
@@ -93,7 +94,8 @@ async function startHarness(
   const service = createMaintenanceService({
     provider: overrides.provider ?? 'sqlite',
     appHome: join(path, '..'),
-    configPath: path,
+    // RFC-536: the application configuration's applied listeners (this seam test saves no settings).
+    configApplied: createConfigAppliedListeners(path),
     loadConfig: () => loadConfig(path),
     fileSnapshotInFlight: () => false,
     payloadSources: Object.freeze({

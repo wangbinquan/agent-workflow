@@ -60,8 +60,9 @@ function method(node: ts.Node, name: string): ts.MethodDeclaration {
   return found[0]!
 }
 
-for (const [name, query, notificationKey] of [
-  ['composeDaemonSession', 'input.configuration', 'input.applicationConfiguration.notificationKey'],
+// RFC-536: the maintenance service and the mirror refresh register on the application configuration's own listeners.
+for (const [name, query, listeners] of [
+  ['composeDaemonSession', 'input.configuration', 'input.applicationConfiguration.listeners'],
 ] as const) {
   describe(`RFC-370 ${name} background configuration binding`, () => {
     const root = declaration(start, name)
@@ -72,7 +73,7 @@ for (const [name, query, notificationKey] of [
       expect(create).toHaveLength(1)
       expect(maintenance.pos).toBeLessThan(create[0]!.pos)
       expect(compact(create[0]!, start)).toContain('loadConfig:()=>maintenanceConfiguration,')
-      expect(compact(create[0]!, start)).toContain(`configPath:${notificationKey},`)
+      expect(compact(create[0]!, start)).toContain(`configApplied:${listeners},`)
       const bindings = calls(root, start, '_bindTaskExecutionProviderBackground')
       expect(bindings).toHaveLength(1)
       const dependencies = compact(bindings[0]!.arguments[1]!, start)
@@ -117,9 +118,11 @@ for (const [name, query, notificationKey] of [
       ).toBe(query)
       expect(compact(refresh, start)).toContain('ticker.reconfigure().then(()=>undefined)')
       expect(compact(refresh, start)).toContain('unregister()')
-      const listener = calls(refresh, start, 'registerConfigAppliedListener')
+      const listener = calls(refresh, start, `${listeners}.register`)
       expect(listener).toHaveLength(1)
-      expect(compact(listener[0]!.arguments[0]!, start)).toBe(notificationKey)
+      expect(compact(listener[0]!.arguments[0]!, start)).toBe(
+        '()=>ticker.reconfigure().then(()=>undefined)',
+      )
     })
 
     test('idle timeout stays hot and batch retention is read at each provider start', () => {

@@ -11,7 +11,6 @@ import {
   mergeValidatedConfigurationPatch,
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
-import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 
 function barrier() {
   let resolve!: () => void
@@ -111,7 +110,7 @@ describe('RFC-370 selected configuration binding', () => {
         },
       },
     })
-    const unregister = registerConfigAppliedListener(key, async (config) => {
+    const unregister = binding.listeners.register(async (config) => {
       expect(config).toEqual(current)
       calls.push('notify-enter')
       entered.resolve()
@@ -171,7 +170,7 @@ describe('RFC-370 selected configuration binding', () => {
         },
       },
     })
-    const unregister = registerConfigAppliedListener(binding.notificationKey, () => {
+    const unregister = binding.listeners.register(() => {
       calls.push('notify')
     })
     const commands = binding.composeCommands(commandEffects(calls))

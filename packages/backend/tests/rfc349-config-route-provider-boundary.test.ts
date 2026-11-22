@@ -1,4 +1,5 @@
 import { composeFileApplicationConfiguration } from '@/modules/system-operations/composition'
+import { createConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
 import { createRuntimeProfileConfigurationCommands } from '@/modules/runtime-management/application/runtimeConfiguration'
 import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/composition/runtimeManagement'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -44,6 +45,8 @@ function harness(): {
   const deps: ConfigRouteDependencies = {
     configuration: composeFileApplicationConfiguration({
       configPath,
+      // RFC-536: the caller's own applied listeners (no process-level table keyed by the path).
+      listeners: createConfigAppliedListeners(configPath),
       withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(configPath),
       runtimeRegistry: createRuntimeProfileConfigurationCommands({
         async getRuntime(name) {

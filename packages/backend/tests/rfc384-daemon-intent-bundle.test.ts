@@ -49,6 +49,7 @@ import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApp
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { eventually } from './helpers/eventually'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
 
 const homes: string[] = []
 function home() {
@@ -414,7 +415,8 @@ describeEachProvider('RFC-384 intent bundle', (harness) => {
     const service = createMaintenanceService({
       provider: harness.applicationBinding.provider,
       appHome: f.input.appHome,
-      configPath: join(f.input.appHome, 'config.json'),
+      // RFC-536: the application configuration's applied listeners (this bundle test saves no settings).
+      configApplied: createConfigAppliedListeners(join(f.input.appHome, 'config.json')),
       loadConfig: () => DEFAULT_CONFIG,
       fileSnapshotInFlight: () => false,
       openAdmissionStore: () => ({ store: createMaintenanceRunStore(harness.db) }),

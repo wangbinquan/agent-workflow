@@ -23,9 +23,9 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
+import type { ProviderHttpApplication } from './helpers/providerHttpApplication'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import { createLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
 
@@ -47,6 +47,8 @@ interface Harness {
    */
   poolScope: object
   configPath: string
+  /** RFC-536: the application configuration's applied listeners. */
+  configApplied: ProviderHttpApplication['configApplied']
   put: (patch: Record<string, unknown>) => Promise<Response>
 }
 
@@ -62,6 +64,7 @@ async function harness(scope: ProviderHttpApplicationScope, _slug: string): Prom
     appHome,
     executionPermits,
     childTaskBudget,
+    configApplied,
     processConcurrencyScope: poolScope,
   } = await scope.open()
   const configPath = join(appHome, 'config.json')
@@ -72,6 +75,7 @@ async function harness(scope: ProviderHttpApplicationScope, _slug: string): Prom
     executionPermits,
     childTaskBudget,
     configPath,
+    configApplied,
     put: async (patch) =>
       await app.request('/api/config', {
         method: 'PUT',
@@ -220,7 +224,7 @@ describeEachProviderHttpApplication(
     test('bounded Settings writes notify live consumers only after persistence', async () => {
       const h = await harness(scope, 'bounded-notify')
       const observed: number[] = []
-      const unregister = registerConfigAppliedListener(h.configPath, (config) => {
+      const unregister = h.configApplied.register((config) => {
         observed.push(config.periodicOrphanReconcileMs)
       })
       try {

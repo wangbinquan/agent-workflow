@@ -67,7 +67,7 @@ import type {
   ApplicationConfigurationPersistencePort,
 } from './application/ports/applicationConfiguration'
 import { createFileApplicationConfiguration } from './infrastructure/local/fileApplicationConfiguration'
-import { notifyConfigApplied } from '@/platform/configuration/configAppliedListeners'
+import type { ConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
 // RFC-346 — bootstrap-only System Operations composition.
@@ -528,16 +528,18 @@ export function composeApplicationConfiguration(deps: ApplicationConfigurationDe
 export function composeFileApplicationConfiguration(
   input: Omit<Parameters<typeof composeApplicationConfiguration>[0], 'persistence' | 'applied'> & {
     readonly configPath: string
+    /** RFC-536: the listeners saving notifies (the caller's own set). */
+    readonly listeners: Pick<ConfigAppliedListeners, 'notify'>
   },
 ) {
-  const { configPath, ...deps } = input
+  const { configPath, listeners, ...deps } = input
   const persistence: ApplicationConfigurationPersistencePort =
     createFileApplicationConfiguration(configPath)
   return composeApplicationConfiguration({
     ...deps,
     persistence,
     applied: {
-      notify: (config) => notifyConfigApplied(configPath, config),
+      notify: (config) => listeners.notify(config),
       setLogLevel: (level) => configureLogger({ level }),
     },
   })

@@ -22,12 +22,15 @@ const frames = new AsyncLocalStorage<readonly object[]>()
 /** 每个客户端上打开着的显式事务层数（顶层只会是 0 或 1，重入不再叠加）。 */
 const openDepth = new WeakMap<object, number>()
 
-const transactionObservers = new WeakMap<object, (ms: number) => void>()
-export function bindTransactionObserver(client: object, observe: (ms: number) => void): void {
-  transactionObservers.set(client, observe)
+// RFC-536: the observer rides on the client it observes (a non-enumerable, read-only own symbol property) — there is
+// no process-level table from clients to observers.
+const TRANSACTION_OBSERVER = Symbol('transaction-observer')
+export function attachTransactionObserver(client: object, observe: (ms: number) => void): void {
+  Object.defineProperty(client, TRANSACTION_OBSERVER, { value: observe })
 }
 export function observeDbTransaction(client: object, ms: number): void {
-  transactionObservers.get(client)?.(ms)
+  if (!Object.hasOwn(client, TRANSACTION_OBSERVER)) return
+  ;(client as { readonly [TRANSACTION_OBSERVER]: (ms: number) => void })[TRANSACTION_OBSERVER](ms)
 }
 
 export class CrossContextTransactionError extends Error {

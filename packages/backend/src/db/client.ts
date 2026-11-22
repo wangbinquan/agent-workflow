@@ -17,7 +17,7 @@ import { guardSqliteGenerationWrites } from '@/platform/persistence/sqliteGenera
 import {
   CrossContextTransactionError,
   foreignExplicitTransactionOpen,
-  bindTransactionObserver,
+  attachTransactionObserver,
 } from './transactionScope'
 export { observeDbTransaction } from './transactionScope'
 
@@ -360,7 +360,7 @@ export function openDb(opts: OpenDbOptions): DbClient {
       sqlite.exec('PRAGMA foreign_keys = ON;')
     }
     if (opts.observeTransactionMs !== undefined) {
-      bindTransactionObserver(db, opts.observeTransactionMs)
+      attachTransactionObserver(db, opts.observeTransactionMs)
     }
     // RFC-311 — armed after migrations so one-time upgrade work stays out of
     // the steady-state slow log.

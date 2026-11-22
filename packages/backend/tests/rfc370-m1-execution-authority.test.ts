@@ -25,7 +25,7 @@ import { createLogger, type Logger } from '@/util/log'
 import { selectExecutionInitialization } from '@/bootstrap/executionInitialization'
 import {
   assertExecutionAvailable,
-  bindExecutionAvailability,
+  attachExecutionAvailability,
 } from '@/platform/http/executionAvailability'
 
 const instanceId = '01a0bf5d-8f4b-7100-8000-000000000001'
@@ -639,7 +639,7 @@ test('recovery failure freezes admission and requests process exit through the l
 
 test('M1 rejects unavailable groups even after task execution becomes active', () => {
   const app = {}
-  bindExecutionAvailability(app, () => ({
+  attachExecutionAvailability(app, () => ({
     mode: 'crewstation',
     state: 'active',
     reason: null,

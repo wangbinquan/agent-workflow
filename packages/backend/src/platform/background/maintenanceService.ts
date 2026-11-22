@@ -9,7 +9,7 @@ import { ulid } from 'ulid'
 
 import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 import type { MaintenanceRunStore } from './maintenanceRunStorePort'
-import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
+import type { ConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
 import {
   startMaintenanceTicker,
   type MaintenanceTickerHandle,
@@ -47,7 +47,8 @@ export function eventLoopStallLogThreshold(
 
 interface MaintenanceServiceCommonOptions {
   readonly appHome: string
-  readonly configPath: string
+  /** RFC-536: the application configuration's applied listeners (the schedule follows saved settings). */
+  readonly configApplied: Pick<ConfigAppliedListeners, 'register'>
   readonly loadConfig: () => Config
   /**
    * 「此刻是否正在对这个库做**文件级**快照」——正在做就别发 WAL checkpoint，两者会抢同一份文件。
@@ -636,7 +637,7 @@ function startMaintenanceService(
   }, CHECKPOINT_SUPERVISOR_MS)
   checkpointTimer.unref?.()
 
-  const unregisterConfig = registerConfigAppliedListener(options.configPath, (config) => {
+  const unregisterConfig = options.configApplied.register((config) => {
     const previousSchedule = currentConfig.maintenanceSchedule
     currentConfig = config
     const nextSchedule = config.maintenanceSchedule

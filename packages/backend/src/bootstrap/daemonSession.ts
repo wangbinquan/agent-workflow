@@ -27,7 +27,6 @@ import {
 import type { createComposedApp } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
-import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 import { runTaskIdleTimeoutSweep } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { startBatchImportGc } from '@/modules/source-control/composition'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
@@ -296,7 +295,7 @@ export async function composeDaemonSession(
         ...handlers,
       }),
     appHome: Paths.root,
-    configPath: input.applicationConfiguration.notificationKey,
+    configApplied: input.applicationConfiguration.listeners,
     loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
       activeTaskIds: () => snapshotMaintenanceTaskIds(runtime.taskExecutionModules.activeTaskIds),
@@ -659,9 +658,9 @@ export async function composeDaemonSession(
         appHome: Paths.root,
         secretBox: input.secretBox,
       })
-      const unregister = registerConfigAppliedListener(
-        input.applicationConfiguration.notificationKey,
-        () => ticker.reconfigure().then(() => undefined),
+      // RFC-536: the application configuration's own listener set (saving the settings notifies it).
+      const unregister = input.applicationConfiguration.listeners.register(() =>
+        ticker.reconfigure().then(() => undefined),
       )
       let stopped = false
       return Object.freeze({
