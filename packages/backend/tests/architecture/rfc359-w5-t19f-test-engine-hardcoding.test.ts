@@ -353,6 +353,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-398 design §5 / §7.5: WAL sidecars, native strict-open negative control, and byte-preserving snapshots are SQLite-only mechanisms
   // (six real files: two epoch-1 templates with and without WAL, the epoch-2 template, the strict-open control, the writer and the offline snapshot).
   'rfc398-wal-sidecar-open.test.ts: 6', // real-file-database
+  // RFC-532: an epoch-1 standalone installation is a legacy `db.sqlite` file on disk; the local boot admission reads it.
+  'rfc532-deployment-database-installation-selection-boundary.test.ts: 1', // real-file-database
   'runner-subagent-live-capture.test.ts: 6', // real-file-database
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1', // sqlite-execution-engine
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1', // sqlite-execution-engine

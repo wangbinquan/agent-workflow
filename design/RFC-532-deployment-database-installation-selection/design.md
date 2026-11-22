@@ -43,9 +43,14 @@ export interface DaemonDatabaseInstallation {
 
 ### D2 两个实现
 
-- `composeLocalDaemonDatabaseInstallation({ appHome, runAutoUpgrade })`：`admit` 是从 daemon 原样搬来的本机 epoch 路径（`appHome` 取代
-  `Paths.root`——单机 profile 交入的正是 `Paths.root`；升级子进程由单机 profile 交入 `runAutoUpgradeChild`，system-operations 不取 bootstrap）；
-  `prepare` 调 `prepareDaemonDatabaseProviderForBoot({ kind: 'file', configuration, file })`。
+- 本机 epoch 路径的判断从 daemon 原样搬进 system-operations 的 application：`application/epochBootAdmission.ts` 的
+  `admitLocalEpochInstallation(effects, config)`——升级策略、核对、回执与指引照旧调 domain 的 `classifyEpochInstallation` / `autoUpgradeTrigger` /
+  `epochInstallationGuidance`；读事实、升级子进程、重读配置、待定恢复与升级日志器都是交入的 effect。不放在 `application/epochSwitch/`：那是只给 CLI 的 V3 迁移面，daemon 不得够到（`rfc395-v3-dormancy`）。组合层只装配（RFC-294 S10：组合层没有分支与
+  `throw`，`composition-control-flow-system-operations` 不升）。
+- `composeLocalDaemonDatabaseInstallation({ appHome, runAutoUpgrade })`：`admit` 以本机 effect 调上面的用例（读事实取
+  `readEpochBootFactsForConfig({ appHome, database })`，`appHome` 取代 `Paths.root`——单机 profile 交入的正是 `Paths.root`；升级子进程由单机 profile
+  交入 `runAutoUpgradeChild`，system-operations 不取 bootstrap；待定恢复是 `applyLocalEpoch2PendingRestore(contract)`；升级日志器照旧是
+  `epoch-upgrade`，只在有回执时创建）；`prepare` 调 `prepareDaemonDatabaseProviderForBoot({ kind: 'file', configuration, file })`。
 - `composeSelectedDaemonDatabaseInstallation(installation)`：`admit` 什么都不做（release Job 已安装）；`prepare` 调
   `prepareDaemonDatabaseProviderForBoot({ kind: 'selected', configuration, installation, file })`。
 - 单机 profile：`databaseInstallation: composeLocalDaemonDatabaseInstallation({ appHome, runAutoUpgrade: runAutoUpgradeChild })`（构造只建闭包，
@@ -62,7 +67,7 @@ export interface DaemonDatabaseInstallation {
 - 选择分组：`databaseInstallation` 从可空一组移到必填一组（必填 55 → 56、可空 8 → 7）；它是进程级的值，不是会话工厂。
 - 钉住旧形状的锁随改：`rfc431`（计数；以 `databaseInstallation` 为靶的“可空改可选”负对照换靶 `crewStationEvents`）、`rfc433`（单机不再给
   `null`，改断言给出本机安装）、`rfc394`（托管不再原样交出安装端口，改断言它交出按端口的安装、`admit` 不碰端口）、`rfc524`（准备的两支实参
-  改钉新文件）、`rfc395-af1`（读事实先于应用待定恢复的顺序改读新文件）、`rfc130-git-version-gate` 与 `rfc370-startup-lease-root-wiring`（daemon
+  改钉新文件）、`rfc395-af1`（读事实先于应用待定恢复的顺序改读 application 的用例）、`rfc130-git-version-gate` 与 `rfc370-startup-lease-root-wiring`（daemon
   里的准备调用改为 `databaseInstallation.prepare(`）。
 - 新增 `tests/rfc532-deployment-database-installation-selection-boundary.test.ts`，登记 guard-manifest：① `bootstrap/daemon*.ts` 不拿
   `databaseInstallation` 与 `null` / `undefined` 比较，不导入本机 epoch 路径的函数、升级子进程与 `prepareDaemonDatabaseProviderForBoot`；② 合同的
@@ -98,7 +103,7 @@ export interface DaemonDatabaseInstallation {
 
 ## 7. 对 RFC-294 刷新后规则的对账
 
-- **C10**：组合层只新增一个装配文件，模块 composition 不取 bootstrap。**C11**：各模块 public 不变（新类型在 composition）。**C12**：RFC-532 用例覆盖
+- **C10**：组合层只新增一个装配文件（只装配，判断在 application），模块 composition 不取 bootstrap。**C11**：各模块 public 不变（新类型在 composition）。**C12**：RFC-532 用例覆盖
   合同、两个 profile 与 daemon。**C13**：计数不升。
 
 ## 8. 本步承担的演进与留下的债

@@ -41,7 +41,9 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
   expect(boot.replace(/\s+/g, '')).toContain(
     'constdaemonHost=development?.daemonHost??createNativeDaemonHostLifecycle({',
   )
-  expect(boot).toContain('prepareDaemonDatabaseProviderForBoot(')
+  // RFC-532: the deployment's database installation admits and prepares the database inside the lease.
+  expect(boot).toContain('await databaseInstallation.admit(')
+  expect(boot).toContain('databaseInstallation.prepare({')
   expect(boot).toContain('await initial.session.resume(lifecycle)')
   expect(boot).toContain('await serveDaemon({')
   const releases = calls(start, 'lock.release')

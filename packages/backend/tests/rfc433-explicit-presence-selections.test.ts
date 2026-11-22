@@ -25,10 +25,14 @@ function home(): string {
   return root
 }
 
-test('the standalone profile states the two hosted-only capabilities as null', () => {
+test('the standalone profile states the one hosted-only capability as null', () => {
   const selections = standaloneSelections({ appHome: home() })
-  expect(selections.databaseInstallation).toBeNull()
   expect(selections.crewStationEvents).toBeNull()
+  // RFC-532: the database installation is required — standalone states its local installation (the epoch path and
+  // the file preparation), which the daemon's boot asks to admit and to prepare.
+  expect(Object.isFrozen(selections.databaseInstallation)).toBe(true)
+  expect(typeof selections.databaseInstallation.admit).toBe('function')
+  expect(typeof selections.databaseInstallation.prepare).toBe('function')
   // RFC-531: the former nullable remote is two required selections — standalone keeps its own mirror clones and
   // their submodule refresh.
   expect(selections.repositoryMirrors).toBe(composeLocalRepositoryMirrors)

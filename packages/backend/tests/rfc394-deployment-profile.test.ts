@@ -371,7 +371,13 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         )
         expect(looked).toEqual(['rfc394-registered'])
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
-        expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
+        // RFC-532: the hosted profile states an installation over the release's installation port (the release Job
+        // installed the database, so admitting it does nothing).
+        expect(profile.selections.databaseInstallation).not.toBe(system.databaseInstallation)
+        expect(Object.isFrozen(profile.selections.databaseInstallation)).toBe(true)
+        expect(
+          await profile.selections.databaseInstallation.admit(undefined as never),
+        ).toBeUndefined()
         // RFC-433: the platform's box, handed out after the startup lock by a closure over it.
         expect(typeof profile.selections.secretBox).toBe('function')
         expect(profile.selections.secretBox()).toBe(system.secretBox)

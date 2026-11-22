@@ -55,6 +55,8 @@ const SO = (...parts: string[]) => at('modules', 'system-operations', ...parts)
 const DA = (...parts: string[]) => at('modules', 'development-automation', ...parts)
 const SO_ROOT = SO('composition.ts')
 const DAEMON_DATABASE = SO('composition', 'daemonDatabase.ts')
+// RFC-532: the two installations name the preparation the daemon used to choose by the selection's `null`.
+const INSTALLATION = SO('composition', 'daemonDatabaseInstallation.ts')
 const MIGRATION = SO('composition', 'databaseMigration.ts')
 const MANUAL = SO('composition', 'manualDatabaseMigration.ts')
 const SEED = SO('composition', 'installationSeedCompletion.ts')
@@ -411,11 +413,15 @@ describe('RFC-524 ③ 装配处的显式构造', () => {
     expect(callArguments(RELOAD, text(RELOAD), 'createNativeDaemonHostLifecycle')).toEqual([
       ['{infoPath:Paths.daemonInfo,controlPath:Paths.controlFile,pid:process.pid,devWatch:true}'],
     ])
-    const prepare = callArguments(START, text(START), 'prepareDaemonDatabaseProviderForBoot')
-    expect(prepare).toHaveLength(1)
-    expect(prepare[0]![0]).toContain(
-      "...(databaseInstallation===null?{kind:'file'asconst}:{kind:'selected'asconst,installation:databaseInstallation})",
-    )
+    expect(callArguments(START, text(START), 'prepareDaemonDatabaseProviderForBoot')).toEqual([])
+    expect(
+      callArguments(INSTALLATION, text(INSTALLATION), 'prepareDaemonDatabaseProviderForBoot'),
+    ).toEqual([
+      ["{kind:'file'asconst,configuration:preparation.configuration,file:preparation.file}"],
+      [
+        "{kind:'selected'asconst,configuration:preparation.configuration,installation,file:preparation.file}",
+      ],
+    ])
     expect(
       callArguments(DAEMON_DATABASE, text(DAEMON_DATABASE), 'prepareDatabaseProviderForBoot'),
     ).toEqual([

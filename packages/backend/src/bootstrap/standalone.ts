@@ -92,6 +92,8 @@ import {
   composeLocalScratchWorkspaceEffects,
 } from '@/modules/source-control/composition/repositoryPreparation'
 import type { DeploymentProfile, DeploymentSelections } from './deploymentProfile'
+import { runAutoUpgradeChild } from './autoUpgradeChild'
+import { composeLocalDaemonDatabaseInstallation } from '@/modules/system-operations/composition/daemonDatabaseInstallation'
 
 /**
  * RFC-431: every selection a standalone daemon makes, rooted at `appHome`. The hosted capabilities are stated as
@@ -190,10 +192,14 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     // RFC-531: the daemon's own mirror clones and their submodule refresh.
     repositoryMirrors: composeLocalRepositoryMirrors,
     repositoryMirrorRefresh: composeLocalRepositoryMirrorRefresh,
-    // RFC-433: hosted-only capabilities. Standalone runs its local epoch installation path and has no CrewStation
-    // events.
-    databaseInstallation: null,
+    // RFC-433: a hosted-only capability — standalone has no CrewStation events.
     crewStationEvents: null,
+    // RFC-532: the local epoch installation path (the automatic upgrade runs this binary's CLI in a child) and the
+    // local file preparation.
+    databaseInstallation: composeLocalDaemonDatabaseInstallation({
+      appHome,
+      runAutoUpgrade: runAutoUpgradeChild,
+    }),
   }
 }
 

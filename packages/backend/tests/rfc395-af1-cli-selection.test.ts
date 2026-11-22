@@ -87,10 +87,18 @@ test('AF-D7 pending restore never attempts v2 parsing for a v1 pointer', () =>
     writeFileSync(artifact, 'staging fixture')
     stagePendingRestore(artifact, { appHome: root, now: 1 })
     await expect(recovery.applyStagedRestore()).rejects.toThrow('epoch-1 installation')
-    const source = readFileSync(join(import.meta.dir, '../src/bootstrap/daemonStart.ts'), 'utf8')
-    expect(source.indexOf('readEpochBootFacts({')).toBeLessThan(
-      source.indexOf('await applyLocalEpoch2PendingRestore('),
+    // RFC-532: the local installation path moved from the daemon's start into the system-operations application
+    // (`admitLocalEpochInstallation`, which the standalone database installation calls); it still reads the facts before
+    // it applies the pending restore.
+    const source = readFileSync(
+      join(import.meta.dir, '../src/modules/system-operations/application/epochBootAdmission.ts'),
+      'utf8',
     )
+    const facts = source.indexOf('await effects.readFacts(')
+    const restore = source.indexOf('await effects.applyPendingRestore()')
+    expect(facts).toBeGreaterThan(-1)
+    expect(restore).toBeGreaterThan(-1)
+    expect(facts).toBeLessThan(restore)
   }))
 test('AF-D11 migration eligibility is the source/target/epoch matrix', () => {
   for (const sourceProvider of ['sqlite', 'postgresql'] as const)

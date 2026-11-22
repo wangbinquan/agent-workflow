@@ -984,6 +984,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   Promise，两条都不满足。首批里这个用例先红在前面的键数断言上，同一个 test 后面的这条从没执行过（bun 的 `expect` 首个失败即中止该 test，与
   截图断言的短路同理）；修了键数复跑才露出来。加成员前全仓搜清单的常量名，读每个 `for (const key of …)` 断言的是什么；修了先红的断言，该
   用例必须复跑。
+- **把 bootstrap 里的判断搬进模块时，判断进 application、effect 交入，组合层只装配**（RFC-532 实撞）：把 daemon 启动程序里的本机 epoch
+  路径原样搬进 system-operations 的 `composition/` 文件，`tsc` / eslint 全过，集中验证里 `composition-control-flow-system-operations` 2 → 11、
+  `rfc515-composition-assembly-only`（组合层不许 `throw`）与 `rfc521`（组合层回落位置的 `??`）三处一起红。改成 application 的用例
+  （读事实、子进程、重读配置等都作 effect 交入），组合文件只建闭包。另一个坑：daemon 够得到的代码不能放进 `application/epochSwitch/`——
+  那是只给 CLI 的 V3 迁移面，`rfc395-v3-dormancy` 按路径判，放进去即红；同名的启动期判定放在 `application/epochBootAdmission.ts`。
 - **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
   删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
   没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import

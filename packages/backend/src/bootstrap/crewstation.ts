@@ -21,6 +21,7 @@ import {
 } from '@/modules/identity-access/composition/authentication'
 import { composeCrewStationTaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
+import { composeSelectedDaemonDatabaseInstallation } from '@/modules/system-operations/composition/daemonDatabaseInstallation'
 import { composeCrewStationObjectPublications } from '@/modules/system-operations/composition/crewstationObjectPublications'
 import type { HostedRestoreNormalizationParticipant } from '@/modules/system-operations/public/participants'
 import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/public/participants'
@@ -312,7 +313,8 @@ export async function composeCrewStationProfile(
         }).verify,
       }),
       applicationConfiguration: system.applicationConfiguration,
-      databaseInstallation: system.databaseInstallation,
+      // RFC-532: the release Job installed the database; the daemon prepares it through the installation port.
+      databaseInstallation: composeSelectedDaemonDatabaseInstallation(system.databaseInstallation),
       executionAuthority: initialized.authority,
       initializeExecution: initialized.initialize,
       ...execution.selections,

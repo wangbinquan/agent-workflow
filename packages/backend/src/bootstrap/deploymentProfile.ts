@@ -49,7 +49,7 @@ import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/composition'
 import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
-import type { DaemonDatabaseInstallationPort } from '@/modules/system-operations/composition/daemonDatabase'
+import type { DaemonDatabaseInstallation } from '@/modules/system-operations/composition/daemonDatabaseInstallation'
 import type { PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import type { Logger } from '@/util/log'
 import type { CustomObserverProgramFactory } from '@/modules/event-center/composition'
@@ -197,8 +197,6 @@ export interface DeploymentSelections {
   taskRecovery: TaskRecoveryDeploymentSelection | null
   maintenanceEffectsBootstrap: MaintenanceWorkerEffectsDescriptor | null
   readonly initializeExecution: ((initialize: () => Promise<void>) => Promise<void>) | null
-  /** RFC-433: hosted database installation; standalone runs its local epoch installation path. */
-  readonly databaseInstallation: DaemonDatabaseInstallationPort | null
   readonly crewStationEvents: CrewStationEventIngress | null
 
   // ── Required, session-scoped factories (RFC-432): each session calls them with its own graph ──
@@ -230,6 +228,12 @@ export interface DeploymentSelections {
    * (which must not happen before the lock); hosted returns the platform-provided master key's box.
    */
   readonly secretBox: () => SecretBox
+  /**
+   * RFC-532: the deployment's database installation, which the daemon's boot asks to admit the installation (before
+   * the secret box opens) and to prepare the selected database. Standalone: the local epoch path and file preparation;
+   * hosted: the release's installation port.
+   */
+  readonly databaseInstallation: DaemonDatabaseInstallation
   /** RFC-370 v2 H7 — the deployment's execution authority; the standalone one is always active, so it gates nothing. */
   readonly executionAuthority: ExecutionAuthorityPort
 }

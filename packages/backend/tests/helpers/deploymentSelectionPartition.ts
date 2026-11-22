@@ -65,6 +65,8 @@ export const REQUIRED_SELECTIONS = [
   // RFC-433: the post-lock secret box factory (see PROCESS_FACTORY_SELECTIONS) and the execution authority.
   'secretBox',
   'executionAuthority',
+  // RFC-532: the database installation (standalone: the local epoch path; formerly hosted-only and nullable).
+  'databaseInstallation',
 ] as const
 
 /**
@@ -108,8 +110,7 @@ export const NULLABLE_SELECTIONS = [
   'taskRecovery',
   'maintenanceEffectsBootstrap',
   'initializeExecution',
-  // RFC-433: former presence switches, now explicit hosted-only capabilities.
-  'databaseInstallation',
+  // RFC-433: former presence switches, now explicit hosted-only capabilities (RFC-532: the database installation left).
   'crewStationEvents',
 ] as const
 

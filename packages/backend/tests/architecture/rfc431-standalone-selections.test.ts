@@ -293,9 +293,11 @@ test('the partition lists are disjoint and cover the contract once', () => {
   // RFC-531: the nullable repository remote became two required selections stated as factories — the mirror refresh a
   // session factory, the mirrors built over the session's store in both deployments (62 → 63, 53 → 55, 9 → 8; session
   // factories 10 → 11, factories 11 → 13).
+  // RFC-532: the database installation left the nullable group — standalone states its local installation (55 → 56,
+  // 8 → 7).
   expect(STATED).toHaveLength(63)
-  expect(REQUIRED).toHaveLength(55)
-  expect(NULLABLE).toHaveLength(8)
+  expect(REQUIRED).toHaveLength(56)
+  expect(NULLABLE).toHaveLength(7)
   expect(SESSION_FACTORIES).toHaveLength(11)
   expect(SESSION_BUILT).toEqual(['repositoryMirrors'])
   expect(FACTORIES).toHaveLength(13)
@@ -334,10 +336,10 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
     PROFILE,
     (text) =>
       text.replace(
-        '  readonly databaseInstallation: DaemonDatabaseInstallationPort | null',
-        '  readonly databaseInstallation?: DaemonDatabaseInstallationPort',
+        '  readonly crewStationEvents: CrewStationEventIngress | null',
+        '  readonly crewStationEvents?: CrewStationEventIngress',
       ),
-    'partition:databaseInstallation:optional!=nullable',
+    'partition:crewStationEvents:optional!=nullable',
   ],
   [
     'a new selection added as optional',

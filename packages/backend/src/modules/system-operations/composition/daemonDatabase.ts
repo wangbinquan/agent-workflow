@@ -10,7 +10,15 @@ type FilePreparation = Omit<
   Parameters<typeof prepareDatabaseProviderForBoot>[0],
   'configuration' | 'configPath'
 >
-type PreparedDaemonDatabase = Awaited<ReturnType<typeof prepareDatabaseProviderForBoot>>
+/** The prepared provider the daemon boots on. */
+export type PreparedDaemonDatabase = Awaited<ReturnType<typeof prepareDatabaseProviderForBoot>>
+
+/** RFC-532: what the daemon hands its database installation to prepare: the configuration port and its local files (a
+ * selected installation reads the configuration and contract from them). */
+export interface DaemonDatabaseBootPreparation {
+  readonly configuration: DatabaseConfigurationPort
+  readonly file: FilePreparation
+}
 
 export type DaemonDatabaseInstallationPort = DatabaseInstallationPort<PreparedDaemonDatabase>
 

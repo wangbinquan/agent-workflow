@@ -1,11 +1,4 @@
 import { selectedDatabaseConfiguration } from '@/platform/persistence/databaseProviderRuntime'
-import { autoUpgradeTrigger } from '@/modules/system-operations/composition/epochBootAdmission'
-import { runAutoUpgradeChild } from './autoUpgradeChild'
-import {
-  classifyEpochInstallation,
-  epochInstallationGuidance,
-  readEpochBootFactsForConfig,
-} from '@/modules/system-operations/composition/epochBootAdmission'
 import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 // `agent-workflow start` — daemon foreground entry.
 import type { DeploymentProfile } from './deploymentProfile'
@@ -20,13 +13,11 @@ import { ensureTokenFile } from '@/auth/token'
 import { schemaDriftGuidance } from '@/modules/system-operations/composition/schemaDriftGuidance'
 import { IS_EMBEDDED } from '@/embed'
 import {
-  applyLocalEpoch2PendingRestore,
   composeDaemonHostApplication,
   composeDaemonStartupLease,
   runDaemonStartupWithLease,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
-import { prepareDaemonDatabaseProviderForBoot } from '@/modules/system-operations/composition/daemonDatabase'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { readdirSync, statSync } from 'node:fs'
@@ -253,54 +244,10 @@ export async function startCommand(
       process.exit(1)
     }
 
-    // RFC-433: a hosted deployment installs its database itself; the standalone one (no installation) runs its
-    // local epoch installation path here — the automatic upgrade first, then a staged pending restore.
+    // RFC-532: the deployment's database installation admits the installation before the secret box opens
+    // (standalone: the automatic epoch upgrade first, then a staged pending restore; hosted: installed by the release).
     const databaseInstallation = profile.selections.databaseInstallation
-    if (databaseInstallation === null) {
-      let facts = await readEpochBootFactsForConfig({
-        appHome: Paths.root,
-        database: config.database,
-      })
-      let installation = classifyEpochInstallation(facts)
-      const trigger = autoUpgradeTrigger({
-        facts,
-        installation,
-        standalone: true,
-        enabled: config.autoEpochMigration !== false,
-      })
-      if (trigger.kind === 'refuse') throw new Error(trigger.guidance ?? trigger.reason)
-      if (trigger.kind === 'start' || trigger.kind === 'resume') {
-        await runAutoUpgradeChild()
-        config = await configuration.read()
-        facts = await readEpochBootFactsForConfig({
-          appHome: Paths.root,
-          database: config.database,
-        })
-        installation = classifyEpochInstallation(facts)
-        if (
-          installation.kind !== 'epoch2' ||
-          (facts.autoUpgradeSessions ?? []).some((s) => s.unfinished)
-        )
-          throw new Error(
-            'Automatic upgrade exited without a verified epoch-2 installation and completed session. Run agent-workflow db migration status.',
-          )
-      }
-      const latest = facts.autoUpgradeSessions?.at(-1)
-      if (latest?.outcome === 'completed') {
-        const receipt = latest.records.at(-1)?.data.receipt as Record<string, unknown> | undefined
-        if (receipt) {
-          const upgradeLog = createLogger('epoch-upgrade')
-          upgradeLog.info('automatic upgrade receipt', receipt)
-          if (Array.isArray(receipt.restrictions))
-            for (const restriction of receipt.restrictions)
-              upgradeLog.warn(`restriction: ${JSON.stringify(restriction)}`)
-        }
-      }
-      const guidance = epochInstallationGuidance(installation, config.autoEpochMigration !== false)
-      if (guidance !== null) throw new Error(guidance)
-      // Classify legacy and unreconciled installations before resolving a pending restore.
-      await applyLocalEpoch2PendingRestore(logicalSchemaContract)
-    }
+    await databaseInstallation.admit({ config, configuration, contract: logicalSchemaContract })
     config = await configuration.read()
 
     // Provider-independent bootstrap secrets are needed by either selected
@@ -324,12 +271,10 @@ export async function startCommand(
     // 5. DB — resolve the verified live generation before opening any provider
     // client. The pointer is authoritative; config may supply mechanism settings
     // but cannot silently select a different database.
-    const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
+    // RFC-532: the deployment's installation prepares it (standalone: the local file preparation; hosted: the
+    // release's installation port, which reads the configuration and contract below).
+    const preparation = databaseInstallation.prepare({
       configuration: applicationConfiguration.databaseConfiguration,
-      // RFC-524: the deployment's installation, or (standalone: `null`) the local file preparation.
-      ...(databaseInstallation === null
-        ? { kind: 'file' as const }
-        : { kind: 'selected' as const, installation: databaseInstallation }),
       file: {
         config: config.database,
         sqlitePath: Paths.db,
@@ -348,7 +293,8 @@ export async function startCommand(
           developmentIntegrity: development?.developmentIntegrity,
         },
       },
-    }).catch(async (err: unknown) => {
+    })
+    const preparedDatabase = await preparation.catch(async (err: unknown) => {
       if (isDbCorruptionFailure(err)) {
         // RFC-213 fail-closed: never serve a corrupt DB. Print the available
         // backups + the exact restore command, then exit non-zero. The DB is

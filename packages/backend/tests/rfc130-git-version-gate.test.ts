@@ -85,7 +85,8 @@ describe('boot wiring (source locks + real probe)', () => {
     expect(profile).toContain('mergeTreeGateError(gitCaps)')
     const probeIdx = src.indexOf('await profile.probeHost({ log, config })')
     const gateIdx = src.indexOf('if (fatal !== null)')
-    const dbIdx = src.indexOf('await prepareDaemonDatabaseProviderForBoot(')
+    // RFC-532: the deployment's database installation prepares the database.
+    const dbIdx = src.indexOf('databaseInstallation.prepare({')
     expect(probeIdx).toBeGreaterThan(-1)
     expect(gateIdx).toBeGreaterThan(-1)
     expect(dbIdx).toBeGreaterThan(-1)
