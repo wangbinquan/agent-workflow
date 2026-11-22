@@ -15,19 +15,33 @@ import type {
 } from '../drivers/types'
 import type { RuntimePlugin } from '../drivers/agentInjection'
 
-// Native compatibility plans keep the reference from their actual compilation.
-// A fixture/legacy raw plan gets an opaque binding to that explicit object;
-// this map never resolves an execution target or reads a registry/Paths.
-const nativeMaterialReferences = new WeakMap<object, string>()
+/** Native compatibility plans keep the reference from their actual compilation.
+ * A fixture/legacy raw plan gets an opaque binding to that explicit object;
+ * the table never resolves an execution target or reads a registry/Paths.
+ * RFC-535: one table per material definition (handed to the compilers it creates) — no process-level table. */
+export interface NativeAgentMaterialReferences {
+  /** The plan's reference: the one recorded for it, else its source plan's, else a new one (then recorded). */
+  reference(plan: object, sourcePlan?: object): string
+  /** A compiler records the reference it issued for the plan it built. */
+  record(plan: object, materialRef: string): void
+}
 
-export function bindNativeAgentMaterialReference(plan: object, sourcePlan?: object): string {
-  const existing = nativeMaterialReferences.get(plan)
-  if (existing !== undefined) return existing
-  const materialRef =
-    (sourcePlan === undefined ? undefined : nativeMaterialReferences.get(sourcePlan)) ??
-    `aw-agent-material:${ulid()}`
-  nativeMaterialReferences.set(plan, materialRef)
-  return materialRef
+export function createNativeAgentMaterialReferences(): NativeAgentMaterialReferences {
+  const references = new WeakMap<object, string>()
+  return Object.freeze<NativeAgentMaterialReferences>({
+    reference(plan, sourcePlan) {
+      const existing = references.get(plan)
+      if (existing !== undefined) return existing
+      const materialRef =
+        (sourcePlan === undefined ? undefined : references.get(sourcePlan)) ??
+        `aw-agent-material:${ulid()}`
+      references.set(plan, materialRef)
+      return materialRef
+    },
+    record(plan, materialRef) {
+      references.set(plan, materialRef)
+    },
+  })
 }
 
 /** Native-only H6 binding. A hosted compiler has its own content binding and
@@ -53,6 +67,8 @@ export function createLocalAgentMaterialCompiler(input: {
   readonly buildNative: (context: AgentSpawnContext) => Promise<AgentSpawnPlan>
   readonly evidenceCapabilities: AgentMaterialEvidenceCapabilities
   readonly fixture?: NativeAgentMaterialFixture
+  /** RFC-535: the material definition's reference table (the compiled plan's reference is recorded there). */
+  readonly references: NativeAgentMaterialReferences
 }) {
   const plans = new Map<string, AgentSpawnPlan>()
   const compiler: AgentMaterialCompiler = {
@@ -143,7 +159,7 @@ export function createLocalAgentMaterialCompiler(input: {
       const plan = await input.buildNative(context)
       const materialRef = `aw-agent-material:${ulid()}`
       plans.set(materialRef, plan)
-      nativeMaterialReferences.set(plan, materialRef)
+      input.references.record(plan, materialRef)
       return {
         materialRef,
         declared: plan.declared,

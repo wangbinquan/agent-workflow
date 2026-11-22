@@ -18,11 +18,10 @@ export interface TaskWorkspaceReadDependencies {
   }
 }
 
-const liveWorkspaceReads = new WeakSet<WorkspaceReadCapability>()
+// RFC-535: the scope itself decides whether a capability is live (not closed, and the very object it issued); there is
+// no process-level set of live capabilities.
 function createWorkspaceReadCapability(): WorkspaceReadCapability {
-  const capability = Object.freeze({}) as WorkspaceReadCapability
-  liveWorkspaceReads.add(capability)
-  return capability
+  return Object.freeze({}) as WorkspaceReadCapability
 }
 
 export async function bindTaskWorkspaceReadScope(
@@ -37,7 +36,7 @@ export async function bindTaskWorkspaceReadScope(
   const capability = createWorkspaceReadCapability()
   let live = true
   function assertBound(candidate: WorkspaceReadCapability) {
-    if (!live || candidate !== capability || !liveWorkspaceReads.has(candidate))
+    if (!live || candidate !== capability)
       throw new Error('task-workspace-read-scope-ended-or-mismatched')
   }
   const port = Object.freeze<TaskWorkspaceReadPort>({
@@ -59,7 +58,6 @@ export async function bindTaskWorkspaceReadScope(
     capability,
     close() {
       live = false
-      liveWorkspaceReads.delete(capability)
       content.close()
     },
   }

@@ -96,9 +96,8 @@ import { createCommittedEventDeliveryPersistence } from '@/platform/events/commi
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { ChildTaskBudget } from '@/modules/task-execution/infrastructure/childBudget'
 import {
-  resetTaskTerminalWatchersForTests,
-  watchTaskTerminal,
-  notifyTaskTerminal,
+  createTaskTerminalWatch,
+  type TaskTerminalWatch,
   type TerminalWatchResult,
 } from '@/modules/task-execution/infrastructure/executionWatch'
 import {
@@ -147,9 +146,8 @@ afterAll(() => {
 })
 
 afterEach(() => {
-  // ⑥ 的两条会往进程级的 watcher 注册表 / WS broadcaster 里挂东西；两个引擎跑同一份 body，
-  // 不清干净会让第二遍读到第一遍的残留。
-  resetTaskTerminalWatchersForTests()
+  // ⑥ 的两条会往进程级的 WS broadcaster 里挂东西；两个引擎跑同一份 body，
+  // 不清干净会让第二遍读到第一遍的残留（RFC-535：终态看门每条用例自建一份，不用清）。
   resetBroadcastersForTests()
   while (SCRATCH.length > 0) rmSync(SCRATCH.pop()!, { recursive: true, force: true })
 })
@@ -492,7 +490,7 @@ async function retryPlaceholder(db: PersistenceDb, taskId: string, nodeId: strin
 
 /** ⑥ 一次投递里，三个「只看状态值是不是终态」的消费面各自看到了什么。 */
 interface LifecycleDelivery {
-  /** 真实 `watchTaskTerminal` 的结算结果；`'not-woken'` = 一直没被唤醒。 */
+  /** 真实终态看门（`TaskTerminalWatch.watch`）的结算结果；`'not-woken'` = 一直没被唤醒。 */
   readonly woken: TerminalWatchResult | 'not-woken'
   /** 排队中的兄弟子任务是不是在这一窗口里被放行了。 */
   readonly siblingAdmitted: boolean
@@ -507,7 +505,7 @@ interface LifecycleDelivery {
  *
  * · durable 面走 `createCommittedEventDispatcher` + `createTaskLifecycleDurableConsumerDefinitions`，
  *   与 daemon 里那套逐字同构（`cli/start.ts` 只是把 `notifyExecutionWatch` 接到
- *   `notifyTaskTerminal`、把 `notifyChildBudget` 接到子任务预算上，这里照抄那两行）。
+ *   会话终态看门的 `notify`、把 `notifyChildBudget` 接到子任务预算上，这里照抄那两行）。
  * · ephemeral 面（WS 投影器）走 `createDatabaseTaskLifecycleWsProjector`，喂的是同一批
  *   落库的信封。
  *
@@ -520,6 +518,7 @@ async function deliverLifecycleEvents(
   input: Readonly<{
     watchedTaskId: string
     budget: ChildTaskBudget
+    terminalWatch: TaskTerminalWatch
     watch: Promise<TerminalWatchResult>
     siblingAdmission: Promise<unknown>
   }>,
@@ -545,7 +544,7 @@ async function deliverLifecycleEvents(
           input.budget.onChildTaskStatus(taskId, status)
         },
         async notifyExecutionWatch(taskId, status: TaskStatus) {
-          notifyTaskTerminal(taskId, status)
+          input.terminalWatch.notify(taskId, status)
         },
         async nudgeWorkspacePrune() {},
         async enqueueTaskRunDistill() {},
@@ -567,7 +566,7 @@ async function deliverLifecycleEvents(
     offList()
   }
 
-  // `notifyTaskTerminal` 是**同步** resolve，`budget.scan()` 同理；两者都发生在上面已经
+  // 看门的 `notify` 是**同步** resolve，`budget.scan()` 同理；两者都发生在上面已经
   // await 完的投递里。宏任务（setTimeout 0）排在所有微任务之后，所以这不是「等一会儿看看」
   // 的竞态睡眠，而是一个确定性的「微任务队列已排空」栅栏。
   const settled = <T>(promise: Promise<T>, fallback: T): Promise<T> =>
@@ -911,7 +910,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
   // 拒掉整条重试。于是「状态值是终态」与「任务真的结束了」在这一跳上分了家。
   //
   // 三个消费面只认前者，全都会在 PG 上把「重试进行中」谎报成「任务已结束」：
-  //   · `task-execution-watch` → `notifyTaskTerminal` 唤醒 `watchTaskTerminal`。RFC-243 的
+  //   · `task-execution-watch` → 看门的 `notify` 唤醒它的 `watch`。RFC-243 的
   //     父任务就等在这上面——它会拿着「子任务已结束」这个**从未发生**的结论往下走，而子任务
   //     马上回到 pending 继续跑；
   //   · `task-child-budget` → 把任务从计数里摘掉并重扫等待队列，窗口里多放行一个排队的
@@ -945,9 +944,10 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
         : { checkpoints: [{ mountPath: '', preSnapshot: options.preSnapshot ?? undefined }] }),
     })
 
-    // 父任务的调用节点在等子任务走到终态（RFC-243 §1.4 的 `watchTaskTerminal`）。
+    // 父任务的调用节点在等子任务走到终态（RFC-243 §1.4；RFC-535：会话的终态看门）。
     const abort = new AbortController()
-    const watch = watchTaskTerminal(createTaskExecutionReadModels(db).statusProjection, childId, {
+    const terminalWatch = createTaskTerminalWatch()
+    const watch = terminalWatch.watch(createTaskExecutionReadModels(db).statusProjection, childId, {
       signal: abort.signal,
       pollMs: 600_000, // 轮询兜底不参与判据：本用例只看事件驱动的那一路。
     })
@@ -964,7 +964,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     budget.onChildTaskStatus(childId, 'running')
     const siblingAdmission = budget.acquire([])
 
-    return { parentId, childId, runId, watch, budget, siblingAdmission, abort }
+    return { parentId, childId, runId, terminalWatch, watch, budget, siblingAdmission, abort }
   }
 
   test('⑥ 子任务被重试时，等它终态的父任务不得被唤醒（也不多放名额、不发 task.done）', async () => {
@@ -980,6 +980,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       const delivered = await deliverLifecycleEvents(db, {
         watchedTaskId: fixture.childId,
         budget: fixture.budget,
+        terminalWatch: fixture.terminalWatch,
         watch: fixture.watch,
         siblingAdmission: fixture.siblingAdmission,
       })
@@ -1017,6 +1018,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       const delivered = await deliverLifecycleEvents(db, {
         watchedTaskId: fixture.childId,
         budget: fixture.budget,
+        terminalWatch: fixture.terminalWatch,
         watch: fixture.watch,
         siblingAdmission: fixture.siblingAdmission,
       })

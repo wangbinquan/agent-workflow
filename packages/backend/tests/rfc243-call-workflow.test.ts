@@ -50,10 +50,7 @@ const closureActor = buildActor({
   source: 'daemon',
 })
 import { runGit } from '../src/util/git'
-import {
-  notifyTaskTerminal,
-  resetTaskTerminalWatchersForTests,
-} from '../src/modules/task-execution/infrastructure/executionWatch'
+import { testTaskTerminalWatch } from './helpers/taskTerminalWatch'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -131,8 +128,9 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(mockPath, mockSource(planFile))
   const db = createInMemoryDb()
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+    // RFC-535: the topology's terminal watch for this database (the child-call nodes wait on it).
     onExecutionWatch(_db, taskId, status) {
-      notifyTaskTerminal(taskId, status)
+      testTaskTerminalWatch(db).notify(taskId, status)
     },
   })
   await seedTestDefaultOpencodeRuntime(db)
@@ -145,7 +143,6 @@ async function buildHarness(): Promise<Harness> {
     planFile,
     cleanup: () => {
       uninstallAfterCommitPump()
-      resetTaskTerminalWatchersForTests()
       rmSync(appHome, { recursive: true, force: true })
     },
   }

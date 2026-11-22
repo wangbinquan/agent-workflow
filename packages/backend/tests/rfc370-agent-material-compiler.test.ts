@@ -20,8 +20,8 @@ import type {
   AgentMaterialIntent,
 } from '../src/modules/runtime-management/application/ports/agentMaterial'
 import {
-  bindNativeAgentMaterialReference,
   createLocalAgentMaterialCompiler,
+  createNativeAgentMaterialReferences,
   type NativeAgentMaterialContents,
 } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import {
@@ -315,6 +315,7 @@ describe('RFC-370 selected material compiler', () => {
     let compilations = 0
     const native = plan()
     const selected = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'opencode',
       contents,
       evidenceCapabilities: capabilities,
@@ -389,6 +390,7 @@ describe('RFC-370 selected material compiler', () => {
     const selected = bindLegacyNativeAgentMaterial('opencode', original)
     expect(reads).toBe(0)
     const compiler = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'opencode',
       ...selected,
       evidenceCapabilities: capabilities,
@@ -433,6 +435,7 @@ describe('RFC-370 selected material compiler', () => {
     expect(skillReads).toBe(1)
     expect(pluginReads).toBe(1)
     const selected = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'opencode',
       ...bound,
       evidenceCapabilities: capabilities,
@@ -471,6 +474,7 @@ describe('RFC-370 selected material compiler', () => {
       },
     }
     const selected = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'opencode',
       ...bound,
       contents: { ...bound.contents, plugin: () => physical },
@@ -505,6 +509,7 @@ describe('RFC-370 selected material compiler', () => {
     expect('binaryOverride' in bound.intent).toBe(false)
     expect('boundaryHostProbe' in bound.intent).toBe(false)
     const selected = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'opencode',
       ...bound,
       evidenceCapabilities: capabilities,
@@ -521,6 +526,7 @@ describe('RFC-370 selected material compiler', () => {
     const bound = bindLegacyNativeAgentMaterial('opencode', context())
     let created = 0
     const selected = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'claude-code',
       contents: {
         workspace() {
@@ -555,6 +561,7 @@ describe('RFC-370 selected material compiler', () => {
     const bound = bindLegacyNativeAgentMaterial('opencode', context())
     let created = 0
     const selected = createLocalAgentMaterialCompiler({
+      references: createNativeAgentMaterialReferences(),
       protocol: 'opencode',
       ...bound,
       evidenceCapabilities: capabilities,
@@ -642,6 +649,7 @@ describe('RFC-370 selected material compiler', () => {
         const driver = getRuntimeDriver(kind)
         const bound = bindLegacyNativeAgentMaterial(kind, original)
         const selected = createLocalAgentMaterialCompiler({
+          references: createNativeAgentMaterialReferences(),
           protocol: kind,
           ...bound,
           evidenceCapabilities: capabilities,
@@ -666,9 +674,10 @@ describe('RFC-370 selected material compiler', () => {
           'captureSessionsToSink',
         ] as const)
           expect([member, typeof evidence[member]]).toEqual([member, typeof expected[member]])
+        // RFC-535: the definition keeps one reference per plan in its own table.
         const referenced = {}
         expect(definition.materialReference(referenced)).toBe(
-          bindNativeAgentMaterialReference(referenced),
+          definition.materialReference(referenced),
         )
         const rootSelected = definition.createCompiler(bound.contents, bound.fixture)
         const preparations = [

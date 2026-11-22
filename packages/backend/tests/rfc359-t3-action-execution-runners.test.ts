@@ -40,7 +40,7 @@ import type {
 } from '@/modules/task-execution/application/ports/actionExecution'
 import { localActionWorkspaceEntries } from '@/modules/task-execution/infrastructure/local/localActionWorkspaceEntries'
 import { readTaskStatus } from '@/modules/task-execution/infrastructure/taskExecutionTaskReads'
-import { watchTaskTerminal } from '@/modules/task-execution/infrastructure/executionWatch'
+import { createTaskTerminalWatch } from '@/modules/task-execution/infrastructure/executionWatch'
 import { getExecutionOutcome } from '@/modules/task-execution/infrastructure/executionOutcome'
 import {
   DIGITAL_EMPLOYEE_PROMPT_KEY,
@@ -70,6 +70,8 @@ function fakeEnvironment(
 ): FakeEnvironment {
   const launches: ActionHostTaskLaunch[] = []
   const cancels: string[] = []
+  // RFC-535: the session's terminal watch (no committed-event pump here; the runners poll it).
+  const terminalWatch = createTaskTerminalWatch()
   const env: ActionExecutionEnvironment = {
     db,
     agents: { get: async () => over.agent ?? null },
@@ -129,7 +131,7 @@ function fakeEnvironment(
     // The environment binding projects the outcome and polls for the terminal status over these two read models.
     executionOutcome: (executionRef) => getExecutionOutcome(env.outcomes, executionRef),
     awaitTerminal: (executionRef, pollMs) =>
-      watchTaskTerminal(env.statusProjection, executionRef, { pollMs }),
+      terminalWatch.watch(env.statusProjection, executionRef, { pollMs }),
   }
   return { env, launches, cancels }
 }

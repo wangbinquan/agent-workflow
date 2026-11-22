@@ -20,7 +20,6 @@ import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
-import { bindNativeAgentMaterialReference } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import { createLocalAgentMaterialEvidence } from '@/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import { selectLocalAgentMaterialDefinition } from '@/modules/runtime-management/composition/localAgentMaterial'
 import { composeLocalRuntimeManagement } from '@/modules/runtime-management/composition/localRuntimeManagement'
@@ -346,8 +345,11 @@ describe('RFC-489 ⑥ 行为与原构造一致', () => {
         ])
       expect(typeof evidence.captureSessions).toBe('function')
       const plan = {}
-      expect(definition.materialReference(plan)).toBe(bindNativeAgentMaterialReference(plan))
       expect(definition.materialReference(plan)).toBe(definition.materialReference(plan))
+      // RFC-535: each definition owns its reference table (no process-level table shared by every definition).
+      expect(selectLocalAgentMaterialDefinition(kind).materialReference(plan)).not.toBe(
+        definition.materialReference(plan),
+      )
     }
   })
 

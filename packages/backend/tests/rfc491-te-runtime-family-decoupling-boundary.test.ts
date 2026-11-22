@@ -34,7 +34,6 @@ import {
   selectLocalAgentMaterialDefinition,
   selectNativeRuntimeDriver,
 } from '@/modules/runtime-management/composition/localAgentMaterial'
-import { bindNativeAgentMaterialReference } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import { detectPluginLoadFailure as pluginLoadFailureAtDeclaration } from '@/modules/runtime-management/infrastructure/local/pluginLoadDiagnostics'
 import {
   localNativeSystemAgentRunProviders,
@@ -439,8 +438,12 @@ describe('RFC-491 ⑦ 行为与驱动直取一致', () => {
       const baseRef = definition.materialReference(base)
       expect(definition.materialReference(wrapped, base)).toBe(baseRef)
       expect(definition.materialReference(wrapped)).toBe(baseRef)
+      // A plan with no recorded reference and no source plan gets a new one, kept for that plan (RFC-535: in this
+      // definition's own table).
       const lone = {}
-      expect(definition.materialReference(lone)).toBe(bindNativeAgentMaterialReference(lone))
+      const loneRef = definition.materialReference(lone)
+      expect(loneRef).not.toBe(baseRef)
+      expect(definition.materialReference(lone)).toBe(loneRef)
     }
   })
 

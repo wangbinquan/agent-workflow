@@ -19,7 +19,6 @@
 import { randomBytes } from 'node:crypto'
 import {
   getRuntimeDriver,
-  getNativeAgentMaterialReference,
   bindNativeAgentMaterialEvidence,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
@@ -27,6 +26,7 @@ import {
 import type { SpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'
 import { createLogger, type Logger } from '@/util/log'
 import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
+import { createNativeAgentMaterialReferences } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { Paths } from '@/util/paths'
 import {
@@ -146,6 +146,8 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   const materialWorkspace = bindNativeAgentMaterialWorkspace({ kind: 'smoke', appHome: Paths.root })
   const worktreeDir = materialWorkspace.locations.workingDirectory
   const runDir = materialWorkspace.locations.runDirectory
+  // RFC-535: this smoke run's material reference table (a material definition owns one per run).
+  const materialReferences = createNativeAgentMaterialReferences()
   return runRuntimeSmokeCore(opts, {
     log,
     timeoutMs,
@@ -181,7 +183,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
                   sessionLocation: () => ({ worktreePath: worktreeDir }),
                 })
               },
-              materialReference: () => getNativeAgentMaterialReference(plan),
+              materialReference: () => materialReferences.reference(plan),
             })
           },
         }

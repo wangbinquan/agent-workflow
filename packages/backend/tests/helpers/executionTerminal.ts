@@ -5,16 +5,15 @@
 // 合一整份退役；`watchExecutionTerminal` 的**生产消费者一直是零**，只有测试在用。
 // 于是它挪到测试树里，而不是让一个没有生产消费者的文件继续存在。
 //
-// 它自己没有任何 provider 判断：`watchTaskTerminal` 与 `getExecutionOutcome` 都是中立实现。
+// 它自己没有任何 provider 判断：终态看门与 `getExecutionOutcome` 都是中立实现。
+// RFC-535：看门取该库的测试看门（与拓扑、事件泵同一份）。
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   type ExecutionOutcome,
   getExecutionOutcome,
 } from '@/modules/task-execution/infrastructure/executionOutcome'
-import {
-  watchTaskTerminal,
-  type TerminalWatchResult,
-} from '@/modules/task-execution/infrastructure/executionWatch'
+import type { TerminalWatchResult } from '@/modules/task-execution/infrastructure/executionWatch'
+import { testTaskTerminalWatch } from './taskTerminalWatch'
 
 export type WatchExecutionResult =
   | { kind: 'outcome'; outcome: ExecutionOutcome }
@@ -29,7 +28,7 @@ export async function watchExecutionTerminal(
   taskId: string,
   opts: { signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<WatchExecutionResult> {
-  const result: TerminalWatchResult = await watchTaskTerminal(db, taskId, opts)
+  const result: TerminalWatchResult = await testTaskTerminalWatch(db).watch(db, taskId, opts)
   if (result.kind === 'terminal') {
     return { kind: 'outcome', outcome: await getExecutionOutcome(db, taskId) }
   }

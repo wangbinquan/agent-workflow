@@ -1,5 +1,6 @@
 import { testExecutionPermits } from './executionPermits'
 import { testChildTaskBudget } from './childTaskBudget'
+import { testTaskTerminalWatch } from './taskTerminalWatch'
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
@@ -374,6 +375,7 @@ export async function createEachProviderTaskExecution(
           taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
           executionPermits: testExecutionPermits,
           childTaskBudget: testChildTaskBudget(persistence.childBudget),
+          terminalWatch: testTaskTerminalWatch(sqlite),
           processConcurrencyScope: sqlite,
           ...runBinding,
           workspaceExcludeProfilesFor,
@@ -483,6 +485,7 @@ export async function createEachProviderTaskExecution(
           cancelTask: (taskId: string) =>
             provider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
           readModels: provider.readModels,
+          terminalWatch: testTaskTerminalWatch(sqlite),
           agents: options.agents,
           terminalPollMs: options.terminalPollMs,
         }
@@ -587,6 +590,7 @@ export async function createEachProviderTaskExecution(
         codeHostRequests: unusedCapability('code-host requests'),
         executionPermits: testExecutionPermits,
         childTaskBudget: testChildTaskBudget(persistence.childBudget),
+        terminalWatch: testTaskTerminalWatch(postgresql),
         processConcurrencyScope: {},
       },
       routeLaunch: {
@@ -688,6 +692,7 @@ export async function createEachProviderTaskExecution(
         cancelTask: (taskId: string) =>
           provider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
         readModels: provider.readModels,
+        terminalWatch: testTaskTerminalWatch(postgresql),
         agents: options.agents,
         terminalPollMs: options.terminalPollMs,
       }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { bindNativeAgentInvocation } from '../src/modules/task-execution/infrastructure/local/agentInvocation'
 import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infrastructure/local/agentProtocol'
-import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
+import { createNativeAgentMaterialReferences } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { AgentInvocationProtocol } from '../src/modules/runtime-management/application/ports/agentProtocol'
 import type { AgentMaterialWorkspace } from '../src/modules/runtime-management/application/ports/agentMaterialWorkspace'
 import {
@@ -29,6 +29,10 @@ import type {
 } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
+
+// RFC-535: a material definition owns its reference table; these fixtures stand in for one definition.
+const materialReferences = createNativeAgentMaterialReferences()
+
 const unavailable = () => {
   throw new Error('unselected physical scope read')
 }
@@ -73,7 +77,7 @@ function makeBinding(
     cleanupReceiver: 'material',
     workingDirectory: () => '/selected-working',
     evidence: createLocalAgentMaterialEvidence({ hooks: evidenceHooks, scope: evidenceScope }),
-    materialReference: () => bindNativeAgentMaterialReference(material),
+    materialReference: () => materialReferences.reference(material),
     ...rest,
   })
 }
@@ -92,7 +96,7 @@ describe('RFC-370 complete native invocation binding', () => {
         return declared
       },
     })
-    const materialRef = bindNativeAgentMaterialReference(material)
+    const materialRef = materialReferences.reference(material)
     let hookReads = 0
     const hooks: NativeAgentMaterialEvidenceHooks = {
       captureSessions: async () => {},

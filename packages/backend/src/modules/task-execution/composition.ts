@@ -181,4 +181,5 @@ export {
   type ChildTaskBudgetLimits,
   type ChildTaskBudgetRuntime,
 } from './infrastructure/childBudget'
-export { notifyTaskTerminal } from './infrastructure/executionWatch'
+// RFC-535: the session's terminal watch (built next to its child-task budget).
+export { createTaskTerminalWatch, type TaskTerminalWatch } from './infrastructure/executionWatch'

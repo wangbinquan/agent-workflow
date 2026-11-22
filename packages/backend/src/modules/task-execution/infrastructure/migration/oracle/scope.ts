@@ -11,9 +11,18 @@ export type OracleSnapshotScope =
       readonly iteration?: number
     }
 
-const scopes = new WeakMap<readonly OracleRunRow[], OracleSnapshotScope>()
+// RFC-535: the scope rides on the row array the snapshot built (a non-enumerable, read-only symbol property) — there is
+// no process-level table from arrays to scopes. An array without it is a complete task, as before.
+const ORACLE_SNAPSHOT_SCOPE = Symbol('oracle-snapshot-scope')
+type ScopedOracleRows = readonly OracleRunRow[] & {
+  readonly [ORACLE_SNAPSHOT_SCOPE]?: OracleSnapshotScope
+}
 
-export function bindOracleSnapshotScope(
+function scopeOf(rows: readonly OracleRunRow[]): OracleSnapshotScope | undefined {
+  return (rows as ScopedOracleRows)[ORACLE_SNAPSHOT_SCOPE]
+}
+
+export function scopeOracleSnapshotRows(
   rows: readonly OracleRunRow[],
   scope: OracleSnapshotScope,
 ): void {
@@ -26,11 +35,11 @@ export function bindOracleSnapshotScope(
       )
         throw new Error('oracle-snapshot-scope-mismatch')
     }
-  scopes.set(rows, scope)
+  Object.defineProperty(rows, ORACLE_SNAPSHOT_SCOPE, { value: scope })
 }
 
 export function requireSupersessionScope(row: OracleRunRow, rows: readonly OracleRunRow[]): void {
-  const scope = scopes.get(rows)
+  const scope = scopeOf(rows)
   // Direct complete-row helpers retain their existing complete-task contract.
   if (scope === undefined || scope.kind === 'task') return
   // Rule (a) only needs every row of this node/iteration (across frames and shards).
@@ -40,7 +49,7 @@ export function requireSupersessionScope(row: OracleRunRow, rows: readonly Oracl
 }
 
 export function requireTaskLabelScope(rows: readonly OracleRunRow[], label: 'role' | 'slot'): void {
-  const scope = scopes.get(rows)
+  const scope = scopeOf(rows)
   if (scope !== undefined && scope.kind !== 'task')
     throw new Error(`oracle-snapshot-incomplete-${label}`)
 }

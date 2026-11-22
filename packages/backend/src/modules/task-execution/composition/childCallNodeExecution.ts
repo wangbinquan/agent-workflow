@@ -1,6 +1,5 @@
 import { ulid } from 'ulid'
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
-import { watchTaskTerminal } from '../infrastructure/executionWatch'
 import { getExecutionOutcome } from '../infrastructure/executionOutcome'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import type { ChildCallNodeExecutionPorts } from '../application/ports/childCallNodeExecution'
@@ -171,8 +170,13 @@ export function createChildCallNodeExecutionPorts(
       },
       isTaskActive: (childTaskId) => state.topology.schedulerDriver.isTaskActive(childTaskId),
       findStatus: (childTaskId) => state.opts.persistence.reads.statusProjection.find(childTaskId),
+      // RFC-535: the session's terminal watch (its committed lifecycle consumer wakes it).
       watchTerminal: (childTaskId, opts) =>
-        watchTaskTerminal(state.opts.persistence.reads.statusProjection, childTaskId, opts),
+        state.opts.terminalWatch.watch(
+          state.opts.persistence.reads.statusProjection,
+          childTaskId,
+          opts,
+        ),
       outcome: (childTaskId) =>
         getExecutionOutcome(state.opts.persistence.reads.executionOutcome, childTaskId),
     },

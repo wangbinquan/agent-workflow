@@ -10,6 +10,7 @@ import type { AgentSpawnContext, AgentSpawnPlan, ResolvedSkill } from '../driver
 import type { RuntimePlugin } from '../drivers/agentInjection'
 import {
   createLocalAgentMaterialCompiler,
+  createNativeAgentMaterialReferences,
   type NativeAgentMaterialContents,
   type NativeAgentMaterialFixture,
 } from './agentMaterialCompiler'
@@ -258,7 +259,12 @@ export async function compileLegacyNativeAgentMaterial(input: {
   }
   if (rawNativeAccessors) return input.buildNative(input.context)
   const binding = bindLegacyNativeAgentMaterial(input.protocol, input.context)
-  const selected = createLocalAgentMaterialCompiler({ ...input, ...binding })
+  // RFC-535: a one-off compilation keeps its own reference table; it hands back only the plan.
+  const selected = createLocalAgentMaterialCompiler({
+    ...input,
+    ...binding,
+    references: createNativeAgentMaterialReferences(),
+  })
   const prepared = await selected.compiler.compile(binding.intent)
   return selected.nativePlan(prepared.materialRef)
 }

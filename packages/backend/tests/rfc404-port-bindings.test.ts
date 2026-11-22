@@ -20,6 +20,7 @@ interface Recorded {
   cancelChild: Record<string, unknown>[]
   forCall: Record<string, unknown>[]
   patch: Record<string, unknown>[]
+  watch: Record<string, unknown>[]
 }
 
 function fixture() {
@@ -30,6 +31,7 @@ function fixture() {
     cancelChild: [],
     forCall: [],
     patch: [],
+    watch: [],
   }
   let cancelError: Error | null = null
   const schedulerDriver = {
@@ -49,6 +51,15 @@ function fixture() {
     isChildTask: async () => false,
     parentTaskId: async () => null,
   })
+  // RFC-535: the session's terminal watch; the child-call port waits on it over the persistence's status projection.
+  const statusProjection = { find: async () => null }
+  const terminalWatch = {
+    notify() {},
+    async watch(source: unknown, taskId: string, opts?: unknown) {
+      calls.watch.push({ source, taskId, opts })
+      return { kind: 'terminal', status: 'done' } as const
+    },
+  }
   const raw = {
     taskId: 'parent-task',
     task: {
@@ -70,6 +81,7 @@ function fixture() {
       maxConcurrentNodes: 3,
       maxInvocationDepth: 5,
       childTaskBudget,
+      terminalWatch,
       executionContext,
       childLaunch: {
         async launchWorkflow(request: Record<string, unknown>) {
@@ -90,6 +102,7 @@ function fixture() {
         },
       },
       persistence: {
+        reads: { statusProjection },
         nodeExecution: {
           async patch(input: Record<string, unknown>) {
             calls.patch.push(input)
@@ -235,6 +248,23 @@ test('task facts are read on use with the historical fallbacks; ledger patches c
       nodeRunId: 'call-run',
       values: { identity: { childTaskId: 'c' } },
       executionContext,
+    },
+  ])
+})
+
+test('RFC-535: the child-call port waits on the session terminal watch over the persistence status projection', async () => {
+  const { raw, state, calls } = fixture()
+  const ports = createChildCallNodeExecutionPorts(state)
+  const signal = new AbortController().signal
+  expect(await ports.children.watchTerminal('child-1', { signal, pollMs: 25 })).toEqual({
+    kind: 'terminal',
+    status: 'done',
+  })
+  expect(calls.watch).toEqual([
+    {
+      source: raw.opts.persistence.reads.statusProjection,
+      taskId: 'child-1',
+      opts: { signal, pollMs: 25 },
     },
   ])
 })

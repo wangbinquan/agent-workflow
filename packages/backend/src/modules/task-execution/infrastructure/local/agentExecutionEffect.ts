@@ -203,20 +203,35 @@ interface NativeAgentExecutionTaskParticipants {
   readonly nodeExecution: () => NodeExecutionPersistence
   readonly readOnlyWorkspace: () => boolean
 }
-const nativeTaskParticipants = new WeakMap<object, NativeAgentExecutionTaskParticipants>()
+
+/** RFC-535: the issued participant carries its native facts in a private field — only this file reads it, so no
+ * process-level table maps participants to facts. */
+class NativeAgentExecutionTaskParticipant {
+  readonly #native: NativeAgentExecutionTaskParticipants
+  constructor(native: NativeAgentExecutionTaskParticipants) {
+    this.#native = native
+    Object.freeze(this)
+  }
+  static read(reference: object): NativeAgentExecutionTaskParticipants | undefined {
+    return #native in reference
+      ? (reference as NativeAgentExecutionTaskParticipant).#native
+      : undefined
+  }
+}
 
 export function bindLocalAgentExecutionParticipants(
   input: NativeAgentExecutionTaskParticipants,
 ): AgentExecutionParticipants & Required<Pick<AgentExecutionParticipants, 'taskEffect'>> {
-  const taskEffect = Object.freeze({}) as NonNullable<AgentExecutionParticipants['taskEffect']>
-  nativeTaskParticipants.set(taskEffect, input)
+  const taskEffect = new NativeAgentExecutionTaskParticipant(input) as unknown as NonNullable<
+    AgentExecutionParticipants['taskEffect']
+  >
   return { taskEffect }
 }
 
 export function resolveLocalAgentExecutionParticipants(participants?: AgentExecutionParticipants) {
   const reference = participants?.taskEffect
   if (reference === undefined) return undefined
-  const native = nativeTaskParticipants.get(reference)
+  const native = NativeAgentExecutionTaskParticipant.read(reference)
   if (native === undefined) throw new Error('agent-execution-task-participant-unavailable')
   return native
 }

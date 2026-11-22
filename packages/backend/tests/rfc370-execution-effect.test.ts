@@ -27,9 +27,11 @@ import type {
   AgentProcessResult,
 } from '../src/platform/execution/local/agentProcess'
 import { createLogger } from '../src/util/log'
-import { createLocalAgentMaterialCompiler } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
+import {
+  createLocalAgentMaterialCompiler,
+  createNativeAgentMaterialReferences,
+} from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { AgentMaterialIntent } from '../src/modules/runtime-management/application/ports/agentMaterial'
-import { getNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/drivers'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import type { AgentSpawnPlan } from '../src/modules/runtime-management/infrastructure/drivers/types'
 
@@ -211,7 +213,10 @@ describe('RFC-370 selected native execution binding', () => {
     const unavailable = () => {
       throw new Error('unselected material content read')
     }
+    // RFC-535: the material definition's reference table, handed to the compiler it creates.
+    const references = createNativeAgentMaterialReferences()
     const selected = createLocalAgentMaterialCompiler({
+      references,
       protocol: 'opencode',
       contents: {
         workspace: () => '/selected-workspace',
@@ -249,11 +254,13 @@ describe('RFC-370 selected native execution binding', () => {
     const material = await selected.compiler.compile(intent)
     const native = selected.nativePlan(material.materialRef)
     expect(native).toBe(plan)
-    expect(getNativeAgentMaterialReference(native)).toBe(material.materialRef)
+    expect(references.reference(native)).toBe(material.materialRef)
     const composed = { ...native, cleanup: () => {} }
-    expect(getNativeAgentMaterialReference(composed, native)).toBe(material.materialRef)
-    expect(getNativeAgentMaterialReference(composed)).toBe(material.materialRef)
-    expect(getNativeAgentMaterialReference({ ...native })).not.toBe(material.materialRef)
+    expect(references.reference(composed, native)).toBe(material.materialRef)
+    expect(references.reference(composed)).toBe(material.materialRef)
+    expect(references.reference({ ...native })).not.toBe(material.materialRef)
+    // RFC-535: another table (another definition) never sees this compiler's reference.
+    expect(createNativeAgentMaterialReferences().reference(native)).not.toBe(material.materialRef)
     expect(builds).toBe(1)
   })
 

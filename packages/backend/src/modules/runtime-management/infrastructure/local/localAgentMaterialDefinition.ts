@@ -3,8 +3,8 @@ import type { AgentInvocationProtocol } from '../../application/ports/agentProto
 import type { AgentMaterialEvidenceCapabilities } from '../../application/ports/agentMaterial'
 import type { AgentMaterialEvidence } from '../../application/ports/agentMaterialEvidence'
 import {
-  bindNativeAgentMaterialReference,
   createLocalAgentMaterialCompiler,
+  createNativeAgentMaterialReferences,
   type NativeAgentMaterialContents,
   type NativeAgentMaterialFixture,
 } from './agentMaterialCompiler'
@@ -50,10 +50,13 @@ export function selectLocalAgentMaterialDefinition(
     )
   }
   const driver = getRuntimeDriver(kind)
+  // RFC-535: this definition's reference table — its compilers record into it and `materialReference` reads it (one
+  // run compiles and references through the same definition).
+  const references = createNativeAgentMaterialReferences()
   return {
     protocol: bindNativeAgentProtocol(driver),
     evidence: (scope) => createLocalAgentMaterialEvidence({ hooks: driver, scope }),
-    materialReference: (plan, sourcePlan) => bindNativeAgentMaterialReference(plan, sourcePlan),
+    materialReference: (plan, sourcePlan) => references.reference(plan, sourcePlan),
     createCompiler(contents, fixture) {
       const evidenceCapabilities: AgentMaterialEvidenceCapabilities = {
         usageMeter: driver.usageMeter !== undefined,
@@ -69,6 +72,7 @@ export function selectLocalAgentMaterialDefinition(
         buildNative,
         evidenceCapabilities,
         ...(fixture === undefined ? {} : { fixture }),
+        references,
       })
     },
   }

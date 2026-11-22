@@ -23,7 +23,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskStatus } from '@agent-workflow/shared'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -31,11 +31,7 @@ import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
 import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/application/launch/taskExecutionLaunchParticipant'
-import {
-  notifyTaskTerminal,
-  resetTaskTerminalWatchersForTests,
-  watchTaskTerminal,
-} from '../src/modules/task-execution/infrastructure/executionWatch'
+import { createTaskTerminalWatch } from '../src/modules/task-execution/infrastructure/executionWatch'
 import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/domain/taskWorkgroupConfig'
 import { trySetTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
@@ -280,17 +276,22 @@ async function seedTask(db: PersistenceDb, status: TaskStatus): Promise<string> 
 
 describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
   let uninstallAfterCommitPump: (() => void) | undefined
+  // RFC-535: one terminal watch per test (as one per daemon session) — no process-level registry to reset.
+  let watch = createTaskTerminalWatch()
+
+  beforeEach(() => {
+    watch = createTaskTerminalWatch()
+  })
 
   afterEach(() => {
     uninstallAfterCommitPump?.()
     uninstallAfterCommitPump = undefined
-    resetTaskTerminalWatchersForTests()
   })
 
   const installExecutionWatchPump = (db: PersistenceDb): void => {
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onExecutionWatch(_db, taskId, status) {
-        notifyTaskTerminal(taskId, status)
+        watch.notify(taskId, status)
       },
     })
   }
@@ -298,20 +299,19 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
   test('already-terminal task resolves on the immediate read', async () => {
     const db = harness.db
     const taskId = await seedTask(db, 'done')
-    expect(await watchTaskTerminal(db, taskId)).toEqual({ kind: 'terminal', status: 'done' })
+    expect(await watch.watch(db, taskId)).toEqual({ kind: 'terminal', status: 'done' })
   })
 
   test('missing row resolves `missing` (never hangs)', async () => {
     const db = harness.db
-    expect(await watchTaskTerminal(db, ulid())).toEqual({ kind: 'missing' })
+    expect(await watch.watch(db, ulid())).toEqual({ kind: 'missing' })
   })
 
   test('lifecycle write resolves watchers for failed (a status the RFC-202 hook ignores)', async () => {
-    resetTaskTerminalWatchersForTests()
     const db = harness.db
     installExecutionWatchPump(db)
     const taskId = await seedTask(db, 'running')
-    const watching = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
+    const watching = watch.watch(db, taskId, { pollMs: 60_000 })
     await Bun.sleep(10)
     await setTaskStatus({
       db,
@@ -325,12 +325,11 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
   })
 
   test('multicast: two watchers both resolve; interrupted counts as terminal', async () => {
-    resetTaskTerminalWatchersForTests()
     const db = harness.db
     installExecutionWatchPump(db)
     const taskId = await seedTask(db, 'running')
-    const a = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
-    const b = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
+    const a = watch.watch(db, taskId, { pollMs: 60_000 })
+    const b = watch.watch(db, taskId, { pollMs: 60_000 })
     await Bun.sleep(10)
     const won = await trySetTaskStatus({
       db,
@@ -346,10 +345,9 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
   })
 
   test('poll fallback: a row deleted after registration resolves `missing`', async () => {
-    resetTaskTerminalWatchersForTests()
     const db = harness.db
     const taskId = await seedTask(db, 'running')
-    const watching = watchTaskTerminal(db, taskId, { pollMs: 25 })
+    const watching = watch.watch(db, taskId, { pollMs: 25 })
     await Bun.sleep(10)
     const { tasks } = tablesOf(db)
     await db.delete(tasks).where(eq(tasks.id, taskId))
@@ -357,11 +355,10 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
   })
 
   test('abort signal resolves `aborted` and deregisters', async () => {
-    resetTaskTerminalWatchersForTests()
     const db = harness.db
     const taskId = await seedTask(db, 'running')
     const ctrl = new AbortController()
-    const watching = watchTaskTerminal(db, taskId, { signal: ctrl.signal, pollMs: 60_000 })
+    const watching = watch.watch(db, taskId, { signal: ctrl.signal, pollMs: 60_000 })
     await Bun.sleep(10)
     ctrl.abort()
     expect(await watching).toEqual({ kind: 'aborted' })

@@ -126,11 +126,12 @@ describe('RFC-456 —— 装配根与平台的边界', () => {
   })
 
   // RFC-533: the child-task budget's two process hooks became the session runtime's factory.
+  // RFC-535: the terminal watch's process-level notify became the session's watch factory.
   test('task-execution composition 给装配根的钩子与预算工厂就是 infrastructure 那一份', () => {
     expect(teComposition.createChildTaskBudgetRuntime).toBe(
       childBudget.createChildTaskBudgetRuntime,
     )
-    expect(teComposition.notifyTaskTerminal).toBe(executionWatch.notifyTaskTerminal)
+    expect(teComposition.createTaskTerminalWatch).toBe(executionWatch.createTaskTerminalWatch)
   })
 
   test('platform 的三个新文件不取 modules/', () => {

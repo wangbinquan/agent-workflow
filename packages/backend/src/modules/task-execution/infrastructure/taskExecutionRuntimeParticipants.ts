@@ -1,5 +1,6 @@
 import type { TaskExecutionPermitRegistry } from '../application/ports/taskExecutionPermits'
 import type { ChildTaskBudgetRuntime } from './childBudget'
+import type { TaskTerminalWatch } from './executionWatch'
 import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
@@ -116,6 +117,8 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly executionPermits: TaskExecutionPermitRegistry
   /** RFC-533: the session's child-task budget, built next to the permit registry. */
   readonly childTaskBudget: ChildTaskBudgetRuntime
+  /** RFC-535: the session's terminal watch, built next to its child-task budget. */
+  readonly terminalWatch: TaskTerminalWatch
   readonly processConcurrencyScope: object
   readonly log: TaskExecutionTopologyLogger
 }
@@ -166,6 +169,7 @@ export function createTaskExecutionRuntimeParticipants(
         childLaunch,
         executionPermits: input.executionPermits,
         childTaskBudget: input.childTaskBudget,
+        terminalWatch: input.terminalWatch,
         processConcurrencyScope: input.processConcurrencyScope,
         identityAccess: input.identityAccess,
         ...(input.codeHostConnections === undefined

@@ -62,7 +62,6 @@ import {
   startManagedWorkerDefinition,
 } from '@/platform/events/committed/workerDefinitions'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { notifyTaskTerminal } from '@/modules/task-execution/composition'
 import {
   composeDatabaseMigrationModule,
   createFileDatabaseConfiguration,
@@ -429,7 +428,8 @@ export async function composeDaemonSession(
           runtime.taskExecutionModules.childTaskBudget.notifyStatus(taskId, status)
         },
         async notifyExecutionWatch(taskId, status) {
-          notifyTaskTerminal(taskId, status)
+          // RFC-535: the session's own terminal watch.
+          runtime.taskExecutionModules.terminalWatch.notify(taskId, status)
         },
         async nudgeWorkspacePrune(taskId) {
           if (runtime.taskExecutionModules.isTaskActive(taskId)) return

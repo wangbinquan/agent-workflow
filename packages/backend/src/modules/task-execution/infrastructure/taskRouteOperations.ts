@@ -1931,7 +1931,7 @@ export async function syncWorkflow(
       // RFC-359 W8：这是两段式准入的**内部交棒**，不是任务真的中断了——第二段
       // `children.resume` 的 `admitResume` 马上把它 CAS 回 pending。不打这个标记，
       // 三个只看「状态值是不是终态」的消费者会在 PG 上把「同步进行中」谎报成
-      // 「任务已结束」（唤醒 watchTaskTerminal / 放掉子任务预算名额 / 发 task.done），
+      // 「任务已结束」（唤醒会话终态看门上的等待者 / 放掉子任务预算名额 / 发 task.done），
       // 而 SQLite 的一段式直接落 pending，一条都不会发生。
       continuationHandoff: true,
     })

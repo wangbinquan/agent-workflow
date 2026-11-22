@@ -1,6 +1,7 @@
 import {
   createChildTaskBudgetRuntime,
   createExecutionPermitRegistry,
+  createTaskTerminalWatch,
 } from '@/modules/task-execution/composition'
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import {
@@ -199,6 +200,9 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   // RFC-533: the session's child-task budget, next to its permit registry: the child-call nodes get it through the run
   // options; the session's lifecycle consumer and the settings hot apply call the same one.
   const childTaskBudget = createChildTaskBudgetRuntime(persistence.childBudget)
+  // RFC-535: the session's terminal watch, next to the budget: the child-call nodes (run options) and the action
+  // executions (`hostTasks`) wait on it; the session's committed lifecycle consumer notifies the same one.
+  const terminalWatch = createTaskTerminalWatch()
   const collaboration: CollaborationRouteContext = createCollaborationCommandContext({
     taskExecutionParticipants: closure.taskExecutionParticipants,
     content: input.content,
@@ -339,6 +343,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     runtime: {
       executionPermits,
       childTaskBudget,
+      terminalWatch,
       processConcurrencyScope: input.adapters.processConcurrencyScope,
       taskRunBinding: selection.taskRunBinding,
       workspaceExcludeProfilesFor: selection.workspaceExcludeProfilesFor,
@@ -431,6 +436,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   })
   const hostTasks = Object.freeze({
     db,
+    terminalWatch,
     launch: provider.routeLaunch.workflow,
     resolveActor: () => core.daemonActor('digital-employee-host-identity-not-admitted'),
     resourceAuthorityFor,
@@ -478,6 +484,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     taskRolePolicy: closure.taskRolePolicy,
     executionPermits,
     childTaskBudget,
+    terminalWatch,
     terminalWorkspacePrune: input.terminalWorkspacePrune,
     processConcurrencyScope: input.adapters.processConcurrencyScope,
     hostTasks,

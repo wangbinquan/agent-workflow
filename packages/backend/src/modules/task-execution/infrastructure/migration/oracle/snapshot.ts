@@ -9,7 +9,7 @@ import {
 } from './pickers'
 import { oracleRunRef, oracleSelectedRun, type OracleRunRow } from './rows'
 import { oracleShardSet } from './shards'
-import { bindOracleRow, bindOracleSnapshotScope, type OracleSnapshotScope } from './scope'
+import { bindOracleRow, scopeOracleSnapshotRows, type OracleSnapshotScope } from './scope'
 
 /** A projected row is legal only with an explicit comparison scope. */
 export interface OracleSnapshotRow extends Pick<OracleRunRow, 'id' | 'nodeId' | 'seq'> {
@@ -70,13 +70,13 @@ export function createRunSelectionOracleSnapshot(
     byTask.set(row.taskId, rows)
   }
   const byId = new Map(snapshot.map((row) => [row.id, row]))
-  for (const rows of byTask.values()) bindOracleSnapshotScope(rows, scope)
+  for (const rows of byTask.values()) scopeOracleSnapshotRows(rows, scope)
   const taskRows = (taskId: string): readonly OracleRunRow[] => {
     if (unboundTask) throw new Error('oracle-snapshot-field-missing:taskId')
     const existing = byTask.get(taskId)
     if (existing !== undefined) return existing
     const empty: OracleRunRow[] = []
-    bindOracleSnapshotScope(empty, scope)
+    scopeOracleSnapshotRows(empty, scope)
     byTask.set(taskId, empty)
     return empty
   }

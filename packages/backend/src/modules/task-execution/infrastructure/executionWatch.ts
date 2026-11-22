@@ -25,31 +25,6 @@ export type TerminalWatchResult =
 
 type Resolver = (r: TerminalWatchResult) => void
 
-const watchers = new Map<string, Set<Resolver>>()
-
-/**
- * Durable-consumer emission point. Never throws and never blocks the already
- * committed status write.
- */
-export function notifyTaskTerminal(taskId: string, to: TaskStatus): void {
-  if (!isTerminalTaskStatus(to)) return
-  const set = watchers.get(taskId)
-  if (set === undefined) return
-  watchers.delete(taskId)
-  for (const resolve of [...set]) {
-    try {
-      resolve({ kind: 'terminal', status: to })
-    } catch {
-      // resolver failures are the consumer's problem, not the writer's
-    }
-  }
-}
-
-/** Test-only: drop all registrations (fresh-module semantics without re-import). */
-export function resetTaskTerminalWatchersForTests(): void {
-  watchers.clear()
-}
-
 type LegacySqliteTaskStatusSource = Parameters<typeof createTaskExecutionReadModels>[0]
 
 function statusReader(
@@ -69,68 +44,100 @@ async function readTerminal(
 }
 
 /**
- * Resolve when `taskId` reaches any terminal status (or is deleted / the
- * caller aborts). Safe to call for already-terminal tasks — resolves on the
- * immediate read without registering anything.
+ * RFC-535: one terminal watch per daemon session (built next to its child-task budget). The child-call nodes and the
+ * action executions wait on it; the session's committed task-lifecycle consumer notifies it. There is no process-level
+ * registry — two sessions never wake each other's waiters.
  */
-export async function watchTaskTerminal(
-  source: TaskStatusProjectionReadModel | LegacySqliteTaskStatusSource,
-  taskId: string,
-  opts: { signal?: AbortSignal; pollMs?: number } = {},
-): Promise<TerminalWatchResult> {
-  const pollMs = opts.pollMs ?? 20_000
-  const reader = statusReader(source)
-  const immediate = await readTerminal(reader, taskId)
-  if (immediate !== null) return immediate
-  if (opts.signal?.aborted === true) return { kind: 'aborted' }
+export interface TaskTerminalWatch {
+  /**
+   * Durable-consumer emission point. Never throws and never blocks the already
+   * committed status write.
+   */
+  notify(taskId: string, to: TaskStatus): void
+  /**
+   * Resolve when `taskId` reaches any terminal status (or is deleted / the
+   * caller aborts). Safe to call for already-terminal tasks — resolves on the
+   * immediate read without registering anything.
+   */
+  watch(
+    source: TaskStatusProjectionReadModel | LegacySqliteTaskStatusSource,
+    taskId: string,
+    opts?: { signal?: AbortSignal; pollMs?: number },
+  ): Promise<TerminalWatchResult>
+}
 
-  return await new Promise<TerminalWatchResult>((resolve) => {
-    let settled = false
-    let cleanup = () => {}
-    const finish = (r: TerminalWatchResult): void => {
-      if (settled) return
-      settled = true
-      cleanup()
-      resolve(r)
-    }
-    const entry: Resolver = finish
-    let set = watchers.get(taskId)
-    if (set === undefined) {
-      set = new Set()
-      watchers.set(taskId, set)
-    }
-    set.add(entry)
-    const timer = startInterval({
-      owner: 'task-execution.execution-watch',
-      everyMs: pollMs,
-      tick: () => {
+export function createTaskTerminalWatch(): TaskTerminalWatch {
+  const watchers = new Map<string, Set<Resolver>>()
+  return Object.freeze<TaskTerminalWatch>({
+    notify(taskId, to) {
+      if (!isTerminalTaskStatus(to)) return
+      const set = watchers.get(taskId)
+      if (set === undefined) return
+      watchers.delete(taskId)
+      for (const resolve of [...set]) {
+        try {
+          resolve({ kind: 'terminal', status: to })
+        } catch {
+          // resolver failures are the consumer's problem, not the writer's
+        }
+      }
+    },
+    async watch(source, taskId, opts = {}) {
+      const pollMs = opts.pollMs ?? 20_000
+      const reader = statusReader(source)
+      const immediate = await readTerminal(reader, taskId)
+      if (immediate !== null) return immediate
+      if (opts.signal?.aborted === true) return { kind: 'aborted' }
+
+      return await new Promise<TerminalWatchResult>((resolve) => {
+        let settled = false
+        let cleanup = () => {}
+        const finish = (r: TerminalWatchResult): void => {
+          if (settled) return
+          settled = true
+          cleanup()
+          resolve(r)
+        }
+        const entry: Resolver = finish
+        let set = watchers.get(taskId)
+        if (set === undefined) {
+          set = new Set()
+          watchers.set(taskId, set)
+        }
+        set.add(entry)
+        const timer = startInterval({
+          owner: 'task-execution.execution-watch',
+          everyMs: pollMs,
+          tick: () => {
+            void readTerminal(reader, taskId)
+              .then((r) => {
+                if (r !== null) finish(r)
+              })
+              .catch(() => {
+                // transient read failure — next poll retries
+              })
+          },
+        })
+        const onAbort = (): void => finish({ kind: 'aborted' })
+        opts.signal?.addEventListener('abort', onAbort, { once: true })
+        cleanup = () => {
+          timer.stop()
+          opts.signal?.removeEventListener('abort', onAbort)
+          const s = watchers.get(taskId)
+          if (s !== undefined) {
+            s.delete(entry)
+            if (s.size === 0) watchers.delete(taskId)
+          }
+        }
+        // Second read AFTER registration: a transition that committed between the
+        // first read and `set.add(entry)` fired its notify into an empty set — this
+        // read closes that window deterministically instead of waiting for poll.
         void readTerminal(reader, taskId)
           .then((r) => {
             if (r !== null) finish(r)
           })
-          .catch(() => {
-            // transient read failure — next poll retries
-          })
-      },
-    })
-    const onAbort = (): void => finish({ kind: 'aborted' })
-    opts.signal?.addEventListener('abort', onAbort, { once: true })
-    cleanup = () => {
-      timer.stop()
-      opts.signal?.removeEventListener('abort', onAbort)
-      const s = watchers.get(taskId)
-      if (s !== undefined) {
-        s.delete(entry)
-        if (s.size === 0) watchers.delete(taskId)
-      }
-    }
-    // Second read AFTER registration: a transition that committed between the
-    // first read and `set.add(entry)` fired its notify into an empty set — this
-    // read closes that window deterministically instead of waiting for poll.
-    void readTerminal(reader, taskId)
-      .then((r) => {
-        if (r !== null) finish(r)
+          .catch(() => {})
       })
-      .catch(() => {})
+    },
   })
 }

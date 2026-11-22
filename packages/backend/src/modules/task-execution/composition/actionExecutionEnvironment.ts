@@ -24,7 +24,7 @@ import { localActionWorkspaceEntries } from '../infrastructure/local/localAction
 /** RFC-431: the standalone selection checks entries below a host action workspace. */
 export { localActionWorkspaceEntries }
 import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
-import { watchTaskTerminal } from '../infrastructure/executionWatch'
+import type { TaskTerminalWatch } from '../infrastructure/executionWatch'
 import { getExecutionOutcome } from '../infrastructure/executionOutcome'
 
 export interface ActionExecutionEnvironmentDependencies {
@@ -41,6 +41,8 @@ export interface ActionExecutionEnvironmentDependencies {
   readonly launch: RootTaskLaunchKernel
   readonly cancelTask: (taskId: string) => Promise<unknown>
   readonly readModels: Pick<TaskExecutionReadModels, 'executionOutcome' | 'statusProjection'>
+  /** RFC-535: the session's terminal watch (its committed lifecycle consumer wakes the waiting host task). */
+  readonly terminalWatch: Pick<TaskTerminalWatch, 'watch'>
   readonly agents: ActionExecutionEnvironment['agents']
   /**
    * 终态回调，同步 / 异步都可以：唯一的消费者 `watchTerminal` 用 `.then(() => notify(ref))`
@@ -76,6 +78,6 @@ export function createActionExecutionEnvironment(
     executionOutcome: (executionRef: string) =>
       getExecutionOutcome(deps.readModels.executionOutcome, executionRef),
     awaitTerminal: (executionRef: string, pollMs: number) =>
-      watchTaskTerminal(deps.readModels.statusProjection, executionRef, { pollMs }),
+      deps.terminalWatch.watch(deps.readModels.statusProjection, executionRef, { pollMs }),
   })
 }

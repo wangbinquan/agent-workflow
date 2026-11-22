@@ -303,7 +303,7 @@ export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = []
  * `retry-admission-target-status` 记在这里（SQLite 的重试准入 CAS 落 `pending`、PG 落
  * `interrupted`），理由写的是「用户可见收尾已由 `admitResume` 对齐」。实测把它推翻了：那个
  * `interrupted` 会以**终态事件**的形式广播出去，于是 PG 上多出两条真副作用——等在
- * `watchTaskTerminal` 上的父任务被假终态唤醒（RFC-243 的调用节点因此拿着一个从未发生的
+ * 终态看门（`TaskTerminalWatch.watch`）上的父任务被假终态唤醒（RFC-243 的调用节点因此拿着一个从未发生的
  * 「子任务已结束」往下走），以及子任务并发预算被放掉一个名额、窗口里多放行一个排队的调用。
  * 那不是可接受的实现差异，是同一操作在 PG 上产出用户可见的错结果。它已经被修掉
  * （`domain/taskLifecycleCommittedEvent.ts` 的 `continuationHandoff`：中转态照旧落库照旧投递，

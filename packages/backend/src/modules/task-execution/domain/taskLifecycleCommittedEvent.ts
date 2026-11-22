@@ -62,7 +62,7 @@ export type TaskLifecycleTransitionedPayloadV1 = Readonly<{
    * `assertResumeAdmission` 当场拒掉整条重试。
    *
    * 于是「状态值是终态」与「任务真的结束了」在这一跳上分了家，而三个消费者只认前者：
-   * 唤醒 `watchTaskTerminal`（RFC-243 的父任务就等在上面）、放掉子任务并发预算的名额、
+   * 唤醒会话的终态看门（RFC-243 的父任务就等在上面；RFC-535 起每会话一份）、放掉子任务并发预算的名额、
    * 广播一帧 `task.done`。三条都会在 PostgreSQL 上把「重试进行中」谎报成「任务已结束」，
    * 而 SQLite 一段式直接落 `pending`、一条都不会发生 —— 同一个操作两个引擎产出不同的
    * 用户可见结果。这个字段就是把这条分家显式化：**事件照旧落库、照旧投递**（durable 投递

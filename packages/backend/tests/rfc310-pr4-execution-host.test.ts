@@ -51,7 +51,10 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createAgent } from './helpers/model/resourceWrites'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
-import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import {
+  neverPruneTerminalWorkspaces,
+  createTaskTerminalWatch,
+} from '@/modules/task-execution/composition'
 
 setDefaultTimeout(120_000)
 
@@ -218,6 +221,8 @@ function runner(
     }),
     cancelTask: (taskId) => cancelViaEngine(h.db, taskId),
     readModels: h.persistence.reads,
+    // RFC-535: the session's terminal watch (polled here at 25ms; no committed-event pump notifies it).
+    terminalWatch: createTaskTerminalWatch(),
     ...(extra.onTerminal !== undefined ? { onTerminal: extra.onTerminal } : {}),
     terminalPollMs: 25,
   })

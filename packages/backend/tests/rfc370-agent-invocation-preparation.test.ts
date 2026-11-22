@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { createAgentInvocationPreparation } from '../src/modules/task-execution/application/agentInvocationPreparation'
 import { createLocalAgentInvocationPreparation } from '../src/modules/task-execution/infrastructure/local/agentInvocationPreparation'
 import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infrastructure/local/agentProtocol'
-import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
+import { createNativeAgentMaterialReferences } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import {
   createLocalAgentMaterialEvidence,
   type NativeAgentMaterialEvidenceHooks,
@@ -24,6 +24,9 @@ import type {
 import type { AgentMaterialWorkspace } from '../src/modules/runtime-management/application/ports/agentMaterialWorkspace'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createLogger } from '../src/util/log'
+
+// RFC-535: a material definition owns its reference table; these fixtures stand in for one definition.
+const materialReferences = createNativeAgentMaterialReferences()
 
 function unavailable(): never {
   throw new Error('unselected physical implementation')
@@ -109,7 +112,7 @@ describe('RFC-370 selected invocation preparation', () => {
       },
     }
     const compiledMaterial = {
-      ...material(bindNativeAgentMaterialReference(nativePlan)),
+      ...material(materialReferences.reference(nativePlan)),
       declared: nativePlan.declared,
     }
     const nativeMaterial = {
@@ -195,7 +198,7 @@ describe('RFC-370 selected invocation preparation', () => {
         return createLocalAgentMaterialEvidence({ hooks, scope })
       }
       materialReference(plan: object) {
-        return bindNativeAgentMaterialReference(plan)
+        return materialReferences.reference(plan)
       }
       get cleanupReceiver(): 'material' {
         calls.push('cleanupReceiver')
@@ -327,7 +330,7 @@ describe('RFC-370 selected invocation preparation', () => {
       env: {},
       declared: emptyDeclaredManifest(),
     }
-    const compiledMaterial = material(bindNativeAgentMaterialReference(nativePlan))
+    const compiledMaterial = material(materialReferences.reference(nativePlan))
     class SelectedScope {
       #worktreePath = '/selected-working'
       runContent = unavailable
@@ -356,7 +359,7 @@ describe('RFC-370 selected invocation preparation', () => {
         protocol: bindNativeAgentProtocol(getRuntimeDriver('opencode')),
         workspace,
         evidence: (scope) => createLocalAgentMaterialEvidence({ hooks, scope }),
-        materialReference: (plan) => bindNativeAgentMaterialReference(plan),
+        materialReference: (plan) => materialReferences.reference(plan),
         workingDirectory: unavailable,
         cleanupReceiver: 'material',
         runNative: unavailable,
