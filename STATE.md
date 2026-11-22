@@ -1,4 +1,18 @@
-## 2026-11-21 RFC-531 部署选择合同的槽位改为语义类型、镜像与子仓刷新由 profile 选择（In Progress；`design/RFC-531-deployment-selection-semantic-slots/`）
+## 2026-11-21 RFC-532 数据库安装由部署选择给出（In Progress；`design/RFC-532-deployment-database-installation-selection/`）
+
+- **来由**：S12 第 1 项余项的另一半。部署选择合同的 `databaseInstallation` 可空：托管给 release 的安装端口，单机给 `null`；daemon 的启动程序据此
+  在打开密钥箱之前跑本机 epoch 安装路径（自动升级子进程、回执、指引与待定恢复），准备数据库时按它选本机文件准备或安装端口——单机的默认行为
+  写在 daemon 里。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按
+  授权记为已批准，不派 Codex。
+- **范围**：`databaseInstallation` 必填，类型是 system-operations 的 `DaemonDatabaseInstallation`（`admit` / `prepare`）；单机给本机安装（本机 epoch
+  路径原样搬入，升级子进程由单机 profile 交入；准备走本机文件准备），托管给按 release 安装端口的安装（`admit` 什么都不做）；daemon 删去两处
+  `null` 判断与本机 epoch 路径的导入；新增 RFC-532 用例，钉住旧形状的锁随改。
+- **不做**：CLI 迁移命令自己的 epoch 判定；按模块分组为适配器集合（design §9.3 的终态）；S12 第 4 项；任何用户可见的行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-531 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-21 RFC-531 部署选择合同的槽位改为语义类型、镜像与子仓刷新由 profile 选择（Done；`design/RFC-531-deployment-selection-semantic-slots/`）
 
 - **来由**：S12 第 6 项与第 1 项余项的一半。部署选择合同有 7 个槽位以本地工厂的签名定型（`typeof composeLocal… / create…`），托管实现与托管模块里的
   工厂也照着本地签名写；可空的 `repositoryRemote` 让 daemon 在两处按它是否为 `null` 选本机实现（HTTP 装配的镜像、子仓刷新句柄）。用户
@@ -20,6 +34,9 @@
   Promise）：刷新交冻结的同一份，镜像单列“按会话构造”一组，`rfc394` 加托管镜像经会话存储读取的断言，修正后涉及的 28 个文件全过；其余红的
   与对照同时 A/B，两边都在 PostgreSQL 一支撞时限（SQLite 一支的三条对照同名同错），`rfc321` 只因导出仓库没有 git 历史；架构报告跨上下文导入
   7,522 → 7,531（都是具名选择类型的类型导入）、计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`ac9ebf7ba`（38 个文件；父提交是 `da7f0e1a5`）。
+- **CI**：实现提交主 CI 70 / 70，windows-platform 与 maintenance-soak-nightly 通过；落档提交 `da7f0e1a5` 70 / 70。都未重跑。
+- **下一步**：S12 第 1 项余项的另一半（数据库安装由部署选择给出，RFC-532）；按模块分组为适配器集合；第 4 项。
 
 ## 2026-11-21 RFC-530 任务执行模块不在 import 期构造（Done；`design/RFC-530-task-execution-module-construction/`）
 

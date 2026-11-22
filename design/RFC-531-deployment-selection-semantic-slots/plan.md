@@ -19,7 +19,7 @@
 - [x] AC-1 合同里没有 `typeof` 定型的槽位；托管工厂与 daemon 装配不按本地工厂签名定型
 - [x] AC-2 `repositoryRemote` 换成必填的镜像与镜像刷新；daemon 不再按 `null` 选；两种 profile 的镜像与刷新与此前相同
 - [x] AC-3 计数不升；锁随改；新增 RFC-531 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -58,7 +58,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `ac9ebf7ba`（实现，父提交是 `da7f0e1a5`）：exact SHA 主 CI run 44972624716 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与
+  `CI required`）；同一提交触发的 windows-platform（run 44972624702）与 maintenance-soak-nightly（run 44972624697）通过。未重跑。
+- 本 RFC 的落档提交 `da7f0e1a5`（只改文档；同一提交记下 RFC-530 转 Done）：主 CI run 44968990439 的 70 个 job 第 1 次全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
