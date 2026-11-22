@@ -35,6 +35,7 @@ import type { TaskOperationConfigurationQueries } from '../application/ports/tas
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
 import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
+import type { ChildTaskBudgetRuntime } from '../infrastructure/childBudget'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 
 export interface RunTaskOptions {
@@ -256,6 +257,8 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly workgroupTurns: WorkgroupTurnsOperations
   readonly childLaunch: ChildExecutionLaunchOperations
   readonly executionPermits: TaskExecutionPermitRegistry
+  /** RFC-533: the session's child-task budget (active child cap and call depth, with their live values). */
+  readonly childTaskBudget: ChildTaskBudgetRuntime
   readonly processConcurrencyScope: object
   readonly identityAccess: NonNullable<RunTaskOptions['identityAccess']>
   readonly dynamicWorkflow: NonNullable<RunTaskOptions['dynamicWorkflow']>

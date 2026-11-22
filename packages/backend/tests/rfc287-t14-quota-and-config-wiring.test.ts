@@ -5,31 +5,27 @@
 // 这类缺陷在功能测试里**永远表现为通过**：接口返回 200、值也写进了库，只有真去看
 // 「排队的人有没有被放行」才看得见。
 
-import { describe, expect, test, beforeEach } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
-import {
-  ensureChildTaskBudget,
-  setChildTaskBudgetCapacity,
-  resetChildTaskBudgetForTests,
-} from '@/modules/task-execution/infrastructure/childBudget'
+import { createChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
+
+// RFC-533: the budget is the session's — each case builds its own runtime (no process singleton to reset); the settings
+// hot apply is the runtime's `applyLimits`.
+const limits = (maxActiveChildTasks: number) => ({ maxActiveChildTasks, maxInvocationDepth: 3 })
 
 describeEachProvider(
   'RFC-287 T14 — 调大子任务配额必须立刻唤醒已排队者',
   (harness) => {
-    beforeEach(() => {
-      resetChildTaskBudgetForTests()
-    })
-
     // 修复前：`setChildTaskBudgetCapacity` 只改变量、不重扫等待队列。于是把上限从 1
     // 调到 2 对**已经在排队**的调用毫无作用——它得等某个子任务恰好发生生命周期变化
     // 才被顺带放行；而这期间**新来**的调用反而能直接拿到空出来的名额。等待者饿死、
     // 插队者得利，公平性正好反了。
     test('容量 1→2：排队中的 acquire 立刻被放行，不必等生命周期事件', async () => {
-      const db = harness.db
-      const budget = await ensureChildTaskBudget(db, () => 1)
+      const runtime = createChildTaskBudgetRuntime(harness.db)
+      const budget = await runtime.ensure(() => 1)
 
       // 占满唯一名额。
       const first = await budget.acquire([])
@@ -46,7 +42,7 @@ describeEachProvider(
       expect(settled).toBe(false)
 
       // 管理员在设置页把上限调到 2。
-      setChildTaskBudgetCapacity(2)
+      runtime.applyLimits(limits(2))
 
       // **不**制造任何子任务生命周期事件——单靠这次配置变更就该放行。
       const handle = await Promise.race([
@@ -58,8 +54,8 @@ describeEachProvider(
     })
 
     test('调小容量不放行任何人（scan 无副作用，方向不必区分）', async () => {
-      const db = harness.db
-      const budget = await ensureChildTaskBudget(db, () => 1)
+      const runtime = createChildTaskBudgetRuntime(harness.db)
+      const budget = await runtime.ensure(() => 1)
       const first = await budget.acquire([])
       expect(first).not.toBeNull()
 
@@ -69,23 +65,20 @@ describeEachProvider(
       })
       await new Promise((r) => setTimeout(r, 30))
 
-      setChildTaskBudgetCapacity(1) // 同值
+      runtime.applyLimits(limits(1)) // 同值
       await new Promise((r) => setTimeout(r, 50))
       expect(settled).toBe(false)
     })
 
-    // 单例的 `counted` 集合是从**某一个库**重建出来的；拿它去服务另一个库，等于用甲
-    // 的在跑数去限乙的并发。生产里 daemon 只有一个库，但并行用不同库的测试会静默
-    // 串扰——那种串扰表现为「另一个用例的配额莫名其妙变了」，极难定位。
-    test('换 DbClient 时单例必须重建，不得继续绑在旧库上', async () => {
-      const dbA = harness.db
-      const dbB = harness.database(1).db
-      const a = await ensureChildTaskBudget(dbA, () => 1)
-      const b = await ensureChildTaskBudget(dbB, () => 1)
+    // 预算的 `counted` 集合是从**某一个库**重建出来的；拿它去服务另一个库，等于用甲
+    // 的在跑数去限乙的并发。RFC-533：每份运行期只服务一个会话的库（会话换库时整个
+    // task-execution 装配重建），两份运行期互不相通。
+    test('两个库各一份运行期，预算不串；同一份再取复用', async () => {
+      const a = await createChildTaskBudgetRuntime(harness.db).ensure(() => 1)
+      const runtimeB = createChildTaskBudgetRuntime(harness.database(1).db)
+      const b = await runtimeB.ensure(() => 1)
       expect(b).not.toBe(a)
-      // 同一个库再取则复用（单例语义本身没被破坏）。
-      const b2 = await ensureChildTaskBudget(dbB, () => 1)
-      expect(b2).toBe(b)
+      expect(await runtimeB.ensure(() => 1)).toBe(b)
     })
   },
   { databaseCount: 2 },

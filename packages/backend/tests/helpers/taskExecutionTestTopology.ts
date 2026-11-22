@@ -1,4 +1,5 @@
 import { testExecutionPermits } from './executionPermits'
+import { testChildTaskBudget } from './childTaskBudget'
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
@@ -177,6 +178,7 @@ export function composeTaskExecutionTestRuntime(
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
       memorySnapshots: composeTaskMemorySnapshotPort(),
+      childTaskBudget: testChildTaskBudget(persistence.childBudget),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: (binding) =>
@@ -383,6 +385,7 @@ export function runTaskWithRealTestTopology(
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
       memorySnapshots: composeTaskMemorySnapshotPort(),
+      childTaskBudget: testChildTaskBudget(persistence.childBudget),
       historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: (binding) =>
@@ -511,6 +514,7 @@ export function runTaskWithRealTestTopology(
         }),
       dynamicWorkflow,
       executionPermits: options.executionPermits ?? testExecutionPermits,
+      childTaskBudget: testChildTaskBudget(persistence.childBudget),
       processConcurrencyScope: options.processConcurrencyScope ?? options.db,
       repositoryPublicationTransport,
       isolationWorkspaces,

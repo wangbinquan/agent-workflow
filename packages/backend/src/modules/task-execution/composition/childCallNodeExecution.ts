@@ -1,10 +1,5 @@
 import { ulid } from 'ulid'
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
-import {
-  currentMaxInvocationDepth,
-  ensureChildTaskBudget,
-  registerKnownChildTask,
-} from '../infrastructure/childBudget'
 import { watchTaskTerminal } from '../infrastructure/executionWatch'
 import { getExecutionOutcome } from '../infrastructure/executionOutcome'
 import type { TaskMechanicsState } from './taskMechanicsState'
@@ -129,15 +124,14 @@ export function createChildCallNodeExecutionPorts(
       childClosureSubset: (refClosureJson, childDefinition, childWorkflowId) =>
         childClosureSubset(refClosureJson, childDefinition, childWorkflowId),
     },
+    // RFC-533: the session's child-task budget (built with the session's Task Execution assembly).
     budget: {
-      maxInvocationDepth: () => currentMaxInvocationDepth(state.opts.maxInvocationDepth),
+      maxInvocationDepth: () =>
+        state.opts.childTaskBudget.maxInvocationDepth(state.opts.maxInvocationDepth),
       ensureBudget: () =>
-        ensureChildTaskBudget(
-          state.opts.persistence.childBudget,
-          () => state.opts.maxActiveChildTasks ?? 8,
-        ),
+        state.opts.childTaskBudget.ensure(() => state.opts.maxActiveChildTasks ?? 8),
       parentTaskId: (taskId) => state.opts.persistence.childBudget.parentTaskId(taskId),
-      registerKnownChildTask,
+      registerKnownChildTask: (taskId) => state.opts.childTaskBudget.registerKnownChild(taskId),
     },
     children: {
       newChildTaskId: () => ulid(),

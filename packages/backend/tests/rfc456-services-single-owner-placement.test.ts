@@ -125,9 +125,11 @@ describe('RFC-456 —— 装配根与平台的边界', () => {
     ).toBe(false)
   })
 
-  test('task-execution composition 给装配根的三个钩子就是 infrastructure 那一份', () => {
-    expect(teComposition.setChildTaskBudgetCapacity).toBe(childBudget.setChildTaskBudgetCapacity)
-    expect(teComposition.notifyChildBudgetTaskStatus).toBe(childBudget.notifyChildBudgetTaskStatus)
+  // RFC-533: the child-task budget's two process hooks became the session runtime's factory.
+  test('task-execution composition 给装配根的钩子与预算工厂就是 infrastructure 那一份', () => {
+    expect(teComposition.createChildTaskBudgetRuntime).toBe(
+      childBudget.createChildTaskBudgetRuntime,
+    )
     expect(teComposition.notifyTaskTerminal).toBe(executionWatch.notifyTaskTerminal)
   })
 

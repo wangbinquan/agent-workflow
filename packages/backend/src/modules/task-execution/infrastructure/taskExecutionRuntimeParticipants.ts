@@ -1,4 +1,5 @@
 import type { TaskExecutionPermitRegistry } from '../application/ports/taskExecutionPermits'
+import type { ChildTaskBudgetRuntime } from './childBudget'
 import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
@@ -113,6 +114,8 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly codeHostRequests?: CodeHostRequestPort
   /** 进程信号量共享用的守护进程级身份。 */
   readonly executionPermits: TaskExecutionPermitRegistry
+  /** RFC-533: the session's child-task budget, built next to the permit registry. */
+  readonly childTaskBudget: ChildTaskBudgetRuntime
   readonly processConcurrencyScope: object
   readonly log: TaskExecutionTopologyLogger
 }
@@ -162,6 +165,7 @@ export function createTaskExecutionRuntimeParticipants(
         workgroupTurns: input.workgroupTurns,
         childLaunch,
         executionPermits: input.executionPermits,
+        childTaskBudget: input.childTaskBudget,
         processConcurrencyScope: input.processConcurrencyScope,
         identityAccess: input.identityAccess,
         ...(input.codeHostConnections === undefined

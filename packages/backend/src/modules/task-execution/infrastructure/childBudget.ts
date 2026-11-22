@@ -246,121 +246,95 @@ function abortError(): Error {
 }
 
 // ---------------------------------------------------------------------------
-// Daemon singleton — lazily initialized by the first consumer (PR-3 call
-// nodes); the lifecycle emission below no-ops until then, so tasks that never
-// use call nodes pay zero bookkeeping cost.
+// RFC-533: the session's budget runtime. Each daemon session builds one when it composes Task Execution (next to its
+// execution permit registry) and hands it to the child-call nodes through the run options; the session's lifecycle
+// consumer and the settings hot apply call the same one. The budget itself is still built lazily by the first consumer
+// (PR-3 call nodes) — status emission no-ops until then, so tasks that never use call nodes pay zero bookkeeping cost.
 // ---------------------------------------------------------------------------
 
-let singleton: ChildTaskBudget | null = null
-/** Cache: taskId → is a child task (avoids a DB read per status transition). */
-const childness = new Map<string, boolean>()
-
-/**
- * daemon 级的实时容量。RFC-287 T10（G4-C9）修复：**不能让容量凝固在第一个调用者
- * 的闭包里**。原实现只在 singleton 为 null 时用调用方传来的 `capacity()`，之后
- * 无论配置怎么改、后续任务传什么，读到的永远是**首个**启动任务捕获的 opts；于是
- * 「设置页把同时活跃子任务数从 8 调到 2」在 daemon 重启前根本不生效。
- *
- * 现在容量是一个模块级的 live 值：`setChildTaskBudgetCapacity` 由 PUT /api/config
- * 推入（与三个节点池的热应用同一个线性化点），任务启动只在**尚未有值时**播种。
- */
-let liveCapacity: number | null = null
-
-/** PUT /api/config 的热应用入口（与 resizeAllNodePools 同处调用）。 */
-export function setChildTaskBudgetCapacity(capacity: number): void {
-  liveCapacity = capacity
-  // 改完必须立刻重扫等待队列——只改变量的话，调大上限对**已排队**的 waiter 无效，
-  // 它们要等某个子任务恰好发生生命周期变化才被顺带放行，而这期间新来的调用反而
-  // 能直接抢走空出来的名额（T14 实现门）。调小时 scan 不会放行任何人，无副作用，
-  // 所以不必区分方向。
-  singleton?.onCapacityChanged()
+export interface ChildTaskBudgetLimits {
+  readonly maxActiveChildTasks: number
+  readonly maxInvocationDepth: number
 }
 
-/** 单例当前绑定的 provider query identity——换 provider 时必须重建。 */
-let singletonSource: object | null = null
+export interface ChildTaskBudgetRuntime {
+  /** The session's budget: seeded with the caller's capacity and rebuilt from the database on first use. */
+  ensure(seedCapacity: () => number): Promise<ChildTaskBudget>
+  /** Lifecycle emission (next to the execution watch); a no-op until the budget exists. */
+  notifyStatus(taskId: string, to: TaskStatus): void
+  /** Register a freshly-inserted child task so its transitions need no database read. */
+  registerKnownChild(taskId: string): void
+  /** Settings saved: the live capacity (re-scanning queued waiters) and the live call depth. */
+  applyLimits(limits: ChildTaskBudgetLimits): void
+  /**
+   * RFC-287 G4 / C9 — the only read point of the call-depth judgment: once settings were saved the live value wins,
+   * else the caller's frozen value, else 3.
+   */
+  maxInvocationDepth(frozen: number | undefined): number
+}
 
-export async function ensureChildTaskBudget(
+export function createChildTaskBudgetRuntime(
   source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
-  capacity: () => number,
-): Promise<ChildTaskBudget> {
-  // 冷启动播种：daemon 起来后第一个走到这里的任务用自己的 opts 定初值；之后一律
-  // 以 live 值为准（配置改动经 setChildTaskBudgetCapacity 落进来）。
-  if (liveCapacity === null) liveCapacity = capacity()
-  // 换了 DbClient 就必须重建：单例的 `counted` 集合是从**某一个库**重建出来的，
-  // 拿着它去服务另一个库等于用甲的在跑数去限乙的并发。生产里 daemon 只有一个库，
-  // 但并行用不同库的测试会静默串扰——那种串扰表现为「另一个用例的配额莫名其妙
-  // 变了」，极难定位。（T14 实现门 P2。）
-  if (singleton !== null && singletonSource !== source) singleton = null
-  if (singleton === null) {
-    singleton = new ChildTaskBudget(childBudgetQueries(source), () => liveCapacity ?? capacity())
-    singletonSource = source
-    await singleton.rebuildFromDb()
-  }
-  return singleton
-}
-
-/** Register a freshly-inserted child task so transitions need no DB read. */
-export function registerKnownChildTask(taskId: string): void {
-  childness.set(taskId, true)
-}
-
-/** Test-only: drop the singleton + childness cache. */
-export function resetChildTaskBudgetForTests(): void {
-  singleton = null
-  singletonSource = null
-  liveCapacity = null
-  childness.clear()
-}
-
-/**
- * Lifecycle emission hook (called next to notifyTaskTerminal). Cheap no-op
- * until the budget singleton exists; unknown tasks are resolved through the
- * childness cache and, when unknown, a single lazy DB read.
- */
-export function notifyChildBudgetTaskStatus(
-  source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
-  taskId: string,
-  to: TaskStatus,
-): void {
-  const budget = singleton
-  if (budget === null) return
-  const known = childness.get(taskId)
-  if (known === false) return
-  if (known === true) {
-    budget.onChildTaskStatus(taskId, to)
-    return
-  }
-  void childBudgetQueries(source)
-    .isChildTask(taskId)
-    .then((isChild) => {
-      childness.set(taskId, isChild)
-      if (isChild) budget.onChildTaskStatus(taskId, to)
-    })
-    .catch(() => {
-      // transient read failure — the next transition (or poll) re-resolves
-    })
-}
-
-/**
- * RFC-287 G4 / C9 —— **调用链最大深度**的即时生效值。
- *
- * 为什么不能读 `opts.maxInvocationDepth`（五轮门终局对账实测）：`opts` 在 `runTask`
- * 一次性冻结，且该键在 `INHERITABLE_RUN_CONFIG_KEYS` 里 ⇒ 子任务继承根任务启动那一刻
- * 的旧值。实效是「下次**根任务**启动才生效」——而这恰恰是 design §10.9 明文作废的那条
- * 退路，UI 文案还写着「保存后立即生效」，属于「改了不生效的设置项比没有更误导」。
- * 与旁边三个池 + 子任务配额同一个线性化点（`routes/config.ts` 的保存处）热应用。
- */
-let liveMaxInvocationDepth: number | null = null
-
-/** 保存设置时热应用（`routes/config.ts` 与三个池、子任务配额同一处调用）。 */
-export function setMaxInvocationDepth(v: number): void {
-  liveMaxInvocationDepth = v
-}
-
-/**
- * 深度判据的**唯一**读点。`frozen` 是调用方冻结的那份（保留它只为让未注入热值的
- * 测试/内联路径逐字保持旧行为）；一旦保存过设置，热值优先。
- */
-export function currentMaxInvocationDepth(frozen: number | undefined): number {
-  return liveMaxInvocationDepth ?? frozen ?? 3
+): ChildTaskBudgetRuntime {
+  const queries = childBudgetQueries(source)
+  let budget: ChildTaskBudget | null = null
+  /** Cache: taskId → is a child task (avoids a DB read per status transition). */
+  const childness = new Map<string, boolean>()
+  /**
+   * The session's live capacity. RFC-287 T10 (G4-C9): the capacity must not freeze in the first caller's closure —
+   * the settings hot apply pushes it (the same linearization point as the node pools); a task's start only seeds it
+   * while it is still unset.
+   */
+  let liveCapacity: number | null = null
+  /**
+   * RFC-287 G4 / C9 — the live call depth. A task's `opts` freeze at `runTask` and children inherit the root's value,
+   * so without a live value a saved depth would only apply from the next root task (which design §10.9 rules out and the
+   * settings page says it does not). RFC-533: the hot apply pushes it again (lost since 2026-09-01).
+   */
+  let liveMaxInvocationDepth: number | null = null
+  return Object.freeze({
+    async ensure(seedCapacity: () => number): Promise<ChildTaskBudget> {
+      // Cold-start seeding: the first task to get here sets the initial value; from then on the live value rules.
+      if (liveCapacity === null) liveCapacity = seedCapacity()
+      if (budget !== null) return budget
+      // As before: the budget is visible to concurrent callers and to status emission while it rebuilds.
+      const created = new ChildTaskBudget(queries, () => liveCapacity ?? seedCapacity())
+      budget = created
+      await created.rebuildFromDb()
+      return created
+    },
+    notifyStatus(taskId: string, to: TaskStatus): void {
+      const current = budget
+      if (current === null) return
+      const known = childness.get(taskId)
+      if (known === false) return
+      if (known === true) {
+        current.onChildTaskStatus(taskId, to)
+        return
+      }
+      void queries
+        .isChildTask(taskId)
+        .then((isChild) => {
+          childness.set(taskId, isChild)
+          if (isChild) current.onChildTaskStatus(taskId, to)
+        })
+        .catch(() => {
+          // transient read failure — the next transition (or poll) re-resolves
+        })
+    },
+    registerKnownChild(taskId: string): void {
+      childness.set(taskId, true)
+    },
+    applyLimits(limits: ChildTaskBudgetLimits): void {
+      liveCapacity = limits.maxActiveChildTasks
+      liveMaxInvocationDepth = limits.maxInvocationDepth
+      // Re-scan the wait set at once: changing only the value would leave already-queued waiters behind a raised cap
+      // until some child happened to change state, while new callers could take the freed units (T14 gate). Lowering
+      // grants nobody, so the direction does not matter.
+      budget?.onCapacityChanged()
+    },
+    maxInvocationDepth(frozen: number | undefined): number {
+      return liveMaxInvocationDepth ?? frozen ?? 3
+    },
+  })
 }

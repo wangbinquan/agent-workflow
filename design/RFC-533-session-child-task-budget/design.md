@@ -27,6 +27,10 @@
 `childBudget.ts` 删去全部模块级状态，导出工厂：
 
 ```ts
+export interface ChildTaskBudgetLimits {
+  readonly maxActiveChildTasks: number
+  readonly maxInvocationDepth: number
+}
 export interface ChildTaskBudgetRuntime {
   /** 会话的预算；第一次用到子调用时以调用方的容量播种并从库重建（不用子调用的任务零开销）。 */
   ensure(seedCapacity: () => number): Promise<ChildTaskBudget>
@@ -34,15 +38,13 @@ export interface ChildTaskBudgetRuntime {
   notifyStatus(taskId: string, to: TaskStatus): void
   registerKnownChild(taskId: string): void
   /** 保存设置的热应用：实时容量（并重扫等待队列）与实时调用链深度。 */
-  applyLimits(limits: {
-    readonly maxActiveChildTasks: number
-    readonly maxInvocationDepth: number
-  }): void
+  applyLimits(limits: ChildTaskBudgetLimits): void
   /** 深度判据的唯一读点：保存过设置就取实时值，否则取冻结值，再否则 3。 */
   maxInvocationDepth(frozen: number | undefined): number
 }
+/** 入参与 `ChildTaskBudget` 的构造参数相同：查询对象，或用例沿用的 SQLite 句柄。 */
 export function createChildTaskBudgetRuntime(
-  queries: ChildTaskBudgetQueries,
+  source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
 ): ChildTaskBudgetRuntime
 ```
 

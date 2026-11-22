@@ -10,6 +10,7 @@ import type {
   ChildCallWorkgroupLaunch,
 } from '@/modules/task-execution/application/ports/childCallNodeExecution'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
+import { createChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
 import { NotFoundError } from '@/util/errors'
 
 interface Recorded {
@@ -42,6 +43,12 @@ function fixture() {
     isTaskActive: (taskId: string) => taskId === 'active-child',
   }
   const executionContext = { sentinel: 'execution-context' }
+  // RFC-533: the session's child-task budget; the depth gate reads it before the frozen option.
+  const childTaskBudget = createChildTaskBudgetRuntime({
+    listCountedChildTaskIds: async () => [],
+    isChildTask: async () => false,
+    parentTaskId: async () => null,
+  })
   const raw = {
     taskId: 'parent-task',
     task: {
@@ -62,6 +69,7 @@ function fixture() {
       appHome: '/app-home',
       maxConcurrentNodes: 3,
       maxInvocationDepth: 5,
+      childTaskBudget,
       executionContext,
       childLaunch: {
         async launchWorkflow(request: Record<string, unknown>) {
@@ -217,6 +225,9 @@ test('task facts are read on use with the historical fallbacks; ledger patches c
   expect(ports.task.refClosureJson).toBe(raw.task.refClosureJson)
   expect(ports.task.workflowAnchorId).toBe('wf-parent')
   expect(ports.budget.maxInvocationDepth()).toBe(5)
+  // RFC-533: a settings hot apply on the session's budget wins over the task's frozen depth.
+  raw.opts.childTaskBudget.applyLimits({ maxActiveChildTasks: 8, maxInvocationDepth: 7 })
+  expect(ports.budget.maxInvocationDepth()).toBe(7)
 
   await ports.ledger.patch({ nodeRunId: 'call-run', values: { identity: { childTaskId: 'c' } } })
   expect(calls.patch).toEqual([

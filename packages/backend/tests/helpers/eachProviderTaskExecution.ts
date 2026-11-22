@@ -1,4 +1,5 @@
 import { testExecutionPermits } from './executionPermits'
+import { testChildTaskBudget } from './childTaskBudget'
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
@@ -368,6 +369,7 @@ export async function createEachProviderTaskExecution(
           memorySnapshots: composeTaskMemorySnapshotPort(),
           taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
           executionPermits: testExecutionPermits,
+          childTaskBudget: testChildTaskBudget(persistence.childBudget),
           processConcurrencyScope: sqlite,
           ...runBinding,
           workspaceExcludeProfilesFor,
@@ -580,6 +582,7 @@ export async function createEachProviderTaskExecution(
         codeHostConnections: unusedCapability('code-host connection'),
         codeHostRequests: unusedCapability('code-host requests'),
         executionPermits: testExecutionPermits,
+        childTaskBudget: testChildTaskBudget(persistence.childBudget),
         processConcurrencyScope: {},
       },
       routeLaunch: {

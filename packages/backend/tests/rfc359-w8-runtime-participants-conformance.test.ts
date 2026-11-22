@@ -1,4 +1,5 @@
 import { testExecutionPermits } from './helpers/executionPermits'
+import { createChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -175,6 +176,8 @@ function sharedInput(
 > {
   return {
     executionPermits: testExecutionPermits,
+    // RFC-533: the session's child-task budget is a direct dependency the factory only hands on.
+    childTaskBudget: createChildTaskBudgetRuntime(db),
     memorySnapshots: composeTaskMemorySnapshotPort(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     db,

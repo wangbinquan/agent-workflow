@@ -1,4 +1,5 @@
 import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/application/ports/taskExecutionPermits'
+import type { ChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
 // RFC-266 —— 并发参数保存即生效（含运行中任务与排队中节点）。
 //
 // 为什么这些测试存在：用户报「最大并发节点数改了也不立即生效」。核实属实——
@@ -36,6 +37,8 @@ afterEach(() => {
 
 interface Harness {
   executionPermits: TaskExecutionPermitRegistry
+  /** RFC-533: the session's child-task budget. */
+  childTaskBudget: ChildTaskBudgetRuntime
   db: PersistenceDb
   /**
    * 池的 scope key **按 provider 不同**（SQLite 用 db，PG 用 provider runtime），所以判据不能
@@ -54,13 +57,20 @@ async function harness(scope: ProviderHttpApplicationScope, _slug: string): Prom
   await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
   // 判据要**回读配置文件**证明 PUT 真的落盘了，所以 configPath 必须是应用实际读写的那一个
   // ——作用域现建的那份，不是用例自建的。
-  const { app, appHome, executionPermits, processConcurrencyScope: poolScope } = await scope.open()
+  const {
+    app,
+    appHome,
+    executionPermits,
+    childTaskBudget,
+    processConcurrencyScope: poolScope,
+  } = await scope.open()
   const configPath = join(appHome, 'config.json')
   loadConfig(configPath)
   return {
     db,
     poolScope,
     executionPermits,
+    childTaskBudget,
     configPath,
     put: async (patch) =>
       await app.request('/api/config', {
@@ -96,6 +106,33 @@ describeEachProviderHttpApplication(
       expect(h.executionPermits.getNodePoolSemaphore(h.poolScope, 'agent', 9)).toBe(agent)
       expect(h.executionPermits.getNodePoolSemaphore(h.poolScope, 'script', 2)).toBe(script)
       expect(loadConfig(h.configPath).maxConcurrentScriptNodes).toBe(2)
+    })
+
+    // RFC-533 regression: the call depth's hot apply was dropped on 2026-09-01 (`d38ada9ed` removed the
+    // `setMaxInvocationDepth(updated.maxInvocationDepth)` call while the settings page still says "applies on save"); a
+    // saved depth only applied from the next root task. The save now hands the depth and the child cap to the session's
+    // budget with the node pools.
+    test('PUT /api/config applies the call depth and the child cap to the session budget', async () => {
+      const h = await harness(scope, 'child-budget')
+      expect(h.childTaskBudget.maxInvocationDepth(3)).toBe(3)
+      const res = await h.put({ maxInvocationDepth: 5, maxActiveChildTasks: 2 })
+      expect(res.status).toBe(200)
+      // The depth judgment reads the saved value whatever the running task froze.
+      expect(h.childTaskBudget.maxInvocationDepth(3)).toBe(5)
+      expect(h.childTaskBudget.maxInvocationDepth(undefined)).toBe(5)
+      // The saved cap is the budget's capacity from its first use (the task's seed no longer wins).
+      const budget = await h.childTaskBudget.ensure(() => 8)
+      const first = await budget.acquire([])
+      const second = await budget.acquire([])
+      let third = false
+      void budget.acquire([]).then(() => {
+        third = true
+      })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(third).toBe(false)
+      first.release()
+      second.release()
+      expect(loadConfig(h.configPath).maxInvocationDepth).toBe(5)
     })
 
     test('growing releases nodes ALREADY QUEUED for a slot — no launch required', async () => {
@@ -222,8 +259,9 @@ describeEachProviderHttpApplication(
         resolve(import.meta.dir, '..', 'src', 'bootstrap/daemonHttpComposition.ts'),
         'utf8',
       )
+      // RFC-533: the session's child-task budget is the third receiver (the cap and the call depth).
       expect(serverSrc).toMatch(
-        /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope,\s*taskExecutionProvider\.executionPermits,?\s*\)/,
+        /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope,\s*taskExecutionProvider\.executionPermits,\s*taskExecutionProvider\.childTaskBudget,?\s*\)/,
       )
       expect(serverSrc).toContain('resizeAllNodePools(daemonScope, {')
 

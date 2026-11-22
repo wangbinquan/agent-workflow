@@ -1,4 +1,7 @@
-import { createExecutionPermitRegistry } from '@/modules/task-execution/composition'
+import {
+  createChildTaskBudgetRuntime,
+  createExecutionPermitRegistry,
+} from '@/modules/task-execution/composition'
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import {
   composeCollaborationRepairPorts,
@@ -184,6 +187,9 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence: observation.workspacePresence,
   })
+  // RFC-533: the session's child-task budget, next to its permit registry: the child-call nodes get it through the run
+  // options; the session's lifecycle consumer and the settings hot apply call the same one.
+  const childTaskBudget = createChildTaskBudgetRuntime(persistence.childBudget)
   const collaboration: CollaborationRouteContext = createCollaborationCommandContext({
     taskExecutionParticipants: closure.taskExecutionParticipants,
     content: input.content,
@@ -322,6 +328,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     recoverySelection: selection.recoverySelection,
     runtime: {
       executionPermits,
+      childTaskBudget,
       processConcurrencyScope: input.adapters.processConcurrencyScope,
       taskRunBinding: selection.taskRunBinding,
       workspaceExcludeProfilesFor: selection.workspaceExcludeProfilesFor,
@@ -460,6 +467,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     ...provider,
     taskRolePolicy: closure.taskRolePolicy,
     executionPermits,
+    childTaskBudget,
     processConcurrencyScope: input.adapters.processConcurrencyScope,
     hostTasks,
     collaboration,

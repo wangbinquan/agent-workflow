@@ -90,7 +90,7 @@ import {
   mcpOperationCoordinator,
 } from '@/modules/resource-catalog/composition'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import { setChildTaskBudgetCapacity } from '@/modules/task-execution/composition'
+import type { ChildTaskBudgetRuntime } from '@/modules/task-execution/composition'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -466,6 +466,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
           concurrencyHotApply: composeConfigConcurrencyHotApply(
             taskExecutionProvider.processConcurrencyScope,
             taskExecutionProvider.executionPermits,
+            taskExecutionProvider.childTaskBudget,
           ),
         }),
       }),
@@ -768,6 +769,7 @@ function composeResourcePackageBinding<P extends DatabaseProvider>(
 function composeConfigConcurrencyHotApply(
   daemonScope: object,
   executionPermits: TaskExecutionPermitRegistry,
+  childTaskBudget: ChildTaskBudgetRuntime,
 ): ConfigConcurrencyHotApplyCommand {
   return Object.freeze({
     apply(input: Parameters<ConfigConcurrencyHotApplyCommand['apply']>[0]) {
@@ -777,7 +779,11 @@ function composeConfigConcurrencyHotApply(
         'code-host': input.maxConcurrentCodeHostCalls,
       })
       executionPermits.resizeAllTaskFanoutSems(input.multiProcessSubprocessConcurrency)
-      setChildTaskBudgetCapacity(input.maxActiveChildTasks)
+      // RFC-533: the session's child-task budget takes the live cap and (again, lost since 2026-09-01) the call depth.
+      childTaskBudget.applyLimits({
+        maxActiveChildTasks: input.maxActiveChildTasks,
+        maxInvocationDepth: input.maxInvocationDepth,
+      })
     },
   })
 }

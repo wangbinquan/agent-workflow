@@ -173,10 +173,12 @@ export {
   type ResourceLimitOperations,
 } from './application/resourceLimitEnforcement'
 
-// RFC-456: the process-level child-budget and terminal-watch hooks the daemon root calls at startup and from
-// committed-event callbacks (the root reaches them here, not in infrastructure/).
+// RFC-456: the terminal-watch hook the daemon root calls from committed-event callbacks (the root reaches it here, not
+// in infrastructure/). RFC-533: the child-task budget is the session's — the daemon builds one per Task Execution
+// assembly and calls it from the lifecycle consumer and the settings hot apply.
 export {
-  notifyChildBudgetTaskStatus,
-  setChildTaskBudgetCapacity,
+  createChildTaskBudgetRuntime,
+  type ChildTaskBudgetLimits,
+  type ChildTaskBudgetRuntime,
 } from './infrastructure/childBudget'
 export { notifyTaskTerminal } from './infrastructure/executionWatch'

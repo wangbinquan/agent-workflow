@@ -52,7 +52,7 @@ const HTTP_OWNERS = [
   'composeCodeHostConnectionProbe',
   'resizeAllNodePools',
   'resizeAllTaskFanoutSems',
-  'setChildTaskBudgetCapacity',
+  // RFC-533: the child-task budget's hot apply is the session runtime's `applyLimits` (RFC-533 boundary test).
 ]
 function walk(node: ts.Node, visit: (node: ts.Node) => void) {
   visit(node)

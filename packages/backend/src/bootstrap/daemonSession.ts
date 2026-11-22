@@ -62,10 +62,7 @@ import {
   startManagedWorkerDefinition,
 } from '@/platform/events/committed/workerDefinitions'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import {
-  notifyChildBudgetTaskStatus,
-  notifyTaskTerminal,
-} from '@/modules/task-execution/composition'
+import { notifyTaskTerminal } from '@/modules/task-execution/composition'
 import {
   composeDatabaseMigrationModule,
   createFileDatabaseConfiguration,
@@ -427,7 +424,8 @@ export async function composeDaemonSession(
           await terminalSweep.run({ taskId, cause: `task-${status}` })
         },
         async notifyChildBudget(taskId, status) {
-          notifyChildBudgetTaskStatus(runtime.taskExecution.persistence.childBudget, taskId, status)
+          // RFC-533: the session's own child-task budget.
+          runtime.taskExecutionModules.childTaskBudget.notifyStatus(taskId, status)
         },
         async notifyExecutionWatch(taskId, status) {
           notifyTaskTerminal(taskId, status)

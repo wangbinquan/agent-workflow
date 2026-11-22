@@ -977,7 +977,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
 - **按被改文件的路径找“读其源码的用例”，要按去掉扩展名的路径与被删调用点的函数名都搜一遍**（RFC-530 实撞，补正提交修）：集中验证按
   `composition/digitalEmployeeExecution\.ts` 这样带扩展名的路径筛读源码的用例，漏掉了把文件写成 `modules/…/digitalEmployeeExecution`（不带 `.ts`）
   的 `rfc514`；它按名字钉 `cancelAndReadTask` 在生产里只被那个文件调用一次，删去那处调用后 CI 红。筛读源码的用例时按文件的路径主干（不带
-  扩展名）匹配；删去或挪走一处生产调用时，再全仓搜被调函数的名字，找“钉生产调用方”的锁。
+  扩展名）匹配；删去或挪走一处生产调用时，再全仓搜被调函数的名字，找“钉生产调用方”的锁。路径还常被拆成几段拼出
+  （`at('bootstrap', 'daemonSession.ts')`）或写成模块内的相对路径（`'composition/childCallNodeExecution.ts'`），按带目录的主干也筛不到，再按
+  不带目录的文件名搜一遍（RFC-533 实撞：`rfc524`、`rfc527`、`scheduler-wrapper-fanout-routing` 与 `rfc473` 因此没被选中，靠事后补搜才跑到）。
 - **往测试助手的分组清单里加成员，要逐个读遍历这份清单的用例循环，不能只改计数**（RFC-531 实撞）：给 `deploymentSelectionPartition.ts` 的
   `SESSION_FACTORY_SELECTIONS` 加了镜像与镜像刷新两个键，改了 `rfc394` / `rfc431` 的键数，却没读 `rfc394` 里遍历这份清单的循环——它按 RFC-432
   要求托管的会话工厂每次交出同一个对象（`factory(undefined)` 两次相同），而托管的镜像要按调用它的会话的仓库存储构造、刷新闭包每次新建
