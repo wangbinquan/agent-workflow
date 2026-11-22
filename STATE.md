@@ -1,4 +1,18 @@
-## 2026-11-21 RFC-530 任务执行模块不在 import 期构造（In Progress；`design/RFC-530-task-execution-module-construction/`）
+## 2026-11-21 RFC-531 部署选择合同的槽位改为语义类型、镜像与子仓刷新由 profile 选择（In Progress；`design/RFC-531-deployment-selection-semantic-slots/`）
+
+- **来由**：S12 第 6 项与第 1 项余项的一半。部署选择合同有 7 个槽位以本地工厂的签名定型（`typeof composeLocal… / create…`），托管实现与托管模块里的
+  工厂也照着本地签名写；可空的 `repositoryRemote` 让 daemon 在两处按它是否为 `null` 选本机实现（HTTP 装配的镜像、子仓刷新句柄）。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294
+  的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：7 个槽位改为拥有方模块导出的具名选择类型（运行时管理、System Agent 运行族、MCP 诊断与 source-control 的 4 个），托管工厂与 daemon
+  的观察装配随之按语义类型定型；`repositoryRemote` 换成必填的 `repositoryMirrors` 与 `repositoryMirrorRefresh`（单机给本机镜像与刷新循环，托管给
+  远端读取与什么都不做的刷新），daemon 的两处 `null` 分支删去；新增 RFC-531 用例，钉住旧形状的锁随改。
+- **不做**：daemon 按 `databaseInstallation` 是否为 `null` 跑本机 epoch 安装路径的分支（另立后继）；按模块分组为适配器集合（design §9.3 的终态，
+  另立后继）；S12 第 4 项；任何用户可见的行为变化。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-530 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-21 RFC-530 任务执行模块不在 import 期构造（Done；`design/RFC-530-task-execution-module-construction/`）
 
 - **来由**：S12 第 3 项。task-execution 组合层在 import 期构造进程级的执行模块（认领闸门与内存驱动登记表），导入组合层的进程都会造一份；生产里
   真正用它的只有 SQLite 的执行绑定（下游都经注入），PostgreSQL 的会话绑定本来就每会话一份；任务取消组合的唯一路由被覆盖、源终止的回落生产总给、
@@ -20,6 +34,14 @@
   一支全过；最终的树上 `tests/architecture/` 与 RFC-530、RFC-526 用例 144 个文件里 143 个通过（红的 `rfc376-report` 两边同样撞 300 秒
   时限）；回归用例在对照（HEAD）上红、在候选上过；架构报告跨上下文导入 7,530 → 7,522（只删不增）、计数不变。实现门 PASS（本会话按路径限定
   自审，只审功能）。
+- **落地**：`2bd4c9959`（66 个文件；父提交是 `c0237b3ce`）；补正 `998ecb1b3`。
+- **CI**：实现提交 68 / 70——backend 分片 42/44 的 `rfc514` 一条是本人缺陷（按名字钉 `cancelAndReadTask` 唯一的生产调用方，本 RFC 删去了那处调用；
+  集中验证按带 `.ts` 的路径筛读源码的用例而漏掉它），`CI required` 随之红；补正让任务路由的取消改调这个用例（生产里只剩一份实现）。补正提交 67 / 70：Markdown 链接检查是 RFC-371
+  文档里一个 GitHub 提交链接的外部 503，backend 分片 43/44 是 `scheduler-wrapper-fanout-e2e` 的一条 PostgreSQL 用例 5 秒超时（不经路由取消；
+  sqlite 变体与父提交都通过，本机在补正的树上 12 / 12 通过），都是环境。
+  落档提交 `c0237b3ce` 70 / 70。都未重跑。
+- **下一步**：S12 第 6 项与第 1 项余项的一半（部署选择合同的槽位改为语义类型、镜像与子仓刷新由 profile 选择，RFC-531）；第 1 项余项的另一半
+  （数据库安装）；第 4 项。
 
 ## 2026-11-21 RFC-529 业务模块的周期定时器改走平台定时原语（Done；`design/RFC-529-module-interval-timers/`）
 

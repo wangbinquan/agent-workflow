@@ -19,7 +19,8 @@
 - [x] AC-1 不在 import 期构造执行模块；组合层不导出单例；SQLite 绑定在绑定时构造、每个会话一份
 - [x] AC-2 同一会话里认领、驱动、停止与后台共用同一份；源终止照旧用会话的登记表
 - [x] AC-3 只服务用例的入口不在生产代码里；计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（实现提交有一格本 RFC 的问题〔`rfc514`〕，由补正 `998ecb1b3` 修复后通过；补正提交另有两格
+      环境性红格——外链 503 与 PostgreSQL 用例在负载下撞 5 秒时限——都不是本 RFC 的改动，未重跑；见 §CI）
 
 ## 集中验证
 
@@ -57,7 +58,17 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `2bd4c9959`（实现，父提交是 `c0237b3ce`）：exact SHA 主 CI run 44949576401 的 70 个 job 第 1 次运行 68 个通过；红的是 backend 分片 42/44 的
+  `rfc514-task-execution-composition-try-throw-out-boundary` 一条（按名字钉 `cancelAndReadTask` 在生产里只被数字员工执行端口调用一次，本 RFC
+  删去那处调用后它在生产里没有调用方）与随之红的 `CI required`。**本人缺陷**：集中验证按带 `.ts` 的路径筛读被改文件源码的用例，漏掉了把文件写成
+  不带扩展名的 `rfc514`。同一提交触发的 windows-platform（run 44949576394）通过。未重跑。
+- 补正 `998ecb1b3`：任务路由操作的 `cancel` 一直内联着同样的取消、读回与 404，改调 `cancelAndReadTask`（生产里只剩这一份实现，行为不变），
+  `rfc514` 的调用方清单改钉任务路由操作；`docs/dev-gotchas.md` 记一条教训（筛读源码的用例按路径主干匹配，删去生产调用时再按被调函数名搜）。
+  exact SHA 主 CI run 44956094443 的 70 个 job 第 1 次运行 67 个通过：Markdown 链接检查红在 RFC-371 文档里一个 GitHub 提交链接回
+  503（外部服务，本提交未改那份文档）；backend 分片 43/44 红在 `scheduler-wrapper-fanout-e2e` 的「2. every nested wrapper kind fails closed」
+  [postgresql] 一条撞 5 秒时限（这条用例不经路由取消；它的 sqlite 变体 190 ms 通过，父提交 `2bd4c9959` 上它通过，本机在补正的树上 12 / 12
+  通过），都归为环境；`CI required` 随之红。未重跑。
+- 本 RFC 的落档提交 `c0237b3ce`（只改文档；同一提交记下 RFC-529 转 Done）：主 CI run 44940851018 的 70 个 job 第 1 次全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
