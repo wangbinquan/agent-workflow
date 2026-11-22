@@ -120,7 +120,9 @@ describeEachProviderHttpApplication(
       // The depth judgment reads the saved value whatever the running task froze.
       expect(h.childTaskBudget.maxInvocationDepth(3)).toBe(5)
       expect(h.childTaskBudget.maxInvocationDepth(undefined)).toBe(5)
-      // The saved cap is the budget's capacity from its first use (the task's seed no longer wins).
+      // The saved cap is the budget's capacity from its first use (the task's seed no longer wins). `acquire` decides
+      // synchronously — a grantable request comes back already resolved — so one microtask turn is the causal barrier:
+      // the third request is still queued after it, and a released unit grants it within the next one (no sleep).
       const budget = await h.childTaskBudget.ensure(() => 8)
       const first = await budget.acquire([])
       const second = await budget.acquire([])
@@ -128,9 +130,11 @@ describeEachProviderHttpApplication(
       void budget.acquire([]).then(() => {
         third = true
       })
-      await new Promise((resolve) => setTimeout(resolve, 30))
+      await Promise.resolve()
       expect(third).toBe(false)
       first.release()
+      await Promise.resolve()
+      expect(third).toBe(true)
       second.release()
       expect(loadConfig(h.configPath).maxInvocationDepth).toBe(5)
     })

@@ -980,6 +980,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   扩展名）匹配；删去或挪走一处生产调用时，再全仓搜被调函数的名字，找“钉生产调用方”的锁。路径还常被拆成几段拼出
   （`at('bootstrap', 'daemonSession.ts')`）或写成模块内的相对路径（`'composition/childCallNodeExecution.ts'`），按带目录的主干也筛不到，再按
   不带目录的文件名搜一遍（RFC-533 实撞：`rfc524`、`rfc527`、`scheduler-wrapper-fanout-routing` 与 `rfc473` 因此没被选中，靠事后补搜才跑到）。
+- **改了用例文件，也要跑扫用例语料的守卫**（RFC-533 实撞，补正提交修）：集中验证按被改的生产文件、读其源码的用例与 import 闭包选用例，选不到
+  逐个扫 `tests/` 的守卫——`test-suite-policy`（共用 HTTP 作用域的用例里不许直线式睡眠、skip 要登记、读的源码路径都在）就是这样漏的：`rfc266`
+  新加的回归用例用 `setTimeout` 睡 30ms 证明“第三个请求还在排队”，推送后 CI 的后端分片 44 红。负向断言照本文件“固定 `setTimeout`”那条改用因果
+  屏障（预算的 `acquire` 同步判定，一次微任务即可），并做变异验证（忽略保存的上限时该用例转红）。改动含用例文件时，把 `test-suite-policy` 与其余
+  遍历 `listTestFiles()` 的守卫加进复跑范围。
 - **往测试助手的分组清单里加成员，要逐个读遍历这份清单的用例循环，不能只改计数**（RFC-531 实撞）：给 `deploymentSelectionPartition.ts` 的
   `SESSION_FACTORY_SELECTIONS` 加了镜像与镜像刷新两个键，改了 `rfc394` / `rfc431` 的键数，却没读 `rfc394` 里遍历这份清单的循环——它按 RFC-432
   要求托管的会话工厂每次交出同一个对象（`factory(undefined)` 两次相同），而托管的镜像要按调用它的会话的仓库存储构造、刷新闭包每次新建
