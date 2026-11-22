@@ -37,7 +37,7 @@ describe('RFC-182 — pending 帧源级锁', () => {
     expect(src).toContain('plan.input.nodeId === WG_MEMBER_NODE_ID')
     expect(src).toContain("status: 'pending' as const")
     expect(src).toContain('nodeChanges: pendingProjectionNodeChanges')
-    expect(block).toContain('publishCommittedEventsAfterCommit(committedEventRefs)')
+    expect(block).toContain('publishCommittedEventsAfterCommit(db, committedEventRefs)')
   })
 
   test('pending 帧：真 mint 恒 1 处广播，adopted 不重发', () => {

@@ -630,7 +630,7 @@ async function launchPreparedChild(
   })
 
   space.cleanup.state = 'committed'
-  await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
+  await publishCommittedEventsAfterCommit(dependencies.db, eventRef === null ? [] : [eventRef])
   await dependencies.coordinatorFactory
     .coordinatorFor({
       runConfig: { kind: 'inherit-parent', parent: request.runtime.runConfig },

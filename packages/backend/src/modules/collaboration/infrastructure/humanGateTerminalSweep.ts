@@ -90,7 +90,7 @@ export function createHumanGateTerminalSweepCommand(
             },
           })
       })
-      await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
+      await publishCommittedEventsAfterCommit(db, eventRef === null ? [] : [eventRef])
       return result satisfies HumanGateTerminalSweepResult
     },
   }

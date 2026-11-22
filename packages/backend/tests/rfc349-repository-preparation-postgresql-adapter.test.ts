@@ -10,13 +10,22 @@ import { join, resolve } from 'node:path'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
 import { createTaskWorkspaceMaterializer } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { workflowFixture, taskFixture, nodeRunFixture, readTaskFixtures } from './helpers/model'
 import { eq } from 'drizzle-orm'
 
+// RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
+const pumpReleases: Array<() => void> = []
+function attachTestPump(db: object, pump: Parameters<typeof attachAfterCommitEventPump>[1]): void {
+  pumpReleases.push(attachAfterCommitEventPump(db, pump))
+}
+function releaseTestPumps(): void {
+  for (const release of pumpReleases.splice(0)) release()
+}
+
 afterEach(() => {
-  registerAfterCommitEventPump(null)
+  releaseTestPumps()
 })
 
 describeEachProvider('RFC-349 repository preparation retry', (harness) => {
@@ -55,7 +64,7 @@ describeEachProvider('RFC-349 repository preparation retry', (harness) => {
     })
     const recording = harness.recordStatements()
     const submissions: TaskDriveSubmission[] = []
-    registerAfterCommitEventPump({
+    attachTestPump(db, {
       async publishNow() {
         expect(recording.statements.some((entry) => /^commit\b/i.test(entry.sql.trim()))).toBe(true)
         expect((await readTaskFixtures(db, { id: 'task-1' }))[0]?.status).toBe('pending')

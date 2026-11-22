@@ -36,7 +36,7 @@ test('serveDaemon 的 shutdown 只做监听器层的事：provider 专属收尾�
   const body = START.slice(start, end)
   for (const forbidden of [
     'distillWorker',
-    'registerAfterCommitEventPump',
+    'attachAfterCommitEventPump',
     'webhookTerminalControl',
     'gracefulShutdown',
     'shutdownActiveTaskExecutions',

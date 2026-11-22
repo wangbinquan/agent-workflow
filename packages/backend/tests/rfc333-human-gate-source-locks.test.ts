@@ -194,7 +194,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       lifecycle.indexOf('transitionHumanGateTask(tx, {'),
     )
     expect(lifecycle.indexOf('transitionHumanGateTask(tx, {')).toBeLessThan(
-      lifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
+      lifecycle.indexOf('publishCommittedEventsAfterCommit(this.db, result.eventRefs)'),
     )
     for (const retired of [
       'packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
@@ -256,7 +256,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       read(
         'packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
       ),
-    ).toContain('publishCommittedEventsAfterCommit(result.eventRefs)')
+    ).toContain('publishCommittedEventsAfterCommit(this.db, result.eventRefs)')
   })
 
   test('T7 new rounds project eager questions while historical lazy reconciliation remains', () => {

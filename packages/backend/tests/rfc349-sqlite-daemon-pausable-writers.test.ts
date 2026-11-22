@@ -90,11 +90,12 @@ describe('RFC-349 SQLite daemon periodic writers are provider-session handles', 
 
   test('neither daemon registers the post-commit pump outside a session handle', () => {
     // 允许的注册只有两处：两个 daemon 各自 handle 的 `start()`。任何裸注册都会
-    // 让泵活过冻结窗口。`registerAfterCommitEventPump(null)` 是撤销，不受此限。
-    const registrations = START.split('registerAfterCommitEventPump(committedEventPump)').length - 1
+    // 让泵活过冻结窗口。摘除函数 `detachPump()` 是撤销，不受此限（RFC-537：泵挂在会话自己的库上）。
+    const registrations =
+      START.split('attachAfterCommitEventPump(db, committedEventPump)').length - 1
     expect(registrations, '注册 post-commit 泵的地方不是两处 ⇒ 有一侧改了组装形状').toBe(1)
     for (const [index] of [
-      ...START.matchAll(/registerAfterCommitEventPump\(committedEventPump\)/g),
+      ...START.matchAll(/attachAfterCommitEventPump\(db, committedEventPump\)/g),
     ].map((match) => [match.index ?? 0] as const)) {
       const preceding = START.slice(Math.max(0, index - 400), index)
       expect(

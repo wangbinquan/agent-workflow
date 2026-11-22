@@ -32,7 +32,7 @@ import {
   DrizzleTaskRuntimeLifecyclePersistence,
   writeTaskRuntimeLifecycleInTx,
 } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import {
   neverPruneTerminalWorkspaces,
   type TerminalWorkspacePrunePolicy,
@@ -41,6 +41,15 @@ import { __hasTaskReviewMutationQueueForTesting } from '@/modules/task-execution
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
+
+// RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
+const pumpReleases: Array<() => void> = []
+function attachTestPump(db: object, pump: Parameters<typeof attachAfterCommitEventPump>[1]): void {
+  pumpReleases.push(attachAfterCommitEventPump(db, pump))
+}
+function releaseTestPumps(): void {
+  for (const release of pumpReleases.splice(0)) release()
+}
 
 const BINDING = 'gitlab:rfc359/atom!7'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -166,7 +175,7 @@ function usePrunePolicy(policy: TerminalWorkspacePrunePolicy): void {
 
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore()
-  registerAfterCommitEventPump(null)
+  releaseTestPumps()
   usePrunePolicy(neverPruneTerminalWorkspaces)
   taskExecutionModule.resetForTesting()
 })
@@ -730,7 +739,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
       )
       restores.push(() => lookup.mockRestore())
       const published: string[] = []
-      registerAfterCommitEventPump({
+      attachTestPump(harness.db, {
         publishNow: async (refs) => {
           published.push(...refs.map((ref) => ref.eventId))
         },
@@ -759,7 +768,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     const heldAt: boolean[] = []
     let publishedRows: Awaited<ReturnType<typeof rows>> | undefined
     let committedAtPublish = false
-    registerAfterCommitEventPump({
+    attachTestPump(harness.db, {
       async publishNow() {
         order.push('publish')
         heldAt.push(__hasTaskReviewMutationQueueForTesting(seeded.taskId))

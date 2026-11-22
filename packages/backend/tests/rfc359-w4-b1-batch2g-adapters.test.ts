@@ -53,9 +53,18 @@ import {
   terminalizeTaskExecutionIntentsInTx,
 } from '@/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
 import { DrizzleTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { describeEachProvider } from './helpers/eachProvider'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+
+// RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
+const pumpReleases: Array<() => void> = []
+function attachTestPump(db: object, pump: Parameters<typeof attachAfterCommitEventPump>[1]): void {
+  pumpReleases.push(attachAfterCommitEventPump(db, pump))
+}
+function releaseTestPumps(): void {
+  for (const release of pumpReleases.splice(0)) release()
+}
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const rootPath = (taskId: string): readonly LineageSlot[] => [
@@ -171,7 +180,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
     )
     const order: string[] = []
     const published: { status: string | undefined; eventIds: string[] }[] = []
-    registerAfterCommitEventPump({
+    attachTestPump(db, {
       async publishNow(refs) {
         order.push('publish')
         const row = await taskRow(db, taskId)
@@ -218,7 +227,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
       expect((await readTaskFixtures(db, { id: taskId }))[0]).toEqual(committed)
       expect(published).toHaveLength(1)
     } finally {
-      registerAfterCommitEventPump(null)
+      releaseTestPumps()
     }
   })
 

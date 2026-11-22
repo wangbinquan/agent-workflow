@@ -200,8 +200,9 @@ describe('RFC-486 ② 准入适配器：一个事务、原次序', () => {
   })
 
   test('提交后发布与原来同一个调用', () => {
-    expect(body).toContain(
-      'return await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])',
+    // RFC-537: the publish names the database it committed to (the call wraps; compare without layout).
+    expect(body.replace(/\s+/g, ' ')).toContain(
+      'return await publishCommittedEventsAfterCommit( dependencies.db, eventRef === null ? [] : [eventRef], )',
     )
   })
 })

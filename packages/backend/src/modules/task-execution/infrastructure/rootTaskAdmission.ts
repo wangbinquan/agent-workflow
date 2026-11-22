@@ -335,7 +335,10 @@ export function createRootTaskAdmission(
       return { eventRef, projection }
     },
     async publishAfterCommit(eventRef: CommittedEventRef | null) {
-      return await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
+      return await publishCommittedEventsAfterCommit(
+        dependencies.db,
+        eventRef === null ? [] : [eventRef],
+      )
     },
   })
 }

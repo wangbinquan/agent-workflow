@@ -1710,7 +1710,9 @@ describeEachProvider(
       )
       expect(src).not.toContain('emitAutoAnswered')
       expect(service).toContain('finally {')
-      expect(service).toContain('publishCommittedEventsAfterCommit(prepared.capture.eventRefs)')
+      expect(service).toContain(
+        'publishCommittedEventsAfterCommit(args.db, prepared.capture.eventRefs)',
+      )
     })
   },
 )

@@ -1,32 +1,34 @@
 import type { AfterCommitEventPump } from './afterCommitEventPump'
 import type { CommittedEventRef } from './types'
+import { afterCommitEventPumpSlotOf } from '@/platform/persistence/sessionTables'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('committed-event-runtime')
 
-let activePump: AfterCommitEventPump | null = null
-
-/** Bootstrap-owned process binding for exact post-commit receipts. */
-export function registerAfterCommitEventPump(pump: AfterCommitEventPump | null): void {
-  activePump = pump
-}
-
-/** A late stop can release only the exact pump that its owning root registered. */
-export function releaseAfterCommitEventPump(pump: AfterCommitEventPump): boolean {
-  if (activePump !== pump) return false
-  activePump = null
-  return true
+/**
+ * RFC-537: the owning session attaches its pump to its own database. The pump rides on the handle's session context
+ * (the client, its transactions and its native session share one), so a writer reaches the pump of the database it
+ * committed on — there is no process-level pump. The returned release clears only the exact pump it attached.
+ */
+export function attachAfterCommitEventPump(handle: object, pump: AfterCommitEventPump): () => void {
+  const slot = afterCommitEventPumpSlotOf(handle)
+  if (slot === undefined) throw new Error('after-commit-event-pump-handle-unbound')
+  slot.pump = pump
+  return () => {
+    if (slot.pump === pump) slot.pump = null
+  }
 }
 
 /**
- * Project and nudge one already-committed receipt. An absent pump is valid
+ * Project and nudge one already-committed receipt on the database it was committed to. An absent pump is valid
  * during boot and isolated tests: durable deliveries remain the recovery path.
  */
 export async function publishCommittedEventsAfterCommit(
+  handle: object,
   eventRefs: readonly CommittedEventRef[],
 ): Promise<boolean> {
-  if (eventRefs.length === 0) return activePump !== null
-  const pump = activePump
+  const pump = afterCommitEventPumpSlotOf(handle)?.pump ?? null
+  if (eventRefs.length === 0) return pump !== null
   if (pump === null) return false
   try {
     await pump.publishNow(eventRefs)

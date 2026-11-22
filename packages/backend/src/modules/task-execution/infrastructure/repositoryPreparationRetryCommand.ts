@@ -302,7 +302,7 @@ async function admitRetry(
     })
     return { intentId, events: event === null ? [] : [event] }
   })
-  await publishCommittedEventsAfterCommit(committed.events)
+  await publishCommittedEventsAfterCommit(dependencies.db, committed.events)
   return committed.intentId
 }
 

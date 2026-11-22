@@ -8,12 +8,18 @@ import {
   type PersistenceTables,
 } from './schema/tables'
 import type { EngineCapabilities } from './capabilities'
+import type { AfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 
 export type { PersistenceTables } from './schema/tables'
+/** RFC-537: the after-commit event pump the owning session attached to this database (shared by its transactions). */
+export interface AfterCommitEventPumpSlot {
+  pump: AfterCommitEventPump | null
+}
 interface DatabaseHandleContext {
   readonly identity: object
   readonly tables: PersistenceTables
   readonly engine: EngineCapabilities
+  readonly afterCommit: AfterCommitEventPumpSlot
 }
 const contextKey = Symbol('native-persistence-session')
 const contexts = new WeakMap<object, DatabaseHandleContext>()
@@ -24,7 +30,7 @@ export function bindDatabaseHandle<T extends object>(
   tables: PersistenceTables,
   engine: EngineCapabilities,
 ): T {
-  const context = Object.freeze({ identity: handle, tables, engine })
+  const context = Object.freeze({ identity: handle, tables, engine, afterCommit: { pump: null } })
   contexts.set(handle, context)
   if (Object.isExtensible(handle))
     Object.defineProperty(handle, contextKey, { value: context, configurable: true })
@@ -54,6 +60,10 @@ export function engineForHandle(handle: object): EngineCapabilities {
 /** The engine bound to a native handle, or undefined for an object no provider constructed. */
 export function boundEngineOf(handle: object): EngineCapabilities | undefined {
   return boundContext(handle)?.engine
+}
+/** RFC-537: the handle's after-commit pump slot, or undefined for an object no provider constructed. */
+export function afterCommitEventPumpSlotOf(handle: object): AfterCommitEventPumpSlot | undefined {
+  return boundContext(handle)?.afterCommit
 }
 export function inheritDatabaseHandle<T extends object>(handle: T, parent: object): T {
   const context = databaseHandleContext(parent)

@@ -1717,7 +1717,7 @@ async function commitDispatchPlan(
       operationId: decision.capture.envelope.decision.operationId,
     })
   }
-  await publishCommittedEventsAfterCommit(committedEventRefs)
+  await publishCommittedEventsAfterCommit(db, committedEventRefs)
   if (replayed && decision?.capture.envelope !== undefined) {
     const envelope = decision.capture.envelope
     return {

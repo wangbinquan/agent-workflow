@@ -182,7 +182,7 @@ async function insertFusionTask(
     })
     return eventRef === null ? [] : [eventRef]
   })
-  await publishCommittedEventsAfterCommit(eventRefs)
+  await publishCommittedEventsAfterCommit(dependencies.db, eventRefs)
   return intentId
 }
 

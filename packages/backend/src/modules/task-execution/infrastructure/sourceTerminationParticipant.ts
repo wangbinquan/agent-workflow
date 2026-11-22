@@ -75,7 +75,7 @@ export function createTaskSourceTerminationParticipant(
             )
             if (applied === null) return null
             // 锁内：发布已提交事件 + 取停机票据（都不阻塞）。
-            await publishCommittedEventsAfterCommit(applied.eventRefs)
+            await publishCommittedEventsAfterCommit(db, applied.eventRefs)
             return {
               ...applied,
               stopTicket:

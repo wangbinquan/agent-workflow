@@ -20,7 +20,7 @@ import {
   createCommittedEventDispatcher,
 } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 
@@ -48,7 +48,9 @@ export async function installCommittedEventProjectionHarness(
     taskLifecycleCommittedEventCodec,
     collaborationCommittedEventCodec,
   )
-  registerAfterCommitEventPump(
+  // RFC-537: the pump rides on this test's database (the writers publish on the database they committed to).
+  return attachAfterCommitEventPump(
+    db,
     createAfterCommitEventPump({
       persistence: createCommittedEventDeliveryPersistence(db),
       codecs,
@@ -61,7 +63,6 @@ export async function installCommittedEventProjectionHarness(
       nudgeDispatcher() {},
     }),
   )
-  return () => registerAfterCommitEventPump(null)
 }
 
 export interface CommittedEventDeliveryTestHarness {
@@ -150,7 +151,8 @@ export async function installCommittedEventDeliveryHarness(
     projectionLedger,
     maxAttempts: () => 1,
   })
-  registerAfterCommitEventPump(
+  const release = attachAfterCommitEventPump(
+    db,
     createAfterCommitEventPump({
       persistence: createCommittedEventDeliveryPersistence(db),
       codecs,
@@ -164,7 +166,7 @@ export async function installCommittedEventDeliveryHarness(
       await dispatcher.drain(maxSteps)
     },
     dispose() {
-      registerAfterCommitEventPump(null)
+      release()
     },
   }
 }

@@ -47,7 +47,6 @@ import {
   type TaskRouteWorkspaceParticipant,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -551,7 +550,6 @@ function launchGuard(input: {
 }
 
 afterEach(() => {
-  registerAfterCommitEventPump(null)
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 

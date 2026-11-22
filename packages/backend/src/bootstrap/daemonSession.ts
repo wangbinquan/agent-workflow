@@ -60,7 +60,7 @@ import {
   createCommittedEventDispatcherWorkerDefinition,
   startManagedWorkerDefinition,
 } from '@/platform/events/committed/workerDefinitions'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import {
   composeDatabaseMigrationModule,
   createFileDatabaseConfiguration,
@@ -491,13 +491,14 @@ export async function composeDaemonSession(
   const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'after-commit-event-pump',
     start() {
-      registerAfterCommitEventPump(committedEventPump)
+      // RFC-537: the session's pump rides on its own database (the writers publish on the database they committed to).
+      const detachPump = attachAfterCommitEventPump(db, committedEventPump)
       let stopped = false
       return Object.freeze({
         stop() {
           if (stopped) return
           stopped = true
-          registerAfterCommitEventPump(null)
+          detachPump()
         },
         async drain() {
           if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')

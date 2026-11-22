@@ -31,15 +31,15 @@ describe('RFC-341 collaboration owner source locks', () => {
     const cases = [
       {
         path: 'modules/collaboration/infrastructure/review.ts',
-        publish: 'publishCommittedEventsAfterCommit(committed.eventRefs)',
+        publish: 'publishCommittedEventsAfterCommit(db, committed.eventRefs)',
       },
       {
         path: 'modules/collaboration/infrastructure/clarify/autoDispatch.ts',
-        publish: 'publishCommittedEventsAfterCommit(prepared.capture.eventRefs)',
+        publish: 'publishCommittedEventsAfterCommit(args.db, prepared.capture.eventRefs)',
       },
       {
         path: 'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
-        publish: 'publishCommittedEventsAfterCommit(committedEventRefs)',
+        publish: 'publishCommittedEventsAfterCommit(db, committedEventRefs)',
       },
     ] as const
     for (const entry of cases) {

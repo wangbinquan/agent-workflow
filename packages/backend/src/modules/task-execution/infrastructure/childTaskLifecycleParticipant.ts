@@ -471,7 +471,7 @@ async function admitResume(
       eventRefs: eventRef === null ? [] : [eventRef],
     }
   })
-  await publishCommittedEventsAfterCommit(result.eventRefs)
+  await publishCommittedEventsAfterCommit(dependencies.db, result.eventRefs)
   return result.prepared
 }
 
@@ -922,7 +922,7 @@ export async function cancelTaskProjection(
       return { childIds, eventRefs: eventRef === null ? [] : [eventRef] }
     })
   }
-  await publishCommittedEventsAfterCommit(committed.eventRefs)
+  await publishCommittedEventsAfterCommit(dependencies.db, committed.eventRefs)
 
   if (stopToken !== null) {
     const ticket = dependencies.stop.requestStop(stopToken, cause)

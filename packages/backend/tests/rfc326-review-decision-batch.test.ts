@@ -314,7 +314,7 @@ async function buildSingle(
     memberId: memberId!,
     strangerId: strangerId!,
     cleanup: () => {
-      // 库的生命周期归 harness；这里只收自己建的目录与全局投影注册。
+      // 库的生命周期归 harness；这里只收自己建的目录与挂在这个库上的投影泵（RFC-537）。
       uninstallProjection()
       rmSync(tmp, { recursive: true, force: true })
     },
@@ -452,7 +452,7 @@ async function buildMulti(
     reviewRunId: docs[0]!.reviewNodeRunId,
     docs,
     cleanup: () => {
-      // 库的生命周期归 harness；这里只收自己建的目录与全局投影注册。
+      // 库的生命周期归 harness；这里只收自己建的目录与挂在这个库上的投影泵（RFC-537）。
       uninstallProjection()
       rmSync(tmp, { recursive: true, force: true })
     },

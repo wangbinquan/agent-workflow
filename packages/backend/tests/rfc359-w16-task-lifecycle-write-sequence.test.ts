@@ -29,12 +29,21 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import type { TaskNodeChangeV1 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
 import { writeTaskRuntimeLifecycleInTx } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+
+// RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
+const pumpReleases: Array<() => void> = []
+function attachTestPump(db: object, pump: Parameters<typeof attachAfterCommitEventPump>[1]): void {
+  pumpReleases.push(attachAfterCommitEventPump(db, pump))
+}
+function releaseTestPumps(): void {
+  for (const release of pumpReleases.splice(0)) release()
+}
 
 const NOW = 1_700_000_000_250
 const INITIAL: TaskNodeChangeV1 = {
@@ -124,7 +133,7 @@ describe('RFC-359 lifecycle native writer contract', () => {
   })
 
   afterEach(() => {
-    registerAfterCommitEventPump(null)
+    releaseTestPumps()
     db.$client.close()
   })
 
@@ -165,7 +174,7 @@ describe('RFC-359 lifecycle native writer contract', () => {
   test('legacy companion is synchronous and defer runs after commit with the original receipt', async () => {
     const order: string[] = []
     const deferred: CommittedEventRef[] = []
-    registerAfterCommitEventPump({
+    attachTestPump(db, {
       async publishNow() {
         order.push('unexpected-publish')
       },

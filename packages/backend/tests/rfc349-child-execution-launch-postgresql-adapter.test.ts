@@ -40,9 +40,18 @@ import {
   type ChildExecutionLaunchDependencies,
 } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+
+// RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
+const pumpReleases: Array<() => void> = []
+function attachTestPump(db: object, pump: Parameters<typeof attachAfterCommitEventPump>[1]): void {
+  pumpReleases.push(attachAfterCommitEventPump(db, pump))
+}
+function releaseTestPumps(): void {
+  for (const release of pumpReleases.splice(0)) release()
+}
 
 const actor = buildActor({
   user: {
@@ -116,7 +125,7 @@ function logger(): TaskExecutionTopologyLogger {
 }
 
 afterEach(() => {
-  registerAfterCommitEventPump(null)
+  releaseTestPumps()
 })
 
 describeEachProvider('RFC-349 child execution launch commit boundary', (harness) => {
@@ -180,7 +189,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
         operationGeneration: 2,
       })
       let publishedTask: PersistenceTables['tasks']['$inferSelect'] | undefined
-      registerAfterCommitEventPump({
+      attachTestPump(fixture.db, {
         async publishNow() {
           trace.push('event:after-commit')
           publishedTask = (await readTaskFixtures(fixture.db, { id: 'child-task' }))[0]

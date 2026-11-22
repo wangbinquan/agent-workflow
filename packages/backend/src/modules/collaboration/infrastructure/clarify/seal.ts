@@ -504,7 +504,7 @@ export async function sealRoundQuestions(
   }
   const txResult = await runSealTx()
 
-  await publishCommittedEventsAfterCommit(txResult.eventRefs)
+  await publishCommittedEventsAfterCommit(args.db, txResult.eventRefs)
   return {
     sealedQuestionIds: txResult.sealedQuestionIds,
     resealedQuestionIds: txResult.resealedQuestionIds,

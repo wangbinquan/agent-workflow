@@ -899,7 +899,7 @@ export async function autoDispatchClarifyRoundWithDecision(
     })
   } finally {
     if (prepared.capture.eventRefs !== undefined) {
-      await publishCommittedEventsAfterCommit(prepared.capture.eventRefs)
+      await publishCommittedEventsAfterCommit(args.db, prepared.capture.eventRefs)
     }
   }
   const envelope = prepared.capture.envelope

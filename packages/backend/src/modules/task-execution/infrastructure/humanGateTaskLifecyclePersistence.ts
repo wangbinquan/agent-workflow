@@ -155,7 +155,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
         eventRefs: [...parked.eventRefs, ...consumed.eventRefs],
       }
     })
-    await publishCommittedEventsAfterCommit(result.eventRefs)
+    await publishCommittedEventsAfterCommit(this.db, result.eventRefs)
     return result
   }
 
@@ -214,7 +214,8 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
         eventRefs: parked.eventRefs,
       }
     })
-    if (result.eventRefs.length > 0) await publishCommittedEventsAfterCommit(result.eventRefs)
+    if (result.eventRefs.length > 0)
+      await publishCommittedEventsAfterCommit(this.db, result.eventRefs)
     return result
   }
 

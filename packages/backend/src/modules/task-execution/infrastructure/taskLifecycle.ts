@@ -536,7 +536,7 @@ export async function setTaskStatus(args: {
   }
   const committedEventRefs = committedEventRef === null ? [] : [committedEventRef]
   if (args.deferCommittedEventPublication === undefined) {
-    await publishCommittedEventsAfterCommit(committedEventRefs)
+    await publishCommittedEventsAfterCommit(args.db, committedEventRefs)
   } else {
     args.deferCommittedEventPublication(committedEventRefs)
   }

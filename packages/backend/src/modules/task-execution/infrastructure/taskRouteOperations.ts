@@ -1936,7 +1936,7 @@ export async function syncWorkflow(
       continuationHandoff: true,
     })
   })
-  await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
+  await publishCommittedEventsAfterCommit(dependencies.db, eventRef === null ? [] : [eventRef])
   // 准入拿下之后才动工作树(与 SQLite 的 `resumeKick` 同序:CAS 是命令准入的胜者,
   // 输的一方零副作用)。此时任务已在 `interrupted`,升级的 allowedFrom 随之收敛到它。
   await rollbackRunsForContinuation(dependencies, {
@@ -2303,7 +2303,7 @@ export async function retryNodeProjection(
     })
     return [lifecycle].filter((ref) => ref !== null)
   })
-  await publishCommittedEventsAfterCommit(admitted)
+  await publishCommittedEventsAfterCommit(dependencies.db, admitted)
   for (const childTaskId of childTaskIds) {
     try {
       await dependencies.cancelChildTaskForCascade(childTaskId, input.taskId)
@@ -2440,7 +2440,7 @@ export async function retryNodeProjection(
           })
     return [nodeStatuses].filter((ref) => ref !== null)
   })
-  await publishCommittedEventsAfterCommit(minted)
+  await publishCommittedEventsAfterCommit(dependencies.db, minted)
   await dependencies.resumeTaskAs(input.actor, input.taskId)
   const updated = await loadTask(dependencies.db, input.taskId)
   if (updated === null)

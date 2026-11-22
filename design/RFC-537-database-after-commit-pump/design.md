@@ -17,8 +17,9 @@
 - **句柄上下文**（`platform/persistence/sessionTables.ts`）：provider 构造库时 `bindDatabaseHandle(handle, tables, engine)` 给句柄挂一份冻结的上下文
   （身份、表集、引擎能力），句柄的原生会话客户端共用同一份，`inheritDatabaseHandle` 让派生句柄（事务等）也指向它；`databaseHandleContext(handle)`
   取回。
-- **用例**：18 个用例文件经测试助手（`tests/helpers/taskLifecycleCommittedEvents.ts` 的 `installTaskLifecycleAfterCommitTestPump(db, …)` 等）登记
-  进程级的泵。
+- **用例**：29 个用例文件登记进程级的泵——22 个经两个测试助手（`tests/helpers/taskLifecycleCommittedEvents.ts` 的
+  `installTaskLifecycleAfterCommitTestPump(db, …)`、`tests/helpers/committedEventHarness.ts` 的两个安装函数），7 个直接调登记函数；另有 7 个
+  源码文本锁钉着登记函数的名字或写方调用的原文。
 
 ## 2. 机制与落位
 
@@ -36,16 +37,20 @@
 
 ### D3 daemon 会话挂在自己的库上
 
-- `after-commit-event-pump` 句柄的 `start()` 改为 `release = attachAfterCommitEventPump(input.db, committedEventPump)`，`stop()` 调 `release()`；`drain()`
-  不变。
+- `after-commit-event-pump` 句柄的 `start()` 改为 `detachPump = attachAfterCommitEventPump(db, committedEventPump)`，`stop()` 调 `detachPump()`；`drain()`
+  不变。`db` 是会话自己经 `adapter.open(…)` 打开的库——会话的组装输入里没有库（落档时写成 `input.db` 是笔误，实现时按源码更正）。
 
 ### D4 用例与锁
 
 - 新增 `tests/rfc537-database-after-commit-pump-boundary.test.ts`，登记 guard-manifest：① `runtime.ts` 顶层没有 `let` 与集合，架构报告的模块级
-  可变单例判据为空；生产代码不再引用删去的名字；每处 `publishCommittedEventsAfterCommit` 调用都带句柄实参；daemon 会话把泵挂在 `input.db` 上
-  （语料下限 3,000）；② 行为：两个库各投各的；事务句柄取到客户端的泵；空批次返回是否挂着泵、没有泵返回 `false`、泵抛错只记告警；摘除只摘
-  自己挂的；带负对照。
-- 读旧形状的用例随改：测试助手的泵改为挂在用例自己的库上（卸载即摘除）；直接调登记函数的用例改用挂接函数。
+  可变单例判据为空；生产代码不再引用删去的名字；每处 `publishCommittedEventsAfterCommit` 调用都带句柄实参；daemon 会话只在泵句柄的
+  `start()` 里把泵挂在它自己的库 `db` 上（语料下限 3,000）；② 行为：两个库各投各的；派生句柄取到客户端的泵；空批次返回是否挂着泵、没有泵返回
+  `false`、泵抛错只记告警；摘除只摘自己挂的；没有句柄上下文的对象不能挂泵；③ 两个引擎上的真库：两个独立的库各投各的，真事务句柄与客户端
+  共用同一格；带负对照。
+- 读旧形状的用例随改：两个测试助手的泵改为挂在用例自己的库上（卸载即摘除）；直接调登记函数的 7 个用例改用挂接函数（其中只在每个用例后兜底
+  清空的 1 个删去兜底——泵已随库走）；7 个源码文本锁改钉新的调用原文；RFC-395 已复核串行化插入点的调用方摘要锁
+  （`tests/fixtures/rfc395-serialized-insert-source-locks.json` 钉着 `clarify/seal.ts` 的全文摘要）记下新摘要与本次复核——只改了提交后投递
+  的实参，轮次锁、调用方事务与答案的插入顺序不变（集中验证时由 `rfc359-w8-t29` 查出漏改）。
 
 ## 3. 清单（退出门）
 

@@ -41,7 +41,7 @@ interface Harness {
 /**
  * RFC-359 AC-6：app home 与 `AGENT_WORKFLOW_HOME` 的接管、还原、删除都归作用域
  * （`open()` 现建、`afterEach` 还原并删掉），这里只剩「一个真 git 仓」和 after-commit pump。
- * pump 要在**装配之前**装上——它挂的是进程级投递口，应用composed 之后再装就漏掉了首批事件。
+ * pump 要在**装配之前**装上——它挂在这个库上（RFC-537：写方按提交所在的库投递），应用装配之后再挂就漏掉了首批事件。
  */
 async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
   const repoPath = mkdtempSync(join(tmpdir(), 'aw-tasks-repo-'))

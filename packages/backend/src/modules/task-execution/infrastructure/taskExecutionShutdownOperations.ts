@@ -76,7 +76,7 @@ export class DrizzleTaskExecutionShutdownOperations implements TaskExecutionShut
       return event === null ? [] : [event]
     })
     if (eventRefs === null) return false
-    await publishCommittedEventsAfterCommit(eventRefs)
+    await publishCommittedEventsAfterCommit(this.db, eventRefs)
     return true
   }
 

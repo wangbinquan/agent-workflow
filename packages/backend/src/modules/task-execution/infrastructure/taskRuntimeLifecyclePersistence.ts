@@ -227,7 +227,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
       }
       return changed.eventRef === null ? [] : [changed.eventRef]
     })
-    await publishCommittedEventsAfterCommit(result)
+    await publishCommittedEventsAfterCommit(this.db, result)
   }
 
   private async load(taskId: string): Promise<LifecycleRow> {

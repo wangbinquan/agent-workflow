@@ -27,10 +27,19 @@ import {
   DrizzleTaskExecutionIntentTerminalPersistence,
   terminalizeTaskExecutionIntentsUncheckedInTx,
 } from '@/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+
+// RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
+const pumpReleases: Array<() => void> = []
+function attachTestPump(db: object, pump: Parameters<typeof attachAfterCommitEventPump>[1]): void {
+  pumpReleases.push(attachAfterCommitEventPump(db, pump))
+}
+function releaseTestPumps(): void {
+  for (const release of pumpReleases.splice(0)) release()
+}
 
 const ID = 'boot-orphan'
 const INPUT_NOW = 1_700_000_000_200
@@ -220,13 +229,13 @@ describeEachProvider(
       await seed(harness.db)
     })
     afterEach(() => {
-      registerAfterCommitEventPump(null)
+      releaseTestPumps()
     })
 
     test('honours the caller clock, writes companions first and publishes after commit', async () => {
       const before = await snapshot(harness.db)
       const publications: Awaited<ReturnType<typeof snapshot>>[] = []
-      registerAfterCommitEventPump({
+      attachTestPump(harness.db, {
         async publishNow() {
           publications.push(await snapshot(harness.db))
         },
@@ -285,7 +294,7 @@ describeEachProvider(
     test('a status-gate miss returns false without touching companion rows or publishing', async () => {
       const before = await snapshot(harness.db)
       let published = false
-      registerAfterCommitEventPump({
+      attachTestPump(harness.db, {
         async publishNow() {
           published = true
         },

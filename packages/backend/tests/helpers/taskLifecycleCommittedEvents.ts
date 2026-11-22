@@ -15,7 +15,7 @@ import {
 import { createDatabaseTaskLifecycleWsProjector } from '@/modules/task-execution/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
-import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
@@ -102,8 +102,8 @@ export function installTaskLifecycleAfterCommitTestPump(
       await pump.awaitDrained()
     }
   })
-  registerAfterCommitEventPump(pump)
-  return () => registerAfterCommitEventPump(null)
+  // RFC-537: the pump rides on this test's database; uninstalling releases exactly this pump.
+  return attachAfterCommitEventPump(db, pump)
 }
 
 const drains = new WeakMap<PersistenceDb, () => Promise<void>>()

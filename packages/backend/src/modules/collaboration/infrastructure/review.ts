@@ -2358,7 +2358,7 @@ async function addReviewCommentUnlocked(
     })
     return eventRef === null ? [] : [eventRef]
   })
-  await publishCommittedEventsAfterCommit(eventRefs)
+  await publishCommittedEventsAfterCommit(args.db, eventRefs)
   return { ...comment, warnings }
 }
 
@@ -2525,7 +2525,7 @@ async function updateReviewCommentTextUnlocked(
     })
     return eventRef === null ? [] : [eventRef]
   })
-  await publishCommittedEventsAfterCommit(eventRefs)
+  await publishCommittedEventsAfterCommit(db, eventRefs)
   return updated
 }
 
@@ -2626,7 +2626,7 @@ async function deleteReviewCommentUnlocked(
     })
     return eventRef === null ? [] : [eventRef]
   })
-  await publishCommittedEventsAfterCommit(eventRefs)
+  await publishCommittedEventsAfterCommit(db, eventRefs)
 }
 
 // ---------------------------------------------------------------------------
@@ -3833,7 +3833,7 @@ async function submitReviewDecisionUnlocked(
     taskId: dv.taskId,
     operationId: committed.receipt.decision.operationId,
   })
-  await publishCommittedEventsAfterCommit(committed.eventRefs)
+  await publishCommittedEventsAfterCommit(db, committed.eventRefs)
 
   const hasBatch = args.comments !== undefined || args.selections !== undefined
   return {
@@ -4192,7 +4192,7 @@ async function setDocumentSelectionUnlocked(args: {
     })
     return eventRef === null ? [] : [eventRef]
   })
-  await publishCommittedEventsAfterCommit(eventRefs)
+  await publishCommittedEventsAfterCommit(args.db, eventRefs)
   return { taskId: dvRow.taskId, docVersionId: args.docVersionId, selection: args.selection }
 }
 

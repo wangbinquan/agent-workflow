@@ -172,7 +172,7 @@ export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWrite
         eventRefs: eventRef === null ? [] : [eventRef],
       }
     })
-    await publishCommittedEventsAfterCommit(created.eventRefs)
+    await publishCommittedEventsAfterCommit(this.db, created.eventRefs)
     return created
   }
 }
