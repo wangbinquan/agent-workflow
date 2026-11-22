@@ -18,7 +18,7 @@
 - [x] AC-1 三个文件没有模块级集合与写模块状态的登记函数；配置生效监听每份应用配置一组，登记与通知用同一组
 - [x] AC-2 执行状态读取器与事务观察者随各自的对象走；行为不变
 - [x] AC-3 模块级可变单例 61 → 58、计数不升；锁随改；新增 RFC-536 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -55,7 +55,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `577db8ccd`（实现，父提交是 `b556cb703`）：exact SHA 主 CI run 45062944465 的 70 个 job 第 1 次全部通过；同一提交触发的 windows-platform
+  （run 45062944463）与 maintenance-soak-nightly（run 45062944454）通过。
+- 本 RFC 的落档提交 `b556cb703`（只改 8 个 Markdown 文件；同一提交记下 RFC-535 转 Done）：主 CI run 45059624802 的 70 个 job 里，Playwright e2e
+  （windows-latest 2/4）红在 `rfc199-save-reliability.spec.ts:375`（“editor exact revision handoff shows a wizard mismatch before any stale launch”，
+  `wizard-workflow-version-mismatch` 15 秒内没出现，弱网保存的时序用例），`CI required` 随之红，其余 68 个通过。该提交的代码与 `bd3b4a323`（70 / 70）
+  逐字相同，后继 `577db8ccd` 的主 CI 里同一分片通过，此前 9 个红过的主 CI 也都不在这一分片——不是该提交引入的，按环境性时序记录；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 
