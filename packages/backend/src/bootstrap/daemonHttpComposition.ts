@@ -65,8 +65,6 @@ import {
 import {
   composeCachedRepositoryOperations,
   composeRepositoryGroups,
-  composeLocalRepositoryMirrors,
-  composeRemoteRepositoryMirrors,
   createWorkspaceContentScope,
 } from '@/modules/source-control/composition'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
@@ -149,7 +147,7 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
       | 'runtimeInventoryContent'
       | 'repositoryRevisionContent'
       | 'codeReviewArtifacts'
-      | 'repositoryRemote'
+      | 'repositoryMirrors'
       | 'workspacePresence'
     > & {
       /** RFC-432: the deployment's package skill artifact owner, built for this session. */
@@ -488,18 +486,12 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       }),
     })
 
-  // RFC-433: a hosted remote reads in the system volume; standalone (null) keeps its own mirror clones. RFC-527: chosen
-  // here explicitly.
-  const repositoryRemote = input.selections.repositoryRemote
-  const repositoryMirrors =
-    repositoryRemote === null
-      ? composeLocalRepositoryMirrors({ store: core.repositoryWorkspaceStore })
-      : composeRemoteRepositoryMirrors({
-          store: core.repositoryWorkspaceStore,
-          remote: repositoryRemote,
-          secretBox: input.secretBox,
-          appHome: input.appHome,
-        })
+  // RFC-531: the deployment's mirrors (standalone: its own mirror clones; hosted: remote reads in the system volume).
+  const repositoryMirrors = input.selections.repositoryMirrors({
+    store: core.repositoryWorkspaceStore,
+    secretBox: input.secretBox,
+    appHome: input.appHome,
+  })
   const resourceCatalogRoutes: ProviderAppCompositionInput<
     SelectedDaemonProviderCore<P>
   >['resourceCatalog'] = Object.freeze({

@@ -12,6 +12,7 @@ import {
   NULLABLE_SELECTIONS,
   PROCESS_FACTORY_SELECTIONS,
   REQUIRED_SELECTIONS,
+  SESSION_BUILT_SELECTIONS,
   SESSION_FACTORY_SELECTIONS,
 } from '../helpers/deploymentSelectionPartition'
 
@@ -41,8 +42,14 @@ const NULLABLE: readonly string[] = NULLABLE_SELECTIONS
 const STATED = [...REQUIRED, ...NULLABLE]
 /** RFC-432: required selections stated as factories each session calls with its own graph. */
 const SESSION_FACTORIES: readonly string[] = SESSION_FACTORY_SELECTIONS
+/** RFC-531: the mirrors, which both deployments build over the session's store — stated the same way. */
+const SESSION_BUILT: readonly string[] = SESSION_BUILT_SELECTIONS
 /** RFC-433: plus the secret box, opened once after the startup lock — stated the same way. */
-const FACTORIES: readonly string[] = [...SESSION_FACTORIES, ...PROCESS_FACTORY_SELECTIONS]
+const FACTORIES: readonly string[] = [
+  ...SESSION_FACTORIES,
+  ...SESSION_BUILT,
+  ...PROCESS_FACTORY_SELECTIONS,
+]
 const HOSTED = PREFIX + 'bootstrap/crewstation.ts'
 const RETIRED = [
   'standaloneModuleAdapters',
@@ -189,7 +196,8 @@ function standaloneViolations(standalone: SourceUnit | undefined): string[] {
   return errors
 }
 
-/** RFC-432/433: the hosted profile states each factory selection as a closure over the object it built. */
+/** RFC-432/433: the hosted profile states each factory selection as a closure over the object it built (RFC-531: or,
+ * for the mirrors, a closure that builds over the session's store). */
 function hostedViolations(hosted: SourceUnit | undefined): string[] {
   if (hosted === undefined) return ['missing source: ' + HOSTED]
   const closures = new Set<string>()
@@ -282,11 +290,16 @@ test('the partition lists are disjoint and cover the contract once', () => {
   // RFC-433: the last seven left the optional group — two required (49 → 51), five nullable (6 → 11).
   // RFC-527: candidate delivery and conflict merge left the nullable group — standalone selects the local effects
   // (51 → 53, 11 → 9).
-  expect(STATED).toHaveLength(62)
-  expect(REQUIRED).toHaveLength(53)
-  expect(NULLABLE).toHaveLength(9)
-  expect(SESSION_FACTORIES).toHaveLength(10)
-  expect(FACTORIES).toHaveLength(11)
+  // RFC-531: the nullable repository remote became two required selections stated as factories — the mirror refresh a
+  // session factory, the mirrors built over the session's store in both deployments (62 → 63, 53 → 55, 9 → 8; session
+  // factories 10 → 11, factories 11 → 13).
+  expect(STATED).toHaveLength(63)
+  expect(REQUIRED).toHaveLength(55)
+  expect(NULLABLE).toHaveLength(8)
+  expect(SESSION_FACTORIES).toHaveLength(11)
+  expect(SESSION_BUILT).toEqual(['repositoryMirrors'])
+  expect(FACTORIES).toHaveLength(13)
+  expect(new Set(FACTORIES).size).toBe(FACTORIES.length)
   for (const name of FACTORIES) expect(REQUIRED).toContain(name)
 })
 
@@ -321,10 +334,10 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
     PROFILE,
     (text) =>
       text.replace(
-        '  readonly repositoryRemote: RepositoryRemoteEffects | null',
-        '  readonly repositoryRemote?: RepositoryRemoteEffects',
+        '  readonly databaseInstallation: DaemonDatabaseInstallationPort | null',
+        '  readonly databaseInstallation?: DaemonDatabaseInstallationPort',
       ),
-    'partition:repositoryRemote:optional!=nullable',
+    'partition:databaseInstallation:optional!=nullable',
   ],
   [
     'a new selection added as optional',
@@ -436,14 +449,11 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
     'hosted factory not a closure:secretBox',
   ],
   [
-    'a hosted-only remote switched by absence again',
-    SESSION,
-    (text) =>
-      text.replace(
-        'if (input.repositoryRemote !== null)',
-        'if (input.repositoryRemote !== undefined)',
-      ),
-    `undefined check:${SESSION}:repositoryRemote`,
+    // RFC-531: the session no longer reads the retired remote; the task recovery is the hosted-only capability read here.
+    'a hosted-only capability switched by absence again',
+    APPLICATION,
+    (text) => text.replace('input.taskRecovery === null ?', 'input.taskRecovery === undefined ?'),
+    `undefined check:${APPLICATION}:taskRecovery`,
   ],
   [
     'the execution authority read as possibly absent',

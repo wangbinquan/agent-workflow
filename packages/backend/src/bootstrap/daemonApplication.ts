@@ -143,13 +143,15 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { composeDaemonRealtimePolicy } from '@/bootstrap/daemonRealtimePolicy'
-import type { LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
+import type {
+  McpDiagnosticsRuntime,
+  McpDiagnosticsSelection,
+} from '@/modules/resource-catalog/composition/mcpDiagnostics'
 
 /** Owned finite resource initialization and runtime-test composition for one application. */
 export interface UnstartedApplicationScope {
   readonly trackReady: <T>(ready: Promise<T>) => Promise<T>
-  readonly createMcpRuntimeTests: (deps: McpDiagnosticsCompositionInput) => McpDiagnosticsRuntime
+  readonly createMcpRuntimeTests: McpDiagnosticsSelection
 }
 
 export interface DaemonApplicationInput<
@@ -262,7 +264,7 @@ export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseP
   readonly resourceLimits: ReturnType<typeof composeResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
-  readonly mcpRuntimeTests: ReturnType<typeof composeLocalMcpDiagnostics>
+  readonly mcpRuntimeTests: McpDiagnosticsRuntime
   readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentModules: DaemonIntentModules
@@ -690,7 +692,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       runtimeInventoryContent: input.runtimeInventoryContent,
       repositoryRevisionContent: input.repositoryRevisionContent,
       codeReviewArtifacts: input.codeReviewArtifacts,
-      repositoryRemote: input.repositoryRemote,
+      repositoryMirrors: input.repositoryMirrors,
       workspacePresence: input.workspacePresence,
     },
     testSeams: {

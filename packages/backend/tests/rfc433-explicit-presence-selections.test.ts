@@ -8,6 +8,10 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { standaloneSelections } from '@/bootstrap/standalone'
+import {
+  composeLocalRepositoryMirrorRefresh,
+  composeLocalRepositoryMirrors,
+} from '@/modules/source-control/composition'
 import { startOnExecutionActive } from '@/bootstrap/executionActivation'
 import type { DaemonProviderRuntimeHandleFactory } from '@/bootstrap/daemonProviderRuntimeSession'
 
@@ -21,11 +25,14 @@ function home(): string {
   return root
 }
 
-test('the standalone profile states the three hosted-only capabilities as null', () => {
+test('the standalone profile states the two hosted-only capabilities as null', () => {
   const selections = standaloneSelections({ appHome: home() })
   expect(selections.databaseInstallation).toBeNull()
-  expect(selections.repositoryRemote).toBeNull()
   expect(selections.crewStationEvents).toBeNull()
+  // RFC-531: the former nullable remote is two required selections — standalone keeps its own mirror clones and
+  // their submodule refresh.
+  expect(selections.repositoryMirrors).toBe(composeLocalRepositoryMirrors)
+  expect(selections.repositoryMirrorRefresh).toBe(composeLocalRepositoryMirrorRefresh)
   // RFC-527: candidate delivery and conflict merge are required; standalone selects the local effects (the candidate
   // steps carry the local fixture session their pushes open).
   const candidate = selections.repositoryCandidateEffects as {

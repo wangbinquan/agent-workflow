@@ -57,11 +57,14 @@
 - `repositoryRemote` 换成两个必填选择（source-control `composition/deploymentSelections.ts` 定义类型）：
   - `repositoryMirrors: RepositoryMirrorsSelection`（`{ store, secretBox, appHome }` → `RepositoryMirrors`）：单机交 `composeLocalRepositoryMirrors`；
     托管交闭包，按托管工作区的远端读取调 `composeRemoteRepositoryMirrors`（与此前 daemon 在远端非空时构造的相同）。
-  - `repositoryMirrorRefresh: RepositoryMirrorRefreshSelection`（`{ store, configuration, appHome, secretBox }` → `Promise<RepositoryMirrorRefresh>`，
-    后者即刷新循环的 `stop` / `reconfigure` / `awaitIdle`）：单机交 `composeLocalRepositoryMirrorRefresh`（调本机的
-    `startConfiguredSubmoduleRefreshLoop`，实参与此前 daemon 交的相同）；托管交返回 `idleRepositoryMirrorRefresh`（什么都不做）的闭包。这两个
-    放在新文件 `composition/repositoryMirrorRefresh.ts`，镜像的组合文件不变。
-  - 两个新键都是会话级的工厂（RFC-432 的约定：单机交构造函数本身，托管交闭包），选择分组的清单随之改。
+  - `repositoryMirrorRefresh: RepositoryMirrorRefreshSelection`（`{ store, configuration, appHome, secretBox }` →
+    `RepositoryMirrorRefresh | Promise<RepositoryMirrorRefresh>`，前者即刷新循环的 `stop` / `reconfigure` / `awaitIdle`，daemon 一律 `await`）：
+    单机交 `composeLocalRepositoryMirrorRefresh`（调本机的 `startConfiguredSubmoduleRefreshLoop`，读过配置才开始，实参与此前 daemon 交的相同）；
+    托管交返回 `idleRepositoryMirrorRefresh`（冻结的一份，什么都不做）的闭包。这两个放在新文件 `composition/repositoryMirrorRefresh.ts`，镜像的
+    组合文件不变。
+  - 两个新键都按会话级的工厂给出（RFC-432 的约定：单机交构造函数本身，托管交闭包），但分属两组：镜像刷新是 RFC-432 的会话工厂——托管的
+    闭包每次交出同一个对象；镜像是新的一组“两种部署都按会话构造”——登记的仓库在会话自己的数据库里，托管的闭包按调用它的会话的仓库存储
+    构造远端读取，没有可由 profile 预先建好的一份。选择分组的清单随之改。
 - daemon：HTTP 装配调 `selections.repositoryMirrors(...)`；子仓刷新句柄调 `repositoryMirrorRefresh(...)` 并照旧登记配置变更监听、停止与排空。
   两处 `null` 分支删去；生命周期程序里 `submodule-refresh` 句柄照旧两种 profile 都登记（有序作业 id 不变）。
 - `DEPLOYMENT_SELECTION_KEYS` 删 `repositoryRemote`、加这两个键。
@@ -73,8 +76,8 @@
   签名定型的类型查询；③ daemon 不读 `repositoryRemote`，两个 profile 都给出 `repositoryMirrors` 与 `repositoryMirrorRefresh`；④ 托管的镜像刷新
   什么都不做、单机的选择按本机实现构造（行为）；带负对照（只喂伪造的源码）。
 - 钉住旧形状的锁随改：RFC-527 的“HTTP 装配按远端显式选镜像”；选择分组的清单（`tests/helpers/deploymentSelectionPartition.ts`）与读它的
-  `rfc394`、`rfc431`（分组计数、两条以 `repositoryRemote` 为靶的负对照改以 `databaseInstallation` 与 `taskRecovery` 为靶）、`rfc433`（单机交出
-  本机的镜像与刷新）；`rfc370-v4-repository-mirrors` 与 `rfc370-root-background-bindings`（子仓刷新句柄改调选择）；`rfc422`（运行族开启处定义的
+  `rfc394`（键数；RFC-432 的会话工厂交出同一个对象之外，加一条：托管的镜像经调用它的会话的仓库存储读取）、`rfc431`（分组计数、两条以
+  `repositoryRemote` 为靶的负对照改以 `databaseInstallation` 与 `taskRecovery` 为靶）、`rfc433`（单机交出本机的镜像与刷新）；`rfc370-v4-repository-mirrors` 与 `rfc370-root-background-bindings`（子仓刷新句柄改调选择）；`rfc422`（运行族开启处定义的
   输入改名）。
 
 ## 3. 清单（退出门）

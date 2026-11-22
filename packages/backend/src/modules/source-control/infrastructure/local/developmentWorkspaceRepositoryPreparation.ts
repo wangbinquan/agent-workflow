@@ -7,14 +7,8 @@ import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/o
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { resolveCachedRepo } from './repositoryMirrorCache'
-
-export interface DevelopmentWorkspaceRepositoryPreparation {
-  prepare(input: { readonly repositoryId: string }): Promise<{
-    readonly id: string
-    readonly localPath: string
-    readonly defaultBranch: string | null
-  }>
-}
+// RFC-531: the port both profiles implement lives in application/ports.
+import type { DevelopmentWorkspaceRepositoryPreparation } from '../../application/ports/developmentWorkspaceRepositoryPreparation'
 
 export function assertDevelopmentWorkspaceRepositoryFreshness(input: {
   readonly repositoryId: string

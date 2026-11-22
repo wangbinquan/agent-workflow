@@ -440,10 +440,14 @@ describe('RFC-527 ③ 装配处的显式构造', () => {
     expect(automation).toContain('constconflictMergeEffects=input.conflictMergeWorkspaceEffects')
   })
 
-  test('HTTP 装配按部署选择的远端显式选镜像的一支', () => {
-    expect(squash(text(HTTP))).toContain(
-      'repositoryRemote===null?composeLocalRepositoryMirrors({store:core.repositoryWorkspaceStore}):composeRemoteRepositoryMirrors({store:core.repositoryWorkspaceStore,remote:repositoryRemote,secretBox:input.secretBox,appHome:input.appHome})',
+  // RFC-531: the deployment profile selects the mirrors (standalone: local; hosted: remote reads); the HTTP assembly no
+  // longer branches on whether the deployment has a remote.
+  test('HTTP 装配取部署选择给出的镜像（RFC-531：由 profile 选本机或远端一支）', () => {
+    const http = squash(text(HTTP))
+    expect(http).toContain(
+      'constrepositoryMirrors=input.selections.repositoryMirrors({store:core.repositoryWorkspaceStore,secretBox:input.secretBox,appHome:input.appHome})',
     )
+    expect(http).not.toContain('repositoryRemote')
   })
 
   test('维护 worker 在没有托管效果时用本机的草稿区、准备与维护文件系统（此前回落的同一组参数；RFC-528：在单机 profile 的 worker 部分）', () => {

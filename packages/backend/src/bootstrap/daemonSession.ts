@@ -29,10 +29,7 @@ import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/op
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { registerConfigAppliedListener } from '@/platform/configuration/configAppliedListeners'
 import { runTaskIdleTimeoutSweep } from '@/modules/task-execution/composition/taskIdleTimeout'
-import {
-  startBatchImportGc,
-  startConfiguredSubmoduleRefreshLoop,
-} from '@/modules/source-control/composition'
+import { startBatchImportGc } from '@/modules/source-control/composition'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { startBackupScheduler } from '@/platform/background/providerBackupScheduler'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
@@ -654,18 +651,15 @@ export async function composeDaemonSession(
   const submoduleRefreshRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'submodule-refresh',
     async start() {
-      // RFC-370 §10 V17: a hosted deployment keeps no mirror to refresh — each
-      // task fetches the latest inside its own volume. The handle stays
-      // registered (both daemons freeze the same writers) but runs nothing.
-      if (input.repositoryRemote !== null)
-        return Object.freeze({ stop: () => undefined, drain: async () => undefined })
-      const ticker = await startConfiguredSubmoduleRefreshLoop(
-        application.core.repositoryWorkspaceStore,
-        input.configuration,
-        undefined,
-        Paths.root,
-        input.secretBox,
-      )
+      // RFC-531: the deployment's mirror refresh (standalone: its mirrors' submodules; hosted: nothing to refresh — each
+      // task fetches the latest inside its own volume, RFC-370 §10 V17). The handle stays registered in both daemons
+      // (both freeze the same writers).
+      const ticker = await input.repositoryMirrorRefresh({
+        store: application.core.repositoryWorkspaceStore,
+        configuration: input.configuration,
+        appHome: Paths.root,
+        secretBox: input.secretBox,
+      })
       const unregister = registerConfigAppliedListener(
         input.applicationConfiguration.notificationKey,
         () => ticker.reconfigure().then(() => undefined),

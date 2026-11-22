@@ -58,6 +58,10 @@ export const REQUIRED_SELECTIONS = [
   'developmentWorkspaceRepositoryPreparation',
   'repositoryPreparationEffects',
   'scratchWorkspaceEffects',
+  // RFC-531: the mirrors and their refresh, selected by the profile (formerly the nullable `repositoryRemote`; see
+  // SESSION_BUILT_SELECTIONS and SESSION_FACTORY_SELECTIONS).
+  'repositoryMirrors',
+  'repositoryMirrorRefresh',
   // RFC-433: the post-lock secret box factory (see PROCESS_FACTORY_SELECTIONS) and the execution authority.
   'secretBox',
   'executionAuthority',
@@ -66,7 +70,7 @@ export const REQUIRED_SELECTIONS = [
 /**
  * RFC-432: the required selections a standalone deployment can only build from the session graph. Both profiles
  * state a factory each session calls: standalone gives the module's local constructor, hosted a closure over the
- * object its profile built.
+ * object its profile built (RFC-531: for the mirror refresh, source-control's one idle handle).
  */
 export const SESSION_FACTORY_SELECTIONS = [
   'contentStore',
@@ -79,7 +83,16 @@ export const SESSION_FACTORY_SELECTIONS = [
   'developmentWorkspaceRepositoryPreparation',
   'repositoryPreparationEffects',
   'scratchWorkspaceEffects',
+  'repositoryMirrorRefresh',
 ] as const
+
+/**
+ * RFC-531: the required selection both deployments build from the session graph. Stated like a session factory
+ * (standalone gives the module's local constructor, hosted a closure), but the hosted closure builds its remote reads
+ * over the repository store of the session that calls it — the registered repositories live in that session's
+ * database — so there is no one object for the hosted profile to build.
+ */
+export const SESSION_BUILT_SELECTIONS = ['repositoryMirrors'] as const
 
 /**
  * RFC-433: the required selection opened once per process after the startup lock (standalone reads or creates
@@ -97,7 +110,6 @@ export const NULLABLE_SELECTIONS = [
   'initializeExecution',
   // RFC-433: former presence switches, now explicit hosted-only capabilities.
   'databaseInstallation',
-  'repositoryRemote',
   'crewStationEvents',
 ] as const
 

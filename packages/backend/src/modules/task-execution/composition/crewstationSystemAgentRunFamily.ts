@@ -1,4 +1,4 @@
-import type { LocalSystemAgentRunFamilyInput } from '../infrastructure/local/systemAgentRunFamily'
+import type { SystemAgentRunFamilySelection } from './systemAgentRunFamilySelection'
 import type { HostedRunFamilyInput } from '../infrastructure/crewstation/hostedRunFamilyProviders'
 import { createHostedSystemAgentRunFamily } from '../infrastructure/crewstation/systemAgentRunFamily'
 import {
@@ -19,9 +19,7 @@ export interface CrewStationSystemAgentRunProviders<Bind> {
 export function createCrewStationSystemAgentRunFamily<Bind>(
   input: HostedRunFamilyInput,
   providers: CrewStationSystemAgentRunProviders<Bind>,
-): (
-  options: LocalSystemAgentRunFamilyInput,
-) => ReturnType<typeof composeLocalSystemAgentRunFamily<Bind>> {
+): SystemAgentRunFamilySelection<Bind> {
   return (options) => {
     if (options.fixture !== undefined)
       return composeLocalSystemAgentRunFamily(options, providers.local)

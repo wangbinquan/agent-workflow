@@ -32,6 +32,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import {
   composeRemoteRepositoryMirrors,
   composeRepositoryWorkspaceStore,
+  idleRepositoryMirrorRefresh,
   type RepositoryRemoteEffects,
 } from '../src/modules/source-control/composition'
 import { executeTaskImageRepositoryRemote } from '../src/modules/source-control/composition/taskImageRepositoryRemote'
@@ -333,14 +334,22 @@ describe('RFC-370 V17 hosted picker route', () => {
 })
 
 describe('RFC-370 V17 hosted mirror refresh job', () => {
-  test('a hosted daemon keeps the refresh handle registered but runs nothing', () => {
+  test('a hosted daemon keeps the refresh handle registered but runs nothing', async () => {
     // Source-level lock: both daemons freeze the same writers (RFC-349), so
-    // the handle stays in the PostgreSQL session's list; with the hosted
-    // remote selected its start() returns an inert handle. RFC-433: the standalone profile states the remote
-    // as null, so the hosted decision is an explicit null check.
+    // the handle stays in the PostgreSQL session's list. RFC-531: the handle always starts the deployment's mirror
+    // refresh, and the hosted profile selects the idle one (no mirror to refresh), so its start runs nothing.
     const start = readDaemonGraphSource()
     const factory = start.slice(start.indexOf("id: 'submodule-refresh'"))
-    expect(factory.slice(0, 700)).toContain('if (input.repositoryRemote !== null)')
+    expect(factory.slice(0, 900)).toContain('await input.repositoryMirrorRefresh({')
+    expect(factory.slice(0, 900)).not.toContain('repositoryRemote')
+    const hosted = await Bun.file(
+      new URL('../src/bootstrap/crewstation.ts', import.meta.url),
+    ).text()
+    expect(hosted).toContain('repositoryMirrorRefresh: () => idleRepositoryMirrorRefresh,')
+    expect(Object.isFrozen(idleRepositoryMirrorRefresh)).toBe(true)
+    expect(idleRepositoryMirrorRefresh.stop()).toBeUndefined()
+    expect(await idleRepositoryMirrorRefresh.reconfigure()).toBe(false)
+    expect(await idleRepositoryMirrorRefresh.awaitIdle()).toBeUndefined()
   })
 })
 

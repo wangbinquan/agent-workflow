@@ -1,5 +1,8 @@
-import { bindMcpDiagnosticsRuntime, createMcpDiagnosticsApplication } from './mcpDiagnostics'
-import type { composeLocalMcpDiagnostics } from './localMcpDiagnostics'
+import {
+  bindMcpDiagnosticsRuntime,
+  createMcpDiagnosticsApplication,
+  type McpDiagnosticsSelection,
+} from './mcpDiagnostics'
 import { composeMcpRuntimeTestProvider } from './mcpRuntimeTestPersistence'
 import { createHostedMcpProbe } from '../infrastructure/crewstation/mcpProbe'
 import {
@@ -12,9 +15,7 @@ export { createCrewStationMcpDiagnosticsEffects } from '../infrastructure/crewst
 
 /** Resource Catalog retains admission, ACL, turn/session leases and UI events;
  * only its selected execution and workspace effects differ. */
-export function createCrewStationMcpDiagnostics(
-  input: HostedInput,
-): typeof composeLocalMcpDiagnostics {
+export function createCrewStationMcpDiagnostics(input: HostedInput): McpDiagnosticsSelection {
   // RFC-488: a test fixture selects the local family in bootstrap; this family is hosted only.
   return (options) => {
     const selected = {

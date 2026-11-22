@@ -101,10 +101,20 @@ for (const [name, query, notificationKey] of [
       expect(compact(backup, start)).not.toContain('loadRetention:')
       expect(compact(backup, start)).toContain("pruneMode:'external'")
       const refresh = namedVariable(root, 'submoduleRefreshRuntimeFactory')
-      const selected = calls(refresh, start, 'startConfiguredSubmoduleRefreshLoop')
+      // RFC-531: the refresh is the deployment's selection; the session hands it the same configuration query.
+      const selected = calls(refresh, start, 'input.repositoryMirrorRefresh')
       expect(selected).toHaveLength(1)
       expect(ts.isAwaitExpression(selected[0]!.parent)).toBe(true)
-      expect(compact(selected[0]!.arguments[1]!, start)).toBe(query)
+      const argument = selected[0]!.arguments[0]!
+      if (!ts.isObjectLiteralExpression(argument))
+        throw new Error('refresh selection input is not a literal')
+      const configuration = argument.properties.find(
+        (property): property is ts.PropertyAssignment =>
+          ts.isPropertyAssignment(property) && property.name.getText(start) === 'configuration',
+      )
+      expect(
+        configuration === undefined ? undefined : compact(configuration.initializer, start),
+      ).toBe(query)
       expect(compact(refresh, start)).toContain('ticker.reconfigure().then(()=>undefined)')
       expect(compact(refresh, start)).toContain('unregister()')
       const listener = calls(refresh, start, 'registerConfigAppliedListener')

@@ -15,6 +15,8 @@ import { createFileArchivedEventsReader } from '@/platform/background/eventsArch
 import { Paths } from '@/util/paths'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import {
+  composeLocalRepositoryMirrorRefresh,
+  composeLocalRepositoryMirrors,
   composeLocalWorkspaceExcludeProfiles,
   createFileConflictMergeWorkspaceEffects,
   createFileEmployeeCaseWorkspaceEffectsFactory,
@@ -185,10 +187,12 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     taskRecovery: null,
     maintenanceEffectsBootstrap: null,
     initializeExecution: null,
-    // RFC-433: hosted-only capabilities. Standalone runs its local epoch installation path, keeps its own
-    // mirror clones and has no CrewStation events.
+    // RFC-531: the daemon's own mirror clones and their submodule refresh.
+    repositoryMirrors: composeLocalRepositoryMirrors,
+    repositoryMirrorRefresh: composeLocalRepositoryMirrorRefresh,
+    // RFC-433: hosted-only capabilities. Standalone runs its local epoch installation path and has no CrewStation
+    // events.
     databaseInstallation: null,
-    repositoryRemote: null,
     crewStationEvents: null,
   }
 }

@@ -20,8 +20,10 @@ import type {
   NativeSystemAgentContents,
 } from './nativeRunFamilyProviders'
 
-/** The explicit root's selection: native facts, optional observations and the fake-run fixture. */
-export interface LocalSystemAgentRunFamilyInput {
+/** The explicit root's selection: native facts, optional observations and the fake-run fixture. RFC-531: what the session
+ * hands either profile's System Agent run family selection (formerly `LocalSystemAgentRunFamilyInput`); it stays beside
+ * the native run because its fixture is typed by the native run's options and result. */
+export interface SystemAgentRunFamilySelectionInput {
   appHome(): string
   readonly observations?: () => SystemAgentObservationFactory
   readonly fixture?: {
@@ -36,7 +38,7 @@ export interface LocalSystemAgentRuntimes<Bind> extends NativeRuntimeContents {
 
 /** Native facts and fake-run projection are selected only by an explicit root. */
 export function createLocalSystemAgentRunFamily<Bind>(
-  input: LocalSystemAgentRunFamilyInput,
+  input: SystemAgentRunFamilySelectionInput,
   providers: {
     readonly runtimes: LocalSystemAgentRuntimes<Bind>
     readonly contents: NativeSystemAgentContents

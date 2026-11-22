@@ -1,6 +1,7 @@
 // RFC-370 §10 V17 — the selected repository mirrors (see the port). RFC-512: the reads, the registration and the
 // refresh are application use cases (application/repositoryMirrors.ts); this assembly selects standalone or
-// hosted and hands each its effects. RFC-527: two explicit assemblies; bootstrap picks one by the deployment's remote.
+// hosted and hands each its effects. RFC-527: two explicit assemblies. RFC-531: the deployment profile selects one (and
+// the matching mirror refresh) instead of the daemon branching on whether the deployment has a remote.
 import type { SecretBox } from '@/auth/secretBox'
 import {
   ensureCachedRepoIdentity,

@@ -21,6 +21,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   NULLABLE_SELECTIONS,
   REQUIRED_SELECTIONS,
+  SESSION_BUILT_SELECTIONS,
   SESSION_FACTORY_SELECTIONS,
 } from './helpers/deploymentSelectionPartition'
 
@@ -64,9 +65,11 @@ const HOSTED_SELECTION_KEYS = [
   'repositoryBaselines',
   'repositoryCandidateEffects',
   'repositoryGitWorkspaces',
+  // RFC-531: the nullable remote became the profile's mirrors and their refresh.
+  'repositoryMirrorRefresh',
+  'repositoryMirrors',
   'repositoryPreparationEffects',
   'repositoryPublicationTransport',
-  'repositoryRemote',
   'repositoryRevisionContent',
   'resourcePackagePluginArtifacts',
   'resourcePackageSkillArtifacts',
@@ -153,8 +156,9 @@ test('selection projection preserves all receivers and excludes session-only fie
   expect('token' in selected).toBe(false)
   expect('requiredProvider' in selected).toBe(false)
   // RFC-428: four dead / shadowed selections retired (72 → 68); RFC-429: the evidence group (68 → 64);
-  // RFC-430: three derivable selections (64 → 61); RFC-431: graph-development artifacts (61 → 62).
-  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(62)
+  // RFC-430: three derivable selections (64 → 61); RFC-431: graph-development artifacts (61 → 62); RFC-531: the nullable
+  // repository remote became the mirrors and their refresh (62 → 63).
+  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(63)
 })
 for (const version of ['git version 2.37.9', null])
   test('incompatible standalone git returns the unchanged fatal message: ' + version, async () => {
@@ -331,8 +335,9 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         expect(Object.keys(profile.selections).sort()).toEqual([...HOSTED_SELECTION_KEYS].sort())
         // RFC-428: the shadowed portArtifactContentEffects left the hosted selections (69 → 68);
         // RFC-429: the evidence group collapsed into evidenceArtifacts (68 → 64);
-        // RFC-430: three derivable selections left (64 → 61); RFC-431: graph-development artifacts (62).
-        expect(HOSTED_SELECTION_KEYS).toHaveLength(62)
+        // RFC-430: three derivable selections left (64 → 61); RFC-431: graph-development artifacts (62); RFC-531: the
+        // remote became the mirrors and their refresh (63).
+        expect(HOSTED_SELECTION_KEYS).toHaveLength(63)
         expect(profile.selections.graphDevelopmentArtifacts).toBe(
           profile.selections.evidenceArtifacts,
         )
@@ -344,6 +349,27 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
           expect(built).toBeDefined()
           expect(factory(undefined as never)).toBe(built)
         }
+        // RFC-531: the hosted mirrors are built over the store of the session that calls the selection (the registered
+        // repositories live in that session's database), so each session reads through its own store.
+        expect(SESSION_BUILT_SELECTIONS).toEqual(['repositoryMirrors'])
+        const looked: string[] = []
+        const sessionStore = {
+          findCachedRepoById: async (id: string) => {
+            looked.push(id)
+            return null
+          },
+        }
+        const mirrors = profile.selections.repositoryMirrors({
+          store: sessionStore as never,
+          secretBox: system.secretBox,
+          appHome: '/rfc394-session-home',
+        })
+        expect(mirrors.registration.kind).toBe('remote')
+        expect(mirrors.local).toBeUndefined()
+        await expect(mirrors.refs('rfc394-registered')).rejects.toThrow(
+          'cached repo rfc394-registered not found',
+        )
+        expect(looked).toEqual(['rfc394-registered'])
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
         // RFC-433: the platform's box, handed out after the startup lock by a closure over it.

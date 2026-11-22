@@ -10,6 +10,7 @@ import type {
   McpProbeRunner,
   McpRuntimeTestReconciliationParticipant,
 } from '../public/participants'
+import type { McpDiagnosticsEffectDependencies } from '../infrastructure/local/mcpDiagnosticsEffects'
 
 export type McpDiagnosticsApplicationInput = McpDiagnosticsDependencies
 
@@ -23,6 +24,17 @@ export interface McpDiagnosticsCompositionInput extends McpDiagnosticsApplicatio
   readonly coordinator: McpOperationCoordinatorPort
 }
 export type McpDiagnosticsRuntime = ReturnType<typeof composeMcpDiagnostics>
+
+/** RFC-531: what the session hands the deployment's MCP diagnostics selection. Both profiles take the same input (the
+ * hosted one spreads it into its own effects); its effect dependencies are still declared beside the local effects. */
+export interface McpDiagnosticsSelectionInput
+  extends
+    McpDiagnosticsEffectDependencies,
+    Omit<McpDiagnosticsDependencies, 'effects'>,
+    Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator'> {}
+
+/** RFC-531: the deployment's MCP diagnostics (standalone: local probes; hosted: probes in the release's system volume). */
+export type McpDiagnosticsSelection = (input: McpDiagnosticsSelectionInput) => McpDiagnosticsRuntime
 
 export function composeMcpDiagnostics(input: McpDiagnosticsCompositionInput) {
   return bindMcpDiagnosticsRuntime(createMcpDiagnosticsApplication(input), input)

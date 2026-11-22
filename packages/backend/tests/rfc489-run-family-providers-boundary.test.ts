@@ -285,12 +285,11 @@ describe('RFC-489 ⑤ bootstrap 绑定运行族的提供者', () => {
     expect(read('bootstrap/crewstation.ts')).toContain(
       '...composeCrewStationRunFamilySelections(execution.hostedAgents),',
     )
+    // RFC-531: the contract types both selections by their selection types, not the local selections' signatures.
     const profile = read('bootstrap/deploymentProfile.ts')
+    expect(profile).toContain('readonly runtimeManagement: RuntimeManagementSelection')
     expect(profile).toContain(
-      'readonly runtimeManagement: typeof composeLocalRuntimeManagementSelection',
-    )
-    expect(profile).toContain(
-      'readonly systemAgentRunFamily: typeof composeLocalSystemAgentRunFamilySelection',
+      'readonly systemAgentRunFamily: SystemAgentRunFamilySelection<SystemAgentRuntimeBinder>',
     )
     const execution = read('modules/task-execution/composition/crewstationExecution.ts')
     expect(execution).not.toContain('systemAgentRunFamily:')

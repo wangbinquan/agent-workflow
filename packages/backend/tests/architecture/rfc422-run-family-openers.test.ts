@@ -47,7 +47,8 @@ const OWNERS = new Map([
   ['HostedRunFamilyInput', HOSTED_PORTS],
   ['HostedSystemAgentContents', HOSTED_PORTS],
   ['createLocalSystemAgentRunFamily', LOCAL_SYSTEM],
-  ['LocalSystemAgentRunFamilyInput', LOCAL_SYSTEM],
+  // RFC-531: renamed from LocalSystemAgentRunFamilyInput (both profiles' selections take it); still defined by the opener.
+  ['SystemAgentRunFamilySelectionInput', LOCAL_SYSTEM],
   ['createLocalRuntimeSmokeRunFamily', LOCAL_SMOKE],
   ['createLocalTaskAgentRunFamily', LOCAL_TASK],
   ['createHostedSystemAgentRunFamily', HOSTED_SYSTEM],

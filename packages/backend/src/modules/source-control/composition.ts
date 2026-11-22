@@ -33,8 +33,18 @@ export {
   assertDevelopmentWorkspaceRepositoryFreshness,
   buildDevelopmentWorkspaceRepositoryPreparation,
   createDevelopmentWorkspaceRepositoryPreparation,
-  type DevelopmentWorkspaceRepositoryPreparation,
 } from './infrastructure/local/developmentWorkspaceRepositoryPreparation'
+export type { DevelopmentWorkspaceRepositoryPreparation } from './application/ports/developmentWorkspaceRepositoryPreparation'
+/** RFC-531: what a deployment selects for Source Control, typed by the session's input and the returned port. */
+export type {
+  DevelopmentWorkspaceRepositoryPreparationSelection,
+  RepositoryMirrorRefresh,
+  RepositoryMirrorRefreshSelection,
+  RepositoryMirrorsSelection,
+  RepositoryPreparationEffectsSelection,
+  RepositoryPublicationTransportSelection,
+  ScratchWorkspaceEffectsSelection,
+} from './composition/deploymentSelections'
 export { composeWorkspaceMaintenanceCommand } from './composition/workspaceMaintenance'
 export { createFileWorkspacePresenceQueries } from './infrastructure/local/fileWorkspacePresence'
 // RFC-431: the standalone profile's local selections (the hosted profile selects its own).
@@ -248,11 +258,16 @@ export type {
   WorkspaceContentEffects,
   WorkspaceContentEffectsFactory,
 } from './application/ports/workspaceContentEffects'
-/** RFC-370 §10 V17: registered repositories' reads, registration and refresh (RFC-527: local or remote, chosen by bootstrap). */
+/** RFC-370 §10 V17: registered repositories' reads, registration and refresh. RFC-531: the deployment profile selects them
+ * (standalone: the local mirrors and refresh; hosted: remote reads and no refresh). */
 export {
   composeLocalRepositoryMirrors,
   composeRemoteRepositoryMirrors,
 } from './composition/repositoryMirrors'
+export {
+  composeLocalRepositoryMirrorRefresh,
+  idleRepositoryMirrorRefresh,
+} from './composition/repositoryMirrorRefresh'
 /** RFC-447: repository-group management and the standalone URL import. */
 export { composeRepositoryGroups, localRepositoryUrlImport } from './composition/repositoryGroups'
 export {

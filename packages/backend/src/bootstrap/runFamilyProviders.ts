@@ -22,6 +22,7 @@ import {
   type LocalRuntimeManagementInput,
 } from '@/modules/runtime-management/composition/localRuntimeManagement'
 import { composeCrewStationRuntimeManagement } from '@/modules/runtime-management/composition/crewstationRuntimeManagement'
+import type { RuntimeManagementAssembly } from '@/modules/runtime-management/composition/runtimeManagement'
 import { composeLocalTaskAgentMaterialReferences } from '@/modules/resource-catalog/composition/taskAgentMaterialReferences'
 import { composeLocalTaskAgentWorkspaceContents } from '@/modules/source-control/composition/taskAgentWorkspaceContents'
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
@@ -34,6 +35,12 @@ import {
   type LocalSystemAgentRunProviders,
 } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { createCrewStationSystemAgentRunFamily } from '@/modules/task-execution/composition/crewstationSystemAgentRunFamily'
+import type {
+  SystemAgentRunFamilyBinding,
+  SystemAgentRunFamilySelection,
+  SystemAgentRunFamilySelectionInput,
+} from '@/modules/task-execution/composition/systemAgentRunFamilySelection'
+import type { SystemAgentObservationFactory } from '@/modules/task-execution/composition/systemAgentObservations'
 import type { LocalTaskAgentRunProviders } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { createHostedRuntimeSmokeProbe } from '@/modules/task-execution/composition/crewstationRuntimeSmoke'
 import {
@@ -48,14 +55,19 @@ export const localRuntimeSmokeRunProviders: LocalRuntimeSmokeRunProviders = Obje
   materialDefinitions: selectLocalAgentMaterialDefinition,
 })
 
+/** RFC-531: the runtime binder every System Agent run family hands back — runtime-management's native one in both
+ * profiles (the hosted family keeps it for the profile getters). */
+export type SystemAgentRuntimeBinder = ReturnType<
+  typeof createLocalSystemAgentRuntimeBindings
+>['bindRuntime']
+
 /** The native system agent run family's providers (runtime-management). */
-export const localSystemAgentRunProviders: LocalSystemAgentRunProviders<
-  ReturnType<typeof createLocalSystemAgentRuntimeBindings>['bindRuntime']
-> = Object.freeze({
-  runtimes: createLocalSystemAgentRuntimeBindings,
-  contents: createLocalSystemAgentRetainedContents,
-  materialDefinitions: selectLocalAgentMaterialDefinition,
-})
+export const localSystemAgentRunProviders: LocalSystemAgentRunProviders<SystemAgentRuntimeBinder> =
+  Object.freeze({
+    runtimes: createLocalSystemAgentRuntimeBindings,
+    contents: createLocalSystemAgentRetainedContents,
+    materialDefinitions: selectLocalAgentMaterialDefinition,
+  })
 
 /** The native task agent run family's providers (runtime-management, resource-catalog, source-control). */
 export const localTaskAgentRunProviders: LocalTaskAgentRunProviders = Object.freeze({
@@ -83,8 +95,8 @@ export function composeLocalMcpDiagnosticRunnerSelection(input: LocalMcpDiagnost
 
 /** The native system agent run family selection: one family per call. */
 export function composeLocalSystemAgentRunFamilySelection(
-  input: Parameters<typeof composeLocalSystemAgentRunFamily>[0],
-) {
+  input: SystemAgentRunFamilySelectionInput,
+): SystemAgentRunFamilyBinding<SystemAgentRuntimeBinder> {
   return composeLocalSystemAgentRunFamily(input, localSystemAgentRunProviders)
 }
 
@@ -95,12 +107,20 @@ export interface RuntimeManagementSelectionInput extends Omit<
   'smoke'
 > {
   appHome(): string
-  readonly observations?: Parameters<typeof composeLocalRuntimeSmokeRunFamily>[0]['observations']
+  readonly observations?: () => SystemAgentObservationFactory
 }
+
+/** RFC-531: the deployment's runtime management selection (standalone: the native assembly with the native smoke run
+ * family; hosted: the CrewStation assembly with the hosted smoke probe). */
+export type RuntimeManagementSelection = (
+  input: RuntimeManagementSelectionInput,
+) => RuntimeManagementAssembly
 
 /** Native runtime management: Runtime Management's own assembly, with Task Execution's native smoke run family over
  * the assembly's diagnostic targets. Every read of the selection input keeps its original timing. */
-export function composeLocalRuntimeManagementSelection(input: RuntimeManagementSelectionInput) {
+export function composeLocalRuntimeManagementSelection(
+  input: RuntimeManagementSelectionInput,
+): RuntimeManagementAssembly {
   return composeLocalRuntimeManagement({
     get configuration() {
       return input.configuration
@@ -137,7 +157,10 @@ type CrewStationHostedAgents = Parameters<typeof createCrewStationSystemAgentRun
 /** The CrewStation run-family selections: the hosted System Agent family over runtime-management's hosted contents,
  * and runtime-management's hosted runtime management with the hosted smoke probe. Each receives the same input it
  * received before RFC-489 (the System Agent family without the capability readers). */
-export function composeCrewStationRunFamilySelections(hosted: CrewStationHostedAgents) {
+export function composeCrewStationRunFamilySelections(hosted: CrewStationHostedAgents): {
+  readonly systemAgentRunFamily: SystemAgentRunFamilySelection<SystemAgentRuntimeBinder>
+  readonly runtimeManagement: RuntimeManagementSelection
+} {
   const {
     capabilities: _capabilities,
     initialCapabilities: _initialCapabilities,

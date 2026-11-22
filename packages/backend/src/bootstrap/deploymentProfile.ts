@@ -10,18 +10,20 @@ import type { CrewStationEventIngress } from '@/modules/integration/composition/
 import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
-import type { createRepositoryPublicationTransport } from '@/modules/source-control/composition'
 import type {
-  composeLocalRepositoryPreparationEffects,
-  composeLocalScratchWorkspaceEffects,
-} from '@/modules/source-control/composition/repositoryPreparation'
+  DevelopmentWorkspaceRepositoryPreparationSelection,
+  RepositoryMirrorRefreshSelection,
+  RepositoryMirrorsSelection,
+  RepositoryPreparationEffectsSelection,
+  RepositoryPublicationTransportSelection,
+  ScratchWorkspaceEffectsSelection,
+} from '@/modules/source-control/composition'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import type { DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
-import type {
-  composeLocalRuntimeManagementSelection,
-  composeLocalSystemAgentRunFamilySelection,
-} from './runFamilyProviders'
+import type { RuntimeManagementSelection, SystemAgentRuntimeBinder } from './runFamilyProviders'
+import type { SystemAgentRunFamilySelection } from '@/modules/task-execution/composition/systemAgentRunFamilySelection'
+import type { McpDiagnosticsSelection } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import type { TaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
@@ -46,18 +48,15 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/composition'
-import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/modules/source-control/composition'
 import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
 import type { DaemonDatabaseInstallationPort } from '@/modules/system-operations/composition/daemonDatabase'
-import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
-import type { createLogger } from '@/util/log'
+import type { Logger } from '@/util/log'
 import type { CustomObserverProgramFactory } from '@/modules/event-center/composition'
 import type { SignalledDaemonRuntimeOwner } from './daemonProviderRuntimeHandles'
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import type {
   EmployeeCaseWorkspaceEffectsFactory,
-  RepositoryRemoteEffects,
   WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import type {
@@ -81,7 +80,7 @@ import type { Config } from '@agent-workflow/shared'
 export type DeploymentKind = 'standalone' | 'crewstation'
 
 export interface HostProbeInput {
-  readonly log: ReturnType<typeof createLogger>
+  readonly log: Logger
   readonly config: Config
 }
 
@@ -122,7 +121,8 @@ export interface DeploymentSessionStorage {
  * substitute a default. Three groups:
  * - required: both profiles give a value; RFC-432: a value the standalone deployment can only build from the
  *   session graph is a factory each session calls (standalone: the module's local constructor; hosted: a
- *   closure over the object its profile built);
+ *   closure over the object its profile built — RFC-531: except the mirrors, whose hosted closure builds over
+ *   the session's repository store);
  * - required, nullable: a capability only the hosted deployment has; standalone states `null`, and a consumer
  *   decides with an explicit `null` check.
  * RFC-433: no selection is optional — what used to be a deployment switch by presence is either a real
@@ -166,11 +166,12 @@ export interface DeploymentSelections {
   readonly recoveredExecutionTaskIds: () => readonly string[]
   /** RFC-370 §9.2 V1 — deployment workers started with execution authority (standalone: none). */
   readonly hostedBackgroundOwners: readonly SignalledDaemonRuntimeOwner[]
-  /** RFC-489: Runtime Management's assembly with the smoke run family bootstrap pairs in. */
-  readonly runtimeManagement: typeof composeLocalRuntimeManagementSelection
+  /** RFC-489: Runtime Management's assembly with the smoke run family bootstrap pairs in. RFC-531: each selection below
+   * is typed by its owner's selection type (the session's input and the returned port), not a local factory. */
+  readonly runtimeManagement: RuntimeManagementSelection
   /** RFC-489: Task Execution's System Agent run family over the providers bootstrap binds. */
-  readonly systemAgentRunFamily: typeof composeLocalSystemAgentRunFamilySelection
-  readonly mcpDiagnostics: typeof composeLocalMcpDiagnostics
+  readonly systemAgentRunFamily: SystemAgentRunFamilySelection<SystemAgentRuntimeBinder>
+  readonly mcpDiagnostics: McpDiagnosticsSelection
   /** RFC-370 v2 §3.6 — the deployment's credential mechanism. */
   credentials: CredentialAdapterSelection
   customObserverPrograms: CustomObserverProgramFactory
@@ -198,8 +199,6 @@ export interface DeploymentSelections {
   readonly initializeExecution: ((initialize: () => Promise<void>) => Promise<void>) | null
   /** RFC-433: hosted database installation; standalone runs its local epoch installation path. */
   readonly databaseInstallation: DaemonDatabaseInstallationPort | null
-  /** RFC-370 §10 V17: hosted repository remote reads; standalone keeps the daemon's own mirror clones. */
-  readonly repositoryRemote: RepositoryRemoteEffects | null
   readonly crewStationEvents: CrewStationEventIngress | null
 
   // ── Required, session-scoped factories (RFC-432): each session calls them with its own graph ──
@@ -215,10 +214,15 @@ export interface DeploymentSelections {
   /** Called by a PostgreSQL session only; a SQLite session keeps its legacy recovery adapter. */
   readonly databaseBackup: PostgresqlBackupCoordinatorFactory
   /** RFC-370 §9.2 V3 — hosted: publication network Git in the task volume. */
-  readonly repositoryPublicationTransport: typeof createRepositoryPublicationTransport
-  readonly developmentWorkspaceRepositoryPreparation: typeof createDevelopmentWorkspaceRepositoryPreparation
-  readonly repositoryPreparationEffects: typeof composeLocalRepositoryPreparationEffects
-  readonly scratchWorkspaceEffects: typeof composeLocalScratchWorkspaceEffects
+  readonly repositoryPublicationTransport: RepositoryPublicationTransportSelection
+  readonly developmentWorkspaceRepositoryPreparation: DevelopmentWorkspaceRepositoryPreparationSelection
+  readonly repositoryPreparationEffects: RepositoryPreparationEffectsSelection
+  readonly scratchWorkspaceEffects: ScratchWorkspaceEffectsSelection
+  /** RFC-370 §10 V17 / RFC-531: registered repositories' reads, registration and refresh — standalone: the daemon's own
+   * mirror clones; hosted: remote reads in the release's system volume. */
+  readonly repositoryMirrors: RepositoryMirrorsSelection
+  /** RFC-531: the periodic mirror refresh — standalone: its mirrors' submodules; hosted: nothing to refresh. */
+  readonly repositoryMirrorRefresh: RepositoryMirrorRefreshSelection
 
   // ── Required, process-scoped (RFC-433) ──
   /**

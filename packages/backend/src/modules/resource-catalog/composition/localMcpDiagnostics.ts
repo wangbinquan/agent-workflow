@@ -6,15 +6,12 @@ import {
 import {
   bindMcpDiagnosticsRuntime,
   createMcpDiagnosticsApplication,
-  type McpDiagnosticsCompositionInput,
+  type McpDiagnosticsRuntime,
+  type McpDiagnosticsSelectionInput,
 } from './mcpDiagnostics'
 
 export interface LocalMcpDiagnosticsApplicationInput
   extends McpDiagnosticsEffectDependencies, Omit<McpDiagnosticsDependencies, 'effects'> {}
-export interface LocalMcpDiagnosticsCompositionInput extends LocalMcpDiagnosticsApplicationInput {
-  readonly requestBinding: McpDiagnosticsCompositionInput['requestBinding']
-  readonly coordinator: McpDiagnosticsCompositionInput['coordinator']
-}
 
 /** Original native snapshot/getter order and actual application callback receiver. */
 export function createLocalMcpDiagnosticsApplication(input: LocalMcpDiagnosticsApplicationInput) {
@@ -27,6 +24,9 @@ export function createLocalMcpDiagnosticsApplication(input: LocalMcpDiagnosticsA
   return application
 }
 
-export function composeLocalMcpDiagnostics(input: LocalMcpDiagnosticsCompositionInput) {
+/** The standalone profile's MCP diagnostics selection (RFC-531: typed by the neutral selection input). */
+export function composeLocalMcpDiagnostics(
+  input: McpDiagnosticsSelectionInput,
+): McpDiagnosticsRuntime {
   return bindMcpDiagnosticsRuntime(createLocalMcpDiagnosticsApplication(input), input)
 }

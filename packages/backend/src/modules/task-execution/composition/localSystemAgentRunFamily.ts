@@ -4,7 +4,7 @@ import type {
 } from '../infrastructure/local/nativeRunFamilyProviders'
 import {
   createLocalSystemAgentRunFamily,
-  type LocalSystemAgentRunFamilyInput,
+  type SystemAgentRunFamilySelectionInput,
   type LocalSystemAgentRuntimes,
 } from '../infrastructure/local/systemAgentRunFamily'
 
@@ -14,14 +14,14 @@ export interface LocalSystemAgentRunProviders<Bind> {
   /** The system agent runtime bindings. */
   runtimes(): LocalSystemAgentRuntimes<Bind>
   /** The retained contents over this family's input. */
-  contents(input: LocalSystemAgentRunFamilyInput): NativeSystemAgentContents
+  contents(input: SystemAgentRunFamilySelectionInput): NativeSystemAgentContents
   readonly materialDefinitions: NativeMaterialDefinitions
 }
 
 /** Native facts and fake-run projection are selected only by an explicit root. RFC-422: the opener is
  * infrastructure/local/systemAgentRunFamily.ts. RFC-489: the runtime-management providers arrive from bootstrap. */
 export function composeLocalSystemAgentRunFamily<Bind>(
-  input: LocalSystemAgentRunFamilyInput,
+  input: SystemAgentRunFamilySelectionInput,
   providers: LocalSystemAgentRunProviders<Bind>,
 ) {
   return createLocalSystemAgentRunFamily(input, {

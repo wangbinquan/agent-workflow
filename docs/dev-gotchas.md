@@ -978,6 +978,12 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `composition/digitalEmployeeExecution\.ts` 这样带扩展名的路径筛读源码的用例，漏掉了把文件写成 `modules/…/digitalEmployeeExecution`（不带 `.ts`）
   的 `rfc514`；它按名字钉 `cancelAndReadTask` 在生产里只被那个文件调用一次，删去那处调用后 CI 红。筛读源码的用例时按文件的路径主干（不带
   扩展名）匹配；删去或挪走一处生产调用时，再全仓搜被调函数的名字，找“钉生产调用方”的锁。
+- **往测试助手的分组清单里加成员，要逐个读遍历这份清单的用例循环，不能只改计数**（RFC-531 实撞）：给 `deploymentSelectionPartition.ts` 的
+  `SESSION_FACTORY_SELECTIONS` 加了镜像与镜像刷新两个键，改了 `rfc394` / `rfc431` 的键数，却没读 `rfc394` 里遍历这份清单的循环——它按 RFC-432
+  要求托管的会话工厂每次交出同一个对象（`factory(undefined)` 两次相同），而托管的镜像要按调用它的会话的仓库存储构造、刷新闭包每次新建
+  Promise，两条都不满足。首批里这个用例先红在前面的键数断言上，同一个 test 后面的这条从没执行过（bun 的 `expect` 首个失败即中止该 test，与
+  截图断言的短路同理）；修了键数复跑才露出来。加成员前全仓搜清单的常量名，读每个 `for (const key of …)` 断言的是什么；修了先红的断言，该
+  用例必须复跑。
 - **把容忍缺省的 `select*(x?)` 换成会抛错的 `require*(x)` 时，入参类型要同步改成必填**（RFC-526 实撞）：`taskNodeRunsProjection` 的回落
   删了、改调 `requireNodeRunPromptOperations`，入参里的 `nodeRunPrompts?` 却还是可选，`tsc` 0 错；9 个用例文件里 19 处调用
   没给它（17 处是 `taskNodeRunsProjection(withO2Closure({ db }), id)`），运行时才抛 `Node-run prompts require complete operations`。这些用例只是 import

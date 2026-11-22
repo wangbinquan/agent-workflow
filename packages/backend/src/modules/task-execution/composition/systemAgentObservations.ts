@@ -5,6 +5,9 @@ import { ulid } from 'ulid'
 import type { CallObservations } from '@/modules/run-observability/public/participants'
 import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
 
+/** RFC-531: the observation factory the run-family selections take (bootstrap names it in their input). */
+export type { SystemAgentObservationFactory }
+
 export function composeSystemAgentObservations(input: {
   readonly calls: CallObservations
 }): SystemAgentObservationFactory {

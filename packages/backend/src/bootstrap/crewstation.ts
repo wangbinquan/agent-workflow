@@ -55,7 +55,11 @@ import {
   readCrewStationEnvironment,
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createCrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
-import { composeCrewStationWorkspaceOwner } from '@/modules/source-control/composition'
+import {
+  composeCrewStationWorkspaceOwner,
+  composeRemoteRepositoryMirrors,
+  idleRepositoryMirrorRefresh,
+} from '@/modules/source-control/composition'
 import { createCrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
 import {
   createHostedGitCommandEnvironment,
@@ -248,6 +252,7 @@ export async function composeCrewStationProfile(
     developmentWorkspaceRepositoryPreparation,
     repositoryPreparationEffects,
     scratchWorkspaceEffects,
+    repositoryRemote,
     ...workspaceSelections
   } = workspace.bind()
   const developmentWorkspaces = composeCrewStationDevelopmentWorkspaces({
@@ -422,6 +427,17 @@ export async function composeCrewStationProfile(
       developmentWorkspaceRepositoryPreparation: () => developmentWorkspaceRepositoryPreparation,
       repositoryPreparationEffects: () => repositoryPreparationEffects,
       scratchWorkspaceEffects: () => scratchWorkspaceEffects,
+      // RFC-531: remote reads over the hosted workspace's remote, built over each session's own repository store (the
+      // registered repositories live in that session's database); no mirror to refresh (tasks fetch in their volumes),
+      // so every session gets the one idle handle.
+      repositoryMirrors: (session) =>
+        composeRemoteRepositoryMirrors({
+          store: session.store,
+          remote: repositoryRemote,
+          secretBox: session.secretBox,
+          appHome: session.appHome,
+        }),
+      repositoryMirrorRefresh: () => idleRepositoryMirrorRefresh,
       // RFC-430: automation contents are actionWorkspaceEffects.contents; only the two selections are given.
       actionWorkspaceEffects: developmentWorkspaces.actionWorkspaceEffects,
       repositoryBaselines: developmentWorkspaces.repositoryBaselines,

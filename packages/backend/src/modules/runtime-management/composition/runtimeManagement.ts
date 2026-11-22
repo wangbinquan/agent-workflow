@@ -54,6 +54,10 @@ export function bindRuntimeManagement(input: {
 }
 
 /** One required family supplies both ordinary management route families. */
+/** RFC-531: the assembled runtime management both profiles hand the daemon (the local and the hosted assembly are the
+ * same binding over different effects). */
+export type RuntimeManagementAssembly = ReturnType<typeof bindRuntimeManagement>['management']
+
 export function composeRuntimeManagement(input: Parameters<typeof bindRuntimeManagement>[0]) {
   return bindRuntimeManagement(input).management
 }
