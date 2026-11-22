@@ -18,7 +18,7 @@
 - [x] AC-1 `databaseInstallation` 必填、类型是 `DaemonDatabaseInstallation`；两个 profile 各给一份
 - [x] AC-2 daemon 不按 `null` 分支、不取本机 epoch 路径；两种 profile 的启动行为与此前相同
 - [x] AC-3 计数不升；锁随改；新增 RFC-532 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -51,7 +51,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `6a911ae34`（实现，父提交是 `2b8f8dfad`）：exact SHA 主 CI run 44980855435 的 70 个 job 第 1 次全部通过（含 design/ 的链接检查与
+  `CI required`）；同一提交触发的 windows-platform（run 44980855404）与 maintenance-soak-nightly（run 44980855452）通过。未重跑。
+- 本 RFC 的落档提交 `2b8f8dfad`（只改文档；同一提交记下 RFC-531 转 Done）：主 CI run 44975481866 的 70 个 job 第 1 次全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
