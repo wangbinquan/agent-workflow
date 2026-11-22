@@ -1,4 +1,18 @@
-## 2026-11-21 RFC-533 子任务预算由会话构造；调用链深度的热应用恢复（In Progress；`design/RFC-533-session-child-task-budget/`）
+## 2026-11-22 RFC-534 终态工作区回收策略与记忆蒸馏策略由会话交入（In Progress；`design/RFC-534-session-process-registrations/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第二步。daemon 启动程序的 `process-registrations` 启动步把 task-execution 的终态工作区回收策略与
+  memory 的蒸馏准入策略写进进程级的模块状态（5 条），并在每次恢复执行前重跑，以找回可能被同一进程里别的会话改写的登记；维护 Worker 是另一个
+  realm，那里的回收策略一直为空。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、
+  2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、
+  设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：回收策略是 task-execution 持久化（与源终止、遗留写者、延迟仓库准备）的必填依赖，daemon 组合一次交给 task-execution 与 integration
+  的装配，维护 Worker 交具名的从不回收；蒸馏策略是 memory 组合的必填输入，`enqueueDistillJob` 显式收；删去 `process-registrations` 启动步与
+  `beforeResume`；新增 RFC-534 用例。
+- **不做**：其余 66 条模块级可变单例；两条策略的判定、回收认领的原子性（同一笔 CAS）与蒸馏准入语义不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-533 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-21 RFC-533 子任务预算由会话构造；调用链深度的热应用恢复（Done；`design/RFC-533-session-child-task-budget/`）
 
 - **来由**：S12 第 4 项（模块级可变单例，架构报告 79 条）的第一步。task-execution 的子任务预算住在 `infrastructure/childBudget.ts` 的模块级
   状态里（进程级单例、子任务缓存、实时容量与实时深度及其 setter / reset，8 条）。另有一处功能缺陷：设置页“调用链最大深度”写着“保存后
@@ -21,6 +35,10 @@
   文件；按不带目录的文件名补跑漏选的 10 个，都过；两批红的与两个调子调用端口的用例共 33 个与对照同时 A/B，两边红的是同样的 16 个文件
   （PostgreSQL 一支撞时限、`tasks` 的 diff、
   `rfc167`、`rfc321` 只因导出仓库没有 git 历史）；架构报告模块级可变单例 79 → 71、计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`4d938230a`（24 个文件；父提交是 `e86211755`）；补正 `b9d0486f5`（2 个文件）。
+- **CI**：实现提交主 CI 68 / 70（后端分片 44 的 `test-suite-policy` 红在本 RFC 新用例的一处直线式睡眠，本人缺陷；`CI required` 随之红），
+  windows-platform 与 maintenance-soak-nightly 通过；补正 `b9d0486f5`（用例改用因果屏障）70 / 70；落档提交 `e86211755` 70 / 70。都未重跑。
+- **下一步**：S12 第 4 项第二步（进程登记的两条策略，RFC-534）；按模块分组为适配器集合。
 
 ## 2026-11-21 RFC-532 数据库安装由部署选择给出（Done；`design/RFC-532-deployment-database-installation-selection/`）
 

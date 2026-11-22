@@ -17,7 +17,7 @@
 - [x] AC-1 `childBudget.ts` 没有模块级可变状态与导出的 setter / reset；预算每会话一份
 - [x] AC-2 容量热应用、懒建与放行不变；深度保存后立即生效（回归用例）
 - [x] AC-3 模块级可变单例 79 → 71、计数不升；锁随改；新增 RFC-533 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -55,7 +55,13 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `4d938230a`（实现，父提交是 `e86211755`）：exact SHA 主 CI run 45000827878 的 70 个 job 里，后端分片 44/44 红在 `test-suite-policy` 的
+  “provider HTTP tests do not sleep to wait for a write”——本 RFC 在 `rfc266` 新加的回归用例里一处 30ms 直线式睡眠（第 131 行；本人缺陷，集中验证
+  没选到逐个扫 `tests/` 的这条守卫），`CI required` 随之红，其余 68 个通过；同一提交触发的 windows-platform（run 45000827886）与
+  maintenance-soak-nightly（run 45000827958）通过。未重跑。
+- `b9d0486f5`（补正：该用例改用因果屏障——预算的 `acquire` 同步判定，一次微任务即可——并做变异验证；`docs/dev-gotchas.md` 记一条）：主 CI
+  run 45003962438 的 70 个 job 第 1 次全部通过。
+- 本 RFC 的落档提交 `e86211755`（只改文档；同一提交记下 RFC-532 转 Done）：主 CI run 44984036715 的 70 个 job 第 1 次全部通过。
 
 ## 实现门（本会话自审，只审功能）
 

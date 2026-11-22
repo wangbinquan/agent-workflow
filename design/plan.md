@@ -563,7 +563,8 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-530](./RFC-530-task-execution-module-construction/proposal.md) | 任务执行模块不在 import 期构造（RFC-294 S12 第十一步）：task-execution 组合层不再在 import 期构造进程级的执行模块，SQLite 的执行绑定按 bootstrap 交入的代次在绑定时构造（每会话一份，与 PostgreSQL 一致）；只服务用例的驱动生命周期导出、任务取消组合与数字员工执行端口里被覆盖的 `tasks` 删去或移进测试助手，源终止参与者的登记表必填。无用户可见变化。 | Done |
 | [RFC-531](./RFC-531-deployment-selection-semantic-slots/proposal.md) | 部署选择合同的槽位改为语义类型、镜像与子仓刷新由 profile 选择（RFC-294 S12 第十二步）：部署选择合同里以本地工厂签名定型的 7 个槽位改为拥有方模块导出的具名选择类型，托管工厂与 daemon 装配随之按语义类型定型；可空的 `repositoryRemote` 换成必填的仓库镜像与镜像刷新两个选择，daemon 不再按部署能力是否为 `null` 选镜像与刷新。无用户可见变化。 | Done |
 | [RFC-532](./RFC-532-deployment-database-installation-selection/proposal.md) | 数据库安装由部署选择给出（RFC-294 S12 第十三步）：部署选择合同的 `databaseInstallation` 改为必填的 `DaemonDatabaseInstallation`（打开密钥箱之前的 `admit` 与准备数据库的 `prepare`）；单机给本机安装（本机 epoch 路径原样从 daemon 搬入，升级子进程由单机 profile 交入），托管给按 release 安装端口的安装；daemon 不再按安装是否为 `null` 分支。无用户可见变化。 | Done |
-| [RFC-533](./RFC-533-session-child-task-budget/proposal.md) | 子任务预算由会话构造；调用链深度的热应用恢复（RFC-294 S12 第十四步）：task-execution 的子任务预算（进程级单例、子任务缓存、实时容量与深度及其 setter / reset）改为每个 daemon 会话装配时构造一份，经运行期选项交给子调用节点，会话的生命周期放行与设置热应用调这一份；顺带恢复 2026-09-01 起丢失的“调用链最大深度保存后立即生效”。 | In Progress |
+| [RFC-533](./RFC-533-session-child-task-budget/proposal.md) | 子任务预算由会话构造；调用链深度的热应用恢复（RFC-294 S12 第十四步）：task-execution 的子任务预算（进程级单例、子任务缓存、实时容量与深度及其 setter / reset）改为每个 daemon 会话装配时构造一份，经运行期选项交给子调用节点，会话的生命周期放行与设置热应用调这一份；顺带恢复 2026-09-01 起丢失的“调用链最大深度保存后立即生效”。 | Done |
+| [RFC-534](./RFC-534-session-process-registrations/proposal.md) | 终态工作区回收策略与记忆蒸馏策略由会话交入（RFC-294 S12 第十五步）：daemon 的 `process-registrations` 启动步把两条策略写进进程级模块状态，改为会话装配时交入——回收策略是 task-execution 持久化、源终止与遗留写者的必填依赖（维护 Worker 交具名的从不回收），蒸馏策略是 memory 组合的必填输入；删去该启动步与恢复前的重登记钩子。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
