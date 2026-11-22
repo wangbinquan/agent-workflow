@@ -567,6 +567,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-534](./RFC-534-session-process-registrations/proposal.md) | 终态工作区回收策略与记忆蒸馏策略由会话交入（RFC-294 S12 第十五步）：daemon 的 `process-registrations` 启动步把两条策略写进进程级模块状态，改为会话装配时交入——回收策略是 task-execution 持久化、源终止与遗留写者的必填依赖（维护 Worker 交具名的从不回收），蒸馏策略是 memory 组合的必填输入；删去该启动步与恢复前的重登记钩子。无用户可见变化。 | Done |
 | [RFC-535](./RFC-535-session-terminal-watch-and-instance-side-tables/proposal.md) | 终态看门由会话构造；按对象挂的侧表归各自实例（RFC-294 S12 第十六步）：task-execution 进程级的终态看门表改为每个 daemon 会话装配时构造一份（子调用节点、动作执行与已提交事件消费者用同一份）；本机执行参与者、迁移对照范围、工作区读取能力与本机材料引用不再挂进程级侧表，改由签发者的实例或数据自身携带。无用户可见变化。 | Done |
 | [RFC-536](./RFC-536-platform-registrations/proposal.md) | 配置生效监听、执行可用性与事务观察不再挂进程级登记（RFC-294 S12 第十七步）：按配置路径的监听表改为每份应用配置一组（保存后的通知与 daemon 会话、维护服务的登记用同一组）；执行状态读取器与事务观察者记在各自的 app / 客户端对象上。无用户可见变化。 | Done |
+| [RFC-537](./RFC-537-database-after-commit-pump/proposal.md) | 已提交事件的即时投递泵随数据库句柄走（RFC-294 S12 第十八步）：进程级的即时投递泵改为挂在数据库句柄的会话上下文上（daemon 会话挂在自己的库上、停止时摘下），25 处写方按提交所用的句柄投递。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
