@@ -16,7 +16,10 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { runGit } from '../src/util/git'
 import { ulid } from 'ulid'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
@@ -235,6 +238,7 @@ const docSlot = defaultContinuationSlotKey({ nodeId: 'doc', iteration: 0, shardK
 async function claimedTask(h: ProviderHarness, taskId: string) {
   const persistence = createTaskExecutionPersistence(h.db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
     recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

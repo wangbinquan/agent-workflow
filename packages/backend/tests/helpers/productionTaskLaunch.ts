@@ -7,7 +7,10 @@ import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // RFC-395 II-pre：既有启动夹具改走生产根启动内核 / workflow 参与者；这里只装配依赖与工作区租约。
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
@@ -258,6 +261,7 @@ export async function launchTestTask(
   const humanGateOpen = options.humanGateOpen ?? composeHumanGateOpenParticipantFactory()
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen,
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -335,6 +339,8 @@ export async function launchTestTask(
   const preparation = composeDeferredRepositoryPreparationStep({
     deps: {
       repositoryPreparationLookup: composeRepositoryPreparationLookup(db),
+      // RFC-534: the deferred preparation's failure write only goes to `failed`; the never-prune policy is exact.
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       ...options,
       repositoryPreparation,
       loadFrozenSpaceLayout: (id) => loadFrozenSpaceLayout(db, id),

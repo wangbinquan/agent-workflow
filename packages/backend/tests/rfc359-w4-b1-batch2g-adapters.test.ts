@@ -55,6 +55,7 @@ import {
 import { DrizzleTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { describeEachProvider } from './helpers/eachProvider'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const rootPath = (taskId: string): readonly LineageSlot[] => [
@@ -121,6 +122,7 @@ async function seedClaimedOwner(
     token,
     persistence: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -165,6 +167,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
     const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
       db,
       createFileWorkspacePresenceQueries(),
+      neverPruneTerminalWorkspaces,
     )
     const order: string[] = []
     const published: { status: string | undefined; eventIds: string[] }[] = []
@@ -225,6 +228,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
     const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
       db,
       createFileWorkspacePresenceQueries(),
+      neverPruneTerminalWorkspaces,
     )
     const before = (await taskRow(db, taskId))!.revision
     expect(

@@ -33,6 +33,10 @@ export interface TaskExecutionParticipantBindings {
    * task, so it is not consulted there; the lifecycle persistence still takes the deployment's own).
    */
   readonly workspacePresence: Parameters<typeof parkPreparedHumanGate>[0]['workspacePresence']
+  /** RFC-534: the session's terminal workspace prune policy, for the same parks (a park never reaches done / canceled). */
+  readonly terminalWorkspacePrune: Parameters<
+    typeof parkPreparedHumanGate
+  >[0]['terminalWorkspacePrune']
   readonly createTaskNodeStatusEventsParticipantInTx: (
     tx: PersistenceTx,
   ) => TaskNodeStatusEventsParticipantInTx

@@ -28,6 +28,7 @@ import { buildStartTaskDeps } from './helpers/startTaskDeps'
 import { describeEachProvider, type ProviderApplicationBinding } from './helpers/eachProvider'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
+import { defaultDistillPolicy } from './helpers/memoryDistill'
 
 function graph(
   binding: ProviderApplicationBinding,
@@ -123,6 +124,7 @@ function graph(
   })
   const memoryModules = composeDaemonMemoryModules({
     db,
+    distillPolicy: defaultDistillPolicy,
     nodeRunPrompts: composeNodeRunPromptOperations(
       createFileNodeRunPromptContent(join(appHome, 'runs')),
     ),

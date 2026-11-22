@@ -47,6 +47,7 @@ import { listClarifyRoundSummaries } from '../src/modules/collaboration/infrastr
 import { scheduledRowsReferencingWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 type TaskStatusCol = TaskFixtureSpec['status']
 type NodeRunStatusCol = NodeRunFixtureSpec['status']
@@ -196,6 +197,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     const a = await seedTask(db, { status: 'running' })
     const won = await trySetTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: a.taskId,
       to: 'canceled',
       allowedFrom: ['running'],
@@ -209,6 +211,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     const b = await seedTask(db, { status: 'running' })
     await trySetTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: b.taskId,
       to: 'failed',
       allowedFrom: ['running'],

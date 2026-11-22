@@ -4,7 +4,10 @@ import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
-import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
+import {
+  createTaskWorktreeLocator,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // Standalone defect fix approved 2026-10-21, following 9956ce39d:
 // repoCount=1 does not mean the task root is a Git worktree. A lone member
 // mounted at svc must use its persisted repository path/key for diff, code
@@ -282,6 +285,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           binding: createTestIsolationBinding({
             persistence: createTaskExecutionPersistence(harness.db, {
               workspacePresence: createFileWorkspacePresenceQueries(),
+              terminalWorkspacePrune: neverPruneTerminalWorkspaces,
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -430,6 +434,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const binding = createTestIsolationBinding({
           persistence: createTaskExecutionPersistence(harness.db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -758,6 +763,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           db: harness.db,
           persistence: createTaskExecutionPersistence(harness.db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

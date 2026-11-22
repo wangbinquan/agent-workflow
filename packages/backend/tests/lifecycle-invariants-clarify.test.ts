@@ -24,6 +24,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { runLifecycleInvariants } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 interface Harness {
   db: PersistenceDb
@@ -124,6 +125,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -140,6 +142,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -159,6 +162,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -179,6 +183,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -205,6 +210,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -221,6 +227,7 @@ describeEachProvider(
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -232,6 +239,7 @@ describeEachProvider(
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

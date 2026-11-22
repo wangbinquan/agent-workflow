@@ -76,6 +76,7 @@ import {
   createFileRepositoryWorkspaceReadQueries,
   createFileWorkspaceUploadContentFactory,
 } from '@/modules/source-control/composition'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const ulid = monotonicFactory()
 
@@ -229,6 +230,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       launches: { launch: async () => unusedDependency('launches.launch') } as never,
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

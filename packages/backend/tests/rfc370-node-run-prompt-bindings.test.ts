@@ -1,5 +1,9 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
-import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
+import {
+  createNodeRunQueries,
+  createNodeOutputQueries,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -22,6 +26,7 @@ import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemon
 import {
   memorySystemAgentBindingForTest,
   runtimeManagementDistillRuntimes,
+  defaultDistillPolicy,
 } from './helpers/memoryDistill'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -359,6 +364,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
       systemAgentBinding: memorySystemAgentBindingForTest(),
       runtimeProfiles: runtimeManagementDistillRuntimes(db),
+      distillPolicy: defaultDistillPolicy,
       db,
       reviewedArtifacts: noReviewedContent,
       nodeRunPrompts: Object.freeze(new Reader()),
@@ -434,6 +440,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     })
     const original = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

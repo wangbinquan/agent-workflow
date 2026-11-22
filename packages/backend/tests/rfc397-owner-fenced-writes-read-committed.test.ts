@@ -57,6 +57,7 @@ import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const normalized = (text: string) => text.toLowerCase().replaceAll('"agent_workflow".', '')
 const effects = (db: PersistenceDb) => new DrizzleTaskExecutionEffectPersistence(db)
@@ -124,6 +125,7 @@ async function seed(db: PersistenceDb, taskId = 't', lineage = 'lineage') {
   })
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

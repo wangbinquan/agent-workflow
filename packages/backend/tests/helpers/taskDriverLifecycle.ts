@@ -10,6 +10,10 @@ import type { TaskExecutionPersistence } from '@/modules/task-execution/applicat
 import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import {
+  neverPruneTerminalWorkspaces,
+  type TerminalWorkspacePrunePolicy,
+} from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { ownershipTokenKey } from '@/modules/task-execution/domain/ownership'
 import {
   clearTaskDriverLifecycleForTesting as clearOwnerHeartbeats,
@@ -60,6 +64,8 @@ export function createDatabaseTaskDriverLifecyclePort(options: {
   readonly persistence?: TaskExecutionPersistence
   /** RFC-526: required (the persistence built here, and the per-claim execution context, need the presence). */
   readonly workspacePresence: WorkspacePresenceQueries
+  /** RFC-534: the persistence built here prunes with this policy (never, unless a case exercises reclamation). */
+  readonly terminalWorkspacePrune?: TerminalWorkspacePrunePolicy
   readonly log: TaskExecutionTopologyLogger
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
 }): TaskDriverLifecyclePort {
@@ -67,7 +73,12 @@ export function createDatabaseTaskDriverLifecyclePort(options: {
     db: options.db,
     module: testTaskExecutionModule,
     claim: (intentId) => testTaskExecutionModule.claim({ db: options.db, intentId }),
-    persistence: options.persistence ?? createTaskExecutionPersistence(options.db, options),
+    persistence:
+      options.persistence ??
+      createTaskExecutionPersistence(options.db, {
+        ...options,
+        terminalWorkspacePrune: options.terminalWorkspacePrune ?? neverPruneTerminalWorkspaces,
+      }),
     log: options.log,
     finalizeWorkspace: options.finalizeWorkspace,
     legacyConnection: options.db,

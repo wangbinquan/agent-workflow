@@ -60,6 +60,7 @@ import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResour
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const T0 = 1_700_000_000_000
 
@@ -550,6 +551,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     // RFC-359 AC-1（第 14 刀）：源终止的装配两个引擎合成一份。
     const taskTermination = composeTaskSourceTermination({
       db: harness.db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
     })
     const control = composeMrTerminalControl({

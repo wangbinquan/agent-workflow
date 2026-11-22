@@ -429,6 +429,7 @@ export async function createClarifyRound(
       db: args.db,
       historyRestrictions: args.historyRestrictions,
       workspacePresence: args.taskExecutionParticipants.workspacePresence,
+      terminalWorkspacePrune: args.taskExecutionParticipants.terminalWorkspacePrune,
       content: args.content,
       prepared: prepared.prepared,
       ...(executionContext === undefined ? {} : { executionContext }),

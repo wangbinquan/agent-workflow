@@ -71,6 +71,7 @@ import { composeAgentLaunchResourceOperations } from '../src/modules/resource-ca
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -131,6 +132,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
           withLocalRepositoryPreparation({ db, appHome }),
         ),
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         appHome,
       }),
       engineFailureMessage: 'rfc165 scheduled kinds drive threw',

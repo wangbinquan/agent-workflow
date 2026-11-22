@@ -42,6 +42,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 interface Response {
   readonly objects?: readonly Record<string, unknown>[]
@@ -140,6 +141,7 @@ describe('RFC-349 task-execution provider adapters', () => {
     })
     const persistence = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -294,6 +296,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       token,
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

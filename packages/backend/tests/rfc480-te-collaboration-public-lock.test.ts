@@ -7,7 +7,7 @@
 //    逐名清单）不在原 public 文件的导出里，值也不在运行时命名空间里（每个 public 文件带一个仍在的正对照）。
 // ③ 直接声明在 public、只有本模块或用例在用的声明按内容落进模块内部（design §2 落位表）：在新位置导出，不在本模块任一 public 文件里。
 // ④ 三处模块外使用取新位置：collaboration 的 review 从 platform 取终止准入；integration 从 task-execution `public/types` 取清理
-//    策略类型；bootstrap 从 task-execution 的 `composition` 取策略注册（带负对照）。
+//    策略类型；bootstrap 从 task-execution 的 `composition` 取具名的从不回收策略（RFC-534 删去策略注册之后；带负对照）。
 // ⑤ 减速带的未消费符号按 context 分项登记，两个模块的上限为 0（实测由 rfc376-structural-guards 的计数门做，全仓每个 context）。
 // ⑥ 回归（design §2「实施中纠正的一处误判」）：架构报告的类型形状遍历走进 `readonly X[]`、元组、泛型实参与索引访问——public 合同
 //    只经这些形式引用的类型算作被消费；修正前它们被误报为未消费（fixture，带「真正没人取用的仍计入」的负对照）。
@@ -331,9 +331,11 @@ describe('RFC-480 —— 三处模块外使用取新位置', () => {
         'TerminalWorkspacePrunePolicy',
         '@/modules/task-execution/public/types',
       ],
+      // RFC-534: the process registration is gone (the policy is a session dependency); bootstrap's remaining module-
+      // external use is the maintenance worker's named never-prune policy.
       [
-        'bootstrap/daemonApplication.ts',
-        'registerTerminalWorkspacePrunePolicy',
+        'bootstrap/maintenanceWorkerGraph.ts',
+        'neverPruneTerminalWorkspaces',
         '@/modules/task-execution/composition',
       ],
     ]
@@ -347,7 +349,7 @@ describe('RFC-480 —— 三处模块外使用取新位置', () => {
       expect.arrayContaining(['TerminalWorkspacePruneDecision', 'TerminalWorkspacePrunePolicy']),
     )
     expect(exportedNames(TE + 'composition.ts', read(TE + 'composition.ts'))).toContain(
-      'registerTerminalWorkspacePrunePolicy',
+      'neverPruneTerminalWorkspaces',
     )
   })
 

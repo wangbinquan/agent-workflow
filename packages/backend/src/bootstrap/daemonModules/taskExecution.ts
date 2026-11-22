@@ -25,6 +25,7 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createLogger } from '@/util/log'
 import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
 import { codeHostNodeRequests } from '@/modules/integration/composition'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
@@ -100,6 +101,8 @@ export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = Databa
 }
 export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseProvider> {
   readonly content: ContentStore
+  /** RFC-534: the session's terminal workspace prune policy (bootstrap composes integration's webhook policy once). */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly appHome: string
@@ -176,7 +179,12 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     memory,
   } = input
   const executionPermits = createExecutionPermitRegistry()
-  const closure = composeCrossContextClosure(db, executionPermits, observation.workspacePresence)
+  const closure = composeCrossContextClosure(
+    db,
+    executionPermits,
+    observation.workspacePresence,
+    input.terminalWorkspacePrune,
+  )
   const log = createLogger('task')
   const resourceSnapshots = composeTaskExecutionResourceBinding(taskExecutionResourceDependencies)
   const resources = createTaskExecutionResourceBinding(db, resourceSnapshots)
@@ -186,6 +194,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     humanGateOpen: closure.humanGateOpen,
     recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence: observation.workspacePresence,
+    terminalWorkspacePrune: input.terminalWorkspacePrune,
   })
   // RFC-533: the session's child-task budget, next to its permit registry: the child-call nodes get it through the run
   // options; the session's lifecycle consumer and the settings hot apply call the same one.
@@ -299,6 +308,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
         return composeDeferredRepositoryPreparation({
           repositoryPreparationLookup,
           db,
+          terminalWorkspacePrune: input.terminalWorkspacePrune,
           appHome,
           secretBox,
           repositoryPreparation,
@@ -468,6 +478,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     taskRolePolicy: closure.taskRolePolicy,
     executionPermits,
     childTaskBudget,
+    terminalWorkspacePrune: input.terminalWorkspacePrune,
     processConcurrencyScope: input.adapters.processConcurrencyScope,
     hostTasks,
     collaboration,

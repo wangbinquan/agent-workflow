@@ -729,7 +729,12 @@ export async function cancelTaskProjection(
   const prune =
     pruneSource === undefined
       ? ({ prune: false } as const)
-      : await resolveTerminalWorkspacePruneDecision({ taskId, ...pruneSource }, 'canceled')
+      : await resolveTerminalWorkspacePruneDecision(
+          // RFC-534: the session's policy, carried by its Task Execution persistence.
+          dependencies.persistence.terminalWorkspacePrune,
+          { taskId, ...pruneSource },
+          'canceled',
+        )
   let stopToken = dependencies.stop.tokenForTask(taskId)
   let revokedRevision: number | null = null
   // RFC-359 AC-1（第 11 刀移植）—— **CAS 被别的可取消态写者挤掉时要复读，不能当失败**。

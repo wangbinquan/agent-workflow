@@ -73,6 +73,8 @@ import type { CodeHostConnectionsService } from '../../src/modules/integration/a
 import { codeHostNodeRequests } from '../../src/modules/integration/composition'
 import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
 import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
@@ -132,7 +134,11 @@ export function composeTestChildLaunchWorkgroup(db: PersistenceDb) {
  * 参与者合一之后，「谁在跑 / 怎么认领 / 怎么请它停」由装配方交；测试拓扑按**生产同形**取——
  * 与 `composeTaskExecutionProviderRuntime` 逐字相同的进程级单例认领 + 进程内注册表。
  */
-export function singleProcessDeploymentPorts(db: DbClient) {
+export function singleProcessDeploymentPorts(
+  db: DbClient,
+  /** RFC-534: the session's terminal workspace prune policy for the driver lifecycle's persistence. */
+  terminalWorkspacePrune: TerminalWorkspacePrunePolicy = neverPruneTerminalWorkspaces,
+) {
   const log = createLogger('task')
   return {
     workspacePresence: createFileWorkspacePresenceQueries(),
@@ -144,6 +150,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
       db,
       createDatabaseTaskDriverLifecyclePort({
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,
@@ -165,11 +172,17 @@ export function singleProcessDeploymentPorts(db: DbClient) {
 /** Shared direct-runtime helper: test schedulers use the same admitted owner. */
 export function composeTaskExecutionTestRuntime(
   db: DbClient,
-  options: Readonly<{ codeHostConnections?: CodeHostConnectionsService }> = {},
+  options: Readonly<{
+    codeHostConnections?: CodeHostConnectionsService
+    /** RFC-534: the session's terminal workspace prune policy (never, unless a case exercises reclamation). */
+    terminalWorkspacePrune?: TerminalWorkspacePrunePolicy
+  }> = {},
 ) {
   const identity = createTaskExecutionTestIdentity(db)
+  const terminalWorkspacePrune = options.terminalWorkspacePrune ?? neverPruneTerminalWorkspaces
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -194,7 +207,7 @@ export function composeTaskExecutionTestRuntime(
       isolationWorkspaces: createLocalIsolationWorkspaceFactory(),
       repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
       db,
-      ...singleProcessDeploymentPorts(db),
+      ...singleProcessDeploymentPorts(db, terminalWorkspacePrune),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
       identityAccess: identity.resources,
       observationInvocations: composeRunObservationCalls(db),
@@ -332,6 +345,7 @@ export function runTaskWithRealTestTopology(
     options.persistence ??
     createTaskExecutionPersistence(options.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
@@ -482,6 +496,7 @@ export function runTaskWithRealTestTopology(
           db: options.db,
           persistence: createChildPersistence(options.db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
             recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,

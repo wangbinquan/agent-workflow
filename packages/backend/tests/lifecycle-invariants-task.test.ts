@@ -23,6 +23,7 @@ import { createTaskExecutionPersistence } from '../src/modules/task-execution/co
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 type TaskStatus =
   | 'pending'
@@ -110,6 +111,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -127,6 +129,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -154,6 +157,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -171,6 +175,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -198,6 +203,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -217,6 +223,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -238,6 +245,7 @@ describeEachProvider(
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -259,6 +267,7 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -277,6 +286,7 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -306,6 +316,7 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -332,6 +343,7 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -354,6 +366,7 @@ describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -368,6 +381,7 @@ describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -383,6 +397,7 @@ describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

@@ -59,6 +59,7 @@ import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const frame = { containerRunId: null, iteration: 0 }
 function row(
@@ -482,6 +483,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const rows = await readNodeRunFixtures(db, { taskId }),
       persistence = createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -523,6 +525,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

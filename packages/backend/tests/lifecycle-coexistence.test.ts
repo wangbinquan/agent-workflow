@@ -30,6 +30,7 @@ import { createTaskExecutionPersistence } from '../src/modules/task-execution/co
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const MIN_MS = 60_000
 const T0 = Date.UTC(2026, 0, 1, 12, 0, 0)
@@ -146,6 +147,7 @@ describeEachProvider(
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(env.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -182,6 +184,7 @@ describeEachProvider(
       await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(env.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -298,6 +301,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -373,6 +377,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -393,6 +398,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -415,6 +421,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
@@ -431,6 +438,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,

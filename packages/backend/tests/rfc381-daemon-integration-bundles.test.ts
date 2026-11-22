@@ -16,7 +16,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -32,7 +32,6 @@ function home() {
   return dir
 }
 afterEach(() => {
-  registerTerminalWorkspacePrunePolicy(null)
   for (const path of homes.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
@@ -235,6 +234,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('MR close requests stop on the session registry and waits for released before succeeding', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
@@ -311,6 +311,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('cleanup failure keeps the claim, completes the MR job and lets the next same-stream effect run', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       workspacePresence: createFileWorkspacePresenceQueries(),
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
@@ -342,10 +343,15 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
         invalidateWorkspacePath() {},
       }),
     )
-    registerTerminalWorkspacePrunePolicy(
-      composeWebhookTerminalWorkspacePrunePolicy({ db: harness.db, enabled: () => true }),
-    )
-    const graph = integrationBundleFixture(harness.db, home(), { workspaceMaintenance })
+    // RFC-534: the session's webhook prune policy goes to the integration bundle (its source termination claims the
+    // workspace with it) instead of a process-level registration.
+    const graph = integrationBundleFixture(harness.db, home(), {
+      workspaceMaintenance,
+      terminalWorkspacePrune: composeWebhookTerminalWorkspacePrunePolicy({
+        db: harness.db,
+        enabled: () => true,
+      }),
+    })
     const { webhookMrControlEffects } = tablesOf(harness.db)
     await insertOne(harness.db, webhookMrControlEffects, {
       id: 'rfc381-reopen',

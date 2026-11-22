@@ -2,6 +2,7 @@ import type { RepositoryPreparationLookup } from '../application/ports/repositor
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '@/auth/secretBox'
+import type { TerminalWorkspacePrunePolicy } from '../domain/terminalWorkspacePrune'
 import { type WorkspaceCleanupHookEvent } from '../application/ports/preparedWorkspace'
 
 import { loadFrozenSpaceLayout } from '../infrastructure/frozenWorkspaceLayout'
@@ -46,6 +47,8 @@ export function composeDeferredRepositoryPreparation(input: {
   readonly repositoryPreparationLookup: RepositoryPreparationLookup
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: PersistenceDb
+  /** RFC-534: the session's terminal workspace prune policy. */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   readonly appHome: string
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number
@@ -56,6 +59,7 @@ export function composeDeferredRepositoryPreparation(input: {
   return composeDeferredRepositoryPreparationStep({
     deps: {
       db: input.db,
+      terminalWorkspacePrune: input.terminalWorkspacePrune,
       repositoryPreparation: input.repositoryPreparation,
       repositoryPreparationLookup: input.repositoryPreparationLookup,
       loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(input.db, sourceTaskId),

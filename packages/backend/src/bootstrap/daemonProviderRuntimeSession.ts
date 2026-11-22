@@ -131,7 +131,6 @@ export interface CreateDaemonProviderRuntimeSessionInput<
   /** Executed in declaration order after every handle has drained. */
   readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
   readonly readyOnResume?: boolean
-  readonly beforeResume?: () => MaybePromise<void>
   readonly beforeClose?: (reason: 'provider-switch' | 'daemon-shutdown') => MaybePromise<void>
   readonly bootSteps?: () => readonly DaemonBootStepReceipt[]
   readonly postReady?: () => Promise<void>
@@ -467,7 +466,6 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
         }
 
         try {
-          await input.beforeResume?.()
           for (const factory of handleFactories) {
             const receipt: DaemonJobReceipt = { id: factory.id, startedAt: Date.now() }
             const handle = await factory.start(lifecycleInput)

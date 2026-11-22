@@ -23,7 +23,10 @@ import { freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
-import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/composition'
+import {
+  createTaskClarifyDirectivePersistence,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 
@@ -350,6 +353,7 @@ describeEachProvider('RFC-482 —— 持久化包的指令读取', (harness) => 
     await seedTask(db, taskId)
     const bundle = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

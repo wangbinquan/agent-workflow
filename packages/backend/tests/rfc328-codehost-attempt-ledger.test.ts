@@ -38,6 +38,7 @@ import { submitTaskContinuation as submitTaskContinuationInTransaction } from '@
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 async function fixture(
   db: PersistenceDb,
@@ -88,6 +89,7 @@ async function fixture(
   module.claimGate.leave(claim.permit)
   const context = createTaskExecutionContext({
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     intentId: intent.intentId,
@@ -113,6 +115,7 @@ async function fixture(
   const observer = createCodeHostEffectAttemptObserver({
     persistence: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -503,12 +506,14 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     const nextObserver = createCodeHostEffectAttemptObserver({
       persistence: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).effects,
       context: createTaskExecutionContext({
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         db: h.db,

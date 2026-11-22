@@ -253,6 +253,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
     taskExecutionProvider.executionPermits,
     input.selections.workspacePresence,
+    taskExecutionProvider.terminalWorkspacePrune,
   )
   const collaborationTaskAccess = createCollaborationTaskAccessPort(
     input.db,

@@ -14,6 +14,7 @@ import {
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { InMemoryTaskRuntimeRegistry } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
 import { testTaskExecutionModule } from './taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const log = createLogger('task')
 
@@ -40,6 +41,7 @@ export function composeTaskCancellation(
       historyRestrictions,
       humanGateOpen,
       workspacePresence,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     }),
     stop,
     log,

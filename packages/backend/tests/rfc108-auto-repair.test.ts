@@ -25,6 +25,7 @@ import { recordAutoRecoveryAttempt } from '../src/modules/task-execution/applica
 import type { RepairOption } from '@agent-workflow/shared'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
@@ -85,6 +86,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const taskId = await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -116,6 +118,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -141,6 +144,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -161,6 +165,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const taskId = await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -184,6 +189,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

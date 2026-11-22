@@ -1,8 +1,8 @@
 import { createTaskWorkspaceQueries } from './application/workspaceRead'
 export { createFileTaskOperationConfiguration } from './infrastructure/local/fileTaskOperationConfiguration'
-// RFC-480: bootstrap registers integration's terminal workspace prune policy here (it used to reach the registry
-// through the retired `public/operations`). The process-level registry itself is S12's to replace.
-export { registerTerminalWorkspacePrunePolicy } from './infrastructure/terminalWorkspacePrune'
+// RFC-534: the terminal workspace prune policy is a required Task Execution dependency (bootstrap hands integration's
+// webhook policy to the session's assembly); the named never-prune policy is for the maintenance worker and tests.
+export { neverPruneTerminalWorkspaces } from './infrastructure/terminalWorkspacePrune'
 import {
   bindTaskWorkspaceReadScope,
   type TaskWorkspaceReadDependencies,

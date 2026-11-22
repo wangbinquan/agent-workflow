@@ -77,7 +77,10 @@ import { createTaskLifecycleDurableConsumerDefinitions } from '@/modules/task-ex
 // 再导出会让这份对拍在账本里看不见。
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import type { CommittedEventEnvelopeV1 } from '@/platform/events/committed/types'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
+import {
+  neverPruneTerminalWorkspaces,
+  type TerminalWorkspacePrunePolicy,
+} from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
@@ -87,19 +90,26 @@ const DELIVERY = 'dlv-rfc359-w8'
 
 // RFC-359 AC-1（第 14 刀）：参与者两个引擎合成一份，两条泳道从此是**同一个工厂**，
 // 唯一按引擎变的是库句柄（由 harness 给）。
+// RFC-534: the participant takes the session's prune policy; the live wrapper reads the one a case set (where it used to
+// register a process-level policy), whenever the participant was built.
+let prune: TerminalWorkspacePrunePolicy = neverPruneTerminalWorkspaces
+function usePrunePolicy(policy: TerminalWorkspacePrunePolicy): void {
+  prune = policy
+}
 function participantFor(harness: ProviderHarness): TaskSourceTerminationParticipant {
   return createTaskSourceTerminationParticipant({
     db: harness.db,
     runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+    terminalWorkspacePrune: (row, to) => prune(row, to),
   })
 }
 
 /**
- * RFC-300 的生产策略本体（provider 中立），两个引擎注册的是同一份。
- * 全局单例——每个用例后必须还原，否则会漏给同进程的其它测试。
+ * RFC-300 的生产策略本体（provider 中立），两个引擎用的是同一份。
+ * RFC-534：交给参与者的是会话的策略；每个用例后还原为从不回收。
  */
 function registerProductionPrunePolicy(db: PersistenceDb): void {
-  registerTerminalWorkspacePrunePolicy(
+  usePrunePolicy(
     createWebhookTerminalWorkspacePrunePolicy({
       attribution: createWebhookTerminalWorkspaceAttributionQueries(db),
       enabled: () => true,
@@ -108,7 +118,7 @@ function registerProductionPrunePolicy(db: PersistenceDb): void {
 }
 
 afterEach(() => {
-  registerTerminalWorkspacePrunePolicy(null)
+  usePrunePolicy(neverPruneTerminalWorkspaces)
 })
 
 interface SeedOverrides {
@@ -580,7 +590,7 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
     // 「读到 priorStatus 之后、终态写之前」await 它一次，所以在这里落一次并发终态写，
     // 就必然让本次的终态 CAS 输掉——不靠 sleep、不靠墙钟。
     let raced = false
-    registerTerminalWorkspacePrunePolicy(async () => {
+    usePrunePolicy(async () => {
       if (!raced) {
         raced = true
         const { tasks } = tablesOf(harness.db)
@@ -654,7 +664,7 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
   test('⑱ 处理首目标期间出现的子任务在固定点重扫中取消，每个目标仅有一条收据和终态事件', async () => {
     const parent = await seed(harness.db, { taskId: 'task-fixed-point-parent' })
     let inserted: Seeded | null = null
-    registerTerminalWorkspacePrunePolicy(async () => {
+    usePrunePolicy(async () => {
       if (inserted === null) {
         inserted = await seed(harness.db, {
           taskId: 'task-fixed-point-child',

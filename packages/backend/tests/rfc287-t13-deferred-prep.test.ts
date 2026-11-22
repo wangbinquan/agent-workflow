@@ -5,7 +5,10 @@ import {
 } from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts'
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 
 import {
@@ -1155,6 +1158,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
                 }),
               ),
               db: db2,
+              terminalWorkspacePrune: neverPruneTerminalWorkspaces,
               appHome: home,
 
               gitBaselineSyncWindowMs: 0,

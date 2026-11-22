@@ -403,6 +403,7 @@ export async function composeDaemonSession(
   const taskExecutionParticipants = composeTaskExecutionParticipantBindings(
     runtime.taskExecutionModules.executionPermits,
     input.workspacePresence,
+    runtime.taskExecutionModules.terminalWorkspacePrune,
   )
   const committedEventProjectors = [
     runtime.taskExecution.lifecycleProjector,

@@ -39,6 +39,7 @@ import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructu
 import { createLogger } from '../src/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 function agent(): Agent {
   return {
@@ -164,6 +165,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         runtime: 'opencode',
         persistence: createTaskExecutionPersistence(db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -431,6 +433,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         runtime,
         persistence: createTaskExecutionPersistence(db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

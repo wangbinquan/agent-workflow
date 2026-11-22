@@ -29,6 +29,7 @@ import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/dr
 import { createLogger } from '@/util/log'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
   for (const runtime of ['opencode', 'claude-code'] as const)
@@ -232,6 +233,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             runtime,
             persistence: createTaskExecutionPersistence(db, {
               workspacePresence: createFileWorkspacePresenceQueries(),
+              terminalWorkspacePrune: neverPruneTerminalWorkspaces,
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

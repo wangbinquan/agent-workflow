@@ -19,7 +19,6 @@ const APPLICATION = readFileSync(
 
 test('both providers bind the common boot program to the original operations', () => {
   const bindings = {
-    'process-registrations': 'registerTerminalWorkspacePrunePolicy(',
     'git-credential-lease-cleanup': 'cleanupOrphanedGitCredentialLeases(',
     'skill-operation-recovery': 'skillCatalogBoot.recoverOperations()',
     'task-execution-recovery': 'runTaskExecutionBootRecovery({',
@@ -34,7 +33,6 @@ test('both providers bind the common boot program to the original operations', (
   for (const [id, operation] of Object.entries(bindings))
     expect(bootImplementation(APPLICATION, id as keyof typeof bindings)).toContain(operation)
   expectBootOrder([
-    'process-registrations',
     'git-credential-lease-cleanup',
     'skill-operation-recovery',
     'employee-agent-templates',

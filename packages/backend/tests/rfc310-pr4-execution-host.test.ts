@@ -51,6 +51,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createAgent } from './helpers/model/resourceWrites'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 setDefaultTimeout(120_000)
 
@@ -164,6 +165,7 @@ async function buildHarness(): Promise<Harness> {
     launchResources,
     persistence: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

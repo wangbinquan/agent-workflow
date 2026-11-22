@@ -85,7 +85,10 @@ import {
   type TaskLifecycleWriteInput,
 } from './taskLifecycleWriteSequence'
 import { withOwnedTaskWrite } from './taskOwnershipPersistence'
-import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
+import {
+  resolveTerminalWorkspacePruneDecision,
+  type TerminalWorkspacePrunePolicy,
+} from './terminalWorkspacePrune'
 export type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
 
 // RFC-359 W8 —— 转移判据 / 错误类型 / 字段白名单下沉到叶子
@@ -338,6 +341,8 @@ export async function setTaskStatus(args: {
   // `databaseSessionFor(db).transaction(...)` + 中立异步 CAS，一条 bun:sqlite 同步游标都没有
   // （W8 把那条 `.get()` 预读改掉时就是为此）。放宽是向后兼容的：`DbClient` 是它的子类型。
   db: PersistenceDb
+  /** RFC-534: the caller's (session's) terminal workspace prune policy; only `done` / `canceled` consult it. */
+  terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   taskId: string
   to: TaskStatus
   allowedFrom: readonly TaskStatus[]
@@ -478,6 +483,7 @@ export async function setTaskStatus(args: {
   // for deterministic tests).
   const now = args.now ?? Date.now()
   const workspacePruneDecision = await resolveTerminalWorkspacePruneDecision(
+    args.terminalWorkspacePrune,
     {
       taskId: args.taskId,
       spaceKind: row.spaceKind,
@@ -547,6 +553,7 @@ export async function setTaskStatus(args: {
 export async function trySetTaskStatus(args: {
   // RFC-359 AC-6：同 `setTaskStatus`，它整个就是把参数转交过去，函数体零方言。
   db: PersistenceDb
+  terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   taskId: string
   to: TaskStatus
   allowedFrom: readonly TaskStatus[]
@@ -595,6 +602,7 @@ export async function trySetTaskStatus(args: {
  */
 export async function transitionTaskStatusByEvent(args: {
   db: PersistenceDb
+  terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   taskId: string
   event: TaskTransitionEvent
   allowTerminal?: boolean
@@ -611,6 +619,7 @@ export async function transitionTaskStatusByEvent(args: {
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   return setTaskStatus({
     db: args.db,
+    terminalWorkspacePrune: args.terminalWorkspacePrune,
     taskId: args.taskId,
     to: targetForTaskEvent(args.event),
     allowedFrom: allowedFromForTaskEvent(args.event),

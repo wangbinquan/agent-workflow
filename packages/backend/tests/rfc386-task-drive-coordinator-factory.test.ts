@@ -27,10 +27,7 @@ import { composeGateContinuationPreDrive } from '@/modules/task-execution/compos
 import { createLogger } from '@/util/log'
 import { gitDiffSnapshot } from '@/util/git'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
-import {
-  setMemoryDistillPolicyProvider,
-  resetMemoryDistillPolicyProviderForTest,
-} from '@/modules/memory/application/distill/schedule'
+import type { MemoryDistillPolicySource } from '@/modules/memory/application/distill/schedule'
 import {
   createTaskDriveCoordinatorFactory,
   CHILD_LAUNCH_FAILURE,
@@ -70,7 +67,6 @@ function home() {
   return path
 }
 afterEach(() => {
-  resetMemoryDistillPolicyProviderForTest()
   for (const path of homes.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 const settings: Partial<Config> = {
@@ -680,8 +676,12 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
   })
 
   test('child observer obeys the live distillation policy, including disabled agent-run sources', async () => {
+    // RFC-534: the bundle's memory enqueuer takes a live policy source (the daemon's re-reads the configuration on every
+    // call); setting `current` stands where the process registration was.
+    let current: MemoryDistillPolicySource = () => DEFAULT_DISTILL_POLICY
+    const livePolicy: MemoryDistillPolicySource = () => current()
     const appHome = home(),
-      fixture = taskBundleInput(harness, appHome),
+      fixture = taskBundleInput(harness, appHome, 'local-sync', livePolicy),
       bundle = fixture.compose()
     const seeded = await seedBundleTask(harness, appHome)
     const { memoryDistillJobs } = tablesOf(harness.db)
@@ -690,10 +690,10 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       .coordinatorFor({ runConfig: { kind: 'inherit-parent', parent: { appHome } } })
       .submit({ ...seeded, completionMode: 'await-settle' })
     const observer = fixture.driven[0]!.agentRunSettled!
-    setMemoryDistillPolicyProvider(() => ({
+    current = () => ({
       ...DEFAULT_DISTILL_POLICY,
       sources: { ...DEFAULT_DISTILL_POLICY.sources, 'agent-run': false },
-    }))
+    })
     await observer.onAgentRunSettled({
       taskId: seeded.taskId,
       nodeRunId: ulid(),
@@ -706,7 +706,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         .from(memoryDistillJobs)
         .where(eq(memoryDistillJobs.taskId, seeded.taskId)),
     ).toHaveLength(0)
-    resetMemoryDistillPolicyProviderForTest()
+    current = () => DEFAULT_DISTILL_POLICY
     const nodeRunId = ulid()
     await observer.onAgentRunSettled({
       taskId: seeded.taskId,

@@ -5,6 +5,7 @@ import type { TaskRecoveryHumanGateFactsPort } from './required-ports'
 import { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import type { TerminalWorkspacePrunePolicy } from '../domain/terminalWorkspacePrune'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -50,13 +51,22 @@ export interface TaskExecutionPersistenceDependencies {
   readonly recoveryHumanGates?: TaskRecoveryHumanGateFactsPort
   /** RFC-526: the deployment's workspace presence (required; only a revival of a terminal task consults it). */
   readonly workspacePresence: WorkspacePresenceQueries
+  /** RFC-534: the session's terminal workspace prune policy (required; the maintenance worker hands the never-prune one). */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
 }
 
 export function createTaskRuntimeLifecyclePersistence(
   db: PersistenceDb,
-  dependencies: Pick<TaskExecutionPersistenceDependencies, 'workspacePresence'>,
+  dependencies: Pick<
+    TaskExecutionPersistenceDependencies,
+    'workspacePresence' | 'terminalWorkspacePrune'
+  >,
 ): DrizzleTaskRuntimeLifecyclePersistence {
-  return new DrizzleTaskRuntimeLifecyclePersistence(db, dependencies.workspacePresence)
+  return new DrizzleTaskRuntimeLifecyclePersistence(
+    db,
+    dependencies.workspacePresence,
+    dependencies.terminalWorkspacePrune,
+  )
 }
 
 export function createTaskExecutionPersistence(
@@ -100,6 +110,7 @@ export function createTaskExecutionPersistence(
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
     clarifyDirectives: createTaskClarifyDirectivePersistence(db),
+    terminalWorkspacePrune: dependencies.terminalWorkspacePrune,
   })
 }
 

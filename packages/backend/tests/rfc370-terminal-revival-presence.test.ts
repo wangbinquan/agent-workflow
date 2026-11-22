@@ -21,6 +21,7 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const TASK_ID = 'selected-terminal-revival'
 async function seed(db: PersistenceDb, extra: Partial<TaskFixtureSpec> = {}) {
@@ -146,6 +147,7 @@ describeEachProvider('RFC-370 terminal revival selected presence', (harness) => 
   for (const mode of ['runtime', 'human-gate'] as const) {
     const resume = async (presence: WorkspacePresenceQueries) => {
       const persistence = createTaskExecutionPersistence(harness.db, {
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

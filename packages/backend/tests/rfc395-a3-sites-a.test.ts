@@ -23,6 +23,7 @@ import {
   type NodeRunFixtureSpec,
 } from './helpers/model'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const definition: WorkflowDefinition = { $schema_version: 6, inputs: [], nodes: [], edges: [] }
 async function seed(db: PersistenceDb) {
@@ -51,6 +52,7 @@ async function run(
 function wrapperPorts(db: PersistenceDb, def = definition) {
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -95,6 +97,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     await run(db, 'child', 'source', { parentNodeRunId: 'wrapper', containerRunId: 'wrapper' })
     const persistence = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -122,6 +125,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     ] as WorkflowNode[]
     const rows = await createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -150,6 +154,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     })
     const persistence = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -178,6 +183,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     })
     const rows = await createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -314,6 +320,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     const def = { ...definition, nodes }
     const persistence = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -368,6 +375,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     })
     const persistence = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

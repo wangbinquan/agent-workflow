@@ -24,8 +24,7 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   enqueueDistillJob,
-  resetMemoryDistillPolicyProviderForTest,
-  setMemoryDistillPolicyProvider,
+  type MemoryDistillPolicySource,
 } from '../src/modules/memory/application/distill/schedule'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
@@ -52,19 +51,26 @@ interface Fixture {
 describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
   let db: PersistenceDb
   let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
+  // RFC-534: the policy is an explicit input of every enqueue. Like the daemon's (which re-reads the configuration on
+  // every call), the live source re-reads `current` each time, so `setPolicy` stands where the process registration was.
+  let current: MemoryDistillPolicySource = () => DEFAULT_DISTILL_POLICY
+  const livePolicy: MemoryDistillPolicySource = () => current()
+  const setPolicy = (source: MemoryDistillPolicySource): void => {
+    current = source
+  }
 
   beforeEach(() => {
     db = harness.db
     memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
-    resetMemoryDistillPolicyProviderForTest()
+    setPolicy(() => DEFAULT_DISTILL_POLICY)
   })
   afterEach(() => {
-    resetMemoryDistillPolicyProviderForTest()
+    setPolicy(() => DEFAULT_DISTILL_POLICY)
   })
 
   function policy(overrides: Partial<DistillPolicy> = {}): void {
-    setMemoryDistillPolicyProvider(async () => ({ ...DEFAULT_DISTILL_POLICY, ...overrides }))
+    setPolicy(async () => ({ ...DEFAULT_DISTILL_POLICY, ...overrides }))
   }
 
   async function seedTask(
@@ -137,7 +143,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('AC-1: agent 运行结束落一行 agent-run，sourceEventId 是 node_run id', async () => {
     const fx = await seedTask()
-    const result = await enqueueDistillJob(memory.store, {
+    const result = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'agent-run',
       sourceEventId: fx.runIds['agent-a']!,
       taskId: fx.taskId,
@@ -154,7 +160,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('AC-4: 任务结束落一行 task-run，sourceEventId 是 task id', async () => {
     const fx = await seedTask()
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'task-run',
       sourceEventId: fx.taskId,
       taskId: fx.taskId,
@@ -168,7 +174,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('AC-12: agent-run 的 scope 只含本次结束的那个 agent', async () => {
     const fx = await seedTask()
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'agent-run',
       sourceEventId: fx.runIds['agent-b']!,
       taskId: fx.taskId,
@@ -181,7 +187,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('其余四类源的 scope 不收窄（逐字保持 RFC-041 行为）', async () => {
     const fx = await seedTask()
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'feedback',
       sourceEventId: 'f1',
       taskId: fx.taskId,
@@ -193,7 +199,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('解析不出 agent 的节点：不收窄 scope，去抖键回落到节点', async () => {
     const fx = await seedTask()
-    const result = await enqueueDistillJob(memory.store, {
+    const result = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'agent-run',
       sourceEventId: fx.runIds['named-only']!,
       taskId: fx.taskId,
@@ -223,7 +229,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
         startedAt: Date.now(),
         shardKey: suffix,
       })
-      const r = await enqueueDistillJob(memory.store, {
+      const r = await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'agent-run',
         sourceEventId: runId,
         taskId: fx.taskId,
@@ -237,13 +243,13 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('不变量：同一去抖键 ⇒ 同一 scope（不同 agent 必须是不同的键）', async () => {
     const fx = await seedTask()
-    const a = await enqueueDistillJob(memory.store, {
+    const a = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'agent-run',
       sourceEventId: fx.runIds['agent-a']!,
       taskId: fx.taskId,
       nodeId: 'agent-a',
     })
-    const b = await enqueueDistillJob(memory.store, {
+    const b = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'agent-run',
       sourceEventId: fx.runIds['agent-b']!,
       taskId: fx.taskId,
@@ -258,13 +264,13 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     const fx = await seedTask()
     policy({ agentRunDebounceMs: 60_000 })
     const before = Date.now()
-    const agentRun = await enqueueDistillJob(memory.store, {
+    const agentRun = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'agent-run',
       sourceEventId: fx.runIds['agent-a']!,
       taskId: fx.taskId,
       nodeId: 'agent-a',
     })
-    const taskRun = await enqueueDistillJob(memory.store, {
+    const taskRun = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'task-run',
       sourceEventId: fx.taskId,
       taskId: fx.taskId,
@@ -278,7 +284,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
   test('AC-5: 定时任务在默认配置下五类源一律不入队（能力影响清单 C1–C3）', async () => {
     const fx = await seedTask({ launchOrigin: 'scheduled' })
     for (const kind of ['clarify', 'review', 'feedback', 'agent-run', 'task-run'] as const) {
-      const result = await enqueueDistillJob(memory.store, {
+      const result = await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: kind,
         sourceEventId: kind === 'agent-run' ? fx.runIds['agent-a']! : fx.taskId,
         taskId: fx.taskId,
@@ -293,7 +299,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     test(`AC-5: ${origin} 任务默认不入队（能力影响清单 C4–C6）`, async () => {
       const fx = await seedTask({ launchOrigin: origin })
       expect(
-        await enqueueDistillJob(memory.store, {
+        await enqueueDistillJob(memory.store, livePolicy, {
           sourceKind: 'task-run',
           sourceEventId: fx.taskId,
           taskId: fx.taskId,
@@ -312,7 +318,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
       const fx = await seedTask(overrides)
       for (const kind of ['clarify', 'review', 'feedback', 'task-run'] as const) {
         expect(
-          await enqueueDistillJob(memory.store, {
+          await enqueueDistillJob(memory.store, livePolicy, {
             sourceKind: kind,
             sourceEventId: fx.taskId,
             taskId: fx.taskId,
@@ -327,7 +333,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     const fx = await seedTask()
     policy({ sources: { ...DEFAULT_DISTILL_POLICY.sources, 'agent-run': false } })
     expect(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'agent-run',
         sourceEventId: fx.runIds['agent-a']!,
         taskId: fx.taskId,
@@ -335,7 +341,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
       }),
     ).toBeNull()
     expect(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'task-run',
         sourceEventId: fx.taskId,
         taskId: fx.taskId,
@@ -350,10 +356,10 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
   test('AC-6: 策略在两次入队之间改变即刻生效（不需要重启 daemon）', async () => {
     const fx = await seedTask({ launchOrigin: 'scheduled' })
     let origins: readonly TaskLaunchOrigin[] = ['manual']
-    setMemoryDistillPolicyProvider(() => ({ ...DEFAULT_DISTILL_POLICY, launchOrigins: origins }))
+    setPolicy(() => ({ ...DEFAULT_DISTILL_POLICY, launchOrigins: origins }))
 
     const enqueue = async (kind: DistillSourceKind) =>
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: kind,
         sourceEventId: fx.taskId,
         taskId: fx.taskId,
@@ -382,7 +388,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     })
     for (const fx of [scheduledParent, scheduledChild]) {
       expect(
-        await enqueueDistillJob(memory.store, {
+        await enqueueDistillJob(memory.store, livePolicy, {
           sourceKind: 'task-run',
           sourceEventId: fx.taskId,
           taskId: fx.taskId,
@@ -400,7 +406,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     })
     for (const fx of [manualParent, manualChild]) {
       expect(
-        await enqueueDistillJob(memory.store, {
+        await enqueueDistillJob(memory.store, livePolicy, {
           sourceKind: 'task-run',
           sourceEventId: fx.taskId,
           taskId: fx.taskId,
@@ -429,14 +435,14 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     })
     let current: DistillPolicy = { ...DEFAULT_DISTILL_POLICY, outputLang: 'zh-CN' }
     let reads = 0
-    setMemoryDistillPolicyProvider(async () => {
+    setPolicy(async () => {
       reads += 1
       enter()
       if (reads === 1) await held
       return current
     })
     let settled = false
-    const pending = enqueueDistillJob(memory.store, {
+    const pending = enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'feedback',
       sourceEventId: `async-first-${fx.taskId}`,
       taskId: fx.taskId,
@@ -453,7 +459,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
       current = { ...current, sources: { ...current.sources, feedback: false } }
       expect(
-        await enqueueDistillJob(memory.store, {
+        await enqueueDistillJob(memory.store, livePolicy, {
           sourceKind: 'feedback',
           sourceEventId: `async-disabled-${fx.taskId}`,
           taskId: fx.taskId,
@@ -463,11 +469,11 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
       expect(await rowsOf(fx.taskId)).toHaveLength(1)
 
       const failure = new Error('selected distill policy unavailable')
-      setMemoryDistillPolicyProvider(async () => {
+      setPolicy(async () => {
         throw failure
       })
       await expect(
-        enqueueDistillJob(memory.store, {
+        enqueueDistillJob(memory.store, livePolicy, {
           sourceKind: 'feedback',
           sourceEventId: `async-failed-${fx.taskId}`,
           taskId: fx.taskId,
@@ -496,7 +502,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     // 多余属性检查拦在编译期——那正是本用例要锁的事实（这个键根本不在准入门的可视面里），
     // 但编译不过就没有运行期断言了，所以先落成一个真正的 Config 再交。
     const config: Config = { ...DEFAULT_CONFIG, memoryDistillerEnabled: false }
-    setMemoryDistillPolicyProvider(async () => resolveDistillPolicy(config))
+    setPolicy(async () => resolveDistillPolicy(config))
     const kinds: readonly DistillSourceKind[] = [
       'clarify',
       'review',
@@ -506,7 +512,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     ]
     for (const sourceKind of kinds) {
       expect(
-        await enqueueDistillJob(memory.store, {
+        await enqueueDistillJob(memory.store, livePolicy, {
           sourceKind,
           sourceEventId: `${sourceKind}-${fx.taskId}`,
           taskId: fx.taskId,
@@ -519,7 +525,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
 
   test('任务行不存在时仍放行（scope 退化为 global-only，与既有行为一致）', async () => {
     const orphanTaskId = ulid()
-    const result = await enqueueDistillJob(memory.store, {
+    const result = await enqueueDistillJob(memory.store, livePolicy, {
       sourceKind: 'task-run',
       sourceEventId: orphanTaskId,
       taskId: orphanTaskId,

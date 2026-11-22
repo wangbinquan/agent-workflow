@@ -44,6 +44,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { transitionTaskStatusByEvent } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
 
@@ -218,6 +219,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       // directly, so model that lifecycle step explicitly.
       await transitionTaskStatusByEvent({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: ctx.taskId,
         event: { kind: 'claim' },
         reason: 'review-multidoc-inherit-test-scheduler-claim',

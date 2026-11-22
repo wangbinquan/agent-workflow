@@ -3,7 +3,10 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // RFC-359 W4-D25 —— human-gate 停靠原子合一：此前 `sqliteHumanGateOpenParticipant.ts` /
 // `postgresqlHumanGateOpenParticipant.ts`（695 / 820 行）与 `sqlite|postgresqlHumanGateTaskLifecyclePersistence.ts`
 // （194 / 181 行）各一份，另有一条只给 SQLite 用的 legacy 同步停靠路（`sqliteTaskParkTransaction.ts` +
@@ -105,6 +108,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -187,6 +191,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
         db,
         createTaskRuntimeLifecyclePersistence(db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         }),
         {
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -227,6 +232,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -251,6 +257,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),

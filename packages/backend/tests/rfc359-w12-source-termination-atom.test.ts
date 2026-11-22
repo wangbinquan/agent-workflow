@@ -33,7 +33,10 @@ import {
   writeTaskRuntimeLifecycleInTx,
 } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
+import {
+  neverPruneTerminalWorkspaces,
+  type TerminalWorkspacePrunePolicy,
+} from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { __hasTaskReviewMutationQueueForTesting } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -153,10 +156,18 @@ for (const { provider, table, bind } of [
   }
 }
 
+// RFC-534: the source termination target takes the session's prune policy; the live wrapper reads the one a case set
+// (where it used to register a process-level policy).
+let prune: TerminalWorkspacePrunePolicy = neverPruneTerminalWorkspaces
+const livePrune: TerminalWorkspacePrunePolicy = (row, to) => prune(row, to)
+function usePrunePolicy(policy: TerminalWorkspacePrunePolicy): void {
+  prune = policy
+}
+
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore()
   registerAfterCommitEventPump(null)
-  registerTerminalWorkspacePrunePolicy(null)
+  usePrunePolicy(neverPruneTerminalWorkspaces)
   taskExecutionModule.resetForTesting()
 })
 
@@ -175,6 +186,7 @@ async function apply(harness: ProviderHarness, input = effect()) {
   const participant = createTaskSourceTerminationParticipant({
     db: harness.db,
     runtimeRegistry: taskExecutionModule.runtimeRegistry,
+    terminalWorkspacePrune: livePrune,
   })
   return await participant.apply(mintSourceTerminationEffectCapability(input), input)
 }
@@ -285,6 +297,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
       harness.db,
       createFileWorkspacePresenceQueries(),
+      livePrune,
     )
     let observedStatus: string | undefined
     expect(
@@ -342,6 +355,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
       harness.db,
       createFileWorkspacePresenceQueries(),
+      livePrune,
     )
     expect(
       await lifecycle.trySetWithGuard(
@@ -428,7 +442,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
       })
       const before = await rows(harness.db, taskId)
       let pruneCalls = 0
-      registerTerminalWorkspacePrunePolicy(async () => {
+      usePrunePolicy(async () => {
         pruneCalls += 1
         return { prune: false }
       })
@@ -466,7 +480,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
   test('an in-transaction terminal winner makes the source CAS miss without inventing a canceled lifecycle event', async () => {
     const { taskId, nodeRunId } = await seed(harness.db)
     let winner: Awaited<ReturnType<typeof writeTaskRuntimeLifecycleInTx>> | undefined
-    registerTerminalWorkspacePrunePolicy(async () => {
+    usePrunePolicy(async () => {
       // The named writer commits the winner into the same actual transaction.
       // This targets the CAS-miss branch on both engines; external PostgreSQL
       // serialization/retry remains the separate W8 concurrency predicate.
@@ -614,6 +628,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
           taskExecutionModule.runtimeRegistry,
           taskId,
           effect('clear-closed'),
+          livePrune,
         )
       } finally {
         sqliteSnapshot.mockRestore()

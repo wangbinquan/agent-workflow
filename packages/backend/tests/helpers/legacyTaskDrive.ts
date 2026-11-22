@@ -26,6 +26,7 @@ import { createRoomContinuation } from '@/modules/task-execution/application/dri
 import {
   composeHumanGateTaskLockPort,
   composeSourceControlTaskPorts,
+  neverPruneTerminalWorkspaces,
 } from '@/modules/task-execution/composition'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import type { HumanGateOpenParticipantFactory } from '@/modules/task-execution/composition/required-ports'
@@ -166,6 +167,7 @@ export function composeTestTaskDriveFactory(input: {
       humanGateOpen: input.humanGateOpen,
       historyRestrictions: input.historyRestrictions,
       workspacePresence: input.deps.workspacePresence ?? createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     })
   // RFC-527: the filesystem is required; the local one is what the command built from these arguments.
   const maintenance = composeWorkspaceMaintenanceCommand({

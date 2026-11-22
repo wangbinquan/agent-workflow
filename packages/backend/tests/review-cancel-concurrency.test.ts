@@ -79,6 +79,7 @@ import { drainCommittedEventDeliveriesForTests } from './helpers/committedEventH
 import { describeEachProvider } from './helpers/eachProvider'
 import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
 import { clearTaskDriverLifecycleForTesting } from './helpers/taskDriverLifecycle'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 interface Harness<Database extends PersistenceDb = PersistenceDb> {
   db: Database
@@ -1084,6 +1085,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
           await childMaySettle
           await trySetTaskStatus({
             db: h.db,
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             taskId: childId,
             to: 'canceled',
             allowedFrom: ['running'],

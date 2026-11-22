@@ -38,6 +38,7 @@ import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 // 慢 mock：先把完整 envelope 写上 stdout，再写起跑 marker，然后挂起等 SIGTERM。
 // 「envelope 已在手但 abort 仍赢」是比单纯挂起更尖的 oracle——runner 对 abort 的
@@ -258,6 +259,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const race = enforceLimits(h.db, Date.now())
     const flipped = await trySetTaskStatus({
       db: h.db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId,
       to: 'done',
       allowedFrom: ['running'],

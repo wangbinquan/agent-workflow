@@ -2,7 +2,10 @@ import { createFileWorkspacePresenceQueries } from '@/modules/source-control/com
 import { testExecutionPermits } from './helpers/executionPermits'
 import type { TaskExecutionParticipantBindings } from '@/modules/collaboration/infrastructure/taskExecutionParticipantBindings'
 import { expect, test } from 'bun:test'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
@@ -18,6 +21,8 @@ const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   executionPermits: testExecutionPermits,
   // RFC-526: the human-gate parks take the session's workspace presence (the local one in these tests).
   workspacePresence: createFileWorkspacePresenceQueries(),
+  // RFC-534: and its terminal workspace prune policy (a park never reaches done / canceled).
+  terminalWorkspacePrune: neverPruneTerminalWorkspaces,
   createTaskNodeStatusEventsParticipantInTx: unusedParticipant,
   createHumanGateNodeRunStateParticipantInTx: unusedParticipant,
   createTaskDecisionParticipantInTx: unusedParticipant,

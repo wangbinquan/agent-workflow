@@ -39,6 +39,7 @@ import { createTaskExecutionPersistence } from '../src/modules/task-execution/co
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const GRACE_MS = 24 * 3_600_000
 
@@ -304,6 +305,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -315,6 +317,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -357,6 +360,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -368,6 +372,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -380,6 +385,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

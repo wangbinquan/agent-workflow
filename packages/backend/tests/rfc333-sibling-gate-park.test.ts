@@ -3,7 +3,10 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // RFC-333 TaskParkTx — sibling human gates of one scheduler wave all park.
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -183,6 +186,7 @@ async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
     // The scheduler hands gate opens the driver's registered execution context.
     executionContext: createTaskExecutionContext({
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: intent.intentId,
@@ -234,6 +238,7 @@ function parker(db: PersistenceDb): DatabaseHumanGateTaskLifecyclePersistence {
     db,
     createTaskRuntimeLifecyclePersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     }),
     {
       humanGateOpen: composeHumanGateOpenParticipantFactory(),

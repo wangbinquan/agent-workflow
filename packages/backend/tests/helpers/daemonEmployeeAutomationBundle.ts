@@ -23,6 +23,7 @@ import { standaloneSelections } from '@/bootstrap/standalone'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { taskBundleInput } from './daemonTaskExecutionBundle'
 import type { ProviderDatabaseHarness } from './eachProvider'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appHome: string) {
   const binding = harness.applicationBinding,
@@ -88,6 +89,7 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   })
   const integration = composeDaemonIntegrationModules({
     db,
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     secretBox,
     configuration: { read: async () => DEFAULT_CONFIG },
     scheduledTaskRuntime: scheduled.scheduledTaskRuntime,

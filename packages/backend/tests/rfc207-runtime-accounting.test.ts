@@ -35,6 +35,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { enforceLimits } from './helpers/resourceLimits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 let db: PersistenceDb
 let workflowId: string
@@ -97,6 +98,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       const id = await seed('pending')
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'running',
         allowedFrom: ['pending'],
@@ -110,6 +112,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       const id = await seed('pending')
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'running',
         allowedFrom: ['pending'],
@@ -118,6 +121,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'awaiting_human',
         allowedFrom: ['running'],
@@ -132,6 +136,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       const id = await seed('pending')
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'running',
         allowedFrom: ['pending'],
@@ -140,6 +145,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'awaiting_human',
         allowedFrom: ['running'],
@@ -149,6 +155,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       // Human takes a long time (1 hour parked) — this must NOT accrue.
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'running',
         allowedFrom: ['awaiting_human'],
@@ -163,6 +170,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       const id = await seed('pending')
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'running',
         allowedFrom: ['pending'],
@@ -171,6 +179,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'awaiting_human',
         allowedFrom: ['running'],
@@ -179,6 +188,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'running',
         allowedFrom: ['awaiting_human'],
@@ -187,6 +197,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'done',
         allowedFrom: ['running'],
@@ -202,6 +213,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       const id = await seed('pending', { runningMs: 1234, runningSince: null })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'canceled',
         allowedFrom: ['pending'],
@@ -217,6 +229,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
       const id = await seed('running', { runningMs: 500, runningSince: null })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'failed',
         allowedFrom: ['running'],
@@ -268,6 +281,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     const id = await seed('pending', { maxDurationMs: 10_000 })
     await setTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: id,
       to: 'running',
       allowedFrom: ['pending'],
@@ -284,6 +298,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     const id = await seed('pending', { maxDurationMs: 10_000 })
     await setTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: id,
       to: 'running',
       allowedFrom: ['pending'],
@@ -292,6 +307,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     })
     await setTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: id,
       to: 'awaiting_human',
       allowedFrom: ['running'],
@@ -302,6 +318,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     const unpark = T0 + 3_605_000
     await setTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: id,
       to: 'running',
       allowedFrom: ['awaiting_human'],

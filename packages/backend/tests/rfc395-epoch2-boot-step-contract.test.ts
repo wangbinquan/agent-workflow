@@ -7,7 +7,6 @@ import { bootImplementation } from './helpers/daemonProgramSource'
 const source = (path: string) => readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
 const expected = [
   'runtime-declarations',
-  'process-registrations',
   'transport-projections',
   'git-credential-lease-cleanup',
   'daemon-identity',
@@ -35,9 +34,9 @@ const expected = [
   'resource-reverify',
   'bootstrap-admin-hint',
 ]
-test('epoch-2 has the exact 28 steps and preserves recovery ordering', () => {
+test('epoch-2 has the exact 27 steps and preserves recovery ordering', () => {
   expect<string[]>(DAEMON_BOOT_STEPS.map((step) => step.id)).toEqual(expected)
-  expect(expected).toHaveLength(28)
+  expect(expected).toHaveLength(27)
   expect(expected.indexOf('skill-operation-recovery')).toBeLessThan(
     expected.indexOf('skill-availability-gate'),
   )

@@ -72,6 +72,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
@@ -407,6 +408,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       module.claimGate.leave(claim.permit)
       const context = createTaskExecutionContext({
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(database).historyRestrictions,
         db: database,

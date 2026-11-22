@@ -36,7 +36,10 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createReviewNodeExecutionPorts } from '@/modules/task-execution/composition/humanGateNodeExecution'
 import { ReviewNodeExecutor } from '@/modules/task-execution/engine/node/review/reviewNodeExecutor'
@@ -147,6 +150,7 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
   })
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

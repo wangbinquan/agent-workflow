@@ -121,6 +121,7 @@ import {
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
 import { Paths } from '@/util/paths'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')
@@ -275,6 +276,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       launches: { launch: async () => ({}) } as never,
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

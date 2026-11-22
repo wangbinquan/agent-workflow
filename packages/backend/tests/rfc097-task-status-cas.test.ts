@@ -49,6 +49,7 @@ import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifec
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const ulid = monotonicFactory()
 
@@ -123,6 +124,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('pending')
       const r = await setTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'running',
         allowedFrom: ['pending'],
@@ -136,6 +138,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('running')
       await setTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'failed',
         allowedFrom: ['pending', 'running'],
@@ -164,6 +167,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       })
       await setTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'pending',
         allowedFrom: ['failed', 'interrupted', 'awaiting_review', 'awaiting_human'],
@@ -183,6 +187,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('done', { finishedAt: 456 })
       await setTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'interrupted',
         allowedFrom: ['done'],
@@ -201,6 +206,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       try {
         await setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId,
           to: 'running',
           allowedFrom: ['pending'],
@@ -220,6 +226,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       try {
         await setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId,
           to: 'pending',
           allowedFrom: ['done'], // 列了也没用：终态闸先于 allowedFrom 检查
@@ -237,6 +244,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('canceled')
       const r = await setTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'pending',
         allowedFrom: [
@@ -259,6 +267,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       try {
         await setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId: '01NOPE00000000000000000000',
           to: 'running',
           allowedFrom: ['pending'],
@@ -281,6 +290,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       try {
         await setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId,
           to: 'done',
           allowedFrom: ['running'],
@@ -305,6 +315,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('pending')
       const won = await trySetTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'running',
         allowedFrom: ['pending'],
@@ -318,6 +329,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('canceled')
       const won = await trySetTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'running',
         allowedFrom: ['pending'],
@@ -331,6 +343,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       const taskId = await h.seedTask('running')
       const won = await trySetTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId,
         to: 'done',
         allowedFrom: ['running'],
@@ -346,6 +359,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
     test('missing task returns false (NotFound maps to "respect the winner" semantics)', async () => {
       const won = await trySetTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: '01NOPE00000000000000000000',
         to: 'running',
         allowedFrom: ['pending'],
@@ -364,6 +378,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
       await expect(
         trySetTaskStatus({
           db: exploding,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId: 'whatever',
           to: 'running',
           allowedFrom: ['pending'],
@@ -562,6 +577,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         if (c.expectOk) {
           const r = await setTaskStatus({
             db: h.db,
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             taskId,
             to: c.to,
             allowedFrom: c.allowedFrom,
@@ -575,6 +591,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
           try {
             await setTaskStatus({
               db: h.db,
+              terminalWorkspacePrune: neverPruneTerminalWorkspaces,
               taskId,
               to: c.to,
               allowedFrom: c.allowedFrom,

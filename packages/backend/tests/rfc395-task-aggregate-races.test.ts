@@ -284,16 +284,21 @@ describeEachProvider('RFC-395 W1 owner fence and aggregate lock order', (harness
       token,
       persistence: createTaskExecutionPersistence(harness.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       }),
     })
     const merge = new DrizzleMergeStateLifecyclePersistence(harness.db)
-    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(harness.db, {
-      async exists() {
-        return true
+    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
+      harness.db,
+      {
+        async exists() {
+          return true
+        },
       },
-    })
+      neverPruneTerminalWorkspaces,
+    )
     const outcomes = await Promise.all([
       merge.transition({
         nodeRunId: 'race-run',
@@ -323,6 +328,7 @@ import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execut
 import { sha256Hex } from '@/util/hash'
 import type { HistoryRestrictionRequest } from '@/platform/contracts/historyRestriction'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 describeEachProvider('RFC-395 W1 Task gate restriction injection', (harness) => {
   test('each lifecycle instance forwards its own provider and an absent provider still refuses replay', async () => {
@@ -352,11 +358,15 @@ describeEachProvider('RFC-395 W1 Task gate restriction injection', (harness) => 
       createdAt: 10,
       updatedAt: 10,
     })
-    const runtime = new DrizzleTaskRuntimeLifecyclePersistence(harness.db, {
-      async exists() {
-        return true
+    const runtime = new DrizzleTaskRuntimeLifecyclePersistence(
+      harness.db,
+      {
+        async exists() {
+          return true
+        },
       },
-    })
+      neverPruneTerminalWorkspaces,
+    )
     const requests: { instance: string; request: HistoryRestrictionRequest }[] = []
     const lifecycle = (instance: string) =>
       new DatabaseHumanGateTaskLifecyclePersistence(harness.db, runtime, {

@@ -34,6 +34,7 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const NOW = 1_700_000_000_250
 const INITIAL: TaskNodeChangeV1 = {
@@ -172,6 +173,7 @@ describe('RFC-359 lifecycle native writer contract', () => {
     })
     const result = await setTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId: 'native',
       to: 'done',
       allowedFrom: ['running'],
@@ -212,6 +214,7 @@ describe('RFC-359 lifecycle native writer contract', () => {
     await expect(
       setTaskStatus({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: 'native',
         to: 'done',
         allowedFrom: ['running'],

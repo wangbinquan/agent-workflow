@@ -1,7 +1,10 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2d —— 四对只差事务 / 围栏原语的适配器合到 `ownedTaskExecution.ts` 上，两个引擎各跑一遍：
@@ -104,6 +107,7 @@ async function seedClaimedOwner(
     token,
     persistence: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -233,6 +237,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
     const step = composeGateContinuationPreDrive({
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -256,6 +261,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
         token,
         persistence: createTaskExecutionPersistence(db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

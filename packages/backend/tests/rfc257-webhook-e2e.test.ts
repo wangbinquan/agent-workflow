@@ -51,6 +51,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { createUser } from './helpers/userFixture'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
 const SECRET = 'e2e-secret'
@@ -75,6 +76,7 @@ async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
 function taskSourceTerminationFor(providerHarness: ProviderHarness) {
   return composeTaskSourceTermination({
     db: providerHarness.db,
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
   })
 }

@@ -44,6 +44,7 @@ import { transitionTaskStatusByEvent } from '@/modules/task-execution/infrastruc
 
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 interface Fixture {
   db: PersistenceDb
@@ -297,6 +298,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // decision can release it; this direct fixture must model that edge too.
       await transitionTaskStatusByEvent({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: h.taskId,
         event: { kind: 'park-review' },
         reason: 'lifecycle-wrapper-nested-test-review-park',

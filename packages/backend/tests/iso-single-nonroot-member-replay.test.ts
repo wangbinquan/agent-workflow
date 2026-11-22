@@ -56,6 +56,7 @@ import { singleMemberWorkspaceFixture } from './helpers/singleMemberWorkspaceFix
 import { createProviderTaskExecutionTestTopology } from './helpers/providerTaskExecutionTestTopology'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/composition'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const TIMEOUT = 60_000
 const shapes = [
@@ -105,6 +106,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
     const binding = createTestIsolationBinding({
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -25,6 +25,7 @@ import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryC
 import { recordAutoRecoveryAttempt } from '../src/modules/task-execution/application/recovery/autoRecoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
@@ -71,6 +72,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const run = stalled(taskId)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -94,6 +96,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const db = harness.db
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -118,6 +121,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -141,6 +145,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -188,6 +193,7 @@ describeEachProvider('RFC-108 T20 — findStalledRunningChildren query', (harnes
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

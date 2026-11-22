@@ -42,6 +42,7 @@ import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifec
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -314,6 +315,7 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
     await Bun.sleep(10)
     await setTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId,
       to: 'failed',
       allowedFrom: ['running'],
@@ -332,6 +334,7 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
     await Bun.sleep(10)
     const won = await trySetTaskStatus({
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       taskId,
       to: 'interrupted',
       allowedFrom: ['running'],

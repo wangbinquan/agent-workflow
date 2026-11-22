@@ -28,6 +28,7 @@ import { executeSourceTermination } from '../application/sourceTerminationExecut
 import type { InMemoryTaskRuntimeRegistry } from './inMemoryTaskRuntimeRegistry'
 import { applySourceTerminationTarget } from './sourceTerminationTarget'
 import { listSourceTerminationTargets } from './sourceTerminationTargets'
+import type { TerminalWorkspacePrunePolicy } from './terminalWorkspacePrune'
 
 export interface TaskSourceTerminationParticipantInput {
   readonly db: PersistenceDb
@@ -39,6 +40,8 @@ export interface TaskSourceTerminationParticipantInput {
    * 不交就只剩 durable 消费者兜底（回执仍是 `no-active-owner`，只是收尾异步发生）。
    */
   readonly finalizeWithoutDriver?: (taskId: string) => Promise<void>
+  /** RFC-534: the session's terminal workspace prune policy (required; bootstrap hands the same one as Task Execution's). */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
 }
 
 export function createTaskSourceTerminationParticipant(
@@ -63,7 +66,13 @@ export function createTaskSourceTerminationParticipant(
         () => listSourceTerminationTargets(db, effect),
         (taskId) =>
           withTaskReviewMutationLock(taskId, async () => {
-            const applied = await applySourceTerminationTarget(db, runtimeRegistry, taskId, effect)
+            const applied = await applySourceTerminationTarget(
+              db,
+              runtimeRegistry,
+              taskId,
+              effect,
+              input.terminalWorkspacePrune,
+            )
             if (applied === null) return null
             // 锁内：发布已提交事件 + 取停机票据（都不阻塞）。
             await publishCommittedEventsAfterCommit(applied.eventRefs)

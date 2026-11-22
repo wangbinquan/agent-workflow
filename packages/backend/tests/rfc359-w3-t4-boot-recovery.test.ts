@@ -26,7 +26,10 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import {
   createDaemonLockProof,
   runTaskExecutionBootRecovery,
@@ -111,6 +114,7 @@ async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<strin
 async function crashPreviousDaemon(db: PersistenceDb, taskId: string) {
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -292,6 +296,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     const db = harness.db
     const persistence = createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

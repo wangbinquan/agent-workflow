@@ -54,6 +54,7 @@ import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
 import { getTask } from './taskDetailRead'
 import { setNodeRunStatus, setTaskStatus } from './taskLifecycle'
+import type { TerminalWorkspacePrunePolicy } from './terminalWorkspacePrune'
 import { createTaskPreparationParticipantInTx } from './taskPreparationParticipant'
 import { createTaskPreparationQueries } from './taskPreparationQueries'
 
@@ -71,6 +72,8 @@ type WorkspacePreparationRepositoryProjection = Parameters<
  */
 export interface DeferredRepositoryPreparationDependencies {
   readonly db: PersistenceDb
+  /** RFC-534: the session's terminal workspace prune policy (the failure write hands it to the lifecycle writer). */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   /** source-control 的物化、清理与组解析都经它（bootstrap 装配的 task 自有绑定）。 */
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly repositoryPreparationLookup: RepositoryPreparationLookup
@@ -712,6 +715,7 @@ async function runDeferredRepoPreparation(args: {
       // pending（G7 不新增状态）。已取消/已推进时抛出，此时**保留既有终态**。
       await setTaskStatus({
         db: deps.db,
+        terminalWorkspacePrune: deps.terminalWorkspacePrune,
         taskId,
         to: 'failed',
         allowedFrom: ['pending'],

@@ -33,6 +33,7 @@ import { NotFoundError } from '@/util/errors'
 import type { Task } from '@agent-workflow/shared'
 import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 export interface ResumeEngineOptions {
   readonly workspacePresence?: WorkspacePresenceQueries
@@ -70,6 +71,7 @@ export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptio
           workspacePresence: options.workspacePresence ?? createFileWorkspacePresenceQueries(),
           persistence: createTaskExecutionPersistence(db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

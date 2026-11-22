@@ -15,6 +15,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   memorySystemAgentBindingForTest,
   runtimeManagementDistillRuntimes,
+  defaultDistillPolicy,
 } from './helpers/memoryDistill'
 import {
   composeNodeRunPromptOperations,
@@ -93,6 +94,7 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),
+    distillPolicy: defaultDistillPolicy,
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(
       createFileNodeRunPromptContent(join(APP_HOME, 'runs')),

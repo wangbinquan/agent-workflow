@@ -29,6 +29,7 @@ import type { TaskMechanicsState } from '../src/modules/task-execution/compositi
 import { createLogger } from '../src/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 function unexpected(operation: string): never {
   throw new Error(`unexpected effect during handoff: ${operation}`)
@@ -568,6 +569,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
       opts: {
         persistence: createTaskExecutionPersistence(harness.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

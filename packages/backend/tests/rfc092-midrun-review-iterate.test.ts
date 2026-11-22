@@ -56,6 +56,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runGit } from '../src/util/git'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence' // 同毫秒插入仍保 id 单调（pure-id freshness）
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 // gate 慢 mock —— 同 rfc092-midrun-clarify-dispatch.test.ts（路径烘焙、零 env）。
 function gateMockSource(paths: {
@@ -316,6 +317,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     await submitTaskContinuation(
       createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

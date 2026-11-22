@@ -20,6 +20,7 @@ import {
 } from '@/modules/task-execution/application/taskLifecycleEvents'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 async function setTaskStatus({
   db,
   ...input
@@ -30,6 +31,7 @@ async function setTaskStatus({
     !(await new DrizzleTaskRuntimeLifecyclePersistence(
       db,
       createFileWorkspacePresenceQueries(),
+      neverPruneTerminalWorkspaces,
     ).trySet(input))
   ) {
     throw new Error('task-lifecycle-fixture-transition-lost-cas')

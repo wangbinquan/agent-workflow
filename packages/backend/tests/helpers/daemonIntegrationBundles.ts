@@ -16,6 +16,7 @@ import { taskExecutionResourceBinding } from './integrationTriggerResourceBindin
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import { createTaskExecutionTestModule } from './taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 type IntegrationInput = Parameters<typeof composeDaemonIntegrationModules>[0]
 export function integrationBundleFixture(
@@ -24,7 +25,12 @@ export function integrationBundleFixture(
   overrides: Partial<
     Pick<
       IntegrationInput,
-      'runtimeRegistry' | 'workspaceMaintenance' | 'adapters' | 'taskExecutions'
+      | 'runtimeRegistry'
+      | 'workspaceMaintenance'
+      | 'adapters'
+      | 'taskExecutions'
+      // RFC-534: the session's terminal workspace prune policy (never, unless a case exercises reclamation).
+      | 'terminalWorkspacePrune'
     >
   > = {},
 ) {
@@ -46,6 +52,7 @@ export function integrationBundleFixture(
   })
   const integrationModules = composeDaemonIntegrationModules({
     db,
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     secretBox: createSecretBoxFromKey(Buffer.alloc(32, 17)),
     configuration: configuration.queries,
     scheduledTaskRuntime: scheduledTaskModules.scheduledTaskRuntime,

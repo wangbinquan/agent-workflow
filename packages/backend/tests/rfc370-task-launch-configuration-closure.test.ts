@@ -41,6 +41,7 @@ import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { awaitTaskDriverIdle } from './helpers/taskDriverLifecycle'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const homes: string[] = []
 afterEach(() => {
@@ -446,6 +447,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
     })
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

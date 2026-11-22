@@ -37,6 +37,7 @@ import {
 } from '@/modules/task-execution/composition/portArtifacts'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 type Dependencies = Parameters<typeof createTaskRouteRepairOperations>[0]
 
@@ -110,6 +111,7 @@ export function createRepairEngine(
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-repair-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

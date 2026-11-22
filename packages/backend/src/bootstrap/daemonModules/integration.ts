@@ -5,6 +5,7 @@ import { createMissionCodeHostEventContinuation } from '@/modules/development-au
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { graphEmployeeTypePackage } from '@/modules/development-automation/composition/graphDevelopment'
 import { createEmployeeAutomationWorkStartProvider } from '@/modules/digital-employee/composition'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
 import {
@@ -58,6 +59,8 @@ type EventAutomationContexts = Parameters<
 export function composeDaemonIntegrationModules(input: {
   readonly db: PersistenceDb
   readonly secretBox: SecretBox
+  /** RFC-534: the session's terminal workspace prune policy (source termination's cancel claims the workspace with it). */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   readonly configuration: ApplicationConfigurationQueries
   readonly scheduledTaskRuntime: DaemonScheduledTaskModules['scheduledTaskRuntime']
   readonly identityAccess: WebhookDispatchDeps['identityAccess']
@@ -111,6 +114,7 @@ export function composeDaemonIntegrationModules(input: {
         db: input.db,
         runtimeRegistry: input.runtimeRegistry,
         finalizeWithoutDriver: finalizeClaimedWorkspace,
+        terminalWorkspacePrune: input.terminalWorkspacePrune,
       }),
     })
   const dispatchCore = composeWebhookDispatchCore(

@@ -19,6 +19,7 @@ import { ulid } from 'ulid'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runStuckTaskDetector } from '../src/modules/task-execution/application/lifecycleAlerts/stuckTaskDetector'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 async function seedUser(
   db: PersistenceDb,
@@ -75,6 +76,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -91,6 +93,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -106,6 +109,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -131,6 +135,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

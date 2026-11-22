@@ -12,7 +12,11 @@ import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 import { distillRuntimeProfile } from '@/modules/memory/application/distill/distillRuntimeProfile'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import { enqueueDistillJob } from '@/modules/memory/application/distill/schedule'
+import {
+  enqueueDistillJob,
+  type MemoryDistillPolicySource,
+} from '@/modules/memory/application/distill/schedule'
+import { DEFAULT_DISTILL_POLICY } from '@agent-workflow/shared'
 import { appHome } from '@/util/paths'
 import {
   runDistill as runSelectedDistill,
@@ -174,8 +178,14 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
   })
 }
 
+/** RFC-534: the fresh-install distill policy, for tests that do not exercise the admission gate. */
+export const defaultDistillPolicy: MemoryDistillPolicySource = () => DEFAULT_DISTILL_POLICY
+
 /** Provider-real test participant for consumers that only enqueue work. */
-export function createSqliteMemoryDistillEnqueuer(db: PersistenceDb): MemoryDistillEnqueuer {
+export function createSqliteMemoryDistillEnqueuer(
+  db: PersistenceDb,
+  distillPolicy: MemoryDistillPolicySource = defaultDistillPolicy,
+): MemoryDistillEnqueuer {
   const store = new DrizzleMemoryDistillWorkStore(
     db,
     createClarifyAnswerQueries(db, taskExecutionParticipants),
@@ -183,6 +193,6 @@ export function createSqliteMemoryDistillEnqueuer(db: PersistenceDb): MemoryDist
     createNodeOutputQueries(db),
   )
   return Object.freeze({
-    enqueue: async (input) => await enqueueDistillJob(store, input),
+    enqueue: async (input) => await enqueueDistillJob(store, distillPolicy, input),
   })
 }

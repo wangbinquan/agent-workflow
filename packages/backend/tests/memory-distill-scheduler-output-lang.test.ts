@@ -25,8 +25,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   enqueueDistillJob,
-  resetMemoryDistillPolicyProviderForTest,
-  setMemoryDistillPolicyProvider,
+  type MemoryDistillPolicySource,
 } from '../src/modules/memory/application/distill/schedule'
 import { DEFAULT_DISTILL_POLICY, type Language } from '@agent-workflow/shared'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -43,6 +42,11 @@ function admitted<T>(result: T | null): T {
   return result
 }
 
+// RFC-534: the policy is an explicit input of every enqueue; the live source re-reads `current` on each call (as the
+// daemon's re-reads the configuration), so setting it stands where the process registration was.
+let current: MemoryDistillPolicySource = () => DEFAULT_DISTILL_POLICY
+const livePolicy: MemoryDistillPolicySource = () => current()
+
 /**
  * Register only the language half of the policy and leave every admission knob
  * at its default. These cases are about `outputLang`, not about the gate, and a
@@ -50,7 +54,7 @@ function admitted<T>(result: T | null): T {
  * ever moved.
  */
 function setAmbientLang(read: () => Language | null): void {
-  setMemoryDistillPolicyProvider(() => ({ ...DEFAULT_DISTILL_POLICY, outputLang: read() }))
+  current = () => ({ ...DEFAULT_DISTILL_POLICY, outputLang: read() })
 }
 
 describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (harness) => {
@@ -59,7 +63,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
 
   beforeEach(() => {
     resetBroadcastersForTests()
-    resetMemoryDistillPolicyProviderForTest()
+    current = () => DEFAULT_DISTILL_POLICY
     db = harness.db
     memory = {
       store: new DrizzleMemoryDistillWorkStore(
@@ -72,13 +76,13 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
   })
 
   afterEach(() => {
-    resetMemoryDistillPolicyProviderForTest()
+    current = () => DEFAULT_DISTILL_POLICY
   })
 
   test('explicit outputLang wins over the ambient provider', async () => {
     setAmbientLang(() => 'en-US')
     const { jobId } = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'evt-1',
         taskId: null,
@@ -95,7 +99,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
   test('ambient provider used when explicit outputLang omitted (production path)', async () => {
     setAmbientLang(() => 'zh-CN')
     const { jobId } = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'evt-2',
         taskId: null,
@@ -110,7 +114,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
 
   test('no provider + no explicit → DB row carries NULL (RFC-041 baseline)', async () => {
     const { jobId } = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'evt-3',
         taskId: null,
@@ -126,7 +130,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
   test('explicit null overrides a provider-set language → DB row NULL', async () => {
     setAmbientLang(() => 'zh-CN')
     const { jobId } = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'evt-4',
         taskId: null,
@@ -150,7 +154,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     let current: 'zh-CN' | 'en-US' = 'zh-CN'
     setAmbientLang(() => current)
     const a = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'sibling-a',
         taskId: 't-shared',
@@ -158,7 +162,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     )
     current = 'en-US'
     const b = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, livePolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'sibling-b',
         taskId: 't-shared',

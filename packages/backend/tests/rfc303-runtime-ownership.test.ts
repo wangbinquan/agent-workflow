@@ -25,6 +25,7 @@ import type {
   TaskSourceTerminationEffectInput,
 } from '@/modules/task-execution/public/participants'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const cause = {
   kind: 'webhook-terminal',
@@ -222,6 +223,7 @@ describe('RFC-303 source termination capability', () => {
 
       const receipts = await createTaskSourceTerminationParticipant({
         db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
       }).apply(mintSourceTerminationEffectCapability(input), input)
 

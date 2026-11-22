@@ -3,7 +3,10 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // RFC-333 T5 — human-gate park/decision participants share one SQLite
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
@@ -262,6 +265,7 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -357,6 +361,7 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
           db,
           createTaskRuntimeLifecyclePersistence(db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           }),
           {
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -506,6 +511,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -544,6 +550,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -583,6 +590,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -621,6 +629,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -653,6 +662,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       db,
       createTaskRuntimeLifecyclePersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       }),
       {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -935,6 +945,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
     )
     const execution = createTaskExecutionContext({
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: decision.continuationRef,
@@ -1009,6 +1020,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: submitted.intentId,

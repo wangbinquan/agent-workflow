@@ -26,7 +26,10 @@ import type { RepositoryPublicationTransport } from '../src/modules/source-contr
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 import { held } from './helpers/portArtifactContent'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   createTaskExecutionContext,
@@ -713,6 +716,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
         const f = await build(harness)
         const persistence = createTaskExecutionPersistence(f.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(f.db).historyRestrictions,
           recoveryHumanGates: o2Ports(f.db).collaborationReads.recovery,

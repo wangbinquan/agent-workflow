@@ -38,7 +38,10 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import {
@@ -231,6 +234,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('① prepare：只撤销上一代 daemon 的 claimed owner，本代的原样留着', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -255,6 +259,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('② prepare：同代 daemon 自己的 owner 不是候选（不会自撤）', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -274,6 +279,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('③ finalize 必须先有孤儿收割屏障的证据，否则拒绝', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -292,6 +298,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('④ finalize：没有未决 effect 的任务被释放，活跃 intent 转 failed', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -327,6 +334,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('⑤ finalize：未消费的 actor-replay-authorized 决策回退成 requires-actor（缺口 08）', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -383,6 +391,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('⑥ finalize：还开着的 code-host effect 没有探针结论时以 outcome-unknown 闭合，不释放', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -430,6 +439,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('⑦ finalize + 探针：applied 的落 succeeded 并投影 node_run；definitely-not-applied 的转 retry-authorized', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -531,6 +541,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('⑧ takeover 证明摘要的载荷含探针判据（缺口 05）—— 两个引擎必须算出同一个摘要', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
@@ -629,6 +640,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   test('⑨ 未经铸造的独占锁证明当场被拒 —— prepare / finalize 都不许因为「恰好没有候选」而静默放行（缺口 04）', async () => {
     const persistence = createTaskExecutionPersistence(harness.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

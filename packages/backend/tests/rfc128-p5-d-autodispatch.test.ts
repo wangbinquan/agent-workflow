@@ -4,7 +4,10 @@ import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBin
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -313,6 +316,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: intent.id,
@@ -325,6 +329,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const step = createGateContinuationPreDriveStep({
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -398,6 +403,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const step = createGateContinuationPreDriveStep({
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -415,6 +421,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         intentKind: claimed.intentKind,
         execution: createTaskExecutionContext({
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           intentId: intent.id,

@@ -947,6 +947,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         prepared: prepared.prepared,
         historyRestrictions: args.historyRestrictions,
         workspacePresence: args.taskExecutionParticipants.workspacePresence,
+        terminalWorkspacePrune: args.taskExecutionParticipants.terminalWorkspacePrune,
         content: args.content,
         ...(executionContext === undefined ? {} : { executionContext }),
       })

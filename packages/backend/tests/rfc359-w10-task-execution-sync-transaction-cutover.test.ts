@@ -67,6 +67,7 @@ import { setNodeRunStatusTx as setNodeRunStatusInTransaction } from '@/modules/t
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const BINDING = 'gitlab:group/proj!910'
 const DELIVERY = 'dlv-rfc359-w10'
@@ -217,6 +218,7 @@ async function applySourceTermination(
   // **两个引擎上都构造这一个** SQLite 命名的参与者：它跑得动 PostgreSQL 正是本波的判据。
   const participant = createTaskSourceTerminationParticipant({
     db: h.db,
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
   })
   await participant.apply(mintSourceTerminationEffectCapability(input), input)

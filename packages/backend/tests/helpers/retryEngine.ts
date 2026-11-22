@@ -36,6 +36,7 @@ import type { Task } from '@agent-workflow/shared'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
 import { awaitTaskDriverReleasedSettled, isTaskDriverActive } from './taskDriverLifecycle'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 export interface RetryEngineOptions {
   readonly appHome?: string
@@ -113,6 +114,7 @@ async function driveInBackground(
 ): Promise<void> {
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -157,6 +159,7 @@ export function createRetryEngine(
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-retry-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -282,6 +285,7 @@ async function retryRepositoryPreparation(
       repositoryPreparationLookup,
       repositoryPreparation: deps.repositoryPreparation,
       db,
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       appHome,
       ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
       ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),

@@ -19,6 +19,7 @@ import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaborat
 import { reapOrphanRuns } from '@/modules/task-execution/infrastructure/local/orphanRunReap'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const NOW = 1_788_969_900_000
 
@@ -102,6 +103,7 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       await reapOrphanRuns(
         createTaskExecutionPersistence(db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -175,6 +177,7 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       await reapOrphanRuns(
         createTaskExecutionPersistence(db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

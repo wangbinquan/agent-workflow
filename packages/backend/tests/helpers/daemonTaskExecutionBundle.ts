@@ -49,7 +49,9 @@ import type {
 } from '@/modules/task-execution/public/commands'
 import type { ProviderDatabaseHarness } from './eachProvider'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
-import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
+import { createSqliteMemoryDistillEnqueuer, defaultDistillPolicy } from './memoryDistill'
+import type { MemoryDistillPolicySource } from '@/modules/memory/composition'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
@@ -68,6 +70,8 @@ export function taskBundleInput(
   harness: Pick<ProviderDatabaseHarness, 'db' | 'applicationBinding'>,
   appHome: string,
   mode: 'local-sync' | 'selected' = 'local-sync',
+  /** RFC-534: the memory enqueuer's distill policy (the fresh-install one unless a case exercises the gate). */
+  distillPolicy: MemoryDistillPolicySource = defaultDistillPolicy,
 ) {
   const db = harness.db
   const binding = harness.applicationBinding
@@ -107,11 +111,12 @@ export function taskBundleInput(
     resumeChild: async () => {},
     isTaskActive: () => false,
   }
-  const distill = createSqliteMemoryDistillEnqueuer(db)
+  const distill = createSqliteMemoryDistillEnqueuer(db, distillPolicy)
   const distillRequests: Parameters<typeof distill.enqueue>[0][] = []
   const input: DaemonTaskExecutionInput = {
     ...epoch2RuntimeTestPorts(db),
     db,
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     appHome,
     configPath: join(appHome, 'config.json'),
     adapters,

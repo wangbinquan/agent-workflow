@@ -29,7 +29,10 @@ import { ConcurrentTaskTransition } from './taskLifecycle'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { revokeExactOwnerInTx } from './taskOwnershipPersistence'
 import { writeTaskRuntimeLifecycleInTx } from './taskRuntimeLifecyclePersistence'
-import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
+import {
+  resolveTerminalWorkspacePruneDecision,
+  type TerminalWorkspacePrunePolicy,
+} from './terminalWorkspacePrune'
 
 const CANCELABLE_NODE_STATUSES = [...allowedFromStatusesForEvent({ kind: 'mark-canceled' })]
 
@@ -166,6 +169,8 @@ export async function applySourceTerminationTarget(
   runtimeRegistry: InMemoryTaskRuntimeRegistry,
   taskId: string,
   input: TaskSourceTerminationEffectInput,
+  /** RFC-534: the session's terminal workspace prune policy. */
+  terminalWorkspacePrune: TerminalWorkspacePrunePolicy,
 ): Promise<AppliedSourceTerminationTarget | null> {
   return await withTaskExecutionSerializable(db, async (tx) => {
     let row = await readTarget(tx, taskId)
@@ -260,6 +265,7 @@ export async function applySourceTerminationTarget(
     let recoveryCode = 'terminal-control-source-terminal'
     if (sourceTerminationTargetDisposition(row.status) === 'cancel') {
       const prune = await resolveTerminalWorkspacePruneDecision(
+        terminalWorkspacePrune,
         {
           taskId,
           spaceKind: row.spaceKind,

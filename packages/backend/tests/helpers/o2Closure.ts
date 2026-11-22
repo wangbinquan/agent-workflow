@@ -10,9 +10,15 @@ import {
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
 import { Paths } from '@/util/paths'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 export const o2Ports = (db: PersistenceDb) =>
-  composeCrossContextClosure(db, testExecutionPermits, createFileWorkspacePresenceQueries())
+  composeCrossContextClosure(
+    db,
+    testExecutionPermits,
+    createFileWorkspacePresenceQueries(),
+    neverPruneTerminalWorkspaces,
+  )
 
 export function withO2Closure<T extends { readonly db: PersistenceDb }>(input: T) {
   const ports = o2Ports(input.db)

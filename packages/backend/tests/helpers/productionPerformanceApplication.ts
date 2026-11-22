@@ -3,7 +3,11 @@ import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './o2Closure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
-import { memorySystemAgentBindingForTest, runtimeManagementDistillRuntimes } from './memoryDistill'
+import {
+  defaultDistillPolicy,
+  memorySystemAgentBindingForTest,
+  runtimeManagementDistillRuntimes,
+} from './memoryDistill'
 import { join } from 'node:path'
 import {
   composeNodeRunPromptOperations,
@@ -152,6 +156,7 @@ export async function createProductionPerformanceApplication(
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),
+    distillPolicy: defaultDistillPolicy,
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(
       createFileNodeRunPromptContent(join(appHome, 'runs')),

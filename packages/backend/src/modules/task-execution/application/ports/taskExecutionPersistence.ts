@@ -25,6 +25,7 @@ import type { TaskRecoveryOperations } from './taskRecoveryOperations'
 import type { RuntimeSessionCapturePersistence } from '@/modules/runtime-management/public/participants'
 import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'
 import type { TaskClarifyDirectiveReads } from './taskClarifyDirectivePersistence'
+import type { TerminalWorkspacePrunePolicy } from '../../domain/terminalWorkspacePrune'
 
 /** Bootstrap-selected task-execution persistence. Every member is a named
  * Promise port; provider clients remain in infrastructure factories. */
@@ -56,4 +57,6 @@ export interface TaskExecutionPersistence {
   readonly runtimeSessionCapture: RuntimeSessionCapturePersistence
   /** RFC-482: the clarify directive the engine reads at dispatch (Task Execution's own table). */
   readonly clarifyDirectives: TaskClarifyDirectiveReads
+  /** RFC-534: the session's terminal workspace prune policy (the cancel path reads the same one as the lifecycle writer). */
+  readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
 }

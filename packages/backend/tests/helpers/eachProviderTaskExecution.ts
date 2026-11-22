@@ -60,7 +60,10 @@ import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { eq } from 'drizzle-orm'
 import { join } from 'node:path'
-import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
+import {
+  createFileTaskOperationConfiguration,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createFileTaskArchiveContent } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import {
   composeNodeRunPromptOperations,
@@ -241,6 +244,7 @@ export async function createEachProviderTaskExecution(
     resources,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -31,6 +31,7 @@ export function createTaskExecutionContext(input: {
   readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   readonly workspacePresence: TaskExecutionPersistenceDependencies['workspacePresence']
+  readonly terminalWorkspacePrune: TaskExecutionPersistenceDependencies['terminalWorkspacePrune']
 }): SqliteTaskExecutionContext {
   const context = createProviderTaskExecutionContext({
     intentId: input.intentId,

@@ -15,7 +15,10 @@ import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
+import {
+  neverPruneTerminalWorkspaces,
+  type TerminalWorkspacePrunePolicy,
+} from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'
@@ -26,6 +29,12 @@ const ulid = monotonicFactory()
 let db: PersistenceDb
 let workflowId: string
 let uninstallAfterCommitPump: (() => void) | null = null
+// RFC-534: the prune policy is the caller's (the session's), handed to every lifecycle write; a case sets the one its
+// writes use where it used to register a process-level policy.
+let prune: TerminalWorkspacePrunePolicy = neverPruneTerminalWorkspaces
+function usePrunePolicy(policy: TerminalWorkspacePrunePolicy): void {
+  prune = policy
+}
 
 describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
   beforeEach(async () => {
@@ -40,7 +49,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
   })
 
   afterEach(() => {
-    registerTerminalWorkspacePrunePolicy(null)
+    usePrunePolicy(neverPruneTerminalWorkspaces)
     uninstallAfterCommitPump?.()
   })
 
@@ -166,9 +175,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     test('winning done CAS writes the claim with the same clock and wakes the effect', async () => {
       const taskId = await seedTask()
       const effects: Array<{ taskId: string; to: string }> = []
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
-      )
+      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune(_db, id, to) {
           effects.push({ taskId: id, to })
@@ -177,6 +184,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: prune,
         taskId,
         to: 'done',
         allowedFrom: ['running'],
@@ -194,14 +202,13 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
     test('the setting is sampled at terminal transition, not when the task started', async () => {
       let enabled = false
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => enabled }),
-      )
+      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => enabled }))
 
       const startedWhileOff = await seedTask()
       enabled = true
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: prune,
         taskId: startedWhileOff,
         to: 'done',
         allowedFrom: ['running'],
@@ -217,6 +224,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
       enabled = false
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: prune,
         taskId: finishingAfterDisable,
         to: 'canceled',
         allowedFrom: ['running'],
@@ -232,9 +240,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     test('losing terminal CAS writes neither claim nor effect', async () => {
       const taskId = await seedTask()
       let effectCount = 0
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
-      )
+      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune() {
           effectCount += 1
@@ -247,6 +253,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
       await expect(
         setTaskStatus({
           db,
+          terminalWorkspacePrune: prune,
           taskId,
           to: 'done',
           allowedFrom: ['running'],
@@ -268,9 +275,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     test('racing done/canceled transitions leave exactly one terminal winner with its claim', async () => {
       const taskId = await seedTask()
       const effects: Array<{ taskId: string; to: string }> = []
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
-      )
+      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune(_db, id, to) {
           effects.push({ taskId: id, to })
@@ -280,6 +285,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
       const outcomes = await Promise.allSettled([
         setTaskStatus({
           db,
+          terminalWorkspacePrune: prune,
           taskId,
           to: 'done',
           allowedFrom: ['running'],
@@ -288,6 +294,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
         }),
         setTaskStatus({
           db,
+          terminalWorkspacePrune: prune,
           taskId,
           to: 'canceled',
           allowedFrom: ['running'],
@@ -304,9 +311,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     })
 
     test('failed/interrupted and a context-only inherited child never gain a claim', async () => {
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
-      )
+      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
       let effectCount = 0
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune() {
@@ -318,6 +323,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
         const taskId = await seedTask()
         await setTaskStatus({
           db,
+          terminalWorkspacePrune: prune,
           taskId,
           to,
           allowedFrom: ['running'],
@@ -336,6 +342,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: prune,
         taskId: inheritedId,
         to: 'done',
         allowedFrom: ['running'],
@@ -350,11 +357,10 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
     test('disabled or throwing provider never blocks the terminal transition', async () => {
       const disabledId = await seedTask()
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => false }),
-      )
+      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => false }))
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: prune,
         taskId: disabledId,
         to: 'done',
         allowedFrom: ['running'],
@@ -366,11 +372,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
       })
 
       const throwingId = await seedTask()
-      registerTerminalWorkspacePrunePolicy(() => {
+      usePrunePolicy(() => {
         throw new Error('corrupt config fixture')
       })
       await setTaskStatus({
         db,
+        terminalWorkspacePrune: prune,
         taskId: throwingId,
         to: 'canceled',
         allowedFrom: ['running'],

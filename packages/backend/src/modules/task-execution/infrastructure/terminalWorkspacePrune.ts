@@ -26,27 +26,29 @@ export type {
 
 const lifecycleLog = createLogger('lifecycle')
 
-let terminalWorkspacePrunePolicy: TerminalWorkspacePrunePolicy | null = null
-
-export function registerTerminalWorkspacePrunePolicy(
-  provider: TerminalWorkspacePrunePolicy | null,
-): void {
-  terminalWorkspacePrunePolicy = provider
-}
+/**
+ * RFC-534: the named "never prune" policy — the maintenance worker's (a separate realm the daemon's policy never
+ * reached, and it only writes `interrupted`) and tests' that do not exercise reclamation.
+ */
+export const neverPruneTerminalWorkspaces: TerminalWorkspacePrunePolicy = async () => ({
+  prune: false,
+})
 
 /** Provider-neutral policy evaluation shared by the SQLite lifecycle writer
  * and the PostgreSQL task-execution adapter. Storage-specific CAS remains in
  * each adapter; this helper only owns the configured business decision and
- * its fail-open diagnostic behavior. */
+ * its fail-open diagnostic behavior. RFC-534: the policy is the session's (handed in with the Task Execution
+ * assembly), no longer a process-level registration. */
 export async function resolveTerminalWorkspacePruneDecision(
+  policy: TerminalWorkspacePrunePolicy,
   row: Parameters<TerminalWorkspacePrunePolicy>[0],
   to: TaskStatus,
 ): Promise<TerminalWorkspacePruneDecision> {
-  if (terminalWorkspacePrunePolicy === null || (to !== 'done' && to !== 'canceled')) {
+  if (to !== 'done' && to !== 'canceled') {
     return { prune: false }
   }
   try {
-    return await terminalWorkspacePrunePolicy(row, to)
+    return await policy(row, to)
   } catch (err) {
     // Config is validated on normal daemon writes, but an out-of-band corrupt
     // file must not turn a successfully executed task into a lifecycle error.

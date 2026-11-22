@@ -35,6 +35,7 @@ import {
   testTaskExecutionModule as taskExecutionModule,
   createTaskExecutionTestModule,
 } from './helpers/taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 interface Harness {
   db: PersistenceDb
@@ -97,6 +98,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
     const t0 = Date.now()
     const persistence = createTaskExecutionPersistence(h.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -123,6 +125,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
     // marks it interrupted.
     const persistence = createTaskExecutionPersistence(h.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -151,6 +154,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
     const taskId = await seedRunning(h.db)
     const persistence = createTaskExecutionPersistence(h.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

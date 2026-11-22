@@ -20,6 +20,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
 // RFC-487: the distiller's runtime resolution is runtime-management's, bound as bootstrap binds it.
 import {
+  defaultDistillPolicy,
   distillTick,
   runtimeManagementDistillRuntimes,
   type RunDistillOptions,
@@ -402,7 +403,7 @@ describeEachProvider('enqueueDistillJob', (harness) => {
     const { taskId } = await seedTask(db)
     const before = Date.now()
     const r = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, defaultDistillPolicy, {
         sourceKind: 'clarify',
         sourceEventId: 'c1',
         taskId,
@@ -419,7 +420,7 @@ describeEachProvider('enqueueDistillJob', (harness) => {
   test('respects debounceMs override (used by tests + manual control)', async () => {
     const before = Date.now()
     const r = admitted(
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, defaultDistillPolicy, {
         sourceKind: 'feedback',
         sourceEventId: 'f1',
         taskId: null,
@@ -447,7 +448,7 @@ describeEachProvider('distillTick', (harness) => {
 
   test('happy path: one row due → status flips to done', async () => {
     const { taskId } = await seedTask(db)
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -466,7 +467,7 @@ describeEachProvider('distillTick', (harness) => {
   test('debounce: 3 pending rows on same key → one merged distill run', async () => {
     const { taskId } = await seedTask(db)
     for (const e of ['c1', 'c2', 'c3']) {
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, defaultDistillPolicy, {
         sourceKind: 'clarify',
         sourceEventId: e,
         taskId,
@@ -488,7 +489,7 @@ describeEachProvider('distillTick', (harness) => {
 
   test('failure: attempt 1 / 2 → pending with exp backoff, attempt 3 → failed', async () => {
     const { taskId } = await seedTask(db)
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -527,7 +528,7 @@ describeEachProvider('distillTick', (harness) => {
 
   test('ordinary runtime failure follows the normal retry budget', async () => {
     const { taskId } = await seedTask(db)
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'runtime-failure',
       taskId,
@@ -555,7 +556,7 @@ describeEachProvider('distillTick', (harness) => {
     // 6 distinct tasks → 6 distinct keys; only 5 should execute.
     for (let i = 0; i < 6; i++) {
       const { taskId } = await seedTask(db)
-      await enqueueDistillJob(memory.store, {
+      await enqueueDistillJob(memory.store, defaultDistillPolicy, {
         sourceKind: 'clarify',
         sourceEventId: 'c' + i,
         taskId,
@@ -576,7 +577,7 @@ describeEachProvider('distillTick', (harness) => {
 
   test('not yet due: tick at t < next_run_at → no pick', async () => {
     const { taskId } = await seedTask(db)
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -653,7 +654,7 @@ describeEachProvider('distillTick', (harness) => {
       parentSessionId: null,
     })
 
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: clarifyId,
       taskId,
@@ -703,7 +704,7 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
 
   test('recoverRunning flips leftover running rows back to pending', async () => {
     const { taskId } = await seedTask(db)
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -833,13 +834,13 @@ describeEachProvider('daemon lifecycle memory-distill polling reentrancy', (harn
     // spawn is ever in-flight. Without the guard, a second tick fires, finds the
     // still-`pending` second head, claims it and spawns CONCURRENTLY → 2.
     const { taskId } = await seedTask(db)
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
       debounceMs: 0,
     })
-    await enqueueDistillJob(memory.store, {
+    await enqueueDistillJob(memory.store, defaultDistillPolicy, {
       sourceKind: 'review',
       sourceEventId: 'r1',
       taskId,

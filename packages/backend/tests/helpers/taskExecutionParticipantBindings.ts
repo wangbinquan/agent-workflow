@@ -22,12 +22,15 @@ import {
   nodeRunStatusCondition,
   taskGateOpenCondition,
   taskGateVisibleCondition,
+  neverPruneTerminalWorkspaces,
 } from '@/modules/task-execution/composition'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
   executionPermits: testExecutionPermits,
   // RFC-526: the human-gate parks take the session's workspace presence (the local one in these tests).
   workspacePresence: createFileWorkspacePresenceQueries(),
+  // RFC-534: and its terminal workspace prune policy (a park never reaches done / canceled).
+  terminalWorkspacePrune: neverPruneTerminalWorkspaces,
   createTaskNodeStatusEventsParticipantInTx,
   createHumanGateNodeRunStateParticipantInTx,
   createTaskDecisionParticipantInTx,

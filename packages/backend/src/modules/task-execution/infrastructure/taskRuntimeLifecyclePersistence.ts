@@ -32,7 +32,10 @@ import {
   taskLifecycleWriteSequence,
   type TaskLifecycleWriteInput,
 } from './taskLifecycleWriteSequence'
-import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
+import {
+  resolveTerminalWorkspacePruneDecision,
+  type TerminalWorkspacePrunePolicy,
+} from './terminalWorkspacePrune'
 
 type LifecycleRow = Readonly<{
   status: TaskStatus
@@ -83,6 +86,8 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
   constructor(
     private readonly db: PersistenceDb,
     private readonly workspacePresence: WorkspacePresenceQueries,
+    /** RFC-534: the session's terminal workspace prune policy. */
+    private readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy,
   ) {}
 
   async trySet(input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0]): Promise<boolean> {
@@ -188,6 +193,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
     }
 
     const prune = await resolveTerminalWorkspacePruneDecision(
+      this.terminalWorkspacePrune,
       {
         taskId: input.taskId,
         spaceKind: snapshot.spaceKind,

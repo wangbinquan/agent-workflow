@@ -1,9 +1,8 @@
 // RFC-370: terminal workspace policy must await the selected current setting,
 // preserve attribution-before-config ordering, and retain lifecycle fallback.
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import {
-  registerTerminalWorkspacePrunePolicy,
   resolveTerminalWorkspacePruneDecision,
   type TerminalWorkspacePrunePolicy,
 } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
@@ -23,8 +22,6 @@ const row: Parameters<TerminalWorkspacePrunePolicy>[0] = {
   workspacePruneCause: null,
   workspacePrunedAt: null,
 }
-
-afterEach(() => registerTerminalWorkspacePrunePolicy(null))
 
 describe('RFC-370 asynchronous terminal workspace setting', () => {
   test('awaits the current setting with its receiver and rereads after edits', async () => {
@@ -96,7 +93,9 @@ describe('RFC-370 asynchronous terminal workspace setting', () => {
       },
     })
     await expect(policy(row, 'done')).rejects.toBe(failure)
-    registerTerminalWorkspacePrunePolicy(policy)
-    expect(await resolveTerminalWorkspacePruneDecision(row, 'done')).toEqual({ prune: false })
+    // RFC-534: the lifecycle writer evaluates the session's policy it was handed (no process-level registration).
+    expect(await resolveTerminalWorkspacePruneDecision(policy, row, 'done')).toEqual({
+      prune: false,
+    })
   })
 })

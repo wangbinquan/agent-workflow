@@ -38,6 +38,7 @@ import {
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const NOW = 1_000_000
 
@@ -94,6 +95,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -112,6 +114,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
         await listRecoveryEventsForTask(
           createTaskExecutionPersistence(db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -141,6 +144,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -182,6 +186,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -235,6 +240,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -282,6 +288,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -301,6 +308,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
@@ -322,6 +330,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const res = await reconcileDeadRunningRuns({
       operations: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -45,6 +45,7 @@ import { createTaskExecutionPersistence } from '../src/modules/task-execution/co
 import type { TaskExecutionPersistence } from '../src/modules/task-execution/application/ports/taskExecutionPersistence'
 import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src/ws/broadcaster'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence' // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -355,6 +356,7 @@ describeEachProvider(
       // injectedMemoriesJson」的第一次 patch 抛，其余原样转发。两个引擎同一形状。
       const realPersistence = createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

@@ -22,7 +22,6 @@ export interface DaemonBootStepDeclaration {
 }
 export const DAEMON_BOOT_STEPS = [
   { id: 'runtime-declarations', phase: 'prepare', failure: 'fail-closed' },
-  { id: 'process-registrations', phase: 'prepare', failure: 'fail-closed' },
   { id: 'transport-projections', phase: 'prepare', failure: 'fail-closed' },
   { id: 'git-credential-lease-cleanup', phase: 'prepare', failure: 'best-effort' },
   {
@@ -358,10 +357,6 @@ export function composeDaemonLifecycle(input: DaemonLifecycleInput) {
         runtimeFactories: runtimeFactories.map(gate),
         backgroundWriterFactories: backgroundWriterFactories.map(gate),
         providerCloseParticipants,
-        beforeResume: async () => {
-          const register = input.steps['process-registrations']
-          if (register !== NotApplicable) await register()
-        },
         beforeClose: drain,
         bootSteps: () => receipts.map((receipt) => ({ ...receipt })),
         postReady: () => runPhase('post-ready'),

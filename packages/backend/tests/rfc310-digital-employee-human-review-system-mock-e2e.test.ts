@@ -69,6 +69,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const roots: string[] = []
 const taskIds: string[] = []
@@ -325,6 +326,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           coordinatorDeps: startDeps,
           persistence: createTaskExecutionPersistence(db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

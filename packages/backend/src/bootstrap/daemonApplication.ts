@@ -5,10 +5,7 @@ import {
   createActiveHistoryRestrictionProvider,
 } from '@/modules/system-operations/composition/epochInstallation'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
-import {
-  composeSourceControlTaskPorts,
-  registerTerminalWorkspacePrunePolicy,
-} from '@/modules/task-execution/composition'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
 import type { DeploymentKind, DeploymentSessionSelections } from './deploymentProfile'
 import {
@@ -20,7 +17,6 @@ import {
 import { composeProviderAppComposition, type ProviderAppOwnerInput } from './daemonHttpComposition'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { DEFAULT_DISTILL_POLICY, resolveDistillPolicy } from '@agent-workflow/shared'
-import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
 import {
   assertRuntimeDeclarations,
   getRuntimeDriver,
@@ -427,8 +423,23 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   })
   const { repositoryTransport, codeHostConnections, developmentCodeHost } = repositoryCredentials
   const repositoryTransportRepository = core.repositoryTransportCredentialRepository
+  // RFC-534: the session's two policies (a process registration before, re-run on every resume): integration's webhook
+  // terminal workspace prune policy for Task Execution and its source termination, and memory's distill admission policy.
+  // Both re-read the configuration on every call, as the registered ones did.
+  const terminalWorkspacePrune = composeWebhookTerminalWorkspacePrunePolicy({
+    db: input.db,
+    enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
+  })
+  const distillPolicy = async () => {
+    try {
+      return resolveDistillPolicy(await configuration.read())
+    } catch {
+      return DEFAULT_DISTILL_POLICY
+    }
+  }
   const memoryModules = composeDaemonMemoryModules({
     db: input.db,
+    distillPolicy,
     nodeRunPrompts,
     systemAgentBinding: memorySystemAgentBinding,
     // RFC-487: the distiller resolves its runtime through runtime-management's internal-agent resolution.
@@ -446,6 +457,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     db: input.db,
     content,
     historyRestrictions: nodeRunHistoryRestrictions,
+    terminalWorkspacePrune,
     appHome: input.appHome,
     configPath: input.configPath,
     secretBox: input.secretBox,
@@ -537,6 +549,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const integrationModules = composeDaemonIntegrationModules({
     db: input.db,
     secretBox: input.secretBox,
+    terminalWorkspacePrune,
     configuration,
     scheduledTaskRuntime,
     identityAccess: integrationIdentityAccess,
@@ -720,21 +733,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
             error: error instanceof Error ? error.message : String(error),
           })
         },
-      })
-    },
-    'process-registrations': async () => {
-      registerTerminalWorkspacePrunePolicy(
-        composeWebhookTerminalWorkspacePrunePolicy({
-          db: input.db,
-          enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
-        }),
-      )
-      setMemoryDistillPolicyProvider(async () => {
-        try {
-          return resolveDistillPolicy(await configuration.read())
-        } catch {
-          return DEFAULT_DISTILL_POLICY
-        }
       })
     },
     'transport-projections': async () => {

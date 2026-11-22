@@ -28,7 +28,10 @@ import type {
   TaskLifecycleAutoRepairCommand,
   TaskLifecycleAutoRepairResult,
 } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createDaemonLockProof } from '@/modules/task-execution/composition/bootRecovery'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskLifecycleAutoRepairCommand } from '@/modules/task-execution/composition/taskLifecycleRepair'
@@ -95,6 +98,7 @@ function repairEngineFor(
 ) {
   const persistence = createTaskExecutionPersistence(harness.db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
     recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

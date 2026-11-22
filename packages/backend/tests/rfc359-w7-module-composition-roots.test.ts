@@ -1,6 +1,9 @@
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
-import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
+import {
+  createTaskCodeWorkspaceQueries,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 // RFC-359 W7 —— code-capability / development-automation / source-control / task-execution 的
@@ -325,6 +328,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db), {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
             recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,

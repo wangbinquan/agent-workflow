@@ -1,7 +1,10 @@
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-386: direct engine fixtures compose the same drive factory as the daemon.
@@ -31,6 +34,7 @@ export function testDriveFactory(
     gateContinuationPreDrive: composeGateContinuationPreDrive({
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
@@ -48,6 +52,7 @@ export function testDriveFactory(
     },
     failures: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

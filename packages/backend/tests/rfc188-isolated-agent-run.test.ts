@@ -54,6 +54,7 @@ import { runGit, snapshotFullState } from '../src/util/git'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { IsolatedAgentRunBinding } from '@/modules/task-execution/application/ports/executionKernel'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 async function initRepo(seed: Record<string, string>): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc188-'))
@@ -125,6 +126,7 @@ function isolatedRunBinding(db: PersistenceDb): IsolatedAgentRunBinding {
     createTestIsolationBinding({
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

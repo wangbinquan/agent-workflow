@@ -17,7 +17,6 @@ import { deferred, lifecycleFixture, runtimeSession, lifecycle } from './helpers
 
 const expectedSteps = [
   'runtime-declarations',
-  'process-registrations',
   'transport-projections',
   'git-credential-lease-cleanup',
   'daemon-identity',
@@ -105,7 +104,7 @@ test('G12: full provider records yield identical standalone lists and only the d
 
 for (const provider of ['sqlite', 'postgresql'] as const)
   describe(provider, () => {
-    test('composition is passive; prepare/recovery run once per session and registrations repeat on resume', async () => {
+    test('composition is passive; prepare/recovery run once per session and a resume re-runs nothing', async () => {
       const fixture = lifecycleFixture(provider),
         program = fixture.compose()
       expect(fixture.events).toEqual([])
@@ -117,7 +116,13 @@ for (const provider of ['sqlite', 'postgresql'] as const)
       await session.resume({ ...lifecycle, provider })
       await session.pause({ ...lifecycle, provider })
       await session.resume({ ...lifecycle, provider })
-      expect(fixture.events.filter((id) => id === 'process-registrations')).toHaveLength(3)
+      // RFC-534: the policies are assembled with the session (no process registration to restore), so a resume re-runs
+      // no boot step — each ran exactly once across resume / pause / resume (the runtime jobs do start and stop per resume).
+      expect(fixture.events).not.toContain('process-registrations')
+      const bootStepIds = new Set<string>(DAEMON_BOOT_STEPS.map(({ id }) => id))
+      const ranSteps = fixture.events.filter((id) => bootStepIds.has(id))
+      expect(ranSteps.length).toBeGreaterThan(0)
+      expect(new Set(ranSteps).size).toBe(ranSteps.length)
       expect(fixture.events.indexOf('task-execution-recovery')).toBeLessThan(
         fixture.events.indexOf('mr-terminal-reconcile'),
       )

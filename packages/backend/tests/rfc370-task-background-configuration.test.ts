@@ -10,7 +10,10 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { TaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  TaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { composeTaskExecutionProviderBackground } from '@/modules/task-execution/composition/providerBackground'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskBackgroundConfigurationQuery } from '@/modules/task-execution/application/ports/taskBackgroundConfiguration'
@@ -49,6 +52,7 @@ function fixture(
   const scheduled = scheduledTaskRuntime(db)
   const recovery = createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

@@ -22,6 +22,8 @@ import { createLogger } from '@/util/log'
 import type { Task } from '@agent-workflow/shared'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
 
 const log = createLogger('task')
 
@@ -32,6 +34,8 @@ export interface CancelEngineOptions {
   readonly cascadeParentTaskId?: string
   /** 取消 CAS 之前的注入点。**生产从不传**。 */
   readonly beforeStatusCas?: () => void | Promise<void>
+  /** RFC-534: the session's terminal workspace prune policy (never, unless a case exercises reclamation). */
+  readonly terminalWorkspacePrune?: TerminalWorkspacePrunePolicy
 }
 
 /** 与退役的 `cancelTask(db, id, opts)` 同形：取消之后把任务行重读一遍还回来。 */
@@ -45,6 +49,7 @@ export async function cancelViaEngine(
       db,
       persistence: createTaskExecutionPersistence(db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: opts.terminalWorkspacePrune ?? neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

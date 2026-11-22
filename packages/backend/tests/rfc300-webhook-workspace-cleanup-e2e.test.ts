@@ -40,7 +40,6 @@ import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopo
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
-import { registerTerminalWorkspacePrunePolicy } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
 import { isTaskActive } from './helpers/taskDriverRegistry'
@@ -58,7 +57,6 @@ let previousHome: string | undefined
 let uninstallAfterCommitPump: (() => void) | null = null
 
 afterEach(() => {
-  registerTerminalWorkspacePrunePolicy(null)
   uninstallAfterCommitPump?.()
   uninstallAfterCommitPump = null
   if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
@@ -258,9 +256,9 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
       .limit(1)
   )[0]!
 
-  registerTerminalWorkspacePrunePolicy(
-    composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
-  )
+  // RFC-534: the session's webhook prune policy, handed to every piece of the pipeline this case drives (task
+  // execution, the webhook participant, cancel and source termination) instead of a process-level registration.
+  const prune = composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true })
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
       if (isTaskActive(taskId)) return
@@ -272,7 +270,9 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     db,
     createIdentityAccessRuntime({ db }),
   )
-  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db, {
+    terminalWorkspacePrune: prune,
+  })
   const dispatcher = createWebhookDispatcher({
     ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...createWebhookDispatchOrchestrationRuntime({
@@ -282,6 +282,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
         secretBox: box,
         schedulerDriver: taskExecutionRuntime.schedulerDriver,
         identityAccess: identityDependencies.identityAccess,
+        terminalWorkspacePrune: prune,
       }),
     }),
     ...identityDependencies,
@@ -365,10 +366,11 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
         return row?.status === 'running' && isTaskActive(taskId) ? true : null
       }, `${one.space} task driver`)
       if (one.terminal === 'canceled') {
-        await cancelViaEngine(db, taskId)
+        await cancelViaEngine(db, taskId, { terminalWorkspacePrune: prune })
       } else {
         await setTaskStatus({
           db,
+          terminalWorkspacePrune: prune,
           taskId,
           to: 'interrupted',
           allowedFrom: ['running'],
@@ -526,9 +528,9 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     cancelOnMrTerminal: true,
   })
 
-  registerTerminalWorkspacePrunePolicy(
-    composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
-  )
+  // RFC-534: the session's webhook prune policy, handed to every piece of the pipeline this case drives (task
+  // execution, the webhook participant, cancel and source termination) instead of a process-level registration.
+  const prune = composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true })
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
       if (isTaskActive(taskId)) return
@@ -541,6 +543,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     taskTermination: composeTaskSourceTermination({
       db,
       runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
+      terminalWorkspacePrune: prune,
     }),
   })
   await terminalControl.reconcileOnBoot()
@@ -549,7 +552,9 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     db,
     createIdentityAccessRuntime({ db }),
   )
-  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db, {
+    terminalWorkspacePrune: prune,
+  })
   const dispatcher = createWebhookDispatcher({
     ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...createWebhookDispatchOrchestrationRuntime({
@@ -559,6 +564,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
         secretBox: box,
         schedulerDriver: taskExecutionRuntime.schedulerDriver,
         identityAccess: identityDependencies.identityAccess,
+        terminalWorkspacePrune: prune,
       }),
     }),
     ...identityDependencies,

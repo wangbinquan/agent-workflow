@@ -25,7 +25,10 @@ import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type {
   SchedulerDriverPort,
@@ -188,6 +191,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       })
       const persistence = createTaskExecutionPersistence(fixture.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(fixture.db).historyRestrictions,
         recoveryHumanGates: o2Ports(fixture.db).collaborationReads.recovery,

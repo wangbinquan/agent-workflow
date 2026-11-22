@@ -1,4 +1,7 @@
-import { createExecutionPermitRegistry } from '@/modules/task-execution/composition'
+import {
+  createExecutionPermitRegistry,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import type {
   MaintenanceWorkerEffects,
   MaintenanceWorkerEffectsSelections,
@@ -262,6 +265,7 @@ export const composeMaintenanceWorkerGraph = async (
     client,
     createExecutionPermitRegistry(),
     workspacePresence,
+    neverPruneTerminalWorkspaces,
   )
   const { appHome } = input
   const store = createMaintenanceRunStore(client)
@@ -274,6 +278,9 @@ export const composeMaintenanceWorkerGraph = async (
     historyRestrictions: createActiveHistoryRestrictionProvider(),
     recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence,
+    // RFC-534: the worker is a separate realm the daemon's prune policy never reached, and its recovery only writes
+    // `interrupted` — the named never-prune policy, as before.
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
   })
   const taskRecoveryOperations = taskExecution.recoveryAdministration
   const taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(

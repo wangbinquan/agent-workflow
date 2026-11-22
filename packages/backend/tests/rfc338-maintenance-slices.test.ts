@@ -30,7 +30,10 @@ import {
 import { createTokenCallAudit } from '@/auth/composition'
 import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
-import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
+import {
+  createTaskNodeEventArchiveStore,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { gcDeliveriesSlice } from '@/modules/integration/application/webhookDeliveryStore'
 import { MIGRATIONS } from './migration-freeze'
@@ -73,6 +76,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
   taskRecovery: createTaskExecutionPersistence(db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune: neverPruneTerminalWorkspaces,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

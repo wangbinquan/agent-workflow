@@ -985,6 +985,13 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   新加的回归用例用 `setTimeout` 睡 30ms 证明“第三个请求还在排队”，推送后 CI 的后端分片 44 红。负向断言照本文件“固定 `setTimeout`”那条改用因果
   屏障（预算的 `acquire` 同步判定，一次微任务即可），并做变异验证（忽略保存的上限时该用例转红）。改动含用例文件时，把 `test-suite-policy` 与其余
   遍历 `listTestFiles()` 的守卫加进复跑范围。
+- **给装配调用加实参或字段，要全仓搜按源码文本钉实参清单与字段顺序的用例**（RFC-534 实撞）：`composeCrossContextClosure` 与
+  `composeTaskExecutionParticipantBindings` 多收一份会话的回收策略、`composeDaemonTaskExecutionModules({ … })` 在 `db` 之后插了一个字段，`tsc`
+  0 错，集中验证里两处红：`rfc526` 按语法树取 `callArguments(…, 'composeCrossContextClosure')` 并对整份实参清单 `toEqual`，`rfc395-w0` 以正则
+  `db: input\.db,\s*content,\s*historyRestrictions…` 钉字段相邻。改调用形状前全仓搜被改函数名的字符串形态（`'name'` 与 `name\(`），逐处
+  读以源码文本钉实参或字段的断言：实参清单随改；新字段放在被钉的那一段之后，不打乱既有的相邻顺序。
+- **新用例文件不要直接建 SQLite 库**（RFC-534 实撞）：`rfc359-w5-t19f` 按文件记 `createInMemoryDb(` 与 `new Database(` 的调用点数（高水位，
+  只降不升），账本里没有的新文件一出现即红。需要库的断言放进 `describeEachProvider`，取 `harness.db`，两个 provider 各跑一遍。
 - **往测试助手的分组清单里加成员，要逐个读遍历这份清单的用例循环，不能只改计数**（RFC-531 实撞）：给 `deploymentSelectionPartition.ts` 的
   `SESSION_FACTORY_SELECTIONS` 加了镜像与镜像刷新两个键，改了 `rfc394` / `rfc431` 的键数，却没读 `rfc394` 里遍历这份清单的循环——它按 RFC-432
   要求托管的会话工厂每次交出同一个对象（`factory(undefined)` 两次相同），而托管的镜像要按调用它的会话的仓库存储构造、刷新闭包每次新建

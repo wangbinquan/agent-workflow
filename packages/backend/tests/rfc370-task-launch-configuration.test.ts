@@ -34,6 +34,7 @@ import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const directories: string[] = []
 afterEach(() => {
@@ -420,6 +421,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
                 intentKind: 'launch',
                 execution: createTaskExecutionContext({
                   workspacePresence: createFileWorkspacePresenceQueries(),
+                  terminalWorkspacePrune: neverPruneTerminalWorkspaces,
                   humanGateOpen: composeHumanGateOpenParticipantFactory(),
                   historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                   db: harness.db,
@@ -526,6 +528,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
               intentKind: 'launch',
               execution: createTaskExecutionContext({
                 workspacePresence: createFileWorkspacePresenceQueries(),
+                terminalWorkspacePrune: neverPruneTerminalWorkspaces,
                 humanGateOpen: composeHumanGateOpenParticipantFactory(),
                 historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                 db: harness.db,

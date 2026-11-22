@@ -32,6 +32,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const T0 = 1_700_000_000_000
 
@@ -201,6 +202,7 @@ describeEachProvider('RFC-359 W7 —— 数字员工动作执行器组合根', (
     const actor = await seedActor(harness.db)
     const persistence = createTaskExecutionPersistence(asSqlite(harness.db), {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
       recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,

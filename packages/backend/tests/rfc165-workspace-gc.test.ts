@@ -1,4 +1,7 @@
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import {
   type TaskFixtureSpec,
   patchTaskFixture,
@@ -175,6 +178,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       await expect(
         setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId: id,
           to: 'pending',
           allowedFrom: ['failed'],
@@ -191,6 +195,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       await expect(
         setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId: id,
           to: 'pending',
           allowedFrom: ['failed'],
@@ -206,6 +211,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
 
       const flip = await setTaskStatus({
         db: h.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         taskId: id,
         to: 'pending',
         allowedFrom: ['failed'],
@@ -340,6 +346,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       await expect(
         setTaskStatus({
           db: h.db,
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           taskId: id,
           to: 'pending',
           allowedFrom: ['failed'],

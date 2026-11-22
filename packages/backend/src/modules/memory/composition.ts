@@ -22,10 +22,11 @@ import {
   enqueueDistillJob,
   recoverRunning,
   retryFailedJob,
+  type MemoryDistillPolicySource,
 } from './application/distill/schedule'
 
-// RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
-export { setMemoryDistillPolicyProvider } from './application/distill/schedule'
+// RFC-534: the distill policy is a required input of the composition below (no process-level registration).
+export type { MemoryDistillPolicySource } from './application/distill/schedule'
 import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillReadStore'
 import { DrizzleMemoryDistillWorkStore } from './infrastructure/memoryDistillWorkStore'
 import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'
@@ -76,6 +77,7 @@ function composeMemoryOperations(input: {
   readonly nodeRunPrompts: NodeRunPromptReader
   readonly injectionQueries: MemoryInjectionQueries
   readonly catalog?: MemoryCatalogOperations
+  readonly distillPolicy: MemoryDistillPolicySource
 }): MemoryOperations {
   const distillQueries = createMemoryDistillQueries(input.readStore)
   return Object.freeze({
@@ -84,7 +86,7 @@ function composeMemoryOperations(input: {
     ...(input.catalog === undefined ? {} : { catalog: input.catalog }),
     distillCommands: Object.freeze({
       enqueue: async (command: EnqueueMemoryDistillJobInput) =>
-        await enqueueDistillJob(input.workStore, command),
+        await enqueueDistillJob(input.workStore, input.distillPolicy, command),
       retryFailed: async (jobId: string) => await retryFailedJob(input.workStore, jobId),
       cancelPending: async (jobId: string) => await cancelPendingJob(input.workStore, jobId),
     }),
@@ -149,6 +151,8 @@ export interface ComposeMemoryOperationsOptions {
   readonly runtimeProfiles: NativeMemoryDistillRuntimeResolver
   /** RFC-523: the caller states the injection queries. */
   readonly injectionQueries: MemoryInjectionQueries
+  /** RFC-534: the session's distill admission policy (the daemon's re-reads the configuration on every call). */
+  readonly distillPolicy: MemoryDistillPolicySource
   readonly catalogBinding?: MemoryCatalogBinding
 }
 
@@ -184,6 +188,7 @@ export function composeMemoryOperationsFor(
     reviewedArtifacts: input.reviewedArtifacts,
     nodeRunPrompts: input.nodeRunPrompts,
     injectionQueries: input.injectionQueries,
+    distillPolicy: input.distillPolicy,
     ...(input.catalogBinding === undefined
       ? {}
       : {

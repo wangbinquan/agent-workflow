@@ -45,6 +45,7 @@ import { monotonicFactory } from 'ulid'
 import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 // Same-ms inserts must keep a deterministic id order (freshness is pure ULID
 // id-order elsewhere; here it just keeps row identification stable). See the
@@ -137,6 +138,7 @@ describeEachProvider(
       const r = await reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -172,6 +174,7 @@ describeEachProvider(
       const r = await reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

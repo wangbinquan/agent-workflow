@@ -74,6 +74,7 @@ import {
 } from './helpers/taskExecutionTestTopology'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/composition'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -474,6 +475,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
         ),
         persistence: createTaskExecutionPersistence(h.db, {
           workspacePresence: createFileWorkspacePresenceQueries(),
+          terminalWorkspacePrune: neverPruneTerminalWorkspaces,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -527,6 +529,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       ?.isolationBase ?? null)!
     const mergeStates = createTaskExecutionPersistence(h.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
@@ -627,6 +630,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       ?.isolationBase ?? null)!
     const mergeStates = createTaskExecutionPersistence(h.db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

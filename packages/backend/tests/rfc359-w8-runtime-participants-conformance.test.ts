@@ -98,7 +98,10 @@ import {
   singleProcessDeploymentPorts,
   createTestRepositoryPublicationTransport,
 } from './helpers/taskExecutionTestTopology'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  createProviderTaskExecutionModule,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import {
   createFileRepositoryGitWorkspaceFactory,
@@ -197,6 +200,7 @@ function sharedInput(
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db, {
       workspacePresence: createFileWorkspacePresenceQueries(),
+      terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,

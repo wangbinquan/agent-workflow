@@ -3,7 +3,10 @@ import {
   withLocalRepositoryPreparation,
   withWorkspaceMaintenancePorts,
 } from './helpers/sourceControlTaskPorts'
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  neverPruneTerminalWorkspaces,
+} from '@/modules/task-execution/composition'
 // RFC-387: both providers exercise session continuation semantics, with the former wiring retained as controls.
 import {
   patchTaskFixture,
@@ -342,6 +345,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       const preparation = composeDeferredRepositoryPreparation({
         repositoryPreparationLookup: composeRepositoryPreparationLookup(harness.db),
         db: harness.db,
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         appHome,
         gitBaselineSyncWindowMs: 0,
         repositoryPreparation: { ...binding, legacy: { ...binding.legacy, prepare } },

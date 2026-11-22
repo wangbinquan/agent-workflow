@@ -43,6 +43,8 @@ import { cancelViaEngine } from './cancelEngine'
 import type { IntegrationTriggerIdentityAccess } from '../../src/server'
 import { Paths } from '../../src/util/paths'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
 
 /** SQLite test composition for Integration's closed TaskExecution participant. */
 export function createSqliteWebhookTaskExecutionParticipant(input: {
@@ -52,8 +54,11 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
   readonly schedulerDriver: SchedulerDriverPort
   /** 与生产同源的身份面：`withIntegrationTriggerResources(db, identityAccess)` 的产物。 */
   readonly identityAccess: IntegrationTriggerIdentityAccess
+  /** RFC-534: the session's terminal workspace prune policy (never, unless a case exercises reclamation). */
+  readonly terminalWorkspacePrune?: TerminalWorkspacePrunePolicy
 }): WebhookTaskExecutionParticipant<TaskExecutionResourceAuthority, ExecutionInvoker> {
   const appHome = Paths.root
+  const terminalWorkspacePrune = input.terminalWorkspacePrune ?? neverPruneTerminalWorkspaces
   const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   const integrity = composeDatabaseAgentResourceIntegrity({
     db: input.db,
@@ -61,6 +66,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
   }).launch
   const persistence = createTaskExecutionPersistence(input.db, {
     workspacePresence: createFileWorkspacePresenceQueries(),
+    terminalWorkspacePrune,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions,
     recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,
@@ -148,6 +154,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
           }),
         ),
         db: input.db,
+        terminalWorkspacePrune,
         appHome,
 
         secretBox: input.secretBox,

@@ -27,6 +27,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { persistIsoNodeTree } from '@/modules/task-execution/engine/kernel/isolation'
 import type { TaskRepositoryCheckpoint } from '@/modules/task-execution/domain/taskCheckpoint'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 const layouts = [
   { name: 'single root', mounts: [''] },
@@ -148,6 +149,7 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
         createTestIsolationBinding({
           persistence: createTaskExecutionPersistence(harness.db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,

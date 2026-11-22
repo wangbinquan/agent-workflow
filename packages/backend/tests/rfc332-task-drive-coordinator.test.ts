@@ -19,6 +19,7 @@ import {
 } from '../src/modules/task-execution/application/drive/taskDriveCoordinator'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -60,6 +61,7 @@ function applicationFixture(input?: {
           intentKind: 'launch',
           execution: createTaskExecutionContext({
             workspacePresence: createFileWorkspacePresenceQueries(),
+            terminalWorkspacePrune: neverPruneTerminalWorkspaces,
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(schemaFixtureDb()).historyRestrictions,
             intentId: request.intentId,

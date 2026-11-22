@@ -375,19 +375,30 @@ describe('RFC-526 ③ 装配处的显式构造', () => {
     expect(provider[0]![0]).toContain(
       'operationConfiguration:createFileTaskOperationConfiguration(configPath)',
     )
+    // RFC-534: the session's terminal workspace prune policy is the closure's fourth argument.
     expect(callArguments(DAEMON_TE, text(DAEMON_TE), 'composeCrossContextClosure')).toEqual([
-      ['db', 'executionPermits', 'observation.workspacePresence'],
+      ['db', 'executionPermits', 'observation.workspacePresence', 'input.terminalWorkspacePrune'],
     ])
     // RFC-530: the daemon's task get / cancel are its routes; the ports take only the database.
     expect(
       callArguments(DAEMON_DE, text(DAEMON_DE), 'composeDatabaseDigitalEmployeeExecutionPorts'),
     ).toEqual([['db']])
     expect(callArguments(HTTP, text(HTTP), 'composeTaskExecutionParticipantBindings')).toEqual([
-      ['taskExecutionProvider.executionPermits', 'input.selections.workspacePresence'],
+      [
+        'taskExecutionProvider.executionPermits',
+        'input.selections.workspacePresence',
+        'taskExecutionProvider.terminalWorkspacePrune',
+      ],
     ])
     expect(
       callArguments(SESSION, text(SESSION), 'composeTaskExecutionParticipantBindings'),
-    ).toEqual([['runtime.taskExecutionModules.executionPermits', 'input.workspacePresence']])
+    ).toEqual([
+      [
+        'runtime.taskExecutionModules.executionPermits',
+        'input.workspacePresence',
+        'runtime.taskExecutionModules.terminalWorkspacePrune',
+      ],
+    ])
     for (const path of [CLARIFY, REVIEW]) {
       const parks = callArguments(path, text(path), 'parkPreparedHumanGate')
       expect(parks).toHaveLength(1)
@@ -420,8 +431,14 @@ describe('RFC-526 ③ 装配处的显式构造', () => {
     expect(squash(text(WORKER))).toContain(
       'constworkspacePresence=createFileWorkspacePresenceQueries()',
     )
+    // RFC-534: the worker never prunes a terminal workspace (named policy, as its empty registration was).
     expect(callArguments(WORKER, text(WORKER), 'composeCrossContextClosure')).toEqual([
-      ['client', 'createExecutionPermitRegistry()', 'workspacePresence'],
+      [
+        'client',
+        'createExecutionPermitRegistry()',
+        'workspacePresence',
+        'neverPruneTerminalWorkspaces',
+      ],
     ])
     const persistence = callArguments(WORKER, text(WORKER), 'createTaskExecutionPersistence')
     expect(persistence).toHaveLength(1)

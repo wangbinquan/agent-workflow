@@ -66,6 +66,7 @@ import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/task
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 /** PostgreSQL qualifies tables with the application schema; order checks compare table names. */
 const statementText = (sql: string): string => sql.toLowerCase().replaceAll('"agent_workflow".', '')
@@ -151,6 +152,7 @@ describeEachProvider('RFC-395 NodeRun multi-table atomicity', (h) => {
       }),
       persistence: createTaskExecutionPersistence(h.db, {
         workspacePresence: createFileWorkspacePresenceQueries(),
+        terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,

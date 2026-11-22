@@ -26,11 +26,7 @@ import type {
   ResolvedDistillScope,
   SourceContextBudget,
 } from '@agent-workflow/shared'
-import {
-  DEFAULT_DISTILL_POLICY,
-  QUARANTINED_SNAPSHOT_AGENT_ID,
-  type WorkgroupRuntimeConfig,
-} from '@agent-workflow/shared'
+import { QUARANTINED_SNAPSHOT_AGENT_ID, type WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { distillAdmission } from '@/modules/memory/domain/distillAdmission'
 import {
   runDistill,
@@ -63,31 +59,13 @@ export const DISTILL_DEBOUNCE_MS = 5_000
  * Per-call `outputLang` passed to `enqueueDistillJob` always wins.
  */
 /**
- * RFC-366: ambient provider for the distill POLICY — which task origins and
- * which sources may enqueue, plus the agent-run debounce window. Same shape and
- * same reason as the RFC-050 language provider above: `cli/start.ts` registers
- * one that re-reads `config.json` on every call, so a settings edit takes effect
- * on the next event instead of at the next daemon restart (RFC-366 D10).
- *
- * The default is deliberately the permissive-for-sources / manual-only-for-origins
- * shape rather than "everything on": tests and early boot must see the same
- * defaults a fresh install sees, or the gate's behaviour would differ between
- * the first event after boot and every later one.
+ * RFC-366: the distill POLICY — which task origins and which sources may enqueue, plus the agent-run debounce window.
+ * The daemon's re-reads `config.json` on every call, so a settings edit takes effect on the next event instead of at the
+ * next daemon restart (RFC-366 D10). RFC-534: it is the session's (a required input of memory's composition, handed to
+ * every enqueue), no longer a process-level registration; a caller with no configuration hands
+ * `() => DEFAULT_DISTILL_POLICY` (the fresh-install shape).
  */
-let memoryDistillPolicyProvider: () => DistillPolicy | Promise<DistillPolicy> = () =>
-  DEFAULT_DISTILL_POLICY
-
-export function setMemoryDistillPolicyProvider(
-  fn: () => DistillPolicy | Promise<DistillPolicy>,
-): void {
-  memoryDistillPolicyProvider = fn
-}
-
-/** Test-only — restore the default provider so a leaked setter from a prior
- *  case does not leak into the next one. Production never calls this. */
-export function resetMemoryDistillPolicyProviderForTest(): void {
-  memoryDistillPolicyProvider = () => DEFAULT_DISTILL_POLICY
-}
+export type MemoryDistillPolicySource = () => DistillPolicy | Promise<DistillPolicy>
 /** Cap how many distill jobs we kick off per tick to bound LLM concurrency. */
 export const DISTILL_BATCH_LIMIT = 5
 /** Failed jobs flip to permanent `failed` after this many attempts. */
@@ -141,9 +119,10 @@ export interface EnqueueResult {
  */
 export async function enqueueDistillJob(
   store: MemoryDistillWorkStore,
+  distillPolicy: MemoryDistillPolicySource,
   input: EnqueueDistillJobInput,
 ): Promise<EnqueueResult | null> {
-  const policy = await memoryDistillPolicyProvider()
+  const policy = await distillPolicy()
   const taskRow = input.taskId === null ? null : await store.findTaskScope(input.taskId)
   const admission = distillAdmission({
     sourceKind: input.sourceKind,

@@ -3,6 +3,7 @@ import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-ex
 import { taskFixture, workflowFixture } from './helpers/model'
 // RFC-487: the distiller's runtime resolution is runtime-management's, bound as bootstrap binds it.
 import {
+  defaultDistillPolicy,
   distillTick,
   runDistill,
   runtimeManagementDistillRuntimes,
@@ -225,7 +226,7 @@ describeEachProvider('memory distill timeout — scheduler plumbing', (harness) 
 
   test('distillTick forwards config.memoryDistillTimeoutMs to the child', async () => {
     const taskId = await seedTask(db)
-    await enqueueDistillJob(ctx.store, {
+    await enqueueDistillJob(ctx.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -243,7 +244,7 @@ describeEachProvider('memory distill timeout — scheduler plumbing', (harness) 
 
   test('distillTick without the knob falls through to the one-hour default', async () => {
     const taskId = await seedTask(db)
-    await enqueueDistillJob(ctx.store, {
+    await enqueueDistillJob(ctx.store, defaultDistillPolicy, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
