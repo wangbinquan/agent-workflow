@@ -19,7 +19,7 @@
 - [x] AC-1 `systemProviderBackup.ts` 没有模块级计数；在途计数挂在句柄上下文上，会话把自己库的那一份交给迁移安全备份与维护服务
 - [x] AC-2 快照期间 checkpoint 跳过、结束后执行；两个库的快照互不挡对方；worker 回退与校验失败的结局不变
 - [x] AC-3 模块级可变单例 55 → 54、计数不升；锁随改；新增 RFC-539 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -54,7 +54,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `bf1ed4716`（实现，父提交是 `7e4a7f826`）：exact SHA 主 CI run 45106253299 的 70 个 job 第 1 次全部通过；同一提交触发的 windows-platform
+  （run 45106253320）与 maintenance-soak-nightly（run 45106253330）通过。
+- 本 RFC 的落档提交 `7e4a7f826`（只改 8 个 Markdown 文件；同一提交记下 RFC-538 转 Done）：主 CI run 45101367963 的 70 个 job 第 1 次全部通过。
 
 ## 实现门（本会话自审，只审功能）
 
