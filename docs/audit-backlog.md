@@ -5643,6 +5643,15 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 页面「Current view combination」里出现应用后的「Exception rules」视图。本机连跑 3 次通过。文档版本变化时画布会闪一下加载态（视图查询不保留
 上一版数据），这是产品上的小问题，未改。
 
+## macOS Playwright e2e 分片 3/4 贴着 20 分钟的 job 时限跑，偶尔超时被取消（2026-11-23 两次实撞）
+
+`c953ac2d1`（run 45148076261）与 `3f236a701`（run 45175354124）两个只改文档的提交上，macOS 的 Playwright e2e 分片 3/4 都在跑满 20 分钟后被
+取消（`timeout-minutes: 20`；工作流 `cancel-in-progress: false`，不是被后继推送取消），`CI required` 随之红；日志到被取消前一刻仍在逐条通过
+（不是卡死），同一 run 里其余三个 macOS 分片 7～10 分钟就跑完。中间的 `7604bebbe` 与 `bbcc840e2` 上同一分片按时跑完。看起来是这一分片分到
+的用例偏重（`ux-consistency` 的整套浏览器矩阵等），在偏慢的 macOS runner 上贴近时限。
+
+**未决**：重新平衡分片或给 macOS 的 e2e 放宽时限，由维护 CI 的会话决定；在此之前遇到这一形态按环境性红记录、不重跑。
+
 ## 删除任务不收尾工作区准备记录（2026-10-29，CrewStation RFC-044 T10 正式实例迁移实撞，删除路径未处置）
 
 正式实例的 epoch 迁移计划被一条 `task_workspace_preparations` 行阻断：lane `repository-preparation`，state `preparing`，

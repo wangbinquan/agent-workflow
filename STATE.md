@@ -1,3 +1,16 @@
+## 2026-11-23 RFC-545 live 持久化 schema 由组合根显式交给 provider 构造（In Progress；`design/RFC-545-live-persistence-schema-explicit/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第十二步。bootstrap 在模块求值时把 live 持久化 schema（表定义、两种引擎的原生表集与行规则错误码）
+  登记进 platform 的模块级变量（`platform/persistence/schema/tables.ts` 的 `liveBinding`），PostgreSQL 客户端构造与 `tablesOf` 的 epoch-2 核对再从
+  那里读，谁在 bootstrap 求值之前构造就只能靠 import 顺序。架构报告的模块级可变单例清单里这个文件 2 条（全仓 48 条）。用户 2026-11-02「好，你
+  继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，
+  你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：删去登记与读取；bootstrap 导出冻结的 live 绑定常量；PostgreSQL 客户端与 provider 运行期选项沿已有的 `contract` 通路必填
+  `liveSchema`（bootstrap 直接取常量，system-operations 与 CLI 由各自的输入收下）；句柄上下文记 live 绑定，`tablesOf` 据此核对；新增 RFC-545 用例。
+- **不做**：schema 历史运行时的登记（另立）与其余模块级可变单例；表定义、行规则与 provider 选择逻辑不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已在
+  本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
 ## 2026-11-23 RFC-544 演示种子与数字员工代理模板迁出 services/（Done；`design/RFC-544-demo-seed-and-agent-templates-out-of-services/`）
 
 - **来由**：RFC-294 plan §4.7（W9-D 余项的成批方式）“其余”一族的第二步。`services/` 余 6 个文件，其中首启示例编排（`demoSeed.ts`，owner
