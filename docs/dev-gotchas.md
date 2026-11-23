@@ -755,7 +755,8 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   要同时删去那条登记；上一个 RFC 的用例若钉了「还剩下的」（RFC-460 钉 memory 蒸馏只剩 `services/runtime/types`），后继 RFC 收掉它时
   一起改——两条都只有跑全量守卫才看得到，tsc / eslint 不报。
 - **sha256 源码锁连依赖一起钉**：`tests/fixtures/rfc395-serialized-insert-source-locks.json` 的条目把调用方文件的摘要也钉住，只改
-  三行 import 也失配（`rfc359-w8-t29`）。
+  三行 import 也失配（`rfc359-w8-t29`）。RFC-537 再撞：只给 `clarify/seal.ts` 的一处提交后投递补了实参，摘要失配、三处已复核的插入点落回账本；
+  选用例的脚本跳过了 `tests/fixtures/`，按路径筛不到这份锁。改到写方文件前先在 `tests/fixtures/` 里搜它的路径，摘要随改并在 `why` 里记下复核。
 - **带 authority 入参的纯判定进 `public/types`**（RFC-466 实撞）：入参类型名以 `Authority` / `Capability` / `Actor` / `Claim` /
   `Token` / `Tx` 结尾（例如 `ResourceAclAudienceAuthority`）的函数一经 `public/types` / `public/events` 转出，就命中 W0-R 的 capability
   名称规则（`rfc294-architecture-preflight` 的 capability 归属用例红出 `… leaks through public/types`，SQLite 上那条用例很慢、高负载时
@@ -798,6 +799,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   `createLocalPluginInstaller` 的调用（要求恰 1 次、父节点是 `??`、左侧是 `input.installer`），`rfc349-postgresql-resource-package-bootstrap`
   把两个本机工件属主列进“组合层源码必须含 `X(`”的清单，首批才红。按名字筛完，再按被改文件的路径（`'…/pluginOperations'` 一类字面量与
   `readDaemonGraphSource`）筛出读取其源码的全部用例一起跑；这一步筛出的用例数常是按名字筛的数倍。
+  RFC-537 再撞：经 `readDaemonGraphSource()` 一类助手读源码的用例，文本里既没有路径也没有名字，按路径与名字都筛不到。先找出读被改文件源码的
+  测试助手（`tests/helpers/daemonGraphSource.ts`、`deploymentSelectionSource.ts`、`tests/architecture/census.ts`、`architectureReport.ts`、
+  `tests/fixtures/rfc359-p0-mutations.ts` 等），再按 import 闭包选到经它们读源码的用例；这一步补出 113 个，其中 57 个 RFC-533 的口径也没选到。
 - **把组合层的回落挪进共享测试助手时，别盖掉用例自己给的值**（RFC-524 实撞，2026-11-20）：`providerHttpApplication` 先 `...selections` 展开
   用例给的选择，RFC-524 在后面显式写 `daemonRuntime: createFileDaemonRuntimeQueries(…)`，把 `rfc370-daemon-runtime-query-bindings` 经
   `scope.open({ daemonRuntime })` 给的查询盖掉，CI 分片 21/44 才红（`fa52dfdfc`）。此前组合层做的是“给了用给的，没给才造”，助手里要写成同样
