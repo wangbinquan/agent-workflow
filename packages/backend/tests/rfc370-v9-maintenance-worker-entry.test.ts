@@ -1,16 +1,14 @@
 // RFC-370 §9.2 V9 — the platform maintenance Worker never imports a deployment
 // or business module. A hosted deployment ships its own Worker entry
-// (`bootstrap/maintenanceWorkerEntry.ts`) that registers its effect module by
-// the symbolic name its descriptor carries; the supervisor starts that entry
-// only when the descriptor names it. Before this, the platform Worker
-// hard-coded `import('@/bootstrap/crewstationMaintenance')`.
+// (`bootstrap/maintenanceWorkerEntry.ts`) whose loader maps the symbolic name
+// its descriptor carries (RFC-541: the entry is its own thin root and hands the
+// loader to the effects scope; no Worker-wide registration); the supervisor
+// starts that entry only when the descriptor names it. Before this, the
+// platform Worker hard-coded `import('@/bootstrap/crewstationMaintenance')`.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  importMaintenanceWorkerEffectModule,
-  registerMaintenanceWorkerEffectModule,
-} from '@/platform/background/maintenanceWorkerEffects'
+import { openMaintenanceWorkerEffectsScope } from '@/platform/background/maintenanceWorkerEffects'
 import {
   createMaintenanceWorkerEffectsInit,
   readMaintenanceWorkerEffectsFrame,
@@ -30,19 +28,29 @@ test('the platform Worker imports no bootstrap module', () => {
     expect(read(file)).not.toMatch(/['"]@\/bootstrap\//)
 })
 
-test('a registered effect module is loaded by its symbolic name', async () => {
-  const module = { createEffects: () => 'selected' }
-  registerMaintenanceWorkerEffectModule('aw:test-effects', async () => module)
-  expect(await importMaintenanceWorkerEffectModule('aw:test-effects')).toBe(module)
-  // An unregistered specifier is an ordinary module import.
-  const fallback = await importMaintenanceWorkerEffectModule('node:path')
-  expect(typeof fallback.join).toBe('function')
+test('without a loader the effects scope imports the descriptor module by its name', async () => {
+  // RFC-541: `node:path` loads (an ordinary import), so the missing export is what fails — not the import.
+  const scope = openMaintenanceWorkerEffectsScope({
+    selectEffects: () => ({}),
+    descriptor: {
+      moduleSpecifier: 'node:path',
+      exportName: 'noSuchFactory',
+      configurationJson: '{}',
+      capabilities: [],
+    },
+    context: { appHome: 'fixture-home', instanceRef: 'fixture-instance' },
+  })
+  await expect(scope.ready).rejects.toThrow('maintenance-worker-effects-factory-missing')
+  await scope.dispose()
 })
 
-test('the hosted entry registers the module its descriptor names and runs the shared Worker root', () => {
+test('the hosted entry is its own thin root and maps the module its descriptor names', () => {
   const entry = read('bootstrap/maintenanceWorkerEntry.ts')
-  expect(entry).toContain("import './maintenanceWorker'")
-  expect(entry).toContain("'aw:crewstation-maintenance'")
+  expect(entry).not.toContain("import './maintenanceWorker'")
+  expect(entry).toContain('runMaintenanceWorker({')
+  expect(entry).toContain('composeGraph: composeMaintenanceWorkerGraph')
+  expect(entry).toContain("specifier === 'aw:crewstation-maintenance'")
+  expect(entry).toContain("import('./crewstationMaintenance')")
   const maintenance = read('bootstrap/crewstationMaintenance.ts')
   expect(maintenance).toContain("'./bootstrap/maintenanceWorkerEntry.ts'")
   expect(maintenance).toContain('workerEntry: HOSTED_MAINTENANCE_WORKER_ENTRY')

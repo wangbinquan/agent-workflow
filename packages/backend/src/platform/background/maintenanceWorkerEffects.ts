@@ -10,25 +10,6 @@ export interface MaintenanceWorkerEffectsDescriptor {
   readonly workerEntry?: string
 }
 
-const effectModules = new Map<string, () => Promise<Record<string, unknown>>>()
-
-/** RFC-370 §9.2 V9 — a deployment's Worker entry registers its effect module
- * under a symbolic name before any init message arrives, so the platform
- * Worker never imports a deployment or business module itself. */
-export function registerMaintenanceWorkerEffectModule(
-  specifier: string,
-  load: () => Promise<Record<string, unknown>>,
-): void {
-  effectModules.set(specifier, load)
-}
-
-export function importMaintenanceWorkerEffectModule(
-  specifier: string,
-): Promise<Record<string, unknown>> {
-  const load = effectModules.get(specifier)
-  return load === undefined ? import(specifier) : load()
-}
-
 export interface MaintenanceWorkerEffectsContext {
   readonly appHome: string
   /** Environment lifetime only; never a Task owner or execution authority. */
@@ -89,7 +70,11 @@ export function openMaintenanceWorkerEffectsScope<Selection extends object>(inpu
     instanceRef: input.context.instanceRef,
     configurationJson: descriptor.configurationJson,
   })
-  const importer = input.importModule ?? importMaintenanceWorkerEffectModule
+  // RFC-541: the Worker entry hands its effect-module loader in (the hosted root maps its symbolic name); without one the
+  // descriptor's module is an ordinary import. The platform Worker still imports no deployment or business module itself.
+  const importer =
+    input.importModule ??
+    ((specifier: string): Promise<Record<string, unknown>> => import(specifier))
   let environment: MaintenanceWorkerEffectsEnvironment<Selection> | undefined
   let disposal: Promise<void> | undefined
   let closing = false

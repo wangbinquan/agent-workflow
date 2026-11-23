@@ -190,8 +190,9 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/bootstrap/crewstation.ts': 'bootstrap',
   'packages/backend/src/bootstrap/crewstationMaintenance.ts': 'bootstrap',
   'packages/backend/src/bootstrap/executionInitialization.ts': 'bootstrap',
-  // RFC-370 §9.2 V9: the maintenance Worker's process entry; bootstrap registers
-  // its effect modules so the platform layer imports no bootstrap or module code.
+  // RFC-370 §9.2 V9: the maintenance Worker's process entry; bootstrap hands its
+  // effect-module loader to the runtime (RFC-541) so the platform layer imports no
+  // bootstrap or module code.
   'packages/backend/src/bootstrap/maintenanceWorkerEntry.ts': 'bootstrap',
   'packages/backend/src/bootstrap/maintenanceWorker.ts': 'bootstrap',
   'packages/backend/src/bootstrap/maintenanceWorkerGraph.ts': 'bootstrap',

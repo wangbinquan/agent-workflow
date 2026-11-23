@@ -113,8 +113,9 @@ export const BOOTSTRAP_FILES = [
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.
   'packages/backend/src/bootstrap/deployment.ts',
   'packages/backend/src/bootstrap/crewstation.ts',
-  // RFC-370 §9.2 V9: the hosted maintenance Worker's effect registration and
-  // its process entry are bootstrap too (the platform layer imports neither).
+  // RFC-370 §9.2 V9: the hosted maintenance Worker's effects module and its
+  // process entry are bootstrap too (the platform layer imports neither; RFC-541:
+  // the entry is its own root and hands the effects loader to the runtime).
   'packages/backend/src/bootstrap/crewstationMaintenance.ts',
   'packages/backend/src/bootstrap/maintenanceWorkerEntry.ts',
   'packages/backend/src/bootstrap/maintenanceWorker.ts',
