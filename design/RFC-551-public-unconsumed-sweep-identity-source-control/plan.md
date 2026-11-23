@@ -17,7 +17,7 @@
 - [x] AC-1 两个 context 的未消费 public 符号为 0（全仓为 0）；撤出的名字不再从它们的 public 导出；判据把构造参数属性当作实例成员
 - [x] AC-2 行为不变
 - [x] AC-3 减速带上限随之降低；新增 RFC-551 用例并登记；读旧位置的用例与清单随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -57,7 +57,15 @@ HEAD 的另一份导出。集中验证查出一处本人缺陷（RFC-550 的用�
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `08d67376d`（实现，父提交是 `cf044f2f2`）：exact SHA 主 CI run 45271124675 的 70 个 job 里 63 个通过，包括其余 44 个后端 job（含真实
+  PostgreSQL）、Linux / Windows 的生产二进制构建与它们的全部 e2e。红的：后端 1/44 的 `rfc376-report`——**本人遗漏**：它读已提交的 HEAD，
+  “未消费段非空”的非空校验在本 RFC 清零后必红，而本 RFC 的集中验证在主树里跑、当时的 HEAD 还是之前的提交，没有红出来；`7f9ef1a5d` 把非空
+  校验改看 public 面（`docs/dev-gotchas.md` 已记这类用例要在候选导出里跑）。macOS 的构建 job 排了 27 分钟没有分到 runner、没有任何步骤即被
+  取消，四个 macOS e2e 分片随之缺构建产物失败；`CI required` 随之红。同一提交触发的 windows-platform 通过。都未重跑。
+- `7f9ef1a5d`（补正，只改那条用例与 guard-manifest 行数）：主 CI run 45275384542 70 / 70 通过（含 macOS 的构建与四个 e2e 分片），作为本 RFC
+  的全绿后继证据。
+- 落档提交 `cf044f2f2`（RFC-550 转 Done、RFC-551 落档，只改文档）：主 CI run 45270954875 的 70 个 job 里 64 个通过（全部后端 job 通过）；红的是
+  macOS 构建 job 排了 26 分钟没有分到 runner、无步骤即取消，与随之缺产物的四个 macOS e2e 分片、`CI required`；都不是本 RFC，未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

@@ -1,4 +1,16 @@
-## 2026-11-23 RFC-551 identity-access 与 source-control 的未消费 public 符号清零（In Progress；`design/RFC-551-public-unconsumed-sweep-identity-source-control/`）
+## 2026-11-23 RFC-552 public/operations 的类型检查豁免收窄到操作描述工厂（In Progress；`design/RFC-552-public-operations-exemption-narrowing/`）
+
+- **来由**：S9 第 1 项“`public/operations` 收口”的检测器部分与退出门“检测器不再整体豁免 `public/operations`”。public 类型污染检测整个跳过这个
+  入口（RFC-344：描述工厂的 `invoke` 本来就可执行）；RFC-294 design §3.2 把豁免限定为只为描述工厂而设，仓储、生命周期函数与写原子不得借它导出。
+  候选导出上实测：去掉豁免后多出 32 条，21 条是操作合同类型本身、4 条来自描述工厂的函数体，其余是借这个入口导出的非描述构件。用户 2026-11-02
+  「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经
+  刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：检测器只放行操作合同类型与用平台构造器构造描述的工厂；knowledge-evolution 的运维函数改由 composition 交给 bootstrap；
+  `OwnerIdentityQueries` 移到 `public/queries`；收窄后显形的旧债逐条入账并写明后继；`public/operations` 的导出逐名入账；新增 RFC-552 用例。
+- **不做**：把 `auth/oidc/providers.ts`、`services/repoCredentials.ts` 迁入模块（各自另立）；S9 的其他项。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-551 转 Done 同一提交），实现与验证后再提交。
+
+## 2026-11-23 RFC-551 identity-access 与 source-control 的未消费 public 符号清零（Done；`design/RFC-551-public-unconsumed-sweep-identity-source-control/`）
 
 - **来由**：S9 第 3 项“未消费 public 符号清零”的第七步，RFC-550 留下的两个 context：HEAD `bb34878c7` 的架构报告还列 17 个（identity-access 9、
   source-control 8）。其中两个是判据盲区——public 错误类构造参数属性 `readonly kind` 的类型（`UserAccessErrorKind`、
@@ -19,6 +31,11 @@
   source-control 的上限 8。tsc 0 错，eslint / promises / prettier 无告警；选出 674 个用例文件 673 个通过（红的就是那一处），改后两个锁与读
   guard-manifest 的 22 个用例文件复跑通过；八种变异都被认出；架构报告未消费 17 → 0、public 面少 31 个、其余门与计数不变（对照导出起初带着
   RFC-550 删掉的三个文件，清掉后重出，`docs/dev-gotchas.md` 已记）。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI 63 / 70（run 45271124675）：其余 44 个后端 job（含真实 PostgreSQL）、Linux / Windows 的构建与全部 e2e 通过；红的是后端
+  1/44 的 `rfc376-report`——**本人遗漏**：它读已提交的 HEAD，“未消费段非空”的校验在清零后必红，而集中验证在主树里跑、当时的 HEAD 还是之前
+  的提交，没红出来；`7f9ef1a5d` 改为校验 public 面非空（`docs/dev-gotchas.md` 已记）。另有 macOS 构建 job 没有分到 runner（27 分钟、无步骤即
+  取消）与随之缺产物的四个 macOS e2e 分片、`CI required`；windows-platform 通过；都未重跑。补正提交 `7f9ef1a5d` 主 CI 70 / 70（run
+  45275384542），作为全绿后继证据。落档提交 `cf044f2f2` 主 CI 64 / 70（全部后端通过；同样是 macOS 构建没有分到 runner）。
 
 ## 2026-11-23 RFC-550 十个 context 的未消费 public 符号清零（Done；`design/RFC-550-public-unconsumed-sweep-ten-contexts/`）
 
