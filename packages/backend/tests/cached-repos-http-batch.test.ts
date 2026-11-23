@@ -11,7 +11,6 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { __resetBatchImportForTests } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -55,7 +54,6 @@ function registerProviderBatchHttpCases(provider: ProviderHarness): void {
   beforeEach(async () => {
     application = undefined
     tmp = undefined
-    __resetBatchImportForTests()
     tmp = mkdtempSync(join(tmpdir(), 'aw-batch-http-'))
     const appHome = join(tmp, 'home')
     mkdirSync(appHome, { recursive: true })
@@ -70,7 +68,6 @@ function registerProviderBatchHttpCases(provider: ProviderHarness): void {
     h = { app: application.app }
   })
   afterEach(async () => {
-    __resetBatchImportForTests()
     try {
       await application?.dispose()
     } finally {
@@ -199,11 +196,9 @@ describeEachProviderHttpApplication(
     let h: Harness
 
     beforeEach(async () => {
-      __resetBatchImportForTests()
       h = await buildHarness(scope)
     })
     afterEach(() => {
-      __resetBatchImportForTests()
       resetBroadcastersForTests()
       rmSync(h.tmp, { recursive: true, force: true })
     })

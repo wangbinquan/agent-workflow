@@ -131,7 +131,11 @@ import type {
   SystemAgentRunOptions,
   SystemAgentRunResult,
 } from '@/modules/task-execution/composition/localMcpDiagnosticRunner'
-import { batchOwnerUserId } from '@/modules/source-control/composition'
+import {
+  batchOwnerUserId,
+  createRepositoryBatchImports,
+  type RepositoryBatchImports,
+} from '@/modules/source-control/composition'
 import { redactEventPayload } from '@/auth/tokenRedaction'
 import {
   composeProviderAppDeps,
@@ -266,6 +270,8 @@ export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseP
   readonly resourceLimits: ReturnType<typeof composeResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
+  /** RFC-548: the daemon's one set of batch imports — the session's GC ticker evicts completed batches from it. */
+  readonly repositoryBatchImports: RepositoryBatchImports
   readonly mcpRuntimeTests: McpDiagnosticsRuntime
   readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
@@ -320,6 +326,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const applicationConfiguration = input.applicationConfiguration
   const configuration = applicationConfiguration.queries
   const taskLaunchConfiguration = input.taskLaunchConfiguration
+  // RFC-548: the daemon's one set of batch imports — the HTTP operations start and read batches on it, the realtime
+  // policy looks up a batch's owner on it, and the session's GC ticker evicts completed ones from it.
+  const repositoryBatchImports = createRepositoryBatchImports()
   const realtimePolicy = composeDaemonRealtimePolicy({
     resourceVisibility: {
       canViewResource: (actor, type, row) =>
@@ -329,7 +338,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       canViewMemory: (authority, actor, scope) =>
         memoryCatalog.queries.canView({ authority, actor }, scope),
     },
-    repoImportOwnerUserId: batchOwnerUserId,
+    repoImportOwnerUserId: (batchId) => batchOwnerUserId(repositoryBatchImports, batchId),
     redactTaskEventPayload: redactEventPayload,
   })
   const selectedCore = composeDaemonProviderCore({
@@ -677,6 +686,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const http = composeProviderAppComposition({
     historyRestrictions: gateHistoryRestrictions,
     codeHistory,
+    repositoryBatchImports,
     db: input.db,
     token: input.token,
     appHome: input.appHome,
@@ -931,6 +941,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     taskExecution: taskExecutionProvider,
     taskExecutionModules,
     collaborationContext: boundCollaborationContext,
+    repositoryBatchImports,
     scheduledTasks: scheduledTaskRuntime,
     scheduledTaskIdentityAccess: integrationIdentityAccess,
     memory: memoryOperations,

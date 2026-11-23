@@ -10,7 +10,6 @@ import { resolve } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryWorkspaceOperations } from '@/modules/source-control/composition'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
-import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -310,7 +309,11 @@ describeEachProvider('RFC-349 repository workspace provider boundary', (harness)
       localPath: '/cache/repo-cache-2',
     })
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(1)
-    invalidateRepositoryWorkspaceFacetCaches()
+    // RFC-548: another store on the same database retires this store's cached facets.
+    new DrizzleRepositoryWorkspaceStore(
+      db,
+      composeSourceControlTaskPorts(db),
+    ).invalidateCachedRepoFacets()
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(2)
   })
 })

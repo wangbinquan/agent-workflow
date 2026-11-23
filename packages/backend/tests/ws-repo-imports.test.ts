@@ -4,7 +4,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // RFC-285 B6②：本频道自此有升级门（发起者 ∨ 资源管理员；缺行同形拒绝）——
 // 正向用例先 seed 真批次（stub resolver，不触网），门矩阵见文件末 describe。
 
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderWebSocketApplication,
@@ -12,7 +12,8 @@ import {
 } from './helpers/providerWebSocketScope'
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '../src/ws/broadcaster'
 import {
-  __resetBatchImportForTests,
+  batchOwnerUserId,
+  createRepositoryBatchImports,
   startBatchImport,
 } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
@@ -31,15 +32,21 @@ const SCOPE_OPTIONS = {
 } as const
 
 // RFC-359 AC-6 —— 整套「provider 应用 + 实时运行时 + ws 适配器 + 活的 server」交给
-// `describeEachProviderWebSocketApplication`；这里只留本文件自己的批次状态复位。
+// `describeEachProviderWebSocketApplication`；这里只留本文件自己的批次导入（RFC-548：每例现建一份，种批次用它，
+// WebSocket 夹具的发起者查询也查它）。
 interface Harness {
   db: PersistenceDb
   url: string
   httpUrl: string
 }
 
+let imports = createRepositoryBatchImports()
+
 async function buildHarness(scope: ProviderWebSocketScope): Promise<Harness> {
-  const opened = await scope.open()
+  imports = createRepositoryBatchImports()
+  const opened = await scope.open({
+    repoImportOwnerUserId: (batchId) => batchOwnerUserId(imports, batchId),
+  })
   return { db: scope.harness.db, url: opened.url, httpUrl: opened.httpUrl }
 }
 
@@ -58,6 +65,7 @@ const hasType = (msgs: Array<{ type: string }>, type: string): boolean =>
 function seedBatch(db: PersistenceDb, ownerUserId: string): string {
   // stub resolver 永不返回：本套件只做频道语义，不跑真实 clone。
   const result = startBatchImport(
+    imports,
     {
       store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       resolveCachedRepo: () => new Promise(() => {}) as never,
@@ -75,9 +83,6 @@ describeEachProviderWebSocketApplication(
     let h: Harness
     beforeEach(async () => {
       h = await buildHarness(scope)
-    })
-    afterEach(async () => {
-      __resetBatchImportForTests()
     })
 
     test('opens with hello frame and receives row.update + batch.completed broadcasts', async () => {
@@ -180,9 +185,6 @@ describeEachProviderWebSocketApplication(
     let h: Harness
     beforeEach(async () => {
       h = await buildHarness(scope)
-    })
-    afterEach(async () => {
-      __resetBatchImportForTests()
     })
 
     async function upgradeStatus(batchId: string, token: string): Promise<number> {

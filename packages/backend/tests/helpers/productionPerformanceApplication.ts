@@ -65,6 +65,7 @@ import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import {
   composeCachedRepositoryOperations,
   composeLocalRepositoryMirrors,
+  createRepositoryBatchImports,
 } from '@/modules/source-control/composition'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountWellKnownRoutes } from '@/routes/docs'
@@ -251,6 +252,7 @@ export async function createProductionPerformanceApplication(
           store: repositoryStore,
           mirrors: composeLocalRepositoryMirrors({ store: repositoryStore }),
           configuration: composeFileApplicationConfigurationQueries(configPath),
+          batchImports: createRepositoryBatchImports(),
           appHome,
         }),
       )

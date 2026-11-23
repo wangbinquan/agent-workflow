@@ -3,10 +3,10 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
-  __resetBatchImportForTests,
+  createRepositoryBatchImports,
   gcBatches,
   getBatchSnapshot,
   startBatchImport,
@@ -16,6 +16,9 @@ import type { resolveCachedRepo } from '../src/modules/source-control/infrastruc
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 type Resolver = typeof resolveCachedRepo
+
+/** RFC-548: each case gets its own batch imports (the daemon application composes one). */
+let imports = createRepositoryBatchImports()
 
 function happyResolver(): Resolver {
   return (async (_d, input) => {
@@ -39,7 +42,7 @@ function happyResolver(): Resolver {
 
 async function waitForCompleted(batchId: string): Promise<void> {
   for (let i = 0; i < 200; i++) {
-    const s = getBatchSnapshot(batchId)
+    const s = getBatchSnapshot(imports, batchId)
     if (s && s.state === 'completed') return
     await new Promise((r) => setTimeout(r, 5))
   }
@@ -47,8 +50,9 @@ async function waitForCompleted(batchId: string): Promise<void> {
 }
 
 describeEachProvider('gcBatches (RFC-033-T2)', (harness) => {
-  beforeEach(() => __resetBatchImportForTests())
-  afterEach(() => __resetBatchImportForTests())
+  beforeEach(() => {
+    imports = createRepositoryBatchImports()
+  })
 
   test('evicts completed batch past TTL', async () => {
     const db = harness.db
@@ -57,14 +61,19 @@ describeEachProvider('gcBatches (RFC-033-T2)', (harness) => {
       resolveCachedRepo: happyResolver(),
       emit: () => {},
     }
-    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
+    const r = startBatchImport(
+      imports,
+      myDeps,
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForCompleted(r.batchId)
-    expect(getBatchSnapshot(r.batchId)).not.toBeNull()
+    expect(getBatchSnapshot(imports, r.batchId)).not.toBeNull()
     // Move now() forward 2 hours.
     const future = Date.now() + 2 * 60 * 60 * 1000
-    const result = gcBatches({ now: () => future })
+    const result = gcBatches(imports, { now: () => future })
     expect(result.evicted).toBe(1)
-    expect(getBatchSnapshot(r.batchId)).toBeNull()
+    expect(getBatchSnapshot(imports, r.batchId)).toBeNull()
   })
 
   test('running batch is never evicted', async () => {
@@ -79,10 +88,15 @@ describeEachProvider('gcBatches (RFC-033-T2)', (harness) => {
       resolveCachedRepo: heldResolver,
       emit: () => {},
     }
-    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
+    const r = startBatchImport(
+      imports,
+      myDeps,
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     const future = Date.now() + 10 * 60 * 60 * 1000
-    const result = gcBatches({ now: () => future })
+    const result = gcBatches(imports, { now: () => future })
     expect(result.evicted).toBe(0)
-    expect(getBatchSnapshot(r.batchId)).not.toBeNull()
+    expect(getBatchSnapshot(imports, r.batchId)).not.toBeNull()
   })
 })

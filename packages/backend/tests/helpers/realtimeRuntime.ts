@@ -19,7 +19,6 @@ import type {
   RealtimeRuntime,
 } from '../../src/modules/runtime-management/public/participants'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { batchOwnerUserId } from '../../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { redactEventPayload } from '../../src/auth/tokenRedaction'
 import { memoryCatalogOf } from './memoryCatalog'
 
@@ -83,7 +82,8 @@ export function composeTestSqliteRealtimeRuntime(input: {
           return await memoryCatalogOf(input.db).queries.canView({ authority, actor }, scope)
         },
       },
-      repoImportOwnerUserId: input.repoImportOwnerUserId ?? batchOwnerUserId,
+      // RFC-548: no batch imports of their own — a suite that seeds batches passes its own lookup.
+      repoImportOwnerUserId: input.repoImportOwnerUserId ?? (() => null),
       redactTaskEventPayload: input.redactTaskEventPayload ?? redactEventPayload,
     },
   })
@@ -123,7 +123,8 @@ export function composeTestProviderRealtimeRuntime(input: {
         return await memoryCatalogOf(neutralDb).queries.canView({ authority, actor }, scope)
       },
     },
-    repoImportOwnerUserId: input.repoImportOwnerUserId ?? batchOwnerUserId,
+    // RFC-548: no batch imports of their own — a suite that seeds batches passes its own lookup.
+    repoImportOwnerUserId: input.repoImportOwnerUserId ?? (() => null),
     redactTaskEventPayload: input.redactTaskEventPayload ?? redactEventPayload,
   }
   if (binding.provider === 'sqlite') {

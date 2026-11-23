@@ -1,5 +1,5 @@
 import type { RepositoryWorkspaceTaskPorts } from '../composition/required-ports'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { databaseStateKey, databaseStateOf, tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, sql, type SQLWrapper } from 'drizzle-orm'
 
@@ -14,10 +14,7 @@ import type {
   RepositoryGroupSnapshot,
   RepositoryScheduleRecord,
 } from '../ports/repositoryWorkspaceStore'
-import {
-  currentRepositoryFacetCacheEpoch,
-  invalidateRepositoryWorkspaceFacetCaches,
-} from '../ports/repositoryWorkspaceStore'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 
 export interface RepositoryWorkspaceSqlExecutor {
   readonly db: PersistenceDb
@@ -210,9 +207,34 @@ const REPOSITORY_FACETS_TTL_MS = 5_000
 
 interface RepositoryFacetsCacheEntry {
   readonly expiresAt: number
-  readonly epoch: number
+  readonly generation: number
   readonly scheduleIds: ReadonlySet<string>
   readonly facets: CachedRepositoryPageRecords['facets']
+}
+
+/**
+ * RFC-548: one database's cached-repository read state, shared by every store on it and its transactions — the facet
+ * cache generation (a write through any store retires every store's cached facets) and the in-flight page reads.
+ */
+interface CachedRepositoryReadState {
+  generation: number
+  pages: InFlightCoalescer<string, CachedRepositoryPageRecords>
+}
+const cachedRepositoryReadState = databaseStateKey<CachedRepositoryReadState>(() => ({
+  generation: 0,
+  pages: createInFlightCoalescer(),
+}))
+
+/** Requests that differ only in whitespace around the search term or in left-out defaults share one read. */
+function cachedRepoPageKey(query: CachedRepositoryPageQuery): string {
+  return JSON.stringify([
+    query.q?.trim() ?? '',
+    query.view ?? 'all',
+    query.submodules ?? 'all',
+    query.autoRefresh ?? 'all',
+    query.cursor ?? null,
+    query.limit,
+  ])
 }
 
 /** Shared provider-independent SQL projection. Provider-specific transaction
@@ -229,9 +251,16 @@ export class RepositoryWorkspaceSqlStore {
     protected readonly taskPorts: RepositoryWorkspaceTaskPorts,
   ) {}
 
+  private get readState(): CachedRepositoryReadState {
+    return databaseStateOf(this.database, cachedRepositoryReadState)
+  }
+
   invalidateCachedRepoFacets(): void {
     this.facetsCache = null
-    invalidateRepositoryWorkspaceFacetCaches()
+    // RFC-548: every store on this database (and its transactions) shares the generation and the in-flight reads.
+    const state = this.readState
+    state.generation += 1
+    state.pages = createInFlightCoalescer()
   }
 
   async findCachedRepoByHash(hash: string): Promise<CachedRepositoryRecord | null> {
@@ -423,12 +452,20 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async listCachedRepoPage(query: CachedRepositoryPageQuery): Promise<CachedRepositoryPageRecords> {
+    return await this.readState.pages(cachedRepoPageKey(query), () =>
+      this.readCachedRepoPage(query),
+    )
+  }
+
+  private async readCachedRepoPage(
+    query: CachedRepositoryPageQuery,
+  ): Promise<CachedRepositoryPageRecords> {
     const persistenceDb = this.database
 
     const cachedFacets =
       this.facetsCache !== null &&
       this.facetsCache.expiresAt > Date.now() &&
-      this.facetsCache.epoch === currentRepositoryFacetCacheEpoch()
+      this.facetsCache.generation === this.readState.generation
         ? this.facetsCache
         : null
     const scheduleIds =
@@ -526,7 +563,7 @@ export class RepositoryWorkspaceSqlStore {
       }
       this.facetsCache = {
         expiresAt: Date.now() + REPOSITORY_FACETS_TTL_MS,
-        epoch: currentRepositoryFacetCacheEpoch(),
+        generation: this.readState.generation,
         scheduleIds,
         facets,
       }

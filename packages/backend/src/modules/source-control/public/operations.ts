@@ -11,5 +11,3 @@ export type {
   RepositoryGroupSnapshot,
   RepositoryWorkspaceStore,
 } from '../ports/repositoryWorkspaceStore'
-
-export { invalidateRepositoryWorkspaceFacetCaches } from '../ports/repositoryWorkspaceStore'

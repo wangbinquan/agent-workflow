@@ -48,7 +48,6 @@ import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
-import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { listTaskOperationsPage } from './helpers/taskListPage'
@@ -478,7 +477,6 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
       finished: 8, // 其余全是 done，外加 k-both 的 failed
     })
 
-    invalidateRepositoryWorkspaceFacetCaches()
     const store = new DrizzleRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     store.invalidateCachedRepoFacets()
     const repoPage = await store.listCachedRepoPage({ limit: 20 })

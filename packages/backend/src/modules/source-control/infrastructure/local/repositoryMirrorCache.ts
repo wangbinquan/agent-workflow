@@ -37,7 +37,6 @@ import type {
   CachedRepositoryRecord,
   RepositoryWorkspaceStore,
 } from '@/modules/source-control/public/operations'
-import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   classifyBaseRef,
@@ -65,7 +64,6 @@ import {
 } from '@/services/repoCredentials'
 import { sha1Hex } from '@/util/hash'
 import { raceWithFallback } from '@/util/process'
-import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 
 const log = createLogger('git-repo-cache')
 
@@ -514,7 +512,7 @@ export async function ensureCachedRepoIdentity(
     const id = ulid()
     const box = deps.secretBox
     // 新增仓会改 all / unused facet ⇒ 让缓存立刻失效。
-    invalidateRepoFacetsCache(deps.store)
+    deps.store.invalidateCachedRepoFacets()
     const inserted = await deps.store.insertCachedRepo({
       id,
       urlHash: hash,
@@ -918,7 +916,7 @@ export async function resolveCachedRepo(
       })
     }
     // 克隆落库(新增或补全身份行)同样会动 facets。
-    invalidateRepoFacetsCache(deps.store)
+    deps.store.invalidateCachedRepoFacets()
     // ⚠️ 后续一律用 `rowId` 而不是 `id`。
     //
     // 四轮门抓到的自伤:三轮门为修 UNIQUE 竞态加了「INSERT 前复读并领养」,`UPDATE`
@@ -1069,30 +1067,6 @@ export interface CachedRepoPageOptions {
 const REPO_PAGE_DEFAULT_LIMIT = 50
 const REPO_PAGE_MAX_LIMIT = 200
 
-let repoPageFlights = new WeakMap<object, InFlightCoalescer<string, CachedRepoPage>>()
-
-function repoPageFlight(
-  store: RepositoryWorkspaceStore,
-): InFlightCoalescer<string, CachedRepoPage> {
-  const owner = store.runtimeIdentity
-  const existing = repoPageFlights.get(owner)
-  if (existing !== undefined) return existing
-  const created = createInFlightCoalescer<string, CachedRepoPage>()
-  repoPageFlights.set(owner, created)
-  return created
-}
-
-function repoPageFlightKey(options: CachedRepoPageOptions): string {
-  return JSON.stringify([
-    options.q?.trim() ?? '',
-    options.view ?? 'all',
-    options.submodules ?? 'all',
-    options.autoRefresh ?? 'all',
-    options.cursor ?? null,
-    Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT)),
-  ])
-}
-
 function decodeRepoCursor(raw: string): { lastFetchedAt: number; id: string } {
   const dot = raw.indexOf('.')
   const ts = dot > 0 ? Number(raw.slice(0, dot)) : Number.NaN
@@ -1103,42 +1077,26 @@ function decodeRepoCursor(raw: string): { lastFetchedAt: number; id: string } {
   return { lastFetchedAt: ts, id }
 }
 
-/** 写路径调用:让下一次读立刻重算(本进程内的写不该被自己的缓存挡住)。
- *  不传 store 时清空本进程的 in-flight 合并器(测试用)。 */
-export function invalidateRepoFacetsCache(store?: RepositoryWorkspaceStore): void {
-  if (store !== undefined) {
-    repoPageFlights.delete(store.runtimeIdentity)
-    store.invalidateCachedRepoFacets()
-  } else {
-    repoPageFlights = new WeakMap()
-    invalidateRepositoryWorkspaceFacetCaches()
-  }
-}
-
 export async function listCachedReposPage(
   store: RepositoryWorkspaceStore,
   options: CachedRepoPageOptions = {},
 ): Promise<CachedRepoPage> {
-  return await repoPageFlight(store)(repoPageFlightKey(options), async () => {
-    const limit = Math.max(
-      1,
-      Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT),
-    )
-    const page = await store.listCachedRepoPage({
-      ...(options.q === undefined ? {} : { q: options.q }),
-      ...(options.view === undefined ? {} : { view: options.view }),
-      ...(options.submodules === undefined ? {} : { submodules: options.submodules }),
-      ...(options.autoRefresh === undefined ? {} : { autoRefresh: options.autoRefresh }),
-      ...(options.cursor === undefined ? {} : { cursor: decodeRepoCursor(options.cursor) }),
-      limit,
-    })
-    const last = page.rows.at(-1)
-    return {
-      items: page.rows.map((row) => rowToCached(row, page.referenceCounts.get(row.id) ?? 0)),
-      nextCursor: page.hasMore && last !== undefined ? `${last.lastFetchedAt}.${last.id}` : null,
-      facets: page.facets,
-    }
+  const limit = Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT))
+  // RFC-548: the store merges concurrent reads of the same page (per database) and retires them on writes.
+  const page = await store.listCachedRepoPage({
+    ...(options.q === undefined ? {} : { q: options.q }),
+    ...(options.view === undefined ? {} : { view: options.view }),
+    ...(options.submodules === undefined ? {} : { submodules: options.submodules }),
+    ...(options.autoRefresh === undefined ? {} : { autoRefresh: options.autoRefresh }),
+    ...(options.cursor === undefined ? {} : { cursor: decodeRepoCursor(options.cursor) }),
+    limit,
   })
+  const last = page.rows.at(-1)
+  return {
+    items: page.rows.map((row) => rowToCached(row, page.referenceCounts.get(row.id) ?? 0)),
+    nextCursor: page.hasMore && last !== undefined ? `${last.lastFetchedAt}.${last.id}` : null,
+    facets: page.facets,
+  }
 }
 
 // Provider-specific paging SQL lives behind RepositoryWorkspaceStore.
@@ -1170,7 +1128,7 @@ export async function refreshCachedRepo(
   opts?: { touchRecency?: boolean },
 ): Promise<RefreshCachedRepoResult> {
   // 刷新会动 last_fetched_at / submodule 同步态 ⇒ attention facet 可能翻转。
-  invalidateRepoFacetsCache(deps.store)
+  deps.store.invalidateCachedRepoFacets()
   const row = await deps.store.findCachedRepoById(id)
   if (row === null) {
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
@@ -1332,7 +1290,7 @@ export async function deleteCachedRepo(
   id: string,
   options: DeleteCachedRepoOptions = {},
 ): Promise<{ deletedLocalPath: string }> {
-  invalidateRepoFacetsCache(deps.store)
+  deps.store.invalidateCachedRepoFacets()
   const row = await deps.store.findCachedRepoById(id)
   if (row === null) {
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)

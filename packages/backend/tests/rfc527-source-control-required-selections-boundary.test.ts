@@ -27,6 +27,7 @@ import {
   bindRepositoryCommitParticipant,
   composeCachedRepositoryOperations,
   composeLocalRepositoryMirrors,
+  createRepositoryBatchImports,
   composeLocalWorkspaceExcludeProfiles,
   composeRemoteRepositoryMirrors,
   createLocalRepositoryCandidateEffects,
@@ -552,6 +553,7 @@ describe('RFC-527 ④ 行为', () => {
         },
       } as never,
       configuration,
+      batchImports: createRepositoryBatchImports(),
     })
     expect(await registered.refresh('r1')).toEqual({ ...refreshed, id: 'r1' } as never)
     expect(reads).toBe(0)
@@ -559,6 +561,7 @@ describe('RFC-527 ④ 行为', () => {
       store: store as never,
       mirrors: { registration: { kind: 'mirror-cache' } } as never,
       configuration,
+      batchImports: createRepositoryBatchImports(),
     })
     // The mirror cache reads the clone time limit, then fetches its own clone.
     await expect(cached.refresh('r1')).rejects.toThrow('mirror-cache-store')

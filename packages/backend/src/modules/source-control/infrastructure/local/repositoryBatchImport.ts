@@ -11,12 +11,13 @@
 //   - RFC-370 §10 V17: a hosted deployment registers each URL through
 //     `register` (the remote is verified, no mirror is cloned: tasks clone
 //     inside their own volumes); rows then report `verifiedOnly`.
-//   - All row state lives in this module's `batches` map; daemon restart
-//     wipes in-flight progress but never loses successfully cloned cache rows
-//     (those are committed by `resolveCachedRepo` before this module sees them).
+//   - All row state lives in a `RepositoryBatchImports` instance (RFC-548: the
+//     daemon application composes one); daemon restart wipes in-flight progress
+//     but never loses successfully cloned cache rows (those are committed by
+//     `resolveCachedRepo` before this module sees them).
 //
 // Concurrency:
-//   - Global semaphore caps simultaneous `runRow` calls across every batch,
+//   - The instance's semaphore caps simultaneous `runRow` calls across every batch,
 //     preventing 2 batches × 3 workers = 6 clones from saturating I/O.
 //   - Same-URL serialization is delegated to `resolveCachedRepo`'s own
 //     per-URL mutex — duplicate URLs across batches will simply cache-hit.
@@ -89,27 +90,35 @@ interface BatchRecord {
   pumping: boolean
 }
 
-const batches = new Map<string, BatchRecord>()
+/** The cross-batch clone semaphore: caps the total `runRow` operations across batches. */
+interface BatchImportSlots {
+  limit: number
+  inFlight: number
+  readonly waiters: Array<() => void>
+}
 
-// Module-global semaphore: caps the total `runRow` operations across batches.
-let globalConcurrency = DEFAULT_CONCURRENCY
-let globalInFlight = 0
-const globalWaiters: Array<() => void> = []
+/**
+ * RFC-548: one daemon's batch imports — every batch by id and the cross-batch clone semaphore. The daemon
+ * application composes one and hands it to the HTTP operations, the realtime owner lookup and the GC ticker.
+ */
+export interface RepositoryBatchImports {
+  readonly batches: Map<string, BatchRecord>
+  readonly slots: BatchImportSlots
+}
+
+export function createRepositoryBatchImports(): RepositoryBatchImports {
+  return Object.freeze({
+    batches: new Map<string, BatchRecord>(),
+    slots: { limit: DEFAULT_CONCURRENCY, inFlight: 0, waiters: [] },
+  })
+}
 
 /**
  * RFC-285 B6②：WS 升级门的判定读点。缺行返回 null——门以「与不存在同形」
  * 拒绝（batch-not-found），不泄露批次存在性。
  */
-export function batchOwnerUserId(batchId: string): string | null {
-  return batches.get(batchId)?.ownerUserId ?? null
-}
-
-/** Test-only: reset internal state between cases. */
-export function __resetBatchImportForTests(): void {
-  batches.clear()
-  globalConcurrency = DEFAULT_CONCURRENCY
-  globalInFlight = 0
-  globalWaiters.length = 0
+export function batchOwnerUserId(imports: RepositoryBatchImports, batchId: string): string | null {
+  return imports.batches.get(batchId)?.ownerUserId ?? null
 }
 
 export interface RepoBatchImportDeps {
@@ -144,6 +153,7 @@ export interface StartBatchImportResult {
  * clones happen in the background via `pumpQueue`.
  */
 export function startBatchImport(
+  imports: RepositoryBatchImports,
   deps: RepoBatchImportDeps,
   input: StartBatchImportInput,
   // RFC-285 B6②：ownership 随创建落地（此前批次无归属，/ws/repo-imports 完全
@@ -151,7 +161,7 @@ export function startBatchImport(
   owner: { userId: string },
 ): StartBatchImportResult {
   if (typeof deps.concurrency === 'number') {
-    setGlobalConcurrency(deps.concurrency)
+    resizeSlots(imports.slots, deps.concurrency)
   }
   const now = deps.now ?? Date.now
 
@@ -236,7 +246,7 @@ export function startBatchImport(
     record.pendingQueue.push(rowId)
   }
 
-  batches.set(batchId, record)
+  imports.batches.set(batchId, record)
 
   // If every row was invalid, the batch is already done.
   if (record.pendingQueue.length === 0 && record.inFlight.size === 0) {
@@ -249,7 +259,7 @@ export function startBatchImport(
     })
   } else {
     queueMicrotask(() => {
-      void pumpQueue(deps, record)
+      void pumpQueue(imports.slots, deps, record)
     })
   }
 
@@ -257,8 +267,11 @@ export function startBatchImport(
 }
 
 /** Read-only snapshot. Returns null when the batch has been GC'd or never existed. */
-export function getBatchSnapshot(batchId: string): BatchImportSnapshot | null {
-  const record = batches.get(batchId)
+export function getBatchSnapshot(
+  imports: RepositoryBatchImports,
+  batchId: string,
+): BatchImportSnapshot | null {
+  const record = imports.batches.get(batchId)
   if (!record) return null
   return serialize(record)
 }
@@ -272,12 +285,13 @@ export interface RetryBatchRowOverride {
  * its state to `running` and restart the pump so the new row gets picked up.
  */
 export function retryBatchRow(
+  imports: RepositoryBatchImports,
   deps: RepoBatchImportDeps,
   batchId: string,
   rowId: string,
   override: RetryBatchRowOverride = {},
 ): BatchImportSnapshot {
-  const record = batches.get(batchId)
+  const record = imports.batches.get(batchId)
   if (!record) {
     throw new NotFoundError('batch-not-found', `batch ${batchId} not found or expired`)
   }
@@ -334,7 +348,7 @@ export function retryBatchRow(
   }
   if (!record.pumping) {
     queueMicrotask(() => {
-      void pumpQueue(deps, record)
+      void pumpQueue(imports.slots, deps, record)
     })
   }
   return serialize(record)
@@ -349,6 +363,7 @@ export interface GcResult {
  * Mirrors the shape of `startWorktreeGc` / `startEventsArchiver`.
  */
 export function startBatchImportGc(
+  imports: RepositoryBatchImports,
   intervalMs: number = HOUR_MS,
   retentionMs: number = DEFAULT_RETENTION_MS,
   // RFC-322：错峰相位。原实现的 handle 没有 unref()，收编后统一 unref——本 GC 的
@@ -361,7 +376,7 @@ export function startBatchImportGc(
     phaseOffsetMs,
     onTick: () => {
       try {
-        gcBatches({ retentionMs })
+        gcBatches(imports, { retentionMs })
       } catch (err) {
         log.warn('gcBatches threw', {
           error: err instanceof Error ? err.message : String(err),
@@ -371,15 +386,18 @@ export function startBatchImportGc(
   })
 }
 
-export function gcBatches(deps: { retentionMs?: number; now?: () => number } = {}): GcResult {
+export function gcBatches(
+  imports: RepositoryBatchImports,
+  deps: { retentionMs?: number; now?: () => number } = {},
+): GcResult {
   const now = (deps.now ?? Date.now)()
   const ttl = deps.retentionMs ?? DEFAULT_RETENTION_MS
   let evicted = 0
-  for (const [id, record] of batches) {
+  for (const [id, record] of imports.batches) {
     if (record.state !== 'completed') continue
     if (record.completedAt === null) continue
     if (now - record.completedAt > ttl) {
-      batches.delete(id)
+      imports.batches.delete(id)
       evicted += 1
     }
   }
@@ -393,40 +411,44 @@ export function gcBatches(deps: { retentionMs?: number; now?: () => number } = {
 // Internals
 // ---------------------------------------------------------------------------
 
-function setGlobalConcurrency(n: number): void {
+function resizeSlots(slots: BatchImportSlots, n: number): void {
   const clamped = Math.max(1, Math.min(8, Math.floor(n)))
-  if (clamped === globalConcurrency) return
-  globalConcurrency = clamped
+  if (clamped === slots.limit) return
+  slots.limit = clamped
   // Wake any waiters that may now fit under the new cap.
-  while (globalInFlight < globalConcurrency && globalWaiters.length > 0) {
-    const wake = globalWaiters.shift()!
+  while (slots.inFlight < slots.limit && slots.waiters.length > 0) {
+    const wake = slots.waiters.shift()!
     wake()
   }
 }
 
-async function acquireSlot(): Promise<void> {
-  if (globalInFlight < globalConcurrency) {
-    globalInFlight += 1
+async function acquireSlot(slots: BatchImportSlots): Promise<void> {
+  if (slots.inFlight < slots.limit) {
+    slots.inFlight += 1
     return
   }
   await new Promise<void>((resolve) => {
-    globalWaiters.push(() => {
-      globalInFlight += 1
+    slots.waiters.push(() => {
+      slots.inFlight += 1
       resolve()
     })
   })
 }
 
-function releaseSlot(): void {
-  globalInFlight -= 1
-  if (globalInFlight < 0) globalInFlight = 0
-  if (globalInFlight < globalConcurrency && globalWaiters.length > 0) {
-    const wake = globalWaiters.shift()!
+function releaseSlot(slots: BatchImportSlots): void {
+  slots.inFlight -= 1
+  if (slots.inFlight < 0) slots.inFlight = 0
+  if (slots.inFlight < slots.limit && slots.waiters.length > 0) {
+    const wake = slots.waiters.shift()!
     wake()
   }
 }
 
-async function pumpQueue(deps: RepoBatchImportDeps, record: BatchRecord): Promise<void> {
+async function pumpQueue(
+  slots: BatchImportSlots,
+  deps: RepoBatchImportDeps,
+  record: BatchRecord,
+): Promise<void> {
   if (record.pumping) return
   record.pumping = true
   try {
@@ -435,8 +457,8 @@ async function pumpQueue(deps: RepoBatchImportDeps, record: BatchRecord): Promis
         const rowId = record.pendingQueue.shift()!
         record.inFlight.add(rowId)
         // Fire-and-forget; runRow always finalizes via finally.
-        void acquireSlot()
-          .then(() => runRow(deps, record, rowId))
+        void acquireSlot(slots)
+          .then(() => runRow(slots, deps, record, rowId))
           .catch((err) => {
             log.warn('runRow leaked exception', {
               batchId: record.batchId,
@@ -461,13 +483,14 @@ async function pumpQueue(deps: RepoBatchImportDeps, record: BatchRecord): Promis
 }
 
 async function runRow(
+  slots: BatchImportSlots,
   deps: RepoBatchImportDeps,
   record: BatchRecord,
   rowId: string,
 ): Promise<void> {
   const row = record.rows.get(rowId)
   if (!row) {
-    releaseSlot()
+    releaseSlot(slots)
     record.inFlight.delete(rowId)
     resolveAnyWaiter(record)
     return
@@ -521,7 +544,7 @@ async function runRow(
   } finally {
     row.finishedAt = now()
     record.inFlight.delete(rowId)
-    releaseSlot()
+    releaseSlot(slots)
     emit(deps, record.batchId, { type: 'row.update', row: rowToWire(row) })
     resolveAnyWaiter(record)
   }

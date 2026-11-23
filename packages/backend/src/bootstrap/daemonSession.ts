@@ -685,6 +685,7 @@ export async function composeDaemonSession(
     id: 'batch-import-gc',
     async start() {
       const ticker = startBatchImportGc(
+        application.runtime.repositoryBatchImports,
         undefined,
         (await input.configuration.read()).repoBatchImportRetentionMs,
       )

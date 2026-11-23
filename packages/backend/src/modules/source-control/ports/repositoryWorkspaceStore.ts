@@ -4,16 +4,6 @@ import type {
   RepoSubmoduleFilter,
 } from '@agent-workflow/shared'
 
-let repositoryFacetCacheEpoch = 0
-
-export function currentRepositoryFacetCacheEpoch(): number {
-  return repositoryFacetCacheEpoch
-}
-
-export function invalidateRepositoryWorkspaceFacetCaches(): void {
-  repositoryFacetCacheEpoch += 1
-}
-
 export interface CachedRepositoryRecord {
   readonly id: string
   readonly urlHash: string
@@ -185,6 +175,7 @@ export interface RepositoryWorkspaceStore {
   cachedRepoReferenceCount(id: string): Promise<number>
   cachedRepoReferenceCounts(ids: readonly string[]): Promise<ReadonlyMap<string, number>>
   listCachedRepoPage(query: CachedRepositoryPageQuery): Promise<CachedRepositoryPageRecords>
+  /** Retire this database's cached facets and in-flight page reads — for every store on it (RFC-548). */
   invalidateCachedRepoFacets(): void
   listDueCachedRepos(input: {
     readonly dueBefore: number

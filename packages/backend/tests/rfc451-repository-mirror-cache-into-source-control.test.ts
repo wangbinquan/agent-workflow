@@ -9,7 +9,10 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
-import { composeCachedRepositoryOperations } from '@/modules/source-control/composition'
+import {
+  composeCachedRepositoryOperations,
+  createRepositoryBatchImports,
+} from '@/modules/source-control/composition'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { NotFoundError } from '@/util/errors'
@@ -92,6 +95,7 @@ function operations(input: {
   } as unknown as RepositoryWorkspaceStore
   return composeCachedRepositoryOperations({
     store,
+    batchImports: createRepositoryBatchImports(),
     mirrors: {
       registration:
         input.remote === undefined ? { kind: 'mirror-cache' } : { kind: 'remote', ...input.remote },

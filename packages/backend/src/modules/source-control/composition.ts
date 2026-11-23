@@ -27,7 +27,12 @@ import { ensureCredentialsSealed } from '@/services/repoCredentials'
 
 export { createRepositoryPublicationTransport } from './infrastructure/repositoryPublicationTransport'
 // RFC-451：本地镜像缓存家族（批量导入的清理与归属、后台子模块保鲜、开发工作区仓库准备），供装配根取用。
-export { batchOwnerUserId, startBatchImportGc } from './infrastructure/local/repositoryBatchImport'
+export {
+  batchOwnerUserId,
+  createRepositoryBatchImports,
+  startBatchImportGc,
+  type RepositoryBatchImports,
+} from './infrastructure/local/repositoryBatchImport'
 export { startConfiguredSubmoduleRefreshLoop } from './infrastructure/local/repositoryMirrorAutoRefresh'
 export {
   assertDevelopmentWorkspaceRepositoryFreshness,

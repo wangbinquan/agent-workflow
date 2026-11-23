@@ -21,6 +21,8 @@ interface DatabaseHandleContext {
   readonly fileSnapshots: FileSnapshotTracker
   /** RFC-545: the live schema the provider bound this handle with (null for epoch-1 and fixture handles). */
   readonly live: RuntimeSchemaBinding | null
+  /** RFC-548: module-owned per-database state by key (see `databaseStateOf`). */
+  readonly states: Map<DatabaseStateKey<unknown>, unknown>
 }
 const contextKey = Symbol('native-persistence-session')
 const contexts = new WeakMap<object, DatabaseHandleContext>()
@@ -39,6 +41,7 @@ export function bindDatabaseHandle<T extends object>(
     live,
     afterCommit: { pump: null },
     fileSnapshots: createFileSnapshotTracker(),
+    states: new Map(),
   })
   contexts.set(handle, context)
   if (Object.isExtensible(handle))
@@ -82,6 +85,23 @@ export function fileSnapshotTrackerOf(handle: object): FileSnapshotTracker {
   const tracker = boundContext(handle)?.fileSnapshots
   if (tracker === undefined) throw new Error('file-snapshot-handle-unbound')
   return tracker
+}
+/**
+ * RFC-548: the key a module keeps its own per-database in-process state under. The module holds the key (left
+ * unexported, no one else reaches the state); the state is created on first use and shared by the database's client,
+ * transactions and native session, like the after-commit pump slot and the file snapshot tracker.
+ */
+export interface DatabaseStateKey<T> {
+  readonly create: () => T
+}
+export function databaseStateKey<T>(create: () => T): DatabaseStateKey<T> {
+  return Object.freeze({ create })
+}
+/** The database's state under `key`, created on first use; an object no provider constructed has none. */
+export function databaseStateOf<T>(handle: object, key: DatabaseStateKey<T>): T {
+  const states = databaseHandleContext(handle).states
+  if (!states.has(key)) states.set(key, key.create())
+  return states.get(key) as T
 }
 export function inheritDatabaseHandle<T extends object>(handle: T, parent: object): T {
   const context = databaseHandleContext(parent)

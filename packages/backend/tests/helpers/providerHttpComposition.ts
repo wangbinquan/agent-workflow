@@ -16,6 +16,7 @@ import {
 } from '@/modules/system-operations/composition/databaseMigration'
 import { createFileDaemonRuntimeQueries } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { composeLocalExecutionAuthority } from '@/modules/system-operations/composition'
+import { createRepositoryBatchImports } from '@/modules/source-control/composition'
 import {
   composePortArtifactOperations,
   createFilePortArtifactContent,
@@ -69,6 +70,7 @@ export async function createProviderHttpCompositionFixture(
       const http = composeProviderAppComposition({
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         codeHistory,
+        repositoryBatchImports: createRepositoryBatchImports(),
         db: harness.db,
         token: input.token,
         appHome: application.appHome,

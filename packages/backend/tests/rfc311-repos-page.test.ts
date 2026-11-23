@@ -24,7 +24,6 @@ import type { CachedRepo } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
-  invalidateRepoFacetsCache,
   listCachedRepos,
   listCachedReposPage,
 } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
@@ -546,7 +545,11 @@ describeEachProvider('RFC-311 T28 — /api/cached-repos C7 双形状', (harness)
       }
       expect(cached.facets.all, 'TTL 内应命中缓存').toBe(12)
 
-      invalidateRepoFacetsCache()
+      // RFC-548: a write through any store on this database retires the app store's cached facets.
+      composeRepositoryWorkspaceStore(
+        db,
+        composeSourceControlTaskPorts(db),
+      ).invalidateCachedRepoFacets()
       const fresh = (await (await get('/api/cached-repos?limit=1')).json()) as {
         facets: { all: number }
       }

@@ -5,7 +5,6 @@
 import type { SecretBox } from '@/auth/secretBox'
 import {
   ensureCachedRepoIdentity,
-  invalidateRepoFacetsCache,
   rowToCached,
 } from '../infrastructure/local/repositoryMirrorCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
@@ -62,7 +61,7 @@ export function composeRemoteRepositoryMirrors(input: {
           },
           { url },
         ),
-      invalidateFacets: () => invalidateRepoFacetsCache(input.store),
+      invalidateFacets: () => input.store.invalidateCachedRepoFacets(),
       project: rowToCached,
     },
   })

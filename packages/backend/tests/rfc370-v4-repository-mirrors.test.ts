@@ -42,7 +42,7 @@ import {
   verifyRemoteRepository,
 } from '../src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume'
 import {
-  __resetBatchImportForTests,
+  createRepositoryBatchImports,
   getBatchSnapshot,
   startBatchImport,
 } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
@@ -355,9 +355,10 @@ describe('RFC-370 V17 hosted mirror refresh job', () => {
 
 describe('RFC-370 V17 hosted batch import', () => {
   test('rows register through the hosted registration and report verified-only', async () => {
-    __resetBatchImportForTests()
+    const imports = createRepositoryBatchImports()
     const registered: string[] = []
     const { batchId } = startBatchImport(
+      imports,
       {
         store: {} as never,
         register: async (url) => {
@@ -372,9 +373,9 @@ describe('RFC-370 V17 hosted batch import', () => {
       { urls: ['https://example.test/acme/new.git', 'https://example.test/acme/known.git'] },
       { userId: 'u-v17' },
     )
-    for (let i = 0; i < 200 && getBatchSnapshot(batchId)?.state !== 'completed'; i += 1)
+    for (let i = 0; i < 200 && getBatchSnapshot(imports, batchId)?.state !== 'completed'; i += 1)
       await Bun.sleep(5)
-    const rows = getBatchSnapshot(batchId)!.rows
+    const rows = getBatchSnapshot(imports, batchId)!.rows
     expect(
       rows.map((row) => [row.inputUrl, row.status, row.cold, row.verifiedOnly, row.cachedRepoId]),
     ).toEqual([
@@ -397,6 +398,5 @@ describe('RFC-370 V17 hosted batch import', () => {
       'https://example.test/acme/known.git',
       'https://example.test/acme/new.git',
     ])
-    __resetBatchImportForTests()
   })
 })

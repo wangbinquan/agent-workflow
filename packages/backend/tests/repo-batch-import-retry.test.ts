@@ -3,11 +3,11 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
-  __resetBatchImportForTests,
+  createRepositoryBatchImports,
   startBatchImport,
   retryBatchRow,
   getBatchSnapshot,
@@ -18,6 +18,9 @@ import type { resolveCachedRepo } from '../src/modules/source-control/infrastruc
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 type Resolver = typeof resolveCachedRepo
+
+/** RFC-548: each case gets its own batch imports (the daemon application composes one). */
+let imports = createRepositoryBatchImports()
 
 function happyResolver(): Resolver {
   let counter = 0
@@ -73,7 +76,7 @@ function flakyOnceResolver(failingUrl: string): Resolver {
 async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const snap = getBatchSnapshot(batchId)
+    const snap = getBatchSnapshot(imports, batchId)
     if (snap && snap.state === 'completed') return
     await new Promise((r) => setTimeout(r, 5))
   }
@@ -89,25 +92,27 @@ function deps(db: PersistenceDb, resolver: Resolver): RepoBatchImportDeps {
 }
 
 describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
-  beforeEach(() => __resetBatchImportForTests())
-  afterEach(() => __resetBatchImportForTests())
+  beforeEach(() => {
+    imports = createRepositoryBatchImports()
+  })
 
   test('failed row succeeds on retry', async () => {
     const db = harness.db
     const resolver = flakyOnceResolver('https://h/a.git')
     const sharedDeps = deps(db, resolver)
     const r = startBatchImport(
+      imports,
       sharedDeps,
       { urls: ['https://h/a.git'] },
       { userId: 'u_batch_owner' },
     )
     await waitForBatchCompleted(r.batchId)
-    let snap = getBatchSnapshot(r.batchId)!
+    let snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[0]?.status).toBe('failed')
     const rowId = snap.rows[0]!.rowId
-    retryBatchRow(sharedDeps, r.batchId, rowId)
+    retryBatchRow(imports, sharedDeps, r.batchId, rowId)
     await waitForBatchCompleted(r.batchId)
-    snap = getBatchSnapshot(r.batchId)!
+    snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[0]?.status).toBe('done')
     expect(snap.rows[0]?.rowId).toBe(rowId)
   })
@@ -115,15 +120,16 @@ describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
   test('done row can be retried (resets and re-runs)', async () => {
     const db = harness.db
     const r = startBatchImport(
+      imports,
       deps(db, happyResolver()),
       { urls: ['https://h/a.git'] },
       { userId: 'u_batch_owner' },
     )
     await waitForBatchCompleted(r.batchId)
-    const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
-    retryBatchRow(deps(db, happyResolver()), r.batchId, rowId)
+    const rowId = getBatchSnapshot(imports, r.batchId)!.rows[0]!.rowId
+    retryBatchRow(imports, deps(db, happyResolver()), r.batchId, rowId)
     await waitForBatchCompleted(r.batchId)
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[0]?.status).toBe('done')
   })
 
@@ -151,25 +157,26 @@ describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
       }
     }) as Resolver
     const r = startBatchImport(
+      imports,
       deps(db, heldResolver),
       { urls: ['https://h/a.git'] },
       { userId: 'u_batch_owner' },
     )
     // Wait until the row is in cloning state.
     for (let i = 0; i < 50; i++) {
-      const snap = getBatchSnapshot(r.batchId)!
+      const snap = getBatchSnapshot(imports, r.batchId)!
       if (snap.rows[0]?.status === 'cloning') break
       await new Promise((res) => setTimeout(res, 5))
     }
-    const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
+    const rowId = getBatchSnapshot(imports, r.batchId)!.rows[0]!.rowId
     try {
-      retryBatchRow(deps(db, heldResolver), r.batchId, rowId)
+      retryBatchRow(imports, deps(db, heldResolver), r.batchId, rowId)
       throw new Error('expected throw')
     } catch (err) {
       expect(err).toBeInstanceOf(DomainError)
       expect((err as DomainError).code).toBe('row-not-retryable')
     }
-    // Let it finish so afterEach can reset cleanly.
+    // Let it finish before the case ends.
     if (release) (release as () => void)()
     await waitForBatchCompleted(r.batchId)
   })
@@ -199,16 +206,17 @@ describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
       }
     }) as Resolver
     const r = startBatchImport(
+      imports,
       deps(db, tracking),
       { urls: ['https://h/bad.git'] },
       { userId: 'u_batch_owner' },
     )
     await waitForBatchCompleted(r.batchId)
-    const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
-    retryBatchRow(deps(db, tracking), r.batchId, rowId, { url: 'https://h/good.git' })
+    const rowId = getBatchSnapshot(imports, r.batchId)!.rows[0]!.rowId
+    retryBatchRow(imports, deps(db, tracking), r.batchId, rowId, { url: 'https://h/good.git' })
     await waitForBatchCompleted(r.batchId)
     expect(calls).toEqual(['https://h/bad.git', 'https://h/good.git'])
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[0]?.status).toBe('done')
   })
 
@@ -222,12 +230,17 @@ describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
         if (msg.type === 'batch.completed') events.push('completed')
       },
     }
-    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
+    const r = startBatchImport(
+      imports,
+      myDeps,
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
-    expect(getBatchSnapshot(r.batchId)!.state).toBe('completed')
+    expect(getBatchSnapshot(imports, r.batchId)!.state).toBe('completed')
     expect(events).toEqual(['completed'])
-    const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
-    retryBatchRow(myDeps, r.batchId, rowId)
+    const rowId = getBatchSnapshot(imports, r.batchId)!.rows[0]!.rowId
+    retryBatchRow(imports, myDeps, r.batchId, rowId)
     // After retry pump should re-run and re-emit.
     await waitForBatchCompleted(r.batchId)
     expect(events).toEqual(['completed', 'completed'])
@@ -235,26 +248,32 @@ describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
 
   test('row-not-found / batch-not-found surface as NotFoundError', () => {
     const db = harness.db
-    expect(() => retryBatchRow(deps(db, happyResolver()), 'nope', 'nope')).toThrow(NotFoundError)
+    expect(() => retryBatchRow(imports, deps(db, happyResolver()), 'nope', 'nope')).toThrow(
+      NotFoundError,
+    )
     const r = startBatchImport(
+      imports,
       deps(db, happyResolver()),
       { urls: ['https://h/a.git'] },
       { userId: 'u_batch_owner' },
     )
-    expect(() => retryBatchRow(deps(db, happyResolver()), r.batchId, 'nope')).toThrow(NotFoundError)
+    expect(() => retryBatchRow(imports, deps(db, happyResolver()), r.batchId, 'nope')).toThrow(
+      NotFoundError,
+    )
   })
 
   test('retry with invalid URL parks row as failed/repo-url-invalid without queuing', async () => {
     const db = harness.db
     const r = startBatchImport(
+      imports,
       deps(db, happyResolver()),
       { urls: ['https://h/a.git'] },
       { userId: 'u_batch_owner' },
     )
     await waitForBatchCompleted(r.batchId)
-    const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
-    retryBatchRow(deps(db, happyResolver()), r.batchId, rowId, { url: 'garbage' })
-    const snap = getBatchSnapshot(r.batchId)!
+    const rowId = getBatchSnapshot(imports, r.batchId)!.rows[0]!.rowId
+    retryBatchRow(imports, deps(db, happyResolver()), r.batchId, rowId, { url: 'garbage' })
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[0]?.status).toBe('failed')
     expect(snap.rows[0]?.errorCode).toBe('repo-url-invalid')
   })

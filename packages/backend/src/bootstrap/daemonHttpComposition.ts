@@ -66,6 +66,7 @@ import {
   composeCachedRepositoryOperations,
   composeRepositoryGroups,
   createWorkspaceContentScope,
+  type RepositoryBatchImports,
 } from '@/modules/source-control/composition'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import { resolveCollaborationTaskAccess } from '@/modules/collaboration/public/queries'
@@ -110,6 +111,8 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
   readonly token: string
   readonly appHome: string
   readonly secretBox: SecretBox
+  /** RFC-548: the daemon's one set of batch imports; the cached-repository operations start and read batches on it. */
+  readonly repositoryBatchImports: RepositoryBatchImports
   readonly dbVersion: number
   readonly opencodeVersion: string | null
   readonly applicationConfiguration: ApplicationConfigurationBinding
@@ -534,6 +537,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         store: core.repositoryWorkspaceStore,
         mirrors: repositoryMirrors,
         configuration,
+        batchImports: input.repositoryBatchImports,
         appHome: input.appHome,
         secretBox: input.secretBox,
       }),

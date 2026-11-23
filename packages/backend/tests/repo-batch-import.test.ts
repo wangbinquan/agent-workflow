@@ -8,10 +8,10 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import {
-  __resetBatchImportForTests,
+  createRepositoryBatchImports,
   startBatchImport,
   getBatchSnapshot,
   type RepoBatchImportDeps,
@@ -22,6 +22,9 @@ import type { RepoImportWsMessage } from '@agent-workflow/shared'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 type StubResolver = typeof resolveCachedRepo
+
+/** RFC-548: each case gets its own batch imports (the daemon application composes one). */
+let imports = createRepositoryBatchImports()
 
 interface Harness {
   db: PersistenceDb
@@ -95,7 +98,7 @@ function deps(harness: Harness, resolver: StubResolver, concurrency = 3): RepoBa
 async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const snap = getBatchSnapshot(batchId)
+    const snap = getBatchSnapshot(imports, batchId)
     if (snap && snap.state === 'completed') return
     await new Promise((r) => setTimeout(r, 5))
   }
@@ -104,15 +107,13 @@ async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise
 
 describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   beforeEach(() => {
-    __resetBatchImportForTests()
-  })
-  afterEach(() => {
-    __resetBatchImportForTests()
+    imports = createRepositoryBatchImports()
   })
 
   test('happy path: 3 URLs all done; order preserved', async () => {
     const h = makeHarness(harness.db)
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h)),
       {
         urls: ['https://h/a.git', 'https://h/b.git', 'https://h/c.git'],
@@ -126,7 +127,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
       'https://h/c.git',
     ])
     await waitForBatchCompleted(r.batchId)
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.state).toBe('completed')
     expect(snap.rows.every((x) => x.status === 'done')).toBe(true)
   })
@@ -134,6 +135,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   test('invalid URL stays terminal and does not occupy a worker', async () => {
     const h = makeHarness(harness.db)
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h)),
       {
         urls: ['not a url', 'https://h/b.git'],
@@ -145,7 +147,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
     expect(r.snapshot.rows[1]?.status).toBe('queued')
     await waitForBatchCompleted(r.batchId)
     expect(h.resolverCalls).toEqual(['https://h/b.git'])
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[1]?.status).toBe('done')
   })
 
@@ -158,6 +160,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
       return undefined
     })
     const r = startBatchImport(
+      imports,
       deps(h, resolver),
       {
         urls: ['https://h/a.git', 'https://h/b.git', 'https://h/c.git'],
@@ -165,7 +168,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
       { userId: 'u_batch_owner' },
     )
     await waitForBatchCompleted(r.batchId)
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.state).toBe('completed')
     expect(snap.rows[0]?.status).toBe('done')
     expect(snap.rows[1]?.status).toBe('failed')
@@ -176,6 +179,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   test('concurrency cap is honored', async () => {
     const h = makeHarness(harness.db)
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h), 2),
       {
         urls: [
@@ -196,6 +200,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   test('duplicate URLs in the same batch are de-duped', async () => {
     const h = makeHarness(harness.db)
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h)),
       {
         urls: ['https://h/a.git', 'https://h/a.git', '  https://h/a.git  '],
@@ -210,6 +215,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   test('all-invalid batch flips to completed without starting any worker', async () => {
     const h = makeHarness(harness.db)
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h)),
       {
         urls: ['not a url', 'also not'],
@@ -217,7 +223,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
       { userId: 'u_batch_owner' },
     )
     // batch should be already completed synchronously
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.state).toBe('completed')
     expect(snap.rows.every((x) => x.status === 'failed')).toBe(true)
     expect(h.resolverCalls).toEqual([])
@@ -226,10 +232,16 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   test('empty URLs throws batch-empty', () => {
     const h = makeHarness(harness.db)
     expect(() =>
-      startBatchImport(deps(h, stubResolver(h)), { urls: [] }, { userId: 'u_batch_owner' }),
+      startBatchImport(
+        imports,
+        deps(h, stubResolver(h)),
+        { urls: [] },
+        { userId: 'u_batch_owner' },
+      ),
     ).toThrow(DomainError)
     try {
       startBatchImport(
+        imports,
         deps(h, stubResolver(h)),
         { urls: ['', '  ', '\n'] },
         { userId: 'u_batch_owner' },
@@ -245,7 +257,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
     const h = makeHarness(harness.db)
     const urls = Array.from({ length: 101 }, (_, i) => `https://h/${i}.git`)
     try {
-      startBatchImport(deps(h, stubResolver(h)), { urls }, { userId: 'u_batch_owner' })
+      startBatchImport(imports, deps(h, stubResolver(h)), { urls }, { userId: 'u_batch_owner' })
       throw new Error('expected throw')
     } catch (err) {
       expect(err).toBeInstanceOf(DomainError)
@@ -256,6 +268,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   test('WS broadcast emits row.update + batch.completed', async () => {
     const h = makeHarness(harness.db)
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h)),
       {
         urls: ['https://h/a.git', 'not-a-url'],
@@ -276,12 +289,13 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
     const h = makeHarness(harness.db)
     const cred = 'https://x-token-auth:s3cr3t@github.com/foo/bar.git'
     const r = startBatchImport(
+      imports,
       deps(h, stubResolver(h)),
       { urls: [cred] },
       { userId: 'u_batch_owner' },
     )
     await waitForBatchCompleted(r.batchId)
-    const snap = getBatchSnapshot(r.batchId)!
+    const snap = getBatchSnapshot(imports, r.batchId)!
     expect(snap.rows[0]?.inputUrlRedacted).not.toContain('s3cr3t')
     expect(snap.rows[0]?.inputUrl).not.toContain('s3cr3t')
     for (const { msg } of h.events) {
@@ -314,6 +328,7 @@ describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
     const importDeps = deps(h, resolver)
     importDeps.secretBox = secretBox
     const result = startBatchImport(
+      imports,
       importDeps,
       { urls: ['https://refresh-bot:secret@example.test/repo.git'] },
       { userId: 'u_batch_owner' },

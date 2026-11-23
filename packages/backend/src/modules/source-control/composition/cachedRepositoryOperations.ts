@@ -9,6 +9,7 @@ import {
   getBatchSnapshot,
   retryBatchRow,
   startBatchImport,
+  type RepositoryBatchImports,
 } from '../infrastructure/local/repositoryBatchImport'
 import {
   deleteCachedRepo,
@@ -31,10 +32,12 @@ export function composeCachedRepositoryOperations(input: {
   readonly store: RepositoryWorkspaceStore
   readonly mirrors: RepositoryMirrors
   readonly configuration: CachedRepositorySettings
+  /** RFC-548: the daemon's one set of batch imports (the realtime owner lookup and the GC ticker read the same one). */
+  readonly batchImports: RepositoryBatchImports
   readonly appHome?: string | undefined
   readonly secretBox?: SecretBox | undefined
 }): CachedRepositoryOperations {
-  const { store, configuration } = input
+  const { store, configuration, batchImports } = input
   const mirrors = input.mirrors.registration
   const registration =
     mirrors.kind === 'remote' ? { register: (url: string) => mirrors.register(url) } : {}
@@ -63,6 +66,7 @@ export function composeCachedRepositoryOperations(input: {
     async startBatchImport(request, initiator) {
       const cfg = await configuration.read()
       const result = startBatchImport(
+        batchImports,
         {
           ...local,
           ...(cfg.repoBatchImportConcurrency === undefined
@@ -79,9 +83,10 @@ export function composeCachedRepositoryOperations(input: {
       )
       return result.snapshot
     },
-    batchSnapshot: (batchId) => getBatchSnapshot(batchId),
+    batchSnapshot: (batchId) => getBatchSnapshot(batchImports, batchId),
     retryBatchRow: (batchId, rowId, request) =>
       retryBatchRow(
+        batchImports,
         { ...local, ...registration },
         batchId,
         rowId,

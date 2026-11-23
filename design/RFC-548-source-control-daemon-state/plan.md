@@ -14,18 +14,58 @@
 
 ## 验收清单
 
-- [ ] AC-1 三个文件没有模块级可变状态与重置函数；批量导入由组合构造并交入；读缓存状态挂在句柄上下文上
-- [ ] AC-2 批量导入、切面缓存与在途页合并的结局不变
-- [ ] AC-3 模块级可变单例 43 → 39、计数不升；新增 RFC-548 用例并登记；读旧接口的用例随改
+- [x] AC-1 三个文件没有模块级可变状态与重置函数；批量导入由组合构造并交入；读缓存状态挂在句柄上下文上
+- [x] AC-2 批量导入、切面缓存与在途页合并的结局不变
+- [x] AC-3 模块级可变单例 43 → 39、计数不升；新增 RFC-548 用例并登记；读旧接口的用例随改
 - [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
-【待补】
+本机 Docker 仍未起（本地没有 PostgreSQL）：本地只跑 SQLite 一支，PostgreSQL 一支以 exact SHA CI 的真实 PostgreSQL 分片为准。验证在候选导出仓库
+里跑（HEAD `d60586a26` 加本 RFC 的 28 个路径，核对与工作树逐字相同，与对照导出的差异恰是这 28 个路径），对照是同一 HEAD 的另一份导出。
+集中验证没有查出本人缺陷：
+
+- **静态**（最终的树）：backend `tsc` 退出码 0、无输出；eslint `--max-warnings 0`：改动的 27 个 TS 文件无告警，改动的 12 个生产文件另过 promises
+  配置；prettier：改动的代码、guard-manifest 与三件套通过。
+- **选择**：按 RFC-533 的口径从 2,991 个用例文件里选出语义层 1,290 个：改动的 12 个用例、全部 `tests/architecture/`（142 个）、在 import 之外以路径
+  点名被改文件的 188 个、点名被改 API 的 59 个、直接导入被改文件的 1,000 个、经 8 个读被改源码的测试助手的 212 个；`tests/fixtures/` 里没有钉
+  被改文件的摘要锁（`rfc395` 的表归属债务清单列着 SQL 存储对 `memories` 的依赖，本 RFC 不动它，读它的用例在选择里）。另按
+  `docs/dev-gotchas.md`（RFC-527 那条）补经子进程夹具与测试助手 import 到达行为变了的 8 个生产文件的用例 78 个（多是经
+  `providerHttpApplication` 装配 daemon 应用的 HTTP 用例，另有 `rfc363` 的准备崩溃 Worker）。
+- **语义层**（SQLite；90 秒；候选 4 个 worker）：1,290 个文件里 1,289 个通过；红的 `rfc321-repository-publication-ratchet` 要求从可达历史复现发布
+  账本，导出仓库只有几笔本地提交——它在对照导出里同样红，在主树（真实历史、内容即候选）里通过，不是候选的问题。补跑的 78 个全部通过。
+- **变异验证**（候选导出仓库里，复原后与工作树逐字相同）：HTTP 组合另建一份批量导入、各实例共用一个信号量、各库共用一张按库状态表、
+  存储失效不加按库代次、页读取的合并键不去掉检索词首尾空白，各自让 RFC-548 用例红。
+- **架构报告**（候选与对照各出一份）：模块级可变单例 43 → 39（删去的正是 `globalConcurrency`、`globalInFlight`、`repoPageFlights` 与
+  `repositoryFacetCacheEpoch`）；source-control 的公开面少 1（`invalidateRepositoryWorkspaceFacetCaches`，原本只有用例用；未被生产消费的公开符号
+  随之 9 → 8）；跨上下文 import 清单多 5 条（bootstrap 取 source-control 组合的批量导入 3 条、SQL 存储取 platform 的按库状态与 util 的在途合并
+  4 条、镜像缓存不再取在途合并少 2 条，都是向下的依赖）；写入入口清单里 `setGlobalConcurrency` 换成 `createRepositoryBatchImports`（按名字认，
+  如实记录）；组合层控制流门里 `cachedRepositoryOperations.ts` 那一处分支随上方新增的 3 行下移（50 → 53 行，同一分支）；模块符号属主
+  32,465 → 32,462；其余计数与门没有变化。
+- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的用例文件，见提交说明。
 
 ## CI（AC-4）
 
 - 【待补：实现提交】
+
+## 实现门（本会话自审，只审功能）
+
+按路径限定在本 RFC 的改动，只审功能。逐项与 HEAD 比对，结论 PASS：
+
+- **批量导入**：原先 daemon 里只有一份模块级的批次表与信号量；现在 `composeDaemonApplication` 在实时策略之前建一份，实时策略的发起者查询、
+  HTTP 组合（经 `ProviderAppOwnerInput.repositoryBatchImports` 交给 `composeCachedRepositoryOperations`）与会话的回收计时器（经应用运行期）用的
+  都是这一份，所以三处仍在同一份状态上碰面。各函数的逻辑逐字不变，只是批次表与信号量改从交入的实例取：起批次时按配置调整名额并唤醒
+  等待者、取名额与归还名额、泵与单行执行、重试时重启泵、回收只扫已完成且过了保留期的批次。
+- **读缓存状态**：切面缓存仍是实例字段、5 秒有效期不变；命中条件里的全进程代次换成按库代次，存储的失效把按库代次加一，所以同一个库上
+  任一存储（含事务上的）写缓存仓库，其余存储的切面缓存照旧随之作废。在途页读取的合并从镜像缓存按句柄的表移进存储：合并键与原先相同
+  （去掉首尾空白的检索词、三个筛选、游标、条数；游标在进存储前解码，坏游标照旧报 `invalid_cursor`），按库共用；镜像缓存的四条写路径与镜像
+  组合的切面失效改调存储的失效，效果与原先的“删合并器 + 存储失效”相同。存储自己的写方法现在也换合并器（原先只清切面缓存）——写后的读
+  不再并入写前已在途的读，结果只会更新。原先全进程一个代次，一个库的写会作废另一个库的切面缓存；现在只作废自己的。
+- **句柄上下文**：多一格按键的模块状态，在 `bindDatabaseHandle` 建上下文时建空表，事务（`inheritDatabaseHandle`）与原生会话共用；没有 provider
+  绑定过的对象照旧报 “no session table set”。其余字段不变。
+- **用例**：新增 RFC-548 用例并登记 guard-manifest；随改批量导入的用例（每例一份实例代替重置）、`ws-repo-imports`（种批次的实例交给
+  WebSocket 夹具的发起者查询）、`cached-repos-http-batch`（去掉重置）、测试助手 `realtimeRuntime`（发起者查询默认查不到）、`providerHttpComposition`
+  与 `productionPerformanceApplication`（交一份实例）、`rfc451`、`rfc527`（直接组合交一份实例）、`rfc311`、`rfc349`、`rfc359`（失效改调存储）。
 
 ## PR / 提交
 
