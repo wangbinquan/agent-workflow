@@ -41,7 +41,8 @@
 - `e4adb5996`（实现，父提交是 `d47b73c57`）：exact SHA 主 CI run 45211994242 的 70 个 job 里 64 个通过，包括 ubuntu 的全部后端分片（含真实
   PostgreSQL）与 Linux / Windows 的生产二进制构建；macOS 的生产二进制构建 job 排队 37 分钟没有分到 runner、没有任何步骤即被取消，四个 macOS
   的 e2e 分片里两个同样没分到 runner 被取消、两个在“下载 e2e 二进制”一步失败，`CI required` 随之红。同一提交触发的 windows-platform
-  （run 45211994486）通过。macOS 这一组按 runner 环境性红记录，未重跑；后继提交的 CI 包含本提交，作为 macOS 的后继证据。
+  （run 45211994486）通过。macOS 这一组按 runner 环境性红记录，未重跑。后继证据：`d60586a26`（只改文档）的主 CI run 45227791845 里 macOS 的生产二进制构建与
+  四个 e2e 分片全部通过。
 - 本 RFC 的落档提交 `d47b73c57`（只改文档）：主 CI run 45210601529 的 70 个 job 全部通过，含 macOS 的构建与四个 e2e 分片。
 - RFC-545 转 Done、RFC-546 落档的提交 `fc5d5c9c0`（只改文档）：主 CI run 45208891404 里 macOS 的构建 job 没有任何步骤、15 分钟多时被取消，
   四个 macOS e2e 分片在“下载 e2e 二进制”一步失败，`CI required` 随之红，其余 64 个通过；与 `d204218c2` 同一形态，未重跑；其后继

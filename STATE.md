@@ -1,4 +1,18 @@
-## 2026-11-23 RFC-548 source-control 的守护进程级状态归实例（In Progress；`design/RFC-548-source-control-daemon-state/`）
+## 2026-11-23 RFC-549 schema 历史运行时由组合根显式交给 platform（In Progress；`design/RFC-549-schema-history-runtime-explicit/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第十五步，拆 RFC-546 “可迁移”一类的最后 2 条：platform 的 schema 历史登记（`binding` 与
+  `registerSchemaHistoryRuntime`）。bootstrap 在模块求值时登记、约 30 处读取靠 import 顺序碰运气（RFC-540 的 Worker 用例不带历史也能过，靠的是
+  同一进程里别处登记过），用例与 e2e 夹具改写这份全局登记来模拟下一个版本。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、
+  2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`RuntimeSchemaBinding` 多 `history`；读取方由调用方显式交入（已收下 live 绑定的取其中的历史，bootstrap 与 SQLite 客户端取 bootstrap
+  的常量，其余沿调用链多一个参数）；Worker 的初始化消息必须带历史；bootstrap 持有历史来源与一处替换口（只给 e2e 与经 bootstrap 组合路径的
+  用例）；新增 RFC-549 用例。
+- **不做**：历史文件的读取与缓存、版本计算、准入判定与迁移流程不变；RFC-546 的两类待用户确认。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-548 转 Done 同一提交），实现与验证后再提交。独立对账
+  （plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-23 RFC-548 source-control 的守护进程级状态归实例（Done；`design/RFC-548-source-control-daemon-state/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第十四步，拆 RFC-546 “可迁移”一类里属于 source-control 的 4 条：仓库批量导入的跨批次信号量
   （2 条，连同模块级批次表），切面缓存的全进程代次与镜像缓存的在途页读取合并表。批量导入由三处装配点各自 import、靠同一份模块状态碰面；
@@ -18,6 +32,10 @@
 - **集中验证**（基于 `d60586a26`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准；没有查出本人缺陷。tsc 0 错，eslint / promises /
   prettier 无告警；语义层 1,290 个文件 1,289 个通过（红的 `rfc321` 要真实 git 历史，对照导出同样红、主树里通过），经夹具与测试助手补跑的
   78 个全部通过；五种变异都被认出；架构报告模块级可变单例 43 → 39、计数不升。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI 67 / 70（run 45233526348）：其余后端分片（含真实 PostgreSQL）与 Linux / Windows / macOS 的构建、macOS e2e 通过；
+  红的是他人文档 RFC-378 的外站 503（Markdown 链接检查）与已登记的 `rfc398-start-auto-upgrade-takeover` 多进程接管偶发到点（第五次，同形，
+  父提交同一分片通过，`docs/audit-backlog.md` 已更新），都不是本 RFC，未重跑；windows-platform、git-protocols-e2e、maintenance-soak-nightly
+  通过。落档提交 `d60586a26` 主 CI 68 / 70（只有同一处 503），macOS 全部通过。
 
 ## 2026-11-23 RFC-547 workspace-insight 的守护进程级状态归组合根构造的实例（Done；`design/RFC-547-workspace-insight-daemon-state/`）
 
@@ -39,7 +57,7 @@
   自审，只审功能）。
 - **CI**：实现提交主 CI 64 / 70（run 45211994242）：后端全部分片（含真实 PostgreSQL）与 Linux / Windows 构建通过；macOS 的构建 job 排队
   37 分钟没有分到 runner、没有任何步骤即被取消，四个 macOS e2e 分片两个同样没分到 runner、两个因缺构建产物失败，按环境性红记录、未重跑
-  （后继提交的 CI 作 macOS 的后继证据）；windows-platform 通过。落档提交 `d47b73c57` 主 CI 70 / 70。RFC-545 转 Done、RFC-546 落档的
+  （后继 `d60586a26` 的主 CI 里 macOS 全部通过，作 macOS 的后继证据）；windows-platform 通过。落档提交 `d47b73c57` 主 CI 70 / 70。RFC-545 转 Done、RFC-546 落档的
   `fc5d5c9c0` 主 CI 64 / 70，macOS 同一形态（构建 job 没有步骤、e2e 缺产物），未重跑。
 
 ## 2026-11-23 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（Draft，待用户确认；`design/RFC-546-module-singleton-process-exceptions/`）

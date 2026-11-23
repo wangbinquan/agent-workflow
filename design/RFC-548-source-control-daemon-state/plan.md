@@ -17,7 +17,7 @@
 - [x] AC-1 三个文件没有模块级可变状态与重置函数；批量导入由组合构造并交入；读缓存状态挂在句柄上下文上
 - [x] AC-2 批量导入、切面缓存与在途页合并的结局不变
 - [x] AC-3 模块级可变单例 43 → 39、计数不升；新增 RFC-548 用例并登记；读旧接口的用例随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -46,7 +46,14 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `9612c16e6`（实现，父提交是 `d60586a26`）：exact SHA 主 CI run 45233526348 的 70 个 job 里 67 个通过，包括 ubuntu 的其余后端分片（含真实
+  PostgreSQL）、Linux / Windows / macOS 的生产二进制构建与四个 macOS e2e 分片。红的两格都不是本 RFC：`Markdown link check (design/)` 红在
+  `design/RFC-378-mindmap-decision-review/research.md` 的两条外站链接返回 503（他人文档，待用户决定的那一项）；后端分片 41/44 红在
+  `rfc398-start-auto-upgrade-takeover`「…acquires after takeover」——`docs/audit-backlog.md` 已登记的多进程接管偶发到点，第五次、同形（184.7 秒后
+  barrier / readiness 到点，子进程输出 `JSON Parse error`），同文件另两例同次通过，父提交的同一分片通过，本 RFC 不碰启动升级与接管路径。
+  `CI required` 随之红。同一提交触发的 windows-platform、git-protocols-e2e 与 maintenance-soak-nightly 通过。都未重跑。
+- 落档提交 `d60586a26`（RFC-547 转 Done、RFC-548 落档，只改文档）：主 CI run 45227791845 的 70 个 job 里 68 个通过（含 macOS 的构建与四个
+  e2e 分片），红的只有 Markdown 链接检查（同上 503）与 `CI required`；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

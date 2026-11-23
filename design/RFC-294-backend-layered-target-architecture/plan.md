@@ -171,6 +171,7 @@
 | S12 第二十三步 | [RFC-542](../RFC-542-persistence-handle-side-tables/proposal.md) | 行规则错误翻译与单行写入的按句柄侧表归各自的句柄：已套行规则翻译的会话标记记在会话对象上，带围栏的单行写入记在根库对象上的槽里、只认登记时的那个对象，删去两张模块级侧表（`boundSessions`、`inserts`，2 条） | `rfc542-persistence-handle-side-tables-boundary`（两个文件没有模块级状态、删去的名字不在；两个库各记各的单行写入，派生对象、透明代理与拦截 insert 的代理走普通写入；同一会话只套一次行规则翻译、事务进入时套上；带负对照） |
 | S12 第二十五步 | [RFC-545](../RFC-545-live-persistence-schema-explicit/proposal.md) | live 持久化 schema 由组合根显式交给 provider 构造：删去 platform 的 live schema 登记（`liveBinding` 与 `registerPersistenceSchema`），bootstrap 导出冻结的 live 绑定常量，PostgreSQL 客户端、provider 运行期选项与 system-operations 的入口沿已有的 `contract` 通路显式收下它，`tablesOf` 改看句柄绑定时交入的 live 绑定（2 条） | `rfc545-live-persistence-schema-explicit-boundary`（文件没有模块级状态、生产代码不再登记；bootstrap 常量冻结；带 live 绑定的句柄取得原生表集、没有或不对报错；带负对照） |
 | S12 第二十六步 | [RFC-547](../RFC-547-workspace-insight-daemon-state/proposal.md) | workspace-insight 的守护进程级状态归组合根构造的实例：删去 SCIP 索引缓存的模块级单例与重置、变更叙述的模块级在途表与重置，深度索引端口的组合构造一份缓存交给深度 diff 与代码智能，workspace-insight 的组合构造一份叙述状态交给读取与触发两个用例（3 条） | `rfc547-workspace-insight-daemon-state-boundary`（两个文件没有模块级状态、删去的名字不在；同一组合共用一份缓存、两次组合各有各的；两份叙述状态互不影响；带负对照） |
+| S12 第二十七步 | [RFC-548](../RFC-548-source-control-daemon-state/proposal.md) | source-control 的守护进程级状态归实例：仓库批量导入的批次表与跨批次信号量改为 daemon 应用的组合构造的一份实例，交给 HTTP 操作、实时策略的发起者查询与会话的回收计时器；缓存仓库的切面代次与在途页读取合并改为挂在数据库句柄上下文上的按库状态（句柄上下文多一格按键的模块状态，4 条） | `rfc548-source-control-daemon-state-boundary`（三个文件没有模块级状态、删去的名字不在、批量导入只在 daemon 应用的组合里构造；两份批量导入各算各的；按库状态在库与事务上同一份；同一个库上的存储共用代次与在途合并、另一个库互不影响；带负对照） |
 
 「结构锁 / 覆盖范围」列（2026-11-10，RFC-479 / S11）：G1～G14 指 RFC-376 的硬结构门（`tests/architecture/rfc376-structural-guards.test.ts`，G2 context 值级 DAG、G3 / G4 public 边界、G6 application 直接 effect、G7 模块分层、G9 部署分支、G14 入口可达）；「全 src」= `packages/backend/src` 的全部源文件，括号里是用例断言的语料下限；「指定 N 个文件」= 只读点名的文件；负对照指合成 fixture 或对真实文件的变异；「未登记 guard-manifest」的锁不受 RFC-317 的语料下限与负对照普查约束。逐行依据是各锁的源码与 `architecture/guard-manifest.json`。
 
@@ -643,6 +644,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 > 后继：第 4 项第十二步 [RFC-545](../RFC-545-live-persistence-schema-explicit/proposal.md)（Done，2026-11-23，`d204218c2`）：live 持久化 schema 不再经进程级登记到 platform，bootstrap 的冻结常量显式交给 PostgreSQL 客户端、provider 运行期与句柄上下文。模块级可变单例 48 → 46。集中验证查出三处本人遗漏（钉着被改形状的三条源码锁），已改并复验。其余 46 条：可迁移的登记与绑定 7 条（schema 历史运行时的登记、规范 JSON 片段缓存、日志器配置）；凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；须经用户确认是否作为例外保留的 30 条（修订 design §14 口径须用户确认）。
 >
 > 后继：第 4 项第十三步 [RFC-547](../RFC-547-workspace-insight-daemon-state/proposal.md)（Done，2026-11-23，`e4adb5996`）：workspace-insight 的 SCIP 索引缓存与变更叙述的在途状态不再放在模块级，由组合各构造一份交给用到它们的函数。模块级可变单例 46 → 43。集中验证没有查出本人缺陷。其余 43 条：可迁移 6 条（source-control 的守护进程级状态 4 条、schema 历史运行时的登记 2 条）继续拆；凭据 / 访问 / 完整性相邻的 9 条与进程级 28 条的处理待用户确认（RFC-546 Q1～Q3）。
+>
+> 后继：第 4 项第十四步 [RFC-548](../RFC-548-source-control-daemon-state/proposal.md)（Done，2026-11-23，`9612c16e6`）：source-control 的批量导入不再放在模块级，由 daemon 应用的组合构造一份交给三处；缓存仓库读缓存的代次与在途合并按库挂在句柄上下文上（句柄上下文多一格按键的模块状态）。模块级可变单例 43 → 39。集中验证没有查出本人缺陷。其余 39 条：可迁移的只剩 schema 历史运行时的登记 2 条（RFC-549）；凭据 / 访问 / 完整性相邻的 9 条与进程级 28 条的处理待用户确认（RFC-546 Q1～Q3）。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在单机 profile（`bootstrap/standalone.ts` 与维护 worker 的单机部分
