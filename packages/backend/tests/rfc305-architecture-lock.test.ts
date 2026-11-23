@@ -228,49 +228,32 @@ describe('RFC-305 identity-access architecture', () => {
       sourceFiles(publicRoot).map((file) => relative(publicRoot, file).replaceAll('\\', '/')),
     ).toEqual([
       'commands.ts',
-      'events.ts',
+      // RFC-551: events.ts held only the event sink port and its event, which no other module read; both moved into
+      // `application/ports/identityAccessEventSink.ts` and the file is gone.
       'operations.ts',
       'participants.ts',
       'queries.ts',
       'types.ts',
     ])
+    // RFC-551: the command classes, their command / result types and the access snapshot had no reader outside the
+    // module; the composition root and the user operations take them from the application.
     expect(exportedNames(resolve(publicRoot, 'commands.ts'))).toEqual([
-      'CreateManagedUser',
-      'CreateManagedUserCommand',
-      'ExactAccessSnapshot',
-      'SyncOidcProfile',
-      'SyncOidcProfileCommand',
-      'SyncOidcProfileResult',
       'UpdateOwnProfile',
       'UpdateOwnProfileCommand',
-      'UpdateUserAccess',
-      'UpdateUserAccessCommand',
-      'UpdateUserAccessResult',
     ])
-    expect(exportedNames(resolve(publicRoot, 'events.ts'))).toEqual([
-      'AuthorityRevisionChanged',
-      'IdentityAccessEventSink',
-    ])
+    // RFC-551: the descriptor factory and its dependencies moved into `application/userOperationDescriptors.ts`; the
+    // OIDC identity ports and the owner-identity batch size are no longer re-exported (no other module read them).
     expect(exportedNames(resolve(publicRoot, 'operations.ts'))).toEqual([
       'DrizzleOidcProviderRepository',
-      'IdentityUserOperationDeps',
       'IdentityUserOperations',
-      'OWNER_IDENTITY_SQL_BATCH_SIZE',
-      'OidcIdentityOperations',
-      'OidcIdentityProfileAccess',
       'OidcProviderRepository',
       'OwnerIdentityQueries',
-      'createIdentityUserOperations',
     ])
-    expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual([
-      'GetUserAccess',
-      'GetUserAccessQuery',
-      'GetUserGitCommitIdentity',
-      'GetUserProfile',
-      'requireUserAccess',
-    ])
+    // RFC-551: the access query, its input, the git commit identity query and `requireUserAccess` had no reader outside
+    // the module.
+    expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual(['GetUserProfile'])
+    // RFC-551: `AdminUserAccessView` moved into `application/view.ts`, the view the user operations project from.
     expect(exportedNames(resolve(publicRoot, 'types.ts'))).toEqual([
-      'AdminUserAccessView',
       'ManagedUserStatus',
       'ResolvedAuthoritySubject',
       'UserAccessError',

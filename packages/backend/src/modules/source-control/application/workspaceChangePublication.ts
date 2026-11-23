@@ -24,15 +24,7 @@ import {
   redactPushError,
 } from '../domain/repositoryPushFailure'
 import { buildFallbackMessage, parseNumstat, truncateDiff } from '../domain/stagedChangeSummary'
-import type {
-  RepositoryCommitCandidateParticipant,
-  RepositoryCommitPublicationParticipant,
-} from '../public/participants'
-import type {
-  RepositoryPublicationSubject,
-  RepositoryPublicationTransport,
-  RepositoryPublishResult,
-} from '../public/types'
+import type { RepositoryPublicationSubject, RepositoryPublicationTransport } from '../public/types'
 import type { RepositoryGitWorkspaceScope } from './ports/repositoryGitWorkspace'
 import type {
   RepositoryPublicationLogger,
@@ -41,6 +33,11 @@ import type {
   WorkspaceWriteLock,
 } from './ports/workspaceChangePublication'
 import type { RepositoryGit } from './repositoryCommit'
+import type {
+  RepositoryCommitCandidateParticipant,
+  RepositoryCommitPublicationParticipant,
+  RepositoryPublishResult,
+} from './ports/repositoryCommit'
 
 /** `bindRepositoryCommitParticipant`'s shape: one repository's bound commit + publication surface. */
 export type RepositoryCommitBinder = (input: {

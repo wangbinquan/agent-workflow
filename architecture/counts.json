@@ -187,8 +187,8 @@
       "reason": "max=0: public symbols of execution-contract that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-identity-access": {
-      "max": 9,
-      "reason": "max=9: public symbols of identity-access that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of identity-access that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-551 (RFC-294 S9 seventh step) swept this context's public entries to zero (identity-access 9 / source-control 8 at bb34878c7, two of them misreported until the report walked class constructor parameter properties); every context is now at 0 — a public export no other module consumes fails here, withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-integration": {
       "max": 0,
@@ -219,8 +219,8 @@
       "reason": "max=0: public symbols of runtime-management that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-source-control": {
-      "max": 8,
-      "reason": "max=8: public symbols of source-control that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized. RFC-550 measures 9 -> 8: RFC-548 withdrew invalidateRepositoryWorkspaceFacetCaches; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of source-control that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-551 (RFC-294 S9 seventh step) swept this context's public entries to zero (identity-access 9 / source-control 8 at bb34878c7, two of them misreported until the report walked class constructor parameter properties); every context is now at 0 — a public export no other module consumes fails here, withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-system-operations": {
       "max": 0,

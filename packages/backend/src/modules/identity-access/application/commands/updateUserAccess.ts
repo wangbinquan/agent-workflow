@@ -10,12 +10,8 @@ import {
   planLegacyRoleTransition,
   type UserAccessTransition,
 } from '../../domain/userAccessPolicy'
-import type { IdentityAccessEventSink } from '../../public/events'
-import {
-  UserAccessError,
-  type AdminUserAccessView,
-  type ManagedUserStatus,
-} from '../../public/types'
+import type { IdentityAccessEventSink } from '../ports/identityAccessEventSink'
+import { UserAccessError, type ManagedUserStatus } from '../../public/types'
 import {
   admissionSubjectOf,
   admitUserAccessMutation,
@@ -27,7 +23,7 @@ import { subjectRefOf, trustedContextMetadata, type CommandContext } from '../op
 import type { IdentityAccessObserver } from '../ports/identityAccessObserver'
 import type { UserAccessRecord } from '../ports/userAccessRepository'
 import type { UserAccessTransactionRunner } from '../ports/userAccessTransaction'
-import { materializeUserAccessView } from '../view'
+import { materializeUserAccessView, type AdminUserAccessView } from '../view'
 
 export interface ExactAccessSnapshot {
   readonly role: Role

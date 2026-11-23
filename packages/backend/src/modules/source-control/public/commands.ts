@@ -1,22 +1,3 @@
-import type {
-  CodeHostProvider,
-  OwnCodeHostPushCredentialSummary,
-  PutOwnCodeHostPushCredentialRequest,
-} from '@agent-workflow/shared'
-import type { OwnRepositoryCredentialSubject } from './types'
-
-export interface OwnRepositoryTransportCredentialCommands {
-  put(
-    subject: OwnRepositoryCredentialSubject,
-    provider: CodeHostProvider,
-    request: PutOwnCodeHostPushCredentialRequest,
-  ): Promise<OwnCodeHostPushCredentialSummary>
-  remove(
-    subject: OwnRepositoryCredentialSubject,
-    provider: CodeHostProvider,
-  ): Promise<{ readonly removed: boolean }>
-}
-
 type WorkspaceGcPhase = 'worktree' | 'iso' | 'scratch' | 'orphan' | 'partial'
 
 interface WorkspaceGcInput {

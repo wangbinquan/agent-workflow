@@ -1,4 +1,4 @@
-import { UserAccessError, type AdminUserAccessView } from '../../public/types'
+import { UserAccessError } from '../../public/types'
 import {
   admissionSubjectOf,
   admitUserDirectoryQuery,
@@ -6,7 +6,7 @@ import {
 } from '../accessAdmission'
 import { subjectRefOf, trustedContextMetadata, type QueryContext } from '../operationContext'
 import type { UserAccessReadRepository } from '../ports/userAccessRepository'
-import { materializeUserAccessView } from '../view'
+import { materializeUserAccessView, type AdminUserAccessView } from '../view'
 
 export interface GetUserAccessQuery {
   readonly userId: string

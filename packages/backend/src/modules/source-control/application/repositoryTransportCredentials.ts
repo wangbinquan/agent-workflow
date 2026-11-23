@@ -8,7 +8,10 @@ import type {
   TestOwnCodeHostPushCredentialRequest,
 } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
-import { selectRepositoryTransportCredential } from '../domain/repositoryTransportCredential'
+import {
+  selectRepositoryTransportCredential,
+  type RepositoryTransportCredentialSelection,
+} from '../domain/repositoryTransportCredential'
 import type {
   RepositoryTransportConnectionProjectionInput,
   RepositoryTransportConnectionMutationFence,
@@ -16,15 +19,16 @@ import type {
   RepositoryTransportCredentialRepository,
   StoredRepositoryTransportConnection,
 } from '../ports/repositoryTransportCredentialRepository'
-import type { OwnRepositoryTransportCredentialCommands } from '../public/commands'
-import type { OwnRepositoryTransportCredentialQueries } from '../public/queries'
-import type { RepositoryTransportCredentialSelectionParticipant } from '../public/participants'
 import {
   RepositoryTransportCredentialError,
   type OwnRepositoryCredentialSubject,
-  type RepositoryTransportCredentialSelection,
 } from '../public/types'
 import { buildRepositoryTransportConnectionProjection } from './repositoryTransportConnectionProjection'
+import type {
+  OwnRepositoryTransportCredentialCommands,
+  OwnRepositoryTransportCredentialQueries,
+  RepositoryTransportCredentialSelectionParticipant,
+} from './ports/repositoryTransportCredentials'
 
 export interface ManagedCodeHostCredential {
   readonly provider: CodeHostProvider

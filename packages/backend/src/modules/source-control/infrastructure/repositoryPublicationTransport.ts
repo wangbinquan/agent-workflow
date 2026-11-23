@@ -30,7 +30,7 @@ import type {
   StoredRepositoryTransportConnection,
 } from '../ports/repositoryTransportCredentialRepository'
 import type { RepositoryPublicationSession, RepositoryPublicationTransport } from '../public/types'
-import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
+import type { RepositoryEndpointDiscoveryParticipant } from '../application/ports/repositoryEndpointDiscovery'
 
 function baseMatchesHost(raw: string, host: string): boolean {
   try {

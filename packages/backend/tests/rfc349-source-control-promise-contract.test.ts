@@ -47,13 +47,15 @@ describe('RFC-349 source-control Promise contract', () => {
   })
 
   test('public credential commands, queries, and selection return Promises', () => {
-    const commands = read('packages/backend/src/modules/source-control/public/commands.ts')
-    const queries = read('packages/backend/src/modules/source-control/public/queries.ts')
-    const participants = read('packages/backend/src/modules/source-control/public/participants.ts')
-    expect(commands).toContain('Promise<OwnCodeHostPushCredentialSummary>')
-    expect(commands).toContain('Promise<{ readonly removed: boolean }>')
-    expect(queries).toContain('Promise<OwnCodeHostPushCredentialList>')
-    expect(participants).toContain('Promise<RepositoryTransportCredentialSelection>')
+    // RFC-551: the own-credential command and query ports and the selection participant left source-control's public
+    // (no other module read them); they are the module's own ports now and stay asynchronous.
+    const ports = read(
+      'packages/backend/src/modules/source-control/application/ports/repositoryTransportCredentials.ts',
+    )
+    expect(ports).toContain('Promise<OwnCodeHostPushCredentialSummary>')
+    expect(ports).toContain('Promise<{ readonly removed: boolean }>')
+    expect(ports).toContain('Promise<OwnCodeHostPushCredentialList>')
+    expect(ports).toContain('Promise<RepositoryTransportCredentialSelection>')
   })
 
   test('repository transport HTTP consumers await the provider-neutral contracts', () => {

@@ -9,6 +9,16 @@
   挪进模块内部），迭代到两个 context 为 0、全仓为 0；两个减速带上限降到 0；新增 RFC-551 用例。
 - **不做**：S9 的 public 类型污染清单、`public/operations` 的豁免收窄与跨 context 内部文件对；凭据、身份与授权的行为与判定不变。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-550 转 Done 同一提交），实现与验证后再提交。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 挪进内部的按内容定层（端口进 `application/ports`，描述工厂进 application，凭据选择结果
+  进 domain）；C11 两个 context 的 public 只减不增（少 31 个名字、删去撤空的 identity-access `public/events.ts`）；C12 RFC-551 用例覆盖撤空的
+  文件不在且全仓零 import、逐名清单不再导出且值不在运行时命名空间、挪入的声明在新位置且不在 public、domain 不取 application、用户操作合同只以
+  type-only 取 application、判据纳入构造参数属性（fixture 与负对照）、全部减速带上限为 0；C13 计数不升。
+- **§14 不变量 / S9 第七步**：未消费 public 符号 17 → 0（全仓为 0，S9 第 3 项完成）；全部 `unconsumed-public-symbols-*` 上限为 0；public 类型
+  偏差 53 不变。
+- **集中验证**（基于 `bb34878c7`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。查出一处本人缺陷并修正：RFC-550 的用例还钉着
+  source-control 的上限 8。tsc 0 错，eslint / promises / prettier 无告警；选出 674 个用例文件 673 个通过（红的就是那一处），改后两个锁与读
+  guard-manifest 的 22 个用例文件复跑通过；八种变异都被认出；架构报告未消费 17 → 0、public 面少 31 个、其余门与计数不变（对照导出起初带着
+  RFC-550 删掉的三个文件，清掉后重出，`docs/dev-gotchas.md` 已记）。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-550 十个 context 的未消费 public 符号清零（Done；`design/RFC-550-public-unconsumed-sweep-ten-contexts/`）
 

@@ -1,6 +1,7 @@
 import { canonicalStoredAccess } from '../domain/userAccessPolicy'
-import type { AdminUserAccessView } from '../public/types'
+import type { ManagedUserStatus } from '../public/types'
 import type { UserAccessRecord, UserPermissionGrantRecord } from './ports/userAccessRepository'
+import type { Permission, Role } from '@agent-workflow/shared'
 
 export function materializeUserAccessView(
   user: UserAccessRecord,
@@ -29,4 +30,24 @@ export function materializeUserAccessView(
     additionalPermissions: canonical.additionalPermissions,
     accessRevision: user.accessRevision,
   }
+}
+
+// RFC-551 (RFC-294 S9): moved from `public/types` (no other module read it); the view this module's user operations
+// project from.
+export interface AdminUserAccessView {
+  readonly id: string
+  readonly username: string
+  readonly email: string | null
+  readonly displayName: string
+  readonly role: Role
+  readonly status: ManagedUserStatus
+  readonly forcePasswordChange: boolean
+  readonly history: Readonly<{
+    createdBy: string | null
+    createdAt: number
+    updatedAt: number
+    lastLoginAt: number | null
+  }>
+  readonly additionalPermissions: ReadonlyArray<Permission>
+  readonly accessRevision: number
 }

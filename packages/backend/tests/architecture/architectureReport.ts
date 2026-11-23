@@ -1227,6 +1227,32 @@ function collectNodeShape(
         )
         continue
       }
+      if (ts.isConstructorDeclaration(member)) {
+        // RFC-551: parameter properties (`constructor(readonly kind: Kind)`) are instance members like any property
+        // declaration, so their types are part of the public class's shape; private and protected ones are not members
+        // of the public instance type, and plain constructor parameters are not members at all.
+        for (const parameter of member.parameters) {
+          if (!ts.isParameterPropertyDeclaration(parameter, member)) continue
+          if (parameter.type === undefined || !ts.isIdentifier(parameter.name)) continue
+          const hidden = (ts.getModifiers(parameter) ?? []).some(
+            (modifier) =>
+              modifier.kind === ts.SyntaxKind.PrivateKeyword ||
+              modifier.kind === ts.SyntaxKind.ProtectedKeyword,
+          )
+          if (hidden) continue
+          collectTypeShape(
+            parameter.type,
+            source,
+            shape,
+            resolver,
+            shapePath(prefix, parameter.name.text),
+            visited,
+            depth + 1,
+            typeParameters,
+          )
+        }
+        continue
+      }
       const name = propertyName(member.name)
       if (name === null) continue
       if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member)) {

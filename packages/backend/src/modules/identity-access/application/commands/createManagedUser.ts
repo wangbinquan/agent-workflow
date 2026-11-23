@@ -1,7 +1,7 @@
 import { normalizeAdditionalPermissionsForWrite } from '@agent-workflow/shared'
 import { initialGrantsForRole } from '../../domain/initialGrants'
 import { canonicalStoredAccess } from '../../domain/userAccessPolicy'
-import type { AdminUserAccessView, ManagedUserStatus } from '../../public/types'
+import type { ManagedUserStatus } from '../../public/types'
 import { UserAccessError as AccessError } from '../../public/types'
 import { mapPermissionValidationError } from '../errors'
 import { subjectRefOf, trustedContextMetadata, type CommandContext } from '../operationContext'
@@ -13,6 +13,7 @@ import {
   userAccessAuditKind,
 } from '../accessAdmission'
 import type { IdentityAccessObserver } from '../ports/identityAccessObserver'
+import type { AdminUserAccessView } from '../view'
 
 export interface CreateManagedUserCommand {
   readonly id: string

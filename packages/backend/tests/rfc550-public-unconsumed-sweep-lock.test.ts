@@ -448,7 +448,7 @@ describe('RFC-550 —— public 里的声明按内容落进模块内部（design
 })
 
 describe('RFC-550 —— 减速带', () => {
-  test('counts.json：十个 context 的未消费计数上限为 0，source-control 为 8', () => {
+  test('counts.json：十个 context 的未消费计数上限为 0', () => {
     const counts = (
       JSON.parse(readFileSync(join(REPO_ROOT, 'architecture', 'counts.json'), 'utf8')) as {
         counts: Record<string, { max: number; reason: string }>
@@ -456,6 +456,8 @@ describe('RFC-550 —— 减速带', () => {
     ).counts
     for (const context of CONTEXTS)
       expect([context, counts[`unconsumed-public-symbols-${context}`]?.max]).toEqual([context, 0])
-    expect(counts['unconsumed-public-symbols-source-control']?.max).toBe(8)
+    // RFC-551 cleared identity-access and source-control as well (source-control 9 -> 8 here, then 0); its lock asserts
+    // that every context's speed bump is at 0.
+    expect(counts['unconsumed-public-symbols-source-control']?.max).toBeLessThanOrEqual(8)
   })
 })

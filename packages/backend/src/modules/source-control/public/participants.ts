@@ -1,31 +1,4 @@
-import type { CodeHostProvider, RepositoryEndpointCandidate } from '@agent-workflow/shared'
-import type {
-  CommitPreparedResult,
-  PrepareRepositoryCommitResult,
-  RepositoryCommitPreviewResult,
-  RepositoryPublishMode,
-  RepositoryPublishResult,
-  WorkspaceExcludeProfileReceipt,
-  RepositoryTransportCredentialSelection,
-} from './types'
-
-export interface RepositoryTransportCredentialSelectionParticipant {
-  select(input: {
-    readonly subject:
-      | { readonly kind: 'user'; readonly userId: string }
-      | { readonly kind: 'system' }
-    readonly provider: CodeHostProvider
-  }): Promise<RepositoryTransportCredentialSelection>
-}
-
-/** Secret-free provider metadata query used by repository endpoint resolution. */
-export interface RepositoryEndpointDiscoveryParticipant {
-  discover(input: {
-    readonly provider: CodeHostProvider
-    readonly project: string
-    readonly connectionGeneration: string
-  }): Promise<RepositoryEndpointCandidate | null>
-}
+import type { WorkspaceExcludeProfileReceipt } from './types'
 
 export interface RepositoryCredentialSealingReceipt {
   readonly sealed: number
@@ -49,42 +22,6 @@ export interface WorkspaceExcludeParticipant {
 /** The selected owner interprets workspace references and binds a complete profile participant. */
 export interface WorkspaceExcludeProfileFactory {
   bind(input: { readonly workspaceRef: string }): WorkspaceExcludeParticipant
-}
-
-/** Bound candidate/index/commit surface; no repository path crosses it. */
-export interface RepositoryCommitCandidateParticipant {
-  prepare(): Promise<PrepareRepositoryCommitResult>
-  preview(): Promise<RepositoryCommitPreviewResult>
-  commitPrepared(input: {
-    message: string
-    verification: 'normal' | 'artifact'
-    authorName?: string | null
-    authorEmail?: string | null
-    /** `prepare`'s tree; restores the index a sibling merge-back reset meanwhile. */
-    preparedTree?: string
-  }): Promise<CommitPreparedResult>
-  classifyPath(input: {
-    path: string
-    directory?: boolean
-  }): Promise<{ excluded: boolean; policyDigest: string }>
-}
-
-/** Bound ref/publication surface; every publish performs its own history scan. */
-export interface RepositoryCommitPublicationParticipant {
-  publish(input: {
-    baseSha: string
-    tipSha: string
-    mode: RepositoryPublishMode
-  }): Promise<RepositoryPublishResult>
-  resolvePushBase(input: {
-    remote: string
-    branch: string
-    fallbackRef: string
-  }): Promise<string | null>
-  updateRef(input: {
-    ref: string
-    commitSha?: string
-  }): Promise<{ ok: true } | { ok: false; error: string }>
 }
 
 // ---------------------------------------------------------------------------

@@ -3,10 +3,10 @@
 // RFC-359 W4-D8 起两个 provider 共用同一份实现，这里只是 db 参数形态的旧门面。
 
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
-import type { OidcIdentityProfileAccess } from '@/modules/identity-access/public/operations'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
+import type { OidcIdentityProfileAccess } from '@/modules/identity-access/application/ports/oidcIdentityCrossContext'
 
 type SqliteIdentityCompositionInput = Parameters<typeof composeOidcIdentityOperations>[0]
 type SqliteIdentityDatabase = SqliteIdentityCompositionInput['db']

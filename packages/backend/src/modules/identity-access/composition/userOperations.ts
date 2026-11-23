@@ -6,10 +6,8 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import { hashPassword } from '@/auth/passwords'
 import type { IdentityAccessModule } from '@/modules/identity-access/composition'
 import { createResetUserPassword } from '@/modules/identity-access/application/commands/resetUserPassword'
-import {
-  createIdentityUserOperations,
-  type IdentityUserOperations,
-} from '@/modules/identity-access/public/operations'
+import { type IdentityUserOperations } from '@/modules/identity-access/public/operations'
+import { createIdentityUserOperations } from '../application/userOperationDescriptors'
 
 export function composeIdentityUserOperations(input: {
   readonly identityAccess: IdentityAccessModule

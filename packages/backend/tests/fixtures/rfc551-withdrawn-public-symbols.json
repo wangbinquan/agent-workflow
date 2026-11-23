@@ -1,0 +1,48 @@
+{
+  "_comment": "RFC-551 (RFC-294 S9 seventh step): the identity-access and source-control public entries exported at bb34878c7 and withdrawn (no other module consumed them). The public file withdrawn as a whole is listed under retired, not by name. Read by tests/rfc551-public-unconsumed-sweep-lock.test.ts.",
+  "retired": ["modules/identity-access/public/events.ts"],
+  "withdrawn": {
+    "identity-access": {
+      "commands": [
+        "CreateManagedUser",
+        "CreateManagedUserCommand",
+        "ExactAccessSnapshot",
+        "SyncOidcProfile",
+        "SyncOidcProfileCommand",
+        "SyncOidcProfileResult",
+        "UpdateUserAccess",
+        "UpdateUserAccessCommand",
+        "UpdateUserAccessResult"
+      ],
+      "operations": [
+        "IdentityUserOperationDeps",
+        "OWNER_IDENTITY_SQL_BATCH_SIZE",
+        "OidcIdentityOperations",
+        "OidcIdentityProfileAccess",
+        "createIdentityUserOperations"
+      ],
+      "queries": [
+        "GetUserAccess",
+        "GetUserAccessQuery",
+        "GetUserGitCommitIdentity",
+        "requireUserAccess"
+      ],
+      "types": ["AdminUserAccessView"]
+    },
+    "source-control": {
+      "commands": ["OwnRepositoryTransportCredentialCommands"],
+      "participants": [
+        "RepositoryCommitCandidateParticipant",
+        "RepositoryCommitPublicationParticipant",
+        "RepositoryEndpointDiscoveryParticipant",
+        "RepositoryTransportCredentialSelectionParticipant"
+      ],
+      "queries": ["OwnRepositoryTransportCredentialQueries", "repoRelForcedPaths"],
+      "types": [
+        "RepositoryPublishMode",
+        "RepositoryPublishResult",
+        "RepositoryTransportCredentialSelection"
+      ]
+    }
+  }
+}

@@ -2,11 +2,7 @@
 // out of the module root `composition.ts` by RFC-475 so the workspace change
 // publication binder can take it without the root's whole import graph; the
 // root still re-exports it).
-import type {
-  RepositoryCommitCandidateParticipant,
-  RepositoryCommitPublicationParticipant,
-} from '../public/participants'
-import type { RepositoryPublishMode } from '../public/types'
+
 import {
   prepareRepositoryCommit,
   commitPreparedRepository,
@@ -21,6 +17,11 @@ import {
 import type { RepositoryPreviewIndexPort } from '../application/ports/repositoryPreviewIndex'
 import type { RepositoryGitWorkspaceScope } from '../application/ports/repositoryGitWorkspace'
 import { requireRepositoryGitWorkspaceScope } from './repositoryGitWorkspaces'
+import type {
+  RepositoryCommitCandidateParticipant,
+  RepositoryCommitPublicationParticipant,
+  RepositoryPublishMode,
+} from '../application/ports/repositoryCommit'
 
 /**
  * RFC-308 temporary path binder. Consumers receive operations bound to one

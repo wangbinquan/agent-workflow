@@ -2,7 +2,6 @@
 // fall through; stale or unusable selected credentials are explicit failures.
 
 import type { CodeHostProvider } from '@agent-workflow/shared'
-import type { RepositoryTransportCredentialSelection } from '../public/types'
 
 export interface RepositoryTransportBinding {
   readonly provider: CodeHostProvider
@@ -56,3 +55,19 @@ export function selectRepositoryTransportCredential(input: {
   }
   return { ok: true, source: 'legacy', credentialRevision: null }
 }
+
+// RFC-551 (RFC-294 S9): moved from `public/types` (no other module read it); the credential selection port returns it.
+/**
+ * Secret-free result of selecting the credential identity for one managed
+ * publication. The opaque ref can only be redeemed inside source-control's
+ * infrastructure boundary.
+ */
+export type RepositoryTransportCredentialSelection =
+  | {
+      readonly ok: true
+      readonly source: 'personal' | 'global'
+      readonly credentialRef: string
+      readonly credentialRevision: number
+    }
+  | { readonly ok: true; readonly source: 'legacy'; readonly credentialRevision: null }
+  | { readonly ok: false; readonly code: 'code-host-push-credential-stale' }

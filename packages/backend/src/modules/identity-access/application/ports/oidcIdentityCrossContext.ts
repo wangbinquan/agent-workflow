@@ -1,5 +1,5 @@
 import type { UserIdentity } from '@agent-workflow/shared'
-import type { SyncOidcProfileCommand, SyncOidcProfileResult } from '../../public/commands'
+import type { SyncOidcProfileCommand, SyncOidcProfileResult } from '../commands/syncOidcProfile'
 
 export interface OidcIdentityRecord {
   readonly id: string

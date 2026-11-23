@@ -5,7 +5,6 @@
 import type { Config } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryPublicationTransport } from '../public/types'
-import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
 import type { RepositoryTransportCredentialRepository } from '../ports/repositoryTransportCredentialRepository'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 import type { DevelopmentWorkspaceRepositoryPreparation } from '../application/ports/developmentWorkspaceRepositoryPreparation'
@@ -13,6 +12,7 @@ import type { RepositoryPreparationEffectFactory } from '../application/ports/re
 import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
 import type { RepositoryMirrors } from '../application/ports/repositoryMirrors'
 import type { RepositoryPreparationInput } from '../infrastructure/local/repositoryPreparation'
+import type { RepositoryEndpointDiscoveryParticipant } from '../application/ports/repositoryEndpointDiscovery'
 
 /** The session's publication transport (standalone: network Git over the session's credentials; hosted: in the task volume). */
 export type RepositoryPublicationTransportSelection = (input: {

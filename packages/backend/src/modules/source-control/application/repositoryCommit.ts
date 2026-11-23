@@ -11,9 +11,8 @@ import type {
   CommitPreparedResult,
   CommitExclusionReceipt,
   PrepareRepositoryCommitResult,
-  RepositoryPublishMode,
-  RepositoryPublishResult,
 } from '../public/types'
+import type { RepositoryPublishMode, RepositoryPublishResult } from './ports/repositoryCommit'
 
 export type RepositoryGit = typeof defaultRunGit
 
