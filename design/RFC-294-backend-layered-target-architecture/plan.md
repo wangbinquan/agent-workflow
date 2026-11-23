@@ -169,6 +169,7 @@
 | S12 第二十一步 | [RFC-540](../RFC-540-sqlite-logical-source-worker-state/proposal.md) | SQLite 逻辑源 Worker 的状态归每个 Worker 的处理器：迁移读源 Worker 的请求处理与三份模块级状态（逻辑源、契约、初始化标志）搬进 `createSqliteLogicalSourceWorkerHandler(io)` 的闭包，Worker 入口只建一个处理器（3 条） | `rfc540-sqlite-logical-source-worker-state-boundary`（入口与处理器文件没有模块级状态、入口只建一个处理器并把消息交给它；两个处理器在进程内各管各的状态；带负对照）与经监工起真 Worker 的 `rfc349-sqlite-logical-source` |
 | S12 第二十二步 | [RFC-541](../RFC-541-maintenance-worker-effect-modules/proposal.md) | 维护 Worker 的效果模块由各自的 Worker 入口交给运行时：删去平台的 Worker 级效果模块登记表（`effectModules` 与登记 / 加载函数），托管入口改为自己的薄根、把映射 `aw:crewstation-maintenance` 的加载器经效果作用域交给运行时，单机根照旧按模块名加载（1 条） | `rfc541-maintenance-worker-effect-modules-boundary`（平台效果文件没有模块级状态、删去的名字不在、两个根各调一次运行时、托管根映射自己的效果模块；效果作用域的注入与缺省加载；带负对照）与 `rfc370-v9-maintenance-worker-entry` |
 | S12 第二十三步 | [RFC-542](../RFC-542-persistence-handle-side-tables/proposal.md) | 行规则错误翻译与单行写入的按句柄侧表归各自的句柄：已套行规则翻译的会话标记记在会话对象上，带围栏的单行写入记在根库对象上的槽里、只认登记时的那个对象，删去两张模块级侧表（`boundSessions`、`inserts`，2 条） | `rfc542-persistence-handle-side-tables-boundary`（两个文件没有模块级状态、删去的名字不在；两个库各记各的单行写入，派生对象、透明代理与拦截 insert 的代理走普通写入；同一会话只套一次行规则翻译、事务进入时套上；带负对照） |
+| S12 第二十五步 | [RFC-545](../RFC-545-live-persistence-schema-explicit/proposal.md) | live 持久化 schema 由组合根显式交给 provider 构造：删去 platform 的 live schema 登记（`liveBinding` 与 `registerPersistenceSchema`），bootstrap 导出冻结的 live 绑定常量，PostgreSQL 客户端、provider 运行期选项与 system-operations 的入口沿已有的 `contract` 通路显式收下它，`tablesOf` 改看句柄绑定时交入的 live 绑定（2 条） | `rfc545-live-persistence-schema-explicit-boundary`（文件没有模块级状态、生产代码不再登记；bootstrap 常量冻结；带 live 绑定的句柄取得原生表集、没有或不对报错；带负对照） |
 
 「结构锁 / 覆盖范围」列（2026-11-10，RFC-479 / S11）：G1～G14 指 RFC-376 的硬结构门（`tests/architecture/rfc376-structural-guards.test.ts`，G2 context 值级 DAG、G3 / G4 public 边界、G6 application 直接 effect、G7 模块分层、G9 部署分支、G14 入口可达）；「全 src」= `packages/backend/src` 的全部源文件，括号里是用例断言的语料下限；「指定 N 个文件」= 只读点名的文件；负对照指合成 fixture 或对真实文件的变异；「未登记 guard-manifest」的锁不受 RFC-317 的语料下限与负对照普查约束。逐行依据是各锁的源码与 `architecture/guard-manifest.json`。
 
@@ -637,6 +638,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 > 后继：第 4 项第十步 [RFC-542](../RFC-542-persistence-handle-side-tables/proposal.md)（Done，2026-11-23，`4db5b0f3a`）：行规则错误翻译的会话标记与带围栏的单行写入不再记在进程级侧表里，各自记在会话与根库对象上；单行写入只认登记时的对象本身（与按身份键的旧表同一判定）。模块级可变单例 50 → 48。集中验证查出一处本人缺陷（最初按 `Object.hasOwn` 认根库，包着根库、拦截 insert 的代理会拿到围栏写入），已修并补回归用例，`docs/dev-gotchas.md` 记下这一类。其余 48 条：可迁移的登记与绑定 12 条继续拆；凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；进程级缓存与计数器 27 条须经用户确认是否保留并修订 design §14 口径（第 4 项的约定）。
 >
 > 后继：第 4 项第十一步 [RFC-543](../RFC-543-database-handle-context-registry/proposal.md)（Withdrawn，2026-11-23，实现未提交）：想删 `sessionTables.ts` 的句柄上下文登记表 `contexts`，集中验证查出它是 RFC-395 T18 X1 为冻结的句柄与客户端保留的身份表（冻结对象记不了属性），撤回。这 1 条与迁移历史的进程级缓存 2 条（原列在可迁移里）改列为须经用户确认是否作为例外保留的一类（连同进程级缓存与计数器 27 条共 30 条，修订 design §14 口径须用户确认）；可迁移的登记与绑定余 9 条。
+>
+> 后继：第 4 项第十二步 [RFC-545](../RFC-545-live-persistence-schema-explicit/proposal.md)（Done，2026-11-23，`d204218c2`）：live 持久化 schema 不再经进程级登记到 platform，bootstrap 的冻结常量显式交给 PostgreSQL 客户端、provider 运行期与句柄上下文。模块级可变单例 48 → 46。集中验证查出三处本人遗漏（钉着被改形状的三条源码锁），已改并复验。其余 46 条：可迁移的登记与绑定 7 条（schema 历史运行时的登记、规范 JSON 片段缓存、日志器配置）；凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；须经用户确认是否作为例外保留的 30 条（修订 design §14 口径须用户确认）。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在单机 profile（`bootstrap/standalone.ts` 与维护 worker 的单机部分

@@ -1,4 +1,15 @@
-## 2026-11-23 RFC-545 live 持久化 schema 由组合根显式交给 provider 构造（In Progress；`design/RFC-545-live-persistence-schema-explicit/`）
+## 2026-11-23 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（Draft，待用户确认；`design/RFC-546-module-singleton-process-exceptions/`）
+
+- **来由**：RFC-294 plan S12 第 4 项规定，确属进程级、需要保留的模块级可变单例由后继 design 提出并经用户确认后修订 design §14 该行的口径。
+  RFC-545 之后架构报告还列 46 条：可迁移 9 条（schema 历史运行时的登记 2 条、守护进程级服务状态 7 条）继续拆；凭据 / 访问 / 完整性相邻 9 条
+  另定；其余 28 条是进程级（主机与工具探测、运行库一次初始化、不变数据的备忘、唯一名计数、只告警一次、stdout 日志端、只能按身份记的表、
+  动态作用域的性能缓存），逐条理由见 proposal §3。
+- **提议**：28 条登记为进程级例外并由守卫钉住（清单之外新增即红、清单条目消失也红），design §14 改为“不计登记的进程级例外”；可迁移与待定
+  两份过渡清单只减不增，删空即达成 S12 第 4 项的退出门。
+- **待用户确认**：Q1 这 28 条是否保留（可逐条否决，否决的转入可迁移）；Q2 §14 的措辞；Q3 凭据 / 访问 / 完整性相邻 9 条是只审功能地重构到 0
+  还是同样登记为例外。确认前只落档、不实施。
+
+## 2026-11-23 RFC-545 live 持久化 schema 由组合根显式交给 provider 构造（Done；`design/RFC-545-live-persistence-schema-explicit/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第十二步。bootstrap 在模块求值时把 live 持久化 schema（表定义、两种引擎的原生表集与行规则错误码）
   登记进 platform 的模块级变量（`platform/persistence/schema/tables.ts` 的 `liveBinding`），PostgreSQL 客户端构造与 `tablesOf` 的 epoch-2 核对再从
@@ -19,6 +30,13 @@
   CI 为准。查出三处本人遗漏（钉着被改形状的三条源码锁：`rfc370-doctor-configuration-bindings`、`rfc474`、`rfc524`），已改并复验。tsc 0 错，
   eslint / promises / prettier 无告警；语义层 423 个文件 419 个通过，另一个 `rfc321` 只在导出仓库里红（要 git 历史）、主树 10 / 10；四种变异都被
   认出；架构报告模块级可变单例 48 → 46、计数不升。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`d204218c2`（115 个文件；父提交是 `d00cf2c72`）。
+- **CI**：实现提交主 CI 64 / 70（run 45200208626）：后端全部分片（含真实 PostgreSQL）与 Linux / Windows 构建通过；macOS 的构建 job 没有真正开跑、
+  15 分钟时被取消，四个 macOS e2e 分片因缺构建产物失败，按环境性红记录、未重跑（后继提交的 CI 作 macOS 的后继证据）；windows-platform 与
+  maintenance-soak-nightly 通过。落档提交 `d00cf2c72` 主 CI 68 / 70（Markdown 链接检查红在他人文档的外站 503，见 plan）；RFC-544 转 Done 的
+  `3f236a701` 主 CI 里 macOS e2e 分片 3/4 撞 20 分钟时限（已记入 `docs/audit-backlog.md`）。都未重跑。
+- **下一步**：S12 第 4 项余 46 条：可迁移 9 条（schema 历史运行时的登记 2 条、守护进程级服务状态 7 条）继续拆；进程级 28 条与凭据 / 访问 /
+  完整性相邻 9 条的处理已写成 RFC-546（Draft，待用户确认）。
 
 ## 2026-11-23 RFC-544 演示种子与数字员工代理模板迁出 services/（Done；`design/RFC-544-demo-seed-and-agent-templates-out-of-services/`）
 

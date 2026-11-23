@@ -17,7 +17,7 @@
 - [x] AC-1 `schema/tables.ts` 没有模块级状态；bootstrap 只导出常量；客户端与 provider 运行期选项显式收下 live 绑定
 - [x] AC-2 两种引擎的客户端与 `tablesOf` 的结局不变
 - [x] AC-3 模块级可变单例 48 → 46、计数不升；新增 RFC-545 用例并登记；读旧接口的用例随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -48,7 +48,16 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `d204218c2`（实现，父提交是 `d00cf2c72`）：exact SHA 主 CI run 45200208626 的 70 个 job 里 64 个通过，包括 ubuntu 的全部后端分片（含真实
+  PostgreSQL）与 Linux / Windows 的生产二进制构建；macOS 的生产二进制构建 job 在 15 分钟时被取消，没有任何步骤与日志（runner 没有真正开跑），
+  四个 macOS 的 e2e 分片随之在“下载 e2e 二进制”一步失败，`CI required` 随之红。同一提交触发的 windows-platform（run 45200208640）与
+  maintenance-soak-nightly（run 45200208350）通过。macOS 这一组按 runner 环境性红记录，未重跑；后继提交的 CI 包含本提交，作为 macOS 的后继证据。
+- RFC-544 转 Done 的提交 `3f236a701`（只改文档）：主 CI run 45175354124 里 macOS 的 Playwright e2e 分片 3/4 运行 20 分 25 秒撞 job 时限被取消
+  （日志到被取消前一刻仍在逐条通过，不是卡死；同一 run 的其余三个 macOS 分片 7～10 分钟跑完），`CI required` 随之红，其余 68 个通过；与
+  `c953ac2d1` 那次同一形态，已记入 `docs/audit-backlog.md`；未重跑。
+- 本 RFC 的落档提交 `d00cf2c72`（只改文档）：主 CI run 45186276778 里 `Markdown link check (design/)` 红在
+  `design/RFC-378-mindmap-decision-review/research.md` 的一条外站链接返回 503（他人文档；外站不稳定，已在本会话向用户说明、待用户决定的那一项），
+  `CI required` 随之红，其余 68 个通过；该提交只改文档，这一检查只在 `design/` 有改动时跑；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 
