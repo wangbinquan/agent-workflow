@@ -18,7 +18,7 @@
 - [x] AC-1 `mcpProbeOperations.ts` 没有模块级状态与测试接缝函数；组合根为每份应用建一份探测环境，三处用同一份
 - [x] AC-2 探测与写入的结局不变；两份环境各用各的选项与时钟，选项在每次探测时读取
 - [x] AC-3 模块级可变单例 56 → 55、计数不升；锁随改；新增 RFC-538 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -59,7 +59,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `d2bd30700`（实现，父提交是 `6f51e236a`）：exact SHA 主 CI run 45097712894 的 70 个 job 第 1 次全部通过；同一提交触发的 windows-platform
+  （run 45097712924）与 maintenance-soak-nightly（run 45097712907）通过。
+- 本 RFC 的落档提交 `6f51e236a`（只改 9 个 Markdown 文件；同一提交记下 RFC-537 转 Done）：主 CI run 45089099290 的 70 个 job 里，后端分片 41/44
+  的 `rfc398-start-auto-upgrade-takeover`「…acquires before takeover」184.7 秒后 barrier / readiness 到点（子进程输出 `JSON Parse error`），
+  `CI required` 随之红，其余 68 个通过。该提交的代码与 `c06e6adab`（70 / 70）逐字相同，父提交的同一分片三例全过；这是 `docs/audit-backlog.md`
+  已登记的 RFC-398 多进程接管偶发红（第四次，登记随本 RFC 的实现提交补上），不是该提交引入的；未改、未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

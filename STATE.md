@@ -1,4 +1,18 @@
-## 2026-11-22 RFC-538 MCP 探测的选项与时钟随应用走（In Progress；`design/RFC-538-mcp-probe-environment/`）
+## 2026-11-22 RFC-539 SQLite 文件快照的在途计数随数据库句柄走（In Progress；`design/RFC-539-database-file-snapshots/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第七步。SQLite 的整库快照（备份与迁移安全备份的 `VACUUM INTO`、`quick_check`）期间，维护服务的
+  WAL checkpoint 要跳过这一拍，否则撞上快照的只读 reader 会在 daemon 的同步主连接上阻塞满 `busy_timeout`；这份“快照在途”是进程级计数
+  （`platform/persistence/sqlite/systemProviderBackup.ts` 的模块级 `activeDbSnapshots`），与被快照的是哪个库无关。架构报告的模块级可变单例
+  清单里这一文件 1 条（全仓 55 条）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、
+  2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话
+  调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：在途计数挂在数据库句柄的上下文上；备份按所快照的库计数，daemon 会话把自己库的那一份交给迁移安全备份与维护服务的 checkpoint 门；
+  新增 RFC-539 用例。
+- **不做**：其余 54 条模块级可变单例；快照、校验与 checkpoint 本身的做法不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-538 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-22 RFC-538 MCP 探测的选项与时钟随应用走（Done；`design/RFC-538-mcp-probe-environment/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第六步。MCP 的连通性探测把选项与时钟挂在进程级的测试接缝上（`resource-catalog/composition/
   mcpProbeOperations.ts` 的模块级 `probeOptionsOverride`，由 `__setMcpProbeOptionsForTesting` 写；探测的开始时间与 MCP 写入的因果时间戳共用的
@@ -20,6 +34,15 @@
   补上 `mcpProbeOptions`；环境的时钟成员原叫 `now`，被架构报告按整词记成两个公开面同名字段的消费，改名 `clock`。四种变异（选项挪回模块级、
   执行器不读选项、探测用例不取时钟、组合根不取测试接缝）都被认出；红的与对照同时 A/B，长扫描用例与 `rfc238`、`rfc400` 在两边放大写死的
   时限后都全过，没有只在候选上红的用例；架构报告模块级可变单例 56 → 55、公开面与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`d2bd30700`（23 个文件；父提交是 `6f51e236a`）。
+- **CI**：实现提交主 CI 70 / 70（run 45097712894，第 1 次），windows-platform 与 maintenance-soak-nightly 通过；落档提交 `6f51e236a` 主 CI 68 / 70
+  （后端分片 41/44 的 RFC-398 多进程接管偶发到点，该提交只改文档、代码与 `c06e6adab` 相同、父提交同一分片通过，已记入 `docs/audit-backlog.md`）。
+  都未重跑。
+- **下一步**：S12 第 4 项其余 55 条。可迁移的登记与绑定 19 条（SQLite 文件快照的在途计数〔RFC-539〕、平台持久化的 schema 绑定与按句柄的侧表、
+  维护 Worker 的效果模块登记、SQLite 逻辑源 Worker 的状态、日志器配置等）继续拆；凭据 / 访问 / 完整性相邻的 9 条（ws 的三处登记、遗留测试库
+  标记、技能启动复核）只审功能地单独处理；进程级缓存与计数器 27 条（npm / tar / git 版本等主机探测、WASM 运行时初始化、唯一名计数器、只告警
+  一次的标志、引擎能力缓存等）按 RFC-294 plan S12 第 4 项须经用户确认是否作为进程缓存保留并修订 design §14 口径，已在本会话向用户说明、
+  待用户决定。
 
 ## 2026-11-22 RFC-537 已提交事件的即时投递泵随数据库句柄走（Done；`design/RFC-537-database-after-commit-pump/`）
 
