@@ -10,6 +10,7 @@ import {
   admitLocalEpochInstallation,
   type EpochBootConfiguration,
 } from '../application/epochBootAdmission'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { readEpochBootFactsForConfig } from './epochBootAdmission'
 import {
   prepareDaemonDatabaseProviderForBoot,
@@ -24,6 +25,8 @@ export interface DaemonDatabaseAdmissionInput {
   /** Re-read after an automatic upgrade, which may rewrite the database settings. */
   readonly configuration: { read(): EpochBootConfiguration | Promise<EpochBootConfiguration> }
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history (a staged restore is applied against it). */
+  readonly schemaHistory: SchemaHistoryRuntime
 }
 
 export interface DaemonDatabaseInstallation {
@@ -43,14 +46,14 @@ export function composeLocalDaemonDatabaseInstallation(input: {
   readonly runAutoUpgrade: () => Promise<void>
 }): DaemonDatabaseInstallation {
   return Object.freeze({
-    admit: ({ config, configuration, contract }: DaemonDatabaseAdmissionInput) =>
+    admit: ({ config, configuration, contract, schemaHistory }: DaemonDatabaseAdmissionInput) =>
       admitLocalEpochInstallation(
         {
           readFacts: (database) =>
             readEpochBootFactsForConfig({ appHome: input.appHome, database }),
           runAutoUpgrade: input.runAutoUpgrade,
           readConfiguration: () => configuration.read(),
-          applyPendingRestore: () => applyLocalEpoch2PendingRestore(contract),
+          applyPendingRestore: () => applyLocalEpoch2PendingRestore(contract, schemaHistory),
           upgradeLog: () => createLogger('epoch-upgrade'),
         },
         config,

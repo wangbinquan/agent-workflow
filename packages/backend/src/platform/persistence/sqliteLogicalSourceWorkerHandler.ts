@@ -1,7 +1,6 @@
 // RFC-540 — the SQLite logical-source Worker's request handling. Each Worker builds one handler (its entry,
 // sqliteLogicalSourceWorker.ts); the opened source, the checked contract and the initializing flag live in the handler,
 // not in module state, so two handlers in one realm never share them.
-import { registerSchemaHistoryRuntime } from './schema/history/runtime'
 import { digestSchemaContract, type LogicalSchemaContract } from './schemaContract'
 import { openSqliteLogicalSource, type SqliteLogicalSource } from './sqliteLogicalSource'
 import {
@@ -80,13 +79,13 @@ export function createSqliteLogicalSourceWorkerHandler(
                 'SQLite logical-source Worker schema digest does not match the daemon',
               )
             }
-            if (request.history)
-              registerSchemaHistoryRuntime({
-                head: () => request.history!.head,
-                metaTables: request.history.metaTables,
-              })
             contract = workerContract
-            source = openSqliteLogicalSource({ path: request.path, contract: workerContract })
+            // RFC-549: the daemon sends its meta tables with the init message; nothing is registered.
+            source = openSqliteLogicalSource({
+              path: request.path,
+              contract: workerContract,
+              metaTables: request.metaTables,
+            })
           } finally {
             initializing = false
           }

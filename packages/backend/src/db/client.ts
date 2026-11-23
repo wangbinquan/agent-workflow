@@ -16,7 +16,6 @@ import { bindSchemaRowRuleErrors } from '@/platform/persistence/schema/rowRules'
 import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
 import { admitSqliteHistorySync } from '@/platform/persistence/schema/history/admission'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { guardSqliteGenerationWrites } from '@/platform/persistence/sqliteGenerationFence'
 import {
   CrossContextTransactionError,
@@ -98,7 +97,8 @@ function developmentDatabaseIdentity(opts: OpenDbOptions): string {
     file.dev,
     file.ino,
     file.birthtimeMs,
-    schemaHistoryRuntime().head().contract.digest,
+    // RFC-549: the binary's schema history travels with the live binding this client is bound with.
+    persistenceSchemaBinding.history.head().contract.digest,
   ])
 }
 
@@ -362,7 +362,7 @@ export function openDb(opts: OpenDbOptions): DbClient {
         .all()
       if (!objects.length)
         installSqliteBaseline(sqlite, { bootstrap: 'required', generationId: opts.generationId })
-      const history = schemaHistoryRuntime()
+      const history = persistenceSchemaBinding.history
       admitSqliteHistorySync(sqlite, { binary: history.head(), metaTables: history.metaTables })
       sqlite.exec('PRAGMA foreign_keys = ON')
     } else {

@@ -62,7 +62,7 @@
 //     要求目标 schema 为空（非空直接 409 `postgresql-restore-target-not-empty`），
 //     没有东西会被覆盖，因而没有安全备份可拍。两侧都满足「不会在无声中吃掉现有数据」。
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -126,6 +126,7 @@ function sqliteHarness(appHome: string): RecoveryHarness {
     direction: 'same' as const,
   })
   const adapter = createLegacyPlatformRecoveryAdapter({
+    schemaHistory: persistenceSchemaBinding.history,
     contract: logicalSchemaContract,
     artifacts,
     appHome,
@@ -162,6 +163,7 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
     verification: {},
   } as unknown as PortableDatabaseBackupInspection
   const restore = createPostgresqlAdminRestoreCoordinator({
+    schemaHistory: persistenceSchemaBinding.history,
     headContract: logicalSchemaContract,
     artifacts,
     runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
@@ -177,6 +179,7 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
     restoreBackup: async () => ({ filesystem: { config: true, skills: true } }) as never,
   })
   const backup = createPostgresqlAdminBackupCoordinator({
+    schemaHistory: persistenceSchemaBinding.history,
     headContract: logicalSchemaContract,
     contract: logicalSchemaContract,
     runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,

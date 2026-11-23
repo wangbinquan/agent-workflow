@@ -15,16 +15,13 @@ import { metaTableName } from '@/platform/persistence/schema/history/meta'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { column } from '@/platform/persistence/schema/dsl'
 import { defineMetaTable } from '@/platform/persistence/schema/history/meta'
-import {
-  schemaHistoryRuntime,
-  registerSchemaHistoryRuntime,
-} from '@/platform/persistence/schema/history/runtime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const bytes = Buffer.from([0, 255, 10, 34, 128, 1])
 const epochMs = 1_798_000_000_123
 
 test('BF-D5 every numeric codec has provider-independent bytes, including int8 values beyond i32', async () => {
-  const original = schemaHistoryRuntime()
+  // RFC-549: the synthetic meta table is handed in, not registered.
   const table = defineMetaTable({
     name: 'numeric_fixture',
     columns: {
@@ -62,32 +59,27 @@ test('BF-D5 every numeric codec has provider-independent bytes, including int8 v
     identity: String(epochMs),
     real: '1.25',
   }
-  registerSchemaHistoryRuntime({ ...original, metaTables: [table] })
-  try {
-    const source: HistoryConnection = {
-      provider: 'sqlite',
-      async execute() {
-        return [sqliteRow]
-      },
-    }
-    const target: HistoryConnection = {
-      provider: 'postgresql',
-      async execute() {
-        return [postgresqlRow]
-      },
-    }
-    const fromSqlite = await captureEpochMetadata(source)
-    const fromPostgresql = await captureEpochMetadata(target)
-    expect(fromSqlite).toEqual(fromPostgresql)
-    expect(fromSqlite.payload.tables[0]!.rows[0]).toEqual({
-      ...sqliteRow,
-      bigint: '9007199254740993',
-    })
-    await restoreEpochMetadata(target, fromSqlite)
-    await restoreEpochMetadata(source, fromPostgresql)
-  } finally {
-    registerSchemaHistoryRuntime(original)
+  const source: HistoryConnection = {
+    provider: 'sqlite',
+    async execute() {
+      return [sqliteRow]
+    },
   }
+  const target: HistoryConnection = {
+    provider: 'postgresql',
+    async execute() {
+      return [postgresqlRow]
+    },
+  }
+  const fromSqlite = await captureEpochMetadata(source, [table])
+  const fromPostgresql = await captureEpochMetadata(target, [table])
+  expect(fromSqlite).toEqual(fromPostgresql)
+  expect(fromSqlite.payload.tables[0]!.rows[0]).toEqual({
+    ...sqliteRow,
+    bigint: '9007199254740993',
+  })
+  await restoreEpochMetadata(target, fromSqlite, [table])
+  await restoreEpochMetadata(source, fromPostgresql, [table])
 })
 function connection(h: ProviderDatabaseHarness): HistoryConnection {
   const binding = h.applicationBinding
@@ -125,8 +117,11 @@ async function roundtrip(source: HistoryConnection, target: HistoryConnection) {
     `SELECT generation_id FROM ${metaTableName(target.provider, 'generations')} WHERE state='active'`,
   )
   await seed(source)
-  const captured = await captureEpochMetadata(source)
-  const snapshot = verifyEpochMetadataSnapshot(JSON.parse(JSON.stringify(captured)))
+  const captured = await captureEpochMetadata(source, persistenceSchemaBinding.history.metaTables)
+  const snapshot = verifyEpochMetadataSnapshot(
+    JSON.parse(JSON.stringify(captured)),
+    persistenceSchemaBinding.history.metaTables,
+  )
   expect(
     snapshot.payload.tables.find((t) => t.name === 'migration_archives')!.rows[0]!.bytes,
   ).toEqual({ type: 'bytes', base64: bytes.toString('base64') })
@@ -138,8 +133,8 @@ async function roundtrip(source: HistoryConnection, target: HistoryConnection) {
   expect(
     snapshot.payload.tables.find((t) => t.name === 'activation_receipts')!.rows[0]!.prepared_at,
   ).toBe(epochMs)
-  await restoreEpochMetadata(target, snapshot)
-  await restoreEpochMetadata(target, snapshot)
+  await restoreEpochMetadata(target, snapshot, persistenceSchemaBinding.history.metaTables)
+  await restoreEpochMetadata(target, snapshot, persistenceSchemaBinding.history.metaTables)
   for (const [table, column] of [
     ['migration_archives', 'bytes'],
     ['activation_receipts', 'previous_pointer_bytes'],
@@ -161,7 +156,7 @@ async function roundtrip(source: HistoryConnection, target: HistoryConnection) {
       [sourceGeneration[0]!.generation_id],
     ),
   ).toEqual([{ state: 'retired' }])
-  const normalized = await captureEpochMetadata(target)
+  const normalized = await captureEpochMetadata(target, persistenceSchemaBinding.history.metaTables)
   expect(normalized.payload.tables.find((t) => t.name === 'migration_blocks')!.rows).toEqual(
     snapshot.payload.tables.find((t) => t.name === 'migration_blocks')!.rows,
   )
@@ -182,9 +177,12 @@ async function roundtrip(source: HistoryConnection, target: HistoryConnection) {
     rows: 1,
     run_id: 'frozen-run',
   })
-  expect(() => verifyEpochMetadataSnapshot({ ...snapshot, digest: 'tampered' })).toThrow(
-    'epoch2-metadata-digest-mismatch',
-  )
+  expect(() =>
+    verifyEpochMetadataSnapshot(
+      { ...snapshot, digest: 'tampered' },
+      persistenceSchemaBinding.history.metaTables,
+    ),
+  ).toThrow('epoch2-metadata-digest-mismatch')
 }
 describeEachProvider('AF-D2 metadata bytes and boolean normalization', (h) => {
   test('captures the provider and restores SQLite, including nonempty activation receipt bytes', async () => {

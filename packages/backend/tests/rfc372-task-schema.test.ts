@@ -20,7 +20,7 @@ import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSou
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/migration/legacy/logicalDatabaseExport'
 import { restoreLogicalDatabaseBackup } from '@/platform/persistence/migration/legacy/logicalDatabaseRestore'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { workflowFixture, taskFixture, nodeRunFixture, clarifyRoundFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -76,6 +76,7 @@ describeEachProvider('RFC-372 retained clarify backup sources', (h) => {
     const { source, snapshot, assertUnchanged } = await (async () => {
       if (binding.provider === 'postgresql') {
         const source = await openPostgresqlLogicalSource({
+          schemaHistory: persistenceSchemaBinding.history,
           runtime: binding.runtime,
           generationId: binding.runtime.generationId,
           contract,
@@ -85,7 +86,11 @@ describeEachProvider('RFC-372 retained clarify backup sources', (h) => {
       }
       const path = join(root, 'current.sqlite')
       writeFileSync(path, (Reflect.get(binding.db, '$client') as Database).serialize())
-      const source = openSqliteLogicalSource({ path, contract })
+      const source = openSqliteLogicalSource({
+        metaTables: persistenceSchemaBinding.history.metaTables,
+        path,
+        contract,
+      })
       const snapshot = await source.preflight()
       return { source, snapshot, assertUnchanged: () => source.assertUnchanged(snapshot) }
     })()
@@ -217,7 +222,11 @@ describe('RFC-372 companion retirement', () => {
       )
       const sourcePath = join(root, 'old.sqlite')
       writeFileSync(sourcePath, native.serialize())
-      const source = openSqliteLogicalSource({ path: sourcePath, contract: previous.contract })
+      const source = openSqliteLogicalSource({
+        metaTables: persistenceSchemaBinding.history.metaTables,
+        path: sourcePath,
+        contract: previous.contract,
+      })
       try {
         const snapshot = await source.preflight()
         const artifactRoot = join(root, 'artifact')

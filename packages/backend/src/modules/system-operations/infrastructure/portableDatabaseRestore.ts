@@ -19,6 +19,7 @@ import {
   type LogicalDatabaseRestoreTarget,
 } from '@/platform/persistence/logicalDatabaseRestore'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import {
   readManifest,
   type BackupManifestV2,
@@ -52,6 +53,8 @@ export interface PortableRestoreFilesystemReceipt {
 
 interface RestorePortableDatabaseBackupCommonOptions {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
@@ -102,6 +105,8 @@ export interface PortableDatabaseRestoreResult {
 
 export interface InspectPortableDatabaseBackupOptions {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
@@ -148,12 +153,14 @@ async function sourceContractForRestore(
   manifest: BackupManifestV2,
   targetContract: LogicalSchemaContract,
   headContract: LogicalSchemaContract,
+  schemaHistory: SchemaHistoryRuntime,
 ): Promise<LogicalSchemaContract> {
   try {
     return await resolveLogicalDatabaseRestoreSourceContract({
       sourceSchemaDigest: manifest.database.schemaDigest,
       headContract,
       targetContract,
+      schemaHistory,
     })
   } catch {
     throw new PortableDatabaseRestoreError(
@@ -203,6 +210,7 @@ export async function inspectPortableDatabaseBackup(
       manifest,
       options.contract,
       options.headContract,
+      options.schemaHistory,
     )
     validateEnvelope(manifest, envelope, sourceContract)
     const verification = verifyLogicalDatabaseArtifactTree({
@@ -256,6 +264,7 @@ export async function restorePortableDatabaseBackup(
       manifest,
       options.contract,
       options.headContract,
+      options.schemaHistory,
     )
     validateEnvelope(manifest, envelope, sourceContract)
 
@@ -283,6 +292,7 @@ export async function restorePortableDatabaseBackup(
         restoreOperationId: options.restoreOperationId,
         contract: sourceContract,
         targetContract: options.contract,
+        schemaHistory: options.schemaHistory,
         target,
         now: options.now,
         onProgress: options.onProgress,

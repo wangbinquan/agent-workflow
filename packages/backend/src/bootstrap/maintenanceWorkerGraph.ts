@@ -169,6 +169,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     const operational = createPostgresqlDatabaseOperationalAdapter({
       runtime,
       contract: logicalSchemaContract,
+      schemaHistory: persistenceSchemaBinding.history,
     })
     const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,

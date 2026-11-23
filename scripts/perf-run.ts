@@ -145,7 +145,11 @@ async function prepareTemplate(input: RunInput): Promise<void> {
   // SQLite file copy and the real logical restore therefore share those bytes.
   const templateDigest = createHash('sha256').update(readFileSync(path)).digest('hex')
   const contract = logicalSchemaContract
-  const source = openSqliteLogicalSource({ path, contract })
+  const source = openSqliteLogicalSource({
+    path,
+    contract,
+    metaTables: persistenceSchemaBinding.history.metaTables,
+  })
   await withPerformanceCleanup(
     async () => {
       const snapshot = await source.preflight()
@@ -165,6 +169,7 @@ async function prepareTemplate(input: RunInput): Promise<void> {
         },
         expectedTableRows: snapshot.tableRows,
         contract,
+        metaTables: persistenceSchemaBinding.history.metaTables,
         artifactRoot: join(input.directory, 'logical-template'),
       })
       json(join(input.output, 'template.json'), {
@@ -250,7 +255,10 @@ async function seedPostgresql(input: RunInput): Promise<void> {
         operationId: receipt.operationId,
         sourceGenerationId: SOURCE_GENERATION,
         contract,
-        plan: buildPostgresqlSchemaPlan(contract),
+        plan: buildPostgresqlSchemaPlan(contract, {
+          schemaHistory: persistenceSchemaBinding.history,
+        }),
+        schemaHistory: persistenceSchemaBinding.history,
       })
       await withPerformanceCleanup(
         async () => {
@@ -261,6 +269,7 @@ async function seedPostgresql(input: RunInput): Promise<void> {
             expectedLegacyArchiveFileDigest: receipt.exported.legacyArchiveFileDigest,
             restoreOperationId: receipt.operationId,
             contract,
+            schemaHistory: persistenceSchemaBinding.history,
             target,
             envelope: receipt.exported.envelope,
           })

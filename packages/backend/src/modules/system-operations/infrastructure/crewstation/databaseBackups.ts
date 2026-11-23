@@ -22,6 +22,7 @@ import {
   hostedBackupFileContent,
 } from './databaseBackupArtifact'
 import { HOSTED_BACKUP_OWNER, hostedBackupReference } from './databaseBackupFormat'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 
 /** Settled catalog rows are kept this long for the administrator's history. */
 export const HOSTED_BACKUP_HISTORY_MS = 30 * 86_400_000
@@ -46,6 +47,8 @@ export function createHostedDatabaseBackups(input: {
   readonly objectSpaceId: string
   readonly keyFingerprint: string
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly openSource: () => Promise<PostgresqlLogicalSource>
   readonly workflows: Pick<PortableBackupApplicationAssets, 'exportWorkflows'>
   readonly assertBornHosted: () => Promise<void>
@@ -168,6 +171,7 @@ export function createHostedDatabaseBackups(input: {
           objectSpaceId: input.objectSpaceId,
           keyFingerprint: input.keyFingerprint,
           contract: input.contract,
+          metaTables: input.schemaHistory.metaTables,
           source: await input.openSource(),
           workflows: input.workflows,
           assertBornHosted: input.assertBornHosted,

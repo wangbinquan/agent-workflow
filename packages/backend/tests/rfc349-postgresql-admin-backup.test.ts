@@ -1,7 +1,7 @@
 // RFC-349 — the existing System Operations backup command must project to the
 // live PostgreSQL provider adapter without exposing provider details publicly.
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator'
 import type { CreatePostgresqlProviderBackupOptions } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
@@ -23,6 +23,7 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
     const runtime = ADMIN_BACKUP_RUNTIME
     let received: CreatePostgresqlProviderBackupOptions | undefined
     const coordinator = createPostgresqlAdminBackupCoordinator({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
       runtime,
@@ -62,6 +63,7 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
   test('does not start a provider backup when preparation fails', async () => {
     let backups = 0
     const coordinator = createPostgresqlAdminBackupCoordinator({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
       runtime: {
@@ -90,6 +92,7 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
   test('hands the scheduled kind and the worktree choice to the provider backup', async () => {
     const received: CreatePostgresqlProviderBackupOptions[] = []
     const coordinator = createPostgresqlAdminBackupCoordinator({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
       runtime: ADMIN_BACKUP_RUNTIME,

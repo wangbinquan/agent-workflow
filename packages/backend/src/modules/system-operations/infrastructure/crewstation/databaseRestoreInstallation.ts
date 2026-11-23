@@ -1,6 +1,5 @@
 import { withNativeTransaction } from '@/platform/persistence/nativeTransaction'
 import { postgresqlHistoryConnection } from '@/platform/persistence/schema/history/connection'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import {
   readRestoreReceipt,
   writeRestoreReceipt,
@@ -57,7 +56,10 @@ export async function restoreHostedDatabaseInstallation(input: {
   readonly liveSchema: RuntimeSchemaBinding
 }): Promise<{ restored: boolean; backupId: string; normalized: Readonly<Record<string, number>> }> {
   const now = input.now ?? Date.now
-  const artifact = await (input.openArtifact ?? openHostedDatabaseBackupArchive)(input)
+  const artifact = await (input.openArtifact ?? openHostedDatabaseBackupArchive)({
+    ...input,
+    schemaHistory: input.liveSchema.history,
+  })
   const connection = await input.runtime
     .providerPool()
     .reserve()
@@ -113,7 +115,7 @@ export async function restoreHostedDatabaseInstallation(input: {
       const active = await connection.unsafe(
         "SELECT generation_id, operation_id, source_generation_id, contract_digest, plan_digest FROM agent_workflow_meta.generations WHERE state='active'",
       )
-      const head = schemaHistoryRuntime().head()
+      const head = input.liveSchema.history.head()
       if (
         active.length > 1 ||
         (active.length === 1 &&
@@ -153,6 +155,7 @@ export async function restoreHostedDatabaseInstallation(input: {
         operationId: artifact.copyOperationId,
         sourceGenerationId: artifact.marker,
         contract: input.contract,
+        schemaHistory: input.liveSchema.history,
         plan: input.plan,
       })
     const target = await openTarget()

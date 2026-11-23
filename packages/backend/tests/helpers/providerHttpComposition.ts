@@ -3,7 +3,7 @@ import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
 import { readActiveEpochInstallation } from '@/modules/system-operations/composition/epochInstallation'
 // RFC-392: exercise the passive HTTP injection boundary with complete session modules on both engines.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import {
   composeProviderAppComposition,
   type ProviderAppOwnerInput,
@@ -41,6 +41,7 @@ export async function createProviderHttpCompositionFixture(
     throw new Error('HTTP composition fixture does not migrate')
   }
   const databaseMigration = composeDatabaseMigrationModule({
+    schemaHistory: persistenceSchemaBinding.history,
     contract: logicalSchemaContract,
     configuration: createFileDatabaseConfiguration(configPath),
     sqlitePath: join(application.appHome, 'db.sqlite'),

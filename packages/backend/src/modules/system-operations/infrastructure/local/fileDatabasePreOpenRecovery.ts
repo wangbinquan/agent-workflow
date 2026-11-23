@@ -6,6 +6,7 @@ import type { DatabasePreOpenRecoveryPort } from '../../application/ports/databa
 import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { Paths } from '@/util/paths'
 import { readDatabaseSchemaUpgradeGeneration } from '../databaseMigrationCoordinator'
 import { applyPendingRestoreIfAny, hasPendingRestore } from './filePendingRestore'
@@ -13,12 +14,18 @@ import { existsSync, readFileSync } from 'node:fs'
 
 export function createFileDatabasePreOpenRecovery(input: {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly migrationsFolder: string
   readonly postOpenRecovery?: () => SqlitePostRestoreRecovery
 }): DatabasePreOpenRecoveryPort<PostgresqlMigrationHistory> {
   const { migrationsFolder, postOpenRecovery } = input
   return {
-    readMigrationHistory: () => loadPostgresqlMigrationHistory({ headContract: input.contract }),
+    readMigrationHistory: () =>
+      loadPostgresqlMigrationHistory({
+        headContract: input.contract,
+        schemaHistory: input.schemaHistory,
+      }),
     readGeneration: ({ contract, history }) =>
       readDatabaseSchemaUpgradeGeneration({
         generationPointerPath: Paths.databaseGenerationPointer,
@@ -41,6 +48,7 @@ export function createFileDatabasePreOpenRecovery(input: {
         )
       return await applyPendingRestoreIfAny({
         contract: input.contract,
+        schemaHistory: input.schemaHistory,
         appHome: Paths.root,
         dbPath: currentSqlitePath(
           Paths.databaseGenerationPointer,

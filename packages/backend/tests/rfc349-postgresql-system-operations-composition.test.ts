@@ -8,7 +8,7 @@ import { composePostgresqlSystemOperations } from '@/modules/system-operations/c
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import type { AdminBackupCoordinatorPort } from '@/modules/system-operations/application/ports/adminBackupCoordinator'
 
 const roots: string[] = []
@@ -35,6 +35,7 @@ function composeFixture(input: {
   roots.push(appHome)
   const selected = input.backup
   return composePostgresqlSystemOperations({
+    schemaHistory: persistenceSchemaBinding.history,
     headContract: logicalSchemaContract,
     runtime: RUNTIME,
     db: {} as PersistenceDb,
@@ -60,6 +61,7 @@ describe('RFC-349 PostgreSQL System Operations composition', () => {
     const plan = { contractDigest: DIGEST } as PostgresqlSchemaPlan
 
     const systemOperations = composePostgresqlSystemOperations({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       runtime: RUNTIME,
       db: {} as PersistenceDb,
@@ -88,6 +90,7 @@ describe('RFC-349 PostgreSQL System Operations composition', () => {
     roots.push(appHome)
     expect(() =>
       composePostgresqlSystemOperations({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         runtime: {
           provider: 'postgresql',

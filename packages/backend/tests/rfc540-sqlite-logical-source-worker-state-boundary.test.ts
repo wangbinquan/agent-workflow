@@ -137,6 +137,8 @@ describe('RFC-540 ② 处理器各管各的状态', () => {
       path,
       contract,
       expectedSchemaDigest: contract.digest,
+      // RFC-549: the epoch-1 fixture has no meta tables; the init message must say so.
+      metaTables: [],
     })
     await second.handler.handle({ ...base('sls_2'), type: 'preflight' })
     await first.handler.handle({ ...base('sls_3'), type: 'preflight' })
@@ -146,6 +148,7 @@ describe('RFC-540 ② 处理器各管各的状态', () => {
       path,
       contract,
       expectedSchemaDigest: contract.digest,
+      metaTables: [],
     })
     await first.handler.handle({
       ...base('sls_5'),

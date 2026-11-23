@@ -38,7 +38,7 @@ import type {
 import { writeManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import { createPortableBackupArchive } from '@/platform/persistence/portableBackupArchive'
 import { extractTarGz, tarGz } from '@/util/archive'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { captureEpochMetadata } from '@/platform/persistence/schema/history/metadataSnapshot'
 import { sqliteHistoryConnection } from '@/platform/persistence/schema/history/connection'
@@ -163,7 +163,10 @@ async function postgresqlBackup(): Promise<{ readonly appHome: string; readonly 
         "INSERT INTO aw_meta_migration_archives (run_id,archive_ref,unit_id,kind,source_table,format,rows,byte_size,bytes) VALUES ('old-run','history','unit','retired-table','code_artifacts','raw-chunk@1',1,3,?)",
       )
       .run(Buffer.from('old'))
-    metadata = await captureEpochMetadata(sqliteHistoryConnection(metadataDb))
+    metadata = await captureEpochMetadata(
+      sqliteHistoryConnection(metadataDb),
+      persistenceSchemaBinding.history.metaTables,
+    )
   } finally {
     metadataDb.close()
   }
@@ -179,6 +182,7 @@ async function postgresqlBackup(): Promise<{ readonly appHome: string; readonly 
     },
     async exportDatabase({ logicalArtifactRoot, operationId }) {
       const receipt = await exportLogicalDatabaseArtifact({
+        metaTables: persistenceSchemaBinding.history.metaTables,
         operationId,
         sourceProvider: 'postgresql',
         sourceGenerationId: 'dbg_postgresql_source_01',
@@ -276,6 +280,7 @@ describe('RFC-349 portable database restore', () => {
     const rows: CanonicalLogicalRow[] = []
     const operationId = 'dbm_restore_sqlite_01'
     const result = await restorePortableDatabaseBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       tarballPath: backup.path,
       appHome: backup.appHome,
@@ -336,6 +341,7 @@ describe('RFC-349 portable database restore', () => {
 
     await expect(
       restorePortableDatabaseBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         tarballPath: forged,
         appHome: backup.appHome,
@@ -370,6 +376,7 @@ describe('RFC-349 portable database restore', () => {
     const plan = { contractDigest: CONTRACT.digest } as PostgresqlSchemaPlan
 
     const result = await restorePostgresqlProviderBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       tarballPath: backup.path,
       appHome: backup.appHome,
@@ -392,6 +399,7 @@ describe('RFC-349 portable database restore', () => {
           sourceGenerationId: 'dbg_postgresql_source_01',
           contract: CONTRACT,
           plan,
+          schemaHistory: persistenceSchemaBinding.history,
         })
         return postgresqlTarget(operationId, calls, restoredRows)
       },
@@ -421,6 +429,7 @@ describe('RFC-349 portable database restore', () => {
 
     await expect(
       restorePostgresqlProviderBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         tarballPath: backup.path,
         appHome: backup.appHome,

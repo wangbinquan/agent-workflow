@@ -5,6 +5,7 @@ import {
   type FileSnapshotTracker,
 } from '@/platform/persistence/fileSnapshots'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { Paths } from '@/util/paths'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import { createFileDatabaseConfiguration } from '../infrastructure/local/fileDatabaseConfiguration'
@@ -25,6 +26,8 @@ export interface DatabaseMigrationModule {
 
 export function composeDatabaseMigrationModule(input: {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, from bootstrap. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly admission: DatabaseMigrationAdmissionPort
   readonly sqlitePath?: string
   readonly operationsRoot?: string
@@ -43,6 +46,7 @@ export function composeDatabaseMigrationModule(input: {
   const coordinator = createDatabaseMigrationCoordinator({
     headContract: input.contract,
     contract: input.contract,
+    schemaHistory: input.schemaHistory,
     sqlitePath: input.sqlitePath ?? Paths.db,
     operationsRoot: input.operationsRoot ?? Paths.databaseMigrationsDir,
     generationPointerPath: input.generationPointerPath ?? Paths.databaseGenerationPointer,
@@ -74,9 +78,11 @@ export interface LocalDatabaseMigrationOperations {
  */
 export function composeLocalDatabaseMigrationOperations(
   contract: LogicalSchemaContract,
+  schemaHistory: SchemaHistoryRuntime,
 ): LocalDatabaseMigrationOperations {
   const module = composeDatabaseMigrationModule({
     contract,
+    schemaHistory,
     configuration: createFileDatabaseConfiguration(Paths.config),
     // RFC-539: the CLI holds the daemon lock — no daemon checkpoint runs while it snapshots.
     fileSnapshots: createFileSnapshotTracker(),

@@ -34,7 +34,8 @@
   启动时的待恢复、协调器、PostgreSQL 管理恢复）、迁移前备份、PostgreSQL 逻辑源 / 逻辑目标与它们的打开方、迁移历史加载与恢复源契约解析、
   元数据快照、PostgreSQL schema 计划（只有 epoch-2 契约读历史）、SQLite 系统恢复、SQLite 逻辑源与 Worker 监管。组合函数缺载体的，由 bootstrap
   交入。
-- Worker：初始化消息的 `history` 改为必填，处理器把它交给逻辑源，不再登记。
+- Worker：初始化消息原先可选地带 head 与元数据表、在 Worker 里登记；改为必带、按数组校验的 `metaTables`（Worker 里只用到元数据表），处理器把它
+  交给逻辑源，不再登记。
 
 ### D3 下一版本启动的替换口
 
@@ -48,7 +49,7 @@
   为空；删去的名字在生产代码里不出现；替换口在生产代码里只有定义、没有调用（语料下限 3,000）；② 行为：`runtimeHistoryAdmission` 按交入的
   历史给出 head、元数据表与目录缓存；bootstrap 的绑定带着二进制的历史；替换口换过之后绑定读到的是新的 head，复原后回到原来的；③ 带负对照。
 - 随改：改写登记的 4 个用例改为把替换后的历史显式交给被测函数（经 `openDb` 的那一个用替换口）；直接调读取方的用例交入
-  `persistenceSchemaBinding.history`；Worker 的用例在初始化消息里带历史；两个 e2e 夹具改用替换口与 bootstrap 的绑定。
+  `persistenceSchemaBinding.history`；Worker 的用例在初始化消息里带元数据表；两个 e2e 夹具改用替换口与 bootstrap 的绑定。
 
 ## 3. 清单（退出门）
 
@@ -64,7 +65,8 @@
 
 - **某条链路漏交历史**：参数必填，`tsc` 报出每一个调用点；没有回落到全局的路径。
 - **替换口流进生产代码**：RFC-549 用例钉生产代码只有它的定义。
-- **Worker 不带历史初始化**：协议的 schema 拒收；RFC-540 的 Worker 用例改为带历史初始化。
+- **Worker 不带元数据表初始化**：协议要求 `metaTables` 且按数组校验，缺了或不是数组即拒收（zod 4 对缺键本就拒收，但 `z.custom()` 不带校验函数时收下任何给出的值）；
+  RFC-540 的 Worker 用例改为带元数据表初始化。
 
 ## 6. 取舍（可推翻）
 

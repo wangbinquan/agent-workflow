@@ -7,6 +7,7 @@ import { createFrozenEpoch1Db } from './migration-freeze'
 import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { openSqliteLogicalSourceWorker } from '@/platform/persistence/sqliteLogicalSourceWorkerSupervisor'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 
@@ -32,7 +33,11 @@ describe('RFC-349 SQLite logical source', () => {
   test('preflights all 222 tables and paginates with lossless migration keys', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
-    const source = openSqliteLogicalSource({ path, contract })
+    const source = openSqliteLogicalSource({
+      metaTables: persistenceSchemaBinding.history.metaTables,
+      path,
+      contract,
+    })
     try {
       const snapshot = await source.preflight()
       expect(Object.keys(snapshot.tableRows)).toHaveLength(222)
@@ -76,7 +81,11 @@ describe('RFC-349 SQLite logical source', () => {
   test('fails the generation fence after an external source write', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
-    const source = openSqliteLogicalSource({ path, contract })
+    const source = openSqliteLogicalSource({
+      metaTables: persistenceSchemaBinding.history.metaTables,
+      path,
+      contract,
+    })
     try {
       const snapshot = await source.preflight()
       const writer = new Database(path)
@@ -98,7 +107,11 @@ describe('RFC-349 SQLite logical source', () => {
   test('names the exact drift signal so a hosted failure is attributable', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
-    const source = openSqliteLogicalSource({ path, contract })
+    const source = openSqliteLogicalSource({
+      metaTables: persistenceSchemaBinding.history.metaTables,
+      path,
+      contract,
+    })
     try {
       const snapshot = await source.preflight()
       const writer = new Database(path)
@@ -118,7 +131,11 @@ describe('RFC-349 SQLite logical source', () => {
   test('runs the production 222-table source scan and chunk reads through a Worker', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
-    const source = await openSqliteLogicalSourceWorker({ path, contract })
+    const source = await openSqliteLogicalSourceWorker({
+      schemaHistory: persistenceSchemaBinding.history,
+      path,
+      contract,
+    })
     try {
       const snapshot = await source.preflight()
       expect(Object.keys(snapshot.tableRows)).toHaveLength(222)

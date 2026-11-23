@@ -7,7 +7,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import {
   preflightPostgresqlTarget,
@@ -51,6 +51,8 @@ export interface PostgresqlAdminRestoreCoordinator extends AdminRestoreCoordinat
 
 export interface CreatePostgresqlAdminRestoreCoordinatorInput {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly artifacts: RestoreArtifactPathResolver
   readonly runtime: PostgresqlDatabaseRuntime
   readonly targetGenerationId: string
@@ -96,6 +98,7 @@ export function createPostgresqlAdminRestoreCoordinator(
       appHome: input.appHome,
       restoreOperationId: provisionalOperationId,
       contract: input.contract,
+      schemaHistory: input.schemaHistory,
     })
   }
 
@@ -118,11 +121,12 @@ export function createPostgresqlAdminRestoreCoordinator(
       contract: input.contract,
       plan: input.plan,
       filesystem: input.filesystem,
+      schemaHistory: input.schemaHistory,
       now,
     })
     const pointerPath = join(input.appHome, 'database-generation.json')
     if (input.targetProfileRef && !existsSync(pointerPath)) {
-      const head = schemaHistoryRuntime().head()
+      const head = input.schemaHistory.head()
       writeGenerationPointerV2({
         pointerPath,
         payload: {
@@ -158,7 +162,10 @@ export function createPostgresqlAdminRestoreCoordinator(
     },
 
     async stage(artifactRef, options) {
-      await settleEpochSwitchBeforePointerReplacement({ appHome: input.appHome })
+      await settleEpochSwitchBeforePointerReplacement({
+        appHome: input.appHome,
+        schemaHistory: input.schemaHistory,
+      })
       const tarballPath = input.artifacts.pathOf(artifactRef)
       const inspection = await inspectArtifact(tarballPath)
       const operationId = restoreOperationId(inspection)
@@ -200,7 +207,10 @@ export function createPostgresqlAdminRestoreCoordinator(
         return { status: 'lock-unavailable' }
       }
       try {
-        await settleEpochSwitchBeforePointerReplacement({ appHome: input.appHome })
+        await settleEpochSwitchBeforePointerReplacement({
+          appHome: input.appHome,
+          schemaHistory: input.schemaHistory,
+        })
         const tarballPath = input.artifacts.pathOf(artifactRef)
         const inspection = await inspectArtifact(tarballPath)
         const operationId = restoreOperationId(inspection)
@@ -238,7 +248,10 @@ export function createPostgresqlAdminRestoreCoordinator(
         )
       }
       try {
-        await settleEpochSwitchBeforePointerReplacement({ appHome: input.appHome })
+        await settleEpochSwitchBeforePointerReplacement({
+          appHome: input.appHome,
+          schemaHistory: input.schemaHistory,
+        })
         const inspection = await inspectArtifact(pending.stagedTarball)
         if (restoreOperationId(inspection) !== pending.operationId) {
           throw new DomainError(

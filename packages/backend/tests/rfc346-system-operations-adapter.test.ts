@@ -1,7 +1,7 @@
 // RFC-346 — verifies the compatibility adapter preserves the established
 // backup/stage/status/cold-restore effect order without moving RFC-213 mechanics.
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,6 +43,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const log: string[] = []
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {
@@ -75,6 +76,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     let backupCalls = 0
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {
@@ -104,6 +106,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {},
@@ -149,6 +152,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const ref = artifacts.ingestLocalPath('/input/invalid.tar.gz')
     let stageCalls = 0
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {},
@@ -181,6 +185,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {},
@@ -218,6 +223,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {},
@@ -269,6 +275,7 @@ describe('RFC-346 legacy platform adapter', () => {
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
     const adapter = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       artifacts,
       backupResources: () => ({ db: {} as DbClient }),
       prepareBackup: async () => {},
@@ -314,6 +321,7 @@ describe('RFC-346 legacy platform adapter', () => {
       resolveRestoreMigrations: async () => '/migrations',
     }
     const live = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       ...base,
       mechanisms: {
         readPidFromLock: () => 321,
@@ -333,6 +341,7 @@ describe('RFC-346 legacy platform adapter', () => {
     ).resolves.toEqual({ status: 'daemon-running', pid: 321 })
 
     const lockRace = createTestLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       ...base,
       mechanisms: {
         readPidFromLock: () => null,

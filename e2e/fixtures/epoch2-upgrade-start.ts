@@ -1,17 +1,16 @@
 // Bun child only. Exercise a real next-version boot without rewriting released receipts.
-import '../../packages/backend/src/bootstrap/persistenceSchema'
-import { restoreArtifactRegistry } from '../../packages/backend/tests/helpers/rfc395V3/successor'
+// RFC-549: the successor boot swaps the bootstrap binding's history through its seam (platform keeps no registration).
 import {
-  schemaHistoryRuntime,
-  registerSchemaHistoryRuntime,
-} from '../../packages/backend/src/platform/persistence/schema/history/runtime'
+  persistenceSchemaBinding,
+  substitutePersistenceSchemaHistory,
+} from '../../packages/backend/src/bootstrap/persistenceSchema'
+import { restoreArtifactRegistry } from '../../packages/backend/tests/helpers/rfc395V3/successor'
 import { column } from '../../packages/backend/src/platform/persistence/schema/dsl'
 import { compileContract } from '../../packages/backend/src/platform/persistence/schema/contract'
 import { createHistoryVersion } from '../../packages/backend/src/platform/persistence/schema/history/compiler'
 import { deriveSchemaEdge } from '../../packages/backend/src/platform/persistence/schema/history/edgeDiff'
 
-const original = schemaHistoryRuntime()
-const previous = original.head()
+const previous = persistenceSchemaBinding.history.head()
 const baseline = restoreArtifactRegistry(previous)
 const tables = baseline.tables.map((table) =>
   table.id === 'tasks'
@@ -38,9 +37,8 @@ const successor = createHistoryVersion({
   edge: deriveSchemaEdge('add-column', previous.contract.contract, compileContract(registry)),
   slug: 'ops030-upgrade',
 })
-registerSchemaHistoryRuntime({
-  ...original,
+substitutePersistenceSchemaHistory((source) => ({
   head: () => successor,
-  history: () => [...(original.history?.() ?? [previous]), successor],
-})
+  history: () => [...(source.history?.() ?? [previous]), successor],
+}))
 await import('../../packages/backend/src/main')

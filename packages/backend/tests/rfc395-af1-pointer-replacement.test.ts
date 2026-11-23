@@ -5,7 +5,7 @@ import { plannedFixture } from './helpers/rfc395V3SwitchFixture'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { openDb } from '@/db/client'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
-import { persistenceSchema } from '@/bootstrap/persistenceSchema'
+import { persistenceSchema, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createMigrationMetaStore } from '@/modules/system-operations/infrastructure/epochSwitch/metaStore'
 import { sqliteHistoryConnection } from '@/platform/persistence/schema/history/connection'
 import { parseSwitchReceipt } from '@/modules/system-operations/domain/epochSwitch/switchReceipt'
@@ -40,15 +40,21 @@ test('AF-D7 refuses an open rollback window, then completes and records a used s
     writeFileSync(f.sourcePath, baseline.serialize())
     baseline.close()
     const before = readFileSync(f.pointerPath)
-    await expect(settleEpochSwitchBeforePointerReplacement({ appHome: f.root })).rejects.toThrow(
-      'complete or roll back',
-    )
+    await expect(
+      settleEpochSwitchBeforePointerReplacement({
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome: f.root,
+      }),
+    ).rejects.toThrow('complete or roll back')
     expect(readFileSync(f.pointerPath)).toEqual(before)
     expect((await f.deps.journal.read(f.operationId))!.payload.status).toBe('running')
     const db = openDb({ path: targetPath, generationId: pointer.payload.generationId })
     db.$client.exec('UPDATE auth_login_policy SET updated_at=updated_at+1')
     db.$client.close()
-    await settleEpochSwitchBeforePointerReplacement({ appHome: f.root })
+    await settleEpochSwitchBeforePointerReplacement({
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome: f.root,
+    })
     const completed = (await f.deps.journal.read(f.operationId))!
     expect(completed.payload).toMatchObject({
       phase: 'completed',
@@ -85,7 +91,10 @@ test('AF-D7 refuses an open rollback window, then completes and records a used s
     } finally {
       native.$client.close()
     }
-    await settleEpochSwitchBeforePointerReplacement({ appHome: f.root })
+    await settleEpochSwitchBeforePointerReplacement({
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome: f.root,
+    })
     expect(await f.deps.journal.readArtifact(f.operationId, 'completion-receipt.json')).toEqual(
       receipt,
     )
@@ -118,12 +127,18 @@ test('BF-D11 a never-activated restore plan names its discard and continuation c
     })
     const before = readFileSync(f.pointerPath)
     const journal = await f.deps.journal.read(f.operationId)
-    await expect(settleEpochSwitchBeforePointerReplacement({ appHome: f.root })).rejects.toThrow(
-      `discard with db migration discard ${f.operationId} --confirm`,
-    )
-    await expect(settleEpochSwitchBeforePointerReplacement({ appHome: f.root })).rejects.toThrow(
-      `continue with db migration plan ${f.operationId}`,
-    )
+    await expect(
+      settleEpochSwitchBeforePointerReplacement({
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome: f.root,
+      }),
+    ).rejects.toThrow(`discard with db migration discard ${f.operationId} --confirm`)
+    await expect(
+      settleEpochSwitchBeforePointerReplacement({
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome: f.root,
+      }),
+    ).rejects.toThrow(`continue with db migration plan ${f.operationId}`)
     expect(await f.deps.journal.read(f.operationId)).toEqual(journal)
     expect(readFileSync(f.pointerPath)).toEqual(before)
   } finally {
@@ -165,7 +180,10 @@ for (const passed of [false, true])
       baseline.query('UPDATE aw_meta_first_write SET first_live_write_at=123').run()
       writeFileSync(path, baseline.serialize())
       baseline.close()
-      await settleEpochSwitchBeforePointerReplacement({ appHome: f.root })
+      await settleEpochSwitchBeforePointerReplacement({
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome: f.root,
+      })
       const bytes = await f.deps.journal.readArtifact(f.operationId, 'completion-receipt.json')
       expect(parseSwitchReceipt(Buffer.from(bytes!).toString('utf8')).payload.health).toEqual(
         health,

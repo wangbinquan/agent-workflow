@@ -15,7 +15,10 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { logicalSchemaContract as CONTRACT } from '@/bootstrap/persistenceSchema'
+import {
+  logicalSchemaContract as CONTRACT,
+  persistenceSchemaBinding,
+} from '@/bootstrap/persistenceSchema'
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
 import { SchemaHistoryError } from '@/platform/persistence/schema/history/types'
 import type { LogicalTableContract } from '@/platform/persistence/schemaContract'
@@ -182,6 +185,7 @@ describe('RFC-349 PostgreSQL logical source', () => {
   test('reads lossless active rows from one repeatable snapshot and checks the live fence', async () => {
     const fake = fixture()
     const source = await openPostgresqlLogicalSource({
+      schemaHistory: persistenceSchemaBinding.history,
       runtime: fake.runtime,
       generationId: GENERATION_ID,
       contract: CONTRACT,
@@ -227,6 +231,7 @@ describe('RFC-349 PostgreSQL logical source', () => {
   test('rejects schema drift before returning a backup snapshot', async () => {
     const fake = fixture({ applicationTables: ['unexpected_rows'] })
     const source = await openPostgresqlLogicalSource({
+      schemaHistory: persistenceSchemaBinding.history,
       runtime: fake.runtime,
       generationId: GENERATION_ID,
       contract: CONTRACT,
@@ -241,6 +246,7 @@ for (const defect of ['receiptMismatch', 'physicalDrift'] as const)
   test(`BF-D9 native admission rejects ${defect} before a row census or snapshot is returned`, async () => {
     const fake = fixture({ [defect]: true })
     const source = await openPostgresqlLogicalSource({
+      schemaHistory: persistenceSchemaBinding.history,
       runtime: fake.runtime,
       generationId: GENERATION_ID,
       contract: CONTRACT,

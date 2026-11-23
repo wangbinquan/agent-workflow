@@ -49,7 +49,11 @@ test('non-backup archives retain the restore and stage refusal before epoch rout
       )
     }
     await expect(
-      validateBackupForStage(tarball, { appHome: root, contract: logicalSchemaContract }),
+      validateBackupForStage(tarball, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome: root,
+        contract: logicalSchemaContract,
+      }),
     ).rejects.toThrow('stage refused: backup contains no db.sqlite (not a backup tarball?)')
     expect(existsSync(join(root, '.restore-pending'))).toBeFalse()
     expect(existsSync(join(root, 'database-generation.json'))).toBeFalse()
@@ -92,6 +96,7 @@ test('an aliased epoch-1 SQLite backup is frozen conversion input and cannot ent
     expect(await classifyRestoreArtifact(tarball)).toBe('epoch1')
     await expect(
       restoreSqliteBackupForTest(tarball, {
+        schemaHistory: persistenceSchemaBinding.history,
         appHome,
         dbPath: join(appHome, 'db.sqlite'),
         noSafetyBackup: true,
@@ -146,6 +151,7 @@ test('AC-7 an epoch-1 SQLite backup restores through the production entry over a
     try {
       if (selected.provider !== 'sqlite') throw new Error('fixture')
       await restoreBackup(installedBackup.path, {
+        schemaHistory: persistenceSchemaBinding.history,
         appHome,
         dbPath: selected.sqlitePath,
         contract: logicalSchemaContract,
@@ -235,7 +241,12 @@ test('an epoch-2 native backup is selected for native restore and retains busine
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
     db.$client.close()
-    await restoreSqliteBackupForTest(backup.path, { appHome: root, dbPath, now: 2 })
+    await restoreSqliteBackupForTest(backup.path, {
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome: root,
+      dbPath,
+      now: 2,
+    })
     db = openDb({ path: dbPath })
     expect((await readWorkflowFixtures(db)).map((row) => row.id)).toEqual(['native-workflow'])
     expect(db.$client.query('SELECT contract_digest FROM aw_meta_schema_history').all()).toEqual([
@@ -271,6 +282,7 @@ for (const skipIntegrityCheck of [false, true])
       await tarGz(artifact, tarball)
       await expect(
         validateBackupForStage(tarball, {
+          schemaHistory: persistenceSchemaBinding.history,
           appHome: join(root, 'stage'),
           contract: logicalSchemaContract,
           skipIntegrityCheck,
@@ -278,6 +290,7 @@ for (const skipIntegrityCheck of [false, true])
       ).rejects.toBeInstanceOf(RestoreIntegrityError)
       await expect(
         restoreBackup(tarball, {
+          schemaHistory: persistenceSchemaBinding.history,
           appHome: join(root, 'cold'),
           dbPath: join(root, 'cold/db.sqlite'),
           contract: logicalSchemaContract,
@@ -319,6 +332,7 @@ test('AF-D8 native restore into a new home publishes a generation only after res
       if (selected.provider !== 'sqlite') throw new Error('fixture')
       expect(existsSync(pointerPath)).toBeFalse()
       await restoreBackup(backup.path, {
+        schemaHistory: persistenceSchemaBinding.history,
         appHome,
         dbPath: selected.sqlitePath,
         contract: logicalSchemaContract,

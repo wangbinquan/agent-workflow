@@ -78,8 +78,14 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
       sqlite.close()
 
       const contract = logicalSchemaContract
-      const plan = buildPostgresqlSchemaPlan(contract)
-      const source = openSqliteLogicalSource({ path: sourcePath, contract })
+      const plan = buildPostgresqlSchemaPlan(contract, {
+        schemaHistory: persistenceSchemaBinding.history,
+      })
+      const source = openSqliteLogicalSource({
+        metaTables: persistenceSchemaBinding.history.metaTables,
+        path: sourcePath,
+        contract,
+      })
       const sourceSnapshot = await source.preflight()
       const operationsDir = join(root, 'database-migrations')
       const controlPlane = createDatabaseMigrationControlPlane({
@@ -120,6 +126,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         generationId: 'dbg_pg_real_postgresql_01',
       })
       const target = await openPostgresqlLogicalTarget({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         runtime,
         operationId: 'dbm_real_postgresql_01',
@@ -129,6 +136,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
       })
       try {
         const runner = createDatabaseMigrationRunner({
+          schemaHistory: persistenceSchemaBinding.history,
           controlPlane,
           source,
           sourceSnapshot,
@@ -192,6 +200,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
           contract,
         })
         const postgresqlSource = await openPostgresqlLogicalSource({
+          schemaHistory: persistenceSchemaBinding.history,
           runtime,
           generationId: runtime.generationId,
           contract,
@@ -200,6 +209,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
           const postgresqlSnapshot = await postgresqlSource.preflight()
           const postgresqlBackupRoot = join(root, 'postgresql-logical-backup')
           const backup = await exportLogicalDatabaseArtifact({
+            metaTables: persistenceSchemaBinding.history.metaTables,
             operationId: 'dbm_real_postgresql_backup_01',
             sourceProvider: 'postgresql',
             sourceGenerationId: runtime.generationId,
@@ -242,7 +252,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         (
           await admitHistory(
             postgresqlHistorySession(runtime.providerPool()),
-            runtimeHistoryAdmission(),
+            runtimeHistoryAdmission(persistenceSchemaBinding.history),
           )
         ).contract.version,
       ).toBe(persistenceHead().contract.version)

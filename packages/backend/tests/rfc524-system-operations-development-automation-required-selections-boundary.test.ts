@@ -222,6 +222,8 @@ describe('RFC-524 ① 选项的形状', () => {
     expect([...members(SO_ROOT, text(SO_ROOT), 'composeLocalSystemOperations')]).toEqual([
       ['repositoryBackupPreparationFactory', false],
       ['contract', false],
+      // RFC-549: the binary's schema history is a required input.
+      ['schemaHistory', false],
       ['repositoryBackupPreparation', true],
       ['databaseConfig', false],
       ['providerRuntime', false],
@@ -445,10 +447,10 @@ describe('RFC-524 ③ 装配处的显式构造', () => {
     expect(session[0]![0]).not.toContain('configPath')
     expect(callArguments(COMMANDS, text(COMMANDS), 'composeLocalSystemOperations')).toEqual([
       [
-        '{repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:logicalSchemaContract,providerRuntime:provider.runtime,databaseConfig:loadConfig(Paths.config).database}',
+        '{repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:logicalSchemaContract,schemaHistory:persistenceSchemaBinding.history,providerRuntime:provider.runtime,databaseConfig:loadConfig(Paths.config).database}',
       ],
       [
-        '{repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,providerRuntime,databaseConfig}',
+        '{repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,schemaHistory:persistenceSchemaBinding.history,providerRuntime,databaseConfig}',
       ],
     ])
     expect(callArguments(MIGRATE, text(MIGRATE), 'prepareManualDatabaseMigration')).toEqual([

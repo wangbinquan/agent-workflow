@@ -13,6 +13,7 @@ import {
   canonicalSchemaJson,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
+import type { MetaTableDeclaration } from '@/platform/persistence/schema/history/meta'
 import {
   createPortableBackupArchive,
   type PortableBackupApplicationAssets,
@@ -51,6 +52,8 @@ export async function createHostedDatabaseBackupArchive(input: {
   readonly objectSpaceId: string
   readonly keyFingerprint: string
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's epoch-2 meta tables (the exported metadata is checked against them). */
+  readonly metaTables: readonly MetaTableDeclaration[]
   readonly source: PostgresqlLogicalSource
   readonly workflows: Pick<PortableBackupApplicationAssets, 'exportWorkflows'>
   readonly assertBornHosted: () => Promise<void>
@@ -82,6 +85,7 @@ export async function createHostedDatabaseBackupArchive(input: {
           sourceProvider: 'postgresql',
           sourceGenerationId: input.source.generationId,
           contract: input.contract,
+          metaTables: input.metaTables,
           artifactRoot: logicalArtifactRoot,
           expectedTableRows: snapshot.tableRows,
           emptyArchive: { kind: 'born-hosted', assertProvenance: input.assertBornHosted },

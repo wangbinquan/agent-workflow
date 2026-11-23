@@ -1,9 +1,9 @@
 // Bun child only: a real additive successor in the extracted backup database.
-import '../../packages/backend/src/bootstrap/persistenceSchema'
+// RFC-549: the binary's meta tables come from the bootstrap binding (platform keeps no registration).
+import { persistenceSchemaBinding } from '../../packages/backend/src/bootstrap/persistenceSchema'
 import { Database } from 'bun:sqlite'
 import { join } from 'node:path'
 import { createRestoreSuccessor } from '../../packages/backend/tests/helpers/rfc395V3/successor'
-import { schemaHistoryRuntime } from '../../packages/backend/src/platform/persistence/schema/history/runtime'
 import { applyHistoryVersion } from '../../packages/backend/src/platform/persistence/schema/history/apply'
 import { sqliteHistorySession } from '../../packages/backend/src/platform/persistence/sqlite/historySession'
 import type { HistoryVersion } from '../../packages/backend/src/platform/persistence/schema/history/types'
@@ -19,7 +19,7 @@ try {
   const successor = createRestoreSuccessor(previous, 'ops019_future_probe', 'ops019-future')
   await applyHistoryVersion(sqliteHistorySession(db), {
     version: successor,
-    metaTables: schemaHistoryRuntime().metaTables,
+    metaTables: persistenceSchemaBinding.history.metaTables,
   })
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
 } finally {

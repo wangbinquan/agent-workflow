@@ -19,6 +19,7 @@ import {
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 
 import { type LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 
 export class PostgresqlProviderBackupError extends Error {
   constructor(
@@ -37,10 +38,13 @@ type PostgresqlLogicalSourceFactory = (input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly generationId: string
   readonly contract: LogicalSchemaContract
+  readonly schemaHistory: SchemaHistoryRuntime
 }) => Promise<PostgresqlLogicalSource>
 
 export interface CreatePostgresqlProviderBackupOptions {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly runtime: PostgresqlDatabaseRuntime
   /**
    * RFC-359 W9：workflow / worktree 的行选择没有 provider 差异，由组合根注入的中立实现
@@ -88,6 +92,7 @@ export async function createPostgresqlProviderBackup(
         runtime: options.runtime,
         generationId: generation.generationId,
         contract,
+        schemaHistory: options.schemaHistory,
       })
       let receipt: Awaited<ReturnType<typeof exportLogicalDatabaseArtifact>>
       try {
@@ -107,6 +112,7 @@ export async function createPostgresqlProviderBackup(
           },
           expectedTableRows: snapshot.tableRows,
           contract,
+          metaTables: options.schemaHistory.metaTables,
           artifactRoot: logicalArtifactRoot,
           now: () => options.now ?? Date.now(),
         })

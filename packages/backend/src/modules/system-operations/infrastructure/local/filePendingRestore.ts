@@ -31,6 +31,7 @@ import {
 } from '@/platform/persistence/sqlite/systemProviderRestore'
 import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
 import { settleEpochSwitchBeforePointerReplacement } from '../epochSwitch/pointerReplacement'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 
 const log = createLogger('pendingRestore')
 
@@ -200,6 +201,8 @@ export function stagePendingRestore(tarballPath: string, opts: StagePendingResto
 
 export interface ApplyPendingRestoreOptions {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   appHome?: string
   dbPath?: string
   migrationsFolder: string
@@ -238,9 +241,10 @@ export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions)
 
   log.warn('applying staged restore before openDb', { staged: marker.stagedTarball })
   try {
-    await settleEpochSwitchBeforePointerReplacement({ appHome })
+    await settleEpochSwitchBeforePointerReplacement({ appHome, schemaHistory: opts.schemaHistory })
     await restoreBackup(marker.stagedTarball, {
       contract: opts.contract,
+      schemaHistory: opts.schemaHistory,
       appHome,
       dbPath: opts.dbPath,
       migrationsFolder: opts.migrationsFolder,

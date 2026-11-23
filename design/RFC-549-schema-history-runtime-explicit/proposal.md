@@ -22,7 +22,7 @@ bootstrap，于是 bootstrap 在模块求值时调 `registerSchemaHistoryRuntime
 
 - **G1 显式交入**：`RuntimeSchemaBinding`（RFC-545 的 live 绑定）多一项 `history`；删去 platform 的模块级登记与读取函数；读历史的函数都由
   调用方交入——已经收下 live 绑定的取其中的历史，bootstrap 与 SQLite 客户端取 bootstrap 的常量，其余沿调用链多一个参数；Worker 的初始化
-  消息必须带历史。
+  消息必须带元数据表。
 - **G2 结局不变**：每处读到的 head、历代版本、目录缓存与元数据表与原先相同；迁移、恢复、备份、逻辑复制与启动准入的行为不变。
 - **G3 下一版本的启动仍可演练**：e2e 用“下一个版本”启动真实 daemon 的夹具改用 bootstrap 的一处替换口（组合根之内，design §14 不计；生产
   代码不调用它）。
@@ -40,7 +40,7 @@ bootstrap，于是 bootstrap 在模块求值时调 `registerSchemaHistoryRuntime
 
 ## 5. 验收标准
 
-- **AC-1**：`schema/history/runtime.ts` 没有模块级状态；读历史的函数都由调用方显式交入；Worker 的初始化消息必须带历史。
+- **AC-1**：`schema/history/runtime.ts` 没有模块级状态；读历史的函数都由调用方显式交入；Worker 的初始化消息必须带元数据表。
 - **AC-2**：各处读到的历史与原先相同，迁移 / 恢复 / 备份 / 逻辑复制 / 启动准入的结局不变。
 - **AC-3**：模块级可变单例 39 → 37、计数不升；新增 RFC-549 用例并登记 guard-manifest；读旧接口的用例与 e2e 夹具随改。
 - **AC-4**：受影响用例全部通过；推送后 exact SHA 的 GitHub Actions 全绿（环境性红格逐格归因、如实记录）。

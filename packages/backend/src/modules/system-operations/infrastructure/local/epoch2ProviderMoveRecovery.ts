@@ -77,6 +77,7 @@ export async function recoverEpoch2ProviderMove(
   const recovery = createDatabaseMigrationCoordinator({
     ...options,
     headContract: options.contract,
+    schemaHistory: options.liveSchema.history,
     interruptedOperationId: pending.operationId,
     admission: {
       async freezeAndDrain() {},

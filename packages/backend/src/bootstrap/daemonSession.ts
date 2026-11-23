@@ -1,7 +1,7 @@
 import { composeTaskExecutionParticipantBindings } from './crossContextClosure'
 import { selectedSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
 // RFC-391 — the sole daemon session graph and lifecycle composition.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { deploymentSelectionsOf } from './deploymentSelections'
 import { composeDaemonApplication } from './daemonApplication'
 import { DAEMON_SESSION_ADAPTERS, type DaemonSessionAdapter } from './daemonSessionAdapters'
@@ -231,6 +231,7 @@ export async function composeDaemonSession(
   })
   const databaseMigration = composeDatabaseMigrationModule({
     contract: logicalSchemaContract,
+    schemaHistory: persistenceSchemaBinding.history,
     admission: input.migrationAdmission,
     sqlitePath: activeDbPath,
     operationsRoot: Paths.databaseMigrationsDir,

@@ -3,7 +3,7 @@ import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/appli
 import type { ChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
 import { registerProviderFixtureCleanup } from './providerFixtureCleanup'
 // RFC-392: every HTTP fixture enters the same application graph and owns its finite lifetime.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach } from 'bun:test'
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -246,6 +246,7 @@ export async function createProviderHttpApplicationFromBinding(
     const databaseMigration =
       input.databaseMigration ??
       composeDatabaseMigrationModule({
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         admission: {
           freezeAndDrain: unexpectedAdmission,

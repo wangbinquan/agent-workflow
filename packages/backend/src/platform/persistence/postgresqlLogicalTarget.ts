@@ -19,7 +19,7 @@ import { createPostgresqlCapabilities } from './capabilities'
 import type { PostgresqlDatabaseRuntime } from './postgresqlRuntime'
 import type { PostgresqlSchemaPlan } from './postgresqlSchema'
 import type { LogicalTargetTableVerification } from './logicalDatabaseRestore'
-import { schemaHistoryRuntime, runtimeHistoryAdmission } from './schema/history/runtime'
+import { runtimeHistoryAdmission, type SchemaHistoryRuntime } from './schema/history/runtime'
 import { installConversionHistoryHead } from './schema/history/apply'
 import { postgresqlHistoryConnection } from './schema/history/connection'
 import { admitHistory } from './schema/history/admission'
@@ -90,8 +90,10 @@ export async function openPostgresqlLogicalTarget(input: {
   contract: LogicalSchemaContract
   plan: PostgresqlSchemaPlan
   verifyMigrationHistory?: (plan: PostgresqlSchemaPlan) => Promise<void>
+  /** RFC-549: the binary's schema history (head plan, meta tables and admission). */
+  schemaHistory: SchemaHistoryRuntime
 }): Promise<PostgresqlLogicalTarget> {
-  const binding = schemaHistoryRuntime()
+  const binding = input.schemaHistory
   const head = binding.head()
   if (
     input.contract.digest !== input.headContract.digest ||
@@ -255,7 +257,11 @@ export async function openPostgresqlLogicalTarget(input: {
       if (active.length !== 1) throw new Error('epoch2-source-generation-missing')
       installedSourceGenerationId = String(active[0]!.generation_id)
       await tx(async () => {
-        await restoreEpochMetadata(postgresqlHistoryConnection(connection), snapshot)
+        await restoreEpochMetadata(
+          postgresqlHistoryConnection(connection),
+          snapshot,
+          binding.metaTables,
+        )
         await setState((await state())?.stage ?? 'prepared')
       })
     },
@@ -422,7 +428,7 @@ export async function openPostgresqlLogicalTarget(input: {
               release() {},
             }),
           }),
-          runtimeHistoryAdmission(),
+          runtimeHistoryAdmission(binding),
         )
         for (const table of input.contract.tables)
           await connection.unsafe(`ANALYZE ${tableName(table.providerTables.postgresql!)}`)

@@ -2,7 +2,7 @@
 // RFC-391: both engines use one passive graph; cold restore, selection admission and
 // maintenance materialization protection retain their explicit behavior contracts.
 import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
@@ -48,6 +48,7 @@ function fixture(harness: ProviderDatabaseHarness) {
     throw new Error('migration not started by application fixture')
   }
   const databaseMigration = composeDatabaseMigrationModule({
+    schemaHistory: persistenceSchemaBinding.history,
     fileSnapshots: createFileSnapshotTracker(),
     contract: logicalSchemaContract,
     admission: {

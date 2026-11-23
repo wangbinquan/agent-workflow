@@ -263,6 +263,7 @@ test('invalid target environment is rejected before retained-source access or an
   const f = fixture('switched', true)
   const calls: string[] = []
   const coordinator = createDatabaseMigrationCoordinator({
+    schemaHistory: persistenceSchemaBinding.history,
     fileSnapshots: createFileSnapshotTracker(),
     ...f.options,
     headContract: logicalSchemaContract,
@@ -302,6 +303,7 @@ test('the coordinator itself never clears a failed move during automatic recover
   f.fail()
   const before = f.manifestBytes()
   const coordinator = createDatabaseMigrationCoordinator({
+    schemaHistory: persistenceSchemaBinding.history,
     fileSnapshots: createFileSnapshotTracker(),
     ...f.options,
     headContract: logicalSchemaContract,

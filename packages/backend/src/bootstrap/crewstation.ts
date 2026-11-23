@@ -272,6 +272,7 @@ export async function composeCrewStationProfile(
   })
   const databaseBackup = composeCrewStationDatabaseBackups({
     contract: logicalSchemaContract,
+    schemaHistory: persistenceSchemaBinding.history,
     db,
     runtime: prepared.runtime.runtime,
     fence,

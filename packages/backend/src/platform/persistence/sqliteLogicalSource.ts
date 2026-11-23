@@ -1,7 +1,7 @@
 import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { sqliteHistoryConnection } from './schema/history/connection'
 import { captureEpochMetadata, type EpochMetadataSnapshot } from './schema/history/metadataSnapshot'
-import { schemaHistoryRuntime } from './schema/history/runtime'
+import type { MetaTableDeclaration } from './schema/history/meta'
 // RFC-349 — read-only, lossless SQLite source used by the logical migration
 // worker. Every integer query opts into Bun SQLite safeIntegers so a value is
 // rejected or copied exactly instead of first passing through a JS double.
@@ -94,7 +94,7 @@ function sqliteKeyValue(value: CanonicalLogicalValue): unknown {
   return typeof decoded === 'boolean' ? (decoded ? 1 : 0) : decoded
 }
 
-function tableNames(db: Database): string[] {
+function tableNames(db: Database, metaTables: readonly MetaTableDeclaration[]): string[] {
   return (
     db
       .query(
@@ -107,13 +107,15 @@ function tableNames(db: Database): string[] {
       (name) =>
         name !== '__drizzle_migrations' &&
         name !== '_drizzle_migrations' &&
-        !schemaHistoryRuntime().metaTables.some((table) => name === `aw_meta_${table.name}`),
+        !metaTables.some((table) => name === `aw_meta_${table.name}`),
     )
 }
 
 export function openSqliteLogicalSource(input: {
   readonly path: string
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's epoch-2 meta tables (left out of the roster, captured as metadata). */
+  readonly metaTables: readonly MetaTableDeclaration[]
 }): SqliteLogicalSource {
   const db = openSqliteForRead(input.path)
   let closed = false
@@ -150,7 +152,7 @@ export function openSqliteLogicalSource(input: {
     }
     try {
       assertExactSchemaRoster(
-        tableNames(db),
+        tableNames(db, input.metaTables),
         input.contract.tables.map((table) => table.sourceTable),
       )
     } catch {
@@ -193,7 +195,7 @@ export function openSqliteLogicalSource(input: {
   const source: SqliteLogicalSource = {
     provider: 'sqlite' as const,
     path: input.path,
-    readMetadata: () => captureEpochMetadata(sqliteHistoryConnection(db)),
+    readMetadata: () => captureEpochMetadata(sqliteHistoryConnection(db), input.metaTables),
     async preflight() {
       return snapshot()
     },

@@ -4,7 +4,7 @@
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { buildFrozenEpoch1LogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
@@ -292,7 +292,9 @@ describe('RFC-349 frozen epoch-1 converter-input finalization', () => {
   })
 })
 
-const LIVE_PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract)
+const LIVE_PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract, {
+  schemaHistory: persistenceSchemaBinding.history,
+})
 const LIVE_TABLE = logicalSchemaContract.tables.find((table) => table.id === 'maintenance_state')!
 const LIVE_EXPECTED = logicalSchemaContract.tables.map((table) => ({
   table: table.id,
@@ -352,6 +354,7 @@ async function liveFixture(
   })
   const open = () =>
     openPostgresqlLogicalTarget({
+      schemaHistory: persistenceSchemaBinding.history,
       runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',

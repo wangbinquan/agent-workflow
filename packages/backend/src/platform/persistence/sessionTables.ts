@@ -69,6 +69,12 @@ export function tablesOf(handle: object): PersistenceTables {
     throw new Error('Native persistence handle has no epoch-2 table set')
   return context.tables
 }
+/** RFC-549: the live schema (and with it the binary's schema history) the provider bound this handle with. */
+export function liveSchemaOf(handle: object): RuntimeSchemaBinding {
+  const live = databaseHandleContext(handle).live
+  if (live === null) throw new Error('Native persistence handle has no live schema binding')
+  return live
+}
 export function engineForHandle(handle: object): EngineCapabilities {
   return databaseHandleContext(handle).engine
 }

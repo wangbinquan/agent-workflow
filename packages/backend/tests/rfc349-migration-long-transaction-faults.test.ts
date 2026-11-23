@@ -43,7 +43,7 @@ import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSche
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
 import { digestSchemaContract } from '@/platform/persistence/schemaContract'
 import { classifyDatabaseMigrationFailure } from '@/modules/system-operations/application/databaseMigrationRunner'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const CONTRACT_DIGEST = `sha256:${'c'.repeat(64)}`
 
@@ -122,7 +122,9 @@ const CONTRACT = contract([
   table('intent_provenance', [column({ identity: false })]),
 ])
 
-const PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract)
+const PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract, {
+  schemaHistory: persistenceSchemaBinding.history,
+})
 const EXPECTED = logicalSchemaContract.tables.map((table) => ({
   table: table.id,
   disposition: table.disposition,
@@ -216,6 +218,7 @@ function fixture(
 
 async function openTarget(fake: ReturnType<typeof fixture>) {
   return openPostgresqlLogicalTarget({
+    schemaHistory: persistenceSchemaBinding.history,
     headContract: logicalSchemaContract,
     runtime: fake.runtime,
     operationId: 'dbm_target_0001',

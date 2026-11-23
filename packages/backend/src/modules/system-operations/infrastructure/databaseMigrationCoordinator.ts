@@ -43,6 +43,7 @@ import {
 } from '@/platform/persistence/generationStore'
 import { verifyDatabaseMigrationManifest } from '../domain/databaseMigration'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import {
   resolvePostgresqlAdditiveRowBridge,
   type PostgresqlMigrationHistory,
@@ -103,6 +104,8 @@ export class DatabaseMigrationCoordinatorError extends Error {
 
 export interface DatabaseMigrationCoordinatorOptions {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly sqlitePath: string
   readonly operationsRoot: string
   readonly generationPointerPath: string
@@ -265,7 +268,7 @@ export function createDatabaseMigrationCoordinator(
 ): DatabaseMigrationCoordinatorPort {
   const sourceSqlitePath = retainedSqlitePath(options.generationPointerPath, options.sqlitePath)
   const contract = options.contract
-  const plan = buildPostgresqlSchemaPlan(contract)
+  const plan = buildPostgresqlSchemaPlan(contract, { schemaHistory: options.schemaHistory })
   const store = createFileDatabaseMigrationStore({ root: options.operationsRoot })
   const controlPlane = createDatabaseMigrationControlPlane({ store })
   const artifacts = createFileDatabaseMigrationArtifactStore({
@@ -285,7 +288,10 @@ export function createDatabaseMigrationCoordinator(
   const activeRuns = new Map<string, Promise<DatabaseMigrationStatusView>>()
   let historyPromise: Promise<PostgresqlMigrationHistory> | undefined
   const history = () =>
-    (historyPromise ??= loadPostgresqlMigrationHistory({ headContract: options.headContract }))
+    (historyPromise ??= loadPostgresqlMigrationHistory({
+      headContract: options.headContract,
+      schemaHistory: options.schemaHistory,
+    }))
   const operationVersion = async (operationId: string) => {
     const manifest = controlPlane.readManifest(operationId)
     if (manifest.payload.source.schemaDigest === contract.digest) return { contract, plan }
@@ -332,7 +338,11 @@ export function createDatabaseMigrationCoordinator(
   }
 
   const inspectSqliteSource = async () => {
-    const source = await openSqliteLogicalSourceWorker({ path: sourceSqlitePath, contract })
+    const source = await openSqliteLogicalSourceWorker({
+      path: sourceSqlitePath,
+      contract,
+      schemaHistory: options.schemaHistory,
+    })
     try {
       return await source.preflight()
     } finally {
@@ -406,6 +416,7 @@ export function createDatabaseMigrationCoordinator(
         ? await openSqliteLogicalSourceWorker({
             path: sourceSqlitePath,
             contract: version.contract,
+            schemaHistory: options.schemaHistory,
           })
         : {
             provider: 'sqlite',
@@ -459,6 +470,7 @@ export function createDatabaseMigrationCoordinator(
         sourceGenerationId: manifest.payload.source.generationId,
         contract: version.contract,
         plan: version.plan,
+        schemaHistory: options.schemaHistory,
       })
       return openingTarget
     }
@@ -530,6 +542,7 @@ export function createDatabaseMigrationCoordinator(
       target: logicalTarget,
       targetRuntime: runtime,
       contract: version.contract,
+      schemaHistory: options.schemaHistory,
       targetSchemaDigest: () => targetSchemaDigest,
       admission,
       safetyBackup,
@@ -682,6 +695,7 @@ export function createDatabaseMigrationCoordinator(
       await settleEpochSwitchBeforePointerReplacement({
         appHome: dirname(options.generationPointerPath),
         env: options.env,
+        schemaHistory: options.schemaHistory,
       })
       const generation = liveGeneration().payload
       // A successful cutover changes the live provider. Replay the operation

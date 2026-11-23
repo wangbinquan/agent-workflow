@@ -3,7 +3,7 @@ import {
   retainGenerationPointer,
   restoreRetainedGenerationPointer,
 } from '@/platform/persistence/generationPointerV2'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 // RFC-349 — the single durable one-click migration application used by CLI,
 // Settings and recovery. Transport adapters start/query this runner; they do
 // not assemble phases, provider operations or cutover rules themselves.
@@ -284,6 +284,8 @@ export function createDatabaseMigrationRunner(deps: {
   readonly target: PostgresqlLogicalTarget
   readonly targetRuntime: PostgresqlDatabaseRuntime
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history (the switched pointer records its head). */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly admission: DatabaseMigrationAdmissionPort
   readonly safetyBackup: DatabaseMigrationSafetyBackupPort
   readonly artifacts: DatabaseMigrationArtifactStorePort
@@ -348,7 +350,7 @@ export function createDatabaseMigrationRunner(deps: {
     const switched = manifest.payload.checkpoints.find(
       (checkpoint) => checkpoint.phase === 'switched',
     )
-    const head = schemaHistoryRuntime().head()
+    const head = deps.schemaHistory.head()
     writeGenerationPointerV2({
       pointerPath: deps.generationPointerPath,
       payload: {

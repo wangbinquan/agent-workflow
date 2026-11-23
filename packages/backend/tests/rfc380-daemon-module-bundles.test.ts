@@ -1,6 +1,6 @@
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-380: construction is passive, session identities are shared, and a replacement gets its own graph.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
@@ -43,12 +43,14 @@ function graph(
   const adapters =
     binding.provider === 'sqlite'
       ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+          schemaHistory: persistenceSchemaBinding.history,
           contract: logicalSchemaContract,
           db: binding.db,
           appHome,
           secretBox,
         })
       : DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+          schemaHistory: persistenceSchemaBinding.history,
           contract: logicalSchemaContract,
           db: binding.db,
           runtime: binding.runtime,

@@ -15,7 +15,6 @@ import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { openReadonlySqliteDatabase } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 import { quickCheckDbFile } from '@/db/integrity'
 import { installSqliteBaseline } from '@/platform/persistence/sqlite/baseline'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { HistoryCatalogCache } from '@/platform/persistence/schema/history/catalog'
 import { sqliteHistoryConnection } from '@/platform/persistence/schema/history/connection'
 import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
@@ -148,7 +147,7 @@ beforeAll(async () => {
   }
   const current = new Database(join(templates, 'epoch2'))
   try {
-    const history = schemaHistoryRuntime()
+    const history = persistenceSchemaBinding.history
     installSqliteBaseline({ head: history.head(), metaTables: history.metaTables }, current, {
       generationId,
     })
@@ -448,7 +447,12 @@ test('doctorDiagnostics credentials, integrity and lifecycle readers use the pub
 test('providerBackupScheduler reads the current history and does not create a spurious backup', async () => {
   const f = fixture('epoch2')
   expect(
-    await maybePreMigrationBackup({ appHome: f.home, dbPath: f.path, enabled: true }),
+    await maybePreMigrationBackup({
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome: f.home,
+      dbPath: f.path,
+      enabled: true,
+    }),
   ).toBeNull()
   expect(existsSync(join(f.home, 'backups'))).toBe(false)
   f.unchanged()
@@ -456,7 +460,11 @@ test('providerBackupScheduler reads the current history and does not create a sp
 
 test('sqliteLogicalSource opens and preflights a WAL file without sidecars', async () => {
   const f = fixture('epoch2')
-  const source = openSqliteLogicalSource({ path: f.path, contract: logicalSchemaContract })
+  const source = openSqliteLogicalSource({
+    metaTables: persistenceSchemaBinding.history.metaTables,
+    path: f.path,
+    contract: logicalSchemaContract,
+  })
   try {
     const snapshot = await source.preflight()
     await source.assertUnchanged(snapshot)
@@ -471,11 +479,19 @@ test('systemProviderRestore history and skill-row probes accept a missing-sideca
   const f = fixture('epoch2')
   const archive = join(directory(), 'backup.tar.gz')
   await tarGz(f.home, archive)
-  expect((await planRestore(archive, { appHome: directory() })).direction).toBe('same')
+  expect(
+    (
+      await planRestore(archive, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome: directory(),
+      })
+    ).direction,
+  ).toBe('same')
   // No skills directory: stage validation must query the empty skills table.
   expect(
     (
       await validateBackupForStage(archive, {
+        schemaHistory: persistenceSchemaBinding.history,
         appHome: directory(),
         contract: logicalSchemaContract,
       })
@@ -507,7 +523,7 @@ test('migration/target/admission reads the physical catalog without opening a wr
   noSidecars(f.path)
   await admitConversionTarget(target, {
     head: persistenceHead(),
-    metaTables: schemaHistoryRuntime().metaTables,
+    metaTables: persistenceSchemaBinding.history.metaTables,
     catalogCache: new HistoryCatalogCache(),
   })
   f.unchanged()

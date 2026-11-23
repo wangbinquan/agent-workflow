@@ -25,7 +25,7 @@ import type {
   LogicalSchemaContract,
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const realTest = process.env.RFC349_TARGET_FAULTS_DATABASE_URL === undefined ? test.skip : test
 const OPERATION_ID = 'dbm_real_target_faults_01'
@@ -197,11 +197,14 @@ async function openTarget(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly contract: LogicalSchemaContract
 }): Promise<PostgresqlLogicalTarget> {
-  const plan = buildPostgresqlSchemaPlan(input.contract)
+  const plan = buildPostgresqlSchemaPlan(input.contract, {
+    schemaHistory: persistenceSchemaBinding.history,
+  })
   let lastError: unknown
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       return await openPostgresqlLogicalTarget({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         runtime: input.runtime,
         operationId: OPERATION_ID,

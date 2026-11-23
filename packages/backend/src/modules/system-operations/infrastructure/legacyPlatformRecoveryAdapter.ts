@@ -22,6 +22,7 @@ import type { AdminBackupCoordinatorPort } from '../application/ports/adminBacku
 import { SCHEDULED_BACKUP_REQUEST } from '../domain/backup'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
 import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 
 interface BackupResources {
   readonly db: DbClient
@@ -64,6 +65,8 @@ export interface LegacyPlatformRecoveryAdapter {
 
 export function createLegacyPlatformRecoveryAdapter(deps: {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history (restore planning, staging, pointer replacement and apply). */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly artifacts: RestoreArtifactPathResolver
   readonly backupResources: () => Promise<BackupResources> | BackupResources
   /** Source Control owns credential sealing and the credential-in-path safety
@@ -111,6 +114,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
         appHome: deps.appHome,
         migrationsFolder: await deps.resolveRestoreMigrations(),
         skipIntegrityCheck: input.skipIntegrityCheck,
+        schemaHistory: deps.schemaHistory,
       })
       return {
         backupKind: plan.manifest?.kind ?? null,
@@ -120,7 +124,10 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
       }
     },
     async stage(artifactRef, input) {
-      await settleEpochSwitchBeforePointerReplacement({ appHome: deps.appHome })
+      await settleEpochSwitchBeforePointerReplacement({
+        appHome: deps.appHome,
+        schemaHistory: deps.schemaHistory,
+      })
       const path = deps.artifacts.pathOf(artifactRef)
       const migrationsFolder = await deps.resolveRestoreMigrations()
       const plan = await mechanisms.validateBackupForStage(path, {
@@ -128,6 +135,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
         appHome: deps.appHome,
         migrationsFolder,
         skipIntegrityCheck: input.skipIntegrityCheck,
+        schemaHistory: deps.schemaHistory,
       })
       mechanisms.stagePendingRestore(path, {
         appHome: deps.appHome,
@@ -161,9 +169,13 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
       }
 
       try {
-        await settleEpochSwitchBeforePointerReplacement({ appHome: deps.appHome })
+        await settleEpochSwitchBeforePointerReplacement({
+          appHome: deps.appHome,
+          schemaHistory: deps.schemaHistory,
+        })
         const result = await mechanisms.restoreBackup(deps.artifacts.pathOf(artifactRef), {
           contract: deps.contract,
+          schemaHistory: deps.schemaHistory,
           appHome: deps.appHome,
           dbPath: deps.dbPath,
           migrationsFolder: await deps.resolveRestoreMigrations(),

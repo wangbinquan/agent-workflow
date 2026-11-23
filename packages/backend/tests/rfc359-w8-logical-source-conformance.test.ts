@@ -72,7 +72,7 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import type { LogicalTableContract } from '@/platform/persistence/schemaContract'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import {
   describeEachProvider,
   resolvePostgresqlTestUrlEnv,
@@ -121,7 +121,11 @@ function openSqliteSource(harness: ProviderHarness): OpenedSource {
   const path = join(root, 'db.sqlite')
   const raw = (harness.db as unknown as { $client: Database }).$client
   writeFileSync(path, raw.serialize())
-  const source = openSqliteLogicalSource({ path, contract: CONTRACT })
+  const source = openSqliteLogicalSource({
+    metaTables: persistenceSchemaBinding.history.metaTables,
+    path,
+    contract: CONTRACT,
+  })
   return {
     source: source as unknown as LogicalSourceProbe,
     sqlitePath: path,
@@ -149,6 +153,7 @@ async function openPostgresqlSource(): Promise<OpenedSource> {
   })
   try {
     const source = await openPostgresqlLogicalSource({
+      schemaHistory: persistenceSchemaBinding.history,
       runtime,
       generationId: GENERATION_ID,
       contract: CONTRACT,

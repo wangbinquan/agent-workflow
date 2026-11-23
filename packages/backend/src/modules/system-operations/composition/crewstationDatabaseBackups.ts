@@ -8,6 +8,7 @@ import { createPortableBackupApplicationAssets } from '@/platform/persistence/po
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import type { HostedObjectPublications } from '../infrastructure/crewstation/objectPublicationContract'
 import { createHostedBackupCatalog } from '../infrastructure/crewstation/databaseBackupCatalog'
 import { readHostedDatabaseBackupProvenance } from '../infrastructure/crewstation/databaseBackupProvenance'
@@ -16,6 +17,8 @@ import { sha256Hex } from '@/util/hash'
 
 export function composeCrewStationDatabaseBackups(input: {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, from bootstrap. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly db: PersistenceDb
   readonly runtime: PostgresqlDatabaseRuntime
   readonly fence: CrewStationMutationFence
@@ -37,6 +40,7 @@ export function composeCrewStationDatabaseBackups(input: {
         runtime: input.runtime,
         generationId: input.runtime.generationId,
         contract,
+        schemaHistory: input.schemaHistory,
       }),
     assertBornHosted: async () => {
       await provenance()

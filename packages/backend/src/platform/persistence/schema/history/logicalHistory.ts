@@ -5,15 +5,17 @@ import type {
   PostgresqlMigrationHistory,
   PostgresqlMigrationVersion,
 } from '../../postgresqlMigrationSequence'
-import { schemaHistoryRuntime } from './runtime'
+import type { SchemaHistoryRuntime } from './runtime'
 import { projectLogicalSchemaContract } from '../logicalContract'
 import { digestSchemaContract } from '../canonical'
 export async function loadPostgresqlMigrationHistory(input: {
   headContract: LogicalSchemaContract
   plan?: PostgresqlSchemaPlan
   migrationsFolder?: string
+  /** RFC-549: the binary's schema history, handed in by the caller. */
+  schemaHistory: SchemaHistoryRuntime
 }): Promise<PostgresqlMigrationHistory> {
-  const binding = schemaHistoryRuntime()
+  const binding = input.schemaHistory
   const versions: PostgresqlMigrationVersion[] = (binding.history?.() ?? [binding.head()]).map(
     (version) => {
       const schema = version.contract.contract
@@ -66,6 +68,7 @@ export async function verifyPostgresqlMigrationHistory(input: {
   headContract: LogicalSchemaContract
   plan: PostgresqlSchemaPlan
   migrationsFolder?: string
+  schemaHistory: SchemaHistoryRuntime
 }): Promise<void> {
   const history = await loadPostgresqlMigrationHistory(input)
   if (
@@ -81,8 +84,9 @@ export async function verifyPostgresqlMigrationHistory(input: {
 export async function recordedLiveLogicalContract(
   digest: string,
   current: LogicalSchemaContract,
+  schemaHistory: SchemaHistoryRuntime,
 ): Promise<LogicalSchemaContract | null> {
   if (digest === current.digest) return current
-  const history = await loadPostgresqlMigrationHistory({ headContract: current })
-  return history.versions.find((version) => version.contract.digest === digest)?.contract ?? null
+  const lineage = await loadPostgresqlMigrationHistory({ headContract: current, schemaHistory })
+  return lineage.versions.find((version) => version.contract.digest === digest)?.contract ?? null
 }

@@ -1,7 +1,7 @@
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withWorkspaceMaintenancePorts } from './sourceControlTaskPorts'
 // RFC-383: real session bundles on each provider; no daemon, timers or external services.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
@@ -34,12 +34,14 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   const adapters =
     binding.provider === 'sqlite'
       ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+          schemaHistory: persistenceSchemaBinding.history,
           contract: logicalSchemaContract,
           db: binding.db,
           appHome,
           secretBox,
         })
       : DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+          schemaHistory: persistenceSchemaBinding.history,
           contract: logicalSchemaContract,
           db: binding.db,
           runtime: binding.runtime,

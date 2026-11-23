@@ -16,7 +16,7 @@ import { createInMemoryDb } from '@/db/client'
 import { createDatabaseMigrationCoordinator } from '@/modules/system-operations/infrastructure/databaseMigrationCoordinator'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
@@ -39,6 +39,7 @@ describe('RFC-349 production database migration coordinator', () => {
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
+      schemaHistory: persistenceSchemaBinding.history,
       fileSnapshots: createFileSnapshotTracker(),
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
@@ -84,6 +85,7 @@ describe('RFC-349 production database migration coordinator', () => {
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
+      schemaHistory: persistenceSchemaBinding.history,
       fileSnapshots: createFileSnapshotTracker(),
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
@@ -187,6 +189,7 @@ describe('RFC-349 production database migration coordinator', () => {
         failBackground = reject
       })
       const { coordinator } = composeDatabaseMigrationModule({
+        schemaHistory: persistenceSchemaBinding.history,
         fileSnapshots: createFileSnapshotTracker(),
         contract: logicalSchemaContract,
         sqlitePath,

@@ -208,9 +208,20 @@ test('metadata replay retains lineage and retires the previous active generation
   const a = openDb({ path: join(home(), 'db.sqlite'), generationId: 'dbg_source_metadata' }),
     b = openDb({ path: join(home(), 'db.sqlite'), generationId: 'dbg_target_metadata' })
   try {
-    const snapshot = await captureEpochMetadata(sqliteHistoryConnection(a.$client))
-    await restoreEpochMetadata(sqliteHistoryConnection(b.$client), snapshot)
-    await restoreEpochMetadata(sqliteHistoryConnection(b.$client), snapshot)
+    const snapshot = await captureEpochMetadata(
+      sqliteHistoryConnection(a.$client),
+      persistenceSchemaBinding.history.metaTables,
+    )
+    await restoreEpochMetadata(
+      sqliteHistoryConnection(b.$client),
+      snapshot,
+      persistenceSchemaBinding.history.metaTables,
+    )
+    await restoreEpochMetadata(
+      sqliteHistoryConnection(b.$client),
+      snapshot,
+      persistenceSchemaBinding.history.metaTables,
+    )
     expect(
       b.$client.query("SELECT count(*) AS n FROM aw_meta_generations WHERE state='retired'").get(),
     ).toEqual({ n: 1 })

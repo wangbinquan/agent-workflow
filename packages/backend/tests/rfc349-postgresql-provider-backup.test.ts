@@ -25,7 +25,7 @@ import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest
 import type { PortableBackupApplicationAssets } from '@/platform/persistence/portableBackupArchive'
 import { captureWorktreeRows } from '@/platform/persistence/worktreeBackup'
 import { extractTarGz } from '@/util/archive'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { workflowFixture } from './helpers/model'
 
 const roots: string[] = []
@@ -147,7 +147,11 @@ async function logicalSource(
   fixture: Awaited<ReturnType<typeof livePostgresqlFixture>>,
   onClose: () => void,
 ): Promise<PostgresqlLogicalSource> {
-  const source = openSqliteLogicalSource({ path: fixture.dbPath, contract: CONTRACT })
+  const source = openSqliteLogicalSource({
+    metaTables: persistenceSchemaBinding.history.metaTables,
+    path: fixture.dbPath,
+    contract: CONTRACT,
+  })
   const sqliteSnapshot = await source.preflight()
   const snapshot = Object.freeze({
     databaseFingerprint: sqliteSnapshot.databaseFingerprint,
@@ -184,6 +188,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     let closed = 0
 
     const backup = await createPostgresqlProviderBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       appHome: fixture.appHome,
       runtime: fixture.runtime,
@@ -226,7 +231,11 @@ describe('RFC-349 PostgreSQL provider backup', () => {
       activeTableCount: 234,
       archiveOnlyTableCount: 0,
     })
-    const nativeSource = openSqliteLogicalSource({ path: fixture.dbPath, contract: CONTRACT })
+    const nativeSource = openSqliteLogicalSource({
+      metaTables: persistenceSchemaBinding.history.metaTables,
+      path: fixture.dbPath,
+      contract: CONTRACT,
+    })
     try {
       const snapshot = await nativeSource.preflight()
       expect(envelope.payload.activeRows).toBe(snapshot.totalRows)
@@ -238,6 +247,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
             'utf8',
           ),
         ),
+        persistenceSchemaBinding.history.metaTables,
       )
       expect(metadata).toEqual(await nativeSource.readMetadata!())
       expect(
@@ -256,6 +266,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     writeFileSync(join(fixture.appHome, 'config.json'), '{"database":{"provider":"postgresql"}}')
 
     const backup = await createPostgresqlProviderBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       appHome: fixture.appHome,
       runtime: fixture.runtime,
@@ -283,6 +294,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     } as PostgresqlDatabaseRuntime
     await expect(
       createPostgresqlProviderBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         appHome,
         runtime,

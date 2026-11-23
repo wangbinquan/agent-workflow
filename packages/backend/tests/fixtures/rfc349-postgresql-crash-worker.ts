@@ -25,7 +25,7 @@ import {
   type PostgresqlLogicalTarget,
 } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 
 const OPERATION_ID = 'dbm_hosted_crash_matrix'
@@ -160,7 +160,11 @@ async function main(): Promise<void> {
   ensureSource(sourcePath)
 
   const contract = logicalSchemaContract
-  const source = openSqliteLogicalSource({ path: sourcePath, contract })
+  const source = openSqliteLogicalSource({
+    metaTables: persistenceSchemaBinding.history.metaTables,
+    path: sourcePath,
+    contract,
+  })
   const sourceSnapshot = await source.preflight()
   const metadata = await source.readMetadata!()
   const activeGeneration = metadata.payload.tables
@@ -223,16 +227,20 @@ async function main(): Promise<void> {
   const target = crashAwareTarget(
     input,
     await openPostgresqlLogicalTarget({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       runtime,
       operationId: OPERATION_ID,
       sourceGenerationId: sourceGenerationId,
       contract,
-      plan: buildPostgresqlSchemaPlan(contract),
+      plan: buildPostgresqlSchemaPlan(contract, {
+        schemaHistory: persistenceSchemaBinding.history,
+      }),
     }),
   )
   try {
     const runner = createDatabaseMigrationRunner({
+      schemaHistory: persistenceSchemaBinding.history,
       controlPlane,
       source,
       sourceSnapshot,

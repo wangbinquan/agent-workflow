@@ -7,7 +7,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ulid } from 'ulid'
 import { first } from '@/platform/persistence/queryHelpers'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -89,12 +89,18 @@ describeEachProvider(
           sqlite.close()
         }
         const history = await loadPostgresqlMigrationHistory({
+            schemaHistory: persistenceSchemaBinding.history,
             headContract: logicalSchemaContract,
           }),
-          source = openSqliteLogicalSource({ path, contract: history.head.contract })
+          source = openSqliteLogicalSource({
+            metaTables: persistenceSchemaBinding.history.metaTables,
+            path,
+            contract: history.head.contract,
+          })
         try {
           const snapshot = await source.preflight()
           const exported = await exportLogicalDatabaseArtifact({
+            metaTables: persistenceSchemaBinding.history.metaTables,
             operationId: 'dbm_rfc374_source_copy',
             sourceProvider: 'sqlite',
             sourceGenerationId: 'dbg_rfc374_source_copy',
@@ -117,6 +123,7 @@ describeEachProvider(
             await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
             await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
             const target = await openPostgresqlLogicalTarget({
+              schemaHistory: persistenceSchemaBinding.history,
               headContract: logicalSchemaContract,
               runtime,
               operationId: 'dbm_rfc374_target_copy',
@@ -126,6 +133,7 @@ describeEachProvider(
             })
             try {
               await restoreLogicalDatabaseBackup({
+                schemaHistory: persistenceSchemaBinding.history,
                 headContract: logicalSchemaContract,
                 artifactRoot,
                 expectedEnvelopeFileDigest: exported.envelopeFileDigest,
@@ -155,6 +163,7 @@ describeEachProvider(
             // Read the copied generation through the PG logical source as well, so both
             // provider adapters prove the same portable seq and allocator representation.
             const copied = await openPostgresqlLogicalSource({
+              schemaHistory: persistenceSchemaBinding.history,
               runtime,
               generationId: runtime.generationId,
               contract: history.head.contract,

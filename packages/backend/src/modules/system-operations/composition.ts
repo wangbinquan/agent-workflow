@@ -95,6 +95,7 @@ import {
   type DatabaseProvider,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import {
   buildPostgresqlSchemaPlan,
   type PostgresqlSchemaPlan,
@@ -214,6 +215,8 @@ function bindRepositoryBackupPreparation(
 
 export function composeSystemOperations(deps: {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, from bootstrap. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly db: DbClient
   readonly secretBox: SecretBox | undefined
   /** Bootstrap-bound Source Control backup preparation participant. */
@@ -229,6 +232,7 @@ export function composeSystemOperations(deps: {
   })
   const adapter = createLegacyPlatformRecoveryAdapter({
     contract: deps.contract,
+    schemaHistory: deps.schemaHistory,
     artifacts,
     appHome,
     dbPath: deps.dbPath ?? join(appHome, 'db.sqlite'),
@@ -261,6 +265,8 @@ export function composeSystemOperationsWithRecoveryAdapter(deps: {
  * verified target runtime. No SQLite handle or fallback enters this path. */
 export function composePostgresqlSystemOperations(deps: {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, from bootstrap. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly runtime: PostgresqlDatabaseRuntime
   /**
    * RFC-359 W9：备份 / 还原要读的 workflow 与 worktree 行没有 provider 差异，走中立
@@ -279,13 +285,15 @@ export function composePostgresqlSystemOperations(deps: {
 }): PostgresqlSystemOperationsModule {
   const appHome = deps.appHome ?? Paths.root
   const contract = deps.contract
-  const plan = deps.plan ?? buildPostgresqlSchemaPlan(contract)
+  const plan =
+    deps.plan ?? buildPostgresqlSchemaPlan(contract, { schemaHistory: deps.schemaHistory })
   requireSchemaPlanForContract(plan, contract)
   const artifacts = createRestoreArtifactIngress({
     uploadRoot: join(appHome, '.restore-upload'),
   })
   const restore: PostgresqlAdminRestoreCoordinator = createPostgresqlAdminRestoreCoordinator({
     headContract: deps.headContract,
+    schemaHistory: deps.schemaHistory,
     artifacts,
     runtime: deps.runtime,
     targetGenerationId: deps.runtime.generationId,
@@ -304,6 +312,7 @@ export function composePostgresqlSystemOperations(deps: {
   // backup — manual and scheduled backups alike.
   const backup = (deps.backup ?? createPostgresqlAdminBackupCoordinator)({
     headContract: deps.headContract,
+    schemaHistory: deps.schemaHistory,
     contract,
     runtime: deps.runtime,
     db: deps.db,
@@ -353,6 +362,7 @@ interface LocalSystemOperationsComposeInput {
   readonly databaseConfig: DatabaseConfig
   readonly appHome: string
   readonly contract: LogicalSchemaContract
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly repositoryBackupPreparationFactory: (
     db: PersistenceDb,
   ) => RepositoryBackupPreparationParticipant
@@ -369,6 +379,7 @@ function composePostgresqlLocalSystemOperations({
   databaseConfig,
   appHome,
   contract,
+  schemaHistory,
   repositoryBackupPreparation: injectedBackupPreparation,
   repositoryBackupPreparationFactory,
 }: LocalSystemOperationsComposeInput): ComposedLocalSystemOperations {
@@ -385,6 +396,7 @@ function composePostgresqlLocalSystemOperations({
     injectedBackupPreparation ?? repositoryBackupPreparationFactory(database)
   const module = composePostgresqlSystemOperations({
     headContract: contract,
+    schemaHistory,
     runtime: runtime.runtime,
     db: database,
     databaseConfig: postgresqlConfig,
@@ -399,6 +411,7 @@ function composePostgresqlLocalSystemOperations({
 
 function composeSqliteLocalSystemOperations({
   contract,
+  schemaHistory,
   provider,
   appHome,
   repositoryBackupPreparation: injectedBackupPreparation,
@@ -429,6 +442,7 @@ function composeSqliteLocalSystemOperations({
     })
   const adapter = createLegacyPlatformRecoveryAdapter({
     contract,
+    schemaHistory,
     artifacts,
     appHome,
     dbPath: sqliteRuntime.sqlitePath,
@@ -461,6 +475,8 @@ export function composeLocalSystemOperations(deps: {
     db: PersistenceDb,
   ) => RepositoryBackupPreparationParticipant
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, from bootstrap. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
   /** RFC-524: the caller reads it (the command roots read the local config file). */
   readonly databaseConfig: DatabaseConfig
@@ -476,6 +492,7 @@ export function composeLocalSystemOperations(deps: {
     databaseConfig,
     appHome,
     contract,
+    schemaHistory: deps.schemaHistory,
     repositoryBackupPreparation: deps.repositoryBackupPreparation,
     repositoryBackupPreparationFactory: deps.repositoryBackupPreparationFactory,
   })
@@ -559,8 +576,13 @@ export { createResourceLimitAudit } from './infrastructure/resourceLimitAudit'
 
 export async function applyLocalEpoch2PendingRestore(
   contract: LogicalSchemaContract,
+  schemaHistory: SchemaHistoryRuntime,
 ): Promise<boolean> {
-  return createFileDatabasePreOpenRecovery({ contract, migrationsFolder: '' }).applyStagedRestore()
+  return createFileDatabasePreOpenRecovery({
+    contract,
+    schemaHistory,
+    migrationsFolder: '',
+  }).applyStagedRestore()
 }
 
 export { composeMaintenanceSystemOperations } from './infrastructure/maintenanceSystemOperations'

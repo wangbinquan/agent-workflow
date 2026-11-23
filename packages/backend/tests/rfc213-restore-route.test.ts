@@ -2,7 +2,7 @@
 // (never hot-swaps). MUTATION CHECK (manually verified): drop the
 // stagePendingRestore call → no marker written → the hasPendingRestore assertion reds.
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { errorHandler } from '../src/util/errors'
@@ -84,6 +84,7 @@ async function appWithRoute(role: 'admin' | 'user' = 'admin'): Promise<Hono> {
   mountRestoreRoutes(
     app,
     composeSystemOperations({
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       db: {} as DbClient,
       secretBox: undefined,

@@ -29,7 +29,7 @@ import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDat
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 import type { FileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
-import { fileSnapshotTrackerOf } from '@/platform/persistence/sessionTables'
+import { fileSnapshotTrackerOf, liveSchemaOf } from '@/platform/persistence/sessionTables'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { quickCheckSqlite } from './systemBackupVacuum'
@@ -211,7 +211,9 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
       }
       // RFC-349: the portable payload is read from the immutable VACUUM
       // snapshot, never from the live synchronous connection.
-      const logicalSource = openSqliteLogicalSource({ path: dbDest, contract })
+      // RFC-549: the meta tables come from the live schema the backed-up database was bound with.
+      const metaTables = liveSchemaOf(opts.db).history.metaTables
+      const logicalSource = openSqliteLogicalSource({ path: dbDest, contract, metaTables })
       let logicalBackup: Awaited<ReturnType<typeof exportLogicalDatabaseArtifact>>
       try {
         const sourceSnapshot = await logicalSource.preflight()
@@ -230,6 +232,7 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
           },
           expectedTableRows: sourceSnapshot.tableRows,
           contract,
+          metaTables,
           artifactRoot: logicalArtifactRoot,
           now: () => opts.now ?? Date.now(),
         })

@@ -190,6 +190,7 @@ export async function composeBackupCommandOperations() {
     return composeLocalSystemOperations({
       repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
       contract: logicalSchemaContract,
+      schemaHistory: persistenceSchemaBinding.history,
       providerRuntime: provider.runtime,
       databaseConfig: loadConfig(Paths.config).database,
     })
@@ -214,6 +215,7 @@ export function composeRestoreCommandOperations() {
   return composeLocalSystemOperations({
     repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
     contract,
+    schemaHistory: persistenceSchemaBinding.history,
     providerRuntime,
     databaseConfig,
   })
@@ -229,7 +231,10 @@ export async function runDoctorCommand() {
 
 /** `db …`: the local database migration operations. */
 export function composeLocalDatabaseMigrationCommandOperations() {
-  return composeLocalDatabaseMigrationOperations(logicalSchemaContract)
+  return composeLocalDatabaseMigrationOperations(
+    logicalSchemaContract,
+    persistenceSchemaBinding.history,
+  )
 }
 
 /** `config get|set` (RFC-474): the installation's configuration file; the daemon need not run. */

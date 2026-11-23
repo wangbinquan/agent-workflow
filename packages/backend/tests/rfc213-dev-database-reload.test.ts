@@ -16,9 +16,9 @@ import { join } from 'node:path'
 import { DbCorruptionError, openDb, type OpenDbOptions } from '../src/db/client'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import {
-  registerSchemaHistoryRuntime,
-  schemaHistoryRuntime,
-} from '@/platform/persistence/schema/history/runtime'
+  persistenceSchemaBinding,
+  substitutePersistenceSchemaHistory,
+} from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 afterEach(() => {
@@ -98,12 +98,12 @@ test('changed native head and replaced database files invalidate development pre
   const f = fixture()
   const preparation: NonNullable<OpenDbOptions['developmentIntegrity']> = {}
   const queries = spyOn(Database.prototype, 'query')
-  const runtime = schemaHistoryRuntime()
+  // RFC-549: the SQLite client reads the bootstrap binding's history; the case swaps it through the bootstrap seam.
+  let restore = (): void => {}
   try {
     openDb({ ...f.options, developmentIntegrity: preparation }).$client.close()
-    const head = runtime.head()
-    registerSchemaHistoryRuntime({
-      ...runtime,
+    const head = persistenceSchemaBinding.history.head()
+    restore = substitutePersistenceSchemaHistory(() => ({
       head: () => ({
         ...head,
         contract: {
@@ -112,18 +112,18 @@ test('changed native head and replaced database files invalidate development pre
           contract: { ...head.contract.contract, digest: `sha256:${'0'.repeat(64)}` },
         },
       }),
-    })
+    }))
     expect(() => openDb({ ...f.options, developmentIntegrity: preparation })).toThrow()
     expect(preparation.validatedDatabase).toBeUndefined()
     expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(2)
-    registerSchemaHistoryRuntime(runtime)
+    restore()
     openDb({ ...f.options, developmentIntegrity: preparation }).$client.close()
     renameSync(f.options.path, `${f.options.path}.old`)
     copyFileSync(`${f.options.path}.old`, f.options.path)
     openDb({ ...f.options, developmentIntegrity: preparation }).$client.close()
     expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(4)
   } finally {
-    registerSchemaHistoryRuntime(runtime)
+    restore()
     queries.mockRestore()
   }
 })

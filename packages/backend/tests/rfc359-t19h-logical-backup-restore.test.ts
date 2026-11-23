@@ -7,7 +7,7 @@
 // PostgreSQL head. While the history held a single version the root *was* the head, so this file
 // never exercised that bridge. The native provider round trips stay on the head.
 import { persistenceHead, persistenceHistory } from '@/bootstrap/persistenceHead'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { EPOCH2_META_TABLES } from '@/modules/system-operations/composition/schema'
 import { createSqliteBaseline } from '@/platform/persistence/sqlite/baseline'
 import { bindSqliteClient } from '@/db/client'
@@ -73,7 +73,10 @@ const opaqueInputs = ' { "old" : true, "empty": null } '
 let history: PostgresqlMigrationHistory
 
 beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory({ headContract: logicalSchemaContract })
+  history = await loadPostgresqlMigrationHistory({
+    schemaHistory: persistenceSchemaBinding.history,
+    headContract: logicalSchemaContract,
+  })
 })
 
 afterEach(() => {
@@ -141,10 +144,15 @@ async function nativeArtifact(version: 'root' | 'head' = 'root') {
     sqlite.close()
   }
   const artifactRoot = join(appHome, 'old-logical')
-  const source = openSqliteLogicalSource({ path: sourcePath, contract })
+  const source = openSqliteLogicalSource({
+    metaTables: persistenceSchemaBinding.history.metaTables,
+    path: sourcePath,
+    contract,
+  })
   try {
     const snapshot = await source.preflight()
     const exported = await exportLogicalDatabaseArtifact({
+      metaTables: persistenceSchemaBinding.history.metaTables,
       operationId: oldOperation,
       sourceProvider: 'sqlite',
       sourceGenerationId: 'dbg_t19h_sqlite_original',
@@ -187,6 +195,7 @@ async function archiveFromPostgresqlSource(
     },
     async exportDatabase({ logicalArtifactRoot, operationId }) {
       const receipt = await exportLogicalDatabaseArtifact({
+        metaTables: persistenceSchemaBinding.history.metaTables,
         operationId,
         sourceProvider: 'postgresql',
         sourceGenerationId: oldGeneration,
@@ -216,6 +225,7 @@ async function archiveFromPostgresqlSource(
 async function protocolBackup() {
   const fixture = await nativeArtifact()
   const source = openSqliteLogicalSource({
+    metaTables: persistenceSchemaBinding.history.metaTables,
     path: fixture.sourcePath,
     contract: fixture.contract,
   })
@@ -276,6 +286,7 @@ describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
     const oldFiles = fileTree(fixture.artifactRoot)
     const backupDigest = digest(fixture.backup.path)
     const inspection = await inspectPortableDatabaseBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       tarballPath: fixture.backup.path,
       appHome: fixture.appHome,
@@ -286,6 +297,7 @@ describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
     expect(inspection.verification.archiveRows).toBe(0)
     const receiver = protocolTarget()
     const result = await restorePortableDatabaseBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: logicalSchemaContract,
       tarballPath: fixture.backup.path,
       appHome: fixture.appHome,
@@ -368,6 +380,7 @@ describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
     }
     await expect(
       restoreLogicalDatabaseBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         artifactRoot: fixture.artifactRoot,
         expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
@@ -386,6 +399,7 @@ describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
     }
     await expect(
       restoreLogicalDatabaseBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         artifactRoot: fixture.artifactRoot,
         expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
@@ -400,6 +414,7 @@ describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
     const failed = protocolTarget(failure)
     await expect(
       restorePortableDatabaseBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         tarballPath: fixture.backup.path,
         appHome: fixture.appHome,
@@ -431,6 +446,7 @@ describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
     let opened = false
     await expect(
       restorePortableDatabaseBackup({
+        schemaHistory: persistenceSchemaBinding.history,
         headContract: logicalSchemaContract,
         tarballPath: fixture.backup.path,
         appHome: fixture.appHome,
@@ -456,6 +472,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
       expect(decodeLogicalRow(task, chunk.payload.rows[0]!).inputs).toBe(opaqueInputs)
       expect(fixture.snapshot.tableRows.tasks).toBe(1)
       const source = openSqliteLogicalSource({
+        metaTables: persistenceSchemaBinding.history.metaTables,
         path: fixture.sourcePath,
         contract: fixture.contract,
       })
@@ -497,6 +514,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
         const originalTarget = await openPostgresqlLogicalTarget({
+          schemaHistory: persistenceSchemaBinding.history,
           headContract: logicalSchemaContract,
           runtime,
           operationId: oldOperation,
@@ -506,6 +524,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         })
         try {
           await restoreLogicalDatabaseBackup({
+            schemaHistory: persistenceSchemaBinding.history,
             headContract: logicalSchemaContract,
             artifactRoot: fixture.artifactRoot,
             expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
@@ -525,6 +544,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         }
         const oldRows = await pool.unsafe('SELECT * FROM agent_workflow.tasks ORDER BY id')
         const source = await openPostgresqlLogicalSource({
+          schemaHistory: persistenceSchemaBinding.history,
           runtime,
           generationId: oldGeneration,
           contract: history.head.contract,
@@ -549,6 +569,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
         const restored = await restorePostgresqlProviderBackup({
+          schemaHistory: persistenceSchemaBinding.history,
           headContract: logicalSchemaContract,
           tarballPath: backup.path,
           appHome: fixture.appHome,
@@ -671,6 +692,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
         const restored = await restorePostgresqlProviderBackup({
+          schemaHistory: persistenceSchemaBinding.history,
           headContract: logicalSchemaContract,
           tarballPath: fixture.backup.path,
           appHome: fixture.appHome,

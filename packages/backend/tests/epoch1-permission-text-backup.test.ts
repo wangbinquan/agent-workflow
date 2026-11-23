@@ -64,6 +64,7 @@ describeEachProvider(
           const appHome = join(home, 'restored'),
             dbPath = join(appHome, 'db.sqlite')
           await restoreBackup(backup.path, {
+            schemaHistory: persistenceSchemaBinding.history,
             contract: logicalSchemaContract,
             appHome,
             dbPath,
@@ -100,6 +101,7 @@ describeEachProvider(
             },
           })
           const backup = await createPostgresqlProviderBackup({
+            schemaHistory: persistenceSchemaBinding.history,
             headContract: logicalSchemaContract,
             contract: logicalSchemaContract,
             runtime: source.runtime,
@@ -118,9 +120,12 @@ describeEachProvider(
           const appHome = join(home, 'restored')
           mkdirSync(appHome)
           await restorePostgresqlProviderBackup({
+            schemaHistory: persistenceSchemaBinding.history,
             headContract: logicalSchemaContract,
             contract: logicalSchemaContract,
-            plan: buildPostgresqlSchemaPlan(logicalSchemaContract),
+            plan: buildPostgresqlSchemaPlan(logicalSchemaContract, {
+              schemaHistory: persistenceSchemaBinding.history,
+            }),
             runtime,
             targetGenerationId: generationId,
             tarballPath: backup.path,

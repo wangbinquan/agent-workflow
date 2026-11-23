@@ -1,5 +1,5 @@
 import { registryFromContract } from './schema/contract'
-import { schemaHistoryRuntime, runtimeHistoryAdmission } from './schema/history/runtime'
+import { runtimeHistoryAdmission, type SchemaHistoryRuntime } from './schema/history/runtime'
 import { admitPostgresqlHistoryConnection } from './schema/history/admission'
 import { projectLogicalSchemaContract } from './schema/logicalContract'
 import { postgresqlHistoryConnection } from './schema/history/connection'
@@ -126,6 +126,8 @@ export async function openPostgresqlLogicalSource(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly generationId: string
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history (generation check, admission and metadata capture). */
+  readonly schemaHistory: SchemaHistoryRuntime
 }): Promise<PostgresqlLogicalSource> {
   const health = await input.runtime.readiness()
   const connection = await input.runtime.providerPool().reserve()
@@ -151,7 +153,7 @@ export async function openPostgresqlLogicalSource(input: {
     if (
       rows.length !== 1 ||
       rows[0]?.state !== 'active' ||
-      rows[0]?.contract_digest !== schemaHistoryRuntime().head().contract.contract.digest
+      rows[0]?.contract_digest !== input.schemaHistory.head().contract.contract.digest
     ) {
       throw new PostgresqlLogicalSourceError(
         'postgresql-source-generation',
@@ -163,7 +165,8 @@ export async function openPostgresqlLogicalSource(input: {
   const source: PostgresqlLogicalSource = {
     provider: 'postgresql',
     generationId: input.generationId,
-    readMetadata: () => captureEpochMetadata(postgresqlHistoryConnection(connection)),
+    readMetadata: () =>
+      captureEpochMetadata(postgresqlHistoryConnection(connection), input.schemaHistory.metaTables),
     async preflight() {
       if (closed) {
         throw new PostgresqlLogicalSourceError(
@@ -190,7 +193,7 @@ export async function openPostgresqlLogicalSource(input: {
       await connection.unsafe('SET LOCAL search_path TO agent_workflow, public')
       const admitted = await admitPostgresqlHistoryConnection(
         postgresqlHistoryConnection(connection),
-        runtimeHistoryAdmission(),
+        runtimeHistoryAdmission(input.schemaHistory),
       )
       const schema = admitted.contract.contract
       const recorded = projectLogicalSchemaContract(registryFromContract(schema))

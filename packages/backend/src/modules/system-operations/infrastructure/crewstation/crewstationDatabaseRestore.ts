@@ -38,7 +38,10 @@ export async function restoreCrewStationDatabaseFromEnvironment(
   if (!prepared) return
   try {
     if (input.normalization === undefined) throw new Error('hosted-restore-normalization-unwired')
-    const history = await loadPostgresqlMigrationHistory({ headContract: input.contract })
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: input.contract,
+      schemaHistory: input.liveSchema.history,
+    })
     await restoreHostedDatabaseInstallation({
       headContract: input.contract,
       ...prepared,

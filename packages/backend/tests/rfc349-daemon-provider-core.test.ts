@@ -164,6 +164,7 @@ describe('RFC-349 daemon provider core', () => {
       db,
       appHome,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         db,
         appHome,
@@ -206,6 +207,7 @@ describe('RFC-349 daemon provider core', () => {
       credentials: composeLocalCredentialAdapters,
       db: fake.db,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         db: fake.db,
         runtime: fake.runtime,

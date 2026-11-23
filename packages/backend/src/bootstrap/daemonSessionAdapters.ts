@@ -1,5 +1,5 @@
 // RFC-391 — all provider differences for the two neutral daemon graphs.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -75,6 +75,7 @@ export const DAEMON_SESSION_ADAPTERS: {
     core: (input) =>
       DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
         contract: logicalSchemaContract,
+        schemaHistory: persistenceSchemaBinding.history,
         db: input.db,
         appHome: input.appHome,
         dbPath: input.dbPath ?? join(input.appHome, 'db.sqlite'),
@@ -113,6 +114,7 @@ export const DAEMON_SESSION_ADAPTERS: {
     core: (input) =>
       DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
         contract: logicalSchemaContract,
+        schemaHistory: persistenceSchemaBinding.history,
         db: input.db,
         runtime: input.provider.runtime,
         databaseConfig: requireDatabaseConfig(input.config.database, 'postgresql'),

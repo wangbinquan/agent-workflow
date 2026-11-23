@@ -3,7 +3,7 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import {
   validateBackupForStage,
   restoreBackup,
@@ -109,12 +109,17 @@ test('epoch-2 skill rows without a skills payload are refused by cold and staged
     const appHome = join(root, 'home')
     const dbPath = join(appHome, 'db.sqlite')
     await expect(
-      validateBackupForStage(artifact, { appHome, contract: logicalSchemaContract }),
+      validateBackupForStage(artifact, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        contract: logicalSchemaContract,
+      }),
     ).rejects.toThrow(
       'stage refused: backup contains skill rows but no matching skills filesystem payload',
     )
     await expect(
       restoreBackup(artifact, {
+        schemaHistory: persistenceSchemaBinding.history,
         appHome,
         dbPath,
         contract: logicalSchemaContract,
@@ -138,6 +143,7 @@ test('an empty epoch-2 DB-only restore clears the prior live skills generation',
     mkdirSync(join(appHome, 'skills/prior/files'), { recursive: true })
     writeFileSync(join(appHome, 'skills/prior/files/SKILL.md'), 'old generation')
     const restored = await restoreBackup(artifact, {
+      schemaHistory: persistenceSchemaBinding.history,
       appHome,
       dbPath,
       contract: logicalSchemaContract,

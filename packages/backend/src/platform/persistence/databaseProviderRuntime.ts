@@ -55,7 +55,7 @@ import {
   writeGenerationPointerV2,
   type GenerationPointerV2,
 } from './generationPointerV2'
-import { schemaHistoryRuntime, runtimeHistoryAdmission } from './schema/history/runtime'
+import { runtimeHistoryAdmission, type SchemaHistoryRuntime } from './schema/history/runtime'
 import {
   installHistoryHead,
   applyHistoryVersion,
@@ -312,7 +312,11 @@ function composePostgresqlProviderRuntime(
     provider: 'postgresql' as const,
     generation,
     runtime,
-    operations: createPostgresqlDatabaseOperationalAdapter({ runtime, contract: options.contract }),
+    operations: createPostgresqlDatabaseOperationalAdapter({
+      runtime,
+      contract: options.contract,
+      schemaHistory: options.liveSchema.history,
+    }),
     telemetry: runtime.telemetry,
     openClient: () =>
       (client ??= createPostgresqlDatabaseClient(runtime, { liveSchema: options.liveSchema })),
@@ -435,7 +439,7 @@ export function resolveDatabaseProviderRuntimeForRestore(
   options: ResolveDatabaseProviderRuntimeOptions,
 ): ResolvedDatabaseProviderRuntime {
   if (existsSync(options.generationPointerPath)) return resolveDatabaseProviderRuntime(options)
-  const head = schemaHistoryRuntime().head()
+  const head = options.liveSchema.history.head()
   const generationId = `dbg_${crypto.randomUUID()}`
   const appHome = dirname(options.generationPointerPath)
   const path = sqliteGenerationLayout(generationId, appHome).databasePath
@@ -543,7 +547,7 @@ export async function prepareEpoch2DatabaseProviderRuntime(
     readonly requireUpgradeLock?: () => void | Promise<void>
   },
 ): Promise<PreparedDatabaseProviderSchema> {
-  const binding = schemaHistoryRuntime()
+  const binding = options.liveSchema.history
   const head = binding.head()
   const existing = existsSync(options.generationPointerPath)
     ? readGenerationPointerV2(options.generationPointerPath)
@@ -609,6 +613,7 @@ export async function prepareEpoch2DatabaseProviderRuntime(
             dbPath: path,
             enabled: options.backupOnMigration !== false,
             recordedVersion: null,
+            schemaHistory: binding,
           })
           throw new DbCorruptionError(path, integrity.errors)
         }
@@ -635,6 +640,7 @@ export async function prepareEpoch2DatabaseProviderRuntime(
         dbPath: path,
         enabled: options.backupOnMigration !== false,
         recordedVersion: installed,
+        schemaHistory: binding,
       })
       if (pending.length) {
         const database = new Database(path)
@@ -681,6 +687,7 @@ export async function prepareEpoch2DatabaseProviderRuntime(
   try {
     const receipt = await preparePostgresqlEpoch2(
       runtime,
+      options.liveSchema.history,
       generationId,
       'apply',
       existing ? 'pointer' : 'unpublished',
@@ -719,13 +726,14 @@ export type PreparedPostgresqlProviderSchema = Extract<
 
 async function preparePostgresqlEpoch2(
   runtime: InstrumentedPostgresqlDatabaseRuntime,
+  schemaHistory: SchemaHistoryRuntime,
   generationId: string,
   mode: 'apply' | 'verify',
   selection: 'pointer' | 'unpublished' | 'hosted',
   requireUpgradeLock?: () => void | Promise<void>,
   hosted?: Extract<ResolvedDatabaseGeneration, { source: 'hosted-installation' }>,
 ): Promise<Epoch2ProviderReceipt & { readonly generationId: string }> {
-  const binding = schemaHistoryRuntime()
+  const binding = schemaHistory
   const head = binding.head()
   const pool = runtime.providerPool()
   const present = await pool.unsafe(
@@ -790,7 +798,10 @@ async function preparePostgresqlEpoch2(
       }
     }
   }
-  const admitted = await admitHistory(postgresqlHistorySession(pool), runtimeHistoryAdmission())
+  const admitted = await admitHistory(
+    postgresqlHistorySession(pool),
+    runtimeHistoryAdmission(binding),
+  )
   const active = await pool.unsafe(
     `SELECT g.generation_id, g.role, g.operation_id, w.generation_id AS marker, w.first_live_write_at FROM ${metaTableName('postgresql', 'generations')} g LEFT JOIN ${metaTableName('postgresql', 'first_write')} w ON w.generation_id = g.generation_id WHERE g.state = 'active'`,
   )
@@ -847,6 +858,7 @@ export async function prepareHostedPostgresqlProviderRuntime(input: {
   try {
     const receipt = await preparePostgresqlEpoch2(
       runtime,
+      input.liveSchema.history,
       input.generation.payload.generationId,
       input.schema,
       'hosted',

@@ -15,10 +15,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDb, type DbClient } from '@/db/client'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
-import {
-  registerSchemaHistoryRuntime,
-  schemaHistoryRuntime,
-} from '@/platform/persistence/schema/history/runtime'
 import { createHistoryVersion } from '@/platform/persistence/schema/history/compiler'
 import { deriveSchemaEdge } from '@/platform/persistence/schema/history/edgeDiff'
 import { compileContract } from '@/platform/persistence/schema/contract'
@@ -26,6 +22,7 @@ import {
   persistenceSchema,
   logicalSchemaContract,
   persistenceSchemaBinding,
+  substitutePersistenceSchemaHistory,
 } from '@/bootstrap/persistenceSchema'
 import { column } from '@/platform/persistence/schema/dsl'
 import { maybePreMigrationBackup } from '../src/platform/background/providerBackupScheduler'
@@ -35,7 +32,8 @@ import { acquireLock } from '@/util/lock'
 import { extractTarGz } from '@/util/archive'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 
-const originalHistory = schemaHistoryRuntime()
+// RFC-549: each case boots as the successor through the bootstrap seam; afterEach swaps the binary's own history back.
+let restoreHistory = (): void => {}
 const head = persistenceHead()
 const tables = persistenceSchema.tables.map((table) =>
   table.id === 'tasks'
@@ -74,7 +72,8 @@ function tmp(): string {
 afterEach(() => {
   // RFC-254: on Windows bun:sqlite frees the file handle on GC, not close(), so a
   // bare rm after close() hits EBUSY. removeTempDirSync forces a GC then deletes.
-  registerSchemaHistoryRuntime(originalHistory)
+  restoreHistory()
+  restoreHistory = () => {}
   for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
@@ -90,6 +89,7 @@ describe('maybePreMigrationBackup', () => {
     sqliteOf(db).close()
 
     const r = await maybePreMigrationBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: home,
       dbPath,
       enabled: true,
@@ -104,15 +104,15 @@ describe('maybePreMigrationBackup', () => {
     const db = openDb({ path: dbPath })
     // A real declared successor makes the current database older than the binary.
     const s = sqliteOf(db)
-    registerSchemaHistoryRuntime({
-      ...originalHistory,
+    restoreHistory = substitutePersistenceSchemaHistory(() => ({
       head: () => successor,
       history: () => [head, successor],
-    })
+    }))
     s.exec('PRAGMA wal_checkpoint(TRUNCATE);')
     s.close()
 
     const r = await maybePreMigrationBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: home,
       dbPath,
       enabled: true,
@@ -129,13 +129,13 @@ describe('maybePreMigrationBackup', () => {
     const dbPath = join(home, 'db.sqlite')
     const db = openDb({ path: dbPath })
     const s = sqliteOf(db)
-    registerSchemaHistoryRuntime({
-      ...originalHistory,
+    restoreHistory = substitutePersistenceSchemaHistory(() => ({
       head: () => successor,
       history: () => [head, successor],
-    })
+    }))
     s.close()
     const r = await maybePreMigrationBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: home,
       dbPath,
       enabled: false,
@@ -147,6 +147,7 @@ describe('maybePreMigrationBackup', () => {
   test('fresh install (no DB file) → no backup', async () => {
     const home = tmp()
     const r = await maybePreMigrationBackup({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       enabled: true,
@@ -176,11 +177,10 @@ for (const lockOwner of ['boot', 'migrate'] as const)
     const pointer = readGenerationPointerV2(common.generationPointerPath)
     if (pointer.payload.database.kind !== 'sqlite-file') throw new Error('fixture')
     const dbPath = join(home, pointer.payload.database.relativePath)
-    registerSchemaHistoryRuntime({
-      ...originalHistory,
+    restoreHistory = substitutePersistenceSchemaHistory(() => ({
       head: () => successor,
       history: () => [head, successor],
-    })
+    }))
     const lock = lockOwner === 'boot' ? acquireLock(lockPath) : undefined
     try {
       const prepared = await prepareDatabaseProviderForBoot({

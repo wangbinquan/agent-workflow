@@ -14,7 +14,7 @@
 // `postgresql-url-env-missing` 失败，不去开就安静返回 manifest。
 
 import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,7 +38,10 @@ const roots: string[] = []
 // the probe first bridges the copy across those additive edges
 // (`tests/rfc401-epoch2-history-bridge.test.ts`).
 const COPY_CONTRACT = (
-  await loadPostgresqlMigrationHistory({ headContract: logicalSchemaContract })
+  await loadPostgresqlMigrationHistory({
+    schemaHistory: persistenceSchemaBinding.history,
+    headContract: logicalSchemaContract,
+  })
 ).root.contract
 const ARTIFACT_DIGEST = `sha256:${'b'.repeat(64)}`
 const OPERATION_ID = 'dbm_operation_0001'
@@ -107,6 +110,7 @@ function acceptingWrites(): {
 
 function coordinatorOn(root: string, operationsRoot: string) {
   return createDatabaseMigrationCoordinator({
+    schemaHistory: persistenceSchemaBinding.history,
     fileSnapshots: createFileSnapshotTracker(),
     headContract: logicalSchemaContract,
     contract: logicalSchemaContract,

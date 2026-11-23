@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import {
   composeLocalDaemonDatabaseInstallation,
   composeSelectedDaemonDatabaseInstallation,
@@ -212,7 +212,15 @@ describe('RFC-532 ④ 两种安装的 admit', () => {
   const admission = (autoEpochMigration: boolean) => {
     const config = { database: DEFAULT_CONFIG.database, autoEpochMigration }
     const read = mock(async () => config)
-    return { input: { config, configuration: { read }, contract: logicalSchemaContract }, read }
+    return {
+      input: {
+        config,
+        configuration: { read },
+        contract: logicalSchemaContract,
+        schemaHistory: persistenceSchemaBinding.history,
+      },
+      read,
+    }
   }
 
   test('托管：admit 什么都不做，不碰安装端口', async () => {

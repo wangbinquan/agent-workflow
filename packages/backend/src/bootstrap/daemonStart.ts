@@ -1,5 +1,4 @@
 import { selectedDatabaseConfiguration } from '@/platform/persistence/databaseProviderRuntime'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 // `agent-workflow start` — daemon foreground entry.
 import type { DeploymentProfile } from './deploymentProfile'
 import type { DevelopmentOverlay } from './developmentReload'
@@ -247,7 +246,12 @@ export async function startCommand(
     // RFC-532: the deployment's database installation admits the installation before the secret box opens
     // (standalone: the automatic epoch upgrade first, then a staged pending restore; hosted: installed by the release).
     const databaseInstallation = profile.selections.databaseInstallation
-    await databaseInstallation.admit({ config, configuration, contract: logicalSchemaContract })
+    await databaseInstallation.admit({
+      config,
+      configuration,
+      contract: logicalSchemaContract,
+      schemaHistory: persistenceSchemaBinding.history,
+    })
     config = await configuration.read()
 
     // Provider-independent bootstrap secrets are needed by either selected
@@ -267,7 +271,7 @@ export async function startCommand(
       log.warn('execution authority lost', { state: state.kind })
       executionExit.request(`execution-authority-${state.kind}`)
     })
-    const dbVersion = schemaHistoryRuntime().head().contract.version
+    const dbVersion = persistenceSchemaBinding.history.head().contract.version
     // 5. DB — resolve the verified live generation before opening any provider
     // client. The pointer is authoritative; config may supply mechanism settings
     // but cannot silently select a different database.

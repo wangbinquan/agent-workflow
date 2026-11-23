@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { openDb } from '@/db/client'
 import { composeSystemOperations } from '@/modules/system-operations/composition'
 import type { AdminBackupReceipt } from '@/modules/system-operations/domain/backup'
@@ -40,6 +40,7 @@ describe('RFC-426 SQLite: the scheduled backup stays an in-process snapshot', ()
     let prepared = 0
     const db = {} as BackupOptions['db']
     const adapter = createLegacyPlatformRecoveryAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       artifacts: {} as RestoreArtifactPathResolver,
       backupResources: () => ({ db }),
@@ -77,6 +78,7 @@ describe('RFC-426 SQLite: the scheduled backup stays an in-process snapshot', ()
     let prepared = 0
     try {
       const module = composeSystemOperations({
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         db,
         secretBox: undefined,

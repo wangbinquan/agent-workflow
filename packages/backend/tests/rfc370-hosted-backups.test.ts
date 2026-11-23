@@ -27,7 +27,7 @@ import {
   hostedPublicationId,
 } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 
@@ -54,6 +54,7 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
     const directories: string[] = []
     const contract = logicalSchemaContract
     const backups = createHostedDatabaseBackups({
+      schemaHistory: persistenceSchemaBinding.history,
       db: harness.db,
       fence,
       publications: journal.publications,

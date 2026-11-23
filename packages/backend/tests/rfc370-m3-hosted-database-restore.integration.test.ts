@@ -70,7 +70,9 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       CS_DATABASE_URL: process.env[urlEnv]!,
     }
     const contract = logicalSchemaContract,
-      plan = buildPostgresqlSchemaPlan(logicalSchemaContract)
+      plan = buildPostgresqlSchemaPlan(logicalSchemaContract, {
+        schemaHistory: persistenceSchemaBinding.history,
+      })
     const restoreEnv = {
       ...env,
       CS_DATABASE_GENERATION_ID: '01a13e6d-3e00-7000-9e3c-000000000011',
@@ -174,6 +176,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           instanceId: 'owner',
         })
         const backup = composeCrewStationDatabaseBackups({
+          schemaHistory: persistenceSchemaBinding.history,
           contract: logicalSchemaContract,
           db,
           runtime: serving.runtime.runtime,
@@ -201,6 +204,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
             JSON.parse(
               readFileSync(join(unpacked, 'database', 'logical', 'epoch2-metadata.json'), 'utf8'),
             ),
+            persistenceSchemaBinding.history.metaTables,
           )
           const generations = metadata.payload.tables.find(
             (table) => table.name === 'generations',
@@ -261,12 +265,16 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         fixture.tamper(undefined)
         const beforeMetadata = await captureEpochMetadata(
           postgresqlHistoryConnection(runtime.providerPool()),
+          persistenceSchemaBinding.history.metaTables,
         )
         const beforeRows = await restoredDatabaseDigests(runtime.providerPool(), contract)
         await expect(attempt()).rejects.toThrow('hosted-restore-target-not-empty')
         expect(targetOpens).toBe(0)
         expect(
-          await captureEpochMetadata(postgresqlHistoryConnection(runtime.providerPool())),
+          await captureEpochMetadata(
+            postgresqlHistoryConnection(runtime.providerPool()),
+            persistenceSchemaBinding.history.metaTables,
+          ),
         ).toEqual(beforeMetadata)
         expect(await restoredDatabaseDigests(runtime.providerPool(), contract)).toEqual(beforeRows)
       } finally {
@@ -317,6 +325,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       ).rejects.toThrow('after generation activation')
       const activatedMetadata = await captureEpochMetadata(
         postgresqlHistoryConnection(runtime.providerPool()),
+        persistenceSchemaBinding.history.metaTables,
       )
       for (const wrongGeneration of [
         { ...input.generation, generationId: 'dbg_other_restore_generation' },
@@ -335,7 +344,10 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         ).rejects.toThrow('hosted-restore-target-not-empty')
         expect(opened).toBe(false)
         expect(
-          await captureEpochMetadata(postgresqlHistoryConnection(runtime.providerPool())),
+          await captureEpochMetadata(
+            postgresqlHistoryConnection(runtime.providerPool()),
+            persistenceSchemaBinding.history.metaTables,
+          ),
         ).toEqual(activatedMetadata)
       }
       expect(await restoreHostedDatabaseInstallation(input)).toMatchObject({

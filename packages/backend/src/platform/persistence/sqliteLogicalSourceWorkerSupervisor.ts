@@ -1,4 +1,4 @@
-import { schemaHistoryRuntime } from './schema/history/runtime'
+import type { SchemaHistoryRuntime } from './schema/history/runtime'
 // RFC-349 — fail-closed supervisor/proxy for the SQLite migration Worker.
 // There is deliberately no main-thread fallback: a missing or failed Worker
 // stops migration instead of turning a data-plane operation into UI latency.
@@ -29,6 +29,8 @@ export interface SqliteLogicalSourceWorkerLike {
 export interface SqliteLogicalSourceWorkerOptions {
   readonly path: string
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, sent to the Worker with the init message. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly workerFactory?: () => SqliteLogicalSourceWorkerLike
   readonly requestTimeoutMs?: number
   readonly setTimer?: (fn: () => void, ms: number) => unknown
@@ -167,10 +169,7 @@ export async function openSqliteLogicalSourceWorker(
       path: options.path,
       expectedSchemaDigest: options.contract.digest,
       contract: options.contract,
-      history: {
-        head: schemaHistoryRuntime().head(),
-        metaTables: schemaHistoryRuntime().metaTables,
-      },
+      metaTables: options.schemaHistory.metaTables,
     },
     'ready',
   )

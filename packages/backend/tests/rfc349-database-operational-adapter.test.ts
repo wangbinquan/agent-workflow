@@ -18,6 +18,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const DIGEST = `sha256:${'d'.repeat(64)}`
@@ -125,6 +126,7 @@ describe('RFC-349 database operational adapters', () => {
       },
     }
     const adapter = createPostgresqlDatabaseOperationalAdapter({
+      schemaHistory: persistenceSchemaBinding.history,
       runtime,
       contract: CONTRACT,
       openLogicalSource: async () => source,

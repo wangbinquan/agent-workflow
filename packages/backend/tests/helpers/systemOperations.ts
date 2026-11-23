@@ -100,6 +100,7 @@ export async function prepareDatabasePreOpenRecovery<THistory>(input: {
   return await prepareSelectedDatabasePreOpenRecovery({
     contract: input.contract,
     effects: createFileDatabasePreOpenRecovery({
+      schemaHistory: persistenceSchemaBinding.history,
       contract: input.contract,
       migrationsFolder: input.migrationsFolder,
     }),

@@ -3,7 +3,7 @@
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
 import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, mkdtempSync } from 'node:fs'
@@ -568,6 +568,7 @@ describe('RFC-305 permission catalog architecture', () => {
         dbVersion: 162,
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
         databaseMigration: composeDatabaseMigrationModule({
+          schemaHistory: persistenceSchemaBinding.history,
           fileSnapshots: createFileSnapshotTracker(),
           contract: logicalSchemaContract,
           sqlitePath: join(home, 'db.sqlite'),

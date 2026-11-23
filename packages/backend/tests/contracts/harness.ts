@@ -17,7 +17,7 @@ import { contentRowColumns } from '@/platform/content/infrastructure/contentStor
 import { agentFixture, nodeRunFixture, taskFixture, workflowFixture } from '../helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -82,6 +82,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const sqlite = (db as unknown as { readonly $client: { serialize(): Uint8Array } }).$client
   writeFileSync(sqlitePath, sqlite.serialize())
   const databaseMigration = composeDatabaseMigrationModule({
+    schemaHistory: persistenceSchemaBinding.history,
     contract: logicalSchemaContract,
     sqlitePath,
     operationsRoot: join(homePath, 'database-migrations'),

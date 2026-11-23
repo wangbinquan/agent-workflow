@@ -1,4 +1,4 @@
-import { schemaHistoryRuntime } from './history/runtime'
+import type { SchemaHistoryRuntime } from './history/runtime'
 import { resolveColumnUniqueNulls } from './targetDefinition'
 import { compileContract } from './contract'
 import { digestSchemaContract } from './canonical'
@@ -312,12 +312,19 @@ function metadataStatements(contract: LogicalSchemaContract): PostgresqlSchemaSt
   ]
 }
 
+/** RFC-549: an epoch-2 contract's plan is the binary head's, so its caller hands in the schema history. */
 export function buildPostgresqlSchemaPlan(
   contract: LogicalSchemaContract,
-  expressions?: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  options: {
+    readonly expressions?: ReadonlyMap<string, ReadonlyMap<string, string>>
+    readonly schemaHistory?: SchemaHistoryRuntime
+  } = {},
 ): PostgresqlSchemaPlan {
+  const expressions = options.expressions
   if ('schemaEpoch' in contract && contract.schemaEpoch === 2) {
-    const head = schemaHistoryRuntime().head()
+    if (options.schemaHistory === undefined)
+      throw new Error('postgresql-schema-plan-epoch2-needs-schema-history')
+    const head = options.schemaHistory.head()
     return {
       version: 1,
       baselineId: '0000_rfc395_epoch2',

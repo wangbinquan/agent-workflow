@@ -14,7 +14,7 @@ import { extractTarGz } from '@/util/archive'
 import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import { composeLocalEpochSwitch } from './epochMigration'
 import { persistenceHead, persistencePostgresqlCatalogs } from './persistenceHead'
-import { logicalSchemaContract } from './persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from './persistenceSchema'
 import { settleEpochSwitchBeforePointerReplacement } from '@/modules/system-operations/composition/epochMigration'
 import { createAutoUpgradeRecords } from '@/modules/system-operations/composition/epochMigration'
 import { automaticUpgradeProvisioning } from './epochMigrationAuto'
@@ -45,7 +45,11 @@ export function composeEpochMigrationCommand() {
   return {
     ...application,
     async restoreBackup(input: Parameters<typeof application.restoreBackup>[0]) {
-      await settleEpochSwitchBeforePointerReplacement({ appHome: Paths.root, env: process.env })
+      await settleEpochSwitchBeforePointerReplacement({
+        appHome: Paths.root,
+        env: process.env,
+        schemaHistory: persistenceSchemaBinding.history,
+      })
       return application.restoreBackup(input)
     },
   }
@@ -73,7 +77,14 @@ export async function classifyRestoreArtifact(
           break
         }
       }
-    if (digest && (await recordedLiveLogicalContract(digest, logicalSchemaContract)))
+    if (
+      digest &&
+      (await recordedLiveLogicalContract(
+        digest,
+        logicalSchemaContract,
+        persistenceSchemaBinding.history,
+      ))
+    )
       return 'epoch2'
     if (digest) {
       const legacy = await loadFrozenEpoch1History()

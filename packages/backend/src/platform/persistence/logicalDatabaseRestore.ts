@@ -11,6 +11,7 @@ import {
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { resolvePostgresqlAdditiveRowBridge } from './postgresqlMigrationSequence'
 import { loadPostgresqlMigrationHistory } from './schema/history/logicalHistory'
+import type { SchemaHistoryRuntime } from './schema/history/runtime'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -135,10 +136,14 @@ export async function resolveLogicalDatabaseRestoreSourceContract(input: {
   readonly sourceSchemaDigest: string
   readonly headContract: LogicalSchemaContract
   readonly targetContract: LogicalSchemaContract
+  readonly schemaHistory: SchemaHistoryRuntime
 }): Promise<LogicalSchemaContract> {
   if (input.sourceSchemaDigest === input.targetContract.digest) return input.targetContract
   try {
-    const history = await loadPostgresqlMigrationHistory({ headContract: input.headContract })
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: input.headContract,
+      schemaHistory: input.schemaHistory,
+    })
     if (!history.versions.some((version) => version.contract.digest === input.sourceSchemaDigest))
       corrupt(
         'restore contract is not in the live epoch-2 history; epoch-1 artifacts require db migration restore-backup',
@@ -489,6 +494,8 @@ export async function restoreLogicalDatabaseArtifact(input: {
   readonly restoreOperationId: string
   readonly headContract: LogicalSchemaContract
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history (source contract lineage and epoch-2 meta tables). */
+  readonly schemaHistory: SchemaHistoryRuntime
   /** Source artifacts retain contract; a verified bridge re-encodes only the
    * in-memory target chunks and the new restore receipt for this target. */
   readonly targetContract?: LogicalSchemaContract
@@ -528,6 +535,7 @@ export async function restoreLogicalDatabaseArtifact(input: {
       sourceSchemaDigest: input.contract.digest,
       headContract: input.headContract,
       targetContract,
+      schemaHistory: input.schemaHistory,
     })
     assertExact(
       sourceContract,
@@ -541,7 +549,10 @@ export async function restoreLogicalDatabaseArtifact(input: {
     const path = join(input.artifactRoot, 'epoch2-metadata.json')
     if (logicalArtifactFileDigest(path) !== metadataDigest)
       corrupt('epoch-2 metadata file digest differs')
-    metadata = verifyEpochMetadataSnapshot(readCanonicalJson(path, 'epoch-2 metadata'))
+    metadata = verifyEpochMetadataSnapshot(
+      readCanonicalJson(path, 'epoch-2 metadata'),
+      input.schemaHistory.metaTables,
+    )
     if (!input.target.restoreMetadata) corrupt('target cannot retain epoch-2 metadata')
   }
   if ('schemaEpoch' in input.contract && input.contract.schemaEpoch === 2 && !metadata)
@@ -650,6 +661,7 @@ export async function restoreLogicalDatabaseBackup(input: {
   readonly restoreOperationId: string
   readonly headContract: LogicalSchemaContract
   readonly contract: LogicalSchemaContract
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly targetContract?: LogicalSchemaContract
   readonly target: LogicalDatabaseRestoreTarget
   readonly now?: () => number

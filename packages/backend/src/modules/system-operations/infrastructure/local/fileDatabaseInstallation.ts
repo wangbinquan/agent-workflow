@@ -68,6 +68,7 @@ export function createFileDatabaseInstallation(
     async resumeMigration(input) {
       const recovery = createDatabaseMigrationCoordinator({
         headContract: options.contract,
+        schemaHistory: options.liveSchema.history,
         sqlitePath: options.sqlitePath,
         operationsRoot: options.operationsRoot,
         generationPointerPath: options.generationPointerPath,

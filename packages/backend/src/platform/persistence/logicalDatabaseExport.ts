@@ -2,6 +2,7 @@ import {
   type EpochMetadataSnapshot,
   verifyEpochMetadataSnapshot,
 } from './schema/history/metadataSnapshot'
+import type { MetaTableDeclaration } from './schema/history/meta'
 // RFC-349 — one bounded exporter for SQLite and PostgreSQL logical backups.
 // PostgreSQL has no active copies of the six archive-only tables, so their
 // already-verified chunks are re-bound from the preserved legacy artifact while
@@ -241,6 +242,8 @@ export async function exportLogicalDatabaseArtifact(input: {
   readonly source: LogicalDatabaseExportSource
   readonly expectedTableRows: Readonly<Record<string, number>>
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's epoch-2 meta tables (the exported metadata is checked against them). */
+  readonly metaTables: readonly MetaTableDeclaration[]
   readonly artifactRoot: string
   readonly preservedArchive?: VerifiedLogicalDatabaseArtifactSource
   /** A fresh hosted PostgreSQL has never held the retired SQLite tables.
@@ -432,7 +435,7 @@ export async function exportLogicalDatabaseArtifact(input: {
   const epoch2MetadataFileDigest = metadata
     ? writeDurableLogicalArtifact(
         join(input.artifactRoot, 'epoch2-metadata.json'),
-        verifyEpochMetadataSnapshot(metadata),
+        verifyEpochMetadataSnapshot(metadata, input.metaTables),
       )
     : undefined
   await input.source.assertUnchanged()

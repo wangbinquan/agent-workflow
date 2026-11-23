@@ -15,7 +15,7 @@ import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 //   can't be SELECTed by the NEW binary).
 
 import type { Database } from 'bun:sqlite'
-import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -288,6 +288,8 @@ export interface PreMigrationBackupOptions {
   now?: number
   /** null means the integrity gate could not read a version; retain raw bytes. */
   recordedVersion?: number | null
+  /** RFC-549: the binary's schema history (its head is the version the database is compared with). */
+  schemaHistory: SchemaHistoryRuntime
 }
 
 /**
@@ -315,7 +317,7 @@ export async function maybePreMigrationBackup(
       db?.close()
     }
   }
-  const binaryMax = schemaHistoryRuntime().head().contract.version
+  const binaryMax = opts.schemaHistory.head().contract.version
   if (dbMax !== null && dbMax >= binaryMax) return null // up to date — no pending migration
   const r = await rawCopyDb({
     kind: 'pre-migration',

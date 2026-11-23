@@ -86,6 +86,7 @@ test('AF-D7 pending restore never attempts v2 parsing for a v1 pointer', () =>
       JSON.stringify({ payload: { version: 1 } }),
     )
     const recovery = createFileDatabasePreOpenRecovery({
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       migrationsFolder: '',
     })
@@ -146,6 +147,7 @@ test('AF-D8 a staged native restore into an empty home publishes the generation 
     await tarGz(incoming, archive)
     stagePendingRestore(archive, { appHome: root, now: 1, noSafetyBackup: true })
     const recovery = createFileDatabasePreOpenRecovery({
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       migrationsFolder: '',
     })

@@ -11,7 +11,11 @@ export type { DatabaseSchemaUpgradeOptions } from './local/fileDatabaseInstallat
 
 export async function prepareDatabaseSchemaUpgrade(options: DatabaseSchemaUpgradeOptions) {
   const history =
-    options.history ?? (await loadPostgresqlMigrationHistory({ headContract: options.contract }))
+    options.history ??
+    (await loadPostgresqlMigrationHistory({
+      headContract: options.contract,
+      schemaHistory: options.liveSchema.history,
+    }))
   return await prepareDatabaseInstallation({
     config: options.config,
     contract: options.contract,

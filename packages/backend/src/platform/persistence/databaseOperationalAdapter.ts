@@ -10,6 +10,7 @@ import {
   type PostgresqlLogicalSource,
 } from './postgresqlLogicalSource'
 import type { PostgresqlDatabaseRuntime } from './postgresqlRuntime'
+import type { SchemaHistoryRuntime } from './schema/history/runtime'
 import type { LogicalSchemaContract } from './schemaContract'
 
 export interface DatabaseOperationalCheck {
@@ -119,11 +120,14 @@ type PostgresqlLogicalSourceFactory = (input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly generationId: string
   readonly contract: LogicalSchemaContract
+  readonly schemaHistory: SchemaHistoryRuntime
 }) => Promise<PostgresqlLogicalSource>
 
 export function createPostgresqlDatabaseOperationalAdapter(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history, for the doctor's logical-source probe. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly openLogicalSource?: PostgresqlLogicalSourceFactory
 }): DatabaseOperationalAdapter {
   const sourceFactory = input.openLogicalSource ?? openPostgresqlLogicalSource
@@ -157,6 +161,7 @@ export function createPostgresqlDatabaseOperationalAdapter(input: {
           runtime: input.runtime,
           generationId: input.runtime.generationId,
           contract: input.contract,
+          schemaHistory: input.schemaHistory,
         })
         const snapshot = await source.preflight()
         checks.push({

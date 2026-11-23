@@ -6,7 +6,7 @@
 // source row arrived exactly once and unchanged.
 import { expect, setDefaultTimeout, test } from 'bun:test'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createPostgresqlCapabilities } from '@/platform/persistence/capabilities'
 import {
   createLogicalTableChunk,
@@ -25,7 +25,9 @@ import { describeV3Providers, type V3Harness } from './helpers/rfc395V3Harness'
 setDefaultTimeout(20_000)
 
 const OPERATION_ID = 'dbm_batched_copy_0001'
-const PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract)
+const PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract, {
+  schemaHistory: persistenceSchemaBinding.history,
+})
 const SINGLE_KEY = logicalSchemaContract.tables.find((table) => table.id === 'maintenance_state')!
 const COMPOSITE_KEY = logicalSchemaContract.tables.find(
   (table) => table.id === 'committed_event_aggregate_heads',
@@ -85,6 +87,7 @@ async function recordingTarget(h: V3Harness) {
     poolFactory: () => recordedPool,
   })
   const target = await openPostgresqlLogicalTarget({
+    schemaHistory: persistenceSchemaBinding.history,
     runtime,
     operationId: OPERATION_ID,
     sourceGenerationId: 'dbg_batched_copy_source',

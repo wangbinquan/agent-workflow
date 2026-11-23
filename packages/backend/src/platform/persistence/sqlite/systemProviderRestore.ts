@@ -3,7 +3,7 @@ import { sqliteHistorySession } from '@/platform/persistence/sqlite/historySessi
 import { atomicScratch } from './atomicScratch'
 import { recordedLiveLogicalContract } from '@/platform/persistence/schema/history/logicalHistory'
 import { admitSqliteHistorySync } from '@/platform/persistence/schema/history/admission'
-import { schemaHistoryRuntime } from '../schema/history/runtime'
+import type { SchemaHistoryRuntime } from '../schema/history/runtime'
 import { applyHistoryVersion } from '../schema/history/apply'
 import { writeGenerationPointerV2 } from '../generationPointerV2'
 import { relative } from 'node:path'
@@ -96,10 +96,15 @@ async function verifyPortableDatabasePayload(
   manifest: BackupManifest | null,
   prefix: 'stage refused' | 'restore refused',
   currentContract: LogicalSchemaContract,
+  schemaHistory: SchemaHistoryRuntime,
 ): Promise<void> {
   if (manifest?.manifestVersion !== 2) return
   const database = manifest.database
-  const contract = await recordedLiveLogicalContract(database.schemaDigest, currentContract)
+  const contract = await recordedLiveLogicalContract(
+    database.schemaDigest,
+    currentContract,
+    schemaHistory,
+  )
   if (database.provider !== 'sqlite' || database.rawSqlitePath !== 'db.sqlite') {
     throw new Error(
       `${prefix}: this restore path requires a matching SQLite raw+logical database payload`,
@@ -124,7 +129,11 @@ async function verifyPortableDatabasePayload(
   }
 
   const rawPath = join(staging, database.rawSqlitePath)
-  const source = openSqliteLogicalSource({ path: rawPath, contract })
+  const source = openSqliteLogicalSource({
+    path: rawPath,
+    contract,
+    metaTables: schemaHistory.metaTables,
+  })
   try {
     const snapshot = await source.preflight()
     await verifyLogicalDatabaseSourceMatchesArtifact({
@@ -207,7 +216,11 @@ export class RestorePostSwapError extends Error {
   }
 }
 
-function recordedEpoch2Version(staging: string, skipIntegrityCheck = false): number {
+function recordedEpoch2Version(
+  staging: string,
+  schemaHistory: SchemaHistoryRuntime,
+  skipIntegrityCheck = false,
+): number {
   const path = join(staging, 'db.sqlite')
   if (!existsSync(path)) throw new Error('restore refused: backup contains no db.sqlite')
   if (!skipIntegrityCheck) {
@@ -235,7 +248,7 @@ function recordedEpoch2Version(staging: string, skipIntegrityCheck = false): num
     if (!row) throw new Error('restore recorded epoch-2 contract missing')
     admitSqliteHistorySync(db, {
       binary: JSON.parse(row.artifact_json),
-      metaTables: schemaHistoryRuntime().metaTables,
+      metaTables: schemaHistory.metaTables,
     })
     return row.version
   } finally {
@@ -247,8 +260,9 @@ function publishRestoredSqliteGeneration(
   appHome: string,
   dbPath: string,
   now: number,
+  schemaHistory: SchemaHistoryRuntime,
 ): void {
-  const head = schemaHistoryRuntime().head()
+  const head = schemaHistory.head()
   // A fresh restore resolver already reserved this generation's directory. Keep
   // that identity when publishing the first pointer; later restores mint a new one.
   const generationDirectory = dirname(resolve(dbPath))
@@ -319,6 +333,8 @@ export function computeRestoreDirection(
 
 export interface RestoreOptions {
   readonly contract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   appHome?: string
   dbPath?: string
   /** Resolved migrations folder (dev: Paths.migrationsDir; embedded: the extracted
@@ -357,7 +373,13 @@ export interface RestoreResult {
 /** Inspect the incoming archive and history without touching live state (for --dry-run). */
 export async function planRestore(
   tarballPath: string,
-  opts: { migrationsFolder?: string; appHome?: string; skipIntegrityCheck?: boolean } = {},
+  opts: {
+    migrationsFolder?: string
+    appHome?: string
+    skipIntegrityCheck?: boolean
+    /** RFC-549: the binary's schema history. */
+    schemaHistory: SchemaHistoryRuntime
+  },
 ): Promise<RestorePlan> {
   const appHome = opts.appHome ?? Paths.root
   const staging = join(appHome, 'backups', `.plan-${Date.now()}-${process.pid}`)
@@ -365,8 +387,12 @@ export async function planRestore(
   try {
     await extractTarGz(tarballPath, staging)
     const manifest = readManifest(staging)
-    const currentMaxWhen = schemaHistoryRuntime().head().contract.version
-    const backupLastCreatedAt = recordedEpoch2Version(staging, opts.skipIntegrityCheck)
+    const currentMaxWhen = opts.schemaHistory.head().contract.version
+    const backupLastCreatedAt = recordedEpoch2Version(
+      staging,
+      opts.schemaHistory,
+      opts.skipIntegrityCheck,
+    )
     return {
       manifest,
       backupLastCreatedAt,
@@ -397,6 +423,7 @@ export async function validateBackupForStage(
     migrationsFolder?: string
     appHome?: string
     skipIntegrityCheck?: boolean
+    schemaHistory: SchemaHistoryRuntime
   },
 ): Promise<RestorePlan> {
   const appHome = opts.appHome ?? Paths.root
@@ -409,8 +436,12 @@ export async function validateBackupForStage(
     if (!existsSync(incomingDb)) {
       throw new Error('stage refused: backup contains no db.sqlite (not a backup tarball?)')
     }
-    const currentMaxWhen = schemaHistoryRuntime().head().contract.version
-    const backupLastCreatedAt = recordedEpoch2Version(staging, opts.skipIntegrityCheck)
+    const currentMaxWhen = opts.schemaHistory.head().contract.version
+    const backupLastCreatedAt = recordedEpoch2Version(
+      staging,
+      opts.schemaHistory,
+      opts.skipIntegrityCheck,
+    )
     const direction = computeRestoreDirection(backupLastCreatedAt, currentMaxWhen)
     if (direction === 'downgrade') {
       throw new RestoreDowngradeError(backupLastCreatedAt!, currentMaxWhen)
@@ -428,7 +459,13 @@ export async function validateBackupForStage(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
-    await verifyPortableDatabasePayload(staging, manifest, 'stage refused', opts.contract)
+    await verifyPortableDatabasePayload(
+      staging,
+      manifest,
+      'stage refused',
+      opts.contract,
+      opts.schemaHistory,
+    )
     assertBackupSkillsPayload(staging, incomingDb, 'stage refused')
     return { manifest, backupLastCreatedAt, currentMaxWhen, direction }
   } finally {
@@ -560,8 +597,12 @@ export async function restoreBackup(
   try {
     await extractTarGz(tarballPath, staging)
     const manifest = readManifest(staging)
-    const currentMaxWhen = schemaHistoryRuntime().head().contract.version
-    const backupLastCreatedAt = recordedEpoch2Version(staging, opts.skipIntegrityCheck)
+    const currentMaxWhen = opts.schemaHistory.head().contract.version
+    const backupLastCreatedAt = recordedEpoch2Version(
+      staging,
+      opts.schemaHistory,
+      opts.skipIntegrityCheck,
+    )
     const direction = computeRestoreDirection(backupLastCreatedAt, currentMaxWhen)
 
     // Refusal checks BEFORE touching live state.
@@ -604,7 +645,13 @@ export async function restoreBackup(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
-    await verifyPortableDatabasePayload(staging, manifest, 'restore refused', opts.contract)
+    await verifyPortableDatabasePayload(
+      staging,
+      manifest,
+      'restore refused',
+      opts.contract,
+      opts.schemaHistory,
+    )
 
     // RFC-223 PR-5: an old DB and its name-keyed skills tree are one restore
     // generation. After 0116 has renamed live roots to immutable ids, restoring
@@ -676,13 +723,13 @@ export async function restoreBackup(
         const native = new Database(dbPath)
         try {
           if (willMigrate)
-            for (const version of schemaHistoryRuntime().history?.() ?? [])
+            for (const version of opts.schemaHistory.history?.() ?? [])
               if (version.contract.version > backupLastCreatedAt)
                 await applyHistoryVersion(sqliteHistorySession(native), {
                   version,
-                  metaTables: schemaHistoryRuntime().metaTables,
+                  metaTables: opts.schemaHistory.metaTables,
                 })
-          publishRestoredSqliteGeneration(native, appHome, dbPath, now)
+          publishRestoredSqliteGeneration(native, appHome, dbPath, now, opts.schemaHistory)
         } finally {
           native.close()
         }

@@ -11,7 +11,10 @@ import {
   admitHistory,
   admitSqliteHistorySync,
 } from '@/platform/persistence/schema/history/admission'
-import { runtimeHistoryAdmission } from '@/platform/persistence/schema/history/runtime'
+import {
+  runtimeHistoryAdmission,
+  type SchemaHistoryRuntime,
+} from '@/platform/persistence/schema/history/runtime'
 import {
   postgresqlHistoryConnection,
   sqliteHistoryConnection,
@@ -33,6 +36,8 @@ import { createEpochSourceRetention } from './sourceRetention'
 export async function settleEpochSwitchBeforePointerReplacement(input: {
   appHome: string
   env?: Readonly<Record<string, string | undefined>>
+  /** RFC-549: the binary's schema history (the pointer's database is admitted against it). */
+  schemaHistory: SchemaHistoryRuntime
 }): Promise<void> {
   const pointerPath = join(input.appHome, 'database-generation.json')
   if (!existsSync(pointerPath)) return
@@ -90,7 +95,7 @@ export async function settleEpochSwitchBeforePointerReplacement(input: {
     if (pointer.payload.database.kind === 'sqlite-file') {
       const db = new Database(resolve(input.appHome, pointer.payload.database.relativePath))
       close = () => db.close()
-      admitSqliteHistorySync(db, runtimeHistoryAdmission())
+      admitSqliteHistorySync(db, runtimeHistoryAdmission(input.schemaHistory))
       connection = sqliteHistoryConnection(db)
     } else {
       const config = PostgresqlDatabaseConfigSchema.parse(
@@ -104,7 +109,7 @@ export async function settleEpochSwitchBeforePointerReplacement(input: {
       close = () => runtime.close()
       await admitHistory(
         postgresqlHistorySession(runtime.providerPool()),
-        runtimeHistoryAdmission(),
+        runtimeHistoryAdmission(input.schemaHistory),
       )
       connection = postgresqlHistoryConnection(runtime.providerPool())
     }

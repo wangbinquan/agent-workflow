@@ -34,6 +34,7 @@ import {
   readGenerationPointerV2,
 } from '@/platform/persistence/generationPointerV2'
 import type { EpochMetadataSnapshot } from '@/platform/persistence/schema/history/metadataSnapshot'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const DIGEST = `sha256:${'a'.repeat(64)}`
@@ -299,6 +300,7 @@ function harness(
     },
   })
   const runner = createDatabaseMigrationRunner({
+    schemaHistory: persistenceSchemaBinding.history,
     controlPlane,
     source,
     sourceSnapshot,

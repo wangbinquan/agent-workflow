@@ -42,11 +42,13 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { digestSchemaContract } from '@/platform/persistence/schemaContract'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
 
 const CONTRACT = logicalSchemaContract
-const PLAN = buildPostgresqlSchemaPlan(CONTRACT)
+const PLAN = buildPostgresqlSchemaPlan(CONTRACT, {
+  schemaHistory: persistenceSchemaBinding.history,
+})
 const TABLE = CONTRACT.tables.find((table) => table.id === 'maintenance_state')!
 const CHUNK_ROWS = 1_000
 /** 与 full 种子里 `node_run_events` 同量级：1000 万行 ÷ 每片 1000 行。 */
@@ -203,6 +205,7 @@ function expectedTables(chunkCount: number) {
 async function measureFinalizeMs(chunkCount: number): Promise<number> {
   const statements: string[] = []
   const target = await openPostgresqlLogicalTarget({
+    schemaHistory: persistenceSchemaBinding.history,
     headContract: CONTRACT,
     runtime: runtimeFor(statements, chunkCount),
     operationId: 'dbm_linear_0001',
@@ -258,6 +261,7 @@ describe('RFC-349 live epoch-2 target coverage groups copy receipts in linear ti
   test('a receipt for a table outside the roster is still rejected', async () => {
     const statements: string[] = []
     const target = await openPostgresqlLogicalTarget({
+      schemaHistory: persistenceSchemaBinding.history,
       headContract: CONTRACT,
       runtime: runtimeFor(statements, 1, true),
       operationId: 'dbm_linear_0001',

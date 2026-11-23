@@ -1,6 +1,6 @@
 import { persistenceHead, persistenceHistory, persistenceCatalogCache } from './persistenceHead'
 import { EPOCH2_META_TABLES } from '@/modules/system-operations/composition/schema'
-import { registerSchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 // RFC-395 activation: the single live epoch-2 registry.
 import {
   schemaContribution as contribution0,
@@ -235,11 +235,50 @@ declare module '@/platform/persistence/schema/tables' {
   }
 }
 export const rowRuleCodes = compileSchemaRowRuleCodes(persistenceSchema)
+/** RFC-549: the binary's own schema history — head, lineage, PostgreSQL catalogs and the epoch-2 meta tables. */
+const embeddedSchemaHistory: SchemaHistoryRuntime = Object.freeze({
+  head: () => persistenceHead(),
+  history: () => persistenceHistory(),
+  catalogCache: persistenceCatalogCache,
+  metaTables: EPOCH2_META_TABLES,
+})
+let schemaHistorySource: SchemaHistoryRuntime = embeddedSchemaHistory
+/** RFC-549: the binding's history reads through to the current source, so a successor boot reaches every reader. */
+const persistenceSchemaHistory: SchemaHistoryRuntime = Object.freeze({
+  get head() {
+    return schemaHistorySource.head
+  },
+  get metaTables() {
+    return schemaHistorySource.metaTables
+  },
+  get history() {
+    return schemaHistorySource.history
+  },
+  get catalogCache() {
+    return schemaHistorySource.catalogCache
+  },
+})
+/**
+ * RFC-549: boot this process as a successor binary. The e2e “next version” fixtures, and the in-process cases that go
+ * through bootstrap-composed paths, swap the head and lineage before the daemon reads them; what is not given stays.
+ * `next` receives the source being replaced (not the binding's read-through view, which would read the new source
+ * back). Returns the swap-back. Production code never calls it (the RFC-549 guard locks that).
+ */
+export function substitutePersistenceSchemaHistory(
+  next: (previous: SchemaHistoryRuntime) => Partial<SchemaHistoryRuntime>,
+): () => void {
+  const previous = schemaHistorySource
+  schemaHistorySource = Object.freeze({ ...previous, ...next(previous) })
+  return () => {
+    schemaHistorySource = previous
+  }
+}
 /** RFC-545: the live schema binding, handed explicitly to provider construction (platform never reads it from module state). */
 export const persistenceSchemaBinding: RuntimeSchemaBinding = Object.freeze({
   definitions: persistenceSchema.tables,
   nativeTables: nativeTableSets,
   rowRuleCodes,
+  history: persistenceSchemaHistory,
 })
 export const logicalSchemaContract = projectLogicalSchemaContract(persistenceSchema)
 export const schemaContract = compileContract(persistenceSchema)
@@ -482,10 +521,3 @@ export const {
 } = nativeTableSets.sqlite
 
 export { compileSqlitePlan } from '@/platform/persistence/schema/sqlitePlan'
-
-registerSchemaHistoryRuntime({
-  head: persistenceHead,
-  history: persistenceHistory,
-  catalogCache: persistenceCatalogCache,
-  metaTables: EPOCH2_META_TABLES,
-})

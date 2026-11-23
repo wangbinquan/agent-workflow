@@ -16,7 +16,7 @@ import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackup
 //     restoreBackup) → the "already consumed" test throws → reds.
 
 import { workflowFixture } from './helpers/model'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { setDefaultTimeout, afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -113,6 +113,7 @@ describe('RFC-213 staged restore', () => {
 
     // "Boot": apply before openDb.
     const applied = await applyPendingRestoreIfAny({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome,
       dbPath,
       migrationsFolder: MIGRATIONS,
@@ -136,13 +137,23 @@ describe('RFC-213 staged restore', () => {
     sqliteOf(db).close()
 
     stagePendingRestore(backup.path, { appHome, now: 2 })
-    expect(await applyPendingRestoreIfAny({ appHome, dbPath, migrationsFolder: MIGRATIONS })).toBe(
-      true,
-    )
+    expect(
+      await applyPendingRestoreIfAny({
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+      }),
+    ).toBe(true)
     // Second boot: nothing pending.
-    expect(await applyPendingRestoreIfAny({ appHome, dbPath, migrationsFolder: MIGRATIONS })).toBe(
-      false,
-    )
+    expect(
+      await applyPendingRestoreIfAny({
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+      }),
+    ).toBe(false)
   })
 
   // Impl-gate P0-1 (Codex 2026-07-22): a failure AFTER the DB swap must fail
@@ -171,6 +182,7 @@ describe('RFC-213 staged restore', () => {
 
     await expect(
       applyPendingRestoreIfAny({
+        schemaHistory: persistenceSchemaBinding.history,
         appHome,
         dbPath,
         migrationsFolder: MIGRATIONS,
@@ -242,6 +254,7 @@ describe('RFC-213 staged restore', () => {
     unlinkSync(join(appHome, '.restore-pending', 'staged.tar.gz'))
     // Must NOT throw / re-restore — treat as consumed, clear, continue.
     const applied = await applyPendingRestoreIfAny({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome,
       dbPath,
       migrationsFolder: MIGRATIONS,
@@ -254,6 +267,7 @@ describe('RFC-213 staged restore', () => {
     const appHome = tmp()
     expect(
       await applyPendingRestoreIfAny({
+        schemaHistory: persistenceSchemaBinding.history,
         appHome,
         dbPath: join(appHome, 'db.sqlite'),
         migrationsFolder: MIGRATIONS,
@@ -286,6 +300,7 @@ describe('restore --stage CLI', () => {
     const r = await restoreCommand(
       [backup.path, '--stage'],
       composeLocalSystemOperations({
+        schemaHistory: persistenceSchemaBinding.history,
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
         contract: logicalSchemaContract,
         ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
@@ -367,6 +382,7 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const maxWhenNow = persistenceHead().contract.version
     const ok = await makeTarball(home, { db: 'valid', manifestLastCreatedAt: maxWhenNow })
     const plan = await validateBackupForStage(ok, {
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       appHome: home,
       migrationsFolder: MIGRATIONS,
@@ -375,6 +391,7 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     // A native DB keeps its recorded version even without the optional outer manifest.
     const legacy = await makeTarball(home, { db: 'valid' })
     const legacyPlan = await validateBackupForStage(legacy, {
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       appHome: home,
       migrationsFolder: MIGRATIONS,
@@ -384,6 +401,7 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const noDb = await makeTarball(home, { db: 'none' })
     await expect(
       validateBackupForStage(noDb, {
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         appHome: home,
         migrationsFolder: MIGRATIONS,
@@ -393,12 +411,14 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const garbage = await makeTarball(home, { db: 'garbage' })
     await expect(
       validateBackupForStage(garbage, {
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         appHome: home,
         migrationsFolder: MIGRATIONS,
       }),
     ).rejects.toThrow(RestoreIntegrityError)
     const unreadable = validateBackupForStage(garbage, {
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       appHome: home,
       skipIntegrityCheck: true,
@@ -411,9 +431,14 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     // (staged with the SAME flag, so the boot apply honours it too).
     const salvageable = await makeTarball(home, { db: 'check-failure' })
     await expect(
-      validateBackupForStage(salvageable, { contract: logicalSchemaContract, appHome: home }),
+      validateBackupForStage(salvageable, {
+        schemaHistory: persistenceSchemaBinding.history,
+        contract: logicalSchemaContract,
+        appHome: home,
+      }),
     ).rejects.toThrow(RestoreIntegrityError)
     const escaped = await validateBackupForStage(salvageable, {
+      schemaHistory: persistenceSchemaBinding.history,
       contract: logicalSchemaContract,
       appHome: home,
       migrationsFolder: MIGRATIONS,
@@ -425,6 +450,7 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const newer = await makeTarball(home, { db: 'valid', manifestLastCreatedAt: maxWhen + 1 })
     await expect(
       validateBackupForStage(newer, {
+        schemaHistory: persistenceSchemaBinding.history,
         contract: logicalSchemaContract,
         appHome: home,
         migrationsFolder: MIGRATIONS,
@@ -445,6 +471,7 @@ describe('impl-gate P1-1 — a failed staged apply self-heals instead of brickin
     expect(hasPendingRestore(home)).toBe(true)
 
     const applied = await applyPendingRestoreIfAny({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       migrationsFolder: MIGRATIONS,
@@ -460,6 +487,7 @@ describe('impl-gate P1-1 — a failed staged apply self-heals instead of brickin
 
     // Second boot: nothing pending, nothing thrown — the loop is broken.
     const again = await applyPendingRestoreIfAny({
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       migrationsFolder: MIGRATIONS,

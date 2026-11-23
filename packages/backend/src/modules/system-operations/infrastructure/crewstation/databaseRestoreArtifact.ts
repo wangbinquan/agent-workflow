@@ -22,6 +22,7 @@ import {
   canonicalSchemaJson,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import {
   readManifest,
   type BackupManifestV2,
@@ -104,6 +105,8 @@ export interface HostedRestoreArtifact {
 
 export async function openHostedDatabaseBackupArchive(input: {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history (the replay resolves lineage and meta tables with it). */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly reference: string
   readonly installation: string
   readonly objectSpaceId: string
@@ -191,6 +194,7 @@ export async function openHostedDatabaseBackupArchive(input: {
           expectedEnvelopeFileDigest: manifest.database.envelopeFileDigest,
           restoreOperationId: copyOperationId,
           contract: input.contract,
+          schemaHistory: input.schemaHistory,
           target,
         })
       },

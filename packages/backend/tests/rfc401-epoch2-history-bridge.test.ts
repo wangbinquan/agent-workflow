@@ -6,7 +6,7 @@
 // 逻辑恢复也拒收升级前的备份。现在行桥按每个版本记录的 edge 折叠：add-index 行不变；add-table（仅 additive 桥）
 // 新增一张空的 KEEP 表；其余 edge 都终止桥。每一步都与下一版本自身的合同比对，不凭 edge 标签放行。
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { beforeAll, describe, expect, test } from 'bun:test'
 
 import { resolveLogicalDatabaseRestoreSourceContract } from '@/platform/persistence/logicalDatabaseRestore'
@@ -27,7 +27,10 @@ const ROW_CHANGED = 'historical row, codec, key or disposition changed'
 let history: PostgresqlMigrationHistory
 
 beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory({ headContract: logicalSchemaContract })
+  history = await loadPostgresqlMigrationHistory({
+    schemaHistory: persistenceSchemaBinding.history,
+    headContract: logicalSchemaContract,
+  })
 })
 
 function between(from: PostgresqlMigrationVersion, to: PostgresqlMigrationVersion) {
@@ -192,6 +195,7 @@ describe('RFC-401 logical restore source across epoch-2 versions', () => {
   test('an older epoch-2 backup resolves to its own history contract', async () => {
     expect(
       await resolveLogicalDatabaseRestoreSourceContract({
+        schemaHistory: persistenceSchemaBinding.history,
         sourceSchemaDigest: history.versions[0]!.contract.digest,
         headContract: logicalSchemaContract,
         targetContract: logicalSchemaContract,
@@ -199,6 +203,7 @@ describe('RFC-401 logical restore source across epoch-2 versions', () => {
     ).toEqual(history.versions[0]!.contract)
     expect(
       await resolveLogicalDatabaseRestoreSourceContract({
+        schemaHistory: persistenceSchemaBinding.history,
         sourceSchemaDigest: logicalSchemaContract.digest,
         headContract: logicalSchemaContract,
         targetContract: logicalSchemaContract,
@@ -209,6 +214,7 @@ describe('RFC-401 logical restore source across epoch-2 versions', () => {
   test('a digest outside the epoch-2 history is refused', async () => {
     await expect(
       resolveLogicalDatabaseRestoreSourceContract({
+        schemaHistory: persistenceSchemaBinding.history,
         sourceSchemaDigest: `sha256:${'5'.repeat(64)}`,
         headContract: logicalSchemaContract,
         targetContract: logicalSchemaContract,
@@ -222,6 +228,7 @@ describe('RFC-401 logical restore source across epoch-2 versions', () => {
   test('only the complete current head is a cross-version target', async () => {
     await expect(
       resolveLogicalDatabaseRestoreSourceContract({
+        schemaHistory: persistenceSchemaBinding.history,
         sourceSchemaDigest: history.versions[0]!.contract.digest,
         headContract: logicalSchemaContract,
         targetContract: withTable(logicalSchemaContract, 'tasks', (table) => ({

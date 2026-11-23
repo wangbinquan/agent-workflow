@@ -17,7 +17,7 @@ import type {
   PortableDatabaseRestoreResult,
 } from '../src/modules/system-operations/infrastructure/portableDatabaseRestore'
 import type { RestoreArtifactRef } from '../src/modules/system-operations/public/types'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const ENVELOPE_DIGEST = `sha256:${'a'.repeat(64)}`
 const RESTORE_OPERATION = `dbm_restore_${'a'.repeat(32)}`
@@ -75,6 +75,7 @@ function fixture(overrides: Partial<CreatePostgresqlAdminRestoreCoordinatorInput
   const restoreOperations: string[] = []
   const coordinator = createPostgresqlAdminRestoreCoordinator({
     headContract: logicalSchemaContract,
+    schemaHistory: persistenceSchemaBinding.history,
     artifacts: { pathOf: () => tarballPath },
     runtime: { provider: 'postgresql', generationId: GENERATION } as PostgresqlDatabaseRuntime,
     targetGenerationId: GENERATION,

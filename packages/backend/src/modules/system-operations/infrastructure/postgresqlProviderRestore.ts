@@ -11,6 +11,7 @@ import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresq
 import { migrationPostgresqlRuntime } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import {
   restorePortableDatabaseBackup,
   type PortableDatabaseRestoreResult,
@@ -26,6 +27,7 @@ export interface OpenPostgresqlProviderRestoreTargetInput {
   readonly sourceGenerationId: string
   readonly contract: LogicalSchemaContract
   readonly plan: PostgresqlSchemaPlan
+  readonly schemaHistory: SchemaHistoryRuntime
 }
 
 type OpenPostgresqlProviderRestoreTarget = (
@@ -34,6 +36,8 @@ type OpenPostgresqlProviderRestoreTarget = (
 
 export interface RestorePostgresqlProviderBackupOptions {
   readonly headContract: LogicalSchemaContract
+  /** RFC-549: the binary's schema history. */
+  readonly schemaHistory: SchemaHistoryRuntime
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
@@ -71,6 +75,7 @@ export async function restorePostgresqlProviderBackup(
     appHome: options.appHome,
     restoreOperationId: options.restoreOperationId,
     contract: options.contract,
+    schemaHistory: options.schemaHistory,
     filesystem: options.filesystem,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
@@ -82,6 +87,7 @@ export async function restorePostgresqlProviderBackup(
         sourceGenerationId: envelope.payload.sourceGenerationId,
         contract,
         plan: options.plan,
+        schemaHistory: options.schemaHistory,
       })
       return Object.freeze({
         target,

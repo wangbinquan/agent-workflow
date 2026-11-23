@@ -1,7 +1,6 @@
 import { persistenceDialect } from '../../nativeDialect'
 import { z } from 'zod'
 import { digestSchemaContract, canonicalSchemaJson } from '../canonical'
-import { schemaHistoryRuntime } from './runtime'
 import { metaTableName } from './meta'
 import { parameters, type HistoryConnection } from './connection'
 import type { ColumnDefinition } from '../contribution'
@@ -81,13 +80,17 @@ export type EpochMetadataSnapshot = z.infer<typeof EpochMetadataSnapshotSchema>
 // Native schema history is installed from this binary. Business lineage, archived
 // rows and restrictions retain their exact original run bindings across a copy.
 const omitted = new Set(['schema_history', 'first_write', 'schema_transform_receipts'])
-const declarations = () =>
-  schemaHistoryRuntime().metaTables.filter((table) => !omitted.has(table.name))
-export function verifyEpochMetadataSnapshot(value: unknown): EpochMetadataSnapshot {
+// RFC-549: the binary's meta tables are handed in by the caller.
+const declarations = (metaTables: readonly MetaTableDeclaration[]) =>
+  metaTables.filter((table) => !omitted.has(table.name))
+export function verifyEpochMetadataSnapshot(
+  value: unknown,
+  metaTables: readonly MetaTableDeclaration[],
+): EpochMetadataSnapshot {
   const snapshot = EpochMetadataSnapshotSchema.parse(value)
   if (snapshot.digest !== digestSchemaContract(snapshot.payload))
     throw new Error('epoch2-metadata-digest-mismatch')
-  const expected = declarations()
+  const expected = declarations(metaTables)
     .map((table) => table.name)
     .sort()
   if (
@@ -95,7 +98,7 @@ export function verifyEpochMetadataSnapshot(value: unknown): EpochMetadataSnapsh
     canonicalSchemaJson(expected)
   )
     throw new Error('epoch2-metadata-table-roster-mismatch')
-  for (const table of declarations()) {
+  for (const table of declarations(metaTables)) {
     const columns = Object.values(table.columns)
       .map((column) => column.name)
       .sort()
@@ -107,9 +110,10 @@ export function verifyEpochMetadataSnapshot(value: unknown): EpochMetadataSnapsh
 }
 export async function captureEpochMetadata(
   connection: HistoryConnection,
+  metaTables: readonly MetaTableDeclaration[],
 ): Promise<EpochMetadataSnapshot> {
   const tables = []
-  for (const table of declarations()) {
+  for (const table of declarations(metaTables)) {
     const columns = Object.values(table.columns).map((column) => column.name)
     const rows = await connection.execute(
       `SELECT ${columns.map(quote).join(',')} FROM ${metaTableName(connection.provider, table.name)} ORDER BY ${table.primaryKey.map(quote).join(',')}`,
@@ -120,15 +124,16 @@ export async function captureEpochMetadata(
     })
   }
   const payload = { version: 1 as const, tables }
-  return verifyEpochMetadataSnapshot({ payload, digest: digestSchemaContract(payload) })
+  return verifyEpochMetadataSnapshot({ payload, digest: digestSchemaContract(payload) }, metaTables)
 }
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`
 export async function restoreEpochMetadata(
   connection: HistoryConnection,
   value: EpochMetadataSnapshot,
+  metaTables: readonly MetaTableDeclaration[],
 ): Promise<void> {
-  const snapshot = verifyEpochMetadataSnapshot(value)
-  for (const table of declarations()) {
+  const snapshot = verifyEpochMetadataSnapshot(value, metaTables)
+  for (const table of declarations(metaTables)) {
     const columns = Object.values(table.columns).map((column) => column.name)
     for (const source of snapshot.payload.tables.find((item) => item.name === table.name)!.rows) {
       // Preserve prior generation facts as lineage; only the new copy is active.

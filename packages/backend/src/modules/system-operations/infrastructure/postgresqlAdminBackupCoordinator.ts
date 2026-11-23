@@ -20,6 +20,7 @@ type CreatePostgresqlBackup = (
 
 export function createPostgresqlAdminBackupCoordinator(input: {
   readonly headContract: CreatePostgresqlProviderBackupOptions['headContract']
+  readonly schemaHistory: CreatePostgresqlProviderBackupOptions['schemaHistory']
   readonly contract: CreatePostgresqlProviderBackupOptions['contract']
   readonly runtime: CreatePostgresqlProviderBackupOptions['runtime']
   /** Provider-neutral client for the application-owned rows the archive carries. */
@@ -37,6 +38,7 @@ export function createPostgresqlAdminBackupCoordinator(input: {
       await input.prepare?.()
       return await createBackup({
         headContract: input.headContract,
+        schemaHistory: input.schemaHistory,
         contract: input.contract,
         runtime: input.runtime,
         appHome: input.appHome,

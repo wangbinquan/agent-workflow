@@ -1,8 +1,4 @@
 import { appendSqliteSuccessor } from './helpers/epoch2SqliteSuccessor'
-import {
-  registerSchemaHistoryRuntime,
-  schemaHistoryRuntime,
-} from '@/platform/persistence/schema/history/runtime'
 import { createInMemoryDb } from '@/db/client'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { parseGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
@@ -25,7 +21,11 @@ import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackup
 //   - invert computeRestoreDirection → downgrade test accepts a newer backup → red.
 
 import { taskFixture, workflowFixture } from './helpers/model'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import {
+  logicalSchemaContract,
+  persistenceSchemaBinding,
+  substitutePersistenceSchemaHistory,
+} from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -150,7 +150,13 @@ describe('RFC-213 restore roundtrip (AC-1)', () => {
     expect(allTableCounts(dbPath).workflows).toBe(3)
 
     // Restore → everything reverts to the backup state.
-    await restoreBackup(res.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 })
+    await restoreBackup(res.path, {
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome,
+      dbPath,
+      migrationsFolder: MIGRATIONS,
+      now: 2,
+    })
     expect(allTableCounts(dbPath)).toEqual(backupCounts)
     const restoredDb = new Database(dbPath, { readonly: true })
     try {
@@ -255,7 +261,13 @@ describe('RFC-213 restore — crash-safe swap over a live WAL', () => {
 
     // 4) Restore the 2-workflow backup. The swap must delete the stale -wal/-shm
     //    BEFORE renaming, or the reopened DB replays the 5 stale frames.
-    await restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 })
+    await restoreBackup(backup.path, {
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome,
+      dbPath,
+      migrationsFolder: MIGRATIONS,
+      now: 2,
+    })
     expect(allTableCounts(dbPath).workflows).toBe(2)
   })
 })
@@ -292,7 +304,13 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     await tarGz(staging, mismatchedTar)
 
     await expect(
-      restoreBackup(mismatchedTar, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 }),
+      restoreBackup(mismatchedTar, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        now: 2,
+      }),
     ).rejects.toThrow('restore refused: raw and logical database payload verification failed')
     expect(readFileSync(dbPath)).toEqual(liveBytes)
     expect(allTableCounts(dbPath)).toEqual(liveCounts)
@@ -320,7 +338,13 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     await tarGz(staging, badTar)
 
     await expect(
-      restoreBackup(badTar, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 }),
+      restoreBackup(badTar, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        now: 2,
+      }),
     ).rejects.toBeInstanceOf(RestoreIntegrityError)
     expect(readFileSync(dbPath)).toEqual(liveBytes)
   })
@@ -363,7 +387,13 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     await tarGz(staging, forgedTar)
 
     await expect(
-      restoreBackup(forgedTar, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 }),
+      restoreBackup(forgedTar, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        now: 2,
+      }),
     ).rejects.toBeInstanceOf(RestoreDowngradeError)
     expect(readFileSync(dbPath)).toEqual(liveBytes)
   })
@@ -390,7 +420,13 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     mkdirSync(join(appHome, 'backups', `pre-restore-${stamp}.tar.gz`), { recursive: true })
 
     await expect(
-      restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now }),
+      restoreBackup(backup.path, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        now,
+      }),
     ).rejects.toBeInstanceOf(RestoreSafetyBackupError)
     // Live DB untouched — the swap never ran.
     expect(readFileSync(dbPath)).toEqual(liveBytes)
@@ -410,6 +446,7 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     sqliteOf(db).close()
 
     const r = await restoreBackup(backup.path, {
+      schemaHistory: persistenceSchemaBinding.history,
       appHome,
       dbPath,
       migrationsFolder: MIGRATIONS,
@@ -465,7 +502,13 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
     })
     sqliteOf(db).close()
 
-    await restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 })
+    await restoreBackup(backup.path, {
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome,
+      dbPath,
+      migrationsFolder: MIGRATIONS,
+      now: 2,
+    })
 
     const check = new Database(dbPath, { readonly: true })
     const suspended = (id: string): number =>
@@ -488,6 +531,7 @@ describe('restore CLI wrapper guard rails', () => {
     const noArg = await restoreCommand(
       [],
       composeLocalSystemOperations({
+        schemaHistory: persistenceSchemaBinding.history,
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
         contract: logicalSchemaContract,
         ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
@@ -499,6 +543,7 @@ describe('restore CLI wrapper guard rails', () => {
     const missing = await restoreCommand(
       [join(tmp('rfc213-cli-'), 'nope.tar.gz')],
       composeLocalSystemOperations({
+        schemaHistory: persistenceSchemaBinding.history,
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
         contract: logicalSchemaContract,
         ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
@@ -531,7 +576,13 @@ describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json
     mkdirSync(join(appHome, 'skills', 'my-skill', 'files'), { recursive: true })
     writeFileSync(join(appHome, 'skills', 'my-skill', 'files', 'SKILL.md'), 'LIVE-SKILL')
 
-    await restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 555 })
+    await restoreBackup(backup.path, {
+      schemaHistory: persistenceSchemaBinding.history,
+      appHome,
+      dbPath,
+      migrationsFolder: MIGRATIONS,
+      now: 555,
+    })
 
     const fsTar = join(appHome, 'backups', 'pre-restore-fs-555.tar.gz')
     expect(existsSync(fsTar)).toBe(true)
@@ -555,6 +606,7 @@ describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json
     ;(db2 as unknown as { $client: Database }).$client.close()
     writeFileSync(join(appHome2, 'config.json'), '{}')
     await restoreBackup(backup2.path, {
+      schemaHistory: persistenceSchemaBinding.history,
       appHome: appHome2,
       dbPath: dbPath2,
       migrationsFolder: MIGRATIONS,
@@ -587,7 +639,6 @@ describe('impl-gate P1-3 — the pre-migration binary gate actually fires', () =
     await tarGz(staging, tarPath)
 
     const saved = process.env.AGENT_WORKFLOW_VERSION
-    const runtime = schemaHistoryRuntime()
     const probe = createInMemoryDb()
     let successor
     try {
@@ -595,24 +646,34 @@ describe('impl-gate P1-3 — the pre-migration binary gate actually fires', () =
     } finally {
       probe.$client.close()
     }
-    registerSchemaHistoryRuntime({
-      ...runtime,
+    // RFC-549: restore reads the history it is handed; the case boots the successor through the bootstrap seam.
+    const restoreHistory = substitutePersistenceSchemaHistory((previous) => ({
       head: () => successor,
-      history: () => [...(runtime.history?.() ?? [runtime.head()]), successor],
-    })
+      history: () => [...(previous.history?.() ?? [previous.head()]), successor],
+    }))
     try {
       process.env.AGENT_WORKFLOW_VERSION = 'vB'
       expect(appVersion()).toBe('vB') // env is the identity override
       await expect(
-        restoreBackup(tarPath, { appHome, dbPath, migrationsFolder: MIGRATIONS }),
+        restoreBackup(tarPath, {
+          schemaHistory: persistenceSchemaBinding.history,
+          appHome,
+          dbPath,
+          migrationsFolder: MIGRATIONS,
+        }),
       ).rejects.toThrow(/pre-migration backup from binary vA/)
 
       // same binary → the gate passes and the restore completes (migrates).
       process.env.AGENT_WORKFLOW_VERSION = 'vA'
-      const res = await restoreBackup(tarPath, { appHome, dbPath, migrationsFolder: MIGRATIONS })
+      const res = await restoreBackup(tarPath, {
+        schemaHistory: persistenceSchemaBinding.history,
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+      })
       expect(res.migrated).toBe(true)
     } finally {
-      registerSchemaHistoryRuntime(runtime)
+      restoreHistory()
       if (saved === undefined) delete process.env.AGENT_WORKFLOW_VERSION
       else process.env.AGENT_WORKFLOW_VERSION = saved
     }
@@ -672,6 +733,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
       const res = await restoreCommand(
         [backup.path, '--dry-run'],
         composeLocalSystemOperations({
+          schemaHistory: persistenceSchemaBinding.history,
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
           contract: logicalSchemaContract,
           ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
@@ -683,6 +745,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
       const apply = await restoreCommand(
         [backup.path, '--yes'],
         composeLocalSystemOperations({
+          schemaHistory: persistenceSchemaBinding.history,
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
           contract: logicalSchemaContract,
           ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),
@@ -706,6 +769,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
       const res = await restoreCommand(
         [junk, '--stage'],
         composeLocalSystemOperations({
+          schemaHistory: persistenceSchemaBinding.history,
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
           contract: logicalSchemaContract,
           ...composeStandaloneLocalSystemOperationsSelection(logicalSchemaContract),

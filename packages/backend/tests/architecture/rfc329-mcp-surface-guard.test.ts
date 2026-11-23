@@ -26,7 +26,7 @@
 // 这件事存在的（`list_repo_refs` 自 RFC-370 §10 V17 起按 id 一跳，不再需要 fixture）。
 
 import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
 
 import { describe, expect, test } from 'bun:test'
@@ -79,6 +79,7 @@ async function mountedRoutes(): Promise<
       dbVersion: 28,
       secretBox: createSecretBoxFromKey(randomBytes(32)),
       databaseMigration: composeDatabaseMigrationModule({
+        schemaHistory: persistenceSchemaBinding.history,
         fileSnapshots: createFileSnapshotTracker(),
         contract: logicalSchemaContract,
         sqlitePath: join(home, 'db.sqlite'),

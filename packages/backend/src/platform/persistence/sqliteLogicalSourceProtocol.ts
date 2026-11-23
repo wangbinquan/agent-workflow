@@ -1,4 +1,3 @@
-import type { HistoryVersion } from './schema/history/types'
 import type { MetaTableDeclaration } from './schema/history/meta'
 import { EpochMetadataSnapshotSchema } from './schema/history/metadataSnapshot'
 // RFC-349 — validated, bounded RPC between the request-serving daemon and the
@@ -44,9 +43,12 @@ export const SqliteLogicalSourceWorkerRequestSchema = z.discriminatedUnion('type
       path: z.string().min(1),
       expectedSchemaDigest: DigestSchema,
       contract: z.custom<LogicalSchemaContract>(),
-      history: z
-        .custom<{ head: HistoryVersion; metaTables: readonly MetaTableDeclaration[] }>()
-        .optional(),
+      // RFC-549: required — the Worker has no other source for the binary's epoch-2 meta tables (it was optional, with the
+      // rest of the history read from a process-wide registration).
+      metaTables: z.custom<readonly MetaTableDeclaration[]>(
+        (value) => Array.isArray(value),
+        'SQLite logical-source Worker init carries no meta tables',
+      ),
     })
     .strict(),
   z.object({ ...BaseRequest, type: z.literal('preflight') }).strict(),

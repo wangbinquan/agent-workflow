@@ -193,6 +193,7 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
       ]),
       databaseBackups: composeCrewStationDatabaseBackups({
         contract: logicalSchemaContract,
+        schemaHistory: persistenceSchemaBinding.history,
         db,
         runtime,
         fence,
