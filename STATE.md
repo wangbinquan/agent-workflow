@@ -1,4 +1,16 @@
-## 2026-11-22 RFC-540 SQLite 逻辑源 Worker 的状态归每个 Worker 的处理器（In Progress；`design/RFC-540-sqlite-logical-source-worker-state/`）
+## 2026-11-22 RFC-541 维护 Worker 的效果模块由各自的 Worker 入口交给运行时（In Progress；`design/RFC-541-maintenance-worker-effect-modules/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第九步。托管部署的维护 Worker 入口在第一条 init 消息前把 `aw:crewstation-maintenance` 登记进平台的
+  一张模块级表（`platform/background/maintenanceWorkerEffects.ts` 的 `effectModules` 与 `registerMaintenanceWorkerEffectModule`），再 import 共用的
+  Worker 根，靠 import 顺序配合。架构报告的模块级可变单例清单里这一文件 1 条（全仓 51 条）。用户 2026-11-02「好，你继续推进RFC294，过程中你
+  以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，
+  进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：删去登记表；托管入口是自己的薄根，把映射符号名的加载器经效果作用域交给运行时，单机根照旧；新增 RFC-541 用例。
+- **不做**：其余 50 条模块级可变单例；维护 Worker 的协议、监工、效果描述符与两种部署的效果实现不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-540 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-22 RFC-540 SQLite 逻辑源 Worker 的状态归每个 Worker 的处理器（Done；`design/RFC-540-sqlite-logical-source-worker-state/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第八步。数据库迁移从 SQLite 读源的专用 Worker（`platform/persistence/sqliteLogicalSourceWorker.ts`，
   单二进制的显式入口）把打开的逻辑源、校验过的契约与“正在初始化”标志放在三个模块级 `let` 里，请求处理与它们绑在入口模块上，只能起一个
@@ -17,6 +29,13 @@
   没有查出本人缺陷；两种变异（状态挪回模块级、入口每条消息另建处理器）都被认出；红的与对照同时 A/B，两个长扫描用例与
   `rfc395-provider-move-recovery`（测试助手的 `beforeAll`）在两边放大写死的时限后都全过，没有只在候选上红的用例；架构报告模块级可变单例
   54 → 51、公开面与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`2f685c9e4`（8 个文件；父提交是 `091d0eee8`）。
+- **CI**：实现提交主 CI 70 / 70（run 45111968497，第 1 次）；落档提交 `091d0eee8` 主 CI 68 / 70（后端分片 16/44 的 `rfc311-perf-guards` PostgreSQL
+  P95 停顿，`docs/audit-backlog.md` 已登记的环境性红，该提交只改文档、代码与 `bf1ed4716` 相同、父提交同一分片通过）。都未重跑。
+- **下一步**：S12 第 4 项其余 51 条。可迁移的登记与绑定 15 条（维护 Worker 的效果模块登记〔RFC-541〕、平台持久化的 schema 绑定与按句柄的侧表、
+  迁移历史的运行时绑定、日志器配置等）继续拆；凭据 / 访问 / 完整性相邻的 9 条（ws 的三处登记、遗留测试库标记、技能启动复核）只审功能地单独
+  处理；进程级缓存与计数器 27 条（npm / tar / git 版本等主机探测、WASM 运行时初始化、唯一名计数器、只告警一次的标志、引擎能力缓存等）按
+  RFC-294 plan S12 第 4 项须经用户确认是否作为进程缓存保留并修订 design §14 口径，已在本会话向用户说明、待用户决定。
 
 ## 2026-11-22 RFC-539 SQLite 文件快照的在途计数随数据库句柄走（Done；`design/RFC-539-database-file-snapshots/`）
 

@@ -17,7 +17,7 @@
 - [x] AC-1 Worker 入口与处理器文件没有模块级状态；入口只建一个处理器并把 `onmessage` 交给它
 - [x] AC-2 六种请求的结局不变；两个处理器各自初始化、互不相通
 - [x] AC-3 模块级可变单例 54 → 51、计数不升；锁随改；新增 RFC-540 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -44,7 +44,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `2f685c9e4`（实现，父提交是 `091d0eee8`）：exact SHA 主 CI run 45111968497 的 70 个 job 第 1 次全部通过（本提交的路径不触发 windows-platform 与
+  maintenance-soak-nightly）。
+- 本 RFC 的落档提交 `091d0eee8`（只改 8 个 Markdown 文件；同一提交记下 RFC-539 转 Done）：主 CI run 45109817756 的 70 个 job 里，后端分片 16/44
+  的 `rfc311-perf-guards`「task-operations catalog — 过滤视图（G1 快路径）」AC-11 塌方探测红——PostgreSQL P95 6,862.64 ms 是 SQLite 44.01 ms 的
+  155.9 倍（阈值 50 倍），`CI required` 随之红，其余 68 个通过。该提交的代码与 `bf1ed4716`（70 / 70）逐字相同，父提交的同一分片通过；这是
+  `docs/audit-backlog.md` 已登记的 runner 上 PostgreSQL 测量窗口停顿，不是该提交引入的；未改、未重跑。
 
 ## 实现门（本会话自审，只审功能）
 
