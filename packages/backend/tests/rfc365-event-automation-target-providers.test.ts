@@ -23,11 +23,9 @@ import type {
   TaskAutomationWorkStartPort,
 } from '@/modules/event-center/composition/required-ports'
 import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
-import {
-  codeHostBusinessEventObservation,
-  codeHostEventCatalogJson,
-} from '@/modules/integration/public/events'
+import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { codeHostBusinessEventObservation } from '@/modules/integration/application/codeHostEvents'
 
 const OWNER = {
   userId: 'rfc365-owner',

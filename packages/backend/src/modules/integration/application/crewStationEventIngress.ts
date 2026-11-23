@@ -11,7 +11,6 @@ import type {
   EventObservationReceipt,
 } from '@/modules/event-center/public/types'
 import { ConflictError, DomainError } from '@/util/errors'
-import { codeHostEventObservations } from '../public/events'
 import type {
   CrewStationEventInboxPort,
   CrewStationInboundDelivery,
@@ -19,6 +18,7 @@ import type {
   CrewStationTargetDecision,
 } from './ports/crewStationEventInbox'
 import { webhookDeliveryOutcome } from './webhookDeliveryOutcome'
+import { codeHostEventObservations } from './codeHostEvents'
 
 export interface CrewStationEventPublisher {
   observe(input: EventObservationInput): Promise<EventObservationReceipt>

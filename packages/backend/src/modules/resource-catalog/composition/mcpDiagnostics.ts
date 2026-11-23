@@ -4,12 +4,9 @@ import {
 } from '../application/mcps/runtimeDiagnostics'
 import { createMcpDiagnosticsOperations } from '../application/mcps/diagnosticsOperations'
 import { createInProcessMcpProbeRunner, type McpProbeEnvironment } from './mcpProbeOperations'
-import type { McpOperationCoordinatorPort } from '../application/mcps/ports'
+import type { McpOperationCoordinatorPort, McpProbeRunner } from '../application/mcps/ports'
 import { createMcpDiagnosticsContexts } from '../infrastructure/mcpDiagnosticsContexts'
-import type {
-  McpProbeRunner,
-  McpRuntimeTestReconciliationParticipant,
-} from '../public/participants'
+import type { McpRuntimeTestReconciliationParticipant } from '../public/participants'
 import type { McpDiagnosticsEffectDependencies } from '../infrastructure/local/mcpDiagnosticsEffects'
 
 export type McpDiagnosticsApplicationInput = McpDiagnosticsDependencies

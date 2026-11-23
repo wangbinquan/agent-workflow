@@ -17,8 +17,8 @@ import { join } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
-import type { SkillCatalogModule } from '@/modules/resource-catalog/public/operations'
 import { standaloneSkillCatalogContent } from './resourceCatalog'
+import type { SkillCatalogModule } from '@/modules/resource-catalog/application/catalogModules'
 
 /** 回滚时「哪些记忆退回待用」在一致性场景里不参与判据，给空实现。 */
 const restoreMembership = Object.freeze({

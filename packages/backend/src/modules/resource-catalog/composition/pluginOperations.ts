@@ -17,7 +17,7 @@ import { createLocalPluginInstaller } from '../infrastructure/local/localPluginI
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { createPluginOperationDescriptors } from './catalogOperationDescriptors'
-import type { PluginCatalogModule } from '../public/operations'
+import type { PluginCatalogModule } from '../application/catalogModules'
 
 export type { PluginInstallerPort }
 /** RFC-431: the standalone selection installs plugins under the local plugin root. */

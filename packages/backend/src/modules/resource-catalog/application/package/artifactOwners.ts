@@ -3,12 +3,12 @@ import type { PluginSourceKind } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PackageResourceKind } from '../../domain/resourceKinds'
 import type { ResourceRequestContext } from '../../public/participants'
-import type {
-  PluginPackageMutation,
-  ResourcePackageMutationReceipt,
-  SkillPackageMutation,
-} from '../../public/types'
 import type { ResourcePackageHumanMemberMapping, ResourcePackageSecretInput } from './ports'
+import type {
+  ResourcePackageMutationReceipt,
+  PluginPackageMutation,
+  SkillPackageMutation,
+} from './preparedMutations'
 
 // Existing package side-effect contracts shared by both database providers.
 // Persisted directory-named fields remain compatible opaque storage references;

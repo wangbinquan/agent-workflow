@@ -1,8 +1,4 @@
 import type {
-  AgentPackageMutation,
-  CapabilityTemplatePackageMutation,
-  McpPackageMutation,
-  PluginPackageMutation,
   PreparedAgentPackageMutation,
   PreparedCapabilityTemplatePackageMutation,
   PreparedMcpPackageMutation,
@@ -10,10 +6,14 @@ import type {
   PreparedSkillPackageMutation,
   PreparedWorkflowPackageMutation,
   PreparedWorkgroupPackageMutation,
+  AgentPackageMutation,
+  CapabilityTemplatePackageMutation,
+  McpPackageMutation,
+  PluginPackageMutation,
   SkillPackageMutation,
   WorkflowPackageMutation,
   WorkgroupPackageMutation,
-} from '../../public/types'
+} from '../package/preparedMutations'
 
 const trustedResourcePackageCapabilities = new WeakSet<object>()
 

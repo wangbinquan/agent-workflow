@@ -23,24 +23,17 @@ import {
 } from '@agent-workflow/shared'
 import {
   type AgentCatalogResource,
-  type AgentPackageMutation,
-  type CapabilityTemplatePackageMutation,
   type CatalogSelectorKind,
   type FrozenIntegrationTriggerResourceSnapshot,
   type FrozenTaskExecutionResourceSnapshot,
   type IntegrationTriggerResourceRequest,
   type McpCatalogResource,
-  type McpPackageMutation,
   type PackageResourceKind,
   type PluginCatalogResource,
-  type PluginPackageMutation,
   type ResourceMemoryScopeRef,
   type SkillCatalogResource,
-  type SkillPackageMutation,
   type TaskExecutionResourceRequest,
   type VersionedIntentResourceChangesetPlan,
-  type WorkflowPackageMutation,
-  type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
 import {
   ACL_CATALOG_KINDS,
@@ -77,22 +70,33 @@ import type {
 } from '../src/modules/resource-catalog/public/participants'
 import type { MemoryResourceScopeAccessParticipant } from '../src/modules/memory/application/ports/resourceScopeAccess'
 import type {
-  AgentCatalogModule,
   AgentOperationDescriptors,
   McpCatalogModule,
   McpOperationDescriptors,
-  PluginCatalogModule,
   PluginOperationDescriptors,
   ResourcePackageCatalogModule,
   ResourcePackageOperationDescriptors,
-  SkillCatalogModule,
   SkillOperationDescriptors,
-  WorkflowCatalogModule,
   WorkflowOperationDescriptors,
-  WorkgroupCatalogModule,
   WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
 import type { PostgresqlResourcePackageTransactionParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
+import type {
+  AgentCatalogModule,
+  PluginCatalogModule,
+  SkillCatalogModule,
+  WorkflowCatalogModule,
+  WorkgroupCatalogModule,
+} from '@/modules/resource-catalog/application/catalogModules'
+import type {
+  AgentPackageMutation,
+  CapabilityTemplatePackageMutation,
+  McpPackageMutation,
+  PluginPackageMutation,
+  SkillPackageMutation,
+  WorkflowPackageMutation,
+  WorkgroupPackageMutation,
+} from '@/modules/resource-catalog/application/package/preparedMutations'
 
 type Equal<Left, Right> =
   (<T>() => T extends Left ? 1 : 2) extends <T>() => T extends Right ? 1 : 2

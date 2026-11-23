@@ -12,7 +12,18 @@
 // way to tell why. A red label with no next step is only marginally better.
 
 import type { ReadinessIssue } from '@/modules/code-capability/domain/templateLayers'
-import type { CodeRepairAction } from '@/modules/code-capability/public/queries'
+
+/**
+ * A fix a person can act on.
+ *
+ * `route` is a platform route rather than free text so the page can link
+ * straight to it; `label` is what the link says.
+ */
+export interface CodeRepairAction {
+  code: ReadinessIssue['code']
+  label: string
+  route: string
+}
 
 /**
  * Where each missing prerequisite is fixed.

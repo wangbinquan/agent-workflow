@@ -1,4 +1,4 @@
-import type { ProtectedMrLaunchGuardInput } from '../../public/participants'
+import type { ProtectedMrLaunchGuardInput } from './mrTerminalControl'
 
 export type MrLaunchGuardStatus =
   | 'reserved'

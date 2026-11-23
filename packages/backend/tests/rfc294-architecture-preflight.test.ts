@@ -378,7 +378,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // `Readonly<Record<DeclarationFace, FaceSupport>>` that makes a new manifest face a compile error in every driver.
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type MappedType',
   'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type UnknownKeyword',
-  'modules/runtime-management/domain/usageMeter.ts#JsonObject: unsafe/open type UnknownKeyword',
+  // RFC-550: the usage meter's open JsonObject left the list with runtime-management's JsonObject re-export (its only
+  // public root).
   // RFC-492: `modelKey` is no longer offered by runtime-management's public (only the driver family read it).
   'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',
   'modules/source-control/application/workspacePorts.ts#requireIsolationWorkspaceScope: unsafe/open type UnknownKeyword',

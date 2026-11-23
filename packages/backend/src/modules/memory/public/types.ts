@@ -32,13 +32,7 @@ export {
   type CandidateVisibilityOptions,
 } from '../domain/candidateVisibility'
 
-export {
-  formatMemoryBlockFromSnapshot,
-  memoryFencingForNonce,
-  parseInjectedSnapshotJson,
-  type MemoryEnvelopeFencing,
-  type ScopeBudget,
-} from '../domain/injectionRendering'
+export { type ScopeBudget } from '../domain/injectionRendering'
 
 // RFC-434: the memory catalog contract, folded in from the former non-exact `public/catalog`.
 export interface MemoryWithChain {

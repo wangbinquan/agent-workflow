@@ -58,17 +58,17 @@
     },
     {
       "auditedBy": "digital-employee-contract",
-      "claimAudit": "DOES NOT hold. Every external consumer bypasses it entirely and deep-imports domain/ and application/ (routes/code.ts, routes/capabilityTemplates.ts, services/capabilityTemplates.ts, services/demoSeed.ts). The module also still has a live production writer outside its own root.",
+      "claimAudit": "RFC-550: re-pointed. The original audit (DOES NOT hold: every external consumer bypassed public/queries and deep-imported domain/ and application/) no longer has a subject — the routes moved into the module's own inbound bindings (RFC-439) and no other module imported public/queries, so RFC-550 withdrew it and the read surface is the module's own application port file.",
       "core": false,
       "files": [
-        "packages/backend/src/modules/code-capability/public/queries.ts"
+        "packages/backend/src/modules/code-capability/application/ports/codeQueries.ts"
       ],
       "guards": [],
       "id": "code-capability-public-queries",
-      "layer": "public",
+      "layer": "application",
       "owner": "code-capability",
-      "singleSourceOf": "Self-documented as 'the five names another context may import ... no star re-export, so nothing internal leaks'.",
-      "title": "code-capability public/queries (compatibility island read surface)"
+      "singleSourceOf": "The matrix, work-item, round-attempt and metrics query ports and the result shapes they return, read by the module's inbound HTTP bindings and composition (RFC-550: moved off public/queries, which had no other-module consumer).",
+      "title": "code-capability query ports (application/ports/codeQueries)"
     },
     {
       "auditedBy": "digital-employee-contract",

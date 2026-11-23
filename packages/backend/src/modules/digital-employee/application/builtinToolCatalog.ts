@@ -2,11 +2,9 @@ import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
 
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
-import {
-  normalizeDispatchRouteDefinitionsJson,
-  type DigitalEmployeePlatformToolCatalogParticipant,
-} from '@/modules/digital-employee/public/types'
+import { type DigitalEmployeePlatformToolCatalogParticipant } from '@/modules/digital-employee/public/types'
 import { sha256Hex } from '@/util/hash'
+import { normalizeDispatchRouteDefinitionsJson } from '../domain/dispatchRouteDefinitions'
 interface DigitalEmployeeBuiltinTemplateHelpers {
   readonly DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS: readonly string[]
   readonly digitalEmployeeBuiltinAgentSuccessorId: (agentId: string) => string | null

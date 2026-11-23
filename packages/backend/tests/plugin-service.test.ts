@@ -26,7 +26,6 @@ import { composePluginCatalog } from '../src/modules/resource-catalog/compositio
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createPluginRepository } from '../src/modules/resource-catalog/infrastructure/pluginRepository'
 import { createLocalPluginInstaller } from '../src/modules/resource-catalog/infrastructure/local/localPluginInstaller'
-import type { PluginCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { PluginOperationContext } from '../src/modules/resource-catalog/public/participants'
 import {
   createPlugin,
@@ -41,6 +40,7 @@ import { createPluginGenerationFilesystemGcPort } from '../src/modules/resource-
 import { resetNpmProbeCacheForTests } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
+import type { PluginCatalogModule } from '@/modules/resource-catalog/application/catalogModules'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 

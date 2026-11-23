@@ -6,10 +6,8 @@ import {
   createWebhookDispatchOrchestrationRuntime,
 } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import type { WebhookExecutionRuntimeDependencies } from '@/modules/integration/infrastructure/webhookExecutionRuntime'
-import type {
-  DigitalEmployeeWorkStartPort,
-  ProtectedMrLaunchGuard,
-} from '@/modules/integration/public/participants'
+import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
+import type { ProtectedMrLaunchGuard } from '@/modules/integration/application/ports/mrTerminalControl'
 
 const actor: Actor = buildActor({
   user: {

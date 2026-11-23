@@ -212,7 +212,8 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     // 各揣一份时出问题的地方；再冒出第二处定义，这条照样红。
     what: '「这条已准备好的包变更属于哪类资源」的七个类型谓词（两个应用引擎曾各揣整族一份）',
     fn: 'preparedPackageMutation',
-    definedIn: `${B}modules/resource-catalog/public/types.ts`,
+    // RFC-550: the guards left resource-catalog's public with the prepared mutation union (no other module read them).
+    definedIn: `${B}modules/resource-catalog/application/package/preparedMutations.ts`,
     consumers: [`${B}modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts`],
     // `forkedFrom` 是**历史**：当初分叉的两处。其中 legacy 那一处已随合一删除，
     // 判据只要求「两处、且至少一处仍存在」，所以这里照旧记两条。

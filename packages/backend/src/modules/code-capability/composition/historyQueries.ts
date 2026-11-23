@@ -27,7 +27,7 @@ import type {
   CodeMatrixQuery,
   CodeRoundAttemptsQuery,
   CodeWorkItemProjectionQuery,
-} from '@/modules/code-capability/public/queries'
+} from '../application/ports/codeQueries'
 
 export interface CodeHistoryQueries {
   readonly matrix: CodeMatrixQuery

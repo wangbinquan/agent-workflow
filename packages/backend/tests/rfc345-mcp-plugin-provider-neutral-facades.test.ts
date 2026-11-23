@@ -30,9 +30,11 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     expect(existsSync(resolve(sourceRoot, 'services/pluginClosure.ts'))).toBe(false)
   })
 
-  test('probe persistence has closed public DTOs and real SQLite/PostgreSQL adapters', () => {
-    const types = source('modules/resource-catalog/public/types.ts')
-    const participants = source('modules/resource-catalog/public/participants.ts')
+  test('probe persistence has closed DTOs and real SQLite/PostgreSQL adapters', () => {
+    // RFC-550: the probe DTOs and the store port left resource-catalog's public (no other module read them); they are the
+    // module's own MCP ports now, and stay closed.
+    const types = source('modules/resource-catalog/application/mcps/ports.ts')
+    const participants = types
     const composition = source('modules/resource-catalog/composition/mcpProbeStore.ts')
     // RFC-359 W4-B2：两份 provider 适配合成一份（mcpProbeStore.ts），写事务走 resource-catalog 的统一原语。
     const shared = source('modules/resource-catalog/infrastructure/mcpProbeStore.ts')

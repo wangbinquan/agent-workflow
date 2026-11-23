@@ -22,13 +22,16 @@ import { ResourceOperationCoordinator } from '@/modules/resource-catalog/infrast
 import type {
   McpAclIdentityParticipant,
   McpOperationContext,
-  McpProbeMeasurement,
-  McpProbeStore,
 } from '@/modules/resource-catalog/public/participants'
 import type { McpQueries } from '@/modules/resource-catalog/public/queries'
-import type { McpCatalogResource, McpProbeRecord } from '@/modules/resource-catalog/public/types'
+import type { McpCatalogResource } from '@/modules/resource-catalog/public/types'
 import { DomainError } from '@/util/errors'
 import { importEdges, sourceUnit } from './architecture/census'
+import type {
+  McpProbeStore,
+  McpProbeMeasurement,
+  McpProbeRecord,
+} from '@/modules/resource-catalog/application/mcps/ports'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -219,7 +222,8 @@ describe('RFC-448 —— 位置与引用', () => {
       `${RC}/application/mcps/probeRecords.ts`,
     ]) {
       const targets = targetsOf(`${file}`)
-      expect(targets.length, file).toBeGreaterThan(1)
+      // RFC-550: the probe records take their store port and DTOs from the module's own MCP ports file (one target).
+      expect(targets.length, file).toBeGreaterThan(0)
       for (const target of targets) {
         const allowed =
           target.startsWith('util/') ||

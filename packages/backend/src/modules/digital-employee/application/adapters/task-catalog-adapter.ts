@@ -6,8 +6,8 @@ import {
   type TaskCatalogListItem,
   type TaskLaunchOrigin,
   type TaskStatus,
+  classifyTerminalKind,
 } from '@agent-workflow/shared'
-import { classifyTerminalKind } from '@/modules/digital-employee/public/types'
 
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import { ValidationError } from '@/util/errors'

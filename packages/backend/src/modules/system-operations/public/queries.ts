@@ -1,10 +1,4 @@
-import type {
-  Config,
-  OverviewResponse,
-  HostedBackupCatalog,
-  HostedBackupVerification,
-  HostedBackupId,
-} from '@agent-workflow/shared'
+import type { Config, OverviewResponse } from '@agent-workflow/shared'
 import type {
   DatabaseMigrationArtifactInput,
   DatabaseMigrationArtifactView,
@@ -18,7 +12,6 @@ import type {
   DaemonRuntimeInfo,
   LocalSystemOperationContext,
   PlanLocalRestoreInput,
-  RecoveryStatusView,
   RestorePlanView,
 } from './types'
 import type {
@@ -42,21 +35,6 @@ export interface PlanLocalRestoreQuery {
     context: LocalSystemOperationContext,
     input: PlanLocalRestoreInput,
   ): Promise<RestorePlanView>
-}
-
-export interface GetRecoveryStatusQuery {
-  execute(context: QueryContext): RecoveryStatusView
-}
-
-export interface SystemOperationQueries {
-  readonly hostedBackupCatalog?: {
-    execute(context: QueryContext): Promise<HostedBackupCatalog>
-  }
-  readonly verifyHostedBackup?: {
-    execute(context: QueryContext, input: HostedBackupId): Promise<HostedBackupVerification>
-  }
-  readonly planLocalRestore: PlanLocalRestoreQuery
-  readonly getRecoveryStatus: GetRecoveryStatusQuery
 }
 
 export interface DatabaseMigrationQueries {

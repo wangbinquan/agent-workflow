@@ -29,7 +29,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
-import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/participants'
 import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
 import type { AgentLaunchResourceOperations } from '@/modules/task-execution/application/ports/agentLaunchResourceOperations'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
@@ -56,6 +55,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import type { ProtectedMrLaunchGuard } from '@/modules/integration/application/ports/mrTerminalControl'
 
 interface SqlResponse {
   readonly objects?: readonly Record<string, unknown>[]

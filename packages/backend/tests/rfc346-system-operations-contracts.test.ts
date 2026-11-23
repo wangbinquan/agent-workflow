@@ -13,18 +13,16 @@ import type {
   RestoreArtifactRef,
   StageRestoreInput,
 } from '../src/modules/system-operations/public/types'
+import { SYSTEM_OPERATION_ALIASES } from '../src/modules/system-operations/public/operations'
+import { backendUnits, sourceUnit, type SourceUnit } from './architecture/census'
+import { createGateCorpus } from './architecture/rfc294Gates'
 import {
   backupResultViewSchema,
   recoveryStatusViewSchema,
   requestBackupInputSchema,
   stageRestoreOptionsSchema,
-} from '../src/modules/system-operations/public/types'
-import {
-  createSystemOperationDescriptors,
-  SYSTEM_OPERATION_ALIASES,
-} from '../src/modules/system-operations/public/operations'
-import { backendUnits, sourceUnit, type SourceUnit } from './architecture/census'
-import { createGateCorpus } from './architecture/rfc294Gates'
+} from '@/modules/system-operations/application/systemOperationContracts'
+import { createSystemOperationDescriptors } from '@/modules/system-operations/application/operationDescriptors'
 
 // Slowest case took 5.41 s on CI run 40433510287 including hooks (4.40 s before RFC-395 II-b); allow 20 s.
 setDefaultTimeout(20_000)
@@ -135,7 +133,13 @@ describe('RFC-346 System Operations contracts', () => {
     expect(queries).toMatch(
       /import type \{[\s\S]*?\bQueryContext\b[\s\S]*?\} from '@\/modules\/identity-access\/public\/participants'/,
     )
-    expect(queries).toContain('execute(context: QueryContext): RecoveryStatusView')
+    // RFC-550: the recovery-status query port left public/queries with the module's own query port (no other module read
+    // it); it still takes the identity-access QueryContext.
+    const ports = readFileSync(
+      join(SOURCE_ROOT, 'modules/system-operations/application/systemOperationPorts.ts'),
+      'utf8',
+    )
+    expect(ports).toContain('execute(context: QueryContext): RecoveryStatusView')
     expect(queries).not.toContain('type SystemOperationQueryContext')
   })
 

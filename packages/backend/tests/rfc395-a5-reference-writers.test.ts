@@ -14,10 +14,7 @@ import { CreateAgentSchema, type CreateAgent } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type {
-  AgentPackageMutation,
-  VersionedIntentResourceChangesetPlan,
-} from '@/modules/resource-catalog/public/types'
+import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -35,6 +32,7 @@ import { bindPostgresqlResourcePackageTransactionReader } from '@/modules/resour
 import type { ResourcePackageArtifactContext } from '@/modules/resource-catalog/application/package/artifactOwners'
 import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
+import type { AgentPackageMutation } from '@/modules/resource-catalog/application/package/preparedMutations'
 
 const OWNER = 'a5-writer-owner'
 const authority = buildActor({

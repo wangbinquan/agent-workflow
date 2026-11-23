@@ -8,10 +8,10 @@
 // composition 不构造本用例，绑定直接报 409 `webhook-ingress-unavailable`。
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { CODE_HOST_ADAPTERS, replayHeaders } from '../domain/codeHostAdapters'
-import { codeHostEventObservations } from '../public/events'
 import type { VerifiedWebhookIngressDependencies } from './ports/verifiedWebhookIngress'
 import type { WebhookDeliveryRuntime } from './ports/webhookDeliveryRuntime'
 import { webhookDeliveryOutcome } from './webhookDeliveryOutcome'
+import { codeHostEventObservations } from './codeHostEvents'
 
 export interface WebhookDeliveryReplayReceipt {
   readonly deliveryId: string

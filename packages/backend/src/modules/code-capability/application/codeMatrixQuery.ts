@@ -23,10 +23,10 @@ export {
 import { deriveReadiness } from '@/modules/code-capability/domain/templateLayers'
 import type {
   CodeMatrixQuery,
-  CodeMatrixRow,
   CodeRoundAttemptsQuery,
   CodeWorkItemProjectionQuery,
-} from '@/modules/code-capability/public/queries'
+  CodeMatrixRow,
+} from './ports/codeQueries'
 
 /** Work items per page. Bounded so one repository cannot return everything. */
 export const WORK_ITEM_PAGE_LIMIT = 20

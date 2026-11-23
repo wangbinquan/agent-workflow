@@ -1,4 +1,4 @@
-import type { CodeWorkItemPage, CodeWorkItemProjectionQuery } from '../../public/queries'
+import type { CodeWorkItemProjectionQuery, CodeWorkItemPage } from './codeQueries'
 
 export type CodeWorkItemPageInput = Parameters<CodeWorkItemProjectionQuery['page']>[0]
 

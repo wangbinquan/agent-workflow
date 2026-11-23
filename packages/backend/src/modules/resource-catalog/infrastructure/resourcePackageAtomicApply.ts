@@ -18,11 +18,6 @@ import type {
   ResourcePackageSecretInput,
 } from '../application/package/ports'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import type {
-  PreparedPackageMutation,
-  ResourcePackageMutationReceipt,
-} from '@/modules/resource-catalog/public/types'
-import { preparedPackageMutation } from '@/modules/resource-catalog/public/types'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAtomicApplyLock } from '@/platform/atomic-apply/keyedLock'
@@ -57,6 +52,11 @@ import {
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import { opSlug, planBundleOps, resourceTypeOfOp } from '../domain/bundlePlan'
+import {
+  type PreparedPackageMutation,
+  type ResourcePackageMutationReceipt,
+  preparedPackageMutation,
+} from '../application/package/preparedMutations'
 
 type PostgresqlResourcePackageMutationSession = ReturnType<
   PostgresqlResourcePackageMutationSessionFactory['create']

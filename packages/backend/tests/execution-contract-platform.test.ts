@@ -31,8 +31,8 @@ import {
   executionContractGuideSchema,
   validateExactContractInput,
   validateExactContractOutput,
+  executionContractRefKey,
 } from '@/modules/execution-contract/domain/model'
-import { executionContractRefKey } from '@/modules/execution-contract/public/types'
 import { createProgramArtifactStore } from '@/modules/digital-employee/infrastructure/programArtifactStore'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'

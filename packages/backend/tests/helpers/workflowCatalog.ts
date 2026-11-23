@@ -6,8 +6,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
-import type { WorkflowCatalogModule } from '@/modules/resource-catalog/public/operations'
 import type { WorkflowOperationContext } from '@/modules/resource-catalog/public/participants'
+import type { WorkflowCatalogModule } from '@/modules/resource-catalog/application/catalogModules'
 
 export function workflowCatalogFor(db: PersistenceDb): WorkflowCatalogModule {
   return composeDatabaseWorkflowCatalog({

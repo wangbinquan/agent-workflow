@@ -949,6 +949,11 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   取出 `tests/`、`scripts/` 与账本 JSON 里的字符串、模板片段和正则字面量，对每个改动的生产文件比 HEAD 与候选，HEAD 命中、候选不命中的就是要改
   的断言（反向的看是不是 `not.toContain`）；只比该用例实际读的文件（路径或 basename 出现在用例或它 import 的 helper 里），命中从上万条降到
   几十条。
+  补充（RFC-550）：这次仍漏了 4 条（OS 架构清单的 public 文件清单与外部边、两条读被挪声明原位置的文本断言、一条“至少两个 import
+  目标”的下限），都在首轮集中验证里 1 秒内红出。撤空整个 public 文件时还有两类按文件记的清单：`architecture/commons-manifest.json`
+  的内核 `files`（`rfc317-architecture-ledgers` 要求文件存在；沿用 RFC-375 / RFC-468 改指新位置、id 不变）与 OS 架构清单的
+  `publicEntries`。某个开放类型如果只经被撤的转出才算 public 可达，`public-surface-deviations` 会降一条，`PUBLIC_SURFACE_DEBT` 随之多出
+  一条陈旧项。按语法树删掉整条 import 声明时，把它替换成空串会在 import 块里留下空行，prettier 不会合并；删完按 diff 里新增的空行清一遍。
 - **按整行文本批量改 import，会把用例里作负对照的同一行字符串一起改掉**（RFC-481 实撞）：`rfc476` 的负对照把一行
   `import { … } from '@/modules/collaboration/public/participants'` 当输入、期望判据报出这个来源；改指脚本把这行字符串也换成了新路径，期望
   值没变，用例转红。改 import 时按语法树只动 import 声明，或者替换后逐处核对 diff，确认每一处都是真的 import。

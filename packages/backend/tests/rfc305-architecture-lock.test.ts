@@ -410,6 +410,10 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts -> @/modules/identity-access/public/participants',
       // RFC-499: the preparation binding moved from composition/repositoryPreparation.ts into infrastructure.
       'packages/backend/src/modules/source-control/infrastructure/repositoryPreparationBridge.ts -> @/modules/identity-access/public/participants',
+      // RFC-550: the descriptor factories and the command / query ports left system-operations' public (no other module
+      // read them) and took their CommandContext / QueryContext imports along; the descriptor contracts stay public.
+      'packages/backend/src/modules/system-operations/application/operationDescriptors.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/system-operations/application/systemOperationPorts.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',

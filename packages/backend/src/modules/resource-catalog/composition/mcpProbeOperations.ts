@@ -5,13 +5,14 @@
 // environment (the composition root builds one per application), not to a
 // process-wide test seam.
 import { createMcpProbeOperations } from '../application/mcps/probeOperations'
-import type { McpProbeCoordinatorPort, McpProbeOperations } from '../application/mcps/ports'
-import { probeMcp, type ProbeOptions } from '../infrastructure/mcpProbe'
 import type {
-  McpAclIdentityParticipant,
+  McpProbeCoordinatorPort,
+  McpProbeOperations,
   McpProbeRunner,
   McpProbeStore,
-} from '../public/participants'
+} from '../application/mcps/ports'
+import { probeMcp, type ProbeOptions } from '../infrastructure/mcpProbe'
+import type { McpAclIdentityParticipant } from '../public/participants'
 import type { McpQueries } from '../public/queries'
 
 /** RFC-538: what a test hands an application (a fake client factory, a clock); production hands none. */

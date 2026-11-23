@@ -1,4 +1,4 @@
-import type { CodeAiAttemptProjection } from '../../public/queries'
+import type { CodeAiAttemptProjection } from './codeQueries'
 
 /** Provider-neutral read mechanics for one round's bounded AI attempt history. */
 export interface RoundAttemptsReadPort {

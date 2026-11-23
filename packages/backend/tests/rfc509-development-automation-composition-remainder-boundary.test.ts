@@ -186,8 +186,10 @@ const ROOTS: Readonly<
   [ACTIVITY_ROOT]: {
     declares: ['composeDevelopmentActivityOperations'],
     offers: ['DevelopmentActivityWorker', 'composeDevelopmentActivityOperations'],
+    // RFC-550: the operations type left development-automation's public (no other module read it); the root takes it
+    // from the application beside the worker cycle.
     takes: [
-      `import ${ACTIVITY}: createDevelopmentActivityWorkerCycle, DevelopmentActivityWorker`,
+      `import ${ACTIVITY}: createDevelopmentActivityWorkerCycle, DevelopmentActivityOperations, DevelopmentActivityWorker`,
       `export ${ACTIVITY}: DevelopmentActivityWorker`,
     ],
     shapes: [],

@@ -15,8 +15,8 @@ export { createFileDatabaseConfiguration }
 import { createDatabaseMigrationApplication } from '../application/databaseMigrationApplication'
 import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
 import { createDatabaseMigrationCoordinator } from '../infrastructure/databaseMigrationCoordinator'
-import { createDatabaseMigrationOperationDescriptors } from '../public/operations'
 import type { LocalSystemOperationContext } from '../public/types'
+import { createDatabaseMigrationOperationDescriptors } from '../application/operationDescriptors'
 
 export interface DatabaseMigrationModule {
   readonly application: ReturnType<typeof createDatabaseMigrationApplication>

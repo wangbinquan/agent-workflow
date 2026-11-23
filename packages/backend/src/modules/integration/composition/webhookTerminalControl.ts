@@ -3,7 +3,6 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
-import type { MrTerminalControl } from '@/modules/integration/public/participants'
 import type {
   MrLaunchGuardPersistencePort,
   MrTerminalEffectPersistencePort,
@@ -15,6 +14,7 @@ import {
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { InMemoryWebhookLaunchSupervisor } from '../infrastructure/inMemoryWebhookLaunchSupervisor'
+import type { MrTerminalControl } from '../application/ports/mrTerminalControl'
 
 export interface MrTerminalControlPersistence {
   readonly launchGuards: MrLaunchGuardPersistencePort

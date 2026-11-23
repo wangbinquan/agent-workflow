@@ -242,9 +242,9 @@ describe('RFC-486 ④ 启动守卫由 task-execution 声明', () => {
 
   test('负对照：命名、别名与仅类型的 import 都会被认出', () => {
     for (const fixture of [
-      "import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/participants'",
-      "import { type ProtectedMrLaunchGuard as Guard } from '@/modules/integration/public/participants'",
-      "import { other, ProtectedMrLaunchGuard } from '../../integration/public/participants'",
+      "import type { ProtectedMrLaunchGuard } from '@/modules/integration/application/ports/mrTerminalControl'",
+      "import { type ProtectedMrLaunchGuard as Guard } from '@/modules/integration/application/ports/mrTerminalControl'",
+      "import { other, ProtectedMrLaunchGuard } from '../../integration/application/ports/mrTerminalControl'",
     ])
       expect(importedNames(`${TE}probe.ts`, fixture), fixture).toContain('ProtectedMrLaunchGuard')
   })
@@ -267,7 +267,8 @@ describe('RFC-486 ④ 启动守卫由 task-execution 声明', () => {
     expect(read(`${TE}public/types.ts`)).toContain(
       "export type { TaskLaunchGuard } from '@/modules/task-execution/application/ports/taskLaunchGuard'",
     )
-    const integration = read('modules/integration/public/participants.ts')
+    // RFC-550: the guard left integration's public (no other module read it); it extends TaskLaunchGuard where it lives.
+    const integration = read('modules/integration/application/ports/mrTerminalControl.ts')
     expect(integration).toContain(
       "import type { TaskLaunchGuard } from '@/modules/task-execution/public/types'",
     )

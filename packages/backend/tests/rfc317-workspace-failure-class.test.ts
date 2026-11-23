@@ -16,7 +16,22 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 
 import { boundaryEscalates } from '@/modules/digital-employee/application/runtimeService'
-import { WORKSPACE_FAILURE_CLASSES } from '@/modules/digital-employee/public/types'
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
+
+// RFC-550 (RFC-294 S9): the class list was a public constant no other module read; the test keeps its own and the
+// compiler checks it names every class of the public union.
+const WORKSPACE_FAILURE_CLASSES = [
+  'boundary',
+  'semantic',
+  'infrastructure',
+] as const satisfies readonly WorkspaceFailureClass[]
+const everyClassListed: Exclude<
+  WorkspaceFailureClass,
+  (typeof WORKSPACE_FAILURE_CLASSES)[number]
+> extends never
+  ? true
+  : false = true
+void everyClassListed
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const OS_SERVICE = 'packages/backend/src/modules/digital-employee/application/runtimeService.ts'

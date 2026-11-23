@@ -1,6 +1,4 @@
 import type {
-  Mcp,
-  McpProbe,
   ResourceVisibility,
   SkillVersionSource,
   WorkflowDefinition,
@@ -24,8 +22,6 @@ import type {
   FrozenTaskExecutionResourceSnapshot,
   GetAgentResourceClosureStatusInput,
   McpAclIdentity,
-  McpProbeRecord,
-  McpProbeWrite,
   ParseSkillZipCatalogInput,
   ParseSkillZipCatalogReceipt,
   CommitSkillZipCatalogInput,
@@ -89,19 +85,6 @@ export type WorkgroupOperationContext = DirectAuthenticatedAuthority
 export interface AgentLaunchResourceIntegrityParticipant {
   readonly [agentLaunchResourceIntegrityParticipantBrand]: 'agent-launch-resource-integrity-participant'
   assertUsable(input: GetAgentResourceClosureStatusInput): Promise<void>
-}
-
-export interface SkillIdentityMigrationReceipt {
-  readonly recoveredOperations: number
-  readonly removedHusks: number
-  readonly migratedSkills: number
-  readonly verifiedSkills: number
-  readonly verifiedVersions: number
-}
-
-export interface SkillLegacyVersionBackfillReceipt {
-  readonly backfilled: number
-  readonly husksRemoved: number
 }
 
 export interface SkillSnapshotReverifyReceipt {
@@ -209,24 +192,6 @@ export interface McpAclIdentityParticipant {
   readonly [mcpAclIdentityParticipantBrand]: 'mcp-acl-identity-participant'
   load(id: string): Promise<McpAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
-}
-
-/** One RFC-030 probe measurement before the store assigns its row identity. */
-export type McpProbeMeasurement = Omit<McpProbe, 'id' | 'mcpId' | 'mcpName' | 'updatedAt'>
-
-/** Runs one probe where the deployment's Agents run their MCP servers. The
- * standalone route probes in-process; the hosted deployment selects a runner
- * that probes inside the task image (RFC-370). `startedAt` is captured before
- * the configuration snapshot was read. */
-export interface McpProbeRunner {
-  probe(mcp: Mcp, options: { readonly startedAt: number }): Promise<McpProbeMeasurement>
-}
-
-/** Provider-neutral persistence participant for MCP probe measurements. */
-export interface McpProbeStore {
-  list(): Promise<readonly McpProbeRecord[]>
-  getByMcpId(mcpId: string): Promise<McpProbeRecord | null>
-  upsert(mcpId: string, measurement: McpProbeWrite): Promise<McpProbeRecord>
 }
 
 /** Provider-bound whole-tree ZIP import; route owns only multipart decoding. */

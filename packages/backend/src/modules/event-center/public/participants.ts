@@ -22,11 +22,6 @@ export interface EventSubscriptionParticipant {
   unsubscribe(subscriptionId: string): Promise<EventSubscriptionReceipt>
 }
 
-export interface EventObserverControlParticipant {
-  /** Passive hint for a hybrid source; facts still come only from its observer program. */
-  nudgeSource(sourceRef: EventExactRef): Promise<boolean>
-}
-
 export interface EventDeliveryParticipant {
   pendingDeliveries(
     subscriber: EventSubscriberRef,

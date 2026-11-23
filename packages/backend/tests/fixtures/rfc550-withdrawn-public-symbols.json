@@ -1,0 +1,148 @@
+{
+  "_comment": "RFC-550 (RFC-294 S9 sixth step): the public entries of ten contexts exported at 85c36f1c0 and withdrawn (no other module consumed them). The three public files withdrawn as a whole are listed under retired, not by name. Read by tests/rfc550-public-unconsumed-sweep-lock.test.ts.",
+  "retired": [
+    "modules/code-capability/public/queries.ts",
+    "modules/event-center/public/commands.ts",
+    "modules/event-center/public/queries.ts"
+  ],
+  "withdrawn": {
+    "development-automation": {
+      "operations": [
+        "DevelopmentActivityOperations",
+        "DevelopmentActivityResult",
+        "createDevelopmentActivityOperation",
+        "developmentAssignmentInputSchema",
+        "developmentConfigCreateInputSchema",
+        "developmentPolicyPreviewInputSchema",
+        "developmentSelectionPreviewInputSchema"
+      ],
+      "types": ["encodeDevelopmentApprovalSubject"]
+    },
+    "digital-employee": {
+      "events": [
+        "EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF",
+        "EMPLOYEE_INVOCATION_RESULT_EVENT_REF",
+        "EMPLOYEE_LIFECYCLE_SOURCE_REF",
+        "EmployeeCaseProjectionInvalidated",
+        "employeeCaseLifecycleObservation",
+        "employeeInvocationResultObservation"
+      ],
+      "types": [
+        "EMPLOYEE_CASE_TERMINAL_KINDS",
+        "EmployeeCaseTerminalKind",
+        "LEGACY_MISSION_TERMINAL_KINDS",
+        "LegacyMissionTerminalKind",
+        "TerminalKindClassification",
+        "WORKSPACE_FAILURE_CLASSES",
+        "classifyTerminalKind",
+        "normalizeDispatchRouteDefinitionsJson"
+      ]
+    },
+    "event-center": {
+      "participants": ["EventObserverControlParticipant"],
+      "types": [
+        "EventDeliveryStatusDocument",
+        "EventDeliveryStatusPageDocument",
+        "EventRecordAuditDocument",
+        "EventRecordAuditPageDocument",
+        "ObserverHealthDocument"
+      ]
+    },
+    "execution-contract": {
+      "types": ["executionContractRefKey", "executionContractRefSchema"]
+    },
+    "integration": {
+      "events": [
+        "CODE_HOST_EVENT_SOURCE_REF",
+        "codeHostBusinessEventObservation",
+        "codeHostBusinessEventTypeRef",
+        "codeHostEventObservation",
+        "codeHostEventObservations",
+        "codeHostEventTypeRef"
+      ],
+      "participants": [
+        "MrTerminalControl",
+        "ProtectedMrLaunchGuard",
+        "ProtectedMrLaunchGuardInput",
+        "WorkStartReceipt"
+      ]
+    },
+    "memory": {
+      "types": [
+        "MemoryEnvelopeFencing",
+        "formatMemoryBlockFromSnapshot",
+        "memoryFencingForNonce",
+        "parseInjectedSnapshotJson"
+      ]
+    },
+    "resource-catalog": {
+      "operations": [
+        "AgentCatalogModule",
+        "PluginCatalogModule",
+        "SkillCatalogModule",
+        "WorkflowCatalogModule",
+        "WorkgroupCatalogModule"
+      ],
+      "participants": [
+        "McpProbeMeasurement",
+        "McpProbeRunner",
+        "McpProbeStore",
+        "SkillIdentityMigrationReceipt",
+        "SkillLegacyVersionBackfillReceipt"
+      ],
+      "types": [
+        "AgentPackageMutation",
+        "CapabilityTemplatePackageMutation",
+        "McpPackageMutation",
+        "McpProbeRecord",
+        "McpProbeWrite",
+        "PluginPackageMutation",
+        "PreparedAgentPackageMutation",
+        "PreparedCapabilityTemplatePackageMutation",
+        "PreparedMcpPackageMutation",
+        "PreparedPackageMutation",
+        "PreparedPluginPackageMutation",
+        "PreparedSkillPackageMutation",
+        "PreparedWorkflowPackageMutation",
+        "PreparedWorkgroupPackageMutation",
+        "ResourcePackageMutationReceipt",
+        "SkillPackageMutation",
+        "WorkflowPackageMutation",
+        "WorkgroupPackageMutation",
+        "preparedPackageMutation"
+      ]
+    },
+    "runtime-management": {
+      "participants": ["JsonObject"]
+    },
+    "system-operations": {
+      "commands": [
+        "CancelStagedRestoreCommand",
+        "DatabaseBackupEffects",
+        "SystemOperationCommands"
+      ],
+      "operations": [
+        "createDatabaseMigrationOperationDescriptors",
+        "createSystemOperationDescriptors"
+      ],
+      "queries": ["GetRecoveryStatusQuery", "SystemOperationQueries"],
+      "types": [
+        "EpochSwitchArtifactPort",
+        "EpochSwitchArtifactReference",
+        "MigrationApproval",
+        "MigrationApprovalPayload",
+        "SourceArchiveInput",
+        "activateLocalRestoreOptionsSchema",
+        "backupResultViewSchema",
+        "cancelStagedRestoreResultSchema",
+        "localRestoreActivationSchema",
+        "recoveryStatusViewSchema",
+        "requestBackupInputSchema",
+        "restorePlanOptionsSchema",
+        "restorePlanViewSchema",
+        "stageRestoreOptionsSchema",
+        "stageRestoreResultSchema"
+      ]
+    }
+  }
+}

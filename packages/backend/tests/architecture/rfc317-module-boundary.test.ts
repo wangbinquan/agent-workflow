@@ -364,9 +364,9 @@ interface OpenRecordSite {
 /**
  * public 入口里键为 `string` / `number` 的 `Record`。**逐条相等**——新增红、消失也红。
  *
- * `integration/public/events.ts` 那条值得单独说：同一个文件里 34 行用的是
- * `Record<CodeHostEventType, …>`（穷尽），50 行却退回 `Record<string, …>`。
- * 同文件内的这种不一致最可能是穷尽性在某次改动里掉了，是这批里唯一**值得改**的一处。
+ * 原先 `integration/public/events.ts` 那条值得单独说（同文件 34 行用穷尽的 `Record<CodeHostEventType, …>`，50 行却退回
+ * `Record<string, …>`）。RFC-550 把代码平台事件的目录与观察构造挪进 integration 自己的 `application/codeHostEvents.ts`
+ * （模块外零消费），public 只留目录 JSON 的转出，这处不再是 public 面，销账；那处不一致仍归 integration 的 owning RFC。
  */
 const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
   {
@@ -389,10 +389,8 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
     site: 'modules/integration/public/participants.ts: Record<string, string>',
     why: 'WorkStartTarget 的 digital-employee 分支 intake.target —— 外部系统（ISSUE / MR 等）带来的标识键值对，键由对端决定，无法在本仓闭合。',
   },
-  {
-    site: 'modules/integration/public/events.ts: Record<string, { zh-CN, en-US }>',
-    why: '**本批唯一值得改的一处**：同文件 34 行已用 Record<CodeHostEventType, …> 穷尽，50 行退回 string 键，疑为穷尽性在某次改动里掉了。修法属 integration 的 owning RFC。',
-  },
+  // RFC-550：`integration/public/events.ts` 的那处（事件标签的 `Record<string, { zh-CN, en-US }>`）随代码平台事件目录挪进
+  // integration 的 `application/codeHostEvents.ts`（模块外零消费），不再是 public 面，销账。
   {
     site: 'modules/knowledge-evolution/public/participants.ts: Record<string, string>',
     why: 'Fusion task input 是由 workflow / agent 声明生成的开放命名映射；键来自资源合同，不能由 Memory 模块预先穷尽。',

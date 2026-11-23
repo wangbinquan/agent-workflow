@@ -24,12 +24,6 @@
 // same file as a switch a repository owner may flip.
 
 import type { Hono } from 'hono'
-import type {
-  CodeMatrixQuery,
-  CodeMetricsQuery,
-  CodeRoundAttemptsQuery,
-  CodeWorkItemProjectionQuery,
-} from '../../public/queries'
 import type { CodeDeliveryChainQuery } from '../../application/codeMatrixQuery'
 import type { TemplateUpstreamOperations } from '../../application/templateUpstreamStatus'
 import { CODE_CAPABILITIES, parseCodeCapabilityId } from '../../domain/stageContract'
@@ -37,6 +31,12 @@ import { lookupStageContract } from '../../domain/capabilityRegistry'
 import { projectStageGraph } from '../../domain/stageGraph'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
+import type {
+  CodeMatrixQuery,
+  CodeMetricsQuery,
+  CodeRoundAttemptsQuery,
+  CodeWorkItemProjectionQuery,
+} from '../../application/ports/codeQueries'
 
 /**
  * The code-history reads this binding serves, in the module's own application

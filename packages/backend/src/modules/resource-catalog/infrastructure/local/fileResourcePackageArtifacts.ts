@@ -47,7 +47,7 @@ import type {
   ResourcePackageSkillArtifact,
   ResourcePackageSkillArtifactOwner,
 } from '../../application/package/artifactOwners'
-import type { SkillPackageMutation } from '../../public/types'
+import type { SkillPackageMutation } from '../../application/package/preparedMutations'
 
 function pathInside(root: string, target: string): boolean {
   const rel = relative(root, target)

@@ -17,8 +17,11 @@ import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
-import type { CodeMatrixRow, CodeMetricsSummary } from '@/modules/code-capability/public/queries'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import type {
+  CodeMatrixRow,
+  CodeMetricsSummary,
+} from '@/modules/code-capability/application/ports/codeQueries'
 
 const NOW = 1_700_000_000_000
 const REPO = 'group/app'

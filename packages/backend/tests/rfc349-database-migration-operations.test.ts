@@ -9,10 +9,10 @@ import {
 } from '@agent-workflow/shared'
 import { createDatabaseMigrationApplication } from '@/modules/system-operations/application/databaseMigrationApplication'
 import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
-import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/operations'
 import type { DatabaseMigrationStatusView } from '@/modules/system-operations/public/types'
 import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
+import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/application/operationDescriptors'
 
 const target = {
   provider: 'postgresql' as const,

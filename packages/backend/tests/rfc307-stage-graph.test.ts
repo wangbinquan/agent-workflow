@@ -31,15 +31,8 @@ import {
   projectStageGraph,
 } from '../src/modules/code-capability/domain/stageGraph'
 import type { StageContract } from '../src/modules/code-capability/domain/stageContract'
-import type { StageGraph as PublicStageGraph } from '../src/modules/code-capability/public/queries'
-
-// The public contract declares its own shape rather than re-exporting the
-// domain type — the RFC-294 preflight rejects a public type that resolves
-// through `typeof CODE_CAPABILITIES`. The cost of two declarations is drift, so
-// this assignment is the check: the projection must still satisfy the contract
-// the outside world was promised, or this file stops compiling.
-const _publicShapeHolds: (g: ReturnType<typeof projectStageGraph>) => PublicStageGraph = (g) => g
-void _publicShapeHolds
+// RFC-550 (RFC-294 S9): the public copy of the stage graph shape had no consumer outside code-capability and was
+// withdrawn; the domain projection is the only shape.
 
 const contractFor = (capability: Parameters<typeof lookupStageContract>[0]): StageContract => {
   const contract = lookupStageContract(capability)

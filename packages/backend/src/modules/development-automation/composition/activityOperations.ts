@@ -1,6 +1,6 @@
-import type { DevelopmentActivityOperations } from '../public/operations'
 import {
   createDevelopmentActivityWorkerCycle,
+  type DevelopmentActivityOperations,
   type DevelopmentActivityWorker,
 } from '../application/activityOperations'
 export type { DevelopmentActivityWorker } from '../application/activityOperations'

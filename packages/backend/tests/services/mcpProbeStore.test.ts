@@ -6,7 +6,6 @@ import { expect, test, beforeEach } from 'bun:test'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
-import type { McpProbeStore } from '../../src/modules/resource-catalog/public/participants'
 import type { ProbeResult } from '../../src/modules/resource-catalog/infrastructure/mcpProbe'
 import {
   getProbeByMcpId,
@@ -14,6 +13,7 @@ import {
   upsertProbe,
 } from '../../src/modules/resource-catalog/application/mcps/probeRecords'
 import { describeEachProvider } from '../helpers/eachProvider'
+import type { McpProbeStore } from '@/modules/resource-catalog/application/mcps/ports'
 
 async function seedMcp(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()

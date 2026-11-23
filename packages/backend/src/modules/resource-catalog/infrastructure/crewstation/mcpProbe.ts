@@ -2,7 +2,7 @@
 // task-image command; the route keeps admission, freshness and persistence.
 import { McpProbeSchema, McpSchema } from '@agent-workflow/shared'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import type { McpProbeRunner } from '../../public/participants'
+import type { McpProbeRunner } from '../../application/mcps/ports'
 
 /** The scratch volume of hosted system work: it holds no state of its own and
  * follows the running release, so its helper always knows `mcp-probe`. */

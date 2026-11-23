@@ -47,24 +47,6 @@ import {
   createPreparedWorkflowPackageMutation,
   createPreparedWorkgroupPackageMutation,
 } from '../../application/participants/resourcePackageCapabilities'
-import type {
-  AgentPackageMutation,
-  CapabilityTemplatePackageMutation,
-  McpPackageMutation,
-  PluginPackageMutation,
-  PreparedAgentPackageMutation,
-  PreparedCapabilityTemplatePackageMutation,
-  PreparedMcpPackageMutation,
-  PreparedPackageMutation,
-  PreparedPluginPackageMutation,
-  PreparedSkillPackageMutation,
-  PreparedWorkflowPackageMutation,
-  PreparedWorkgroupPackageMutation,
-  ResourcePackageMutationReceipt,
-  SkillPackageMutation,
-  WorkflowPackageMutation,
-  WorkgroupPackageMutation,
-} from '../../public/types'
 import { mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginConfigHash, pluginFromPersistenceRow } from '../pluginPersistence'
 import type { McpTransactionLifecycle } from '../mcpRepository'
@@ -84,6 +66,24 @@ import {
   type PostgresqlResourcePackageSkillPublication,
 } from './postgresqlResourcePackageMutationArms'
 import type { AgentMutationBatch } from '../../application/ports/agentMutation'
+import type {
+  PreparedPackageMutation,
+  ResourcePackageMutationReceipt,
+  PreparedAgentPackageMutation,
+  PreparedCapabilityTemplatePackageMutation,
+  PreparedMcpPackageMutation,
+  PreparedPluginPackageMutation,
+  PreparedSkillPackageMutation,
+  PreparedWorkflowPackageMutation,
+  PreparedWorkgroupPackageMutation,
+  AgentPackageMutation,
+  CapabilityTemplatePackageMutation,
+  McpPackageMutation,
+  PluginPackageMutation,
+  SkillPackageMutation,
+  WorkflowPackageMutation,
+  WorkgroupPackageMutation,
+} from '../../application/package/preparedMutations'
 
 export type PostgresqlResourcePackageSelectionFence =
   | Readonly<{

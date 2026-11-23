@@ -22,12 +22,12 @@ import type { SkillCreationContentStore } from '../application/skills/creationCo
 import type { SkillVersionContentStore } from '../application/skills/versionContentStore'
 import { createSkillZipImportParticipant } from '../infrastructure/skillZipImportAdapter'
 import { createSkillOperationDescriptors } from './catalogOperationDescriptors'
-import type { SkillCatalogModule } from '../public/operations'
 import type { SkillOperationContext } from '../public/participants'
 import type { SkillZipImportParticipant } from '../public/participants'
 
 import type { SkillLifecycleContentStore } from '../application/skills/lifecycleContentStore'
 import type { SkillDeletionContentStore } from '../application/skills/deletionContentStore'
+import type { SkillCatalogModule } from '../application/catalogModules'
 
 export interface SkillCatalogCompositionDependencies {
   readonly db: PersistenceDb

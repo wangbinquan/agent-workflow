@@ -28,8 +28,8 @@ import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { canViewAccess } from '../domain/resourceAccess'
 import { createWorkgroupOperationDescriptors } from './catalogOperationDescriptors'
-import type { WorkgroupCatalogModule } from '../public/operations'
 import type { WorkgroupOperationContext } from '../public/participants'
+import type { WorkgroupCatalogModule } from '../application/catalogModules'
 
 type WorkgroupAclOperationApplication = Parameters<typeof createWorkgroupOperationDescriptors>[2]
 

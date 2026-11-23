@@ -1,12 +1,12 @@
 // RFC-370: verified transport deliveries use the same admission/publication
 // path. Provider parsing and transport authentication belong to inbound adapters.
 import { createLogger } from '@/util/log'
-import { codeHostEventObservations } from '../public/events'
 import type {
   VerifiedWebhookIngressCommands,
   VerifiedWebhookIngressDependencies,
 } from './ports/verifiedWebhookIngress'
 import { webhookDeliveryOutcome } from './webhookDeliveryOutcome'
+import { codeHostEventObservations } from './codeHostEvents'
 
 const log = createLogger('webhook-ingress')
 

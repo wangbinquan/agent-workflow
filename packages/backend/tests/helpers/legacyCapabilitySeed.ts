@@ -265,12 +265,12 @@ import type {
 } from '@/modules/code-capability/application/ports/deliveryChainRead'
 import type { DeliveryOutcome, DeliveryStep } from '@/modules/code-capability/domain/deliveryChain'
 import type { CodeMetricsReadPort } from '@/modules/code-capability/application/ports/codeMetricsRead'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import type {
   CodeRoundProjection,
   CodeStageProjection,
   CodeWorkItemProjection,
-} from '@/modules/code-capability/public/queries'
-import { rawExec } from '@/platform/persistence/queryHelpers'
+} from '@/modules/code-capability/application/ports/codeQueries'
 
 function epoch1HistoryTables(db: object): FrozenPersistenceTables {
   return frozenTableSets[engineForHandle(db).provider] as FrozenPersistenceTables

@@ -139,4 +139,4 @@ export type { RuntimeDiagnosticTarget } from '../application/ports/runtimeManage
 
 /** RFC-371 v2: protocol-neutral usage metering, parsed by each RuntimeDriver. */
 export { objectOf } from '../domain/usageMeter'
-export type { JsonObject, RuntimeUsageMeter, RuntimeUsageSnapshot } from '../domain/usageMeter'
+export type { RuntimeUsageMeter, RuntimeUsageSnapshot } from '../domain/usageMeter'

@@ -1,6 +1,18 @@
 // RFC-346 — exact application DTOs for backup/restore administration.
 
-import { z } from 'zod'
+import type { z } from 'zod'
+import type {
+  activateLocalRestoreOptionsSchema,
+  backupResultViewSchema,
+  cancelStagedRestoreResultSchema,
+  localRestoreActivationSchema,
+  recoveryStatusViewSchema,
+  requestBackupInputSchema,
+  restorePlanOptionsSchema,
+  restorePlanViewSchema,
+  stageRestoreOptionsSchema,
+  stageRestoreResultSchema,
+} from '../application/systemOperationContracts'
 
 export interface ReclaimableDiskItem {
   readonly id: 'retired-runtime-stores'
@@ -49,119 +61,27 @@ export interface LocalSystemOperationContext {
 export interface RestoreArtifactRef {
   readonly [restoreArtifactRefBrand]: 'restore-artifact-ref'
 }
-
-export const requestBackupInputSchema = z.object({ includeWorktrees: z.boolean() }).strict()
 export type RequestBackupInput = z.infer<typeof requestBackupInputSchema>
-
-export const backupResultViewSchema = z
-  .object({
-    path: z.string(),
-    sizeBytes: z.number().nonnegative(),
-    contents: z
-      .object({
-        workflows: z.number().int().nonnegative(),
-        skills: z.number().int().nonnegative(),
-        db: z.boolean(),
-        config: z.boolean(),
-      })
-      .strict(),
-  })
-  .strict()
 export type BackupResultView = z.infer<typeof backupResultViewSchema>
-
-export const restorePlanOptionsSchema = z.object({ skipIntegrityCheck: z.boolean() }).strict()
 export type RestorePlanOptions = z.infer<typeof restorePlanOptionsSchema>
 
 export interface PlanLocalRestoreInput extends RestorePlanOptions {
   readonly artifactRef: RestoreArtifactRef
 }
-
-export const restorePlanViewSchema = z
-  .object({
-    backupKind: z.string().nullable(),
-    backupMigrationCreatedAt: z.number().nullable(),
-    binaryMigrationCreatedAt: z.number(),
-    direction: z.enum(['same', 'forward', 'downgrade']),
-  })
-  .strict()
 export type RestorePlanView = z.infer<typeof restorePlanViewSchema>
-
-export const stageRestoreOptionsSchema = z
-  .object({
-    noSafetyBackup: z.boolean(),
-    noMigrate: z.boolean(),
-    skipIntegrityCheck: z.boolean(),
-  })
-  .strict()
 export type StageRestoreOptions = z.infer<typeof stageRestoreOptionsSchema>
 
 export interface StageRestoreInput extends StageRestoreOptions {
   readonly artifactRef: RestoreArtifactRef
 }
-
-export const stageRestoreResultSchema = z
-  .object({ direction: z.enum(['same', 'forward', 'downgrade']) })
-  .strict()
 export type StageRestoreResult = z.infer<typeof stageRestoreResultSchema>
-
-export const cancelStagedRestoreResultSchema = z.object({ cleared: z.boolean() }).strict()
 export type CancelStagedRestoreResult = z.infer<typeof cancelStagedRestoreResultSchema>
-
-export const activateLocalRestoreOptionsSchema = z
-  .object({
-    noSafetyBackup: z.boolean(),
-    noMigrate: z.boolean(),
-    skipIntegrityCheck: z.boolean(),
-  })
-  .strict()
 export type ActivateLocalRestoreOptions = z.infer<typeof activateLocalRestoreOptionsSchema>
 
 export interface ActivateLocalRestoreInput extends ActivateLocalRestoreOptions {
   readonly artifactRef: RestoreArtifactRef
 }
-
-const restoredComponentsSchema = z
-  .object({ db: z.boolean(), config: z.boolean(), skills: z.boolean() })
-  .strict()
-
-export const localRestoreActivationSchema = z.discriminatedUnion('status', [
-  z
-    .object({
-      status: z.literal('completed'),
-      direction: z.enum(['same', 'forward', 'downgrade']),
-      safetyBackupPath: z.string().nullable(),
-      migrated: z.boolean(),
-      restored: restoredComponentsSchema,
-    })
-    .strict(),
-  z.object({ status: z.literal('daemon-running'), pid: z.number().int().positive() }).strict(),
-  z.object({ status: z.literal('lock-unavailable') }).strict(),
-])
 export type LocalRestoreActivationResult = z.infer<typeof localRestoreActivationSchema>
-
-const pendingRestoreViewSchema = z
-  .object({
-    requestedAt: z.number(),
-    stagedBytes: z.number().nonnegative().nullable(),
-    noMigrate: z.boolean(),
-    skipIntegrityCheck: z.boolean(),
-  })
-  .strict()
-
-const failedRestoreViewSchema = z
-  .object({
-    dir: z.string(),
-    failedAt: z.number().nullable(),
-    error: z.string().nullable(),
-  })
-  .strict()
-
-export const recoveryStatusViewSchema = z
-  .object({
-    pending: pendingRestoreViewSchema.nullable(),
-    failed: z.array(failedRestoreViewSchema),
-  })
-  .strict()
 export type RecoveryStatusView = z.infer<typeof recoveryStatusViewSchema>
 export type { DaemonRuntimeInfo } from '../domain/daemonRuntime'
 
@@ -239,13 +159,7 @@ export interface MigrationTraceResult {
   readonly blocks: readonly z.infer<typeof ConversionBlockSchema>[]
   readonly archive: `archive:sha256:${string}` | null
 }
-export type {
-  MigrationApproval,
-  MigrationApprovalPayload,
-  EpochSwitchArtifactPort,
-  EpochSwitchArtifactReference,
-  SourceArchiveInput,
-} from '@/platform/persistence/migration/run/types'
+
 /** Hosted run Jobs print CS_DATABASE_MIGRATION_PLAN=<JSON of this value> when approval is needed. */
 export interface EpochSwitchApprovalRequest {
   readonly operationId: string

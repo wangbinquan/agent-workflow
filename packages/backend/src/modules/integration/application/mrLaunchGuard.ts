@@ -6,11 +6,8 @@ import type {
   MrLaunchGuardPersistencePort,
   MrLaunchSupervisorPort,
 } from './ports/mrTerminalControlPersistence'
-import type {
-  ProtectedMrLaunchGuard,
-  ProtectedMrLaunchGuardInput,
-} from '@/modules/integration/public/participants'
 import { ConflictError } from '@/util/errors'
+import type { ProtectedMrLaunchGuard, ProtectedMrLaunchGuardInput } from './ports/mrTerminalControl'
 
 export class MrLaunchGuardCoordinator {
   constructor(

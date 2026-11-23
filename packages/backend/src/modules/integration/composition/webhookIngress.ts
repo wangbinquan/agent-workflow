@@ -1,7 +1,6 @@
 import type { CrewStationEventIngress } from './crewstationEvents'
 import type { SecretBox } from '@/auth/secretBox'
 import type { EventCenterModule } from '@/modules/event-center/composition'
-import type { MrTerminalControl } from '../public/participants'
 import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
@@ -23,6 +22,7 @@ import { createVerifiedWebhookDeliveryPersistence } from '../infrastructure/veri
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 import { createWebhookDeliveryQueries } from '../infrastructure/webhookDeliveryQueries'
 import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
+import type { MrTerminalControl } from '../application/ports/mrTerminalControl'
 
 export type { WebhookDeliveryRuntime }
 

@@ -13,8 +13,7 @@
 // rowToProbe is the only place where stored JSON strings get re-parsed.
 
 import { McpProbeSchema, type McpProbe } from '@agent-workflow/shared'
-import type { McpProbeRecord, McpProbeWrite } from '../../public/types'
-import type { McpProbeMeasurement, McpProbeStore } from '../../public/participants'
+import type { McpProbeStore, McpProbeRecord, McpProbeWrite, McpProbeMeasurement } from './ports'
 
 function parseJson(value: string | null): unknown {
   if (value === null) return null

@@ -2,8 +2,6 @@ import { projectAdminBackupReceipt } from '../domain/backup'
 import { projectAdminRecoveryStatus } from '../domain/recovery'
 import type { AdminBackupCoordinatorPort } from './ports/adminBackupCoordinator'
 import type { AdminRestoreCoordinatorPort } from './ports/adminRestoreCoordinator'
-import type { SystemOperationCommands } from '../public/commands'
-import type { SystemOperationQueries } from '../public/queries'
 import {
   backupResultViewSchema,
   cancelStagedRestoreResultSchema,
@@ -11,7 +9,8 @@ import {
   recoveryStatusViewSchema,
   restorePlanViewSchema,
   stageRestoreResultSchema,
-} from '../public/types'
+} from './systemOperationContracts'
+import type { SystemOperationCommands, SystemOperationQueries } from './systemOperationPorts'
 
 export interface SystemOperationsApplication {
   readonly commands: SystemOperationCommands

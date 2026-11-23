@@ -25,11 +25,7 @@ import {
   DigitalEmployeeRuntimeService,
   projectFrozenExecutionOptions,
 } from '@/modules/digital-employee/application/runtimeService'
-import {
-  digitalEmployeeLifecycleEventCatalogJson,
-  EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
-  EMPLOYEE_LIFECYCLE_SOURCE_REF,
-} from '@/modules/digital-employee/public/events'
+import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import {
   evaluateEmployeeInvocationGuard,
   evaluateEmployeeInvocationJoin,
@@ -40,6 +36,10 @@ import { composeEventCenter, standaloneEventCenterSelections } from './helpers/e
 import { parsePersistedEmployeeTypePackageDescriptor } from '@/modules/digital-employee/domain/model'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
+import {
+  EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
+  EMPLOYEE_LIFECYCLE_SOURCE_REF,
+} from '@/modules/digital-employee/application/lifecycleEvents'
 
 /**
  * RFC-368：业务工具 round 不再经 outbox 启动，而是由派发臂（`dispatchOneReaction`）领取。

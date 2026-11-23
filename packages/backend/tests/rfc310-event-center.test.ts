@@ -4,7 +4,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
-import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/public/types'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import {
   createLocalCustomObserverProgramFactory,
@@ -23,13 +22,14 @@ import {
   createDevelopmentApprovalEventObserver,
 } from '@/modules/integration/application/developmentEventObservers'
 import type { MrFactsSnapshot } from '@/modules/integration/application/mrFacts'
-import {
-  codeHostBusinessEventObservation,
-  codeHostEventCatalogJson,
-  codeHostEventObservation,
-} from '@/modules/integration/public/events'
+import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/domain/approvalSubject'
+import {
+  codeHostBusinessEventObservation,
+  codeHostEventObservation,
+} from '@/modules/integration/application/codeHostEvents'
 
 const OWNER_PRINCIPAL = {
   userId: 'owner-1',

@@ -147,8 +147,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 19 -> 0."
     },
     "public-surface-deviations": {
-      "max": 54,
-      "reason": "max=54: RFC-527 (RFC-294 S12 step 8) dropped the fallback-only parameters of the source-control selections (the repository Git selection's legacy runner typeof, the exclude-profile selection's app-home reader) and the exclude-profile selection itself (56 -> 54, measured). max=56: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); RFC-482 measures 74 -> 68 (five task-execution factories reach collaboration through its participant bindings and left the public entries; the no-op reselectRunInTx is gone); RFC-485 measures 68 -> 65 (the node-run, node-output and task-gate query factories reach collaboration through the bindings and memory through its assembly input); RFC-483 measures 65 -> 57 (the three SQL conditions left the public; collaboration's badge read model takes them through the bindings); RFC-492 withdraws modelKey with the fourteen family-only runtime-management public members (57 -> 56: its unsafe/open type entry); no growth authorized."
+      "max": 53,
+      "reason": "max=53: RFC-550 (RFC-294 S9 sixth step) withdrew runtime-management's JsonObject re-export, the only public root that reached the usage meter's open JsonObject (54 -> 53, measured). max=54: RFC-527 (RFC-294 S12 step 8) dropped the fallback-only parameters of the source-control selections (the repository Git selection's legacy runner typeof, the exclude-profile selection's app-home reader) and the exclude-profile selection itself (56 -> 54, measured). max=56: RFC-479 (RFC-294 S11) — public type deviations (the architecture report section publicSurfaceDeviations; the per-entry list is PUBLIC_SURFACE_DEBT in rfc294-architecture-preflight); RFC-480 measures 88 -> 77: 12 were reached only through task-execution public roots it withdrew, and the terminal workspace prune policy's function type became visible when it moved from the exempt public/operations to public/types; RFC-481 measures 77 -> 74 (the two frame functions take closed interfaces, collaboration's task-deletion participant factory reaches bootstrap through composition); RFC-482 measures 74 -> 68 (five task-execution factories reach collaboration through its participant bindings and left the public entries; the no-op reselectRunInTx is gone); RFC-485 measures 68 -> 65 (the node-run, node-output and task-gate query factories reach collaboration through the bindings and memory through its assembly input); RFC-483 measures 65 -> 57 (the three SQL conditions left the public; collaboration's badge read model takes them through the bindings); RFC-492 withdraws modelKey with the fourteen family-only runtime-management public members (57 -> 56: its unsafe/open type entry); no growth authorized."
     },
     "repo-value-scc": {
       "max": 0,
@@ -163,36 +163,36 @@
       "reason": "max=0: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "unconsumed-public-symbols-code-capability": {
-      "max": 5,
-      "reason": "max=5: public symbols of code-capability that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of code-capability that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-collaboration": {
       "max": 0,
       "reason": "max=0: public symbols of collaboration that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9 first step) swept this context's public entries to zero (task-execution 181 / collaboration 24 at 673b1b53b); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-development-automation": {
-      "max": 8,
-      "reason": "max=8: public symbols of development-automation that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of development-automation that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-digital-employee": {
-      "max": 13,
-      "reason": "max=13: public symbols of digital-employee that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of digital-employee that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-event-center": {
-      "max": 4,
-      "reason": "max=4: public symbols of event-center that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of event-center that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-execution-contract": {
-      "max": 2,
-      "reason": "max=2: public symbols of execution-contract that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of execution-contract that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-identity-access": {
       "max": 9,
       "reason": "max=9: public symbols of identity-access that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
     },
     "unconsumed-public-symbols-integration": {
-      "max": 8,
-      "reason": "max=8: public symbols of integration that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of integration that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-intent": {
       "max": 0,
@@ -203,28 +203,28 @@
       "reason": "max=0: public symbols of knowledge-evolution that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
     },
     "unconsumed-public-symbols-memory": {
-      "max": 3,
-      "reason": "max=3: public symbols of memory that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of memory that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-resource-catalog": {
-      "max": 12,
-      "reason": "max=12: public symbols of resource-catalog that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of resource-catalog that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-run-observability": {
       "max": 0,
       "reason": "max=0: public symbols of run-observability that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
     },
     "unconsumed-public-symbols-runtime-management": {
-      "max": 1,
-      "reason": "max=1: public symbols of runtime-management that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of runtime-management that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-source-control": {
-      "max": 9,
-      "reason": "max=9: public symbols of source-control that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 8,
+      "reason": "max=8: public symbols of source-control that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized. RFC-550 measures 9 -> 8: RFC-548 withdrew invalidateRepositoryWorkspaceFacetCaches; no growth authorized."
     },
     "unconsumed-public-symbols-system-operations": {
-      "max": 17,
-      "reason": "max=17: public symbols of system-operations that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
+      "max": 0,
+      "reason": "max=0: public symbols of system-operations that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-550 (RFC-294 S9 sixth step) swept this context's public entries to zero (ten contexts, 71 -> 0 at 85c36f1c0); a public export no other module consumes fails here — withdraw it or name its consumer."
     },
     "unconsumed-public-symbols-task-catalog": {
       "max": 0,

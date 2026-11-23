@@ -40,9 +40,10 @@ event-center、memory、execution-contract、runtime-management）的 `public/` 
 
 - `architecture/counts.json`：十个 context 的 `unconsumed-public-symbols-*` 上限降到 0（理由改为“RFC-550 清零”），source-control 的上限 9 → 8
   （RFC-548 撤出 `invalidateRepositoryWorkspaceFacetCaches` 之后的实测）。
-- 新增 `tests/rfc550-public-unconsumed-sweep-lock.test.ts`，登记 guard-manifest：① 逐名清单
-  `tests/fixtures/rfc550-withdrawn-public-symbols.json`（以 `85c36f1c0` 的导出为基准）里的名字不再从对应 public 文件导出；② 架构报告的这十个
-  context 未消费计数为 0；③ 带负对照（清单里的名字重新导出即被认出）。
+- 新增 `tests/rfc550-public-unconsumed-sweep-lock.test.ts`，登记 guard-manifest：① 撤空的 public 文件不在、全仓零 import；② 逐名清单
+  `tests/fixtures/rfc550-withdrawn-public-symbols.json`（以 `85c36f1c0` 的导出为基准）里的名字不再从对应 public 文件导出、值也不在运行时
+  命名空间里；③ 挪进内部的声明在新位置导出、不在本模块任一 public 文件里，删去的声明全仓不再有定义；④ 十个 context 的减速带上限为 0（实测
+  由 `rfc376-structural-guards` 的计数门对全仓每个 context 做，与 RFC-480 相同）；判据都带负对照（重新导出、重新 import、重新声明即被认出）。
 - 随改：经 public 取这些名字的本模块文件与用例改取新位置；断言 public 导出清单的用例随改。
 
 ## 4. 失败模式

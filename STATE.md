@@ -8,6 +8,17 @@
   不用的删除；撤出 → 复采 → 再撤，迭代到十个 context 为 0；十个 context 的减速带上限降到 0、source-control 9 → 8；新增 RFC-550 用例。
 - **不做**：identity-access 与 source-control 的未消费符号；S9 的 public 类型污染清单与跨 context 内部文件对。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-549 转 Done 同一提交），实现与验证后再提交。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 挪进内部的按内容定层（查询与命令端口进 `application/ports`，修复动作进 domain，
+  描述工厂与 zod 合同进 application）；C11 十个 context 的 public 只减不增（少 118 个名字、删去 3 个撤空的 public 文件）；C12 RFC-550 用例
+  覆盖撤空的文件不在且全仓零 import、逐名清单不再导出且值不在运行时命名空间、挪入的声明在新位置导出且不在 public、删去的声明全仓无定义、
+  修复表不取 application、十个 context 的减速带上限为 0；C13 计数不升。
+- **§14 不变量 / S9 第六步**：未消费 public 符号 88 → 17（十个 context 全部归零；余 identity-access 9、source-control 8），public 类型偏差
+  54 → 53；十个 context 的减速带上限 → 0、source-control 9 → 8。
+- **集中验证**（基于 `fe1db6768`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。查出一类本人缺陷并修正：四条源码锁没有随改
+  （OS 架构清单的 event-center public 文件与两条外部边、`rfc346` 读恢复状态查询的原位置、`rfc448` 的 import 目标下限、`rfc509` 的组合根边）。
+  tsc 0 错，eslint / promises / prettier 无告警；选出 774 个用例文件首轮 770 个通过（红的就是这四条），复跑 787 个 786 个通过（`rfc167` 一例在
+  5 秒结算期限处到点——复跑时本会话同时跑 tsc、eslint 与架构报告，负载 19～24；首轮通过、单独再跑 3 次通过）；八种变异都被认出；架构报告
+  十个 context 归零、public 面少 118 个、其余门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-549 schema 历史运行时由组合根显式交给 platform（Done；`design/RFC-549-schema-history-runtime-explicit/`）
 

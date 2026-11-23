@@ -42,16 +42,6 @@ import type { McpTransactionLifecycle } from '../mcpRepository'
 import { type PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 
 import { createWorkgroupMutationParticipant } from '../workgroupMutationParticipant'
-import {
-  type AgentPackageMutation,
-  type CapabilityTemplatePackageMutation,
-  type McpPackageMutation,
-  type PluginPackageMutation,
-  type ResourcePackageMutationReceipt,
-  type SkillPackageMutation,
-  type WorkflowPackageMutation,
-  type WorkgroupPackageMutation,
-} from '../../public/types'
 
 import type {
   PostgresqlResourcePackageMutationRequestContext,
@@ -62,6 +52,16 @@ import { createAgentMutationParticipant } from '../agentMutationParticipant'
 import { createSkillMutationParticipant } from '../skillMutationParticipant'
 import { createMcpMutationParticipant } from '../mcpMutationParticipant'
 import { createPluginMutationParticipant } from '../pluginMutationParticipant'
+import type {
+  ResourcePackageMutationReceipt,
+  AgentPackageMutation,
+  CapabilityTemplatePackageMutation,
+  McpPackageMutation,
+  PluginPackageMutation,
+  SkillPackageMutation,
+  WorkflowPackageMutation,
+  WorkgroupPackageMutation,
+} from '../../application/package/preparedMutations'
 
 export interface PostgresqlResourcePackagePendingName {
   readonly type: BundleResourceType

@@ -12,7 +12,7 @@ import type {
   CodeHostEventWorkStartPort,
 } from '../ports/codeHostEventResponse'
 import { codeHostWebhookRoutingFactsSchema } from '../../domain/codeHostWebhookEvent'
-import { CODE_HOST_EVENT_SOURCE_REF, codeHostEventTypeRef } from '../../public/events'
+import { CODE_HOST_EVENT_SOURCE_REF, codeHostEventTypeRef } from '../codeHostEvents'
 
 function eventCenterDefinition(
   definition: Awaited<ReturnType<CodeHostEventResponseDirectoryPort['list']>>[number],

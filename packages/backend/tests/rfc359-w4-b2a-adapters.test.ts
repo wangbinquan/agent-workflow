@@ -17,8 +17,8 @@ import { createDemoResourceCatalogSeedPersistence } from '@/modules/resource-cat
 import { createMcpProbeStore } from '@/modules/resource-catalog/infrastructure/mcpProbeStore'
 import { createPluginGenerationReferenceReadPort } from '@/modules/resource-catalog/infrastructure/pluginGenerationGc'
 import { createDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/application/demoResourceCatalogSeed'
-import type { McpProbeWrite } from '@/modules/resource-catalog/public/types'
 import { describeEachProvider } from './helpers/eachProvider'
+import type { McpProbeWrite } from '@/modules/resource-catalog/application/mcps/ports'
 
 async function seedOwner(db: PersistenceDb): Promise<string> {
   const id = `u_b2a_${ulid()}`

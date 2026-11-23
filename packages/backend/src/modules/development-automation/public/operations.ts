@@ -1,19 +1,10 @@
 // RFC-344 — exact public operation-catalog entrypoint.
 
 export {
-  createDevelopmentActivityOperation,
-  type DevelopmentActivityOperations,
-  type DevelopmentActivityResult,
-} from '../application/activityOperations'
-export {
   createDevelopmentConfigResourceDescriptors,
   createDevelopmentConfigSupplementalDescriptors,
-  developmentAssignmentInputSchema,
-  developmentConfigCreateInputSchema,
   developmentConfigReviseInputSchema,
   developmentEmployeePlaybookInputSchema,
-  developmentPolicyPreviewInputSchema,
-  developmentSelectionPreviewInputSchema,
   type DevelopmentAssignmentInput,
   type DevelopmentConfigAclRow,
   type DevelopmentConfigCreateInput,

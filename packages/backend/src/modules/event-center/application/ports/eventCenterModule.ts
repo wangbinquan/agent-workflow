@@ -11,17 +11,15 @@ import type {
   ManualCommittedEventRetryInput,
   ManualCommittedEventRetryReceipt,
 } from '@/platform/events/committed/types'
-import type { EventObservationCommandPort } from '../../public/commands'
-import type {
-  EventCenterParticipant,
-  EventObserverControlParticipant,
-} from '../../public/participants'
-import type {
-  EventCenterCatalogQueryPort,
-  EventCenterOperationsQueryPort,
-} from '../../public/queries'
+import type { EventCenterParticipant } from '../../public/participants'
 import type { EventCenterService } from '../eventCenterService'
 import type { EventResponseRuleService, ResponseRuleWritePrincipal } from '../eventResponseRules'
+import type {
+  EventObservationCommandPort,
+  EventObserverControlParticipant,
+  EventCenterCatalogQueryPort,
+  EventCenterOperationsQueryPort,
+} from './eventCenterPorts'
 
 export interface EventCenterModule {
   readonly initialize: () => Promise<void>

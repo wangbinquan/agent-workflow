@@ -7,10 +7,9 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
-import type { McpProbeStore } from '../public/participants'
-import type { McpProbeWrite } from '../public/types'
 import { mcpProbeFromPersistence, mcpProbePersistenceValues } from './mcpProbePersistence'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
+import type { McpProbeStore, McpProbeWrite } from '../application/mcps/ports'
 
 export function createMcpProbeStore(db: PersistenceDb): McpProbeStore {
   return Object.freeze({

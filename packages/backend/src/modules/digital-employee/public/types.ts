@@ -7,17 +7,6 @@
 
 import type { TaskLaunchOrigin } from '@agent-workflow/shared'
 
-import { dispatchRouteDefinitionsSchema } from '../domain/model'
-
-export function normalizeDispatchRouteDefinitionsJson(inputJson: string): string | null {
-  try {
-    const parsed = dispatchRouteDefinitionsSchema.safeParse(JSON.parse(inputJson) as unknown)
-    return parsed.success ? JSON.stringify(parsed.data) : null
-  } catch {
-    return null
-  }
-}
-
 export interface EmployeeTypeRef {
   readonly typeId: string
   readonly revision: number
@@ -158,9 +147,7 @@ export interface EmployeeCaseDetailProjectionParticipant {
  *
  * 现在类别是端口上的**闭合字段**，OS 按联合分支，新增一类是编译错误。
  */
-export const WORKSPACE_FAILURE_CLASSES = ['boundary', 'semantic', 'infrastructure'] as const
-
-export type WorkspaceFailureClass = (typeof WORKSPACE_FAILURE_CLASSES)[number]
+export type WorkspaceFailureClass = 'boundary' | 'semantic' | 'infrastructure'
 
 /**
  * RFC-317 T31（DE-05）—— 「这一轮不绑具体工具，走平台工作项」的**保留 slotRef**。
@@ -182,14 +169,6 @@ export const PLATFORM_WORK_ITEM_SLOT_REF = 'platform'
  * （components/digital-employees/outcomes.ts）。前端 import 不到后端模块，词汇留在这里
  * 就必然在前端被再抄一遍——而再抄一遍正是本条 finding 的成因。
  */
-export {
-  classifyTerminalKind,
-  EMPLOYEE_CASE_TERMINAL_KINDS,
-  LEGACY_MISSION_TERMINAL_KINDS,
-  type EmployeeCaseTerminalKind,
-  type LegacyMissionTerminalKind,
-  type TerminalKindClassification,
-} from '@agent-workflow/shared'
 
 /**
  * RFC-317 T41（findings DE-02）—— 反应轮次的**只读**查询面。

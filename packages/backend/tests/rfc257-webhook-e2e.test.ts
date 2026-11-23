@@ -32,11 +32,7 @@ import {
   createMrLaunchGuardPersistence,
   createMrTerminalEffectPersistence,
 } from '../src/modules/integration/infrastructure/mrTerminalControlPersistence'
-import {
-  codeHostEventCatalogJson,
-  codeHostEventTypeRef,
-} from '../src/modules/integration/public/events'
-import type { MrTerminalControl } from '../src/modules/integration/public/participants'
+import { codeHostEventCatalogJson } from '../src/modules/integration/public/events'
 import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import { mountWebhookIngressRoutes } from '../src/modules/integration/inbound/http/webhookIngressRoutes'
 import {
@@ -52,6 +48,8 @@ import {
 import { createUser } from './helpers/userFixture'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { codeHostEventTypeRef } from '@/modules/integration/application/codeHostEvents'
+import type { MrTerminalControl } from '@/modules/integration/application/ports/mrTerminalControl'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
 const SECRET = 'e2e-secret'

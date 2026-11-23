@@ -1,5 +1,5 @@
 import type { McpPatch } from '../ports/mcpMutation'
-import type { CreateMcp, Mcp, McpProbe } from '@agent-workflow/shared'
+import type { CreateMcp, Mcp, McpProbe, McpProbeErrorCodeT } from '@agent-workflow/shared'
 import type { McpOperationContext } from '../../public/participants'
 import type { McpCatalogResource } from '../../public/types'
 
@@ -107,4 +107,65 @@ export interface McpMutationClock {
 export interface McpRuntimeLifecyclePort {
   prepareDelete(mcpId: string): Promise<void>
   reconcileDurableIntents(): Promise<void>
+}
+
+// RFC-550 (RFC-294 S9): the probe runner and store ports with the measurement and record shapes they carry. They sat on
+// `public/participants` and `public/types` without any other module consuming them.
+/** Runs one probe where the deployment's Agents run their MCP servers. The
+ * standalone route probes in-process; the hosted deployment selects a runner
+ * that probes inside the task image (RFC-370). `startedAt` is captured before
+ * the configuration snapshot was read. */
+export interface McpProbeRunner {
+  probe(mcp: Mcp, options: { readonly startedAt: number }): Promise<McpProbeMeasurement>
+}
+
+/** Provider-neutral persistence participant for MCP probe measurements. */
+export interface McpProbeStore {
+  list(): Promise<readonly McpProbeRecord[]>
+  getByMcpId(mcpId: string): Promise<McpProbeRecord | null>
+  upsert(mcpId: string, measurement: McpProbeWrite): Promise<McpProbeRecord>
+}
+
+/** One RFC-030 probe measurement before the store assigns its row identity. */
+export type McpProbeMeasurement = Omit<McpProbe, 'id' | 'mcpId' | 'mcpName' | 'updatedAt'>
+
+export interface McpProbeRecord {
+  readonly id: string
+  readonly mcpId: string
+  readonly mcpName: string
+  readonly status: 'ok' | 'error'
+  readonly latencyMs: number
+  readonly handshakeMs: number | null
+  readonly serverInfoJson: string | null
+  readonly protocolVersion: string | null
+  readonly capabilitiesJson: string | null
+  readonly toolsJson: string | null
+  readonly resourcesJson: string | null
+  readonly resourceTemplatesJson: string | null
+  readonly promptsJson: string | null
+  readonly errorCode: McpProbeErrorCodeT | null
+  readonly errorMessage: string | null
+  readonly errorDetailJson: string | null
+  readonly startedAt: number
+  readonly finishedAt: number
+  readonly updatedAt: number
+}
+
+/** Closed write projection captured before crossing the probe-store port. */
+export interface McpProbeWrite {
+  readonly status: 'ok' | 'error'
+  readonly latencyMs: number
+  readonly handshakeMs: number | null
+  readonly serverInfoJson: string | null
+  readonly protocolVersion: string | null
+  readonly capabilitiesJson: string | null
+  readonly toolsJson: string | null
+  readonly resourcesJson: string | null
+  readonly resourceTemplatesJson: string | null
+  readonly promptsJson: string | null
+  readonly errorCode: McpProbeErrorCodeT | null
+  readonly errorMessage: string | null
+  readonly errorDetailJson: string | null
+  readonly startedAt: number
+  readonly finishedAt: number
 }

@@ -17,8 +17,6 @@ export {
   buildExecutionContractAgentPrompt,
   executionContractAgentImplementationSchema,
   executionContractImplementationSchema,
-  executionContractRefKey,
-  executionContractRefSchema,
   parseExecutionContractRef,
 } from '../domain/model'
 

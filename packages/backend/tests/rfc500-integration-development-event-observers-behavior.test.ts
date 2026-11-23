@@ -21,7 +21,6 @@ import {
   type StartedSystemMockSuite,
 } from '@agent-workflow/system-mocks'
 
-import { encodeDevelopmentApprovalSubject } from '../src/modules/development-automation/public/types'
 import {
   createDevelopmentCodeHostEventObserver,
   createDevelopmentEmployeeEventObserver,
@@ -29,6 +28,7 @@ import {
 import type { MrEnsureConnectionDeps } from '../src/modules/integration/application/mrEnsure'
 import { codeHostRequests } from '../src/modules/integration/composition'
 import { composeDevelopmentEmployeeEventObserver } from '../src/modules/integration/composition/digitalEmployeeEventObserver'
+import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/domain/approvalSubject'
 
 setDefaultTimeout(120_000)
 

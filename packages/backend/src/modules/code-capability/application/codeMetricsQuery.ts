@@ -24,11 +24,11 @@ import type {
   CodeMetricsReadPort,
 } from '@/modules/code-capability/application/ports/codeMetricsRead'
 import type {
-  CodeAdoptionBuckets,
   CodeMetricsQuery,
   CodeMetricsSummary,
+  CodeAdoptionBuckets,
   CodeRunCounts,
-} from '@/modules/code-capability/public/queries'
+} from './ports/codeQueries'
 
 /**
  * The default reporting window: 30 days.

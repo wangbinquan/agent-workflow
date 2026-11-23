@@ -1,5 +1,4 @@
 import type { Config } from '@agent-workflow/shared'
-export type { AdminBackupCoordinatorPort as DatabaseBackupEffects } from '../application/ports/adminBackupCoordinator'
 
 export type { HostedObjectPublicationMaintenance } from '../infrastructure/crewstation/objectPublicationContract'
 
@@ -15,7 +14,6 @@ export interface DatabaseBackupMaintenance {
 }
 import type {
   ActivateLocalRestoreInput,
-  CancelStagedRestoreResult,
   DatabaseMigrationOperationInput,
   DatabaseMigrationPreflightInput,
   DatabaseMigrationPreflightView,
@@ -44,22 +42,11 @@ export interface StageRestoreCommand {
   ): Promise<StageRestoreResult>
 }
 
-export interface CancelStagedRestoreCommand {
-  execute(context: CommandContext): CancelStagedRestoreResult
-}
-
 export interface ActivateLocalRestoreCommand {
   execute(
     context: LocalSystemOperationContext,
     input: ActivateLocalRestoreInput,
   ): Promise<LocalRestoreActivationResult>
-}
-
-export interface SystemOperationCommands {
-  readonly requestBackup: RequestBackupCommand
-  readonly stageRestore: StageRestoreCommand
-  readonly cancelStagedRestore: CancelStagedRestoreCommand
-  readonly activateLocalRestore: ActivateLocalRestoreCommand
 }
 
 export interface DatabaseMigrationCommands {

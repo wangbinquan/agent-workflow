@@ -65,18 +65,15 @@ import {
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { decideProtectedLaunch, type MrStreamState } from '../domain/mrTerminalControl'
-import type {
-  MrTerminalControl,
-  ProtectedMrLaunchGuard,
-  WorkStartReceipt,
-  WorkStartTarget,
-} from '../public/participants'
+import type { WorkStartTarget } from '../public/participants'
 import { DomainError } from '@/util/errors'
 import type {
   WebhookDispatchPersistencePort,
   WebhookTriggerRecord,
 } from './ports/webhookDispatchPersistence'
 import type { WebhookDeliveryPersistencePort } from './ports/webhookDeliveryPersistence'
+import type { MrTerminalControl, ProtectedMrLaunchGuard } from './ports/mrTerminalControl'
+import type { WorkStartReceipt } from './ports/workStartReceipt'
 
 const log = createLogger('webhook-dispatch')
 

@@ -133,17 +133,15 @@ import type {
   ActivateLocalRestoreCommand,
   RequestBackupCommand,
   StageRestoreCommand,
-  SystemOperationCommands,
 } from './public/commands'
-import {
-  createSystemOperationDescriptors,
-  type SystemOperationDescriptors,
-} from './public/operations'
+import { type SystemOperationDescriptors } from './public/operations'
 import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 import type { MaintenanceSystemOperations } from './application/ports/maintenanceSystemOperations'
 import { createSystemOperationsMaintenanceJobHandlers as createSystemJobHandlers } from './application/maintenanceJobs'
 import { pruneLocalBackups } from './infrastructure/local/localBackupPrune'
+import { createSystemOperationDescriptors } from './application/operationDescriptors'
+import type { SystemOperationCommands } from './application/systemOperationPorts'
 
 export { readDatabaseSchemaUpgradeGeneration } from './infrastructure/databaseMigrationCoordinator'
 export {

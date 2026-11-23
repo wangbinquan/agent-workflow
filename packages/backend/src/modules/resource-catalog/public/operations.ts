@@ -7,33 +7,17 @@ import type {
   IdempotentCommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
-import type { SkillFileCommands, SkillVersionCommands, WorkgroupTaskRoomCommands } from './commands'
+import type { WorkgroupTaskRoomCommands } from './commands'
 import type {
   AgentOperationContext,
   McpAclIdentityParticipant,
   McpOperationContext,
   PluginOperationContext,
   SkillOperationContext,
-  SkillZipImportParticipant,
   WorkflowOperationContext,
   WorkgroupOperationContext,
 } from './participants'
-import type {
-  AgentDependencyQueries,
-  AgentImportQueries,
-  AgentQueries,
-  AgentReferenceQueries,
-  AgentResourceIntegrityQueries,
-  McpQueries,
-  PluginQueries,
-  SkillFileQueries,
-  SkillQueries,
-  SkillVersionQueries,
-  WorkflowQueries,
-  WorkflowValidationQueries,
-  WorkgroupQueries,
-  WorkgroupTaskRoomQueries,
-} from './queries'
+import type { McpQueries, WorkgroupTaskRoomQueries } from './queries'
 import type {
   AgentCatalogResource,
   ApplyResourcePackage,
@@ -148,15 +132,6 @@ export interface AgentOperationDescriptors extends ResourceAclOperationDescripto
   >
 }
 
-export interface AgentCatalogModule {
-  readonly queries: AgentQueries
-  readonly referenceQueries: AgentReferenceQueries
-  readonly dependencyQueries: AgentDependencyQueries
-  readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
-  readonly importQueries: AgentImportQueries
-  readonly operations: AgentOperationDescriptors
-}
-
 export interface SkillOperationDescriptors extends ResourceAclOperationDescriptors<SkillOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
@@ -228,16 +203,6 @@ export interface SkillOperationDescriptors extends ResourceAclOperationDescripto
     RestoreSkillVersionCatalogReceipt,
     SkillOperationContext
   >
-}
-
-export interface SkillCatalogModule {
-  readonly fileCommands: SkillFileCommands
-  readonly versionCommands: SkillVersionCommands
-  readonly queries: SkillQueries
-  readonly fileQueries: SkillFileQueries
-  readonly versionQueries: SkillVersionQueries
-  readonly zipImport: SkillZipImportParticipant
-  readonly operations: SkillOperationDescriptors
 }
 
 export interface McpOperationDescriptors extends ResourceAclOperationDescriptors<McpOperationContext> {
@@ -324,11 +289,6 @@ export interface PluginOperationDescriptors extends ResourceAclOperationDescript
   >
 }
 
-export interface PluginCatalogModule {
-  readonly queries: PluginQueries
-  readonly operations: PluginOperationDescriptors
-}
-
 export interface WorkflowOperationDescriptors extends ResourceAclOperationDescriptors<WorkflowOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
@@ -360,12 +320,6 @@ export interface WorkflowOperationDescriptors extends ResourceAclOperationDescri
     DeleteWorkflowCatalogReceipt,
     WorkflowOperationContext
   >
-}
-
-export interface WorkflowCatalogModule {
-  readonly queries: WorkflowQueries
-  readonly validationQueries: WorkflowValidationQueries
-  readonly operations: WorkflowOperationDescriptors
 }
 
 export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescriptors<WorkgroupOperationContext> {
@@ -404,11 +358,6 @@ export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescr
     UpdateWorkgroupCatalogReceipt,
     WorkgroupOperationContext
   >
-}
-
-export interface WorkgroupCatalogModule {
-  readonly queries: WorkgroupQueries
-  readonly operations: WorkgroupOperationDescriptors
 }
 
 /** Required route binding for the task-scoped room/config/action aggregate. */

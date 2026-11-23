@@ -7,11 +7,8 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { zodOperationCodec } from '@/platform/operations/codecs'
 import type { VersionedExactCodec } from '@/platform/operations/contracts'
-import {
-  stageRestoreOptionsSchema,
-  type RestoreArtifactRef,
-  type StageRestoreInput,
-} from '../public/types'
+import { type RestoreArtifactRef, type StageRestoreInput } from '../public/types'
+import { stageRestoreOptionsSchema } from '../application/systemOperationContracts'
 
 export interface RestoreArtifactUpload {
   arrayBuffer(): Promise<ArrayBuffer>

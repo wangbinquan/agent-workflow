@@ -1,11 +1,6 @@
 import type { SubjectTaskReferencePort } from './required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import type {
-  AgentCatalogModule,
-  SkillCatalogModule,
-  WorkflowCatalogModule,
-} from '../public/operations'
 import { createAgentPersistenceSemantics } from '../infrastructure/agentPersistenceSemantics'
 import type { AgentRuntimeProfileLookup } from '../infrastructure/agentMutationParticipant'
 import type {
@@ -26,6 +21,11 @@ import {
   composeDatabaseWorkflowCatalog,
   composeSkillContentAvailability,
 } from './workflowOperations'
+import type {
+  AgentCatalogModule,
+  SkillCatalogModule,
+  WorkflowCatalogModule,
+} from '../application/catalogModules'
 
 export interface ClassicCatalogBundle {
   readonly agent: AgentCatalogModule

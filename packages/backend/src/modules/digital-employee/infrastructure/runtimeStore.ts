@@ -53,8 +53,8 @@ import {
   type ReactionRoundRecord,
   reactionExecutionPlanSchema,
 } from '../domain/runtimeModel'
-import { employeeCaseLifecycleObservation } from '../public/events'
 import { reactionArtifactRef, sanitizeReactionText } from '../domain/reactionArtifacts'
+import { employeeCaseLifecycleObservation } from '../application/lifecycleEvents'
 
 async function enqueueCaseLifecycleEventTx(
   tx: PersistenceTx,

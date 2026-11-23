@@ -1,11 +1,8 @@
 import { ulid } from 'ulid'
-import {
-  classifyTerminalKind,
-  PLATFORM_WORK_ITEM_SLOT_REF,
-} from '@/modules/digital-employee/public/types'
+import { PLATFORM_WORK_ITEM_SLOT_REF } from '@/modules/digital-employee/public/types'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { z } from 'zod'
-import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
+import { utf16MaxLength, utf16MinLength, classifyTerminalKind } from '@agent-workflow/shared'
 import {
   PLATFORM_WORKSPACE_DIR,
   TaskLaunchOriginSchema,
@@ -26,7 +23,6 @@ import type {
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
 } from '../public/types'
-import { employeeInvocationResultObservation } from '../public/events'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
@@ -91,6 +87,7 @@ import {
   type ReactionExecutionPlan,
   type ReactionRoundRecord,
 } from '../domain/runtimeModel'
+import { employeeInvocationResultObservation } from './lifecycleEvents'
 
 const subscribePayloadSchema = z
   .object({

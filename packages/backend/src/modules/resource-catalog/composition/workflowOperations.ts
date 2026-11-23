@@ -28,12 +28,12 @@ import type {
   SkillVersionPresenceQueries,
 } from '../application/skills/contentAvailability'
 import { createWorkflowOperationDescriptors } from './catalogOperationDescriptors'
-import type { WorkflowCatalogModule } from '../public/operations'
 import type { WorkflowOperationContext } from '../public/participants'
 import {
   createWorkflowReferenceAdmissionPort,
   createWorkflowValidationPort,
 } from '../infrastructure/workflowValidation'
+import type { WorkflowCatalogModule } from '../application/catalogModules'
 
 type WorkflowAclOperationApplication = Parameters<typeof createWorkflowOperationDescriptors>[2]
 
