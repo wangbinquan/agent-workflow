@@ -6,7 +6,7 @@
 //   · SQLite 侧 `sqliteLogicalSource.ts`（267 行）有 4 处生产调用方——
 //     `platform/persistence/sqlite/systemProviderBackup.ts:233`（SQLite 部署的逻辑备份）、
 //     `platform/persistence/sqlite/systemProviderRestore.ts:119`（备份校验）、
-//     `sqliteLogicalSourceWorker.ts:62`（迁移读出的 Worker 线程实体）→ 由
+//     `sqliteLogicalSourceWorkerHandler.ts:89`（迁移读出的 Worker 线程实体；RFC-540 起请求处理归 Worker 的处理器）→ 由
 //     `modules/system-operations/infrastructure/databaseMigrationCoordinator.ts:193,232`
 //     经 `sqliteLogicalSourceWorkerSupervisor.ts` 驱动。它**不是** `LogicalTarget` 那种一侧死
 //     代码的形态：迁移是单向的（SQLite → PostgreSQL），所以 target 侧的 SQLite 实现没人用，

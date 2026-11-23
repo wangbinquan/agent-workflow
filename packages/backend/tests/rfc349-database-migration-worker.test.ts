@@ -16,15 +16,19 @@ describe('RFC-349 database migration Worker boundary', () => {
       'src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts',
     )
     const worker = readBackend('src/platform/persistence/sqliteLogicalSourceWorker.ts')
+    // RFC-540: the Worker entry builds one handler; the request handling lives in the handler file.
+    const handler = readBackend('src/platform/persistence/sqliteLogicalSourceWorkerHandler.ts')
     const supervisor = readBackend(
       'src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts',
     )
 
     expect(coordinator).toContain('openSqliteLogicalSourceWorker')
     expect(coordinator).not.toContain('openSqliteLogicalSource({')
-    expect(worker).toContain('openSqliteLogicalSource({')
-    expect(worker).toContain('await requireSource().preflight()')
-    expect(worker).toContain('await requireSource().readChunk(')
+    expect(worker).toContain('createSqliteLogicalSourceWorkerHandler({')
+    expect(worker).toContain('await handler.handle(event.data)')
+    expect(handler).toContain('openSqliteLogicalSource({')
+    expect(handler).toContain('await requireSource().preflight()')
+    expect(handler).toContain('await requireSource().readChunk(')
     expect(supervisor).toContain('new Worker(SQLITE_LOGICAL_SOURCE_WORKER_ENTRY)')
     expect(supervisor).not.toContain('openSqliteLogicalSource({')
     expect(supervisor).toContain('SQLite logical-source Worker request ${input.type} timed out')
