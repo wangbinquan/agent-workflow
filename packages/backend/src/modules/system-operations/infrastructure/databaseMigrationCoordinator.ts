@@ -64,6 +64,7 @@ import type {
   SqliteLogicalSourceSnapshot,
 } from '@/platform/persistence/sqliteLogicalSource'
 import { openSqliteLogicalSourceWorker } from '@/platform/persistence/sqliteLogicalSourceWorkerSupervisor'
+import type { FileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 
 type PostgresqlConfig = Extract<DatabaseConfig, { provider: 'postgresql' }>
 
@@ -109,6 +110,8 @@ export interface DatabaseMigrationCoordinatorOptions {
   readonly env?: Readonly<Record<string, string | undefined>>
   readonly admission: DatabaseMigrationAdmissionPort
   readonly safetyBackup?: DatabaseMigrationSafetyBackupPort
+  /** RFC-539: the tracker the default safety backup counts its snapshots on (the daemon: its own database's). */
+  readonly fileSnapshots: FileSnapshotTracker
   /** Persist the safe target config at cutover; the URL value is never passed. */
   readonly activateTargetConfig: (target: DatabaseMigrationTargetView) => Promise<void> | void
   /** Restore the provider selector only after a durable instant rollback. */
@@ -273,7 +276,8 @@ export function createDatabaseMigrationCoordinator(
     controlPlane,
     contract,
   })
-  const safetyBackup = options.safetyBackup ?? createSqliteMigrationSafetyBackup()
+  const safetyBackup =
+    options.safetyBackup ?? createSqliteMigrationSafetyBackup(options.fileSnapshots)
   const now = options.now ?? Date.now
   // A daemon owns one coordinator instance. Keep execution singular so
   // duplicate resume requests cannot race the same durable owner fence, and

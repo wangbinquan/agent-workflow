@@ -1,3 +1,4 @@
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/application/ports/taskExecutionPermits'
 import type { ChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
 import { registerProviderFixtureCleanup } from './providerFixtureCleanup'
@@ -256,6 +257,8 @@ export async function createProviderHttpApplicationFromBinding(
         operationsRoot: join(appHome, 'database-migrations'),
         generationPointerPath: join(appHome, 'database-generation.json'),
         configuration: createFileDatabaseConfiguration(configPath),
+        // RFC-539: the test application's migration snapshots count on a tracker of their own.
+        fileSnapshots: createFileSnapshotTracker(),
         executionMode: 'inline',
       })
     const applicationConfiguration =

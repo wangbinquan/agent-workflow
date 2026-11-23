@@ -56,7 +56,8 @@ interface MaintenanceServiceCommonOptions {
    * RFC-359 AC-10：原来写成 `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，
    * 并且让这个中立的后台服务直接 import 了 `platform/persistence/sqlite/systemProviderBackup`。
    * 答案由**装配方**给（它本来就知道自己在装哪个 provider）：
-   * SQLite 侧给 `isDbSnapshotInProgress`，外部服务器侧给 `() => false`——它的存储在服务端，
+   * SQLite 侧给会话库的快照计数器（RFC-539：`fileSnapshotTrackerOf(db).inFlight`；此前是进程级的
+   * `isDbSnapshotInProgress`），外部服务器侧给 `() => false`——它的存储在服务端，
    * 根本没有「本地文件快照」这回事，所以恒为 false 与原行为逐字一致（PG 原本就从不因此跳过）。
    */
   readonly fileSnapshotInFlight: () => boolean

@@ -1,3 +1,4 @@
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { postgresqlHistorySession } from '@/platform/persistence/postgresql/historySession'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -140,7 +141,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
             activatePostgresql: async () => undefined,
             openPostgresqlAdmission: async () => undefined,
           },
-          safetyBackup: createSqliteMigrationSafetyBackup(),
+          safetyBackup: createSqliteMigrationSafetyBackup(createFileSnapshotTracker()),
           artifacts: createFileDatabaseMigrationArtifactStore({
             operationsRoot: operationsDir,
           }),

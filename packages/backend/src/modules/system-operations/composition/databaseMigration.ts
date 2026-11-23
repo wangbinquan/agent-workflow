@@ -1,5 +1,9 @@
 // RFC-349 — bootstrap-only composition for the database migration application.
 
+import {
+  createFileSnapshotTracker,
+  type FileSnapshotTracker,
+} from '@/platform/persistence/fileSnapshots'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { Paths } from '@/util/paths'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
@@ -32,6 +36,8 @@ export function composeDatabaseMigrationModule(input: {
   }) => void
   /** RFC-524: the caller selects it (daemon and CLI: the local config file). */
   readonly configuration: DatabaseConfigurationPort
+  /** RFC-539: the tracker the safety backup counts its snapshots on (the daemon: its own database's; the CLI: its own). */
+  readonly fileSnapshots: FileSnapshotTracker
 }): DatabaseMigrationModule {
   const configuration = input.configuration
   const coordinator = createDatabaseMigrationCoordinator({
@@ -45,6 +51,7 @@ export function composeDatabaseMigrationModule(input: {
     onBackgroundFailure: input.onBackgroundFailure,
     activateTargetConfig: (target) => configuration.write(target),
     activateSourceConfig: () => configuration.write({ provider: 'sqlite' }),
+    fileSnapshots: input.fileSnapshots,
   })
   const application = createDatabaseMigrationApplication(coordinator)
   return Object.freeze({
@@ -71,6 +78,8 @@ export function composeLocalDatabaseMigrationOperations(
   const module = composeDatabaseMigrationModule({
     contract,
     configuration: createFileDatabaseConfiguration(Paths.config),
+    // RFC-539: the CLI holds the daemon lock — no daemon checkpoint runs while it snapshots.
+    fileSnapshots: createFileSnapshotTracker(),
     admission: {
       async freezeAndDrain() {},
       async reopenSqlite() {},

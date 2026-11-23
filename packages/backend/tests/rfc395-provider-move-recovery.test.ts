@@ -1,5 +1,6 @@
 // BF-D2: boot never resumes a parked/failed/cancelled move merely because it
 // shares the live source. Only a healthy pointer binding or active cutover wins.
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { setDefaultTimeout, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -258,6 +259,7 @@ test('invalid target environment is rejected before retained-source access or an
   const f = fixture('switched', true)
   const calls: string[] = []
   const coordinator = createDatabaseMigrationCoordinator({
+    fileSnapshots: createFileSnapshotTracker(),
     ...f.options,
     headContract: logicalSchemaContract,
     env: {},
@@ -296,6 +298,7 @@ test('the coordinator itself never clears a failed move during automatic recover
   f.fail()
   const before = f.manifestBytes()
   const coordinator = createDatabaseMigrationCoordinator({
+    fileSnapshots: createFileSnapshotTracker(),
     ...f.options,
     headContract: logicalSchemaContract,
     interruptedOperationId: operationId,

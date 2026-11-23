@@ -37,7 +37,7 @@
 
 - `daemonSessionAdapters.ts` 的 SQLite 维护适配器：`fileSnapshotInFlight` 取会话库的计数器（`fileSnapshotTrackerOf(db).inFlight`）；PostgreSQL 不变。
 - `daemonSession.ts`：迁移模块多收 `fileSnapshots: fileSnapshotTrackerOf(db)`，经迁移协调器的选项交给 `createSqliteMigrationSafetyBackup(snapshots)`；
-  命令行的本机迁移操作（没有 daemon、没有 checkpoint 时钟）各建一个计数器。
+  命令行的本机迁移操作与启动时的两处迁移恢复（provider 迁移恢复、安装恢复；都持有 daemon 锁，没有 checkpoint 时钟在读）各建一个计数器。
 
 ### D3 用例与锁
 

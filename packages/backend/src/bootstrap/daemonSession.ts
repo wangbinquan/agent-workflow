@@ -61,6 +61,7 @@ import {
   startManagedWorkerDefinition,
 } from '@/platform/events/committed/workerDefinitions'
 import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { fileSnapshotTrackerOf } from '@/platform/persistence/sessionTables'
 import {
   composeDatabaseMigrationModule,
   createFileDatabaseConfiguration,
@@ -235,6 +236,8 @@ export async function composeDaemonSession(
     operationsRoot: Paths.databaseMigrationsDir,
     generationPointerPath: Paths.databaseGenerationPointer,
     configuration: createFileDatabaseConfiguration(Paths.config),
+    // RFC-539: the safety backup's snapshots count on this session's own database, so its WAL checkpoint skips.
+    fileSnapshots: fileSnapshotTrackerOf(db),
     executionMode: 'background',
     onBackgroundFailure({ operationId, error }) {
       input.log.error('database migration background operation failed', {

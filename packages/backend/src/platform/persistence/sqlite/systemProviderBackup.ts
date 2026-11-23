@@ -28,6 +28,8 @@ import {
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
+import type { FileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
+import { fileSnapshotTrackerOf } from '@/platform/persistence/sessionTables'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { quickCheckSqlite } from './systemBackupVacuum'
@@ -77,15 +79,13 @@ function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
   return runBackupWorker({ dbPath, dest }, 'vacuum')
 }
 
-/** RFC-311 实现门 P0-2:备份的只读快照会在库上持续 30–90 秒,而 C5 把 WAL
+/* RFC-311 实现门 P0-2:备份的只读快照会在库上持续 30–90 秒,而 C5 把 WAL
  *  checkpoint 循环改成了默认开——`PRAGMA wal_checkpoint(TRUNCATE)` 撞上活跃
  *  reader 时会调 busy handler 并**阻塞整个 busy_timeout(本仓 5 秒)**,而它跑在
  *  daemon 的同步主连接上,这 5 秒里全站冻结。也就是 §6.6 要消灭的那件事被本 RFC
- *  的另一半重新引入了。计数器让 checkpoint 循环在快照期间跳过这一拍。 */
-let activeDbSnapshots = 0
-export function isDbSnapshotInProgress(): boolean {
-  return activeDbSnapshots > 0
-}
+ *  的另一半重新引入了。计数器让 checkpoint 循环在快照期间跳过这一拍。
+ *  RFC-539:计数器是被快照的那个库的(句柄上下文的 `fileSnapshots`),两个快照函数收它,
+ *  `createBackup` 取 `opts.db` 的那一份。 */
 
 /**
  * RFC-349 —— `PRAGMA quick_check` 也走 worker。
@@ -98,35 +98,33 @@ export function isDbSnapshotInProgress(): boolean {
  * 回落规则与 `vacuumIntoOffThread` 一致（RFC-311 P0-2）：worker 起不来就在主线程上
  * 跑同一条校验——丢的只是「不冻结主线程」这个优化，**校验本身绝不能没**。
  */
-export async function quickCheckOffThread(dbPath: string): Promise<{ offThread: boolean }> {
-  activeDbSnapshots += 1
-  try {
-    await runBackupWorker({ quickCheckPath: dbPath }, 'quick-check')
-    return { offThread: true }
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('backup quick-check failed:'))
-      throw error
-    log.warn('backup quick-check worker unavailable; falling back to the main thread', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    quickCheckSqlite({ dbPath })
-    return { offThread: false }
-  } finally {
-    activeDbSnapshots -= 1
-  }
+export async function quickCheckOffThread(
+  dbPath: string,
+  snapshots: FileSnapshotTracker,
+): Promise<{ offThread: boolean }> {
+  return await snapshots.track(async () => {
+    try {
+      await runBackupWorker({ quickCheckPath: dbPath }, 'quick-check')
+      return { offThread: true }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('backup quick-check failed:'))
+        throw error
+      log.warn('backup quick-check worker unavailable; falling back to the main thread', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      quickCheckSqlite({ dbPath })
+      return { offThread: false }
+    }
+  })
 }
 
 export async function vacuumIntoOffThread(
   sqlite: Pick<Database, 'exec'>,
   dbPath: string,
   dest: string,
+  snapshots: FileSnapshotTracker,
 ): Promise<{ offThread: boolean }> {
-  activeDbSnapshots += 1
-  try {
-    return await vacuumIntoOffThreadInner(sqlite, dbPath, dest)
-  } finally {
-    activeDbSnapshots -= 1
-  }
+  return await snapshots.track(() => vacuumIntoOffThreadInner(sqlite, dbPath, dest))
 }
 
 async function vacuumIntoOffThreadInner(
@@ -209,7 +207,7 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
       if (dbFile === '') {
         sqlite.exec(`VACUUM INTO '${dbDest.replaceAll("'", "''")}'`)
       } else {
-        await vacuumIntoOffThread(sqlite, dbFile, dbDest)
+        await vacuumIntoOffThread(sqlite, dbFile, dbDest, fileSnapshotTrackerOf(opts.db))
       }
       // RFC-349: the portable payload is read from the immutable VACUUM
       // snapshot, never from the live synchronous connection.

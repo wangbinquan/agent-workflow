@@ -20,7 +20,7 @@ import type {
 import type { DaemonTaskExecutionAdapters } from '@/bootstrap/daemonModules/taskExecution'
 import type { DaemonApplicationInput } from './daemonApplication'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
-import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
+import { fileSnapshotTrackerOf } from '@/platform/persistence/sessionTables'
 import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import type { createMaintenanceService } from '@/platform/background/maintenanceService'
@@ -83,9 +83,10 @@ export const DAEMON_SESSION_ADAPTERS: {
       }),
     taskExecution: (input) => DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db: input.db }),
     afterCore: async () => {},
-    maintenance: ({ dbPath, migrationsFolder }) => ({
+    maintenance: ({ db, dbPath, migrationsFolder }) => ({
       provider: 'sqlite',
-      fileSnapshotInFlight: isDbSnapshotInProgress,
+      // RFC-539: the checkpoint skips while a whole-file snapshot of the session's own database is in flight.
+      fileSnapshotInFlight: fileSnapshotTrackerOf(db).inFlight,
       openAdmissionStore: (current) =>
         openSqliteMaintenanceAdmissionStore({
           dbPath,

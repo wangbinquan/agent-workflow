@@ -1,3 +1,4 @@
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
@@ -86,6 +87,8 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     operationsRoot: join(homePath, 'database-migrations'),
     generationPointerPath: join(homePath, 'database-generation.json'),
     configuration: createFileDatabaseConfiguration(configPath),
+    // RFC-539: the harness's migration snapshots count on a tracker of their own.
+    fileSnapshots: createFileSnapshotTracker(),
     admission: {
       async freezeAndDrain() {
         throw new Error('contract-harness-database-migration-admission')

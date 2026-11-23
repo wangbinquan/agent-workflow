@@ -25,6 +25,7 @@
 // 就会提前结束，后续路径永远不会发生，守卫会把它们误报成 uncovered。`TOOL_FIXTURES` 就是为
 // 这件事存在的（`list_repo_refs` 自 RFC-370 §10 V17 起按 id 一跳，不再需要 fixture）。
 
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
 
@@ -78,6 +79,7 @@ async function mountedRoutes(): Promise<
       dbVersion: 28,
       secretBox: createSecretBoxFromKey(randomBytes(32)),
       databaseMigration: composeDatabaseMigrationModule({
+        fileSnapshots: createFileSnapshotTracker(),
         contract: logicalSchemaContract,
         sqlitePath: join(home, 'db.sqlite'),
         operationsRoot: join(home, 'database-migrations'),

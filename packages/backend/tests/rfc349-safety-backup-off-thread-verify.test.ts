@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { quickCheckOffThread } from '../src/platform/persistence/sqlite/systemProviderBackup'
+import { createFileSnapshotTracker } from '../src/platform/persistence/fileSnapshots'
 
 function seedDatabase(path: string): void {
   const db = new Database(path)
@@ -34,7 +35,7 @@ describe('RFC-349 safety-backup integrity check runs off the daemon thread', () 
     const path = join(dir, 'db.sqlite')
     seedDatabase(path)
 
-    const result = await quickCheckOffThread(path)
+    const result = await quickCheckOffThread(path, createFileSnapshotTracker())
 
     expect(result.offThread, 'the worker must be the one reading the whole file').toBe(true)
   })
@@ -44,7 +45,7 @@ describe('RFC-349 safety-backup integrity check runs off the daemon thread', () 
     const path = join(dir, 'db.sqlite')
     writeFileSync(path, 'this is not a SQLite database', 'utf8')
 
-    await expect(quickCheckOffThread(path)).rejects.toThrow()
+    await expect(quickCheckOffThread(path, createFileSnapshotTracker())).rejects.toThrow()
   })
 
   test('a real verify failure is not swallowed by the main-thread fallback', () => {

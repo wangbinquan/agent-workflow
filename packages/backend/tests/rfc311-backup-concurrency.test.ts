@@ -5,8 +5,8 @@
 // `PRAGMA wal_checkpoint(TRUNCATE)` 撞上备份的活跃 reader 时会阻塞满 busy_timeout
 // （实测 5310ms），且跑在 daemon 的**同步主连接**上——那 5 秒整站冻结，正是 §6.6
 // 要消灭的事。修复（快照期间 checkpoint 让路 + VACUUM INTO 移出主线程）落在实现门
-// 里，但没有护栏：没有测试的话，下一个人把 `isDbSnapshotInProgress()` 这层判断删掉
-// 不会有任何信号。
+// 里，但没有护栏：没有测试的话，下一个人把「快照在途」这层判断删掉
+// 不会有任何信号。RFC-539：在途计数是被快照的那个库的（`fileSnapshotTrackerOf(db)`）。
 //
 // 本文件锁三件事：
 //   1. 快照进行中时 checkpoint tick **跳过**而不是阻塞；
@@ -15,7 +15,7 @@
 
 import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { fileSnapshotTrackerOf, tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -24,10 +24,7 @@ import { join } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { openDb } from '../src/db/client'
-import {
-  isDbSnapshotInProgress,
-  vacuumIntoOffThread,
-} from '../src/platform/persistence/sqlite/systemProviderBackup'
+import { vacuumIntoOffThread } from '../src/platform/persistence/sqlite/systemProviderBackup'
 import { runWalCheckpointTick } from '../src/platform/background/providerBackupScheduler'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 
@@ -47,6 +44,7 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
     try {
       const dbPath = join(home, 'db.sqlite')
       const db = openDb({ path: dbPath })
+      const snapshots = fileSnapshotTrackerOf(db)
       const { users } = tablesOf(db)
       await insertOne(db, users, {
         id: 'admin',
@@ -80,19 +78,19 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
         })
       }
 
-      expect(isDbSnapshotInProgress()).toBe(false)
-      expect(runWalCheckpointTick(db)).toBe('checkpointed')
+      expect(snapshots.inFlight()).toBe(false)
+      expect(runWalCheckpointTick(db, snapshots)).toBe('checkpointed')
 
       // 真做一次快照，并在**快照进行中**打页面 + 打 checkpoint。
       const sqlite = new Database(dbPath)
       const dest = join(home, 'snapshot.sqlite')
       let duringSnapshot: { tick: string; pageMs: number; items: number } | null = null
-      const snapshot = vacuumIntoOffThread(sqlite, dbPath, dest).finally(() => {
+      const snapshot = vacuumIntoOffThread(sqlite, dbPath, dest, snapshots).finally(() => {
         sqlite.close()
       })
       // 快照期间(计数器 >0)取一次页并给 checkpoint 一拍。
-      while (!isDbSnapshotInProgress()) await new Promise((r) => setTimeout(r, 1))
-      const tick = runWalCheckpointTick(db)
+      while (!snapshots.inFlight()) await new Promise((r) => setTimeout(r, 1))
+      const tick = runWalCheckpointTick(db, snapshots)
       const t0 = performance.now()
       const page = await listTaskOperationsPage(db, admin(), { limit: '50' })
       const pageMs = performance.now() - t0
@@ -106,8 +104,8 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
       expect(duringSnapshot.items).toBe(50)
       expect(duringSnapshot.pageMs).toBeLessThan(2_000)
       // ③ 让路是临时的:快照结束后 checkpoint 必须恢复执行。
-      expect(isDbSnapshotInProgress()).toBe(false)
-      expect(runWalCheckpointTick(db)).toBe('checkpointed')
+      expect(snapshots.inFlight()).toBe(false)
+      expect(runWalCheckpointTick(db, snapshots)).toBe('checkpointed')
     } finally {
       rmSync(home, { recursive: true, force: true })
     }

@@ -4,6 +4,7 @@
 // same operation files and external target exercises production replay rather
 // than an in-process mock exception.
 
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import type { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -244,7 +245,7 @@ async function main(): Promise<void> {
         activatePostgresql: async () => undefined,
         openPostgresqlAdmission: async () => undefined,
       },
-      safetyBackup: createSqliteMigrationSafetyBackup(),
+      safetyBackup: createSqliteMigrationSafetyBackup(createFileSnapshotTracker()),
       artifacts: createFileDatabaseMigrationArtifactStore({ operationsRoot }),
       generationPointerPath: pointerPath,
       chunkRows: 25,

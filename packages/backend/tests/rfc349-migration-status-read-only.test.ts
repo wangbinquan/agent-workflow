@@ -13,6 +13,7 @@
 // 判据用「目标环境变量根本不存在」当探针：真去开 runtime 就会以
 // `postgresql-url-env-missing` 失败，不去开就安静返回 manifest。
 
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -106,6 +107,7 @@ function acceptingWrites(): {
 
 function coordinatorOn(root: string, operationsRoot: string) {
   return createDatabaseMigrationCoordinator({
+    fileSnapshots: createFileSnapshotTracker(),
     headContract: logicalSchemaContract,
     contract: logicalSchemaContract,
     sqlitePath: join(root, 'db.sqlite'),

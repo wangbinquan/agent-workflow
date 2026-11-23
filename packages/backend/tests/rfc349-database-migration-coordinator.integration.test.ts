@@ -4,6 +4,7 @@
 // RFC-370 CI 36374739146 exposed replay incorrectly requiring the old SQLite
 // provider after a successful cutover. Replays must be read-only and target-bound.
 
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import type { DatabaseConfig } from '@agent-workflow/shared'
@@ -38,6 +39,7 @@ describe('RFC-349 production database migration coordinator', () => {
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
+      fileSnapshots: createFileSnapshotTracker(),
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
       sqlitePath,
@@ -82,6 +84,7 @@ describe('RFC-349 production database migration coordinator', () => {
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
+      fileSnapshots: createFileSnapshotTracker(),
       headContract: logicalSchemaContract,
       contract: logicalSchemaContract,
       sqlitePath,
@@ -184,6 +187,7 @@ describe('RFC-349 production database migration coordinator', () => {
         failBackground = reject
       })
       const { coordinator } = composeDatabaseMigrationModule({
+        fileSnapshots: createFileSnapshotTracker(),
         contract: logicalSchemaContract,
         sqlitePath,
         operationsRoot: join(root, 'database-migrations'),

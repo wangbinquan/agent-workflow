@@ -1,3 +1,4 @@
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { existsSync } from 'node:fs'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -86,6 +87,8 @@ export async function recoverEpoch2ProviderMove(
     // Epoch-2 configuration remains authoritative through the pointer's profileRef.
     async activateTargetConfig() {},
     async activateSourceConfig() {},
+    // RFC-539: boot recovery runs under the upgrade lock, before any daemon checkpoint.
+    fileSnapshots: createFileSnapshotTracker(),
   })
   const result = await (resumeMigration ?? recovery.resumeInterrupted)(pending.target)
   if (result?.phase !== 'accepting-writes' || result.failure)

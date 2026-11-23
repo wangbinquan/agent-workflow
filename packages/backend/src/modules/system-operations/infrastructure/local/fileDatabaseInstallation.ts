@@ -1,5 +1,6 @@
 // RFC-370 A-T2: standalone installation effects. Paths, the daemon lock,
 // durable file metadata and local copy recovery stay behind this adapter.
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import type { DaemonStartupLease } from '../../application/ports/daemonStartupLease'
 import type { DatabaseConfigurationPort } from '../../application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from '../../application/ports/databaseInstallation'
@@ -82,6 +83,8 @@ export function createFileDatabaseInstallation(
         },
         activateTargetConfig: (target) => options.writeConfig(target),
         activateSourceConfig: () => options.writeConfig({ provider: 'sqlite' }),
+        // RFC-539: the held daemon lock — no daemon checkpoint runs while it snapshots.
+        fileSnapshots: createFileSnapshotTracker(),
       })
       return await recovery.resumeInterrupted(input.target)
     },

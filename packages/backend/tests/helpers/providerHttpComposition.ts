@@ -1,3 +1,4 @@
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
 import { readActiveEpochInstallation } from '@/modules/system-operations/composition/epochInstallation'
@@ -50,6 +51,8 @@ export async function createProviderHttpCompositionFixture(
       activatePostgresql: unexpected,
       openPostgresqlAdmission: unexpected,
     },
+    // RFC-539: the fixture's migration snapshots count on a tracker of their own.
+    fileSnapshots: createFileSnapshotTracker(),
     executionMode: 'inline',
   })
   const installation = await readActiveEpochInstallation(harness.db)

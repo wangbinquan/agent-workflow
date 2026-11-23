@@ -2,6 +2,7 @@
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -567,6 +568,7 @@ describe('RFC-305 permission catalog architecture', () => {
         dbVersion: 162,
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
         databaseMigration: composeDatabaseMigrationModule({
+          fileSnapshots: createFileSnapshotTracker(),
           contract: logicalSchemaContract,
           sqlitePath: join(home, 'db.sqlite'),
           operationsRoot: join(home, 'database-migrations'),

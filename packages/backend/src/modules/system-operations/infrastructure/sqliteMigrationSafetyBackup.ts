@@ -17,6 +17,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { DatabaseMigrationSafetyBackupPort } from '../application/databaseMigrationRunner'
+import type { FileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import {
   quickCheckOffThread,
   vacuumIntoOffThread,
@@ -58,32 +59,35 @@ function fsyncDirectory(path: string): void {
  *
  * 现在：只在**发布前**校验一次（临时文件），并且走 backup worker。
  */
-async function verifySqlite(path: string): Promise<void> {
+async function verifySqlite(path: string, snapshots: FileSnapshotTracker): Promise<void> {
   try {
-    await quickCheckOffThread(path)
+    await quickCheckOffThread(path, snapshots)
   } catch (error) {
     throw new Error('SQLite migration safety backup failed quick_check', { cause: error })
   }
 }
 
-export function createSqliteMigrationSafetyBackup(): DatabaseMigrationSafetyBackupPort {
+/** RFC-539: the snapshots count on `snapshots` (the daemon session's database tracker, so its WAL checkpoint skips). */
+export function createSqliteMigrationSafetyBackup(
+  snapshots: FileSnapshotTracker,
+): DatabaseMigrationSafetyBackupPort {
   const port: DatabaseMigrationSafetyBackupPort = {
     async create(input) {
       const destination = join(input.operationRoot, 'source-backup', 'db.sqlite')
       if (existsSync(destination)) {
-        await verifySqlite(destination)
+        await verifySqlite(destination, snapshots)
         return { path: destination, digest: await digestFile(destination) }
       }
       mkdirSync(dirname(destination), { recursive: true })
       const temporary = `${destination}.tmp-${process.pid}-${Date.now()}-${crypto.randomUUID()}`
       const source = openSqliteForRead(input.sourcePath)
       try {
-        await vacuumIntoOffThread(source, input.sourcePath, temporary)
+        await vacuumIntoOffThread(source, input.sourcePath, temporary, snapshots)
       } finally {
         source.close()
       }
       try {
-        await verifySqlite(temporary)
+        await verifySqlite(temporary, snapshots)
         // Windows FlushFileBuffers requires a write-capable file handle.
         const handle = openSync(temporary, 'r+')
         try {

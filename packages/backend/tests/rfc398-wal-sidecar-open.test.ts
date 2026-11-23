@@ -1,4 +1,5 @@
 // RFC-398-T1 / §5 and §7.6: every disk reader handles missing WAL sidecars without changing source bytes.
+import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -322,7 +323,7 @@ const simpleReaders: readonly [
   [
     'sqliteMigrationSafetyBackup',
     async (f) => {
-      const backup = await createSqliteMigrationSafetyBackup().create({
+      const backup = await createSqliteMigrationSafetyBackup(createFileSnapshotTracker()).create({
         operationId: 'dbm_rfc398_safety',
         sourcePath: f.path,
         operationRoot: join(f.home, 'safety'),

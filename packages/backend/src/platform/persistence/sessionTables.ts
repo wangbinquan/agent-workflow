@@ -9,6 +9,7 @@ import {
 } from './schema/tables'
 import type { EngineCapabilities } from './capabilities'
 import type { AfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
+import { createFileSnapshotTracker, type FileSnapshotTracker } from './fileSnapshots'
 
 export type { PersistenceTables } from './schema/tables'
 /** RFC-537: the after-commit event pump the owning session attached to this database (shared by its transactions). */
@@ -20,6 +21,8 @@ interface DatabaseHandleContext {
   readonly tables: PersistenceTables
   readonly engine: EngineCapabilities
   readonly afterCommit: AfterCommitEventPumpSlot
+  /** RFC-539: whole-file snapshots in flight on this database (its WAL checkpoint skips while one is). */
+  readonly fileSnapshots: FileSnapshotTracker
 }
 const contextKey = Symbol('native-persistence-session')
 const contexts = new WeakMap<object, DatabaseHandleContext>()
@@ -30,7 +33,13 @@ export function bindDatabaseHandle<T extends object>(
   tables: PersistenceTables,
   engine: EngineCapabilities,
 ): T {
-  const context = Object.freeze({ identity: handle, tables, engine, afterCommit: { pump: null } })
+  const context = Object.freeze({
+    identity: handle,
+    tables,
+    engine,
+    afterCommit: { pump: null },
+    fileSnapshots: createFileSnapshotTracker(),
+  })
   contexts.set(handle, context)
   if (Object.isExtensible(handle))
     Object.defineProperty(handle, contextKey, { value: context, configurable: true })
@@ -64,6 +73,12 @@ export function boundEngineOf(handle: object): EngineCapabilities | undefined {
 /** RFC-537: the handle's after-commit pump slot, or undefined for an object no provider constructed. */
 export function afterCommitEventPumpSlotOf(handle: object): AfterCommitEventPumpSlot | undefined {
   return boundContext(handle)?.afterCommit
+}
+/** RFC-539: the handle's file snapshot tracker (its transactions and native session share it). */
+export function fileSnapshotTrackerOf(handle: object): FileSnapshotTracker {
+  const tracker = boundContext(handle)?.fileSnapshots
+  if (tracker === undefined) throw new Error('file-snapshot-handle-unbound')
+  return tracker
 }
 export function inheritDatabaseHandle<T extends object>(handle: T, parent: object): T {
   const context = databaseHandleContext(parent)

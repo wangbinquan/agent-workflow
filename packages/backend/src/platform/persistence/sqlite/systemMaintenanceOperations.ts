@@ -1,5 +1,5 @@
 import type { DbClient } from '@/db/client'
-import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
+import type { FileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 
 export type SqliteMaintenanceDatabase = DbClient
 
@@ -9,8 +9,12 @@ export function checkpointSqliteWal(db: DbClient): void {
   db.$client.exec('PRAGMA wal_checkpoint(TRUNCATE);')
 }
 
-export function runSqliteWalCheckpointTick(db: DbClient): 'checkpointed' | 'skipped-snapshot' {
-  if (isDbSnapshotInProgress()) return 'skipped-snapshot'
+/** RFC-539: skips while a whole-file snapshot of this database is in flight (the tracker its snapshot takers count on). */
+export function runSqliteWalCheckpointTick(
+  db: DbClient,
+  snapshots: FileSnapshotTracker,
+): 'checkpointed' | 'skipped-snapshot' {
+  if (snapshots.inFlight()) return 'skipped-snapshot'
   checkpointSqliteWal(db)
   return 'checkpointed'
 }

@@ -14,10 +14,8 @@ import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import {
-  isDbSnapshotInProgress,
-  vacuumIntoOffThread,
-} from '../src/platform/persistence/sqlite/systemProviderBackup'
+import { vacuumIntoOffThread } from '../src/platform/persistence/sqlite/systemProviderBackup'
+import { createFileSnapshotTracker } from '../src/platform/persistence/fileSnapshots'
 import { runWalCheckpointTick } from '../src/platform/background/providerBackupScheduler'
 
 describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
@@ -58,7 +56,7 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
     const db = new Database(dbPath)
     db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO t (v) VALUES ('x');")
     const dest = join(dir, 'copy.sqlite')
-    const result = await vacuumIntoOffThread(db, dbPath, dest)
+    const result = await vacuumIntoOffThread(db, dbPath, dest, createFileSnapshotTracker())
     expect(result.offThread).toBe(true)
     expect(existsSync(dest)).toBe(true)
     const copy = new Database(dest, { readonly: true })
@@ -81,7 +79,7 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
       }
     }
     try {
-      const result = await vacuumIntoOffThread(db, dbPath, dest)
+      const result = await vacuumIntoOffThread(db, dbPath, dest, createFileSnapshotTracker())
       expect(result.offThread).toBe(false)
       expect(existsSync(dest)).toBe(true)
       const copy = new Database(dest, { readonly: true })
@@ -103,14 +101,16 @@ describe('RFC-311 P0-2 — checkpoint yields to an in-flight snapshot', () => {
     const raw = new Database(dbPath)
     raw.exec('PRAGMA journal_mode = WAL; CREATE TABLE t (id INTEGER PRIMARY KEY);')
     const db = { $client: raw } as unknown as Parameters<typeof runWalCheckpointTick>[0]
+    // RFC-539: the snapshot and the checkpoint share the database's tracker (a raw connection: a tracker of its own).
+    const snapshots = createFileSnapshotTracker()
 
-    expect(runWalCheckpointTick(db)).toBe('checkpointed')
-    const slow = vacuumIntoOffThread(raw, dbPath, join(dir, 'copy.sqlite'))
-    expect(isDbSnapshotInProgress()).toBe(true)
-    expect(runWalCheckpointTick(db)).toBe('skipped-snapshot')
+    expect(runWalCheckpointTick(db, snapshots)).toBe('checkpointed')
+    const slow = vacuumIntoOffThread(raw, dbPath, join(dir, 'copy.sqlite'), snapshots)
+    expect(snapshots.inFlight()).toBe(true)
+    expect(runWalCheckpointTick(db, snapshots)).toBe('skipped-snapshot')
     await slow
-    expect(isDbSnapshotInProgress()).toBe(false)
-    expect(runWalCheckpointTick(db)).toBe('checkpointed')
+    expect(snapshots.inFlight()).toBe(false)
+    expect(runWalCheckpointTick(db, snapshots)).toBe('checkpointed')
     raw.close()
   })
 })
