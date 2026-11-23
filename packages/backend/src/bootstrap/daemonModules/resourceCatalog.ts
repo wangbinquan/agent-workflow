@@ -43,7 +43,7 @@ import { mountAclEndpoints } from '@/routes/resourceAcl'
 import {
   getProbeByMcpId,
   mcpOperationCoordinator,
-  mcpProbeNow,
+  type McpProbeEnvironment,
   pluginOperationCoordinator,
 } from '@/modules/resource-catalog/composition'
 
@@ -62,6 +62,8 @@ export function composeDaemonResourceCatalogModules(input: {
   readonly pluginInstaller: PluginInstallerPort
   readonly runtimeProfiles: Parameters<typeof composeClassicCatalogs>[0]['runtimeProfiles']
   readonly mcpRuntime: Parameters<typeof composeMcpCatalog>[0]['runtime']
+  /** RFC-538: the application's MCP probe environment; MCP writes read its clock (one timeline with the probes). */
+  readonly mcpProbe: McpProbeEnvironment
 }) {
   const db = input.db
   const resourceCatalog = composeResourceCatalogFor({
@@ -98,7 +100,7 @@ export function composeDaemonResourceCatalogModules(input: {
     coordinator: mcpOperationCoordinator,
     nextMutationTimestamp: async (mcp) => {
       const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
-      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpProbeNow(), [
+      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, input.mcpProbe.clock(), [
         mcp.updatedAt + 1,
         (persisted?.startedAt ?? 0) + 1,
         mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
@@ -241,6 +243,7 @@ export function composeDaemonResourceCatalogModules(input: {
     agentResourceIntegrity: classicCatalogs.agentResourceIntegrity,
     skillCatalogBoot,
     mcpProbeStore,
+    mcpProbe: input.mcpProbe,
     mcpTransactionLifecycle,
     mcpCatalog,
     agentCatalog,

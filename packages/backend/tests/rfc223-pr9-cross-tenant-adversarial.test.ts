@@ -47,7 +47,6 @@ import {
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { __setMcpProbeOptionsForTesting as __setProbeOptionsForTesting } from '../src/modules/resource-catalog/composition'
 import {
   approveFusion,
   createFusion as createFusionWithAuthority,
@@ -55,7 +54,10 @@ import {
   reconcileFusion,
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import type { ProbedMcpClient } from '../src/modules/resource-catalog/infrastructure/mcpProbe'
+import type {
+  ProbedMcpClient,
+  ProbeOptions,
+} from '../src/modules/resource-catalog/infrastructure/mcpProbe'
 import { buildSiblingOutputsBlock } from '@/modules/collaboration/infrastructure/review'
 import {
   createManagedSkill,
@@ -87,6 +89,12 @@ const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const TOKEN = 'rfc223-pr9-token'
+
+// RFC-538: the probe options ride on each application (its MCP probe environment reads them per probe).
+let probeOptions: ProbeOptions | undefined
+function setProbeOptions(options: ProbeOptions | undefined): void {
+  probeOptions = options
+}
 const TEST_TIMEOUT_MS = 30_000
 
 type TestFusionDeps = FusionDeps & { readonly db: DbClient }
@@ -251,7 +259,7 @@ async function apiReq(app: Hono, path: string, init: RequestInit = {}): Promise<
 
 afterEach(() => {
   abortAllActiveTasks('rfc223-pr9-test-cleanup')
-  __setProbeOptionsForTesting(undefined)
+  setProbeOptions(undefined)
   resetBroadcastersForTests()
 })
 
@@ -534,6 +542,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           configPath: '/tmp/aw-rfc223-pr9-config-never-used.json',
           opencodeVersion: '1.14.25',
           dbVersion: 1,
+          mcpProbeOptions: () => probeOptions,
         },
       )
     ).app
@@ -542,7 +551,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const expectedConfigHash = ((await detail.json()) as { operationConfigHash: string })
       .operationConfigHash
     const openedIds: string[] = []
-    __setProbeOptionsForTesting({
+    setProbeOptions({
       openClient: async (mcp) => {
         openedIds.push(mcp.id)
         return { client: fakeProbeClient(), handshakeMs: 1 }

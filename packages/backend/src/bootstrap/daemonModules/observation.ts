@@ -11,6 +11,7 @@ import { type LocalMcpDiagnosticRunFixture } from '@/modules/task-execution/comp
 import { composeLocalMcpDiagnosticRunnerSelection } from '../runFamilyProviders'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mcpOperationCoordinator } from '@/modules/resource-catalog/composition'
+import type { McpProbeEnvironment } from '@/modules/resource-catalog/composition/mcpProbeOperations'
 import type { DeploymentSelections } from '../deploymentProfile'
 import { type DaemonProviderCore } from './providerCore'
 
@@ -29,6 +30,8 @@ export interface DaemonObservationInput {
   readonly identityAccess: DaemonProviderCore['identityAccess']
   readonly runtimeRegistry: DaemonProviderCore['runtimeRegistry']
   readonly mcpCatalog: () => McpCatalogModule
+  /** RFC-538: the application's MCP probe environment (the in-process probe reads its options). */
+  readonly mcpProbe: McpProbeEnvironment
   readonly adapters: DaemonObservationAdapters
   readonly mcpRuntimeTestDependencies?: Partial<
     Pick<Parameters<DaemonObservationAdapters['mcpDiagnostics']>[0], 'now' | 'capacity' | 'appHome'>
@@ -90,6 +93,7 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
     ...composeMcpRuntimeTestProvider(input.db),
     isRuntimeEligible: isRuntimeMcpTestEligible,
     coordinator: mcpOperationCoordinator,
+    probe: input.mcpProbe,
     requestBinding: {
       contexts: identityAccess.contexts,
       directAuthority: identityAccess.directAuthority,

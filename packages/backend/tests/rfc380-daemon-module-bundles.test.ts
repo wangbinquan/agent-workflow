@@ -28,6 +28,7 @@ import { buildStartTaskDeps } from './helpers/startTaskDeps'
 import { describeEachProvider, type ProviderApplicationBinding } from './helpers/eachProvider'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
+import { createMcpProbeEnvironment } from '@/modules/resource-catalog/composition/mcpProbeOperations'
 import { defaultDistillPolicy } from './helpers/memoryDistill'
 
 function graph(
@@ -76,6 +77,8 @@ function graph(
     kind: 'file',
     configPath: join(appHome, 'config.json'),
   })
+  // RFC-538: one MCP probe environment for this application, shared by the diagnostics and the catalogs.
+  const mcpProbe = createMcpProbeEnvironment()
   const observationModules = composeDaemonObservationModules({
     db,
     appHome,
@@ -85,6 +88,7 @@ function graph(
     daemonActor: core.daemonActor,
     runtimeRegistry: core.runtimeRegistry,
     mcpCatalog: () => resourceCatalogModules.mcpCatalog,
+    mcpProbe,
     adapters: {
       systemAgentRunFamily: standalone.systemAgentRunFamily,
       runtimeManagement: standalone.runtimeManagement,
@@ -105,6 +109,7 @@ function graph(
       prepareDelete: (id) => observationModules.mcpRuntimeTests.prepareMcpDelete(id),
       reconcileDurableIntents: () => observationModules.mcpRuntimeTests.reconcileDurableIntents(),
     },
+    mcpProbe,
   })
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
     selection: standalone.developmentPurposes,
@@ -187,6 +192,7 @@ describeEachProvider('RFC-380 passive module bundles', (harness) => {
             'agentResourceIntegrity',
             'skillCatalogBoot',
             'mcpProbeStore',
+            'mcpProbe',
             'mcpTransactionLifecycle',
             'mcpCatalog',
             'agentCatalog',

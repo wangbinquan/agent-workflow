@@ -7,16 +7,15 @@
 // ② 两个进程级协调器实例只在 composition 声明一次。
 // ③ 探测用例的外部行为：404 区分、配置变化 409、禁用 422（都不探测）、成功写入并带回 configHashUsed、同一配置并发只探测一次、
 //    列表只给可见 MCP 的记录。
-// ④ 装配：有 `probeRunner` 时探测交给它；`mcpProbeNow()` 取测试注入的时钟。
-import { afterEach, describe, expect, test } from 'bun:test'
+// ④ 装配：有 `probeRunner` 时探测交给它；探测的开始时间取交进来的时钟（RFC-538：应用的 MCP 探测环境，不再是进程级的测试接缝）。
+import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { createMcpProbeOperations } from '@/modules/resource-catalog/application/mcps/probeOperations'
 import {
-  __setMcpProbeOptionsForTesting,
   composeMcpProbeOperations,
+  createMcpProbeEnvironment,
   mcpOperationCoordinator,
-  mcpProbeNow,
   pluginOperationCoordinator,
 } from '@/modules/resource-catalog/composition'
 import { ResourceOperationCoordinator } from '@/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
@@ -303,11 +302,9 @@ describe('RFC-448 —— 探测用例', () => {
 })
 
 describe('RFC-448 —— 装配', () => {
-  afterEach(() => __setMcpProbeOptionsForTesting(undefined))
-
-  test('有 probeRunner 时探测交给它；mcpProbeNow() 取测试注入的时钟', async () => {
-    __setMcpProbeOptionsForTesting({ now: () => 42_000 })
-    expect(mcpProbeNow()).toBe(42_000)
+  test('有 probeRunner 时探测交给它；探测的开始时间取交进来的时钟', async () => {
+    const environment = createMcpProbeEnvironment(() => ({ now: () => 42_000 }))
+    expect(environment.clock()).toBe(42_000)
     const runs: number[] = []
     const operations = composeMcpProbeOperations({
       queries: {
@@ -323,6 +320,7 @@ describe('RFC-448 —— 装配', () => {
           return measurement(startedAt)
         },
       },
+      clock: environment.clock,
     })
     const receipt = await operations.probe(AUTHORITY, 'mcp-runner', 'hash-1')
     expect(runs).toEqual([42_000])

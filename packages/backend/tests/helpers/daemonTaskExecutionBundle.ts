@@ -6,6 +6,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 import { readTaskFixtures, taskFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { createMcpProbeEnvironment } from '@/modules/resource-catalog/composition/mcpProbeOperations'
 import {
   admitDaemonIdentity,
   actorOfDirectAuthority,
@@ -94,6 +95,8 @@ export function taskBundleInput(
     pluginInstaller: createLocalPluginInstaller(),
     runtimeProfiles: { get: (name) => runtimeRegistry.getRuntime(name) },
     mcpRuntime: { prepareDelete: async () => {}, reconcileDurableIntents: async () => {} },
+    // RFC-538: the application's MCP probe environment (no test options here).
+    mcpProbe: createMcpProbeEnvironment(),
   })
   const standalone = standaloneSelections({ appHome })
   const nodeRunPrompts = composeNodeRunPromptOperations(

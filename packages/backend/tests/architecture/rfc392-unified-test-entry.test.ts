@@ -27,6 +27,8 @@ const SEAMS = [
   'runtimeDiagnosticTestDependencies',
   'webhookDispatcher',
   'mcpRuntimeTestDependencies',
+  // RFC-538: the MCP probe options this application's probes and MCP write clock read.
+  'mcpProbeOptions',
   'intentTestDependencies',
   'workflowRuntime',
   'opencodeVersion',

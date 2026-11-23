@@ -338,8 +338,9 @@ describe('RFC-525 ③ 装配处的显式构造', () => {
   })
 
   test('单机 MCP 诊断显式选进程内执行器', () => {
+    // RFC-538: the in-process probe reads the application's probe environment.
     expect(callArguments(DIAGNOSTICS, text(DIAGNOSTICS), 'createInProcessMcpProbeRunner')).toEqual([
-      [],
+      ['input.probe'],
     ])
     expect(text(DIAGNOSTICS)).not.toContain('probeRunner: undefined')
   })

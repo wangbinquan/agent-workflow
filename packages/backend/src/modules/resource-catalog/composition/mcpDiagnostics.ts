@@ -3,7 +3,7 @@ import {
   type McpDiagnosticsDependencies,
 } from '../application/mcps/runtimeDiagnostics'
 import { createMcpDiagnosticsOperations } from '../application/mcps/diagnosticsOperations'
-import { createInProcessMcpProbeRunner } from './mcpProbeOperations'
+import { createInProcessMcpProbeRunner, type McpProbeEnvironment } from './mcpProbeOperations'
 import type { McpOperationCoordinatorPort } from '../application/mcps/ports'
 import { createMcpDiagnosticsContexts } from '../infrastructure/mcpDiagnosticsContexts'
 import type {
@@ -22,6 +22,8 @@ export function createMcpDiagnosticsApplication(input: McpDiagnosticsApplication
 export interface McpDiagnosticsCompositionInput extends McpDiagnosticsApplicationInput {
   readonly requestBinding: Parameters<typeof createMcpDiagnosticsContexts>[0]
   readonly coordinator: McpOperationCoordinatorPort
+  /** RFC-538: the application's MCP probe environment (the in-process probe reads its options). */
+  readonly probe: McpProbeEnvironment
 }
 export type McpDiagnosticsRuntime = ReturnType<typeof composeMcpDiagnostics>
 
@@ -31,7 +33,7 @@ export interface McpDiagnosticsSelectionInput
   extends
     McpDiagnosticsEffectDependencies,
     Omit<McpDiagnosticsDependencies, 'effects'>,
-    Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator'> {}
+    Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator' | 'probe'> {}
 
 /** RFC-531: the deployment's MCP diagnostics (standalone: local probes; hosted: probes in the release's system volume). */
 export type McpDiagnosticsSelection = (input: McpDiagnosticsSelectionInput) => McpDiagnosticsRuntime
@@ -43,7 +45,7 @@ export function composeMcpDiagnostics(input: McpDiagnosticsCompositionInput) {
 /** The ordinary and explicit native roots share the same complete runtime graph. */
 export function bindMcpDiagnosticsRuntime(
   application: McpDiagnosticsApplication,
-  input: Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator'>,
+  input: Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator' | 'probe'>,
 ) {
   const contexts = createMcpDiagnosticsContexts(input.requestBinding)
   const operations = createMcpDiagnosticsOperations({
@@ -69,6 +71,6 @@ export function bindMcpDiagnosticsRuntime(
     resume: () => application.resume(),
     /** A deployment that runs Agents elsewhere selects where probes run too; standalone probes in-process
      * (RFC-525: an explicit selection, not an absent one). */
-    probeRunner: createInProcessMcpProbeRunner() as McpProbeRunner,
+    probeRunner: createInProcessMcpProbeRunner(input.probe) as McpProbeRunner,
   })
 }

@@ -28,10 +28,11 @@
 ### D1 探测环境
 
 - `mcpProbeOperations.ts` 删去模块级变量、`__setMcpProbeOptionsForTesting` 与 `mcpProbeNow`，改为：
-  - `McpProbeEnvironment`（只读：`now(): number`、`options(): ProbeOptions | undefined`）与
-    `createMcpProbeEnvironment(options?: () => ProbeOptions | undefined)`——`now()` 取选项里的时钟、否则 `Date.now`，选项每次调用时读取；
+  - `McpProbeEnvironment`（只读：`clock(): number`、`options(): ProbeOptions | undefined`）与
+    `createMcpProbeEnvironment(options?: () => ProbeOptions | undefined)`——`clock()` 取选项里的时钟、否则 `Date.now`，选项每次调用时读取
+    （成员名不叫 `now`：架构报告按整词把消费文件里的 `now` 记成别的上下文公开面同名字段的消费）；
   - `createInProcessMcpProbeRunner(environment)`——每次探测把 `{ ...environment.options(), startedAt }` 交给 `probeMcp`（与此前每次读接缝同义）；
-  - `composeMcpProbeOperations({ …, now })`——探测开始时间取交进来的时钟。
+  - `composeMcpProbeOperations({ …, clock })`——探测开始时间取交进来的时钟。
 - `composition.ts` 的转出随改：删去两个名字，转出 `createMcpProbeEnvironment` 与 `McpProbeEnvironment`。
 
 ### D2 组合根建一份、往下交
@@ -39,8 +40,8 @@
 - `daemonApplication.ts` 每份应用建一份环境：`createMcpProbeEnvironment(input.testSeams?.mcpProbeOptions)`（`DaemonApplicationTestSeams` 多一项
   `mcpProbeOptions`；生产没有测试接缝，得到默认客户端与 `Date.now`），交给：
   - observation 模块 → MCP 诊断选择的输入多一项 `probe`，`bindMcpDiagnosticsRuntime` 以它建进程内执行器；托管部署仍选自己的执行器；
-  - 资源目录模块 → `nextMutationTimestamp` 取 `mcpProbe.now()`；资源目录模块把同一份环境交出（`mcpProbe`）；
-  - HTTP 组装 → `composeMcpProbeOperations({ …, now: resourceCatalog.mcpProbe.now })`。
+  - 资源目录模块 → `nextMutationTimestamp` 取 `mcpProbe.clock()`；资源目录模块把同一份环境交出（`mcpProbe`）；
+  - HTTP 组装 → `composeMcpProbeOperations({ …, clock: resourceCatalog.mcpProbe.clock })`。
 
 ### D3 用例与锁
 
@@ -57,7 +58,7 @@
 | ------------------------------------------------------------------------- | ------------------------------------------------- |
 | `probeOptionsOverride` / `__setMcpProbeOptionsForTesting` / `mcpProbeNow` | 删去；`createMcpProbeEnvironment(options?)`       |
 | `createInProcessMcpProbeRunner()`                                         | 改为 `createInProcessMcpProbeRunner(environment)` |
-| `composeMcpProbeOperations({ …, probeRunner })`                           | 多一项 `now`                                      |
+| `composeMcpProbeOperations({ …, probeRunner })`                           | 多一项 `clock`                                    |
 
 ## 4. 用例
 

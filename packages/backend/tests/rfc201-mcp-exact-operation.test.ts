@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
 
-import { __setMcpProbeOptionsForTesting as __setProbeOptionsForTesting } from '../src/modules/resource-catalog/composition'
 import type {
   OpenClientFn,
   ProbedMcpClient,
+  ProbeOptions,
 } from '../src/modules/resource-catalog/infrastructure/mcpProbe'
 
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
@@ -20,6 +20,13 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'rfc201-mcp-token'
+
+// RFC-538: the probe options ride on each application (its MCP probe environment reads them per probe and its
+// MCP writes read the same clock).
+let probeOptions: ProbeOptions | undefined
+function setProbeOptions(options: ProbeOptions | undefined): void {
+  probeOptions = options
+}
 
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
@@ -105,6 +112,7 @@ async function providerHarness(provider: ProviderDatabaseHarness): Promise<Hono>
       opencodeVersion: '1.14.25',
       dbVersion: 1,
       appHome,
+      mcpProbeOptions: () => probeOptions,
     })
     providerApplications.set(application, appHome)
     return application.app
@@ -125,7 +133,7 @@ afterEach(async () => {
   }
 })
 
-afterEach(() => __setProbeOptionsForTesting(undefined))
+afterEach(() => setProbeOptions(undefined))
 
 describe('RFC-201 MCP exact operation wire', () => {
   describeEachProvider('functional operations', (provider) => {
@@ -171,7 +179,7 @@ describe('RFC-201 MCP exact operation wire', () => {
         }),
       })
       let opens = 0
-      __setProbeOptionsForTesting({
+      setProbeOptions({
         openClient: async () => {
           opens += 1
           return { client: client('never'), handshakeMs: 0 }
@@ -188,7 +196,7 @@ describe('RFC-201 MCP exact operation wire', () => {
       const created = await createMcp(app)
       const gate = deferred()
       let opens = 0
-      __setProbeOptionsForTesting({
+      setProbeOptions({
         openClient: async () => {
           opens += 1
           await gate.promise
@@ -226,7 +234,7 @@ describe('RFC-201 MCP exact operation wire', () => {
         }
         return { client: client('new'), handshakeMs: 1 }
       }
-      __setProbeOptionsForTesting({ openClient: opener })
+      setProbeOptions({ openClient: opener })
 
       const oldResponseP = postProbe(app, h1.id, h1.operationConfigHash)
       await waitForStart(() => oldOpened, 'stale probe transport')
@@ -257,7 +265,7 @@ describe('RFC-201 MCP exact operation wire', () => {
         const created = await createMcp(app)
         const gate = deferred()
         let opened = false
-        __setProbeOptionsForTesting({
+        setProbeOptions({
           openClient: async () => {
             opened = true
             await gate.promise
@@ -303,7 +311,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     test('persisted probe follows the stable MCP id across rename', async () => {
       const app = await providerHarness(provider)
       const created = await createMcp(app)
-      __setProbeOptionsForTesting({
+      setProbeOptions({
         openClient: async () => ({ client: client('renamed-tool'), handshakeMs: 0 }),
       })
       expect((await postProbe(app, created.id, created.operationConfigHash)).status).toBe(200)
@@ -330,7 +338,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     test('frozen clock preserves Save→Probe freshness and Probe→Save staleness', async () => {
       const app = await providerHarness(provider)
       const created = await createMcp(app)
-      __setProbeOptionsForTesting({
+      setProbeOptions({
         now: () => 1_000,
         openClient: async () => ({ client: client('clock'), handshakeMs: 0 }),
       })

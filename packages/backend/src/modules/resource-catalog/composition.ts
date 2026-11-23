@@ -50,12 +50,14 @@ export function composeCollaborationTaskRolePolicy() {
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createResourceCatalogMaintenanceJobHandlers } from './application/maintenanceJobs'
 
-// RFC-448: MCP probe use cases, the probe / write clock and test seam, the shared
-// process-wide operation coordinators, and the probe-record read the MCP write clock needs.
+// RFC-448: MCP probe use cases, the shared process-wide operation coordinators, and the
+// probe-record read the MCP write clock needs. RFC-538: the probe options and clock are one
+// application's probe environment.
 export {
-  __setMcpProbeOptionsForTesting,
   composeMcpProbeOperations,
-  mcpProbeNow,
+  createMcpProbeEnvironment,
+  type McpProbeEnvironment,
+  type McpProbeOptions,
 } from './composition/mcpProbeOperations'
 export {
   mcpOperationCoordinator,

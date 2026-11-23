@@ -122,6 +122,10 @@ import type { createLogger } from '@/util/log'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import {
+  createMcpProbeEnvironment,
+  type McpProbeOptions,
+} from '@/modules/resource-catalog/composition/mcpProbeOperations'
 import type {
   LocalMcpDiagnosticRunFixture,
   SystemAgentRunOptions,
@@ -198,6 +202,8 @@ export interface DaemonApplicationTestSeams<P extends DatabaseProvider = Databas
     readonly now?: () => number
     readonly capacity?: number
   }
+  /** RFC-538: the MCP probe options this application's probes and MCP write clock read (a fake client, a clock). */
+  readonly mcpProbeOptions?: () => McpProbeOptions | undefined
   readonly intentTestDependencies?: {
     readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   }
@@ -365,6 +371,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   }
 
   const identityAccess = core.identityAccess
+  // RFC-538: one MCP probe environment per application — the in-process probe, the probe use cases and the MCP
+  // write clock all read it.
+  const mcpProbe = createMcpProbeEnvironment(input.testSeams?.mcpProbeOptions)
   const observationModules = composeDaemonObservationModules({
     db: input.db,
     appHome: input.appHome,
@@ -374,6 +383,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     daemonActor: core.daemonActor,
     runtimeRegistry: core.runtimeRegistry,
     mcpCatalog: () => mcpCatalog,
+    mcpProbe,
     adapters: {
       systemAgentRunFamily: input.systemAgentRunFamily,
       // RFC-488: a test fixture selects the local family in the daemon phase (the CrewStation family has no fixture
@@ -401,6 +411,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       prepareDelete: (id) => mcpRuntimeTests.prepareMcpDelete(id),
       reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
     },
+    mcpProbe,
   })
   const {
     resourceCatalog,

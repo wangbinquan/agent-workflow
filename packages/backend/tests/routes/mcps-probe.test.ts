@@ -12,15 +12,21 @@
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { __setMcpProbeOptionsForTesting as __setProbeOptionsForTesting } from '../../src/modules/resource-catalog/composition'
 import type {
   OpenClientFn,
   ProbedMcpClient,
+  ProbeOptions,
 } from '../../src/modules/resource-catalog/infrastructure/mcpProbe'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from '../helpers/providerHttpApplicationScope'
 
 const TOKEN = 'rfc030-token-fixture'
+
+// RFC-538: the probe options ride on each application (its MCP probe environment reads them per probe).
+let probeOptions: ProbeOptions | undefined
+function setProbeOptions(options: ProbeOptions | undefined): void {
+  probeOptions = options
+}
 
 function makeFakeClient(opts: { failTools?: boolean } = {}): ProbedMcpClient {
   return {
@@ -70,7 +76,7 @@ async function postProbe(app: Hono, id: string, expectedConfigHash: string): Pro
 }
 
 afterEach(() => {
-  __setProbeOptionsForTesting(undefined)
+  setProbeOptions(undefined)
 })
 
 registerProviderApplication('GET /api/mcps/probes (static route precedence)', (buildHarness) => {
@@ -91,7 +97,7 @@ registerProviderApplication('GET /api/mcps/probes (static route precedence)', (b
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
-    __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
+    setProbeOptions({ openClient: fakeOpener(makeFakeClient()) })
     const probed = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(probed.status).toBe(200)
 
@@ -135,7 +141,7 @@ registerProviderApplication('GET /api/mcps/:id/probe', (buildHarness) => {
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
-    __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
+    setProbeOptions({ openClient: fakeOpener(makeFakeClient()) })
     await postProbe(app, mcp.id, mcp.operationConfigHash)
     const r = await req(app, `/api/mcps/${mcp.id}/probe`)
     expect(r.status).toBe(200)
@@ -157,7 +163,7 @@ registerProviderApplication('POST /api/mcps/:id/probe', (buildHarness) => {
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
-    __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
+    setProbeOptions({ openClient: fakeOpener(makeFakeClient()) })
     const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; mcpName: string }
@@ -176,7 +182,7 @@ registerProviderApplication('POST /api/mcps/:id/probe', (buildHarness) => {
       e.code = 'ENOENT'
       throw e
     }
-    __setProbeOptionsForTesting({ openClient: opener })
+    setProbeOptions({ openClient: opener })
     const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; errorCode: string }
@@ -190,7 +196,7 @@ registerProviderApplication('POST /api/mcps/:id/probe', (buildHarness) => {
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
-    __setProbeOptionsForTesting({
+    setProbeOptions({
       openClient: fakeOpener(makeFakeClient({ failTools: true })),
     })
     const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
@@ -253,7 +259,13 @@ function registerProviderApplication(
 ): void {
   describeEachProviderHttpApplication(
     name,
-    { token: TOKEN, opencodeVersion: '1.14.25', dbVersion: 1, tempPrefix: 'rfc359-w50-http-' },
+    {
+      token: TOKEN,
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      tempPrefix: 'rfc359-w50-http-',
+      mcpProbeOptions: () => probeOptions,
+    },
     (scope) => {
       let app: Hono | undefined
       beforeEach(async () => {
