@@ -18,7 +18,7 @@
 - [x] AC-1 `runtime.ts` 没有模块级状态；读历史的函数都由调用方显式交入；Worker 的初始化消息必须带元数据表
 - [x] AC-2 各处读到的历史与原先相同，迁移 / 恢复 / 备份 / 逻辑复制 / 启动准入的结局不变
 - [x] AC-3 模块级可变单例 39 → 37、计数不升；新增 RFC-549 用例并登记；读旧接口的用例与 e2e 夹具随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -48,7 +48,14 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `85c36f1c0`（实现，父提交是 `fe14649c9`）：exact SHA 主 CI run 45248519934 的 70 个 job 里 68 个通过，包括全部后端分片（含真实
+  PostgreSQL）、Linux / Windows / macOS 的生产二进制构建、ubuntu 的另两个 e2e 分片与 Windows、macOS 的全部 e2e 分片。红的是
+  `Playwright e2e (ubuntu-24.04 shard 2/3)`：`e2e/rfc490-mindmap-guided-journey.spec.ts:180` 两次（含 retry）都在 `pickRootOnCanvas` 到点，
+  对脑图画布的点击一直被大纲头 `.mindmap-outline__header` 拦截指针事件。不是本 RFC：本 RFC 不碰前端与 shared（只改后端与两个 epoch-2 升级
+  e2e 夹具，只有 rfc319 的两个 spec 用它们）；同一 SHA 的 Windows 3/4 与 macOS 3/4 分片同一用例通过；前三个提交的同一分片通过。已记入
+  `docs/audit-backlog.md`，未重跑；`CI required` 随之红。同一提交触发的 windows-platform 与 maintenance-soak-nightly 通过。
+- 落档提交 `fe14649c9`（RFC-548 转 Done、RFC-549 落档，只改文档）：主 CI run 45241220793 的 70 个 job 里 68 个通过，红的只有 Markdown
+  链接检查（他人文档 RFC-378 `research.md` 的两条外站链接 503，待用户决定的那一项）与 `CI required`；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

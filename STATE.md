@@ -1,4 +1,15 @@
-## 2026-11-23 RFC-549 schema 历史运行时由组合根显式交给 platform（In Progress；`design/RFC-549-schema-history-runtime-explicit/`）
+## 2026-11-23 RFC-550 十个 context 的未消费 public 符号清零（In Progress；`design/RFC-550-public-unconsumed-sweep-ten-contexts/`）
+
+- **来由**：S9（public 合同收敛）第 3 项“未消费 public 符号清零”的第六步。HEAD `85c36f1c0` 的架构报告还列 88 个、分布在 12 个 context；本 RFC
+  处理其中 10 个 context 的 71 个，identity-access（9）与 source-control（8）多是凭据与身份面的端口，另立后继。用户 2026-11-02「好，你继续推进
+  RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照
+  最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：沿用 RFC-480 的撤出规则——转出删掉、使用方改取定义处；直接声明在 public、只有本模块或用例在用的按内容挪进模块内部各层；谁都
+  不用的删除；撤出 → 复采 → 再撤，迭代到十个 context 为 0；十个 context 的减速带上限降到 0、source-control 9 → 8；新增 RFC-550 用例。
+- **不做**：identity-access 与 source-control 的未消费符号；S9 的 public 类型污染清单与跨 context 内部文件对。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-549 转 Done 同一提交），实现与验证后再提交。
+
+## 2026-11-23 RFC-549 schema 历史运行时由组合根显式交给 platform（Done；`design/RFC-549-schema-history-runtime-explicit/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第十五步，拆 RFC-546 “可迁移”一类的最后 2 条：platform 的 schema 历史登记（`binding` 与
   `registerSchemaHistoryRuntime`）。bootstrap 在模块求值时登记、约 30 处读取靠 import 顺序碰运气（RFC-540 的 Worker 用例不带历史也能过，靠的是
@@ -21,6 +32,10 @@
   本就拒收），补了“不是数组也被拒收”。tsc 0 错，eslint / promises / prettier 无告警；1,956 个用例文件（约三分之二）里 1,953 个通过，
   余下三个是上面两条锁与要真实 git 历史的 `rfc321`（对照导出同样红、主树里通过），改后复跑通过；六种变异都被认出；架构报告模块级可变
   单例 39 → 37、门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI 68 / 70（run 45248519934）：后端全部分片（含真实 PostgreSQL）、Linux / Windows / macOS 的构建与 Windows、macOS 的
+  e2e 通过；红的是 ubuntu e2e 2/3 分片里 `rfc490-mindmap-guided-journey` 的画布点击两次都被大纲头拦截（同一 SHA 的 Windows 与 macOS 分片
+  同一用例通过，前三个提交同一分片通过，本 RFC 不碰前端，已记入 `docs/audit-backlog.md`），不是本 RFC，未重跑，`CI required` 随之红；
+  windows-platform 与 maintenance-soak-nightly 通过。落档提交 `fe14649c9` 主 CI 68 / 70（只有他人文档 RFC-378 的外站 503）。
 
 ## 2026-11-23 RFC-548 source-control 的守护进程级状态归实例（Done；`design/RFC-548-source-control-daemon-state/`）
 

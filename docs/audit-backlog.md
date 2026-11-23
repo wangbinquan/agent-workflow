@@ -5766,6 +5766,19 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办：先在用例里把子进程的原始 stdout / stderr 与退出码随失败一起打印（确认是半行输出还是进程被杀），再决定是给 readiness 改成按行协议、
   还是给 barrier 加超时后的诊断转储。
 
+## 脑图引导旅程 e2e：`rfc490-mindmap-guided-journey` 的画布点击被大纲头拦截（2026-11-23 首见，CI 偶发，未处置）
+
+- 现象：主 CI run 45248519934（`85c36f1c0`，RFC-549 实现）的 Playwright e2e ubuntu 2/3 分片里，
+  `e2e/rfc490-mindmap-guided-journey.spec.ts:180`「first-round mindmap: reasons in the side panel, two skips, …」两次（含 retry #1）都在
+  `pickRootOnCanvas`（143 行的 `toPass` 20 s 到点）失败：对 `getByRole('img', { name: 'Clarification mindmap' })` 的点击一直被
+  `nav[aria-label="Question outline"]` 里的 `.mindmap-outline__header` 拦截指针事件（`locator.click: Timeout 15000ms exceeded`）。同分片
+  `rfc372-mindmap.spec.ts:315` 记 flaky（retry 通过），其余 166 例通过。
+- 归因：与该提交无关——RFC-549 只改后端 schema 历史运行时的接线与两个 epoch-2 升级 e2e 夹具（只有 rfc319 的两个 spec 用），没有改前端与
+  shared；同一 SHA 的 Windows 3/4 与 macOS 3/4 分片同一用例通过；前三个提交（`d60586a26`、`9612c16e6`、`fe14649c9`）的 ubuntu 2/3 分片通过。
+  按「flaky 不能掩盖红 case」不重跑追绿，如实记录；归属不明（记录它的会话没有改过脑图前端）。
+- 待办：先核实机制（ubuntu 视口下大纲头与画布在点击坐标处重叠，还是布局未稳定就点击），再决定修测试（点击前等布局稳定、改点画布可见
+  区内的坐标）还是修布局。
+
 ## system-mock 网关的控制请求在本机并发负载下被对端重置：`rfc310-digital-employee-system-mock-e2e`（2026-11-11 首见，本机，未处置）
 
 - 现象：RFC-483 集中验证时，本机全量 SQLite（6 个 worker）与只放宽时限的副本批次（3 个 worker）里这条用例两次都红在
