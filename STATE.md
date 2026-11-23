@@ -1,3 +1,18 @@
+## 2026-11-23 RFC-544 演示种子与数字员工代理模板迁出 services/（In Progress；`design/RFC-544-demo-seed-and-agent-templates-out-of-services/`）
+
+- **来由**：RFC-294 plan §4.7（W9-D 余项的成批方式）“其余”一族的第二步。`services/` 余 6 个文件，其中首启示例编排（`demoSeed.ts`，owner
+  bootstrap）与开发数字员工的内置代理模板（`digitalEmployeeAgentTemplates.ts`：旧版模板定义、工具展示、升级映射与启动对齐用例）已没有理由
+  留在那里；V2 模板的数据声明又写在 development-automation 的 `public/participants.ts` 里，唯一的生产使用方就是这个 services 文件。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10
+  「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：演示种子迁为 `bootstrap/demoSeed.ts`；代理模板按内容迁入 development-automation（V2 与旧版数据、工具展示、升级映射与配置进
+  domain，对齐与列出用例进 application），`public/participants.ts` 只转出、bootstrap 经 public 取用；owner 取 development-automation 而非 plan
+  记的 digital-employee（模板是开发数字员工的内置代理，放进 digital-employee 要新增反方向的边）。`services/` 6 → 4；新增 RFC-544 用例。
+- **不做**：`services/codeRoundContract.ts`（W4-E8）与 git 一族（W5）；模板内容、对齐规则与示例数据不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已在
+  本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
 ## 2026-11-23 RFC-543 数据库句柄上下文只记在句柄上（Withdrawn；`design/RFC-543-database-handle-context-registry/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第十一步。provider 构造数据库时把句柄上下文（表集、引擎能力、提交后事件泵槽、整文件快照计数）交给
