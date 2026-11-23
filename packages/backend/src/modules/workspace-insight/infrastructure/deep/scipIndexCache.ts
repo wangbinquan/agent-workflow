@@ -196,14 +196,3 @@ export class ScipIndexCache implements ScipIndexAnswers {
     return { entries: this.entries.size, totalWeight: this.totalWeight }
   }
 }
-
-/** Daemon-scoped singleton (routes construct services per request). */
-let singleton: ScipIndexCache | null = null
-export function scipIndexCache(deps?: IndexCacheDeps): ScipIndexCache {
-  if (singleton === null) singleton = new ScipIndexCache(deps)
-  return singleton
-}
-/** Test seam — drop the singleton between tests. */
-export function resetScipIndexCache(): void {
-  singleton = null
-}

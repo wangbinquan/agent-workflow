@@ -10,20 +10,23 @@
 
 import type { StructuralDiff } from '@agent-workflow/shared'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/public/participants'
-import type { DeepDeps } from '../../application/ports/structuralDeepIndexing'
+import type { DeepDeps, ScipIndexAnswers } from '../../application/ports/structuralDeepIndexing'
 import { preciseImpactFromBaseline } from '../../domain/deep/deepImpact'
 import { DeepUnavailableError, type DeepDegradedReason } from '../../domain/deep/deepIndexing'
 import { INDEXER_SPECS, indexersForFiles } from '../../domain/deep/indexers'
 import { mergeScipGraphs, parseScip, ScipParseError, type ScipGraph } from '../../domain/deep/scip'
 import { probeIndexer as defaultProbe } from './indexerProbe'
 import { runIndexer as defaultRun } from './indexerRunner'
-import { scipIndexCache } from './scipIndexCache'
 
-export async function computeDeepStructuralDiff(args: {
-  baseline: StructuralDiff
-  worktreePath: string
-  deps: DeepDeps
-}): Promise<StructuralDiff> {
+/** RFC-547: `daemonCache` is the composed module's index cache (shared with code intel); a caller's own cache wins. */
+export async function computeDeepStructuralDiff(
+  args: {
+    baseline: StructuralDiff
+    worktreePath: string
+    deps: DeepDeps
+  },
+  daemonCache: ScipIndexAnswers,
+): Promise<StructuralDiff> {
   const { baseline, worktreePath, deps } = args
   const probe = deps.probeIndexer ?? defaultProbe
   const run = deps.runIndexer ?? defaultRun
@@ -42,7 +45,7 @@ export async function computeDeepStructuralDiff(args: {
     deps.probeIndexer === undefined &&
     deps.runIndexer === undefined
   ) {
-    const cache = deps.cacheScope.cache ?? scipIndexCache()
+    const cache = deps.cacheScope.cache ?? daemonCache
     const snapshotDigest = await (deps.snapshotDigest?.() ??
       composeLocalRepositoryRevisionContent().bind(worktreePath).snapshotDigest())
     const graphs: ScipGraph[] = []

@@ -44,8 +44,8 @@ import {
   buildNarrativeInput as buildNarrativeInputWithPort,
   buildNarrativePrompt,
   extractJsonObject,
+  createChangeNarrativeState,
   getChangeNarrativeStatus as getChangeNarrativeStatusInStore,
-  resetChangeNarrativeStateForTests,
 } from '../src/modules/workspace-insight/application/changeNarrative'
 import { composeLocalCodeReviewArtifacts } from '../src/modules/workspace-insight/composition/codeReviewArtifacts'
 import { localCodeReviewReads } from './helpers/workspaceInsightReads'
@@ -68,8 +68,10 @@ import { createUser } from './helpers/userFixture'
 const buildNarrativeInput = (db: PersistenceDb, task: Task) =>
   buildNarrativeInputWithPort(localCodeReviewReads(createTaskCodeWorkspaceQueries(db)), task)
 // RFC-453: the artifact store is a required parameter; these tests read the standalone appHome files.
+// RFC-547: the generation state belongs to the composed module; each test gets a fresh one (afterEach).
+let narrativeState = createChangeNarrativeState()
 const getChangeNarrativeStatus = (taskId: string) =>
-  getChangeNarrativeStatusInStore(taskId, composeLocalCodeReviewArtifacts())
+  getChangeNarrativeStatusInStore(narrativeState, taskId, composeLocalCodeReviewArtifacts())
 
 let home: string
 beforeAll(() => {
@@ -81,7 +83,7 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true })
 })
 afterEach(() => {
-  resetChangeNarrativeStateForTests()
+  narrativeState = createChangeNarrativeState()
 })
 
 const dirs: string[] = []
@@ -290,6 +292,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
   function deps(db: PersistenceDb, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
     const runtimes = runtimeRegistryPersistence(db)
     const base: ChangeNarrativeDeps = {
+      state: narrativeState,
       workspace: localCodeReviewReads(createTaskCodeWorkspaceQueries(db)),
       async requireMember(actor, taskId) {
         const { tasks } = tablesOf(db)
@@ -362,6 +365,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     })
     await triggerSelectedNarrative(
       {
+        state: original.state,
         workspace: original.workspace,
         async resolveRuntime(input) {
           const profile = await original.resolveRuntime(input)
@@ -431,6 +435,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     const trigger = () =>
       triggerSelectedNarrative(
         {
+          state: original.state,
           workspace: original.workspace,
           async resolveRuntime(input) {
             const profile = await original.resolveRuntime(input)
@@ -661,6 +666,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         }
       await triggerSelectedNarrative(
         {
+          state: original.state,
           workspace: original.workspace,
           async resolveRuntime(input) {
             return binding.bindRuntime(await original.resolveRuntime(input))

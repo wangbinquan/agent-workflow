@@ -25,12 +25,8 @@ import {
   composeTaskWorkspaceInsight,
 } from '@/modules/workspace-insight/composition'
 import { EXT_RESOLUTION, resolveLang } from '@/modules/workspace-insight/domain/lang/languages'
-import {
-  resetScipIndexCache,
-  scipIndexCache,
-} from '@/modules/workspace-insight/infrastructure/deep/scipIndexCache'
+import { ScipIndexCache } from '@/modules/workspace-insight/infrastructure/deep/scipIndexCache'
 import type { CodeReviewArtifactStore } from '@/modules/workspace-insight/public/types'
-import { resetChangeNarrativeStateForTests } from '@/modules/workspace-insight/application/changeNarrative'
 import { compareNodeRunsForTimeline } from '@/modules/task-execution/public/queries'
 import { compareNodeRunsForTimeline as declared } from '@/modules/task-execution/application/reviewRoundTiming'
 import type {
@@ -309,7 +305,6 @@ describe('RFC-453 —— 合同装配', () => {
   test('合同的方法落到装配时给的那批对象上', async () => {
     const { calls, narrative, input } = fakeInputs()
     const insight = composeTaskWorkspaceInsight(input)
-    resetChangeNarrativeStateForTests()
     expect(await insight.changeNarrativeStatus('t-status')).toEqual({ status: 'ready', narrative })
     await expect(
       insight.structuralDiff('t-diff', 'task', undefined, { mode: 'baseline' }),
@@ -345,17 +340,13 @@ describe('RFC-453 —— 合同装配', () => {
 })
 
 describe('RFC-453 —— 深度索引端口', () => {
-  test('每次现取索引缓存单例；清空后拿到新实例', () => {
-    resetScipIndexCache()
+  // RFC-547: the cache is built by the composition, not a module singleton.
+  test('同一次组合共用一份索引缓存；两次组合各有各的', () => {
     const deep = composeStructuralDeepIndexing()
     const first = deep.indexCache()
-    expect(first).toBe(scipIndexCache())
+    expect(first).toBeInstanceOf(ScipIndexCache)
     expect(deep.indexCache()).toBe(first)
-    resetScipIndexCache()
-    const second = deep.indexCache()
-    expect(second).not.toBe(first)
-    expect(second).toBe(scipIndexCache())
-    resetScipIndexCache()
+    expect(composeStructuralDeepIndexing().indexCache()).not.toBe(first)
   })
 })
 

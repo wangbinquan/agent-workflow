@@ -11,6 +11,7 @@ import type { TaskWorktreeLocator } from '@/modules/task-execution/public/querie
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import { getCallTargets } from '../application/callGraph/callTargets'
 import {
+  createChangeNarrativeState,
   getChangeNarrativeStatus,
   triggerChangeNarrative,
   type ChangeNarrativeDeps,
@@ -40,13 +41,17 @@ export function composeTaskWorkspaceInsight(input: {
     artifacts: input.artifacts,
     deep: composeStructuralDeepIndexing(),
   }
+  // RFC-547: one generation state per composed module (the daemon composes it once).
+  const narrativeState = createChangeNarrativeState()
   const insight: TaskWorkspaceInsight = {
     structuralDiff: (taskId, scope, nodeRunId, options) =>
       getTaskStructuralDiff(reads, taskId, scope, nodeRunId, options),
-    changeNarrativeStatus: (taskId) => getChangeNarrativeStatus(taskId, input.artifacts),
+    changeNarrativeStatus: (taskId) =>
+      getChangeNarrativeStatus(narrativeState, taskId, input.artifacts),
     triggerChangeNarrative: (task, runtime) =>
       triggerChangeNarrative(
         {
+          state: narrativeState,
           workspace: reads,
           resolveRuntime: input.narrative.resolveRuntime,
           systemAgents: input.narrative.systemAgents,

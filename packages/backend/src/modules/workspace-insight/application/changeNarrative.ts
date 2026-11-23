@@ -53,17 +53,17 @@ interface GeneratingState {
   startedAt: number
   promise: Promise<void>
 }
-const generating = new Map<string, GeneratingState>()
-const failures = new Map<string, { message: string; at: number }>()
-/** Trigger-phase single-flight: concurrent POSTs during the (async) input
- *  validation window await the SAME promise and get the same startedAt. */
-const inflightTrigger = new Map<string, Promise<{ status: 'generating'; startedAt: number }>>()
+/** RFC-547: the in-memory generation state of one composed workspace-insight (the daemon composes it once). */
+export interface ChangeNarrativeState {
+  readonly generating: Map<string, GeneratingState>
+  readonly failures: Map<string, { message: string; at: number }>
+  /** Trigger-phase single-flight: concurrent POSTs during the (async) input
+   *  validation window await the SAME promise and get the same startedAt. */
+  readonly inflightTrigger: Map<string, Promise<{ status: 'generating'; startedAt: number }>>
+}
 
-/** Test hook: forget all in-memory generation state. */
-export function resetChangeNarrativeStateForTests(): void {
-  generating.clear()
-  failures.clear()
-  inflightTrigger.clear()
+export function createChangeNarrativeState(): ChangeNarrativeState {
+  return { generating: new Map(), failures: new Map(), inflightTrigger: new Map() }
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +286,8 @@ export function extractJsonObject(text: string): unknown | null {
 // ---------------------------------------------------------------------------
 
 export interface ChangeNarrativeDeps {
+  /** RFC-547: the composed module's generation state (single-flight and failure memory). */
+  state: ChangeNarrativeState
   /** The code-review reads the narrative input and its artifact are computed / stored with. */
   workspace: CodeReviewReads
   /** Provider-neutral runtime profile resolved by the runtime-registry owner. */
@@ -312,14 +314,15 @@ export interface ChangeNarrativeDeps {
 }
 
 export async function getChangeNarrativeStatus(
+  state: ChangeNarrativeState,
   taskId: string,
   artifacts: CodeReviewArtifactStore,
 ): Promise<ChangeNarrativeStatus | null> {
-  const gen = generating.get(taskId)
+  const gen = state.generating.get(taskId)
   if (gen !== undefined) return { status: 'generating', startedAt: gen.startedAt }
   const stored = await artifacts.readNarrative(taskId)
   if (stored !== null) return { status: 'ready', narrative: stored }
-  const failed = failures.get(taskId)
+  const failed = state.failures.get(taskId)
   if (failed !== undefined && Date.now() - failed.at < FAILURE_TTL_MS) {
     return { status: 'failed', message: failed.message }
   }
@@ -337,9 +340,9 @@ export async function triggerChangeNarrative(
   deps: ChangeNarrativeDeps,
   task: Task,
 ): Promise<{ status: 'generating'; startedAt: number }> {
-  const existing = generating.get(task.id)
+  const existing = deps.state.generating.get(task.id)
   if (existing !== undefined) return { status: 'generating', startedAt: existing.startedAt }
-  const inflight = inflightTrigger.get(task.id)
+  const inflight = deps.state.inflightTrigger.get(task.id)
   if (inflight !== undefined) return inflight
 
   const trigger = (async () => {
@@ -358,18 +361,18 @@ export async function triggerChangeNarrative(
     const promise = runGeneration(deps, task, input, attempt)
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
-        failures.set(task.id, { message, at: Date.now() })
+        deps.state.failures.set(task.id, { message, at: Date.now() })
         deps.log?.warn('change-narrative generation failed', { taskId: task.id, message })
       })
       .finally(() => {
-        generating.delete(task.id)
+        deps.state.generating.delete(task.id)
       })
-    generating.set(task.id, { startedAt, promise })
-    failures.delete(task.id)
+    deps.state.generating.set(task.id, { startedAt, promise })
+    deps.state.failures.delete(task.id)
     return { status: 'generating' as const, startedAt }
   })()
-  inflightTrigger.set(task.id, trigger)
-  trigger.finally(() => inflightTrigger.delete(task.id)).catch(() => {})
+  deps.state.inflightTrigger.set(task.id, trigger)
+  trigger.finally(() => deps.state.inflightTrigger.delete(task.id)).catch(() => {})
   return trigger
 }
 

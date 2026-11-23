@@ -5,6 +5,7 @@
 // into a clean baseline fallback). The baseline payload is always preserved.
 
 import { describe, expect, test } from 'bun:test'
+import { ScipIndexCache } from '../src/modules/workspace-insight/infrastructure/deep/scipIndexCache'
 import { computeDeepStructuralDiff } from '../src/modules/workspace-insight/infrastructure/deep/deepStructuralDiff'
 import { DeepUnavailableError } from '../src/modules/workspace-insight/domain/deep/deepIndexing'
 import { encodeScipFixture } from '../src/modules/workspace-insight/domain/deep/scip'
@@ -73,11 +74,14 @@ describe('computeDeepStructuralDiff', () => {
         occurrences: [{ symbol: 'S#charge', range: [8, 4, 10], isDefinition: false }],
       },
     ])
-    const out = await computeDeepStructuralDiff({
-      baseline: baselineDiff(),
-      worktreePath: '/wt',
-      deps: { probeIndexer: available, runIndexer: async () => ({ ok: true, scipBytes }) },
-    })
+    const out = await computeDeepStructuralDiff(
+      {
+        baseline: baselineDiff(),
+        worktreePath: '/wt',
+        deps: { probeIndexer: available, runIndexer: async () => ({ ok: true, scipBytes }) },
+      },
+      new ScipIndexCache(),
+    )
     expect(out.engine).toBe('deep')
     expect(out.degradedReason).toBeUndefined()
     expect(out.files).toHaveLength(1) // baseline payload preserved
@@ -137,17 +141,20 @@ describe('computeDeepStructuralDiff', () => {
         occurrences: [{ symbol: 'PY#bar', range: [3, 0, 5], isDefinition: false }],
       },
     ])
-    const out = await computeDeepStructuralDiff({
-      baseline,
-      worktreePath: '/wt',
-      deps: {
-        probeIndexer: available,
-        runIndexer: async ({ spec }) => ({
-          ok: true,
-          scipBytes: spec.id === 'scip-typescript' ? tsBytes : pyBytes,
-        }),
+    const out = await computeDeepStructuralDiff(
+      {
+        baseline,
+        worktreePath: '/wt',
+        deps: {
+          probeIndexer: available,
+          runIndexer: async ({ spec }) => ({
+            ok: true,
+            scipBytes: spec.id === 'scip-typescript' ? tsBytes : pyBytes,
+          }),
+        },
       },
-    })
+      new ScipIndexCache(),
+    )
     expect(out.engine).toBe('deep')
     const callerFiles = out.impact.flatMap((i) => i.callers.map((c) => c.filePath)).sort()
     expect(callerFiles).toEqual(['caller.ts', 'helper.py']) // merged across both indexers
@@ -155,11 +162,14 @@ describe('computeDeepStructuralDiff', () => {
 
   test('no indexer available → indexer-missing', async () => {
     await expectReason(
-      computeDeepStructuralDiff({
-        baseline: baselineDiff(),
-        worktreePath: '/wt',
-        deps: { probeIndexer: async () => ({ available: false, bin: 'x', version: null }) },
-      }),
+      computeDeepStructuralDiff(
+        {
+          baseline: baselineDiff(),
+          worktreePath: '/wt',
+          deps: { probeIndexer: async () => ({ available: false, bin: 'x', version: null }) },
+        },
+        new ScipIndexCache(),
+      ),
       'indexer-missing',
     )
   })
@@ -168,52 +178,64 @@ describe('computeDeepStructuralDiff', () => {
     const noLang = baselineDiff()
     noLang.files[0]!.filePath = 'data.bin' // no indexer ext
     await expectReason(
-      computeDeepStructuralDiff({ baseline: noLang, worktreePath: '/wt', deps: {} }),
+      computeDeepStructuralDiff(
+        { baseline: noLang, worktreePath: '/wt', deps: {} },
+        new ScipIndexCache(),
+      ),
       'indexer-missing',
     )
   })
 
   test('indexer exits non-zero → build-failed', async () => {
     await expectReason(
-      computeDeepStructuralDiff({
-        baseline: baselineDiff(),
-        worktreePath: '/wt',
-        deps: {
-          probeIndexer: available,
-          runIndexer: async () => ({ ok: false, reason: 'build-failed' }),
+      computeDeepStructuralDiff(
+        {
+          baseline: baselineDiff(),
+          worktreePath: '/wt',
+          deps: {
+            probeIndexer: available,
+            runIndexer: async () => ({ ok: false, reason: 'build-failed' }),
+          },
         },
-      }),
+        new ScipIndexCache(),
+      ),
       'build-failed',
     )
   })
 
   test('indexer times out → timeout', async () => {
     await expectReason(
-      computeDeepStructuralDiff({
-        baseline: baselineDiff(),
-        worktreePath: '/wt',
-        deps: {
-          probeIndexer: available,
-          runIndexer: async () => ({ ok: false, reason: 'timeout' }),
+      computeDeepStructuralDiff(
+        {
+          baseline: baselineDiff(),
+          worktreePath: '/wt',
+          deps: {
+            probeIndexer: available,
+            runIndexer: async () => ({ ok: false, reason: 'timeout' }),
+          },
         },
-      }),
+        new ScipIndexCache(),
+      ),
       'timeout',
     )
   })
 
   test('garbage SCIP output → scip-parse-error', async () => {
     await expectReason(
-      computeDeepStructuralDiff({
-        baseline: baselineDiff(),
-        worktreePath: '/wt',
-        deps: {
-          probeIndexer: available,
-          runIndexer: async () => ({
-            ok: true,
-            scipBytes: Uint8Array.from([0x08, 0xff, 0xff, 0xff, 0xff, 0xff]),
-          }),
+      computeDeepStructuralDiff(
+        {
+          baseline: baselineDiff(),
+          worktreePath: '/wt',
+          deps: {
+            probeIndexer: available,
+            runIndexer: async () => ({
+              ok: true,
+              scipBytes: Uint8Array.from([0x08, 0xff, 0xff, 0xff, 0xff, 0xff]),
+            }),
+          },
         },
-      }),
+        new ScipIndexCache(),
+      ),
       'scip-parse-error',
     )
   })

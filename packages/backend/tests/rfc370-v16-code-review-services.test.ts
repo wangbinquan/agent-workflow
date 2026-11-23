@@ -31,7 +31,10 @@ import type {
 import { getTaskStructuralDiff } from '@/modules/workspace-insight/application/structuralDiff/taskStructuralDiff'
 import { getTaskFileContent } from '@/modules/workspace-insight/application/fileContent'
 import { getCallTargets } from '@/modules/workspace-insight/application/callGraph/callTargets'
-import { getChangeNarrativeStatus } from '@/modules/workspace-insight/application/changeNarrative'
+import {
+  createChangeNarrativeState,
+  getChangeNarrativeStatus,
+} from '@/modules/workspace-insight/application/changeNarrative'
 import { composeStructuralDeepIndexing } from '@/modules/workspace-insight/composition'
 
 const TASK = '01V16CODEREVIEWSERVICES000'
@@ -304,7 +307,7 @@ describe('RFC-370 §10 V16 file content, call targets and narrative through the 
       generatedAt: 1,
       inputDigest: 'digest',
     }
-    const status = await getChangeNarrativeStatus(TASK, {
+    const status = await getChangeNarrativeStatus(createChangeNarrativeState(), TASK, {
       ...artifactStore().store,
       readNarrative: async (taskId) => (taskId === TASK ? narrative : null),
     })

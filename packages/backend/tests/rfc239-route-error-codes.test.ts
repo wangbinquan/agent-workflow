@@ -8,7 +8,6 @@ import { taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { resetChangeNarrativeStateForTests } from '../src/modules/workspace-insight/application/changeNarrative'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -16,7 +15,6 @@ const TOKEN = 'a'.repeat(64)
 
 afterEach(() => {
   resetBroadcastersForTests()
-  resetChangeNarrativeStateForTests()
 })
 
 async function seedTask(db: PersistenceDb, lineage?: typeof providerTaskLineage): Promise<string> {

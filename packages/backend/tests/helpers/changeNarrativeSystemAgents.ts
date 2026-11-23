@@ -36,7 +36,14 @@ export async function triggerChangeNarrative(
 ): ReturnType<typeof triggerSelectedNarrative> {
   const binding = composeLocalSystemAgentRunFamilySelection({ appHome })
   const descriptors: PropertyDescriptorMap = {}
-  for (const field of ['workspace', 'runtimeName', 'defaultRuntime', 'now', 'log'] as const) {
+  for (const field of [
+    'state',
+    'workspace',
+    'runtimeName',
+    'defaultRuntime',
+    'now',
+    'log',
+  ] as const) {
     descriptors[field] = { enumerable: true, get: () => deps[field] }
   }
   const selected = Object.defineProperties<object>(
