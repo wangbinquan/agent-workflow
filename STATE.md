@@ -1,4 +1,17 @@
-## 2026-11-23 RFC-547 workspace-insight 的守护进程级状态归组合根构造的实例（In Progress；`design/RFC-547-workspace-insight-daemon-state/`）
+## 2026-11-23 RFC-548 source-control 的守护进程级状态归实例（In Progress；`design/RFC-548-source-control-daemon-state/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第十四步，拆 RFC-546 “可迁移”一类里属于 source-control 的 4 条：仓库批量导入的跨批次信号量
+  （2 条，连同模块级批次表），切面缓存的全进程代次与镜像缓存的在途页读取合并表。批量导入由三处装配点各自 import、靠同一份模块状态碰面；
+  读缓存的失效按进程而不是按数据库计。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进
+  RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`createRepositoryBatchImports()` 由 daemon 应用的组合构造一份，交给 HTTP 操作、实时策略的发起者查询与会话的回收计时器；platform
+  的句柄上下文多一格按键的模块状态，SQL 存储在其中放按库的切面代次与在途页读取合并器；删去模块级状态与重置 / 失效函数；新增 RFC-548 用例。
+- **不做**：schema 历史运行时的登记（另立）；批量导入的 WebSocket 广播、切面缓存的有效期与页面形状不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-547 转 Done 同一提交），实现与验证后再提交。独立对账
+  （plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-23 RFC-547 workspace-insight 的守护进程级状态归组合根构造的实例（Done；`design/RFC-547-workspace-insight-daemon-state/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第十三步，拆 RFC-546 “可迁移”一类里属于 workspace-insight 的 3 条：SCIP 索引缓存的模块级单例与重置
   （深度结构 diff 在调用方没带缓存时回落到它，这正是实际走的路），变更叙述的模块级在途表与重置。两份状态都只服务一个守护进程，而
@@ -16,6 +29,10 @@
 - **集中验证**（基于 `d47b73c57`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准；没有查出本人缺陷。tsc 0 错，eslint / promises /
   prettier 无告警；语义层 154 个文件全部通过；三种变异都被认出；架构报告模块级可变单例 46 → 43、计数不升。实现门 PASS（本会话按路径限定
   自审，只审功能）。
+- **CI**：实现提交主 CI 64 / 70（run 45211994242）：后端全部分片（含真实 PostgreSQL）与 Linux / Windows 构建通过；macOS 的构建 job 排队
+  37 分钟没有分到 runner、没有任何步骤即被取消，四个 macOS e2e 分片两个同样没分到 runner、两个因缺构建产物失败，按环境性红记录、未重跑
+  （后继提交的 CI 作 macOS 的后继证据）；windows-platform 通过。落档提交 `d47b73c57` 主 CI 70 / 70。RFC-545 转 Done、RFC-546 落档的
+  `fc5d5c9c0` 主 CI 64 / 70，macOS 同一形态（构建 job 没有步骤、e2e 缺产物），未重跑。
 
 ## 2026-11-23 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（Draft，待用户确认；`design/RFC-546-module-singleton-process-exceptions/`）
 
@@ -51,7 +68,7 @@
   认出；架构报告模块级可变单例 48 → 46、计数不升。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **落地**：`d204218c2`（115 个文件；父提交是 `d00cf2c72`）。
 - **CI**：实现提交主 CI 64 / 70（run 45200208626）：后端全部分片（含真实 PostgreSQL）与 Linux / Windows 构建通过；macOS 的构建 job 没有真正开跑、
-  15 分钟时被取消，四个 macOS e2e 分片因缺构建产物失败，按环境性红记录、未重跑（后继提交的 CI 作 macOS 的后继证据）；windows-platform 与
+  15 分钟时被取消，四个 macOS e2e 分片因缺构建产物失败，按环境性红记录、未重跑（后继 `d47b73c57` 的主 CI 全绿，作 macOS 的后继证据）；windows-platform 与
   maintenance-soak-nightly 通过。落档提交 `d00cf2c72` 主 CI 68 / 70（Markdown 链接检查红在他人文档的外站 503，见 plan）；RFC-544 转 Done 的
   `3f236a701` 主 CI 里 macOS e2e 分片 3/4 撞 20 分钟时限（已记入 `docs/audit-backlog.md`）。都未重跑。
 - **下一步**：S12 第 4 项余 46 条：可迁移 9 条（schema 历史运行时的登记 2 条、守护进程级服务状态 7 条）继续拆；进程级 28 条与凭据 / 访问 /
