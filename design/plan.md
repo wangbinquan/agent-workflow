@@ -574,7 +574,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-541](./RFC-541-maintenance-worker-effect-modules/proposal.md) | 维护 Worker 的效果模块由各自的 Worker 入口交给运行时（RFC-294 S12 第二十二步）：删去平台的 Worker 级效果模块登记表，托管入口改为自己的薄根，把映射 `aw:crewstation-maintenance` 的加载器经效果作用域交给运行时，单机根照旧按模块名加载。无用户可见变化。 | Done |
 | [RFC-542](./RFC-542-persistence-handle-side-tables/proposal.md) | 行规则错误翻译与单行写入的按句柄侧表归各自的句柄（RFC-294 S12 第二十三步）：已套行规则翻译的会话标记与带围栏的单行写入改为记在各自的对象上，删去两张模块级侧表（`boundSessions`、`inserts`）。无用户可见变化。 | Done |
 | [RFC-543](./RFC-543-database-handle-context-registry/proposal.md) | 数据库句柄上下文只记在句柄上（RFC-294 S12 第二十四步）：删去模块级句柄上下文登记表（`contexts`），上下文只记在句柄与原生客户端自己的属性上，不可扩展的句柄在构造时明确报错。无用户可见变化。 | Withdrawn（2026-11-23）：前提不成立——模块表是 RFC-395 T18 X1 为冻结的句柄与客户端保留的身份表，实现未提交 |
-| [RFC-544](./RFC-544-demo-seed-and-agent-templates-out-of-services/proposal.md) | 演示种子与数字员工代理模板迁出 services/（RFC-294 §4.7 其余一族第二步）：`services/demoSeed.ts` 迁为 `bootstrap/demoSeed.ts`；`services/digitalEmployeeAgentTemplates.ts` 与 development-automation `public/participants.ts` 里的 V2 模板声明按内容迁入 development-automation 的 domain 与 application，public 只转出、bootstrap 经 public 取用。`services/` 6 → 4。无用户可见变化。 | In Progress |
+| [RFC-544](./RFC-544-demo-seed-and-agent-templates-out-of-services/proposal.md) | 演示种子与数字员工代理模板迁出 services/（RFC-294 §4.7 其余一族第二步）：`services/demoSeed.ts` 迁为 `bootstrap/demoSeed.ts`；`services/digitalEmployeeAgentTemplates.ts` 与 development-automation `public/participants.ts` 里的 V2 模板声明按内容迁入 development-automation 的 domain 与 application，public 只转出、bootstrap 经 public 取用。`services/` 6 → 4。无用户可见变化。 | Done |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

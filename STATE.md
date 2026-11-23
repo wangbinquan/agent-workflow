@@ -1,4 +1,4 @@
-## 2026-11-23 RFC-544 演示种子与数字员工代理模板迁出 services/（In Progress；`design/RFC-544-demo-seed-and-agent-templates-out-of-services/`）
+## 2026-11-23 RFC-544 演示种子与数字员工代理模板迁出 services/（Done；`design/RFC-544-demo-seed-and-agent-templates-out-of-services/`）
 
 - **来由**：RFC-294 plan §4.7（W9-D 余项的成批方式）“其余”一族的第二步。`services/` 余 6 个文件，其中首启示例编排（`demoSeed.ts`，owner
   bootstrap）与开发数字员工的内置代理模板（`digitalEmployeeAgentTemplates.ts`：旧版模板定义、工具展示、升级映射与启动对齐用例）已没有理由
@@ -21,6 +21,13 @@
   `rfc310-digital-employee-os-architecture` 首批即红，改为新路径后通过。tsc 0 错，eslint / promises / prettier 无告警；按 RFC-533 的口径选出 529 个
   文件，语义层 355 个；撞写死时限的 7 个与对照同时 A/B、在两边放大时限后都全过，`rfc321` 只在导出仓库里红（要 git 历史）、主树 10 / 10，
   没有只在候选上红的用例；五种变异都被认出；架构报告计数不升。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`bbcc840e2`（36 个文件；父提交是 `7604bebbe`）。
+- **CI**：实现提交主 CI 70 / 70（run 45169590551，第 1 次），windows-platform 与 maintenance-soak-nightly 通过；落档提交 `7604bebbe` 主 CI 70 / 70
+  （run 45152098677）。RFC-543 撤回提交 `c953ac2d1` 的主 CI（run 45148076261）里 macOS Playwright e2e 分片 3/4 撞 20 分钟的 job 时限被取消、
+  `CI required` 随之红（只改文档、父提交 70 / 70；`7604bebbe` 是它的后继证据），未重跑。
+- **下一步**：§4.7 “其余”一族余 `codeRoundContract.ts`（代码轮仍是在用功能，随 W4-E8 code-capability 并入 development-automation 一并处理）；
+  git 一族与 `util/git.ts`（W5）；S12 第 4 项可迁移的 9 条（live schema 与 schema 历史运行时的登记、规范 JSON 片段缓存、日志器配置）继续拆，
+  须经用户确认的 30 条见 RFC-543 条目。
 
 ## 2026-11-23 RFC-543 数据库句柄上下文只记在句柄上（Withdrawn；`design/RFC-543-database-handle-context-registry/`）
 

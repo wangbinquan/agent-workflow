@@ -18,7 +18,7 @@
 - [x] AC-1 `services/` 下没有这两个文件；迁入位置与分层按 design §3，bootstrap 只经 public 取用
 - [x] AC-2 内置代理对齐、公开模板列表、工具展示名、升级映射、工具配置与首启示例的结局不变
 - [x] AC-3 新增 RFC-544 用例并登记；钉着旧路径的用例与锁随改；减速带计数不升
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -53,7 +53,13 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `bbcc840e2`（实现，父提交是 `7604bebbe`）：exact SHA 主 CI run 45169590551 的 70 个 job 第 1 次全部通过；同一提交触发的 windows-platform
+  （run 45169590437）与 maintenance-soak-nightly（run 45169590357）通过。
+- RFC-543 的撤回提交 `c953ac2d1`（只改 7 个 Markdown 文件）：主 CI run 45148076261 的 70 个 job 里，macOS 的 Playwright e2e 分片 3/4 运行 20 分
+  19 秒后被取消（该 job 的 `timeout-minutes: 20`；工作流 `cancel-in-progress: false`，不是被后继推送取消），`CI required` 随之红，其余 68 个通过。
+  父提交 `b3181fc02` 70 / 70；这是 runner 偏慢撞 job 时限，与该提交无关；未重跑。后继证据：`c953ac2d1` 是 `7604bebbe` 的祖先，内容原样保留，
+  后者的主 CI 见下条。
+- 本 RFC 的落档提交 `7604bebbe`（只改文档）：主 CI run 45152098677 的 70 个 job 第 1 次全部通过——它包含 `c953ac2d1`，也是后者的后继证据。
 
 ## 实现门（本会话自审，只审功能）
 
