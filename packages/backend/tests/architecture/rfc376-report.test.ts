@@ -365,7 +365,10 @@ describe('RFC-376 committed report contract', () => {
     expect(first.gates['public-surface-deviations']).toEqual(
       [...first.publicSurfaceDeviations].sort(),
     )
-    expect(first.unconsumedPublicSymbols.length).toBeGreaterThan(0)
+    // RFC-551 cleared the last two contexts — the S9 end state — so the section is empty at HEAD and cannot carry the
+    // non-vacuity check any more; it moves to the public surfaces the section is computed from (the per-context split
+    // itself is exercised on fixtures by rfc480 / rfc551).
+    expect(first.publicSurfaces.length).toBeGreaterThan(500)
     const selected = spawnSync('git', ['show', `${SOURCE.sourceSha}:scripts/depcheck.ts`], {
       cwd: ROOT,
       encoding: 'utf8',

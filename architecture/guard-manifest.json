@@ -851,7 +851,7 @@
       "minCorpusFiles": null,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 470
+      "lines": 473
     },
     {
       "id": "rfc376-structural-guards",
