@@ -211,11 +211,12 @@ export function createSchemaRowRuleErrorTranslator(declared: ReadonlyMap<string,
   const codes = new Map(declared)
   return (error: unknown): unknown => mapSchemaRowRuleError(codes, error) ?? error
 }
-const boundSessions = new WeakSet<object>()
+/** RFC-542: a session that already translates row-rule errors carries this mark (on itself, not in a module registry). */
+const rowRulesBound = Symbol('schema-row-rule-errors-bound')
 export function bindSchemaRowRuleErrors(handle: object, codes: ReadonlyMap<string, string>): void {
   const session = (handle as { session?: object }).session
-  if (!session || boundSessions.has(session)) return
-  boundSessions.add(session)
+  if (!session || Object.hasOwn(session, rowRulesBound)) return
+  Object.defineProperty(session, rowRulesBound, { value: true })
   const translate = createSchemaRowRuleErrorTranslator(codes)
   const wrap = (target: object, method: string): void => {
     const object = target as Record<string, unknown>

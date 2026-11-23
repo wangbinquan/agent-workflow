@@ -14,9 +14,21 @@ type SingleInsert = (
   value: Record<string, unknown>,
   fallback: () => WriteResult,
 ) => WriteResult
-const inserts = new WeakMap<object, SingleInsert>()
+/** RFC-542: the fenced single-row insert rides on the root database object itself (not in a module registry) and
+ * answers only for that very object, as an identity-keyed table did. Derived handles (transactions) and wrappers around
+ * the root (a proxy forwards property reads to it) are other objects and keep the ordinary insert. */
+interface SingleInsertSlot {
+  readonly owner: object
+  readonly insert: SingleInsert
+}
+const singleInsertKey = Symbol('persistence-single-insert')
 export function bindSingleInsert(db: object, insert: SingleInsert): void {
-  inserts.set(db, insert)
+  const slot: SingleInsertSlot = Object.freeze({ owner: db, insert })
+  Object.defineProperty(db, singleInsertKey, { value: slot, configurable: true })
+}
+function singleInsertOf(db: object): SingleInsert | undefined {
+  const slot = (db as { [singleInsertKey]?: SingleInsertSlot })[singleInsertKey]
+  return slot?.owner === db ? slot.insert : undefined
 }
 /** The handle is still the native database. Only this terminal opts in to the fenced INSERT. */
 export function insertOne<T extends Table>(
@@ -35,5 +47,5 @@ export function insertOne<T extends Table>(
   value: PersistenceInsertValues<T>,
 ): WriteResult {
   const fallback = () => queryWrite(db.insert(table).values(value))
-  return inserts.get(db)?.(table, value, fallback) ?? fallback()
+  return singleInsertOf(db)?.(table, value, fallback) ?? fallback()
 }
