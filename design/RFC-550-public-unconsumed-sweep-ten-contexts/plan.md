@@ -16,7 +16,7 @@
 - [x] AC-1 十个 context 的未消费 public 符号为 0；撤出的名字不再从它们的 public 导出
 - [x] AC-2 行为不变
 - [x] AC-3 减速带上限随之降低；新增 RFC-550 用例并登记；读旧位置的用例随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -68,7 +68,15 @@ HEAD 的另一份导出。集中验证查出一类本人缺陷（四条源码锁
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `bb34878c7`（实现，父提交是 `fe1db6768`）：exact SHA 主 CI run 45261463884 的 70 个 job 里 66 个通过，包括全部 45 个后端 job（含真实
+  PostgreSQL）、Linux / Windows / macOS 的生产二进制构建、ubuntu 的三个与 Windows 的四个 e2e 分片、macOS 的 2/4 与 3/4。红的都不是本 RFC：
+  `Markdown link check (design/)` 红在他人文档 RFC-378 `research.md` 的两条外站链接 503（待用户决定的那一项）；macOS e2e 1/4 与 4/4 的 e2e 步骤
+  跑了约 18 分钟后被时限取消——任务等不到状态、Playwright 用例到点。那台 runner 整体变慢：4/4 分片里两次都通过的 69 个用例，耗时中位数是
+  `85c36f1c0` 同一分片的 2.1 倍，连只碰前端的编辑器拖拽用例也慢了 4～5 倍；同一份二进制在 Linux、Windows 与 macOS 另两个分片全部通过。
+  `CI required` 随之红。同一提交触发的 windows-platform 通过。都未重跑。
+- 落档提交 `fe1db6768`（RFC-549 转 Done、RFC-550 落档，只改文档）：主 CI run 45258235483 的 70 个 job 里 66 个通过；红的是同一处 503、后端 42/44
+  分片里 `rfc159` 的一例 PostgreSQL 用例 beforeEach 在 5 秒处到点（已记入 `docs/audit-backlog.md`）、macOS e2e 2/4 排了 60 分钟没有分到 runner
+  被取消，以及 `CI required`；都不是本 RFC，未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

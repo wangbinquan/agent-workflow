@@ -5766,6 +5766,16 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办：先在用例里把子进程的原始 stdout / stderr 与退出码随失败一起打印（确认是半行输出还是进程被杀），再决定是给 readiness 改成按行协议、
   还是给 barrier 加超时后的诊断转储。
 
+## run-now 路由门的 PostgreSQL 一例：`rfc159` 的 beforeEach 在 5 秒处到点（2026-11-23 首见，CI 偶发，未处置）
+
+- 现象：主 CI run 45258235483（`fe1db6768`，RFC-549 转 Done 与 RFC-550 落档，只改文档）的后端 42/44 分片里，`RFC-159 T7 — run-now route gate
+  [postgresql] > application lifetime > stranger → 404 (invisible == missing)` 在 5,232 ms 失败：`a beforeEach/afterEach hook timed out for this
+  test`，随后报一条测试之间的未处理错误——夹具正在写入内置代理（`insert into "agent_workflow"."agents"`，`graph-development-clarifier-v1`）时
+  连接已随拆除关闭。同文件其余用例通过。
+- 归因：与该提交无关（只改文档）；形态是 `docs/dev-gotchas.md`「PostgreSQL 夹具的每例开销算在每条用例的 5 秒里」那一类——每例种内置代理
+  的夹具在慢 runner 上越过默认 5 秒。后继提交 `bb34878c7` 的 45 个后端 job 全部通过。按「flaky 不能掩盖红 case」不重跑追绿，如实记录。
+- 待办：给这组 PostgreSQL 用例的 beforeEach 显式预算（与 RFC-395 激活后其他 PG 夹具的做法一致），或把内置代理的种入挪到 `beforeAll`。
+
 ## 脑图引导旅程 e2e：`rfc490-mindmap-guided-journey` 的画布点击被大纲头拦截（2026-11-23 首见，CI 偶发，未处置）
 
 - 现象：主 CI run 45248519934（`85c36f1c0`，RFC-549 实现）的 Playwright e2e ubuntu 2/3 分片里，

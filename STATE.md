@@ -1,4 +1,16 @@
-## 2026-11-23 RFC-550 十个 context 的未消费 public 符号清零（In Progress；`design/RFC-550-public-unconsumed-sweep-ten-contexts/`）
+## 2026-11-23 RFC-551 identity-access 与 source-control 的未消费 public 符号清零（In Progress；`design/RFC-551-public-unconsumed-sweep-identity-source-control/`）
+
+- **来由**：S9 第 3 项“未消费 public 符号清零”的第七步，RFC-550 留下的两个 context：HEAD `bb34878c7` 的架构报告还列 17 个（identity-access 9、
+  source-control 8）。其中两个是判据盲区——public 错误类构造参数属性 `readonly kind` 的类型（`UserAccessErrorKind`、
+  `RepositoryTransportCredentialErrorKind`），报告的类型形状遍历不进构造参数属性，于是被误报。用户 2026-11-02「好，你继续推进RFC294，过程中你以
+  最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，
+  进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：报告的类型形状遍历纳入类的非 private / protected 构造参数属性；其余按 RFC-480 的规则撤出（转出删掉、只有本模块在用的声明按内容
+  挪进模块内部），迭代到两个 context 为 0、全仓为 0；两个减速带上限降到 0；新增 RFC-551 用例。
+- **不做**：S9 的 public 类型污染清单、`public/operations` 的豁免收窄与跨 context 内部文件对；凭据、身份与授权的行为与判定不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-550 转 Done 同一提交），实现与验证后再提交。
+
+## 2026-11-23 RFC-550 十个 context 的未消费 public 符号清零（Done；`design/RFC-550-public-unconsumed-sweep-ten-contexts/`）
 
 - **来由**：S9（public 合同收敛）第 3 项“未消费 public 符号清零”的第六步。HEAD `85c36f1c0` 的架构报告还列 88 个、分布在 12 个 context；本 RFC
   处理其中 10 个 context 的 71 个，identity-access（9）与 source-control（8）多是凭据与身份面的端口，另立后继。用户 2026-11-02「好，你继续推进
@@ -19,6 +31,11 @@
   tsc 0 错，eslint / promises / prettier 无告警；选出 774 个用例文件首轮 770 个通过（红的就是这四条），复跑 787 个 786 个通过（`rfc167` 一例在
   5 秒结算期限处到点——复跑时本会话同时跑 tsc、eslint 与架构报告，负载 19～24；首轮通过、单独再跑 3 次通过）；八种变异都被认出；架构报告
   十个 context 归零、public 面少 118 个、其余门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI 66 / 70（run 45261463884）：全部 45 个后端 job（含真实 PostgreSQL）、三个平台的构建、Linux 与 Windows 的全部 e2e、
+  macOS 的 e2e 2/4 与 3/4 通过；红的是他人文档 RFC-378 的外站 503，与 macOS e2e 1/4、4/4 在一台整体变慢的 runner 上被步骤时限取消（同一分片
+  两次都通过的用例耗时中位数是 `85c36f1c0` 的 2.1 倍，只碰前端的编辑器用例也慢 4～5 倍；同一份二进制在其他平台与分片全部通过），都不是
+  本 RFC，未重跑，`CI required` 随之红；windows-platform 通过。落档提交 `fe1db6768` 主 CI 66 / 70（同一处 503、`rfc159` 一例 PostgreSQL
+  beforeEach 到点——已记入 `docs/audit-backlog.md`、macOS e2e 2/4 没有分到 runner）。
 
 ## 2026-11-23 RFC-549 schema 历史运行时由组合根显式交给 platform（Done；`design/RFC-549-schema-history-runtime-explicit/`）
 
