@@ -24,16 +24,16 @@ import {
 import {
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,
-} from '@/modules/development-automation/public/participants'
+} from '@/modules/development-automation/domain/developmentAgentTemplatesV2'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { digitalEmployeeAgentToolPresentation } from '@/modules/development-automation/domain/legacyDigitalEmployeeAgentTemplates'
 import {
-  digitalEmployeeAgentToolPresentation,
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 
 const NONCE = 'a'.repeat(64)
 

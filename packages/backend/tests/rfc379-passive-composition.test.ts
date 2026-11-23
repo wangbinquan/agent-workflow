@@ -7,13 +7,13 @@ import { composeDigitalEmployeeBuiltinToolCatalog } from '../src/modules/digital
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition/agentTemplateCatalog'
 import { developmentEmployeeTypePackage } from '../src/modules/development-automation/composition/employeeTypePackage'
+import { ensureDigitalEmployeeAgentTemplates } from '../src/modules/development-automation/application/digitalEmployeeAgentTemplates'
 import {
-  ensureDigitalEmployeeAgentTemplates,
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
   digitalEmployeeBuiltinAgentSuccessorId,
   digitalEmployeeBuiltinToolConfiguration,
   digitalEmployeeAgentToolPresentation,
-} from '../src/services/digitalEmployeeAgentTemplates'
+} from '../src/modules/development-automation/domain/legacyDigitalEmployeeAgentTemplates'
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import { lifecycleFixture } from './helpers/daemonLifecycle'

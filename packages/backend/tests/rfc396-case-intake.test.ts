@@ -10,7 +10,7 @@ import { GRAPH_EVENT_SOURCE } from '@/modules/development-automation/application
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { memoryGraphArtifacts } from './helpers/graphDesign'
-import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { ensureDigitalEmployeeAgentTemplates } from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 
 describeEachProvider('RFC-396 durable Case work requests', (harness) => {
   const homes: string[] = []

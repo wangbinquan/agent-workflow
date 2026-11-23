@@ -110,7 +110,7 @@ import {
 import type { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
-import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { ensureDigitalEmployeeAgentTemplates } from '@/modules/development-automation/public/participants'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/modules/integration/composition/webhookDelivery'
@@ -822,7 +822,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       await seedFusionResources(fusionOperations.persistence)
     },
     'demo-seed': async () => {
-      const { seedDemoContent } = await import('@/services/demoSeed')
+      const { seedDemoContent } = await import('./demoSeed')
       const result = await seedDemoContent({
         resourceCatalog: composeDemoResourceCatalogSeedParticipant(input.db),
         codeCapability: composeCodeCapabilityDemoSeedParticipant(input.db),

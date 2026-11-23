@@ -266,7 +266,8 @@ describe('RFC-471 —— 结构同形与依赖方向', () => {
     // Positive controls: the parser sees both re-export lists and plain declarations.
     for (const name of [
       'assertEvidenceStagingFactory',
-      'developmentBuiltinAgentConfigurationV2',
+      // RFC-544: the V2 template declarations left public; a re-exported template name stands in.
+      'digitalEmployeeBuiltinToolConfiguration',
       'EvidenceStagingFactory',
       'DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF',
     ])

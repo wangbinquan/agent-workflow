@@ -236,9 +236,9 @@ describe('RFC-476 —— 两个 services/ 文件不在、零引用', () => {
         [
           '[delete](../../packages/backend/src/services/taskDelete.ts#L91)',
           '[queue](../../packages/backend/src/services/reviewMutationCoordinator.ts)',
-          // RFC-478 retired services/task.ts and RFC-491 moved systemAgentRun.ts; a remaining services/ sibling is the
-          // non-retired control.
-          '[agent](../../packages/backend/src/services/demoSeed.ts)',
+          // RFC-478 retired services/task.ts, RFC-491 moved systemAgentRun.ts and RFC-544 moved demoSeed.ts; a remaining
+          // services/ sibling is the non-retired control.
+          '[agent](../../packages/backend/src/services/gitSubmodule.ts)',
           '`packages/backend/src/services/taskDelete.ts`',
         ].join('\n'),
       ),

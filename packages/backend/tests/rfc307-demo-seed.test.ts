@@ -31,7 +31,7 @@ import {
   DEMO_ROUND_ID,
   DEMO_WORKFLOW_REVIEW_ID,
   seedDemoContent,
-} from '../src/services/demoSeed'
+} from '../src/bootstrap/demoSeed'
 import { lookupStageContract } from '../src/modules/code-capability/domain/capabilityRegistry'
 import { composeCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'

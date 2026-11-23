@@ -57,7 +57,7 @@ import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resourc
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 import {
   addReviewComment,
   submitReviewDecision,

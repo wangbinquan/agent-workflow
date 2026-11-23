@@ -30,6 +30,7 @@
         "bootstrap/maintenanceWorkerGraph.ts -> composition",
         "bootstrap/persistenceSchema.ts -> composition/schema",
         "bootstrap/standalone.ts -> composition",
+        "modules/development-automation/application/digitalEmployeeAgentTemplates.ts -> public/participants",
         "modules/development-automation/application/employeeCaseDetailProjection.ts -> public/types",
         "modules/development-automation/application/employeePlatformWorkItems.ts -> public/types",
         "modules/development-automation/application/employeeTypePackage.ts -> public/types",
@@ -52,8 +53,7 @@
         "modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts -> public/participants",
         "modules/task-execution/application/adapters/reaction-admission-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/adapters/reaction-execution-adapter.ts -> composition/required-ports",
-        "server.ts -> composition",
-        "services/digitalEmployeeAgentTemplates.ts -> public/participants"
+        "server.ts -> composition"
       ]
     },
     "event-center": {

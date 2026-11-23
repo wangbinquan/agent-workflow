@@ -39,7 +39,7 @@ import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resourc
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 import {
   DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,
   DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID,

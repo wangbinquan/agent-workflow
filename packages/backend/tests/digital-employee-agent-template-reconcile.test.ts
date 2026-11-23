@@ -21,11 +21,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { getAgentById, listAgents } from '@/modules/resource-catalog/infrastructure/legacy/agent'
+import { DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS } from '@/modules/development-automation/domain/legacyDigitalEmployeeAgentTemplates'
 import {
-  DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function templateCatalog(db: PersistenceDb) {

@@ -40,11 +40,13 @@ import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resourc
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
+} from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
+import {
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
   digitalEmployeeBuiltinAgentSuccessorId,
   digitalEmployeeBuiltinToolConfiguration,
   digitalEmployeeAgentToolPresentation,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/domain/legacyDigitalEmployeeAgentTemplates'
 import { listAgents } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
 import {

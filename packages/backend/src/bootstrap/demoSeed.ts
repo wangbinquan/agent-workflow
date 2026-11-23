@@ -1,4 +1,5 @@
 // RFC-307 / RFC-349 — provider-neutral, never-fatal first-run demo orchestration.
+// RFC-544: moved from services/; its owner is bootstrap.
 // Each bounded context owns its rows. This file owns only the durable marker
 // and the sample description; it never receives a database client.
 

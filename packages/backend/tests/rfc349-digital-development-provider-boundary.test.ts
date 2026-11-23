@@ -48,7 +48,8 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
       ...['developmentConfig.ts', 'developmentMissions.ts', 'missionInputUploads.ts'].map((name) =>
         join(BACKEND, 'src', 'routes', name),
       ),
-      ...['digitalEmployeeAgentTemplates.ts'].map((name) => join(BACKEND, 'src', 'services', name)),
+      // RFC-544: the template module left services/ for development-automation's domain and application, which
+      // businessFiles('development-automation') above already covers.
       // RFC-471: the delivery bridge left `services/developmentDeliveryDeps.ts` for this composition file.
       join(
         BACKEND,

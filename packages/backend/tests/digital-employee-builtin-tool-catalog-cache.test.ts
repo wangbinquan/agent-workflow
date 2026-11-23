@@ -5,13 +5,13 @@ import { readPersistedDigitalEmployeeTypePackageDescriptorJsons } from '@/module
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/digital-employee/composition'
+import { ensureDigitalEmployeeAgentTemplates } from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 import {
-  ensureDigitalEmployeeAgentTemplates,
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
   digitalEmployeeBuiltinAgentSuccessorId,
   digitalEmployeeBuiltinToolConfiguration,
   digitalEmployeeAgentToolPresentation,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/domain/legacyDigitalEmployeeAgentTemplates'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('digital employee builtin tool catalog boot snapshot', (harness) => {

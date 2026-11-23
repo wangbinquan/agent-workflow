@@ -46,7 +46,7 @@ import {
   digitalEmployeeBuiltinAgentSuccessorId,
   digitalEmployeeBuiltinToolConfiguration,
   digitalEmployeeAgentToolPresentation,
-} from '@/services/digitalEmployeeAgentTemplates'
+} from '@/modules/development-automation/public/participants'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import { type DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { type ProviderResourceCatalogComposition } from '@/modules/resource-catalog/composition/providerResourceCatalog'

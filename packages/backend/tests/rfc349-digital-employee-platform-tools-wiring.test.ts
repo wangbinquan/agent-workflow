@@ -21,7 +21,7 @@ import type { DigitalEmployeeWorkStartPort } from '../src/modules/integration/pu
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { developmentEmployeeTypePackage } from '../src/modules/development-automation/composition/employeeTypePackage'
-import { ensureDigitalEmployeeAgentTemplates } from '../src/services/digitalEmployeeAgentTemplates'
+import { ensureDigitalEmployeeAgentTemplates } from '../src/modules/development-automation/application/digitalEmployeeAgentTemplates'
 
 const backendRoot = resolve(import.meta.dir, '..')
 

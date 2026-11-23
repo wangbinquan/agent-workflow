@@ -118,7 +118,8 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(route).toContain('module.listDigitalEmployeeTemplates()')
     expect(route).not.toContain('filterVisibleRows')
     expect(route).not.toContain("from '@/services/resourceAcl'")
-    expect(route).not.toContain("from '@/services/digitalEmployeeAgentTemplates'")
+    // RFC-544 moved the template module into development-automation; the route reaches it under neither path.
+    expect(route).not.toContain('digitalEmployeeAgentTemplates')
   })
 
   test('skill precondition tokens have one module-owned byte-compatible codec', () => {

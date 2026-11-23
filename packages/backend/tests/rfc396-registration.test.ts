@@ -16,7 +16,7 @@ import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/appl
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { INTERPRETER_SPEC } from '@/platform/execution/local/scriptInterpreter'
-import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { ensureDigitalEmployeeAgentTemplates } from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 
 test('graph type has six responsibilities while view combinations are selected within design', () => {
   const type = employeeTypePackageDescriptorSchema.parse(

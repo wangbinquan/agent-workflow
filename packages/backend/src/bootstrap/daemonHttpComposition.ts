@@ -92,7 +92,7 @@ import {
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import type { ChildTaskBudgetRuntime } from '@/modules/task-execution/composition'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { listDigitalEmployeeAgentTemplates } from '@/modules/development-automation/public/participants'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import type {

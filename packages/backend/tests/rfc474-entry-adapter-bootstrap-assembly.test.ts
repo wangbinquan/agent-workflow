@@ -9,7 +9,7 @@
 // ④ 命令装配：`main.ts` 把 bootstrap 组装的依赖交给 config / migration-report，doctor 分支取 bootstrap 的 `runDoctorCommand()`；三个 CLI
 //    文件不取任何 `@/modules/`；Doctor composition 交出的 `formatDoctor` 与 domain 的是同一函数；development-automation 的 `render` 就是
 //    `printMigrationReport`。
-// ⑤ 首启示例：`services/demoSeed.ts` 不取任何 composition；code-capability `public/types` 恰好转出两个类型（RFC-453 退役的
+// ⑤ 首启示例：`bootstrap/demoSeed.ts`（RFC-544 从 services/ 迁来）不取任何 composition；code-capability `public/types` 恰好转出两个类型（RFC-453 退役的
 //    `public/participants.ts` 不复活）；`daemonApplication` 的
 //    `demo-seed` 启动步骤体内组装完成标记并作为 `completion` 传入（每次启动调用时选，不在模块加载时选）。
 // 另：`windows-platform.yml` 路径过滤里的每个具体文件都在。
@@ -40,7 +40,7 @@ const ENTRIES = [
   'cli/config-cli.ts',
   'cli/doctor.ts',
   'cli/migrationReport.ts',
-  'services/demoSeed.ts',
+  'bootstrap/demoSeed.ts',
 ] as const
 const slash = (path: string) => path.split('\\').join('/')
 const read = (path: string) => readFileSync(join(SRC, path), 'utf8')
@@ -273,7 +273,7 @@ describe('RFC-474 —— 五个入口不再取模块内部', () => {
         path,
         [],
       ])
-    const seed = specifiersIn(read('services/demoSeed.ts')).filter((s) =>
+    const seed = specifiersIn(read('bootstrap/demoSeed.ts')).filter((s) =>
       s.startsWith('@/modules/'),
     )
     expect(seed.filter((s) => !/^@\/modules\/[a-z-]+\/public\/[a-z]+$/.test(s))).toEqual([])
@@ -386,7 +386,7 @@ describe('RFC-474 —— 首启示例：参与方类型经 public、完成标记
       ),
     ).toBe('@/modules/system-operations/composition/installationSeedCompletion')
     // The seed itself no longer selects a default: the completion is required.
-    expect(compact(read('services/demoSeed.ts'))).toContain(
+    expect(compact(read('bootstrap/demoSeed.ts'))).toContain(
       'readonlycompletion:InstallationSeedCompletionPort',
     )
   })

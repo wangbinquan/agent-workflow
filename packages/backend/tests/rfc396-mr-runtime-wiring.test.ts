@@ -41,7 +41,7 @@ import {
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import type { RootTaskLaunchRequest } from '@/modules/task-execution/application/launch/rootTaskLaunch'
-import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { ensureDigitalEmployeeAgentTemplates } from '@/modules/development-automation/application/digitalEmployeeAgentTemplates'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'

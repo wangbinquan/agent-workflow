@@ -184,7 +184,7 @@ describe('RFC-491 ① task-execution 不 import 运行时驱动一族', () => {
       "const lazy = () => import('@/services/systemAgentRun')",
       "import type { SmokeOptions } from '../../../../services/runtimeSmoke'",
       "import { getRuntimeDriver as legacy } from '../../../../services/runtime'",
-      "import { createDemoSeed } from '@/services/demoSeed'",
+      "import { createDemoSeed } from '@/bootstrap/demoSeed'",
       "import { isKnownRuntimeKind } from '@/modules/runtime-management/public/queries'",
     ].join('\n')
     expect(familyImports(path, text)).toEqual([

@@ -12,6 +12,15 @@
 - **不做**：`services/codeRoundContract.ts`（W4-E8）与 git 一族（W5）；模板内容、对齐规则与示例数据不变。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已在
   本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 按内容分层落位（数据与纯函数进 domain，用例进 application，首启编排归 bootstrap）；C11
+  development-automation 的 public 只转出，新增六个名字都有 bootstrap 消费，V2 的五个名字不再公开（未消费公开符号 8 → 6）；C12 RFC-544 用例覆盖
+  迁入位置、取用方向与模板结局；C13 减速带计数不升。
+- **§4.7 其余一族第二步**：`services/` 6 → 4（`legacy-service-implementations` 6 → 4，`legacy-horizontal-files` 125 → 123），余
+  `codeRoundContract.ts`（W4-E8）与 git 一族（W5）。
+- **集中验证**（基于 `7604bebbe`，详见 plan）：查出一处本人遗漏——RFC-310 的数字员工 OS 架构清单按文件登记外部依赖，仍写旧路径，
+  `rfc310-digital-employee-os-architecture` 首批即红，改为新路径后通过。tsc 0 错，eslint / promises / prettier 无告警；按 RFC-533 的口径选出 529 个
+  文件，语义层 355 个；撞写死时限的 7 个与对照同时 A/B、在两边放大时限后都全过，`rfc321` 只在导出仓库里红（要 git 历史）、主树 10 / 10，
+  没有只在候选上红的用例；五种变异都被认出；架构报告计数不升。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-543 数据库句柄上下文只记在句柄上（Withdrawn；`design/RFC-543-database-handle-context-registry/`）
 
