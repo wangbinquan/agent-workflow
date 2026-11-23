@@ -571,7 +571,8 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-538](./RFC-538-mcp-probe-environment/proposal.md) | MCP 探测的选项与时钟随应用走（RFC-294 S12 第十九步）：进程级的探测测试接缝改为每份应用一份 MCP 探测环境（组合根建、选项经应用的测试接缝交进来），进程内探测、探测用例与 MCP 写入时钟用同一份。无用户可见变化。 | Done |
 | [RFC-539](./RFC-539-database-file-snapshots/proposal.md) | SQLite 文件快照的在途计数随数据库句柄走（RFC-294 S12 第二十步）：进程级的快照在途计数改为挂在数据库句柄的上下文上（备份按所快照的库计数，daemon 会话把自己库的那一份交给迁移安全备份与维护服务的 checkpoint 门）。无用户可见变化。 | Done |
 | [RFC-540](./RFC-540-sqlite-logical-source-worker-state/proposal.md) | SQLite 逻辑源 Worker 的状态归每个 Worker 的处理器（RFC-294 S12 第二十一步）：迁移读源 Worker 的请求处理与三份模块级状态（逻辑源、契约、初始化标志）搬进 `createSqliteLogicalSourceWorkerHandler(io)` 的闭包，Worker 入口只建一个处理器。无用户可见变化。 | Done |
-| [RFC-541](./RFC-541-maintenance-worker-effect-modules/proposal.md) | 维护 Worker 的效果模块由各自的 Worker 入口交给运行时（RFC-294 S12 第二十二步）：删去平台的 Worker 级效果模块登记表，托管入口改为自己的薄根，把映射 `aw:crewstation-maintenance` 的加载器经效果作用域交给运行时，单机根照旧按模块名加载。无用户可见变化。 | In Progress |
+| [RFC-541](./RFC-541-maintenance-worker-effect-modules/proposal.md) | 维护 Worker 的效果模块由各自的 Worker 入口交给运行时（RFC-294 S12 第二十二步）：删去平台的 Worker 级效果模块登记表，托管入口改为自己的薄根，把映射 `aw:crewstation-maintenance` 的加载器经效果作用域交给运行时，单机根照旧按模块名加载。无用户可见变化。 | Done |
+| [RFC-542](./RFC-542-persistence-handle-side-tables/proposal.md) | 行规则错误翻译与单行写入的按句柄侧表归各自的句柄（RFC-294 S12 第二十三步）：已套行规则翻译的会话标记与带围栏的单行写入改为记在各自的对象上，删去两张模块级侧表（`boundSessions`、`inserts`）。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

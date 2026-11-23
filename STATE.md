@@ -1,4 +1,16 @@
-## 2026-11-22 RFC-541 维护 Worker 的效果模块由各自的 Worker 入口交给运行时（In Progress；`design/RFC-541-maintenance-worker-effect-modules/`）
+## 2026-11-22 RFC-542 行规则错误翻译与单行写入的按句柄侧表归各自的句柄（In Progress；`design/RFC-542-persistence-handle-side-tables/`）
+
+- **来由**：S12 第 4 项（模块级可变单例）的第十步。provider 构造数据库时的两件按句柄绑定各记在进程级的侧表里：已套行规则错误翻译的会话
+  （`platform/persistence/schema/rowRules.ts` 的 `boundSessions`）与 PostgreSQL 根库带代际围栏的单行写入（`platform/persistence/singleInsert.ts` 的
+  `inserts`）。架构报告的模块级可变单例清单里这两个文件各 1 条（全仓 50 条）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、
+  2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：会话标记与单行写入记在各自的对象上，删去两张模块级侧表；新增 RFC-542 用例。
+- **不做**：其余 48 条模块级可变单例；行规则的定义、翻译出的错误与围栏 INSERT 的 SQL 不变。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-541 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
+  §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+
+## 2026-11-22 RFC-541 维护 Worker 的效果模块由各自的 Worker 入口交给运行时（Done；`design/RFC-541-maintenance-worker-effect-modules/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第九步。托管部署的维护 Worker 入口在第一条 init 消息前把 `aw:crewstation-maintenance` 登记进平台的
   一张模块级表（`platform/background/maintenanceWorkerEffects.ts` 的 `effectModules` 与 `registerMaintenanceWorkerEffectModule`），再 import 共用的
@@ -16,6 +28,14 @@
 - **集中验证**（基于 `2f685c9e4`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；按 RFC-533 的口径选出 242 个文件，语义层 225 个，
   没有查出本人缺陷；三种变异（登记表回来、托管根不映射、作用域不回落 import）都被认出；红的四个长扫描用例与对照同时 A/B，在两边放大写死的
   时限后都全过，没有只在候选上红的用例；架构报告模块级可变单例 51 → 50、公开面与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **落地**：`896fc990a`（9 个文件；父提交是 `d6065f733`）。
+- **CI**：实现提交主 CI 70 / 70（run 45117772865，第 1 次），maintenance-soak-nightly 通过；落档提交 `d6065f733` 主 CI 68 / 70（后端分片 15/44 的
+  `rfc310-pr3-journey` PostgreSQL 一支泵耗尽，`docs/audit-backlog.md` 已登记的一类、补记随本条，该提交只改文档、代码与 `2f685c9e4` 相同、父提交
+  同一分片通过）。都未重跑。
+- **下一步**：S12 第 4 项其余 50 条。可迁移的登记与绑定 14 条（行规则错误翻译与单行写入的按句柄侧表〔RFC-542〕、平台持久化的 schema 选择与历史
+  运行时、句柄上下文自身的登记表、迁移历史的运行时绑定、日志器配置等）继续拆；凭据 / 访问 / 完整性相邻的 9 条（ws 的三处登记、遗留测试库标记、
+  技能启动复核）只审功能地单独处理；进程级缓存与计数器 27 条（npm / tar / git 版本等主机探测、WASM 运行时初始化、唯一名计数器、只告警一次的
+  标志、引擎能力缓存等）按 RFC-294 plan S12 第 4 项须经用户确认是否作为进程缓存保留并修订 design §14 口径，已在本会话向用户说明、待用户决定。
 
 ## 2026-11-22 RFC-540 SQLite 逻辑源 Worker 的状态归每个 Worker 的处理器（Done；`design/RFC-540-sqlite-logical-source-worker-state/`）
 

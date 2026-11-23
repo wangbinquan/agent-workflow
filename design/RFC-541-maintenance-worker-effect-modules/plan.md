@@ -17,7 +17,7 @@
 - [x] AC-1 `maintenanceWorkerEffects.ts` 没有模块级表与登记函数；两个 Worker 入口各自把效果加载器交给运行时
 - [x] AC-2 两种部署的维护 Worker 加载的效果模块与结局不变
 - [x] AC-3 模块级可变单例 51 → 50、计数不升；锁随改；新增 RFC-541 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -44,7 +44,13 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `896fc990a`（实现，父提交是 `d6065f733`）：exact SHA 主 CI run 45117772865 的 70 个 job 第 1 次全部通过；同一提交触发的
+  maintenance-soak-nightly（run 45117772821）通过（本提交的路径不触发 windows-platform）。
+- 本 RFC 的落档提交 `d6065f733`（只改 8 个 Markdown 文件；同一提交记下 RFC-540 转 Done）：主 CI run 45115889841 的 70 个 job 里，后端分片 15/44
+  的 `rfc310-pr3-journey` PostgreSQL 一支「publish → wrong ref 422 → submit → working → route block」90 秒泵耗尽（停在
+  `status=blocked blockCode=template-route:route-indeterminate`），`CI required` 随之红，其余 68 个通过。该提交的代码与 `2f685c9e4`（70 / 70）逐字
+  相同，父提交的同一分片同一用例通过；这是 `docs/audit-backlog.md` 已登记的该用例泵耗尽一类（本次停在 blocked，补记随本 RFC 转 Done 的提交），
+  不是该提交引入的；未改、未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

@@ -4338,6 +4338,11 @@ mission 停在 `working`、`blockCode` 为 null——与本条签名逐字吻合
 丢掉推进（典型嫌疑：fire-and-forget 的 arm 完成回调与 `reconcile` 的读—判—写交错）。
 判据就是本条的签名：`pumpUntil exhausted … status=working blockCode=null`，且同用例单跑百毫秒即过。
 
+**2026-11-22 补记（相近形态）**：`d6065f733`（RFC-541 落档，只改 8 个文档文件）主 CI run 45115889841 的 ubuntu 分片 15/44 红在
+PostgreSQL 一支「platform-channel answers over HTTP > publish → wrong ref 422 → submit → working → route block」：90 秒泵耗尽，停在
+`status=blocked blockCode=template-route:route-indeterminate`（2,676 轮、`unsettledEffects=[none]`）。父提交 `2f685c9e4` 的同一分片同一用例
+通过；与本条同属“泵耗尽而 mission 不再推进”，但停在 blocked 而不是 working，记录待查，未重跑。
+
 ## 全部 skill 套件同进程跑时，两条会红成 `skill-not-found`（2026-09-06 实撞，先于任何本次改动）
 
 把 `tests/*skill*.test.ts` 一次性交给同一个 bun 进程跑，稳定红两条：

@@ -167,6 +167,7 @@
 | S12 第十九步 | [RFC-538](../RFC-538-mcp-probe-environment/proposal.md) | MCP 探测的选项与时钟随应用走：进程级的探测测试接缝（`probeOptionsOverride`、`__setMcpProbeOptionsForTesting` 与 `mcpProbeNow`）删去，组合根为每份应用建一份 MCP 探测环境（`createMcpProbeEnvironment`，选项经应用的测试接缝交进来），进程内探测、探测用例与 MCP 写入时钟用同一份（1 条） | `rfc538-mcp-probe-environment-boundary`（探测文件没有模块级状态、删去的名字不在、环境只在组合根建一次且取应用的测试接缝、执行器与探测用例都取这份环境；两份环境各用各的选项与时钟、选项每次读取、没有选项时取 `Date.now`；带负对照）与 `rfc448` 的装配用例（探测的开始时间取交进来的时钟） |
 | S12 第二十步 | [RFC-539](../RFC-539-database-file-snapshots/proposal.md) | SQLite 文件快照的在途计数随数据库句柄走：进程级的快照在途计数（`activeDbSnapshots` 与 `isDbSnapshotInProgress`）删去，计数器挂在数据库句柄的上下文上（`fileSnapshotTrackerOf`），备份按所快照的库计数，daemon 会话把自己库的那一份交给迁移安全备份与维护服务的 checkpoint 门，命令行与启动恢复各建一份（1 条） | `rfc539-database-file-snapshots-boundary`（两个文件没有模块级状态、删去的名字不在、快照都带计数器、备份取所快照库的那一份、协调器用交进来的、会话把自己库的交给迁移与 checkpoint 门；计数器的在途与撤销、checkpoint 只让自己库的快照、派生句柄共用；两个引擎上的真库；带负对照）与 `rfc311` 的快照期间 checkpoint 让路 |
 | S12 第二十一步 | [RFC-540](../RFC-540-sqlite-logical-source-worker-state/proposal.md) | SQLite 逻辑源 Worker 的状态归每个 Worker 的处理器：迁移读源 Worker 的请求处理与三份模块级状态（逻辑源、契约、初始化标志）搬进 `createSqliteLogicalSourceWorkerHandler(io)` 的闭包，Worker 入口只建一个处理器（3 条） | `rfc540-sqlite-logical-source-worker-state-boundary`（入口与处理器文件没有模块级状态、入口只建一个处理器并把消息交给它；两个处理器在进程内各管各的状态；带负对照）与经监工起真 Worker 的 `rfc349-sqlite-logical-source` |
+| S12 第二十二步 | [RFC-541](../RFC-541-maintenance-worker-effect-modules/proposal.md) | 维护 Worker 的效果模块由各自的 Worker 入口交给运行时：删去平台的 Worker 级效果模块登记表（`effectModules` 与登记 / 加载函数），托管入口改为自己的薄根、把映射 `aw:crewstation-maintenance` 的加载器经效果作用域交给运行时，单机根照旧按模块名加载（1 条） | `rfc541-maintenance-worker-effect-modules-boundary`（平台效果文件没有模块级状态、删去的名字不在、两个根各调一次运行时、托管根映射自己的效果模块；效果作用域的注入与缺省加载；带负对照）与 `rfc370-v9-maintenance-worker-entry` |
 
 「结构锁 / 覆盖范围」列（2026-11-10，RFC-479 / S11）：G1～G14 指 RFC-376 的硬结构门（`tests/architecture/rfc376-structural-guards.test.ts`，G2 context 值级 DAG、G3 / G4 public 边界、G6 application 直接 effect、G7 模块分层、G9 部署分支、G14 入口可达）；「全 src」= `packages/backend/src` 的全部源文件，括号里是用例断言的语料下限；「指定 N 个文件」= 只读点名的文件；负对照指合成 fixture 或对真实文件的变异；「未登记 guard-manifest」的锁不受 RFC-317 的语料下限与负对照普查约束。逐行依据是各锁的源码与 `architecture/guard-manifest.json`。
 
@@ -629,6 +630,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 > 后继：第 4 项第七步 [RFC-539](../RFC-539-database-file-snapshots/proposal.md)（Done，2026-11-22，`bf1ed4716`）：SQLite 文件快照的在途计数不再是进程级状态，挂在数据库句柄的上下文上，备份按所快照的库计数，daemon 会话把自己库的那一份交给迁移安全备份与维护服务的 checkpoint 门。模块级可变单例 55 → 54。集中验证没有查出本人缺陷（准备变异时补强了新用例的语料锁）。其余 54 条：可迁移的登记与绑定 18 条继续拆；凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；进程级缓存与计数器 27 条须经用户确认是否保留并修订 design §14 口径（第 4 项的约定）。
 >
 > 后继：第 4 项第八步 [RFC-540](../RFC-540-sqlite-logical-source-worker-state/proposal.md)（Done，2026-11-22，`2f685c9e4`）：SQLite 逻辑源 Worker 的状态不再是模块级状态，请求处理与逻辑源、契约、初始化标志归每个 Worker 的处理器。模块级可变单例 54 → 51。集中验证没有查出本人缺陷。其余 51 条：可迁移的登记与绑定 15 条继续拆；凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；进程级缓存与计数器 27 条须经用户确认是否保留并修订 design §14 口径（第 4 项的约定）。
+>
+> 后继：第 4 项第九步 [RFC-541](../RFC-541-maintenance-worker-effect-modules/proposal.md)（Done，2026-11-22，`896fc990a`）：维护 Worker 的效果模块不再经 Worker 级登记表，托管入口是自己的薄根、把映射符号名的加载器经效果作用域交给运行时。模块级可变单例 51 → 50。集中验证没有查出本人缺陷。其余 50 条：可迁移的登记与绑定 14 条继续拆；凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；进程级缓存与计数器 27 条须经用户确认是否保留并修订 design §14 口径（第 4 项的约定）。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在单机 profile（`bootstrap/standalone.ts` 与维护 worker 的单机部分
