@@ -33,7 +33,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlTestDatabase } from './helpers/testDatabase'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const URL_ENV = 'RFC349_WRITE_MATRIX_DATABASE_URL'
 const realTest = process.env[URL_ENV] === undefined ? test.skip : test
@@ -172,7 +172,7 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
 
         // 进程级选择必须还原：CI 的 oracle 步骤把好几个测试文件跑在**同一个 bun 进程**里，
         // 留着 postgresql 投影会渗进后面的文件（跨文件污染在本仓有前科）。
-        const db = createPostgresqlDatabaseClient(runtime)
+        const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
         const facades = nativeTables(db)
         const contract = logicalSchemaContract
         const defects: string[] = []

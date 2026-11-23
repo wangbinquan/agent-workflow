@@ -38,6 +38,7 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { Paths } from '@/util/paths'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { doctorEpochUpgrade } from './doctorEpochUpgrade'
@@ -164,6 +165,7 @@ const ENGINE_HEALTH_CHECKS = {
 
 export async function checkConfiguredDatabase(
   contract: LogicalSchemaContract,
+  liveSchema: RuntimeSchemaBinding,
   tasks: DoctorTaskLifecyclePort,
   configuration?: ApplicationConfigurationQueries,
 ): Promise<CheckResult[]> {
@@ -217,6 +219,7 @@ export async function checkConfiguredDatabase(
       generationPointerPath: Paths.databaseGenerationPointer,
       operationsRoot: Paths.databaseMigrationsDir,
       contract,
+      liveSchema,
     })
   } catch (error) {
     return [
@@ -554,6 +557,7 @@ function checkMigrations(): CheckResult {
 export function createLocalDoctorDiagnostics(input: {
   readonly tasks: DoctorTaskLifecyclePort
   readonly contract: LogicalSchemaContract
+  readonly liveSchema: RuntimeSchemaBinding
   /** RFC-487: bootstrap binds runtime-management's default-binary probe. */
   readonly runtimeBinary: DoctorRuntimeBinaryProbe
   readonly configuration?: ApplicationConfigurationQueries
@@ -590,7 +594,7 @@ export function createLocalDoctorDiagnostics(input: {
       return checkMigrations()
     },
     database() {
-      return checkConfiguredDatabase(input.contract, input.tasks, configuration)
+      return checkConfiguredDatabase(input.contract, input.liveSchema, input.tasks, configuration)
     },
     backups() {
       return checkBackups()
@@ -600,12 +604,13 @@ export function createLocalDoctorDiagnostics(input: {
 
 export function createLocalDoctorDiagnosticsFactory(
   contract: LogicalSchemaContract,
+  liveSchema: RuntimeSchemaBinding,
   tasks: DoctorTaskLifecyclePort,
   runtimeBinary: DoctorRuntimeBinaryProbe,
 ): DoctorDiagnosticsFactory {
   return {
     create(input) {
-      return createLocalDoctorDiagnostics({ ...input, contract, tasks, runtimeBinary })
+      return createLocalDoctorDiagnostics({ ...input, contract, liveSchema, tasks, runtimeBinary })
     },
   }
 }

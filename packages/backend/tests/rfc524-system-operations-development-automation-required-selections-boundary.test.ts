@@ -240,7 +240,8 @@ describe('RFC-524 ① 选项的形状', () => {
       ],
     ])
     expect(signatures(MANUAL, text(MANUAL), 'prepareManualDatabaseMigration')).toEqual([
-      ['contract', 'options'],
+      // RFC-545: the live schema rides next to the contract.
+      ['contract', 'liveSchema', 'options'],
     ])
     expect(signatures(SEED, text(SEED), 'composeLocalInstallationSeedCompletion')).toEqual([[]])
     expect([
@@ -453,6 +454,7 @@ describe('RFC-524 ③ 装配处的显式构造', () => {
     expect(callArguments(MIGRATE, text(MIGRATE), 'prepareManualDatabaseMigration')).toEqual([
       [
         'logicalSchemaContract',
+        'persistenceSchemaBinding',
         "options??{kind:'file',configuration:createFileDatabaseConfiguration(Paths.config)}",
       ],
     ])

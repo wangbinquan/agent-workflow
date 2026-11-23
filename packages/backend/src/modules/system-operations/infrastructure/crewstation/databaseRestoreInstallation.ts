@@ -26,6 +26,7 @@ import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLo
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { type PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
 import { openHostedDatabaseBackupArchive } from './databaseRestoreArtifact'
 import {
@@ -52,6 +53,8 @@ export async function restoreHostedDatabaseInstallation(input: {
   readonly openArtifact?: typeof openHostedDatabaseBackupArchive
   readonly openTarget?: typeof openPostgresqlLogicalTarget
   readonly openClient?: (runtime: PostgresqlDatabaseRuntime) => PersistenceDb
+  /** RFC-545: the live schema the default client is built with. */
+  readonly liveSchema: RuntimeSchemaBinding
 }): Promise<{ restored: boolean; backupId: string; normalized: Readonly<Record<string, number>> }> {
   const now = input.now ?? Date.now
   const artifact = await (input.openArtifact ?? openHostedDatabaseBackupArchive)(input)
@@ -179,7 +182,10 @@ export async function restoreHostedDatabaseInstallation(input: {
       // connection before owner normalization opens its business transaction.
       await target.close()
     }
-    const client = (input.openClient ?? createPostgresqlDatabaseClient)(input.runtime)
+    const client =
+      input.openClient !== undefined
+        ? input.openClient(input.runtime)
+        : createPostgresqlDatabaseClient(input.runtime, { liveSchema: input.liveSchema })
     const session = databaseSessionFor(client),
       normalized: Record<string, number> = {}
     for (const participant of [

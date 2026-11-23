@@ -23,7 +23,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
 import type { DoctorRuntimeBinaryProbe } from '@/modules/system-operations/application/ports/doctorDiagnostics'
 import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
@@ -432,6 +432,7 @@ describeEachProvider('RFC-487 ⑤ 经绑定的解析与探测', (harness) => {
     }
     const diagnostics = createLocalDoctorDiagnosticsFactory(
       logicalSchemaContract,
+      persistenceSchemaBinding,
       composeSystemOperationsTaskPorts(),
       runtimeBinary,
     ).create({})

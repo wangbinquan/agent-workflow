@@ -9,6 +9,7 @@ import { createCrewStationObjectReader } from '@/platform/crewstation/objectStor
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
 import { parseHostedBackupReference } from './databaseBackupFormat'
@@ -29,6 +30,8 @@ export async function restoreCrewStationDatabaseFromEnvironment(
   input: RestoreEnvironmentInput & {
     /** Owner participants, composed by bootstrap (`composeCrewStationRestoreNormalization`). */
     readonly normalization?: readonly HostedRestoreNormalizationParticipant[]
+    /** RFC-545: the live schema the restored database's client is built with. */
+    readonly liveSchema: RuntimeSchemaBinding
   },
 ): Promise<void> {
   const prepared = prepareRestore(input)
@@ -41,6 +44,7 @@ export async function restoreCrewStationDatabaseFromEnvironment(
       ...prepared,
       plan: history.head.plan,
       normalization: input.normalization,
+      liveSchema: input.liveSchema,
     })
   } finally {
     await prepared.runtime.close()

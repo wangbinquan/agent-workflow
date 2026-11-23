@@ -5,7 +5,7 @@ import {
   contentExclusive,
 } from '@/platform/content/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import { composeCrewStationObjectPublications } from '@/modules/system-operations/composition/crewstationObjectPublications'
@@ -120,7 +120,7 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
   try {
     const writeBarrier = composeCrewStationDatabaseWriteBarrier()
     const fence = composeCrewStationWorkerFence(
-      createPostgresqlDatabaseClient(runtime),
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
       configuration.fence,
     )
     const databaseWrites = {
@@ -129,7 +129,10 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
         await fence.assertHeld(tx, configuration.fence)
       },
     }
-    const db = createPostgresqlDatabaseClient(runtime, { beforeWrite: databaseWrites.assertHeld })
+    const db = createPostgresqlDatabaseClient(runtime, {
+      liveSchema: persistenceSchemaBinding,
+      beforeWrite: databaseWrites.assertHeld,
+    })
     const platform = createCrewStationPlatformApi({ baseUrl: environment.platformApiUrl })
     const api = createCrewStationBusinessExecution(platform)
     const objects = createCrewStationObjectStorage({ baseUrl: environment.objectsUrl, fence })

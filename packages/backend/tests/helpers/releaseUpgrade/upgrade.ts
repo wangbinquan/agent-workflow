@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { composeLocalEpochSwitchDependencies } from '@/bootstrap/epochMigration'
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { loadConfig } from '@/config'
 import {
   autoUpgrade,
@@ -114,6 +114,7 @@ export async function prepareNativeHistory(built: BuiltRelease): Promise<void> {
       generationPointerPath: join(built.home, 'database-generation.json'),
       operationsRoot: join(built.home, 'database-migrations'),
       contract: logicalSchemaContract,
+      liveSchema: persistenceSchemaBinding,
       env: built.env,
       lockPath: join(built.home, '.daemon.lock'),
       backupOnMigration: false,

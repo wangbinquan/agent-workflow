@@ -23,6 +23,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { createCodeHostConnectionsService } from '@/modules/integration/infrastructure/codeHost/connections'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const DIGEST = 'a'.repeat(64)
 
@@ -80,7 +81,7 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   return {
     repository: new DrizzleRepositoryTransportCredentialRepository(
-      createPostgresqlDatabaseClient(runtime),
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     ),
     executions,
   }

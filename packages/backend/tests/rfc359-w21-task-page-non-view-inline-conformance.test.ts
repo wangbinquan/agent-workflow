@@ -24,6 +24,7 @@ import {
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 // Slowest case took 3.03 s on CI run 40433510287 including hooks (1.01 s before RFC-395 II-b); allow 20 s.
 setDefaultTimeout(20_000)
@@ -291,7 +292,7 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
     env: { RFC359_TASK_PAGE_PROBE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   try {
     const parsed = parseTaskOperationsQuery(VIEWER, { q: 'MiXeD%_', limit: '2' }, OPTIONS)
     for (const cursor of [

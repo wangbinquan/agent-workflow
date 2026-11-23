@@ -6,16 +6,9 @@ export interface SchemaBinding {
 }
 export type PersistenceTables = NeutralTableSet<SchemaBinding['definitions']>
 export type NativeTableSets = SchemaBinding['nativeTables']
-interface RuntimeSchemaBinding {
+/** RFC-545: the live schema bootstrap composes; it reaches platform as an explicit argument, never through module state. */
+export interface RuntimeSchemaBinding {
   readonly definitions: SchemaBinding['definitions']
   readonly nativeTables: NativeTableSets
   readonly rowRuleCodes: ReadonlyMap<string, string>
-}
-let liveBinding: RuntimeSchemaBinding | undefined
-export function registerPersistenceSchema(binding: RuntimeSchemaBinding): void {
-  liveBinding = Object.freeze(binding)
-}
-export function persistenceSchemaBinding(): RuntimeSchemaBinding {
-  if (!liveBinding) throw new Error('Live persistence schema has not been composed')
-  return liveBinding
 }

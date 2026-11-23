@@ -10,6 +10,15 @@
 - **不做**：schema 历史运行时的登记（另立）与其余模块级可变单例；表定义、行规则与 provider 选择逻辑不变。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交，实现与验证后再提交。独立对账（plan §0 第 10 条）已到期、已在
   本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 bootstrap 组合 live schema 并显式交给 provider 构造；C11 各模块 public 不变（system-operations 的
+  组合输入沿已有的 `contract` 通路多一个字段）；C12 RFC-545 用例覆盖文件没有模块级状态、生产代码不再登记，以及 `tablesOf` 按交入的 live 绑定
+  核对；C13 计数不升。
+- **§14 不变量 / S12 第二十五步**：live 持久化 schema 不再经进程级登记到 platform——bootstrap 的冻结常量显式交给 PostgreSQL 客户端、provider
+  运行期与句柄上下文。模块级可变单例 48 → 46。
+- **集中验证**（基于 `d00cf2c72`，详见 plan）：机器途中重启、scratchpad 清空，工具与导出重建后重跑；本地无 Docker，只跑 SQLite，PostgreSQL 以
+  CI 为准。查出三处本人遗漏（钉着被改形状的三条源码锁：`rfc370-doctor-configuration-bindings`、`rfc474`、`rfc524`），已改并复验。tsc 0 错，
+  eslint / promises / prettier 无告警；语义层 423 个文件 419 个通过，另一个 `rfc321` 只在导出仓库里红（要 git 历史）、主树 10 / 10；四种变异都被
+  认出；架构报告模块级可变单例 48 → 46、计数不升。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-544 演示种子与数字员工代理模板迁出 services/（Done；`design/RFC-544-demo-seed-and-agent-templates-out-of-services/`）
 

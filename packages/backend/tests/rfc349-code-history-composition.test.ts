@@ -22,6 +22,7 @@ import type {
 import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
 import { errorHandler } from '@/util/errors'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const CODE_ROUTE_SOURCE = resolve(
   import.meta.dir,
@@ -178,8 +179,10 @@ function postgresqlHistoryFixture() {
   }
   return {
     history: composeCodeHistoryQueries(
-      createPostgresqlDatabaseClient(runtime),
-      createAgentExecutionQueries(createPostgresqlDatabaseClient(runtime)),
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      createAgentExecutionQueries(
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      ),
       reader,
     ),
     executions,

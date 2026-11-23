@@ -83,6 +83,7 @@ import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eac
 import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const T0 = 1_700_000_000_000
 const GENERATION_ID = 'dbg_rfc359_w6_t26'
@@ -761,10 +762,13 @@ if (!postgresqlSelected) {
         },
         close: (options?: { readonly timeout?: number }) => pool.close(options),
       }
-      client = createPostgresqlDatabaseClient({
-        ...runtime,
-        providerPool: () => recordingPool,
-      } as unknown as PostgresqlDatabaseRuntime) as unknown as PersistenceDb
+      client = createPostgresqlDatabaseClient(
+        {
+          ...runtime,
+          providerPool: () => recordingPool,
+        } as unknown as PostgresqlDatabaseRuntime,
+        { liveSchema: persistenceSchemaBinding },
+      ) as unknown as PersistenceDb
       await seedAuditCorpus(client, AUDIT_ROWS)
       // 装载后维护：**两件事都要做，缺一件量到的都不是生产里的形状**。
       //

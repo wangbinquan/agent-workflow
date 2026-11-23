@@ -344,8 +344,9 @@ describe('RFC-474 —— 命令依赖由 bootstrap 组装、main.ts 注入', () 
     const text = compact(bootstraps)
     expect(text).toContain('return{ok:result.ok,output:formatDoctor(result)}')
     expect(text).toContain('returncomposeFileCliConfiguration(Paths.config)')
+    // RFC-545: the live schema rides next to the contract.
     expect(text).toContain(
-      'Object.freeze({contract:logicalSchemaContract,analysis:composeLegacyAssetMigrationReport})',
+      'Object.freeze({contract:logicalSchemaContract,liveSchema:persistenceSchemaBinding,analysis:composeLegacyAssetMigrationReport})',
     )
   })
 

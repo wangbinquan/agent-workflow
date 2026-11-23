@@ -13,6 +13,7 @@ import {
   sqlitePlan,
   postgresqlPlan,
   nativeTableSets,
+  persistenceSchemaBinding,
 } from '@/bootstrap/persistenceSchema'
 import roster from '@/bootstrap/targetSchemaRoster.json'
 import destinations from '@/bootstrap/targetColumnDestinations.json'
@@ -457,6 +458,7 @@ describe('RFC-395 II-b R1 target contract', () => {
         { session: { client } },
         nativeTableSets[engine.provider],
         engine,
+        persistenceSchemaBinding,
       )
       expect(tablesOf({ session: { client } })).toBe(nativeTableSets[engine.provider])
       expect(() => tablesOf({})).toThrow('no session table set')

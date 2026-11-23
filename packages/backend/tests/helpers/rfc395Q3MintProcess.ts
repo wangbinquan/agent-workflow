@@ -6,6 +6,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { seedSequenceTask, mintSequenceRun } from './rfc374Fixtures'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 async function main() {
   const generationId = 'dbg_q3_multiprocess'
@@ -36,7 +37,7 @@ async function main() {
       },
       env: process.env,
     })
-    db = createPostgresqlDatabaseClient(runtime)
+    db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
     close = () => runtime.close()
   }
   try {

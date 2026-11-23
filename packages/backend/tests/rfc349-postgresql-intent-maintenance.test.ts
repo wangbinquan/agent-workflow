@@ -14,6 +14,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(
   input: {
@@ -115,7 +116,10 @@ function fixture(updatedAt: number, claim?: { readonly expiresAt: number }) {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), statements }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    statements,
+  }
 }
 
 const log = Object.freeze({ info() {}, warn() {}, error() {}, debug() {} }) as never

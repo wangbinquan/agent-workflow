@@ -11,6 +11,7 @@
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { loadConfig } from '@/config'
 import { existsSync } from 'node:fs'
 import { Paths } from '@/util/paths'
@@ -18,6 +19,7 @@ import { Paths } from '@/util/paths'
 /** What the command needs; bootstrap's `composeMigrationReportCommandDependencies()` supplies development-automation's analysis. */
 export interface MigrationReportCommandDependencies<R> {
   readonly contract: LogicalSchemaContract
+  readonly liveSchema: RuntimeSchemaBinding
   /** The legacy asset analysis over the client this command opened (`now` is read after the rows are collected). */
   analysis(db: PersistenceDb): {
     analyze(now: () => number): Promise<R>
@@ -38,6 +40,7 @@ export async function migrationReportCommand<R>(
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract: deps.contract,
+    liveSchema: deps.liveSchema,
   })
   try {
     if ('sqlitePath' in runtime && !existsSync(runtime.sqlitePath))

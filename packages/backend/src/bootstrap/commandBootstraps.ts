@@ -5,7 +5,7 @@
 import { join } from 'node:path'
 import { composeRepositoryBackupPreparation } from './repositoryBackupPreparation'
 import { createLocalDoctorDiagnosticsFactory } from './doctorDiagnostics'
-import { logicalSchemaContract } from './persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from './persistenceSchema'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { resolveDatabaseProviderRuntimeForRestore } from '@/platform/persistence/databaseProviderRuntime'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -83,6 +83,7 @@ async function resolveCommandProvider() {
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract,
+    liveSchema: persistenceSchemaBinding,
     configPath: Paths.config,
     lockPath: Paths.lock,
     sqliteOptions: {},
@@ -208,6 +209,7 @@ export function composeRestoreCommandOperations() {
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract,
+    liveSchema: persistenceSchemaBinding,
   })
   return composeLocalSystemOperations({
     repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
@@ -239,6 +241,7 @@ export function composeConfigCommandPersistence() {
 export function composeMigrationReportCommandDependencies() {
   return Object.freeze({
     contract: logicalSchemaContract,
+    liveSchema: persistenceSchemaBinding,
     analysis: composeLegacyAssetMigrationReport,
   })
 }

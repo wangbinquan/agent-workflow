@@ -8,7 +8,7 @@
 // RFC-427: the mode is read once, by `selectDeployment`; `migrate` and the two
 // hosted verification commands are operations of the selected deployment, and
 // an operation a deployment does not offer fails with one error type.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { composeCrewStationRestoreNormalization, composeCrewStationProfile } from './crewstation'
 import {
   composeCrewStationMigrationInstallation,
@@ -109,21 +109,26 @@ async function migrateCrewStation(
     }
   }
   const environment = readCrewStationDatabaseEnvironment(env)
-  const prepared = await prepareManualDatabaseMigration(logicalSchemaContract, {
-    kind: 'selected',
-    configuration: {
-      read: () => crewStationDatabaseConfig(env),
-      write: () => {
-        throw new Error('the CrewStation database connection is provided by the platform')
+  const prepared = await prepareManualDatabaseMigration(
+    logicalSchemaContract,
+    persistenceSchemaBinding,
+    {
+      kind: 'selected',
+      configuration: {
+        read: () => crewStationDatabaseConfig(env),
+        write: () => {
+          throw new Error('the CrewStation database connection is provided by the platform')
+        },
       },
+      installation: composeCrewStationMigrationInstallation(
+        logicalSchemaContract,
+        persistenceSchemaBinding,
+        environment,
+        env,
+        composeCrewStationRestoreNormalization(),
+      ),
     },
-    installation: composeCrewStationMigrationInstallation(
-      logicalSchemaContract,
-      environment,
-      env,
-      composeCrewStationRestoreNormalization(),
-    ),
-  })
+  )
   try {
     return { output: prepared.describeSchemaOutcome() }
   } finally {
@@ -135,6 +140,7 @@ async function verifyCrewStationRestore(env: DeploymentEnvironment): Promise<str
   const environment = readCrewStationDatabaseEnvironment(env)
   const prepared = await prepareCrewStationDatabase({
     contract: logicalSchemaContract,
+    liveSchema: persistenceSchemaBinding,
     environment,
     env,
     schema: 'verify',

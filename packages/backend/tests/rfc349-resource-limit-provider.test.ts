@@ -20,6 +20,7 @@ import type {
 // RFC-477: the policy moved from services/limits.ts into task-execution application; the usage reader is its own file.
 import { enforceLimits } from '@/modules/task-execution/application/resourceLimitEnforcement'
 import { readTaskResourceUsage } from '@/modules/task-execution/application/taskResourceUsage'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function source(relativePath: string): string {
   return readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
@@ -96,7 +97,7 @@ function postgresqlFixture() {
     async close() {},
   }
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     executions,
     get releases() {
       return releases

@@ -14,6 +14,7 @@ import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { type PreparedPostgresqlProviderSchema } from '@/platform/persistence/databaseProviderRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
 import { createDatabaseApplicationConfiguration } from '../infrastructure/databaseApplicationConfiguration'
 import { createHostedDatabaseInstallation } from '../infrastructure/crewstation/hostedDatabaseInstallation'
@@ -85,6 +86,7 @@ export function composeCrewStationWorkerFence(
  */
 export function composeCrewStationMigrationInstallation(
   contract: LogicalSchemaContract,
+  liveSchema: RuntimeSchemaBinding,
   environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>,
   env?: Readonly<Record<string, string | undefined>>,
   /** Restore normalization participants of the owning modules (bootstrap). */
@@ -95,7 +97,13 @@ export function composeCrewStationMigrationInstallation(
     service: environment.service,
     env: env ?? process.env,
     prepare: () =>
-      prepareCrewStationMigrationInstallation({ contract, environment, env, normalization }),
+      prepareCrewStationMigrationInstallation({
+        contract,
+        liveSchema,
+        environment,
+        env,
+        normalization,
+      }),
   })
 }
 
@@ -123,10 +131,12 @@ export interface CrewStationSystemSelections {
 export async function composeCrewStationSystemSelections(input: {
   readonly environment: CrewStationDeploymentEnvironment
   readonly prepared: PreparedPostgresqlProviderSchema
+  readonly liveSchema: RuntimeSchemaBinding
 }): Promise<CrewStationSystemSelections> {
   const barrier = createHostedDatabaseWriteBarrier({ enforcing: false })
-  const raw = crewStationControlClient(input.prepared.runtime.runtime)
+  const raw = crewStationControlClient(input.prepared.runtime.runtime, input.liveSchema)
   const db = createPostgresqlDatabaseClient(input.prepared.runtime.runtime, {
+    liveSchema: input.liveSchema,
     beforeWrite: barrier.beforeWrite,
     countsAsLiveWrite: barrier.isEnforcing,
   })

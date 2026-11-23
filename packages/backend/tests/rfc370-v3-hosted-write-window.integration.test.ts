@@ -29,7 +29,7 @@ import { createDatabaseHostedExecutionControl } from '@/modules/system-operation
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { errorHandler } from '@/util/errors'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
@@ -79,6 +79,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     await raw('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
     await selectDeployment(env()).migrate()
     const prepared = await prepareCrewStationDatabase({
+      liveSchema: persistenceSchemaBinding,
       contract: logicalSchemaContract,
       environment,
       schema: 'verify',
@@ -175,6 +176,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     const { prepared, control } = await install()
     const barrier = createHostedDatabaseWriteBarrier()
     const guarded = createPostgresqlDatabaseClient(prepared.runtime.runtime, {
+      liveSchema: persistenceSchemaBinding,
       beforeWrite: barrier.beforeWrite,
     })
     const app = new Hono()
@@ -243,6 +245,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     const { prepared } = await install()
     const barrier = createHostedDatabaseWriteBarrier({ enforcing: false })
     const db = createPostgresqlDatabaseClient(prepared.runtime.runtime, {
+      liveSchema: persistenceSchemaBinding,
       beforeWrite: barrier.beforeWrite,
       countsAsLiveWrite: barrier.isEnforcing,
     })
@@ -261,7 +264,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       expect(barrier.isEnforcing()).toBe(false)
       expect(await marker()).toBeNull()
       await createDatabaseHostedExecutionControl({
-        db: crewStationControlClient(prepared.runtime.runtime),
+        db: crewStationControlClient(prepared.runtime.runtime, persistenceSchemaBinding),
       }).write({
         epoch: 1,
         owner: null,
@@ -273,7 +276,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       expect(await marker()).toBeNull()
       // Opening: the platform hands execution to the instance at a newer epoch.
       await createDatabaseHostedExecutionControl({
-        db: crewStationControlClient(prepared.runtime.runtime),
+        db: crewStationControlClient(prepared.runtime.runtime, persistenceSchemaBinding),
       }).write({
         epoch: 2,
         owner: 'next',
@@ -297,6 +300,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     let guards = 0
     const barrier = createHostedDatabaseWriteBarrier()
     const counted = createPostgresqlDatabaseClient(prepared.runtime.runtime, {
+      liveSchema: persistenceSchemaBinding,
       async beforeWrite(tx) {
         guards += 1
         await barrier.beforeWrite(tx)
@@ -321,6 +325,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
   test('a release keeps writing after its successor installs a newer schema (no digest fence)', async () => {
     const { prepared } = await install()
     const guarded = createPostgresqlDatabaseClient(prepared.runtime.runtime, {
+      liveSchema: persistenceSchemaBinding,
       beforeWrite: createHostedDatabaseWriteBarrier().beforeWrite,
     })
     try {
@@ -350,6 +355,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     }
     const serve = () =>
       prepareCrewStationDatabase({
+        liveSchema: persistenceSchemaBinding,
         contract: logicalSchemaContract,
         environment,
         schema: 'verify',

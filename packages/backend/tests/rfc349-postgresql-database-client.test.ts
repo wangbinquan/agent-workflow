@@ -26,6 +26,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function createPostgresqlDatabaseClient(
   ...args: Parameters<typeof createNativePostgresqlDatabaseClient>
@@ -131,7 +132,9 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('uses schema-qualified pgTable columns and native boolean parameters', async () => {
     const fake = fixture()
     fake.queued.push({ values: [['agent-1', true]] })
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     const { agents } = tablesOf(db)
     const rows = await db
@@ -149,7 +152,9 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('maps an empty get result to undefined instead of an all-undefined row', async () => {
     const fake = fixture()
     fake.queued.push({ values: [] })
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     const { agents } = tablesOf(db)
     expect(await first(db.select({ id: agents.id }).from(agents).limit(1))).toBeUndefined()
@@ -158,7 +163,9 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('normalizes mutation count and supports object-mode raw queries', async () => {
     const fake = fixture()
     fake.queued.push({ count: 1 }, { objects: [{ one: 1 }] })
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     const { agents } = tablesOf(db)
     const mutation = await db.insert(agents).values({ id: 'agent-1', name: 'Agent' })
@@ -182,7 +189,9 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('pins begin, business statements and commit to one reserved connection', async () => {
     const fake = fixture()
     fake.queued.push({ count: 1 })
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     const receipt = await db.transaction(async (transaction) => {
       const { agents } = tablesOf(transaction)
@@ -208,7 +217,9 @@ describe('RFC-349 PostgreSQL database client', () => {
 
   test('rolls back and releases the reserved connection on failure', async () => {
     const fake = fixture()
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     await expect(
       db.transaction(async () => {
@@ -225,7 +236,9 @@ describe('RFC-349 PostgreSQL database client', () => {
 
   test('does not route SQLite physical operations to the pool', async () => {
     const fake = fixture()
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
     const failure = await Promise.resolve(rawExec(db, sql`PRAGMA quick_check`)).catch(
       (error: unknown) => error,
     )
@@ -238,7 +251,9 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('fails closed and rolls back when the generation is no longer active', async () => {
     const fake = fixture()
     fake.deactivate()
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     let failure: unknown
     try {
@@ -265,7 +280,9 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('the live-write marker never rewrites a generation it already marked', async () => {
     const fake = fixture()
     fake.queued.push({ count: 1 }, { count: 1 })
-    const db = createPostgresqlDatabaseClient(fake.runtime)
+    const db = createPostgresqlDatabaseClient(fake.runtime, {
+      liveSchema: persistenceSchemaBinding,
+    })
 
     const { agents } = tablesOf(db)
     await insertOne(db, agents, { id: 'agent-1', name: 'Agent' })
@@ -303,6 +320,7 @@ test('deployment write guard shares the reserved transaction, rejects before mut
   }
   let calls = 0
   const db = createPostgresqlDatabaseClient(fake.runtime, {
+    liveSchema: persistenceSchemaBinding,
     async beforeWrite(tx) {
       calls += 1
       await rawRows(
@@ -378,6 +396,7 @@ test('deployment write guard runs once per transaction and again for the next on
   const fake = fixture()
   let calls = 0
   const db = createPostgresqlDatabaseClient(fake.runtime, {
+    liveSchema: persistenceSchemaBinding,
     async beforeWrite() {
       calls += 1
     },
@@ -405,7 +424,7 @@ test('deployment write guard runs once per transaction and again for the next on
 test('snapshot isolation is set by native PgTransactionConfig before its first read', async () => {
   const fake = fixture()
   fake.queued.push({ objects: [{ one: 1 }] })
-  const db = createPostgresqlDatabaseClient(fake.runtime)
+  const db = createPostgresqlDatabaseClient(fake.runtime, { liveSchema: persistenceSchemaBinding })
   const session = createPostgresqlDatabaseSession(db)
   expect(
     await session.snapshotRead((tx) => Promise.resolve(rawFirst(tx, sql`select 1 as one`))),
@@ -422,7 +441,7 @@ test('snapshot isolation is set by native PgTransactionConfig before its first r
 
 test('native savepoints inherit the session tables and roll back independently', async () => {
   const fake = fixture()
-  const db = createPostgresqlDatabaseClient(fake.runtime)
+  const db = createPostgresqlDatabaseClient(fake.runtime, { liveSchema: persistenceSchemaBinding })
   const failure = new Error('nested-failure')
   await db.transaction(async (tx) => {
     expect(tablesOf(tx)).toBe(tablesOf(db))
@@ -451,7 +470,7 @@ test('native savepoints inherit the session tables and roll back independently',
 
 test('a rolled-back first write retries the marker before the next business write', async () => {
   const fake = fixture()
-  const db = createPostgresqlDatabaseClient(fake.runtime)
+  const db = createPostgresqlDatabaseClient(fake.runtime, { liveSchema: persistenceSchemaBinding })
   const failure = new Error('abort first write')
   fake.queued.push({ count: 1 }, { count: 1 })
   await expect(

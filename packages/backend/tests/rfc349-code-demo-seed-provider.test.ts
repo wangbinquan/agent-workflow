@@ -14,6 +14,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider } from './helpers/eachProvider'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(input: {
   readonly objects?: readonly Record<string, unknown>[]
@@ -70,7 +71,10 @@ function postgresqlFixture() {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), statements }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    statements,
+  }
 }
 
 describe('RFC-349 Code Capability demo-seed participant', () => {

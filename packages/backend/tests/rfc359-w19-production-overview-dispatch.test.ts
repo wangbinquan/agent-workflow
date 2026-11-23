@@ -14,6 +14,7 @@ import {
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
 import { createProductionOverviewQuery, runProductionOverview } from './helpers/productionOverview'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface ObservedStatement {
   readonly sql: string
@@ -52,7 +53,7 @@ function createDispatchProbe() {
     poolFactory: () => pool,
   })
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     runtime,
     stop,
     statements,

@@ -5,11 +5,13 @@ import { composeDoctorApplication } from '@/modules/system-operations/compositio
 import { createLocalDoctorDiagnosticsFactory as createDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
 import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
 import { composeDefaultRuntimeBinaryProbe } from '@/modules/runtime-management/composition/defaultRuntimeBinaryProbe'
+import { persistenceSchemaBinding } from './persistenceSchema'
 
 export function createLocalDoctorDiagnosticsFactory(contract: LogicalSchemaContract) {
   // RFC-487: runtime-management's default-binary probe fills system-operations' own probe port.
   return createDiagnosticsFactory(
     contract,
+    persistenceSchemaBinding,
     composeSystemOperationsTaskPorts(),
     composeDefaultRuntimeBinaryProbe(),
   )

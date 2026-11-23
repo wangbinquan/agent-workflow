@@ -13,6 +13,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Response {
   readonly objects?: readonly Record<string, unknown>[]
@@ -86,7 +87,7 @@ function fixture(responses: Response[]) {
     async close() {},
   }
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     executions,
     remaining: () => responses.length,
     get reserves() {

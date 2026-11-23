@@ -7,6 +7,7 @@ import { rawExec } from '@/platform/persistence/queryHelpers'
 // RFC-395 T18 X1: frozen provider clients and inherited transaction handles retain their bindings.
 import { expect, test } from 'bun:test'
 import { schemaFixtureDb } from './helpers/schemaFixture'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import {
   bindDatabaseHandle,
   inheritDatabaseHandle,
@@ -20,7 +21,7 @@ test('frozen native handles and clients resolve tables through their bound provi
   const engine = engineForHandle(db)
   const client = Object.freeze({})
   const handle = Object.freeze({ session: { client } })
-  expect(bindDatabaseHandle(handle, tables, engine)).toBe(handle)
+  expect(bindDatabaseHandle(handle, tables, engine, persistenceSchemaBinding)).toBe(handle)
   expect(tablesOf(handle)).toBe(tables)
   const transaction = Object.freeze({ session: { client } })
   expect(tablesOf(transaction)).toBe(tables)
@@ -37,10 +38,10 @@ test('a re-bound frozen client uses its explicit context without changing its pr
   const handle = { session: { client } }
   const tables = tablesOf(db)
   const engine = engineForHandle(db)
-  bindDatabaseHandle(handle, tables, engine)
+  bindDatabaseHandle(handle, tables, engine, persistenceSchemaBinding)
   Object.freeze(handle)
   Object.freeze(client)
-  expect(() => bindDatabaseHandle(handle, tables, engine)).not.toThrow()
+  expect(() => bindDatabaseHandle(handle, tables, engine, persistenceSchemaBinding)).not.toThrow()
   expect(tablesOf({ session: { client } })).toBe(tables)
 })
 

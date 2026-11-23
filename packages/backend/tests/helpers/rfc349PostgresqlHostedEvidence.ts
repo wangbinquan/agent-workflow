@@ -40,7 +40,7 @@ import {
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
 import {
@@ -1757,7 +1757,9 @@ async function enqueuePostgresqlMaintenance(input: {
     generationId: input.generationId,
     env: { RFC349_DATABASE_URL: input.url },
   })
-  const store = createMaintenanceRunStore(createPostgresqlDatabaseClient(runtime))
+  const store = createMaintenanceRunStore(
+    createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+  )
   const payloads = heavyPayloads(input.expectedEvents, input.archiveTargetRows)
   const runTag = randomUUID()
   const now = Date.now()

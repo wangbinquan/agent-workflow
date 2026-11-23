@@ -34,6 +34,7 @@ import { createTaskExecutionResourceBinding } from '@/modules/task-execution/inf
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Input {
   root: string
@@ -67,7 +68,7 @@ if (input.provider.kind === 'sqlite') {
     config: input.provider.config,
     generationId: input.provider.generationId,
   })
-  db = createPostgresqlDatabaseClient(runtime)
+  db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   close = () => runtime.close()
 }
 function checkpoint(stage: string, worktreePath: string, baseCommit: string | null) {

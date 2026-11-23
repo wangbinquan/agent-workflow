@@ -3,7 +3,7 @@ import { afterAll } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import type { DbClient } from '@/db/client'
-import { nativeTableSets } from '@/bootstrap/persistenceSchema'
+import { nativeTableSets, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
 let handle: DbClient | undefined
@@ -12,6 +12,7 @@ export function schemaFixtureDb(): DbClient {
     drizzle(new Database(':memory:'), { schema: nativeTableSets.sqlite }),
     nativeTableSets.sqlite,
     createSqliteCapabilities(),
+    persistenceSchemaBinding,
   ))
 }
 afterAll(() => {

@@ -21,6 +21,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(input: {
   readonly objects?: readonly Record<string, unknown>[]
@@ -83,7 +84,7 @@ function fixture(fenceAccepted = true) {
     providerPool: () => pool,
     async close() {},
   }
-  const client = createPostgresqlDatabaseClient(runtime)
+  const client = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   return {
     client,
     store: createMaintenanceRunStore(client),
@@ -267,7 +268,9 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     // 这条用例仍是有价值的：它用**假 pool** 断言这一份实现在 PostgreSQL 客户端上发出的
     // 语句形状（`WITH candidates AS (…) DELETE … USING candidates`）与游标推进。
     const result = await runRetentionSweepSlice(
-      composeRetentionSweepPhases(createPostgresqlDatabaseClient(runtime)),
+      composeRetentionSweepPhases(
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      ),
       { eventStreamRetentionDays: 30, webhookTriggerFiresRetentionDays: 0 },
       undefined,
       3_000_000_000,
@@ -347,7 +350,9 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
       providerPool: () => pool,
       async close() {},
     }
-    const store = createTaskNodeEventArchiveStore(createPostgresqlDatabaseClient(runtime))
+    const store = createTaskNodeEventArchiveStore(
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    )
 
     await expect(
       createEventsArchiveMaintenanceCommand({

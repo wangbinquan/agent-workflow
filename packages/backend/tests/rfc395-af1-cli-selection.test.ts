@@ -10,7 +10,7 @@ import { checkConfiguredDatabase } from '@/modules/system-operations/infrastruct
 import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import { createFileDatabasePreOpenRecovery } from '@/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery'
 import { stagePendingRestore } from '@/modules/system-operations/infrastructure/local/filePendingRestore'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { tarGz } from '@/util/archive'
@@ -41,7 +41,9 @@ test('AF-D10 report refuses and doctor accepts an uninstalled home without creat
     await expect(
       migrationReportCommand([], composeMigrationReportCommandDependencies()),
     ).rejects.toThrow('requires an installed database generation')
-    expect((await checkConfiguredDatabase(logicalSchemaContract, tasks))[0]).toMatchObject({
+    expect(
+      (await checkConfiguredDatabase(logicalSchemaContract, persistenceSchemaBinding, tasks))[0],
+    ).toMatchObject({
       ok: true,
       message: 'SQLite (no database yet)',
     })
@@ -50,6 +52,7 @@ test('AF-D10 report refuses and doctor accepts an uninstalled home without creat
 test('AF-D10 report and doctor follow the SQLite pointer even when configuration selects PostgreSQL', () =>
   withHome(async (root) => {
     const prepared = await prepareEpoch2DatabaseProviderRuntime({
+      liveSchema: persistenceSchemaBinding,
       config: { provider: 'sqlite' },
       contract: logicalSchemaContract,
       sqlitePath: join(root, 'db.sqlite'),
@@ -68,7 +71,11 @@ test('AF-D10 report and doctor follow the SQLite pointer even when configuration
           .output,
       ),
     ).toBeObject()
-    const report = await checkConfiguredDatabase(logicalSchemaContract, tasks)
+    const report = await checkConfiguredDatabase(
+      logicalSchemaContract,
+      persistenceSchemaBinding,
+      tasks,
+    )
     expect(report[0]!.message).toContain('sqlite generation')
     expect(existsSync(join(root, 'db.sqlite'))).toBeFalse()
   }))

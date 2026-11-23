@@ -25,7 +25,7 @@ import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/compo
 // 所以这份文件真正的价值在于**它此前不存在**：全仓没有任何测试 import
 // `checkConfiguredDatabase`，在它之前把这整段删掉都不会有任何测试变红。
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -62,6 +62,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
     writeFileSync(join(process.env.AGENT_WORKFLOW_HOME!, 'config.json'), '{ not json', 'utf8')
     const checks = await checkConfiguredDatabase(
       logicalSchemaContract,
+      persistenceSchemaBinding,
       composeSystemOperationsTaskPorts(),
     )
     expect(checks).toHaveLength(1)
@@ -74,6 +75,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
     writeConfig({ provider: 'sqlite' })
     const checks = await checkConfiguredDatabase(
       logicalSchemaContract,
+      persistenceSchemaBinding,
       composeSystemOperationsTaskPorts(),
     )
     expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'database-generation.json'))).toBe(
@@ -107,6 +109,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
     })
     const checks = await checkConfiguredDatabase(
       logicalSchemaContract,
+      persistenceSchemaBinding,
       composeSystemOperationsTaskPorts(),
     )
     // 关键断言：**没有**那句 SQLite 专属的回话。改动前这里拿到的就是它。

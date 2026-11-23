@@ -1,4 +1,4 @@
-import { persistenceSchemaBinding } from '@/platform/persistence/schema/tables'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { getTableColumns } from 'drizzle-orm'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -336,7 +336,7 @@ test('heavy projection guard accepts only checked scalar text and retains full d
 
 function heavyColumns(): string[] {
   return heavyColumnsIn(
-    Object.values(persistenceSchemaBinding().nativeTables.sqlite).flatMap((table) =>
+    Object.values(persistenceSchemaBinding.nativeTables.sqlite).flatMap((table) =>
       Object.values(getTableColumns(table)).map((column) => column.name),
     ),
   )

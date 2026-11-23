@@ -13,6 +13,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -56,7 +57,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     providerPool: () => pool,
     async close() {},
   }
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   return {
     query: historyProjectionParity(
       'workItems',

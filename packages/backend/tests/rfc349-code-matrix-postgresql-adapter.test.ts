@@ -21,6 +21,7 @@ import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
 import { errorHandler } from '@/util/errors'
 import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const REPO = 'repo-1'
 
@@ -64,7 +65,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    executions,
+  }
 }
 
 function appWithHistory(history: ReturnType<typeof composeCodeHistoryQueries>): Hono {

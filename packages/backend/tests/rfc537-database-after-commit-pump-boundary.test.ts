@@ -18,7 +18,7 @@ import {
 import type { AfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { bindDatabaseHandle, inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
-import { persistenceSchemaBinding } from '@/platform/persistence/schema/tables'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -127,7 +127,7 @@ describe('RFC-537 ① 即时投递泵没有进程级状态；写方按提交所�
 function boundHandle(): object {
   return bindDatabaseHandle(
     {},
-    persistenceSchemaBinding().nativeTables.sqlite as never,
+    persistenceSchemaBinding.nativeTables.sqlite as never,
     createSqliteCapabilities(),
   )
 }

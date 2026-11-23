@@ -18,7 +18,7 @@
 // execution-recovery step runs on standby, and after activation the
 // execution-recovery steps (including the hosted targeted resume) run in order.
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -203,6 +203,7 @@ if (providers.includes('postgresql')) {
         .then((response) => response.status)
         .catch(() => 0)
     const serving = prepareCrewStationDatabase({
+      liveSchema: persistenceSchemaBinding,
       contract: logicalSchemaContract,
       environment: { project: PROJECT, service: PROJECT },
       schema: 'verify',

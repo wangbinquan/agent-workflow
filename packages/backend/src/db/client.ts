@@ -6,7 +6,11 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { chmodSync, mkdirSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createLogger } from '@/util/log'
-import { nativeTableSets, rowRuleCodes } from '@/bootstrap/persistenceSchema'
+import {
+  nativeTableSets,
+  persistenceSchemaBinding,
+  rowRuleCodes,
+} from '@/bootstrap/persistenceSchema'
 import { createSqliteBaseline, installSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { bindSchemaRowRuleErrors } from '@/platform/persistence/schema/rowRules'
 import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
@@ -343,7 +347,12 @@ export function openDb(opts: OpenDbOptions): DbClient {
   }
 
   normalizeDirectStatementChanges(sqlite)
-  const db = bindDatabaseHandle(drizzle(sqlite, { schema }), schema, createSqliteCapabilities())
+  const db = bindDatabaseHandle(
+    drizzle(sqlite, { schema }),
+    schema,
+    createSqliteCapabilities(),
+    persistenceSchemaBinding,
+  )
   bindSchemaRowRuleErrors(db, rowRuleCodes)
   guardForeignStatements(sqlite, db as object)
   try {
@@ -420,7 +429,12 @@ export function createInMemoryDb(opts: CreateInMemoryDbOptions = {}): DbClient {
 /** Bind an already installed SQLite image with the same native semantics as openDb. */
 export function bindSqliteClient(sqlite: Database): DbClient {
   normalizeDirectStatementChanges(sqlite)
-  const db = bindDatabaseHandle(drizzle(sqlite, { schema }), schema, createSqliteCapabilities())
+  const db = bindDatabaseHandle(
+    drizzle(sqlite, { schema }),
+    schema,
+    createSqliteCapabilities(),
+    persistenceSchemaBinding,
+  )
   bindSchemaRowRuleErrors(db, rowRuleCodes)
   guardForeignStatements(sqlite, db as object)
   return db

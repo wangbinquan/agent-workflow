@@ -31,6 +31,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Response {
   readonly objects?: readonly Record<string, unknown>[]
@@ -96,7 +97,7 @@ function fixture(responses: Array<Response | Error>) {
     async close() {},
   }
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     executions,
     get releases() {
       return releases

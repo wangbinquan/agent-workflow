@@ -22,7 +22,7 @@ import { restorePostgresqlProviderBackup } from '@/modules/system-operations/inf
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { createPostgresqlProviderRestoreApplicationAssets } from '@/modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
@@ -112,7 +112,9 @@ describeEachProvider(
           await h.database(1).executeFixtureDdl('DROP SCHEMA agent_workflow_meta CASCADE')
           const generationId = 'dbg_permission_restored'
           const runtime = { ...target.runtime, generationId }
-          const db = createPostgresqlDatabaseClient(runtime)
+          const db = createPostgresqlDatabaseClient(runtime, {
+            liveSchema: persistenceSchemaBinding,
+          })
           const appHome = join(home, 'restored')
           mkdirSync(appHome)
           await restorePostgresqlProviderBackup({

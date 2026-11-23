@@ -3,7 +3,7 @@ import type { SQL as BunSQL } from 'bun'
 import { getTableColumns, is, Placeholder, SQL, sql, type Table } from 'drizzle-orm'
 import { drizzle, type BunSQLDatabase } from 'drizzle-orm/bun-sql'
 import { PgDialect } from 'drizzle-orm/pg-core'
-import { persistenceSchemaBinding, type NativeTableSets } from './schema/tables'
+import type { NativeTableSets, RuntimeSchemaBinding } from './schema/tables'
 import { bindSchemaRowRuleErrors } from './schema/rowRules'
 import { createPostgresqlCapabilities } from './capabilities'
 import { bindDatabaseHandle } from './sessionTables'
@@ -31,6 +31,8 @@ export type PostgresqlDatabaseClient = BunSQLDatabase<NativeTableSets['postgresq
 }
 /** 部署写闸在同一条预留连接上、每笔事务首次写之前调用一次。 */
 export interface PostgresqlDatabaseClientOptions {
+  /** RFC-545: the live schema bootstrap composed (native tables and row-rule codes). */
+  readonly liveSchema: RuntimeSchemaBinding
   readonly beforeWrite?: (tx: PersistenceDb) => Promise<void>
   /**
    * Whether a write transaction counts as the generation's first live write (absent: every write
@@ -116,14 +118,14 @@ function fencedInsert(
 
 export function createPostgresqlDatabaseClient(
   runtime: PostgresqlDatabaseRuntime,
-  options: PostgresqlDatabaseClientOptions = {},
+  options: PostgresqlDatabaseClientOptions,
 ): PostgresqlDatabaseClient {
   const pool = runtime.providerPool()
   const engine = createPostgresqlCapabilities()
-  const { nativeTables, rowRuleCodes } = persistenceSchemaBinding()
+  const { nativeTables, rowRuleCodes } = options.liveSchema
   const schema = nativeTables.postgresql
   const bind = <T extends object>(handle: T): T => {
-    bindDatabaseHandle(handle, schema, engine)
+    bindDatabaseHandle(handle, schema, engine, options.liveSchema)
     bindSchemaRowRuleErrors(handle, rowRuleCodes)
     return handle
   }

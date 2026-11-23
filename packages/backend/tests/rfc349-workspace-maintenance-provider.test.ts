@@ -30,6 +30,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const ulid = monotonicFactory()
 const cleanups: Array<() => void> = []
@@ -136,7 +137,9 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       async close() {},
     }
     const store = new PortWorkspaceMaintenanceStore(
-      composeSourceControlTaskPorts(createPostgresqlDatabaseClient(runtime)),
+      composeSourceControlTaskPorts(
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      ),
     )
 
     await expect(store.listGcCandidates()).resolves.toEqual([

@@ -19,6 +19,7 @@ import {
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import { seedHostedInstallation } from '@/platform/persistence/hostedInstallationSeed'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { type CrewStationExecutionAuthorityPort } from './crewStationExecutionAuthority'
 import type { createDatabaseHostedExecutionControl } from '../hostedExecutionControl'
 import { hostedLeaseOf, HostedExecutionLeaseLostError } from '../hostedExecutionControl'
@@ -58,6 +59,7 @@ export function crewStationDatabaseConfig(
  */
 export async function prepareCrewStationDatabase(input: {
   readonly contract: LogicalSchemaContract
+  readonly liveSchema: RuntimeSchemaBinding
   readonly environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>
   readonly schema: 'apply' | 'verify'
   readonly env?: Readonly<Record<string, string | undefined>>
@@ -66,6 +68,7 @@ export async function prepareCrewStationDatabase(input: {
   return await prepareHostedPostgresqlProviderRuntime({
     config: crewStationDatabaseConfig(input.env ?? process.env),
     contract,
+    liveSchema: input.liveSchema,
     generation: hostedDatabaseGeneration({
       project: input.environment.project,
       service: input.environment.service,
@@ -81,21 +84,24 @@ export async function prepareCrewStationDatabase(input: {
  * once, and close the runtime when the seed fails (RFC-519: the body of the installation's `prepare`). */
 export async function prepareCrewStationMigrationInstallation(input: {
   readonly contract: LogicalSchemaContract
+  readonly liveSchema: RuntimeSchemaBinding
   readonly environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>
   readonly env: Readonly<Record<string, string | undefined>> | undefined
   readonly normalization:
     | Parameters<typeof restoreCrewStationDatabaseFromEnvironment>[0]['normalization']
     | undefined
 }) {
-  const { contract, environment, env, normalization } = input
+  const { contract, liveSchema, environment, env, normalization } = input
   await restoreCrewStationDatabaseFromEnvironment({
     contract,
+    liveSchema,
     environment,
     env: env ?? process.env,
     ...(normalization === undefined ? {} : { normalization }),
   })
   const prepared = await prepareCrewStationDatabase({
     contract,
+    liveSchema,
     environment,
     schema: 'apply',
     ...(env === undefined ? {} : { env }),
@@ -130,8 +136,9 @@ export async function prepareCrewStationMigrationInstallation(input: {
  */
 export function crewStationControlClient(
   runtime: PostgresqlDatabaseRuntime,
+  liveSchema: RuntimeSchemaBinding,
 ): PostgresqlDatabaseClient {
-  return createPostgresqlDatabaseClient(runtime, { countsAsLiveWrite: () => false })
+  return createPostgresqlDatabaseClient(runtime, { liveSchema, countsAsLiveWrite: () => false })
 }
 
 /** The application side of the execution fence: a write needs the active lease (crash-only, RFC-370 §3.2). */

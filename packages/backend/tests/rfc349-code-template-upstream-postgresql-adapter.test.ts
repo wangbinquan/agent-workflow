@@ -17,6 +17,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Execution {
   readonly sql: string
@@ -81,7 +82,9 @@ function fixture() {
   }
   return {
     operations: createTemplateUpstreamOperations(
-      createTemplateUpstreamPersistence(createPostgresqlDatabaseClient(runtime)),
+      createTemplateUpstreamPersistence(
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      ),
     ),
     executions,
     queued,

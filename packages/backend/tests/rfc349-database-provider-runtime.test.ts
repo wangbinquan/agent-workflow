@@ -16,7 +16,10 @@ import {
   type GenerationPointerV2Payload,
 } from '@/platform/persistence/generationPointerV2'
 import { digestSchemaContract } from '@/platform/persistence/schema/canonical'
-import { logicalSchemaContract as contract } from '@/bootstrap/persistenceSchema'
+import {
+  logicalSchemaContract as contract,
+  persistenceSchemaBinding,
+} from '@/bootstrap/persistenceSchema'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import type {
   PostgresqlPool,
@@ -56,6 +59,7 @@ describe('RFC-349 database provider runtime resolution', () => {
       ...paths,
       config: { provider: 'sqlite' as const },
       contract,
+      liveSchema: persistenceSchemaBinding,
       sqliteOptions: {},
     }
     const prepared = await prepareEpoch2DatabaseProviderRuntime(options)
@@ -90,6 +94,7 @@ describe('RFC-349 database provider runtime resolution', () => {
       },
     })
     const resolved = resolveDatabaseProviderRuntime({
+      liveSchema: persistenceSchemaBinding,
       ...paths,
       config: {
         provider: 'postgresql',
@@ -168,8 +173,13 @@ describe('RFC-349 database provider runtime resolution', () => {
       }
       const resolved =
         source === 'files'
-          ? resolveDatabaseProviderRuntime({ ...options, ...paths })
+          ? resolveDatabaseProviderRuntime({
+              liveSchema: persistenceSchemaBinding,
+              ...options,
+              ...paths,
+            })
           : resolveDatabaseProviderRuntimeFromArtifacts({
+              liveSchema: persistenceSchemaBinding,
               ...options,
               generationArtifacts: {
                 pointerLabel: 'loaded installation',

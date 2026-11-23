@@ -12,6 +12,7 @@ import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 function selectedValue(value: unknown) {
   return sql.join([sql.raw('select '), sql.param(value), sql.raw(' as value')], sql.raw(''))
 }
@@ -54,7 +55,7 @@ function createCompilationProbe() {
     env: { RFC359_COMPILE_REUSE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   return {
     db,
     runtime,

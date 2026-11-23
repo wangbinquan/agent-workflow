@@ -12,6 +12,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(values: readonly (readonly unknown[])[] = []): SqlRows {
   const objects = [] as Array<Record<string, unknown>> & { count?: number }
@@ -75,7 +76,10 @@ function fixture() {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), statements }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    statements,
+  }
 }
 
 describe('RFC-349 Development and Integration provider composition', () => {

@@ -58,6 +58,7 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const normalized = (text: string) => text.toLowerCase().replaceAll('"agent_workflow".', '')
 const effects = (db: PersistenceDb) => new DrizzleTaskExecutionEffectPersistence(db)
@@ -278,7 +279,7 @@ async function dedicated(h: ProviderHarness) {
     }),
   })
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     recording,
     pid: Number(backend!.pid),
     beforeBegin(callback: (ordinal: number) => Promise<void>) {

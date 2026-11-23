@@ -49,6 +49,7 @@ import {
   composePortArtifactOperations,
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const SRC = (path: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
@@ -103,7 +104,10 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    executions,
+  }
 }
 
 describe('RFC-349 collaboration runtime mechanics', () => {

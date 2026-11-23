@@ -25,7 +25,7 @@ import { schemaContribution as contribution15 } from '@/modules/runtime-manageme
 import { schemaContribution as contribution16 } from '@/modules/source-control/composition/schema'
 import { schemaContribution as contribution17 } from '@/modules/system-operations/composition/schema'
 import { schemaContribution as contribution18 } from '@/modules/task-execution/composition/schema'
-import { registerPersistenceSchema } from '@/platform/persistence/schema/tables'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { materializeTableSets } from '@/platform/persistence/schema/nativeTables'
 import { createSchemaRegistry } from '@/platform/persistence/schema/registry'
 import { projectLogicalSchemaContract } from '@/platform/persistence/schema/logicalContract'
@@ -235,7 +235,8 @@ declare module '@/platform/persistence/schema/tables' {
   }
 }
 export const rowRuleCodes = compileSchemaRowRuleCodes(persistenceSchema)
-registerPersistenceSchema({
+/** RFC-545: the live schema binding, handed explicitly to provider construction (platform never reads it from module state). */
+export const persistenceSchemaBinding: RuntimeSchemaBinding = Object.freeze({
   definitions: persistenceSchema.tables,
   nativeTables: nativeTableSets,
   rowRuleCodes,

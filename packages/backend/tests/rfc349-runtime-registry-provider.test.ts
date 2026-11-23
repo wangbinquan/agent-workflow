@@ -17,6 +17,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function source(relativePath: string): string {
   return /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(relativePath)
@@ -90,7 +91,9 @@ function postgresqlFixture() {
     async close() {},
   }
   return {
-    registry: composeRuntimeRegistryOperations(createPostgresqlDatabaseClient(runtime)),
+    registry: composeRuntimeRegistryOperations(
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    ),
     executions,
   }
 }

@@ -14,6 +14,7 @@ import {
 } from '@/platform/persistence/generationValidation'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const contract: LogicalSchemaContract = {
   contractVersion: 2,
@@ -72,6 +73,7 @@ describe('RFC-370 provider bootstrap from installation artifacts', () => {
     let created = 0
     expect(() =>
       resolveDatabaseProviderRuntimeFromArtifacts({
+        liveSchema: persistenceSchemaBinding,
         config,
         contract,
         env,
@@ -88,6 +90,7 @@ describe('RFC-370 provider bootstrap from installation artifacts', () => {
   test('a valid generation still cannot disagree with configured provider', () => {
     expect(() =>
       resolveDatabaseProviderRuntimeFromArtifacts({
+        liveSchema: persistenceSchemaBinding,
         config: { provider: 'sqlite' },
         contract,
         generationArtifacts: artifacts(),
@@ -99,6 +102,7 @@ describe('RFC-370 provider bootstrap from installation artifacts', () => {
     const input = {
       config: { provider: 'sqlite' } as const,
       contract,
+      liveSchema: persistenceSchemaBinding,
       generationArtifacts: artifacts(null),
     }
     try {

@@ -1,6 +1,6 @@
 import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
 // Only the configuration entry points are exercised; other doctor checks are unchanged.
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -112,6 +112,7 @@ describe('RFC-370 doctor configuration selection', () => {
     let finished = false
     const pending = checkConfiguredDatabase(
       logicalSchemaContract,
+      persistenceSchemaBinding,
       composeSystemOperationsTaskPorts(),
       selected,
     ).then((result) => {
@@ -152,6 +153,7 @@ describe('RFC-370 doctor configuration selection', () => {
     expect(
       await checkConfiguredDatabase(
         logicalSchemaContract,
+        persistenceSchemaBinding,
         composeSystemOperationsTaskPorts(),
         selected,
       ),
@@ -181,6 +183,7 @@ describe('RFC-370 doctor configuration selection', () => {
       expect(
         await checkConfiguredDatabase(
           logicalSchemaContract,
+          persistenceSchemaBinding,
           composeSystemOperationsTaskPorts(),
           selected,
         ),
@@ -251,7 +254,8 @@ describe('RFC-370 doctor configuration selection', () => {
     for (const expected of [
       'configuration.read()',
       'checkConfig(configuration,selected===undefined)',
-      'checkConfiguredDatabase(input.contract,input.tasks,configuration)',
+      // RFC-545: the live schema rides next to the contract.
+      'checkConfiguredDatabase(input.contract,input.liveSchema,input.tasks,configuration)',
     ]) {
       expect(calls.filter((node) => compact(node) === expected)).toHaveLength(1)
     }

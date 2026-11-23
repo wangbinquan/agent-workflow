@@ -31,6 +31,7 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { recordStatements } from './helpers/statementRecorder'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const VIEWER: TaskListViewer = { userId: 'w25-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -407,7 +408,7 @@ test('the real PG compiler retains the original SQL and explains every additiona
     env: { RFC359_W25_PG_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   try {
     for (const raw of [RAW, { ...RAW, q: 'percent%_' }, withCursor(RAW, 890, 'root-11')]) {
       const query = fastFilteredRootQuery(

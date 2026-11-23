@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -15,6 +15,7 @@ for (const kind of ['receipt-mismatch', 'physical-drift'] as const)
     const pointerPath = join(home, 'database-generation.json')
     try {
       const prepared = await prepareEpoch2DatabaseProviderRuntime({
+        liveSchema: persistenceSchemaBinding,
         config: { provider: 'sqlite' },
         contract: logicalSchemaContract,
         sqlitePath: join(home, 'db.sqlite'),

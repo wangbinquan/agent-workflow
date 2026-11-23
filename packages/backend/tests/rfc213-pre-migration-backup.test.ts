@@ -22,7 +22,11 @@ import {
 import { createHistoryVersion } from '@/platform/persistence/schema/history/compiler'
 import { deriveSchemaEdge } from '@/platform/persistence/schema/history/edgeDiff'
 import { compileContract } from '@/platform/persistence/schema/contract'
-import { persistenceSchema, logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import {
+  persistenceSchema,
+  logicalSchemaContract,
+  persistenceSchemaBinding,
+} from '@/bootstrap/persistenceSchema'
 import { column } from '@/platform/persistence/schema/dsl'
 import { maybePreMigrationBackup } from '../src/platform/background/providerBackupScheduler'
 
@@ -159,6 +163,7 @@ for (const lockOwner of ['boot', 'migrate'] as const)
     const common = {
       config: { provider: 'sqlite' as const },
       contract: logicalSchemaContract,
+      liveSchema: persistenceSchemaBinding,
       sqlitePath: join(home, 'db.sqlite'),
       generationPointerPath: join(home, 'database-generation.json'),
       operationsRoot: join(home, 'database-migrations'),

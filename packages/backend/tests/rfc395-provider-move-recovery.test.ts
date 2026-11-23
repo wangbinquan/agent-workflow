@@ -5,7 +5,7 @@ import { setDefaultTimeout, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
@@ -113,6 +113,7 @@ function fixture(phase: DatabaseMigrationPhase = 'planned', pointerBound = false
   const options = {
     config: { provider: 'sqlite' as const },
     contract: logicalSchemaContract,
+    liveSchema: persistenceSchemaBinding,
     sqlitePath: join(root, 'retained.sqlite'),
     generationPointerPath,
     operationsRoot,
@@ -173,7 +174,10 @@ for (const state of ['copying', 'failed', 'cancelled', 'cancellation-requested']
     } finally {
       source.close()
     }
-    const prepared = await prepareDatabaseProviderForBoot({ ...f.options, env: {} })
+    const prepared = await prepareDatabaseProviderForBoot({
+      ...f.options,
+      env: {},
+    })
     try {
       expect(prepared.runtime.provider).toBe('sqlite')
     } finally {

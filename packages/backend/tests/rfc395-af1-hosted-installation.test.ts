@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import {
   prepareHostedPostgresqlProviderRuntime,
   prepareEpoch2DatabaseProviderRuntime,
@@ -33,6 +33,7 @@ describeEachProvider('AF-D3/D4/D6 hosted native generation selection', (h) => {
       ])
       for (const schema of ['verify', 'apply'] as const) {
         const prepared = await prepareHostedPostgresqlProviderRuntime({
+          liveSchema: persistenceSchemaBinding,
           config: b.databaseConfig,
           contract: logicalSchemaContract,
           generation,
@@ -72,6 +73,7 @@ describeEachProvider('AF-D3/D4/D6 hosted native generation selection', (h) => {
       for (const schema of ['verify', 'apply'] as const)
         await expect(
           prepareHostedPostgresqlProviderRuntime({
+            liveSchema: persistenceSchemaBinding,
             config: b.databaseConfig,
             contract: logicalSchemaContract,
             generation: hostedDatabaseGeneration({
@@ -101,6 +103,7 @@ describeEachProvider('AF-D3/D4/D6 hosted native generation selection', (h) => {
       env: platformIdentity,
     })
     const prepared = await prepareHostedPostgresqlProviderRuntime({
+      liveSchema: persistenceSchemaBinding,
       config: b.databaseConfig,
       contract: logicalSchemaContract,
       generation,
@@ -155,6 +158,7 @@ describeEachProvider('AF-D3/D4/D6 hosted native generation selection', (h) => {
         ]) {
           await expect(
             prepareHostedPostgresqlProviderRuntime({
+              liveSchema: persistenceSchemaBinding,
               config: b.databaseConfig,
               contract: logicalSchemaContract,
               generation: hostedDatabaseGeneration({
@@ -190,6 +194,7 @@ describeEachProvider('AF-D3/D4/D6 hosted native generation selection', (h) => {
     const options = {
       config: b.databaseConfig,
       contract: logicalSchemaContract,
+      liveSchema: persistenceSchemaBinding,
       sqlitePath: join(home, 'db.sqlite'),
       generationPointerPath: join(home, 'database-generation.json'),
       operationsRoot: join(home, 'database-migrations'),

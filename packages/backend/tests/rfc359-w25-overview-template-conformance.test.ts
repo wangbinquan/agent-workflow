@@ -18,6 +18,7 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement, StatementRecording } from './helpers/statementRecorder'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const T0 = 1_700_000_000_000
 const actor = buildActor({
@@ -342,7 +343,7 @@ function createClientProbe(id: string) {
     env: { RFC359_OVERVIEW_PROBE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   return { db, runtime, statements, stop, closed, closes: () => closes, reserves: () => reserves }
 }
 async function expectCause(operation: PromiseLike<unknown>, expected: Error) {

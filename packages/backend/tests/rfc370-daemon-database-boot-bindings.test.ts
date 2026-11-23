@@ -21,6 +21,7 @@ import {
   mergeValidatedConfigurationPatch,
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const history = await loadPostgresqlMigrationHistory({
   headContract: buildFrozenEpoch1LogicalSchemaContract(),
@@ -115,6 +116,7 @@ function fixture() {
   const file = {
     config: DEFAULT_CONFIG.database,
     contract: history.head.contract,
+    liveSchema: persistenceSchemaBinding,
     sqliteOptions: { migrationsFolder: 'unused-selected-migrations' },
     get sqlitePath(): string {
       throw new Error('selected installation read a local database path')

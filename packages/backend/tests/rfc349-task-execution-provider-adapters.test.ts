@@ -43,6 +43,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Response {
   readonly objects?: readonly Record<string, unknown>[]
@@ -102,7 +103,10 @@ function postgresqlFixture(responses: Response[]) {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    executions,
+  }
 }
 
 describe('RFC-349 task-execution provider adapters', () => {

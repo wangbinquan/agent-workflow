@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { composeDigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/application/platformInventoryParticipant'
 import { createEmployeeDefinitionViewProjection } from '@/modules/digital-employee/application/employeeDefinitionView'
 import { requireSchemaPlanForContract } from '@/modules/system-operations/application/schemaPlanAdmission'
@@ -778,6 +778,7 @@ describe('RFC-517 ④ 行为', () => {
       const input = (dir: string) => ({
         config: { provider: 'sqlite' as const },
         contract: logicalSchemaContract,
+        liveSchema: persistenceSchemaBinding,
         sqlitePath: join(dir, 'db.sqlite'),
         generationPointerPath: join(dir, 'database-generation.json'),
         operationsRoot: join(dir, 'database-migrations'),

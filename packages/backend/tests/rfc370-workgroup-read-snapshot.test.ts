@@ -17,6 +17,7 @@ import {
   type WorkgroupHostLedgerParticipantFactory,
 } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 type HostLedger = ReturnType<WorkgroupHostLedgerParticipantFactory['inTransaction']>
 type HostSnapshot = Awaited<ReturnType<HostLedger['load']>>
@@ -89,7 +90,7 @@ function fixture(snapshot: HostSnapshot = null) {
     env: { SNAPSHOT_FIXTURE_URL: 'postgresql://fixture@localhost/snapshot' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   const persistence = createWorkgroupTurnsPersistence({
     db,
     hostLedgerFactory: {

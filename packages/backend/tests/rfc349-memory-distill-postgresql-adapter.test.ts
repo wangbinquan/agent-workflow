@@ -14,6 +14,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -57,9 +58,9 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   return {
     queries: composePostgresqlMemoryDistillQueries(
-      createPostgresqlDatabaseClient(runtime),
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
       createClarifyAnswerQueries(
-        createPostgresqlDatabaseClient(runtime),
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
         taskExecutionParticipants,
       ),
     ),

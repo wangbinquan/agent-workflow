@@ -18,6 +18,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(direct: readonly Record<string, unknown>[] = []): SqlRows {
   return Object.assign(Promise.resolve(Object.assign([...direct], { count: direct.length })), {
@@ -72,8 +73,10 @@ function postgresqlFixture(): {
   }
   return {
     store: new DrizzleRepositoryWorkspaceStore(
-      createPostgresqlDatabaseClient(runtime),
-      composeSourceControlTaskPorts(createPostgresqlDatabaseClient(runtime)),
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      composeSourceControlTaskPorts(
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      ),
     ),
     executions,
   }

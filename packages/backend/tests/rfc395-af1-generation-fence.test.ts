@@ -6,6 +6,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 describeEachProvider('AF-D1 first mutation and committed marker cache', (h) => {
   test('snapshot read has no generation mutation and serializable configuration precedes its fence', async () => {
@@ -50,7 +51,9 @@ describeEachProvider('AF-D1 first mutation and committed marker cache', (h) => {
         recording.statements.slice(committed).some((s) => s.sql.includes('first_write')),
       ).toBeFalse()
       const freshRuntime = { ...h.applicationBinding.runtime }
-      const db = createPostgresqlDatabaseClient(freshRuntime)
+      const db = createPostgresqlDatabaseClient(freshRuntime, {
+        liveSchema: persistenceSchemaBinding,
+      })
       const offset = recording.statements.length
       await db.update(tablesOf(db).authLoginPolicy).set({ updatedAt: 126 })
       expect(

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { classifyRestoreArtifact } from '@/bootstrap/epochMigrationEntry'
 import { composeLocalEpochSwitch } from '@/bootstrap/epochMigration'
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { resolveConfigurationValue } from '@/platform/configuration/configurationValues'
 import { openDb } from '@/db/client'
 import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
@@ -136,6 +136,7 @@ test('AC-7 an epoch-1 SQLite backup restores through the production entry over a
     })
     installedSource.$client.close()
     const selected = resolveDatabaseProviderRuntimeForRestore({
+      liveSchema: persistenceSchemaBinding,
       config: { provider: 'sqlite' },
       contract: logicalSchemaContract,
       sqlitePath: join(appHome, 'db.sqlite'),
@@ -307,6 +308,7 @@ test('AF-D8 native restore into a new home publishes a generation only after res
     })
     const pointerPath = join(appHome, 'database-generation.json')
     const selected = resolveDatabaseProviderRuntimeForRestore({
+      liveSchema: persistenceSchemaBinding,
       config: { provider: 'sqlite' },
       contract: logicalSchemaContract,
       sqlitePath: join(appHome, 'db.sqlite'),

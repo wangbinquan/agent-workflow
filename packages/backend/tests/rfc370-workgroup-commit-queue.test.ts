@@ -20,6 +20,7 @@ import {
 } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { POSTGRESQL_SERIALIZATION_ATTEMPTS } from '@/platform/persistence/postgresqlSerializationRetry'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 type HostLedger = ReturnType<WorkgroupHostLedgerParticipantFactory['inTransaction']>
 type Apply = HostLedger['apply']
@@ -102,7 +103,7 @@ function postgresqlFixture() {
     env: { COMMIT_FIXTURE_URL: 'postgresql://fixture@localhost/commit' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   return {
     db,
     queries,

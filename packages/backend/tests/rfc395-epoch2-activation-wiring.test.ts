@@ -15,7 +15,7 @@ import { openDb, createInMemoryDb, DbCorruptionError } from '@/db/client'
 import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
 import { acquireLock } from '@/util/lock'
 import { extractTarGz } from '@/util/archive'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import {
   prepareEpoch2DatabaseProviderRuntime,
@@ -54,6 +54,7 @@ function preparation(root: string) {
     operationsRoot: join(root, 'database-migrations'),
     lockPath: join(root, 'daemon.lock'),
     contract: logicalSchemaContract,
+    liveSchema: persistenceSchemaBinding,
     sqliteOptions: {},
   }
 }
@@ -110,7 +111,10 @@ for (const caller of ['boot', 'migrate'] as const)
     const daemon = caller === 'boot' ? acquireLock(options.lockPath) : undefined
     try {
       await expect(
-        prepareDatabaseProviderForBoot({ ...options, lock: daemon }),
+        prepareDatabaseProviderForBoot({
+          ...options,
+          lock: daemon,
+        }),
       ).rejects.toBeInstanceOf(DbCorruptionError)
       const backups = readdirSync(join(root, 'backups')).filter((name) =>
         name.startsWith('pre-migration-unknown-'),
@@ -132,6 +136,7 @@ test('fresh installation writes pointer v2 and one active installed generation',
   const root = home(),
     path = join(root, 'db.sqlite')
   const prepared = await prepareEpoch2DatabaseProviderRuntime({
+    liveSchema: persistenceSchemaBinding,
     config: { provider: 'sqlite' },
     sqlitePath: path,
     generationPointerPath: join(root, 'database-generation.json'),
@@ -263,6 +268,7 @@ test('pointer v2 resolves the converted SQLite file rather than the default file
   })
   expect(currentSqlitePath(pointerPath, join(root, 'db.sqlite'))).toBe(file)
   const runtime = resolveDatabaseProviderRuntime({
+    liveSchema: persistenceSchemaBinding,
     config: { provider: 'sqlite' },
     sqlitePath: join(root, 'db.sqlite'),
     generationPointerPath: pointerPath,
@@ -290,6 +296,7 @@ test('AF-D6 adopts the exact installed SQLite head left before pointer publicati
     classifyEpochInstallation(readEpochBootFacts({ appHome: root, provider: 'sqlite' })).kind,
   ).toBe('fresh')
   const prepared = await prepareEpoch2DatabaseProviderRuntime({
+    liveSchema: persistenceSchemaBinding,
     config: { provider: 'sqlite' },
     sqlitePath: join(root, 'db.sqlite'),
     generationPointerPath: join(root, 'database-generation.json'),
@@ -317,6 +324,7 @@ test('AF-D6 refuses an unpublished SQLite head that has already accepted busines
   db.$client.close()
   await expect(
     prepareEpoch2DatabaseProviderRuntime({
+      liveSchema: persistenceSchemaBinding,
       config: { provider: 'sqlite' },
       sqlitePath: join(root, 'db.sqlite'),
       generationPointerPath: join(root, 'database-generation.json'),
@@ -349,6 +357,7 @@ test('AF-D13 a maintenance skipMigrations connection has the same generation fen
 test('AF-D8 empty-home restore selection creates neither database nor pointer during planning', async () => {
   const root = home()
   const runtime = resolveDatabaseProviderRuntimeForRestore({
+    liveSchema: persistenceSchemaBinding,
     config: { provider: 'sqlite' },
     sqlitePath: join(root, 'db.sqlite'),
     generationPointerPath: join(root, 'database-generation.json'),

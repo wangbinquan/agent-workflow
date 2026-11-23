@@ -15,7 +15,10 @@ import { createPostgresqlDatabaseClient } from '../packages/backend/src/platform
 import { openPostgresqlLogicalTarget } from '../packages/backend/src/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '../packages/backend/src/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '../packages/backend/src/platform/persistence/postgresqlSchema'
-import { logicalSchemaContract } from '../packages/backend/src/bootstrap/persistenceSchema'
+import {
+  logicalSchemaContract,
+  persistenceSchemaBinding,
+} from '../packages/backend/src/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '../packages/backend/src/platform/persistence/sqliteLogicalSource'
 import { createProductionPerformanceApplication } from '../packages/backend/tests/helpers/productionPerformanceApplication'
 import { measurePerformanceArchive, measurePerformanceHttp } from './perf-bench'
@@ -271,7 +274,7 @@ async function seedPostgresql(input: RunInput): Promise<void> {
         },
         () => target.close(),
       )
-      const db = createPostgresqlDatabaseClient(runtime)
+      const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
       const seeded = await seedPerformanceCorpus({
         db,
         session: databaseSessionFor(db),
@@ -328,7 +331,11 @@ async function withDatabase(
   const sqliteProfile =
     phase === 'profile' && sqlite !== null ? profileSqliteQueries(sqlite.$client) : null
   const db =
-    runtime === null ? sqlite! : createPostgresqlDatabaseClient(pgProfile?.runtime ?? runtime)
+    runtime === null
+      ? sqlite!
+      : createPostgresqlDatabaseClient(pgProfile?.runtime ?? runtime, {
+          liveSchema: persistenceSchemaBinding,
+        })
   await withPerformanceCleanup(
     async () => {
       if (phase === 'profile') {

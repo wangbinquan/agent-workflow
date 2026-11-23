@@ -59,7 +59,7 @@ import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMainten
 import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createLogger, type Logger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -162,6 +162,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     const close = () => runtime.close()
     registerConnectionClose(close)
     const db = createPostgresqlDatabaseClient(runtime, {
+      liveSchema: persistenceSchemaBinding,
       beforeWrite: workerEffects?.databaseWrites?.assertHeld,
     })
     const effects = selectWorkerEffects({ selected: workerEffects, db, appHome })

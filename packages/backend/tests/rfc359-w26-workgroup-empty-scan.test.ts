@@ -36,6 +36,7 @@ import {
   type TaskFixtureSpec,
 } from './helpers/model'
 import type { RecordedStatement } from './helpers/statementRecorder'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 // RFC-374: the participant's two node-run projections also carry `seq` (outside the probe).
 // RFC-395 I-b: one session table destructuring now serves the whole write transaction.
@@ -473,7 +474,7 @@ test('the actual PostgreSQL client preserves original SQL and every original bin
     env: { RFC359_W26_PG_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   async function rejectsAtClient(run: () => Promise<unknown>): Promise<void> {
     try {
       await run()

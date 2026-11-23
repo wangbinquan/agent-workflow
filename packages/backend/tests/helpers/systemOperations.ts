@@ -13,6 +13,7 @@ import {
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import type { DatabaseProvider, LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { Paths } from '@/util/paths'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 /**
  * `composeLocalSystemOperations`'s former fallbacks, in their former order: the local config file's database
@@ -24,6 +25,7 @@ export function composeStandaloneLocalSystemOperationsSelection(contract: Logica
 } {
   const databaseConfig = createFileDatabaseConfiguration(Paths.config).read()
   const providerRuntime = resolveDatabaseProviderRuntimeForRestore({
+    liveSchema: persistenceSchemaBinding,
     config: databaseConfig,
     sqlitePath: Paths.db,
     generationPointerPath: Paths.databaseGenerationPointer,

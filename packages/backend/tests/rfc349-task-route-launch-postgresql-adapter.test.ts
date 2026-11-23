@@ -55,6 +55,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { createFileWorkspaceUploadContentFactory } from '@/modules/source-control/composition'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface SqlResponse {
   readonly objects?: readonly Record<string, unknown>[]
@@ -155,7 +156,10 @@ function postgresqlFixture(input: {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    executions,
+  }
 }
 
 const actor = buildActor({

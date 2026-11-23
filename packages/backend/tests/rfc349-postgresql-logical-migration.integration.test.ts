@@ -29,7 +29,7 @@ import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLo
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 
 const roots: string[] = []
@@ -171,7 +171,9 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
           .unsafe('SELECT bytes FROM agent_workflow_meta.migration_archives')
         expect(Buffer.from(archives[0]!.bytes as Uint8Array)).toEqual(Buffer.from([0, 255, 1]))
 
-        const liveDb = createPostgresqlDatabaseClient(runtime)
+        const liveDb = createPostgresqlDatabaseClient(runtime, {
+          liveSchema: persistenceSchemaBinding,
+        })
         const { agents } = tablesOf(liveDb)
         await insertOne(liveDb, agents, { id: 'agent-rfc349', name: 'RFC 349 Agent' })
         expect(await liveDb.select({ id: agents.id }).from(agents)).toContainEqual({

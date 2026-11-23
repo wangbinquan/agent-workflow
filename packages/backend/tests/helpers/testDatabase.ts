@@ -34,6 +34,7 @@ import type {
   TestDatabase,
   TestDatabaseMetaTables,
 } from './testDatabaseTypes'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 type BaselineOptions = Pick<CreateTestDbOptions, 'bootstrap' | 'now'>
 function baseline(head: HistoryVersion): TestDatabase['baseline'] {
@@ -157,7 +158,7 @@ export async function createPostgresqlTestDatabase(
     await initializeFixture(postgresqlHistoryConnection(pool), options)
   }
   await install()
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(db)
   const session = databaseSessionFor(db)
   return {

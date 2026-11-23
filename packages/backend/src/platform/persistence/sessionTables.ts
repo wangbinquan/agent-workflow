@@ -2,11 +2,7 @@
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from './postgresqlDatabaseClient'
 import type { DbTxSync } from '@/db/txSync'
-import {
-  persistenceSchemaBinding,
-  type NativeTableSets,
-  type PersistenceTables,
-} from './schema/tables'
+import type { NativeTableSets, PersistenceTables, RuntimeSchemaBinding } from './schema/tables'
 import type { EngineCapabilities } from './capabilities'
 import type { AfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { createFileSnapshotTracker, type FileSnapshotTracker } from './fileSnapshots'
@@ -23,6 +19,8 @@ interface DatabaseHandleContext {
   readonly afterCommit: AfterCommitEventPumpSlot
   /** RFC-539: whole-file snapshots in flight on this database (its WAL checkpoint skips while one is). */
   readonly fileSnapshots: FileSnapshotTracker
+  /** RFC-545: the live schema the provider bound this handle with (null for epoch-1 and fixture handles). */
+  readonly live: RuntimeSchemaBinding | null
 }
 const contextKey = Symbol('native-persistence-session')
 const contexts = new WeakMap<object, DatabaseHandleContext>()
@@ -32,11 +30,13 @@ export function bindDatabaseHandle<T extends object>(
   handle: T,
   tables: PersistenceTables,
   engine: EngineCapabilities,
+  live: RuntimeSchemaBinding | null = null,
 ): T {
   const context = Object.freeze({
     identity: handle,
     tables,
     engine,
+    live,
     afterCommit: { pump: null },
     fileSnapshots: createFileSnapshotTracker(),
   })
@@ -59,7 +59,10 @@ export function tablesOf(handle: PostgresqlDatabaseClient): NativeTableSets['pos
 export function tablesOf(handle: object): PersistenceTables
 export function tablesOf(handle: object): PersistenceTables {
   const context = databaseHandleContext(handle)
-  if (context.tables !== persistenceSchemaBinding().nativeTables[context.engine.provider])
+  if (
+    context.live === null ||
+    context.tables !== context.live.nativeTables[context.engine.provider]
+  )
     throw new Error('Native persistence handle has no epoch-2 table set')
   return context.tables
 }

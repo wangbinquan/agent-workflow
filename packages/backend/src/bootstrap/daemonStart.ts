@@ -23,7 +23,7 @@ import { Paths } from '@/util/paths'
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
   composeDaemonProviderBootstrap,
@@ -281,6 +281,7 @@ export async function startCommand(
         generationPointerPath: Paths.databaseGenerationPointer,
         operationsRoot: Paths.databaseMigrationsDir,
         contract: logicalSchemaContract,
+        liveSchema: persistenceSchemaBinding,
         lockPath: Paths.lock,
         lock,
         backupOnMigration: config.backupOnMigration,
@@ -375,6 +376,7 @@ export async function startCommand(
             generationPointerPath: Paths.databaseGenerationPointer,
             operationsRoot: Paths.databaseMigrationsDir,
             contract: logicalSchemaContract,
+            liveSchema: persistenceSchemaBinding,
           })
           if (
             nextProvider.provider !== lifecycleInput.provider ||

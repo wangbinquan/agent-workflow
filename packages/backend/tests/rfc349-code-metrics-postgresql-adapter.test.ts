@@ -15,6 +15,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const NOW = 1_700_000_000_000
 
@@ -64,7 +65,9 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     query: historyProjectionParity(
       'metrics',
       sourceRows,
-      createEpoch1HistoryQueries(createPostgresqlDatabaseClient(runtime)).metrics,
+      createEpoch1HistoryQueries(
+        createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+      ).metrics,
       reads,
     ),
     reads,

@@ -2,6 +2,7 @@
 // as daemon boot. Local paths remain in the explicit file preparation branch.
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { Paths } from '@/util/paths'
 import { loadConfig } from '@/config'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
@@ -35,6 +36,7 @@ export type ManualDatabaseMigrationOptions =
 
 export async function prepareManualDatabaseMigration(
   contract: LogicalSchemaContract,
+  liveSchema: RuntimeSchemaBinding,
   options: ManualDatabaseMigrationOptions,
 ): Promise<PreparedManualDatabaseMigration> {
   const configuration = options.configuration
@@ -55,6 +57,7 @@ export async function prepareManualDatabaseMigration(
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract,
+    liveSchema,
     configuration,
     lockPath: Paths.lock,
     sqliteOptions: { migrationsFolder: '' },

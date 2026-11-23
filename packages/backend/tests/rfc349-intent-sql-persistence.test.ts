@@ -23,6 +23,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider } from './helpers/eachProvider'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const SESSION: IntentSessionRecord = {
   id: 'intent-session-sql-rendering',
@@ -146,7 +147,7 @@ function postgresqlFixture() {
     async close() {},
   }
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     statements,
     get releases() {
       return releases

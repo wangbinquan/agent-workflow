@@ -4,7 +4,7 @@
 
 import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { getTableColumns, type Table } from 'drizzle-orm'
-import { nativeTableSets } from '@/bootstrap/persistenceSchema'
+import { nativeTableSets, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
@@ -69,7 +69,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     executions,
     remaining: () => responses.length,
   }

@@ -23,6 +23,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const SOURCE: EventSourceDescriptor = {
   schemaVersion: 1,
@@ -119,7 +120,10 @@ function postgresqlFixture(responses: Response[]) {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    executions,
+  }
 }
 
 describe('RFC-349 Event Center provider behavior', () => {

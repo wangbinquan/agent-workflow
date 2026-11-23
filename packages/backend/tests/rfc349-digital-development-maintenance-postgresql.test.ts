@@ -18,6 +18,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function rows(input: {
   readonly objects?: readonly Record<string, unknown>[]
@@ -92,7 +93,10 @@ function fixture() {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), statements }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    statements,
+  }
 }
 
 function writerFixture() {
@@ -145,7 +149,10 @@ function writerFixture() {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), statements }
+  return {
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    statements,
+  }
 }
 
 describe('RFC-349 Digital/Development PostgreSQL maintenance owners', () => {

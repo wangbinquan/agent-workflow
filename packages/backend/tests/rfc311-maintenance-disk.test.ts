@@ -16,7 +16,7 @@ import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/dat
 //      500（2026-09-02 用户实撞：2866MB 的 store 一字节没删）。这条锁的就是它。
 
 import { rawExec } from '@/platform/persistence/queryHelpers'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
   chmodSync,
@@ -156,6 +156,7 @@ describe('RFC-311 T20 — reclaimable disk report and cleanup', () => {
     try {
       process.env.AGENT_WORKFLOW_HOME = home
       const installed = await prepareEpoch2DatabaseProviderRuntime({
+        liveSchema: persistenceSchemaBinding,
         config: { provider: 'sqlite' },
         contract: logicalSchemaContract,
         sqlitePath: join(home, 'db.sqlite'),

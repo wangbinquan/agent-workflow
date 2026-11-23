@@ -20,6 +20,7 @@ import {
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
 import { ensureCachedRepoIdentity } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { sha256Hex } from '@/util/hash'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Input {
   root: string
@@ -55,7 +56,7 @@ if (input.provider.kind === 'sqlite') {
     config: input.provider.config,
     generationId: input.provider.generationId,
   })
-  db = createPostgresqlDatabaseClient(runtime)
+  db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   close = () => runtime.close()
 }
 try {

@@ -29,6 +29,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const VIEWER: TaskListViewer = { userId: 'w27-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -464,7 +465,7 @@ test('the actual PG compiler preserves original SQL and bindings without executi
     env: { RFC359_W27_PG_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   try {
     for (const raw of [RAW, { ...RAW, q: 'percent%_' }, withCursor(RAW, 890, 'root-11')]) {
       const query = fastFilteredRootQuery(

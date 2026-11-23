@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
 import { composeLocalEpochSwitchDependencies } from '@/bootstrap/epochMigration'
 import { classifyRestoreArtifact } from '@/bootstrap/epochMigrationEntry'
@@ -403,6 +403,7 @@ test('databaseProviderRuntime quick_check and history read finish before the fir
   const beforeWrite = new Error('rfc398-read-phases-complete')
   await expect(
     prepareEpoch2DatabaseProviderRuntime({
+      liveSchema: persistenceSchemaBinding,
       config: { provider: 'sqlite' },
       sqlitePath: f.path,
       generationPointerPath: join(f.home, 'database-generation.json'),
@@ -425,7 +426,7 @@ test('doctorDiagnostics credentials, integrity and lifecycle readers use the pub
   expect(checkSealedCredentials()).toMatchObject({ ok: true, message: 'no sealed credentials' })
   expect(checkDbIntegrity()).toMatchObject({ ok: true, message: 'quick_check ok' })
   let lifecycleRead = false
-  const checks = await checkConfiguredDatabase(logicalSchemaContract, {
+  const checks = await checkConfiguredDatabase(logicalSchemaContract, persistenceSchemaBinding, {
     async countLifecycleStates(source) {
       expect(source.provider).toBe('sqlite')
       if (source.provider !== 'sqlite') throw new Error('expected SQLite')

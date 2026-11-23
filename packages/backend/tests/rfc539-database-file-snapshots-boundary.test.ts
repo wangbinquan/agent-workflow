@@ -18,7 +18,7 @@ import {
   fileSnapshotTrackerOf,
   inheritDatabaseHandle,
 } from '@/platform/persistence/sessionTables'
-import { persistenceSchemaBinding } from '@/platform/persistence/schema/tables'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { runSqliteWalCheckpointTick } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
@@ -162,7 +162,7 @@ describe('RFC-539 ① 文件快照计数没有进程级状态；会话把自己�
 function boundHandle(): object {
   return bindDatabaseHandle(
     {},
-    persistenceSchemaBinding().nativeTables.sqlite as never,
+    persistenceSchemaBinding.nativeTables.sqlite as never,
     createSqliteCapabilities(),
   )
 }

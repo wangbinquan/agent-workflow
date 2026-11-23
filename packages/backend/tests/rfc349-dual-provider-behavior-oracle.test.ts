@@ -39,6 +39,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { sha256Hex } from '@/util/hash'
 import { canonicalJson } from '@agent-workflow/shared'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 type SqlStep = Readonly<{
   label: string
@@ -121,7 +122,7 @@ function createScriptedPostgresqlFixture(
     async close() {},
   }
   return {
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     assertExhausted() {
       expect(remaining.map((step) => step.label)).toEqual([])
     },

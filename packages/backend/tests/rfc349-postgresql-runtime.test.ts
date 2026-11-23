@@ -16,6 +16,7 @@ import {
   type PostgresqlPoolOptions,
   type PostgresqlReservedConnection,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 type PostgresqlConfig = Extract<DatabaseConfig, { provider: 'postgresql' }>
 
@@ -280,7 +281,7 @@ test('native database transactions include their reservation in pool-wait teleme
     telemetryWallNow: () => 1_000,
     telemetryMonotonicNow: () => ticks.shift() ?? 25,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   await db.transaction(async (tx) => {
     await rawRows(tx, sql`select 1`)
   })

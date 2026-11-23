@@ -29,6 +29,7 @@ import {
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlTestDatabase } from './helpers/testDatabase'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const render = (q: ReturnType<typeof sql>): string => new SQLiteSyncDialect().sqlToQuery(q).sql
 
@@ -272,7 +273,7 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         await raw(
           'create table public.cap_scratch(id serial primary key, name text unique, v bigint)',
         )
-        const db = createPostgresqlDatabaseClient(runtime)
+        const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
         const session = createPostgresqlDatabaseSession(db)
 
         await rawExec(db, sql`insert into cap_scratch(name, v) values ('stable', 7)`)

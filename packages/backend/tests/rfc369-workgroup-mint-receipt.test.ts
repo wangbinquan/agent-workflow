@@ -32,6 +32,7 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid(),
@@ -87,7 +88,9 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
       const bodyRuns = [0, 0, 0]
       const clients = bodyRuns.map(() =>
         harness.applicationBinding.provider === 'postgresql'
-          ? createPostgresqlDatabaseClient(harness.applicationBinding.runtime)
+          ? createPostgresqlDatabaseClient(harness.applicationBinding.runtime, {
+              liveSchema: persistenceSchemaBinding,
+            })
           : db,
       )
       const persistences = clients.map((client, index) =>

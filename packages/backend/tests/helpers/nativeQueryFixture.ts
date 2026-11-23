@@ -4,7 +4,11 @@ import { afterAll } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle as sqliteDrizzle } from 'drizzle-orm/bun-sqlite'
 import { drizzle as pgDrizzle } from 'drizzle-orm/bun-sql'
-import { nativeTableSets, rowRuleCodes } from '@/bootstrap/persistenceSchema'
+import {
+  nativeTableSets,
+  persistenceSchemaBinding,
+  rowRuleCodes,
+} from '@/bootstrap/persistenceSchema'
 import {
   createPostgresqlCapabilities,
   createSqliteCapabilities,
@@ -32,12 +36,14 @@ export function nativeQueryFixture(provider: DatabaseProvider): {
       sqliteDrizzle(client, { schema: nativeTableSets.sqlite }),
       nativeTableSets.sqlite,
       createSqliteCapabilities(),
+      persistenceSchemaBinding,
     )
   } else {
     db = bindDatabaseHandle(
       pgDrizzle.mock({ schema: nativeTableSets.postgresql }),
       nativeTableSets.postgresql,
       createPostgresqlCapabilities(),
+      persistenceSchemaBinding,
     )
   }
   bindSchemaRowRuleErrors(db, rowRuleCodes)

@@ -17,6 +17,7 @@ import {
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider } from './helpers/eachProvider'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 function repository(
   id: string,
@@ -91,7 +92,7 @@ function postgresqlCompilerProbe() {
     },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   return { db, runtime, stop, statements }
 }
 

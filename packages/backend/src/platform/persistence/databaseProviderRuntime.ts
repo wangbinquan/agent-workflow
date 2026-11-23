@@ -45,6 +45,7 @@ import {
   type PostgresqlDatabaseClient,
 } from './postgresqlDatabaseClient'
 import type { LogicalSchemaContract } from './schemaContract'
+import type { RuntimeSchemaBinding } from './schema/tables'
 import type { PostgresqlMigrationHistory } from './postgresqlMigrationSequence'
 import { existsSync } from 'node:fs'
 import { canonicalSchemaJson, digestSchemaContract } from './schema/canonical'
@@ -160,6 +161,8 @@ export interface ResolveDatabaseProviderRuntimeOptions {
   readonly generationPointerPath: string
   readonly operationsRoot: string
   readonly contract: LogicalSchemaContract
+  /** RFC-545: the live schema bootstrap composed; the PostgreSQL client is built with it. */
+  readonly liveSchema: RuntimeSchemaBinding
   readonly env?: Readonly<Record<string, string | undefined>>
   /** Infrastructure test seam; production uses Bun.SQL. */
   readonly postgresqlPoolFactory?: (options: PostgresqlPoolOptions) => PostgresqlPool
@@ -300,7 +303,7 @@ function composeSqliteProviderRuntime(
 }
 
 function composePostgresqlProviderRuntime(
-  options: { readonly contract: LogicalSchemaContract },
+  options: { readonly contract: LogicalSchemaContract; readonly liveSchema: RuntimeSchemaBinding },
   generation: ResolvedDatabaseGeneration,
   runtime: InstrumentedPostgresqlDatabaseRuntime,
 ): PostgresqlDatabaseProviderRuntime {
@@ -311,7 +314,8 @@ function composePostgresqlProviderRuntime(
     runtime,
     operations: createPostgresqlDatabaseOperationalAdapter({ runtime, contract: options.contract }),
     telemetry: runtime.telemetry,
-    openClient: () => (client ??= createPostgresqlDatabaseClient(runtime)),
+    openClient: () =>
+      (client ??= createPostgresqlDatabaseClient(runtime, { liveSchema: options.liveSchema })),
     close: () => runtime.close(),
   })
 }
@@ -821,6 +825,7 @@ async function preparePostgresqlEpoch2(
 export async function prepareHostedPostgresqlProviderRuntime(input: {
   readonly config: DatabaseConfig
   readonly contract: LogicalSchemaContract
+  readonly liveSchema: RuntimeSchemaBinding
   readonly generation: ResolvedDatabaseGeneration
   readonly history?: PostgresqlMigrationHistory
   readonly schema: 'apply' | 'verify'

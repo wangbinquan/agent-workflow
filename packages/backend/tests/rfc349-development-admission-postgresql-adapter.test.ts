@@ -14,6 +14,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const COMPOSITION_SOURCE = resolve(
   import.meta.dir,
@@ -76,7 +77,9 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    lookup: composeDevelopmentAdmissionLookup(createPostgresqlDatabaseClient(runtime)),
+    lookup: composeDevelopmentAdmissionLookup(
+      createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
+    ),
     executions,
   }
 }

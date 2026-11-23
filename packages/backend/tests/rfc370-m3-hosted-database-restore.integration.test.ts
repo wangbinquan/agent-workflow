@@ -52,7 +52,7 @@ import { hostedDatabaseGeneration } from '@/platform/persistence/generationValid
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 
@@ -102,6 +102,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       await emptyTarget()
       await selectDeployment(env).migrate()
       const serving = await prepareCrewStationDatabase({
+        liveSchema: persistenceSchemaBinding,
         contract: logicalSchemaContract,
         environment,
         schema: 'verify',
@@ -229,6 +230,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         let targetOpens = 0
         const attempt = (override: Partial<typeof identity> = {}) =>
           restoreHostedDatabaseInstallation({
+            liveSchema: persistenceSchemaBinding,
             headContract: logicalSchemaContract,
             ...identity,
             ...override,
@@ -277,6 +279,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         runtime,
         reference: reference!,
         contract,
+        liveSchema: persistenceSchemaBinding,
         plan,
         generation: { generationId: generation.generationId, operationId: generation.operationId! },
         objects: fixture.objects,
@@ -377,6 +380,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         verifiedConnection.release()
       }
       const restored = await prepareCrewStationDatabase({
+        liveSchema: persistenceSchemaBinding,
         contract: logicalSchemaContract,
         environment,
         schema: 'verify',

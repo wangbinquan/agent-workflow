@@ -35,7 +35,7 @@ import {
 import { composeCrewStationDevelopmentAdapters } from '@/modules/integration/composition'
 import { composeCrewStationReviewArtifacts } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
 import { composeCrewStationCodeReviewArtifacts } from '@/modules/workspace-insight/composition'
-import { logicalSchemaContract } from './persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from './persistenceSchema'
 import { composeCrewStationMaintenanceDescriptor } from './crewstationMaintenance'
 import {
   composeCrewStationResourceArtifacts,
@@ -115,11 +115,16 @@ export async function composeCrewStationProfile(
     throw new Error('AW_AGENT_PROFILES contains duplicate runtime/model mappings')
   const prepared = await prepareCrewStationDatabase({
     contract: logicalSchemaContract,
+    liveSchema: persistenceSchemaBinding,
     environment,
     schema: 'verify',
     env,
   })
-  const system = await composeCrewStationSystemSelections({ environment, prepared })
+  const system = await composeCrewStationSystemSelections({
+    environment,
+    prepared,
+    liveSchema: persistenceSchemaBinding,
+  })
   const db = system.database
   const historyRestrictions = createActiveHistoryRestrictionProvider()
   const initialized = selectExecutionInitialization(system.executionAuthority)

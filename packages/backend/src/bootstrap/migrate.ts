@@ -3,7 +3,7 @@
 // exists as a recovery / debug fallback when the daemon won't start due to
 // a failed migration that needs inspection.
 
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { loadConfig } from '@/config'
 import { Paths } from '@/util/paths'
 import {
@@ -44,6 +44,7 @@ export async function migrateCommand(
   }
   const prepared = await prepareManualDatabaseMigration(
     logicalSchemaContract,
+    persistenceSchemaBinding,
     // RFC-524: without options the command selects the local config file.
     options ?? { kind: 'file', configuration: createFileDatabaseConfiguration(Paths.config) },
   ).catch((error: unknown) => {

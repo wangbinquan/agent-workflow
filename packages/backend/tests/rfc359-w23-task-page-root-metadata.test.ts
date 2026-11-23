@@ -24,6 +24,7 @@ import {
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const VIEWER: TaskListViewer = { userId: 'w21-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -398,7 +399,7 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
     env: { RFC359_TASK_PAGE_PROBE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const db = createPostgresqlDatabaseClient(runtime)
+  const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   try {
     const parsed = parseTaskOperationsQuery(VIEWER, { q: 'MiXeD%_', limit: '2' }, OPTIONS)
     for (const cursor of [

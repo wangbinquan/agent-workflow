@@ -4,7 +4,7 @@
 // provider runtime.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -136,7 +136,7 @@ function postgresqlFixture() {
   }
   return {
     runtime,
-    db: createPostgresqlDatabaseClient(runtime),
+    db: createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
     statements,
     get closes() {
       return closes

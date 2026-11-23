@@ -25,7 +25,7 @@ import { createDatabaseApplicationConfiguration } from '@/modules/system-operati
 import { readHostedDatabaseBackupProvenance } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupProvenance'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { POSTGRESQL_METADATA_SCHEMA } from '@/platform/persistence/postgresqlSchema'
-import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 const PROJECT = 'agent-workflow'
@@ -51,6 +51,7 @@ if (providers.includes('postgresql')) {
   })
   const serve = (service: string) =>
     prepareCrewStationDatabase({
+      liveSchema: persistenceSchemaBinding,
       contract: logicalSchemaContract,
       environment: { project: PROJECT, service },
       schema: 'verify',
