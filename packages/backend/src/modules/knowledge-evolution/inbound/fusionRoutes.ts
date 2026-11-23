@@ -41,8 +41,9 @@ import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
-import type { FusionOperations } from '@/modules/knowledge-evolution/public/participants'
+
 import { directRequestAuthority } from '@/routes/operationAuthority'
+import type { FusionOperations } from '../application/ports/fusionOperations'
 
 export interface FusionRouteDependencies {
   readonly operations: FusionOperations

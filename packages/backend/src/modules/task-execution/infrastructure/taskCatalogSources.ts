@@ -2,7 +2,7 @@
 // 此前 sqlite / postgresql 两份薄壳只差客户端类型；目录源的适配逻辑一个字都不在这里。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
+
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 
 import {
@@ -11,6 +11,7 @@ import {
 } from '../application/adapters/task-catalog-adapter'
 import { createTaskExecutionCatalogSourceFactory } from './taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from './taskListPage'
+import type { OwnerIdentityQueries } from '@/modules/identity-access/public/queries'
 
 export function createDatabaseTaskExecutionCatalogSourceFactory(
   db: PersistenceDb,

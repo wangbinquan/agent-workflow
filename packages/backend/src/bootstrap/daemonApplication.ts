@@ -820,7 +820,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
     'fusion-decision-recovery': async () => {
       const { recoverFusionDecisions } =
-        await import('@/modules/knowledge-evolution/public/operations')
+        await import('@/modules/knowledge-evolution/composition/fusion')
       const r = await recoverFusionDecisions(fusionOperations.persistence)
       if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
         log.info('fusion decision recovery on boot', { ...r })
@@ -828,7 +828,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
     'fusion-resource-seed': async () => {
       const { seedFusionResources } =
-        await import('@/modules/knowledge-evolution/public/operations')
+        await import('@/modules/knowledge-evolution/composition/fusion')
       await seedFusionResources(fusionOperations.persistence)
     },
     'demo-seed': async () => {

@@ -1051,6 +1051,15 @@ const FORBIDDEN_TYPE_NAME = new Set([
 const FORBIDDEN_TYPE_IMPORT =
   /^(?:@\/(?:auth|cli|config|db|embed|mcp|platform|routes|server|services|util|ws)(?:\/|$)|drizzle-orm(?:\/|$)|hono(?:\/|$)|node:(?:child_process|fs|path|process)(?:\/|$)|(?:fs|path|process)$)/
 
+/**
+ * RFC-552: the operation contract types an operations entry exposes on purpose (descriptors, aliases, codecs). Inside
+ * `public/operations` they are the contract itself, not debt; everywhere else the platform rule above still applies.
+ */
+const OPERATION_CONTRACTS = '@/platform/operations/contracts'
+/** RFC-552: the OperationCatalog descriptor builders (RFC-344); a function that calls one is a descriptor factory. */
+const DESCRIPTOR_BUILDERS = new Set(['defineQueryOperation', 'defineCommandOperation'])
+const DESCRIPTOR_BUILDER_MODULE = '@/platform/operations/definitions'
+
 /** zod 从 schema 推导类型的三个入口。 */
 const ZOD_INFERENCE_HELPERS = new Set(['infer', 'input', 'output'])
 
@@ -1405,8 +1414,13 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
     }
   }
 
-  const visitDeclaration = (unit: SourceUnit, declaration: ts.Declaration, chain: string): void => {
-    const key = `${unit.path}:${declaration.pos}:${declaration.end}`
+  const visitDeclaration = (
+    unit: SourceUnit,
+    declaration: ts.Declaration,
+    chain: string,
+    operationsEntry: boolean,
+  ): void => {
+    const key = `${unit.path}:${declaration.pos}:${declaration.end}:${operationsEntry ? 'operations' : 'entry'}`
     if (visitedDeclarations.has(key)) return
     visitedDeclarations.add(key)
 
@@ -1440,7 +1454,9 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
       }
       if (ts.isImportTypeNode(node)) {
         const specifier = literalSpecifier(node.argument)
-        if (specifier !== null && FORBIDDEN_TYPE_IMPORT.test(specifier)) {
+        if (operationsEntry && specifier === OPERATION_CONTRACTS) {
+          // RFC-552: the operation contract itself — neither debt nor something to descend into.
+        } else if (specifier !== null && FORBIDDEN_TYPE_IMPORT.test(specifier)) {
           violations.add(`${chain}: forbidden type import ${specifier}`)
         } else if (specifier !== null && node.qualifier !== undefined) {
           const target = resolveUnit(units, unit.path, specifier)
@@ -1449,7 +1465,7 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
             : node.qualifier.right.text
           const resolved = target ? resolveNamedDeclaration(units, target, importedName) : undefined
           if (resolved !== undefined) {
-            visitDeclaration(resolved.unit, resolved.declaration, chain)
+            visitDeclaration(resolved.unit, resolved.declaration, chain, operationsEntry)
           }
         }
       }
@@ -1463,7 +1479,9 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
         }
         const binding = bindings.get(localName)
         if (binding !== undefined) {
-          if (FORBIDDEN_TYPE_IMPORT.test(binding.specifier)) {
+          if (operationsEntry && binding.specifier === OPERATION_CONTRACTS) {
+            // RFC-552: the operation contract itself — neither debt nor something to descend into.
+          } else if (FORBIDDEN_TYPE_IMPORT.test(binding.specifier)) {
             violations.add(
               `${chain}: forbidden type import ${binding.specifier}#${binding.importedName === '*' ? name : binding.importedName}`,
             )
@@ -1477,12 +1495,13 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
                 )
               : undefined
             if (resolved !== undefined) {
-              visitDeclaration(resolved.unit, resolved.declaration, chain)
+              visitDeclaration(resolved.unit, resolved.declaration, chain, operationsEntry)
             }
           }
         } else {
           const local = localDeclarations.get(name)
-          if (local !== undefined && local !== declaration) visitDeclaration(unit, local, chain)
+          if (local !== undefined && local !== declaration)
+            visitDeclaration(unit, local, chain, operationsEntry)
         }
       }
       ts.forEachChild(node, visitType)
@@ -1490,21 +1509,65 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
     for (const typeNode of declarationTypeNodes(declaration)) visitType(typeNode)
   }
 
-  // RFC-344 operation entrypoints expose descriptor factories whose invoke
-  // functions are deliberately executable. Their DTO closure is enforced by
-  // versioned exact codecs + catalog self-check, so treating every function
-  // member as the old open-public-type debt would reject the operation model
-  // by construction. Filename/export-shape checks above still apply.
-  for (const root of publicSurfaceRoots(units).filter(
-    (entry) => moduleLocation(entry.publicUnit.path)?.rest !== 'public/operations',
-  )) {
+  // RFC-344 operation entrypoints expose descriptor factories whose invoke functions are deliberately executable; their
+  // DTO closure is enforced by versioned exact codecs + catalog self-check, so treating every function member as the old
+  // open-public-type debt would reject the operation model by construction. RFC-552 (RFC-294 design §3.2) narrows the
+  // exemption to exactly that: inside `public/operations` a descriptor factory is skipped and the operation contract types
+  // are allowed, while every other export of the entry (repositories, lifecycle functions, records) is checked like any
+  // public type. Filename/export-shape checks above still apply.
+  for (const root of publicSurfaceRoots(units)) {
+    const operationsEntry = moduleLocation(root.publicUnit.path)?.rest === 'public/operations'
+    if (
+      operationsEntry &&
+      isDescriptorFactory(root.declaration, bindingIndexes.get(root.unit.path) ?? new Map())
+    )
+      continue
     visitDeclaration(
       root.unit,
       root.declaration,
       `${canonicalModulePath(root.unit.path)}#${root.symbol}`,
+      operationsEntry,
     )
   }
   return [...violations].sort()
+}
+
+/**
+ * RFC-552: a function (declaration, or a const initialised with an arrow / function expression) whose body calls one of
+ * the OperationCatalog descriptor builders imported from the platform — it returns descriptors, and their `invoke`
+ * members are executable by design (RFC-344).
+ */
+export function isDescriptorFactory(
+  declaration: ts.Declaration,
+  bindings: ReadonlyMap<string, ImportBinding>,
+): boolean {
+  const body = ts.isFunctionDeclaration(declaration)
+    ? declaration.body
+    : ts.isVariableDeclaration(declaration) &&
+        declaration.initializer !== undefined &&
+        (ts.isArrowFunction(declaration.initializer) ||
+          ts.isFunctionExpression(declaration.initializer))
+      ? declaration.initializer.body
+      : undefined
+  if (body === undefined) return false
+  let builds = false
+  const visit = (node: ts.Node): void => {
+    if (builds) return
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const binding = bindings.get(node.expression.text)
+      if (
+        binding !== undefined &&
+        binding.specifier === DESCRIPTOR_BUILDER_MODULE &&
+        DESCRIPTOR_BUILDERS.has(binding.importedName)
+      ) {
+        builds = true
+        return
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(body)
+  return builds
 }
 
 function typeNames(node: ts.TypeNode | undefined): string[] {

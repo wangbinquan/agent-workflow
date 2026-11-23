@@ -247,11 +247,14 @@ describe('RFC-305 identity-access architecture', () => {
       'DrizzleOidcProviderRepository',
       'IdentityUserOperations',
       'OidcProviderRepository',
-      'OwnerIdentityQueries',
     ])
     // RFC-551: the access query, its input, the git commit identity query and `requireUserAccess` had no reader outside
     // the module.
-    expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual(['GetUserProfile'])
+    // RFC-552: the owner identity read port is a query; it moved here from operations.ts.
+    expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual([
+      'GetUserProfile',
+      'OwnerIdentityQueries',
+    ])
     // RFC-551: `AdminUserAccessView` moved into `application/view.ts`, the view the user operations project from.
     expect(exportedNames(resolve(publicRoot, 'types.ts'))).toEqual([
       'ManagedUserStatus',
@@ -353,8 +356,9 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/intent/application/resourceCatalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/composition/resourceCatalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts -> @/modules/identity-access/public/participants',
+      // RFC-552: the fusion persistence port (and the authority snapshot it takes) left knowledge-evolution's public.
+      'packages/backend/src/modules/knowledge-evolution/application/ports/fusionPersistence.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/knowledge-evolution/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/memory/composition.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts -> @/modules/identity-access/public/participants',
@@ -417,13 +421,13 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> @/modules/identity-access/public/queries',
       // RFC-359 AC-1（第 12 刀）：运行时参与者合一后按新文件名重新落位（账本按字典序）。
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts -> @/modules/identity-access/public/operations',
-      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts -> @/modules/identity-access/public/queries',
+      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/modules/task-execution/infrastructure/taskRecoverySelection.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/public/queries.ts -> @/modules/identity-access/public/participants',

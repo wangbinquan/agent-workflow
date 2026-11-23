@@ -21,7 +21,6 @@ import type { CommandContext, QueryContext } from './participants'
 
 export type { OidcProviderRepository } from '../application/ports/oidcProviderPersistence'
 export { DrizzleOidcProviderRepository } from '../infrastructure/oidcProviderRepository'
-export { type OwnerIdentityQueries } from '../application/ports/ownerIdentityQueries'
 
 export interface IdentityUserOperations {
   readonly listUsers: QueryOperationDescriptor<

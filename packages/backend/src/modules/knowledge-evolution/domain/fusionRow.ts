@@ -5,8 +5,6 @@
 
 import type { Fusion, FusionSkipped, FusionStatus } from '@agent-workflow/shared'
 
-import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
-
 /** 坏 JSON / 非数组 / 非字符串项一律丢弃，绝不抛——这是列表页的取数路径。 */
 export function jsonArray(s: string | null): string[] {
   if (s === null) return []
@@ -51,4 +49,30 @@ export function rowToFusion(row: FusionPersistenceRecord): Fusion {
     decisionReason: row.decisionReason,
     error: row.error,
   }
+}
+
+// RFC-552 (RFC-294 S9): moved from `public/types` (no other module read it); the stored fusion row this file maps.
+export interface FusionPersistenceRecord {
+  readonly id: string
+  readonly skillId: string
+  readonly skillName: string
+  readonly baseSkillVersion: number
+  readonly preconditionToken: string | null
+  readonly memoryIdsJson: string
+  readonly intent: string
+  readonly status: FusionStatus
+  readonly iteration: number
+  readonly currentTaskId: string | null
+  readonly proposedWorktreePath: string | null
+  readonly proposedDiff: string | null
+  readonly incorporatedMemoryIdsJson: string | null
+  readonly skippedJson: string | null
+  readonly changelog: string | null
+  readonly appliedSkillVersion: number | null
+  readonly ownerUserId: string
+  readonly createdAt: number
+  readonly decidedByUserId: string | null
+  readonly decidedAt: number | null
+  readonly decisionReason: string | null
+  readonly error: string | null
 }

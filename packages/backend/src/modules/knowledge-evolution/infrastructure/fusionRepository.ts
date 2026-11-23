@@ -19,22 +19,7 @@ import type { FusionStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import type {
-  FusionBuiltinWorkflowSeed,
-  FusionDecisionRecoveryReceipt,
-  FusionPersistencePatch,
-  FusionPersistenceRecord,
-  FusionProvenanceRepairReceipt,
-  FusionResourceSeed,
-  FusionSkillAccess,
-  FusionSkillIdentity,
-} from '../public/types'
-import type {
-  FusionApplyCommand,
-  FusionDecisionClaimInput,
-  FusionPersistence,
-  FusionStatusCas,
-} from '../public/participants'
+
 import {
   QUARANTINED_FUSION_SKILL_ID,
   canEditFusionSkill,
@@ -44,6 +29,20 @@ import {
   resolveFusionSkillAccess,
 } from './fusionRepositorySupport'
 import { ConflictError, staleConflictError } from '@/util/errors'
+import type {
+  FusionPersistence,
+  FusionDecisionRecoveryReceipt,
+  FusionProvenanceRepairReceipt,
+  FusionResourceSeed,
+  FusionSkillAccess,
+  FusionApplyCommand,
+  FusionDecisionClaimInput,
+  FusionStatusCas,
+  FusionPersistencePatch,
+  FusionSkillIdentity,
+} from '../application/ports/fusionPersistence'
+import type { FusionBuiltinWorkflowSeed } from '../domain/fusionWorkflowSeed'
+import type { FusionPersistenceRecord } from '../domain/fusionRow'
 
 type FusionRow = PersistenceTables['fusions']['$inferSelect']
 type SkillRow = PersistenceTables['skills']['$inferSelect']

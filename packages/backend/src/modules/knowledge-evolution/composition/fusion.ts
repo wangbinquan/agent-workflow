@@ -8,11 +8,9 @@ import {
   type FusionSkillVersionCommit,
 } from '../infrastructure/fusionRepository'
 import type { MemoryCatalogOperations } from '../../memory/public/operations'
-import type {
-  FusionEngineTaskOperations,
-  FusionOperations,
-  FusionPersistence,
-} from '../public/participants'
+import type { FusionEngineTaskOperations } from '../public/participants'
+import type { FusionOperations } from '../application/ports/fusionOperations'
+import type { FusionPersistence } from '../application/ports/fusionPersistence'
 
 interface FusionCompositionDependencies {
   readonly appHome: string
@@ -95,3 +93,15 @@ export function composeFusionOperationsFor(
 
 /** RFC-381 起两个 provider 的融合运营都经 `composeFusionOperationsFor`；持久化旧名仍由系统运维恢复使用。 */
 export { composeFusionPersistenceFor as composeSqliteFusionPersistence }
+
+// RFC-552 (RFC-294 S9): the fusion maintenance steps bootstrap runs — built-in resource seeding, provenance repair at
+// boot, rollback of half-applied decisions, and the reconcile loop body (their order matters; see the application). They
+// are daemon-lifecycle functions, not user commands or operation descriptors, and only bootstrap calls them, so they
+// leave the public `operations` entry (RFC-294 design §3.2) and are handed over here.
+export {
+  recoverFusionDecisions,
+  reconcileFusion,
+  reconcileRunningFusions,
+  repairFusionProvenance,
+  seedFusionResources,
+} from '../application/fusionOrchestration'

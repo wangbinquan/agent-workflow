@@ -16,13 +16,13 @@ import type {
 import { and, eq, inArray } from 'drizzle-orm'
 import { projectStoredTaskRepositorySummary } from '../taskRepositorySurface'
 
-import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import {
   defaultTaskListRowRef,
   taskListVisibilityCondition,
   type TaskListViewer,
 } from './authorization'
 import type { TaskListPageDb } from './db'
+import type { OwnerIdentityQueries } from '@/modules/identity-access/public/queries'
 
 // ── 裸 SQL 回读的数值归一。**每一处**从 SQL 行里读数字的地方都必须走这三个 helper ──
 //

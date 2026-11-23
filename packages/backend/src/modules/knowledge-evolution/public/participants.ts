@@ -9,56 +9,9 @@
 // 本刀只做归位，不改形状，避免「表已归位、跨聚合直写还在」与「形状改了但还在 legacy」
 // 两种半截状态同时存在。
 
-import type { FusionStatus, TaskStatus } from '@agent-workflow/shared'
-import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
+import type { TaskStatus } from '@agent-workflow/shared'
 
-import type { MemoryCatalogOperations } from '../../memory/public/operations'
-import type { SkillTreeVersionOperations } from '../../resource-catalog/public/participants'
-import type {
-  FusionBuiltinWorkflowSeed,
-  FusionDecisionRecoveryReceipt,
-  FusionEngineTaskResult,
-  FusionPersistencePatch,
-  FusionPersistenceRecord,
-  FusionProvenanceRepairReceipt,
-  FusionResourceSeed,
-  FusionSkillAccess,
-  FusionSkillIdentity,
-  FusionTreeFile,
-  FusionWorkspaceSeed,
-} from './types'
-
-export interface FusionPersistence {
-  seedResources(seed: FusionResourceSeed): Promise<void>
-  loadBuiltinWorkflowId(seed: FusionBuiltinWorkflowSeed, ownerUserId: string): Promise<string>
-
-  loadSkillAccess(
-    actor: AuthenticatedAuthoritySnapshot,
-    skillId: string,
-  ): Promise<FusionSkillAccess | null>
-  loadSkillIdentity(skillId: string): Promise<FusionSkillIdentity | null>
-
-  create(record: FusionPersistenceRecord): Promise<void>
-  load(id: string): Promise<FusionPersistenceRecord | null>
-  listSummaries(filter?: {
-    readonly skillId?: string
-    readonly status?: FusionStatus
-  }): Promise<readonly FusionPersistenceRecord[]>
-  listIdsByStatus(status: FusionStatus): Promise<readonly string[]>
-  listAwaitingApprovalOwners(): Promise<readonly { id: string; ownerUserId: string }[]>
-
-  casStatus(command: FusionStatusCas): Promise<boolean>
-  claimDecision(command: FusionDecisionClaimInput): Promise<boolean>
-  claimCancellation(input: {
-    readonly id: string
-    readonly actor: AuthenticatedAuthoritySnapshot
-    readonly now: number
-  }): Promise<{ readonly ok: false } | { readonly ok: true; readonly taskId: string | null }>
-  apply(command: FusionApplyCommand): Promise<{ readonly versionIndex: number }>
-
-  repairProvenance(): Promise<FusionProvenanceRepairReceipt>
-  recoverDecisions(now?: number): Promise<FusionDecisionRecoveryReceipt>
-}
+import type { FusionEngineTaskResult, FusionWorkspaceSeed } from './types'
 
 export interface FusionEngineTaskRecord {
   readonly status: TaskStatus
@@ -94,54 +47,6 @@ export interface FusionEngineTaskOperations {
   /** Gives the task's workspace back once its proposal is no longer needed there. */
   release(taskId: string): Promise<void>
   cancel(taskId: string): Promise<void>
-}
-
-export interface FusionOperations {
-  readonly persistence: FusionPersistence
-  readonly memories: MemoryCatalogOperations
-  readonly tasks: FusionEngineTaskOperations
-  /** Seeds (strict version trees) and proposal candidates of the selected skill storage. */
-  readonly skillTrees: SkillTreeVersionOperations
-}
-
-// ---------------------------------------------------------------------------
-// RFC-353 T5 —— fusion 的**命令载荷**形状。
-//
-// 它们是入参 DTO（谁在改、从什么状态改到什么状态、这次提交带什么），不是 participant。
-// 它们与 `FusionPersistence` 的方法签名绑定，所以保留在 participants 面；
-// RFC-400：调用方身份直接使用 Identity Access 的 AuthenticatedAuthoritySnapshot。
-//
-// `FusionDecisionClaimInput` 原名 `FusionDecisionClaimInput`：capability-forge 守卫按**名字后缀**
-// 判敏感类型（`…Claim` 视为需要 brand + 唯一工厂 + 私有注册表的能力对象）。它其实只是入参 DTO，
-// 所以改名而不是给它铸一个假的能力合同——守卫是在说这个名字承诺了它并不提供的东西。
-// ---------------------------------------------------------------------------
-
-export interface FusionDecisionClaimInput {
-  readonly id: string
-  readonly actor: AuthenticatedAuthoritySnapshot
-  readonly from: FusionStatus
-  readonly to: FusionStatus
-  readonly patch?: FusionPersistencePatch
-}
-
-export interface FusionStatusCas {
-  readonly id: string
-  readonly from: readonly FusionStatus[]
-  readonly to: FusionStatus
-  readonly expectedCurrentTaskId?: string | null
-  readonly patch?: FusionPersistencePatch
-}
-
-export interface FusionApplyCommand {
-  readonly fusionId: string
-  readonly actor: AuthenticatedAuthoritySnapshot
-  /** The proposed skill tree that becomes the next version. */
-  readonly proposal: readonly FusionTreeFile[]
-  readonly incorporatedMemoryIds: readonly string[]
-  readonly summary: string
-  readonly now: number
-  /** 提案所在的候选树；提交后由 RC 场景的尾部清理。 */
-  readonly candidateId?: string
 }
 
 // ---------------------------------------------------------------------------

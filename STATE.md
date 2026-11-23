@@ -9,6 +9,17 @@
   `OwnerIdentityQueries` 移到 `public/queries`；收窄后显形的旧债逐条入账并写明后继；`public/operations` 的导出逐名入账；新增 RFC-552 用例。
 - **不做**：把 `auth/oidc/providers.ts`、`services/repoCredentials.ts` 迁入模块（各自另立）；S9 的其他项。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-551 转 Done 同一提交），实现与验证后再提交。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 运维函数归 composition（装配入口）、查询端口归 `public/queries`、fusion 的端口与记录按使用方
+  落在 application / domain；C11 public 只减不增（knowledge-evolution 少 19 个名字与 operations 入口）；C12 RFC-552 用例覆盖 `public/operations`
+  的逐名清单、判据三条规则的正反 fixture、运维函数与连锁类型的新位置、`OwnerIdentityQueries` 的入口；C13 public 类型偏差因判据收窄显形 53 → 59，
+  逐条入账并写明后继，其余计数不升。
+- **§14 不变量 / S9 第八步**：检测器不再整体豁免 `public/operations`（S9 第 1 项的检测器部分完成）；该入口的导出逐名入账，余下的非描述构件是
+  遗留实现在用的两组仓储构件（各有迁移后继）。
+- **集中验证**（基于 `7f9ef1a5d`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。查出两处本人缺陷并修正：运维函数离开 public
+  后 knowledge-evolution 的 14 个类型连锁变成未消费（五轮，按使用方挪进 application / domain），以及 `rfc305` 的 identity-access 边清单没跟上
+  连锁。tsc 0 错，eslint / promises / prettier 无告警；首轮 605 个用例文件 603 个通过、连锁后重选 654 个 653 个通过（红的就是这两处，另有 RFC-551
+  留下的 `rfc376-report` 已单独修正），改后复跑通过；读已提交源码的两个用例在候选导出里通过；八种变异都被认出；架构报告偏差 53 → 59、未消费
+  仍为 0、其余门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-551 identity-access 与 source-control 的未消费 public 符号清零（Done；`design/RFC-551-public-unconsumed-sweep-identity-source-control/`）
 

@@ -9,7 +9,6 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 
-import type { FusionBuiltinWorkflowSeed } from '@/modules/knowledge-evolution/public/types'
 import { FUSION_WORKFLOW_DESCRIPTION, MERGER_PROMPT_TEMPLATE } from './fusionPrompt'
 
 /**
@@ -84,4 +83,13 @@ export function fusionBuiltinWorkflowSeed(
     definition: canonicalFusionWorkflowDefinition(identity),
     mergerAgentId: identity.mergerAgentId,
   }
+}
+
+// RFC-552 (RFC-294 S9): moved from `public/types` (no other module read it); the built-in workflow seed this file builds.
+export interface FusionBuiltinWorkflowSeed {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+  readonly definition: WorkflowDefinition
+  readonly mergerAgentId: string
 }

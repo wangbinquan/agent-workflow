@@ -34,18 +34,8 @@ import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
-import type {
-  FusionDecisionRecoveryReceipt,
-  FusionPersistencePatch,
-  FusionPersistenceRecord,
-  FusionProvenanceRepairReceipt,
-  FusionTreeFile,
-} from '@/modules/knowledge-evolution/public/types'
-import type {
-  FusionEngineTaskOperations,
-  FusionOperations,
-  FusionPersistence,
-} from '@/modules/knowledge-evolution/public/participants'
+import type { FusionTreeFile } from '@/modules/knowledge-evolution/public/types'
+import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
@@ -70,6 +60,14 @@ import {
   fusionBuiltinWorkflowSeed,
   serializeMemoriesForPrompt,
 } from '@/modules/knowledge-evolution/domain'
+import type { FusionOperations } from './ports/fusionOperations'
+import type {
+  FusionPersistence,
+  FusionDecisionRecoveryReceipt,
+  FusionProvenanceRepairReceipt,
+  FusionPersistencePatch,
+} from './ports/fusionPersistence'
+import type { FusionPersistenceRecord } from '../domain/fusionRow'
 export { isValidFusionTransition }
 
 /**

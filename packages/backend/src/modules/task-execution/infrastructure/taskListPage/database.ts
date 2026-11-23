@@ -3,10 +3,11 @@
 // 实现是 RFC-328 明令的债，正解是由装配根注入。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
+
 import { loadTaskFailureCodes } from '../taskDetailRead'
 
 import { createTaskListPage, type TaskListPage } from './page'
+import type { OwnerIdentityQueries } from '@/modules/identity-access/public/queries'
 
 export function createDatabaseTaskListPage(
   db: PersistenceDb,

@@ -25,7 +25,7 @@ import {
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import type { createComposedApp } from '@/server'
-import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
+import { reconcileRunningFusions } from '@/modules/knowledge-evolution/composition/fusion'
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { runTaskIdleTimeoutSweep } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { startBatchImportGc } from '@/modules/source-control/composition'

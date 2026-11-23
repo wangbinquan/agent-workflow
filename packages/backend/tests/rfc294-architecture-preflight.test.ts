@@ -143,19 +143,24 @@ const BARE_TYPEOF_FIXTURE = sourceUnits({
   `,
 })
 
-const OPERATION_REEXPORT_FIXTURE = sourceUnits({
-  'packages/backend/src/modules/probe/application/operations.ts': `
-    export interface ProbeOperations {
-      one(): void; two(): void; three(): void; four(): void; five(): void; six(): void
-    }
-    export function createProbeDescriptors(operations: ProbeOperations): unknown {
-      return operations
-    }
-  `,
-  'packages/backend/src/modules/probe/public/operations.ts': `
-    export { createProbeDescriptors, type ProbeOperations } from '../application/operations'
-  `,
-})
+// RFC-552: the operations-entry exemption covers descriptor factories only — functions that build descriptors with the
+// platform's `define*Operation` builders. The same function without a builder call is checked like any public type.
+const operationReexportFixture = (buildsDescriptors: boolean) =>
+  sourceUnits({
+    'packages/backend/src/modules/probe/application/operations.ts': `
+      import { defineQueryOperation } from '@/platform/operations/definitions'
+      export interface ProbeOperations {
+        one(): void; two(): void; three(): void; four(): void; five(): void; six(): void
+      }
+      export function createProbeDescriptors(operations: ProbeOperations): unknown {
+        return ${buildsDescriptors ? 'Object.freeze({ one: defineQueryOperation({ invoke: (input: unknown) => operations.one() }) })' : 'operations'}
+      }
+    `,
+    'packages/backend/src/modules/probe/public/operations.ts': `
+      export { createProbeDescriptors, type ProbeOperations } from '../application/operations'
+    `,
+  })
+const OPERATION_REEXPORT_FIXTURE = operationReexportFixture(true)
 
 describe('RFC-317 T25 —— 解析扩面与 typeof 豁免的正反 fixture', () => {
   test('shared 的类型确实被解析并检查 public 合同（撤掉扩面 ⇒ 这条红）', () => {
@@ -183,6 +188,12 @@ describe('RFC-317 T25 —— 解析扩面与 typeof 豁免的正反 fixture', ()
 
   test('public/operations 的 re-export 保留 operation-catalog 专属射程', () => {
     expect(publicSurfaceViolations(OPERATION_REEXPORT_FIXTURE)).toEqual([])
+  })
+
+  test('RFC-552：public/operations 里不构造描述的函数照常检查（豁免只为描述工厂而设）', () => {
+    expect(publicSurfaceViolations(operationReexportFixture(false))).toEqual([
+      'modules/probe/application/operations.ts#createProbeDescriptors: unsafe/open type UnknownKeyword',
+    ])
   })
 })
 
@@ -354,11 +365,22 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-471: composeSelectedDevelopmentPipelineEvidence is no longer public (its only consumer moved into the module); the
   // same open `object` field of the evidence staging namespace is now first reached through assertEvidenceStagingFactory.
   'modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingFactory: unsafe/open type ObjectKeyword',
+  // RFC-552: visible once the `public/operations` exemption narrowed to descriptor factories (RFC-294 design §3.2) — the
+  // handle contracts the routes take carry open payloads (`Record<string, unknown>`, an index signature) and the evidence
+  // file view's stream openers; successor: close them on the routes' zod schemas (S9 item 2).
+  'modules/development-automation/application/configOperations.ts#DevelopmentConfigIdentityView: unsafe/open type UnknownKeyword',
+  'modules/development-automation/application/configOperations.ts#DevelopmentConfigOperations: unsafe/open type UnknownKeyword',
+  'modules/development-automation/application/missionOperations.ts#DevelopmentMissionFileView: unsafe/open type FunctionType',
+  'modules/development-automation/application/missionOperations.ts#DevelopmentMissionOperations: unsafe/open type UnknownKeyword',
+  // RFC-552: visible once the operations exemption narrowed — the OIDC provider repository re-exported for the legacy
+  // `auth/oidc/providers.ts`; successor: that provider management moves into identity-access (W9-D).
+  'modules/identity-access/application/ports/oidcProviderPersistence.ts#OidcProviderRepository: forbidden type Partial',
   'modules/identity-access/public/participants.ts#HttpAuthenticationParticipant: unsafe/open type FunctionType',
   'modules/identity-access/public/participants.ts#WebSocketAuthenticationParticipant: unsafe/open type FunctionType',
   'modules/identity-access/public/participants.ts#WebSocketCredential: unsafe/open type ObjectKeyword',
   'modules/integration/application/ports/developmentPurposeBinding.ts#RequirementAdapterBinding: unsafe/open type ObjectKeyword',
-  'modules/knowledge-evolution/public/participants.ts#FusionPersistence: forbidden type Partial',
+  // RFC-552: the fusion persistence port left knowledge-evolution's public with the maintenance functions (no other module
+  // read it); its `Partial` patch is no longer a public deviation.
   'modules/resource-catalog/application/intent/artifactOwners.ts#IntentSkillArtifactOwner: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts#TaskAgentMaterialReferences: forbidden type import @/util/log#Logger',
   'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createAgentExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
@@ -395,6 +417,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/source-control/infrastructure/repositoryScopeAuthorization.ts#repositoryScopeExistenceReads: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: forbidden type import @/util/git#WorktreeCleanupProvenance',
   'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: unsafe/open type FunctionType',
+  // RFC-552: visible once the operations exemption narrowed — the repository workspace store and its credential sealing
+  // mutation re-exported for the legacy `services/repoCredentials.ts`; successor: that service moves into source-control.
+  'modules/source-control/ports/repositoryWorkspaceStore.ts#RepositoryCredentialSealingMutation: forbidden type Partial',
+  'modules/source-control/ports/repositoryWorkspaceStore.ts#RepositoryWorkspaceStore: unsafe/open type ObjectKeyword',
   'modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort: forbidden type Partial',
   'modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort: unsafe/open type FunctionType',
   // RFC-398 §2.7: the automatic-upgrade receipt is a JSON evidence document assembled from the

@@ -17,11 +17,12 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
-import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
+
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeStandaloneSkillVersionCommitParticipantFactory } from './helpers/resourceCatalog'
+import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/domain/fusionRow'
 
 const roots: string[] = []
 afterEach(() => {

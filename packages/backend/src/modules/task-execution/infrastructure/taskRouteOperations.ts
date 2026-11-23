@@ -113,7 +113,6 @@ import type {
   TaskReviewRepairPort,
 } from '../application/ports/collaborationRepair'
 
-import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import type {
   FrozenTaskExecutionResourceSnapshot,
   WorkflowCatalogDetail,
@@ -188,6 +187,7 @@ import {
   createTaskRouteRepairOperations,
   type TaskRepairOperations,
 } from './taskRouteRepairOperations'
+import type { OwnerIdentityQueries } from '@/modules/identity-access/public/queries'
 
 const log = createLogger('task-execution.postgresql-task-routes')
 
