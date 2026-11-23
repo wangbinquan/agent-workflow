@@ -7679,6 +7679,11 @@ S12 把模块级侧表挪到对象自己身上时（RFC-535、RFC-542 一类）�
 2. 迁移这类侧表时，把全部用 `new Proxy(` 的用例与 `helpers/competingWriter` 的导入方加进复验清单（RFC-542 是 59 个），并补“透明代理 /
    拦截方法的代理照旧走自己的路径”的用例。
 
+**反过来**（RFC-543 实撞，同日）：模块级 `WeakMap` 也可能正是为不可扩展的对象而设——冻结的对象记不了属性，只能按身份查表。RFC-543 想删
+`sessionTables.ts` 的 `contexts`，只按“调用处是否内联 `Object.freeze(...)`”查过，漏了先冻结变量再绑定的用例（`rfc395-session-table-binding`，
+RFC-395 T18 X1）与把冻结连接池交给客户端的 PostgreSQL 测试夹具，集中验证首批才红、整份撤回。删按身份键的表之前，先读该文件与相邻用例
+里的 RFC 来历，并在导入它的用例与测试助手里搜 `Object.freeze(` / `Object.seal(` / `preventExtensions(`。
+
 ## 同步参与者改异步后，**漏一个 `await` 既不会红也不会被 lint 抓**（RFC-359 W7 实测）
 
 把一个同步事务参与者（`recordArtifact(tx, …): void`）改成 `Promise<void>` 之后，生产链上**漏掉

@@ -1,4 +1,4 @@
-## 2026-11-23 RFC-543 数据库句柄上下文只记在句柄上（In Progress；`design/RFC-543-database-handle-context-registry/`）
+## 2026-11-23 RFC-543 数据库句柄上下文只记在句柄上（Withdrawn；`design/RFC-543-database-handle-context-registry/`）
 
 - **来由**：S12 第 4 项（模块级可变单例）的第十一步。provider 构造数据库时把句柄上下文（表集、引擎能力、提交后事件泵槽、整文件快照计数）交给
   句柄（`platform/persistence/sessionTables.ts`）：上下文已记在句柄与原生客户端自己的符号属性上，同一份记录却还写进一张模块级 `WeakMap`
@@ -10,6 +10,16 @@
 - **不做**：其余 47 条模块级可变单例；上下文的内容、表集校验与各访问函数的签名不变。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套与 RFC-542 转 Done 一并先提交，实现与验证后再提交。独立对账（plan
   §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **结论：撤回**（2026-11-23，实现未提交）：集中验证查出前提不成立——`contexts` 是 RFC-395 T18 X1 为冻结的句柄、原生客户端与继承句柄保留的
+  身份表（`rfc395-session-table-binding` 两条用例锁住；RFC-395 的 PostgreSQL 测试夹具交给客户端的连接池也是冻结的，`rfc395-target-test-database`
+  的 PostgreSQL 支 7 条在构造时就报 `persistence-handle-not-extensible`）。冻结的对象记不了属性，访问函数只拿到句柄，不经模块表的做法不存在。
+  工作树恢复为 HEAD；这 1 条改列为须保留的身份表，与进程级缓存一起须经用户确认是否作为例外保留并修订 design §14 口径。教训记进
+  `docs/dev-gotchas.md`。
+- **CI**：落档提交 `b3181fc02` 主 CI 70 / 70（run 45140254130，第 1 次）；实现未提交。
+- **下一步**：S12 第 4 项其余 48 条。可迁移的登记与绑定 9 条（live schema 的登记、schema 历史运行时、规范 JSON 片段缓存、日志器配置）继续拆；
+  凭据 / 访问 / 完整性相邻的 9 条只审功能地单独处理；须经用户确认是否作为例外保留的 30 条：进程级缓存与计数器 27 条、迁移历史的进程级缓存
+  2 条（`postgresqlMigrationHistory.ts` 的 `runtimeHistory` / `runtimeHeadContract`，源码注明“一份校验过的历史服务整个进程”，原列在可迁移里）与
+  句柄上下文的身份表 1 条，已在本会话向用户说明、待用户决定。
 
 ## 2026-11-22 RFC-542 行规则错误翻译与单行写入的按句柄侧表归各自的句柄（Done；`design/RFC-542-persistence-handle-side-tables/`）
 

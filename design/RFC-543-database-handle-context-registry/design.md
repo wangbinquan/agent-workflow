@@ -60,3 +60,19 @@
 - **承担**：S12 第 4 项第十一步（句柄上下文登记表，1 条）。
 - **留下**：其余 47 条（可迁移的登记与绑定 11 条：live schema 的登记、schema 历史运行时、规范 JSON 片段缓存、迁移历史的运行时绑定与日志器
   配置；凭据 / 访问 / 完整性相邻的 9 条；进程级缓存与计数器 27 条须经用户确认是否保留并修订 §14 口径）。
+
+## 9. 结论：撤回（2026-11-23）
+
+集中验证查出 §1 的前提不成立：仓内有不可扩展的句柄，而且是有意支持的。
+
+- `tests/rfc395-session-table-binding.test.ts`（RFC-395 T18 X1：“frozen provider clients and inherited transaction handles retain their bindings”）先把
+  句柄、原生客户端、事务与继承句柄冻结，再绑定上下文、按句柄与客户端取表，另钉“冻结的客户端重新绑定后按新上下文取表、属性不变”。
+- RFC-395 的 PostgreSQL 测试夹具交给 provider 的连接池是冻结的：`createPostgresqlDatabaseClient` 用 `nativeDatabase(pool)` 直接在连接池外建 drizzle
+  库，绑定时要把上下文记到连接池上（`rfc395-target-test-database` 的 PostgreSQL 支 7 条在构造时就报 `persistence-handle-not-extensible`）。生产的
+  连接池是可扩展的 Bun.SQL 实例。
+- 冻结的对象上记不了属性；`tablesOf(handle)` 一类访问函数只拿到句柄本身，能让冻结对象带上上下文、又不经模块级表的做法不存在（包一层会换掉
+  句柄身份）。所以 `contexts` 是为不可扩展对象保留的身份表，不是可删的重复登记。
+
+处置：实现改动撤回、未提交（工作树恢复为 HEAD）；`sessionTables.ts` 的这 1 条从“可迁移的登记与绑定”改列为须保留的身份表，与进程级缓存一起
+须经用户确认是否作为例外保留并修订 RFC-294 design §14 的口径。§1 关于“仓内没有不可扩展的句柄”的判断只按调用处是否内联 `Object.freeze(...)`
+查过，漏了先冻结变量再绑定的用例与测试夹具（教训记在 `docs/dev-gotchas.md`）。
