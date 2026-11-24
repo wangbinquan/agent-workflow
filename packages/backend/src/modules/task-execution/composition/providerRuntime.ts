@@ -34,7 +34,7 @@ import type {
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
 import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
-import type { TaskOverviewQuery } from '../public/queries'
+import type { TaskOverviewQuery } from '../application/ports/taskOverviewQuery'
 import type { TaskClarifyDirectiveRouteOperations, TaskExecutionReadModels } from '../public/types'
 import {
   createTaskExecutionRuntimeParticipants,

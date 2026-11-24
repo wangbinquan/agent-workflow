@@ -110,8 +110,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
     'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts -> system-operations',
-    'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> development-automation',
-    'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> digital-employee',
+    // RFC-561: Intent's platform inventory names its two cross-context sources with its own ports; bootstrap binds them.
     'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts -> runtime-management',
@@ -121,11 +120,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts -> runtime-management',
     'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts -> task-execution',
     'packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts -> runtime-management',
-    'packages/backend/src/modules/system-operations/application/overview.ts -> integration',
-    'packages/backend/src/modules/system-operations/application/overview.ts -> memory',
-    'packages/backend/src/modules/system-operations/application/overview.ts -> resource-catalog',
-    'packages/backend/src/modules/system-operations/application/overview.ts -> source-control',
-    'packages/backend/src/modules/system-operations/application/overview.ts -> task-execution',
+    // RFC-561: the system overview names its five sources with its own ports; bootstrap binds the owners' queries.
     'packages/backend/src/modules/system-operations/composition.ts -> source-control',
     'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts -> system-operations',
     // RFC-560: task-execution implements the fusion engine task port through its knowledge-evolution adapter.

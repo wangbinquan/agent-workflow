@@ -1,15 +1,11 @@
 import type { OverviewResponse } from '@agent-workflow/shared'
 
-import type { IntegrationOverviewQueries } from '@/modules/integration/public/queries'
-import type { MemoryCatalogOperations } from '@/modules/memory/public/operations'
-import type { ResourceCatalogOverviewQuery } from '@/modules/resource-catalog/public/queries'
-import type { RepositoryOverviewQueries } from '@/modules/source-control/public/queries'
-import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'
 import type {
   SystemOverviewAuthority,
   SystemOverviewQuery,
 } from '@/modules/system-operations/public/queries'
 import { createInFlightCoalescer } from '@/util/inFlight'
+import type { SystemOverviewSources } from './ports/systemOverviewSources'
 
 const WINDOW_7D_MS = 7 * 86_400_000
 
@@ -23,14 +19,10 @@ function flightKey(authority: SystemOverviewAuthority): string {
   ])
 }
 
-export function composeSystemOverviewQuery(input: {
-  readonly resourceCatalog: ResourceCatalogOverviewQuery
-  readonly repositories: RepositoryOverviewQueries
-  readonly integration: IntegrationOverviewQueries
-  readonly memories: Pick<MemoryCatalogOperations, 'queries'>
-  readonly tasks: TaskOverviewQuery
-  readonly now?: () => number
-}): SystemOverviewQuery {
+// RFC-561: the five sources are this module's own ports (`ports/systemOverviewSources.ts`); bootstrap binds the owners' queries.
+export function composeSystemOverviewQuery(
+  input: SystemOverviewSources & { readonly now?: () => number },
+): SystemOverviewQuery {
   const now = input.now ?? Date.now
   const flights = createInFlightCoalescer<string, OverviewResponse>()
 

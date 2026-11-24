@@ -6,7 +6,7 @@ import { and, count, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { OverviewTasks } from '@agent-workflow/shared'
-import type { TaskOverviewQuery } from '../public/queries'
+import type { TaskOverviewQuery } from '../application/ports/taskOverviewQuery'
 import { taskVisibilityCondition } from './taskAuthorization'
 
 function createCountTemplates(db: PersistenceDb, canReadAll: boolean) {

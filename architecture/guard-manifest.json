@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 638,
+      "lines": 600,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1045
+      "lines": 1040
     },
     {
       "assertsAbsence": true,
@@ -2035,7 +2035,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc305-architecture-lock.test.ts",
       "id": "rfc305-architecture-lock",
-      "lines": 950,
+      "lines": 956,
       "mechanism": "ast",
       "minCorpusFiles": 900,
       "negativeFixture": true,
@@ -3751,7 +3751,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc503-intent-use-cases-out-of-composition-boundary.test.ts",
       "id": "rfc503-intent-use-cases-out-of-composition-boundary",
-      "lines": 560,
+      "lines": 562,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -3919,7 +3919,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc517-module-root-runtime-logic-out-boundary.test.ts",
       "id": "rfc517-module-root-runtime-logic-out-boundary",
-      "lines": 842,
+      "lines": 843,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -4414,6 +4414,18 @@
       "lines": 159,
       "mechanism": "ast",
       "minCorpusFiles": 700,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc561-aggregate-read-source-ports-boundary.test.ts",
+      "id": "rfc561-aggregate-read-source-ports-boundary",
+      "lines": 276,
+      "mechanism": "ast",
+      "minCorpusFiles": 150,
       "negativeFixture": true,
       "runner": "bun"
     }

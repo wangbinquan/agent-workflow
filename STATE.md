@@ -1,3 +1,26 @@
+## 2026-11-24 RFC-561 两个跨 context 的聚合读用自己的端口点名来源：系统总览与 Intent 平台清单（In Progress；`design/RFC-561-aggregate-read-source-ports/`）
+
+- **来由**：DAG 外 offered 边（33 条）里 7 条出自两个把多个 context 的结果拼成一张表的只读聚合——system-operations 的首页总览取 resource-catalog /
+  source-control / integration / memory / task-execution 的 public，intent 的平台清单取 development-automation / digital-employee 的 public；目标 DAG 都不画。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10
+  「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，
+  不派 Codex。
+- **范围**：system-operations 新增 `application/ports/systemOverviewSources.ts`（五个来源端口），intent 新增
+  `application/ports/platformInventorySources.ts`（两个来源端口），两个聚合改用；bootstrap 不改，照旧交各 owner 的同一个对象。失去模块外读者的 8 个
+  public 类型撤回各自模块（resource-catalog 的计数查询与计数模型进 `application/resourceCatalogOverview.ts`，task-execution 的任务计数查询进
+  `application/ports/taskOverviewQuery.ts`，digital-employee 的三个清单类型进 `application/ports/platformInventory.ts`，source-control 的仓库数查询写在
+  装配输出上，integration 的 `public/queries.ts` 整份删除）；两份精确清单、减速带、七处钉着旧位置的用例与清单随之更新；新增 RFC-561 用例。
+- **不做**：其余 26 条 DAG 外 offered 边（system-operations `composition.ts` 取 source-control 备份准备参与者那一条是仓库凭据面，留给后续）；总览聚合
+  放在哪个 context（RFC-294 design §3.4 把“跨业务统计”列为 system-operations 不跨界的内容，归属另行决定）；各来源的权限判断原地不动。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 端口归聚合方的 application/ports，只取 shared 与 identity-access 的 authority 类型；C11 system-operations
+  与 intent 的 public 不变，五个来源 context 的 public 收窄 8 个符号；C12 RFC-561 用例覆盖两个 context 全部源码取别的 context 的边、两份端口的依赖面、
+  七处结构绑定（`tsc`）与撤出；C13 DAG 外 offered 边 33 → 26，其余计数不升，目标 DAG 不变。
+- **集中验证**（基于 `c974e28eb`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷两处已修复并复验——都是没查到的精确清单
+  （`rfc305-architecture-lock` 的 identity-access 消费方清单、RFC-310 的 `os-architecture-manifest.json`）。tsc 0 错，eslint / promises / prettier 无告警；
+  选出 650 个用例文件，除 `rfc167-dynamic-workflow-engine` 一例在本机满载时到 5 秒结算期限（既记两次同形，单独再跑 3 / 3 通过，记为第三次）外
+  全部通过；读已提交源码的用例在候选导出里通过；七种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的两个交接处报错；架构报告 DAG 外 offered 边
+  33 → 26、public 面 −8，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+
 ## 2026-11-23 RFC-560 knowledge-evolution 的 fusion 引擎任务端口经 required-ports 交给 task-execution（Done；`design/RFC-560-fusion-engine-task-port/`）
 
 - **来由**：fusion 引擎任务端口是 knowledge-evolution 向 task-execution 要的启动面（consumer-owned），却声明在 knowledge-evolution 的 `public/participants.ts`，

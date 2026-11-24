@@ -8,8 +8,9 @@
 //    一次（带负对照）。
 // ③ 全部生产文件、用例与 e2e 不从两个删除的位置取任何东西：命名 import、type-only、默认与副作用 import、re-export、命名空间成员与动态
 //    import 都认，带负对照。
-// ④ 新文件的依赖面是闭集：只取 `@/auth/actor`、四个外域的 `public` 类型入口与本模块 domain / application / public；不取 infrastructure、
-//    composition、IO 包，不用进程全局（带负对照）。
+// ④ 新文件的依赖面是闭集：只取 `@/auth/actor`、两个外域（identity-access、resource-catalog）的 `public` 类型入口与本模块
+//    domain / application / public；不取 infrastructure、composition、IO 包，不用进程全局（带负对照）。RFC-561 起不含
+//    development-automation 与 digital-employee 的 public：平台清单改用 Intent 自己的端口点名这两个来源。
 //
 // 覆盖范围（C12）：① ③ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
 // AST；② ④ 读 `maintenance.ts`、`dispatch.ts`、intent 的 `composition.ts`、bootstrap 的 `daemonModules/intent.ts` 与新文件。
@@ -308,8 +309,8 @@ const SURFACE = (file: string, specifier: string): boolean => {
   if (
     [
       '@/auth/actor',
-      '@/modules/development-automation/public/operations',
-      '@/modules/digital-employee/public/participants',
+      // RFC-561: the platform inventory names Development Automation and Digital Employee through Intent's own ports, so
+      // their public entries left this surface.
       '@/modules/identity-access/public/participants',
       '@/modules/resource-catalog/public/queries',
       '@/modules/resource-catalog/public/participants',
@@ -521,7 +522,7 @@ describe('RFC-503 ③ 没有文件从两个删除的位置取任何东西', () =
 })
 
 describe('RFC-503 ④ 新文件的依赖面是闭集、不用进程全局', () => {
-  test('只取 @/auth/actor、四个外域的 public 类型入口与本模块 domain / application / public', () => {
+  test('只取 @/auth/actor、两个外域的 public 类型入口与本模块 domain / application / public', () => {
     for (const location of Object.keys(NEW_FILES)) {
       const path = sourceOf(location)
       expect([location, purityFindings(path, text(path), SURFACE)]).toEqual([location, []])
@@ -545,6 +546,7 @@ describe('RFC-503 ④ 新文件的依赖面是闭集、不用进程全局', () =
       `export async function run() { await import('node:path'); const at = Date.now(); const env = process.env; await fetch('x'); Math.random() }`,
     ].join('\n')
     expect(purityFindings(file, source, SURFACE)).toEqual([
+      'import @/modules/development-automation/public/operations',
       'import ../infrastructure/intentPersistence',
       'import ../composition/maintenance',
       'import @/modules/resource-catalog/composition',

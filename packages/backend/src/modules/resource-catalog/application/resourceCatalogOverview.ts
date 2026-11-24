@@ -1,8 +1,37 @@
 import type { Permission } from '@agent-workflow/shared'
-import type { ResourceCatalogOverviewCounts, ResourceCatalogOverviewQuery } from '../public/queries'
 import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../domain/resourceKinds'
 import type { ResourceCatalogOverviewCountPort } from './ports/resourceCatalogOverview'
+
+/**
+ * Closed Resource Catalog contribution to the system overview. RFC-561: declared here, beside the query that produces
+ * it — the overview owner names its sources with its own ports and bootstrap binds this query to them.
+ */
+export interface ResourceCatalogOverviewCounts {
+  readonly agents: number | null
+  readonly skills: number | null
+  readonly mcps: number | null
+  readonly plugins: number | null
+  readonly workflows: number | null
+  readonly workgroups: number | null
+}
+
+/**
+ * RFC-359 W57：`load` 收的是 **actor 本身**，不是请求上下文。
+ *
+ * 原先收 `ResourceRequestContext`，而唯一的实现拿到它之后做的唯一一件事，就是用一张**调用方
+ * 填的** `WeakMap<authority, Actor>` 把它**反查回请求者**——计数本来就只认请求者
+ * （`visibleRowsCondition` 收的就是 `ResourceAclActorProjection`）。代价是每个装配根都要抄一份
+ * 「填 map + 包一层 execute」的胶水（daemon 一份、性能 helper 两份），任何一处漏填就是运行时
+ * `foreign-overview-authority`。而 `SystemOverviewQuery` 的入参（`SystemOverviewAuthority`）
+ * 本来就同时带着请求者与 authority，反查纯属绕路。
+ *
+ * 收的是**本模块自己的闭合投影** `ResourceAclActorProjection`（`{user:{id}, permissions}`），
+ * 不是 `Actor`：资源目录刻意不依赖 identity-access 的 `Actor`。`Actor` 结构上可赋值给它，调用方照常传。
+ */
+export interface ResourceCatalogOverviewQuery {
+  load(viewer: ResourceAclActorProjection): Promise<ResourceCatalogOverviewCounts>
+}
 
 const dimensions = Object.freeze([
   Object.freeze({ property: 'agents', kind: 'agent', permission: 'agents:read', builtin: true }),

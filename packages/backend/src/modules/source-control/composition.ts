@@ -1,5 +1,4 @@
 import type { RepositoryBackupPreparationParticipant } from './public/participants'
-import type { RepositoryOverviewQueries } from './public/queries'
 import type { RepositoryPublicationTransport } from './public/types'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
@@ -103,7 +102,13 @@ export type { WorkspaceMaintenanceFilesystem } from './application/ports/workspa
 
 export interface RepositoryWorkspaceOperations {
   readonly backupPreparation: RepositoryBackupPreparationParticipant
-  readonly overviewQueries: RepositoryOverviewQueries
+  /**
+   * Secret-free system projection; no repository persistence mechanism leaks. RFC-561: the system overview names this
+   * source with its own port and bootstrap binds it, so the shape is declared here instead of in `public/queries`.
+   */
+  readonly overviewQueries: {
+    countCachedRepositories(): Promise<number>
+  }
 }
 
 /** Closed application surface shared by SQLite and PostgreSQL composition. */

@@ -5,7 +5,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 // with its opaque input branch copied verbatim and no new branch semantics.
 import { buildActor } from '@/auth/actor'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
-import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'
+import type { TaskOverviewQuery } from '@/modules/task-execution/application/ports/taskOverviewQuery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { insertOne } from '@/platform/persistence/singleInsert'

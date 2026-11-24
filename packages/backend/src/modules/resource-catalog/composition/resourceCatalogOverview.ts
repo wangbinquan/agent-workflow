@@ -1,6 +1,8 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { ResourceCatalogOverviewQuery } from '../public/queries'
-import { createResourceCatalogOverviewQuery } from '../application/resourceCatalogOverview'
+import {
+  createResourceCatalogOverviewQuery,
+  type ResourceCatalogOverviewQuery,
+} from '../application/resourceCatalogOverview'
 import { createResourceCatalogOverviewCountPort } from '../infrastructure/resourceCatalogOverview'
 
 /**
@@ -16,7 +18,7 @@ import { createResourceCatalogOverviewCountPort } from '../infrastructure/resour
  * （判据见 `docs/dev-gotchas.md`「`PostgresqlDatabaseClient` 不是 PostgreSQL 客户端类型」）。
  * `/api/overview` 两侧收成一份时 SQLite 也要装它，名字与类型一并归中立。
  *
- * 同时去掉了原来的 `authority` 解析器入参：端口现在直接收 actor，见 `public/queries.ts`。
+ * 同时去掉了原来的 `authority` 解析器入参：端口现在直接收 actor，见 `application/resourceCatalogOverview.ts`。
  */
 export function composeResourceCatalogOverviewQuery(
   db: PersistenceDb,

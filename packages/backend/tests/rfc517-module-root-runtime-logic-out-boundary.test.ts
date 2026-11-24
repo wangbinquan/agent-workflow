@@ -145,7 +145,8 @@ const ROOT_EDGES: Readonly<Record<string, readonly string[]>> = {
 const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   [PLATFORM]: [
     'import modules/identity-access/public/participants: DirectAuthenticatedAuthority',
-    'import modules/digital-employee/public/participants: DigitalEmployeePlatformInventoryParticipant, DigitalEmployeePlatformInventoryResourceType, DigitalEmployeePlatformInventoryRow',
+    // RFC-561: the three inventory types are declared in the module's own ports (Intent names this source with its own type).
+    'import modules/digital-employee/application/ports/platformInventory: DigitalEmployeePlatformInventoryParticipant, DigitalEmployeePlatformInventoryResourceType, DigitalEmployeePlatformInventoryRow',
     'import modules/digital-employee/application/ports/digitalEmployeeModule: DigitalEmployeeQueries, ToolRegistrationView',
   ],
   [VIEW]: [

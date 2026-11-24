@@ -19,11 +19,14 @@ describe('RFC-349 Resource Catalog provider contributions', () => {
       'utf8',
     )
 
-    expect(publicQueries).toContain('export interface ResourceCatalogOverviewCounts')
-    expect(publicQueries).toContain('export interface ResourceCatalogOverviewQuery')
+    // RFC-561：系统总览改用自己的端口点名五个来源、bootstrap 把本查询绑上去；这两个类型失去了模块外的读者，
+    // 从 public/queries 挪到产出它们的查询旁边（application/resourceCatalogOverview.ts）。
+    expect(application).toContain('export interface ResourceCatalogOverviewCounts')
+    expect(application).toContain('export interface ResourceCatalogOverviewQuery')
     for (const property of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
-      expect(publicQueries).toContain(`readonly ${property}: number | null`)
+      expect(application).toContain(`readonly ${property}: number | null`)
     }
+    expect(publicQueries).not.toContain('ResourceCatalogOverview')
     expect(application).toContain('actor.permissions.has(dimension.permission)')
     // RFC-359 W8：`composeSqliteResourceCatalogOverviewQuery` 已删——它零调用方，唯一的「引用」
     // 就是这里原本的那条 `toContain` 字符串（一条守卫按名字钉着一个没人调的函数）。计数端口本来

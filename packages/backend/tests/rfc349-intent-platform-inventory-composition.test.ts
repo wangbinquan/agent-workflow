@@ -10,9 +10,9 @@ import {
   composeDigitalEmployeePlatformInventoryParticipant,
   type DigitalEmployeeQueries,
 } from '@/modules/digital-employee/composition'
-import type { DigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/public/participants'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { createIntentPlatformInventoryParticipant } from '@/modules/intent/application/platformInventoryParticipant'
+import type { IntentDigitalEmployeeInventoryQueries } from '@/modules/intent/application/ports/platformInventorySources'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 
@@ -88,7 +88,7 @@ describe('RFC-349 Intent platform inventory composition', () => {
   test('the nine-type aggregate delegates only to owner-authorized query participants', async () => {
     const directAuthority = authority(ACTOR.user.id)
     const digitalCalls: string[] = []
-    const digitalEmployee: DigitalEmployeePlatformInventoryParticipant = {
+    const digitalEmployee: IntentDigitalEmployeeInventoryQueries = {
       async listVisibleRows(type, received) {
         expect(received).toBe(directAuthority)
         digitalCalls.push(type)

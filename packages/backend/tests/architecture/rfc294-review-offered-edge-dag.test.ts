@@ -318,18 +318,8 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
   },
-  {
-    from: 'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts',
-    to: 'development-automation',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts',
-    to: 'digital-employee',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
+  // RFC-561：intent 的平台清单聚合（`application/platformInventoryParticipant.ts`）取 development-automation / digital-employee public 的
+  // 2 条销账——两个来源改由它自己的端口声明（`application/ports/platformInventorySources.ts`），bootstrap 绑定。
   {
     from: 'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts',
     to: 'runtime-management',
@@ -378,36 +368,8 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 Task family 的 native 工作内容适配使用 runtime-management public 的逻辑运行内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
-  {
-    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
-    to: 'integration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
-    to: 'memory',
-    why: 'RFC-434：边本身早已存在——此前经非精确 public 文件（`memory/public/catalog`、`integration/public/mrTerminalControl`）引用，被记作跨 context 内部边；这三个文件并入精确入口后，同一依赖如实归为 DAG 外的 offered 边（跨 context 内部边同步 −8）。待 bounded-context 对正式进入 design §3.1 目标 DAG 或依赖改道后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
-    to: 'resource-catalog',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
-    to: 'source-control',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
-    to: 'task-execution',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。 RFC-359 W57：这条边此前挂在 `public/queries.ts` 上——它把 task-execution 的 `TaskOverviewQuery` 再导出一手，唯一的跨模块消费者是 `services/overview.ts`。`/api/overview` 两侧收成一份后那个 facade 整份删除，再导出的跨模块消费者归零（`rfc294-review-public-consumer-ledger` 判红），于是退役；聚合体改从真正的 owner（task-execution public）取合同，边随之从 public 层挪到 application 层。同一个 bounded-context 对、同一个清偿波次，条目数不变。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
+  // RFC-561：system-operations 的总览聚合（`application/overview.ts`）取 integration / memory / resource-catalog / source-control /
+  // task-execution public 的 5 条销账——五个来源改由它自己的端口声明（`application/ports/systemOverviewSources.ts`），bootstrap 绑定。
   {
     from: 'packages/backend/src/modules/system-operations/composition.ts',
     to: 'source-control',

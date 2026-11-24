@@ -2,13 +2,16 @@
 // composition/platformInventory.ts; the factory is now createIntentPlatformInventoryParticipant (the composition file is gone;
 // bootstrap takes it via intent's composition.ts).
 import type { Actor } from '@/auth/actor'
-import type { DevelopmentConfigOperations } from '@/modules/development-automation/public/operations'
-import type { DigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/public/participants'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type {
   IntentPlatformInventoryParticipant,
   IntentPlatformInventoryRow,
 } from './ports/intentAuxiliaryQueries'
+import type {
+  IntentDevelopmentConfigInventoryQueries,
+  IntentDevelopmentConfigInventoryRow,
+  IntentDigitalEmployeeInventoryQueries,
+} from './ports/platformInventorySources'
 import type { PlatformOnlyResourceType } from '../domain/teaching/platformMap'
 
 /** Code Capability contributes only its already-authorized public list view. */
@@ -25,8 +28,8 @@ export interface IntentCapabilityTemplateInventoryQueries {
 export interface IntentPlatformInventoryParticipantDependencies {
   readonly authorityFor: (actor: Actor) => DirectAuthenticatedAuthority
   readonly capabilityTemplates: IntentCapabilityTemplateInventoryQueries
-  readonly developmentConfig: Pick<DevelopmentConfigOperations, 'resources'>
-  readonly digitalEmployee: DigitalEmployeePlatformInventoryParticipant
+  readonly developmentConfig: IntentDevelopmentConfigInventoryQueries
+  readonly digitalEmployee: IntentDigitalEmployeeInventoryQueries
 }
 
 function publishState(publishedRevision: number | null): string {
@@ -54,7 +57,7 @@ function developmentRows(
     | 'automation_policy'
     | 'development_adapter'
   >,
-  rows: Awaited<ReturnType<DevelopmentConfigOperations['resources']['digital-employee']['list']>>,
+  rows: readonly IntentDevelopmentConfigInventoryRow[],
 ): readonly IntentPlatformInventoryRow[] {
   return sortRows(
     rows.map((row) => {

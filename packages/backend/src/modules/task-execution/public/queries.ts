@@ -28,9 +28,7 @@ export { createRunHistorySnapshot } from '../application/runHistory'
 export type { RunHistoryFacts } from '../application/runHistory'
 // RFC-482: the run selection reader reaches collaboration through its participant bindings (`TaskRunSelectionReads`
 // in public/types is the contract); the table reader factory stays inside Task Execution.
-import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
-import { type OverviewTasks } from '@agent-workflow/shared'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
 
 /** The existing Task visibility gate runs before these bound workspace queries. */
@@ -56,18 +54,6 @@ export {
   type FrameCoordinate,
   type SourceFrameResolution,
 } from '../domain/environmentChain'
-
-/**
- * Task Execution owns the public-task window used by System Overview.  The
- * adapter applies the exact owner/collaborator visibility rule and never
- * exposes a provider row or client to the aggregate.
- */
-export interface TaskOverviewQuery {
-  load(input: {
-    readonly actor: AuthenticatedAuthoritySnapshot
-    readonly since: number
-  }): Promise<OverviewTasks>
-}
 
 /** Public projection of the baseline carried by a persisted git-wrapper row. */
 export function readWrapperGitBaseline(progressJson: string | null | undefined): string | null {

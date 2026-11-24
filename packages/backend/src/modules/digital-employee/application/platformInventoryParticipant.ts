@@ -6,7 +6,7 @@ import type {
   DigitalEmployeePlatformInventoryParticipant,
   DigitalEmployeePlatformInventoryResourceType,
   DigitalEmployeePlatformInventoryRow,
-} from '../public/participants'
+} from './ports/platformInventory'
 import type { DigitalEmployeeQueries, ToolRegistrationView } from './ports/digitalEmployeeModule'
 
 interface DigitalEmployeePlatformInventoryAclRow {

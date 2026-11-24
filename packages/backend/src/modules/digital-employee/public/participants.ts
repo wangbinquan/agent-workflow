@@ -1,31 +1,7 @@
 import type { Agent, CreateAgent } from '@agent-workflow/shared'
-import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { digitalEmployeeAgentTemplateCatalogParticipantBrand } from '../domain/participantBrands'
 
 declare const digitalEmployeeIntegrationTriggerParticipantBrand: unique symbol
-
-export type DigitalEmployeePlatformInventoryResourceType =
-  | 'employee_definition'
-  | 'employee_tool'
-  | 'employee_job_template'
-
-export interface DigitalEmployeePlatformInventoryRow {
-  readonly id: string
-  readonly name: string
-  readonly description: string | null
-}
-
-/**
- * Visibility-filtered Digital Employee contribution to Intent's read-only
- * platform inventory. The owner keeps authoring rows and ACL facts private;
- * consumers receive only the three display fields that the dump renders.
- */
-export interface DigitalEmployeePlatformInventoryParticipant {
-  listVisibleRows(
-    type: DigitalEmployeePlatformInventoryResourceType,
-    authority: DirectAuthenticatedAuthority,
-  ): Promise<readonly DigitalEmployeePlatformInventoryRow[]>
-}
 
 /**
  * Resource Catalog owns Agent persistence; Digital Employee owns the exact

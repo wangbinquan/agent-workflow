@@ -47,7 +47,6 @@
         "modules/development-automation/composition/graphDeliveryLifecycle.ts -> public/types",
         "modules/development-automation/composition/graphDevelopment.ts -> public/types",
         "modules/development-automation/infrastructure/graph-development/employeeWorkspace.ts -> public/types",
-        "modules/intent/application/platformInventoryParticipant.ts -> public/participants",
         "modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts -> public/participants",
         "modules/resource-catalog/composition/integrationTrigger.ts -> public/participants",
         "modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts -> public/participants",

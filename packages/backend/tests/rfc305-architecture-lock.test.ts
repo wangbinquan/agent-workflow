@@ -342,7 +342,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/development-automation/inbound/http/employeeCaseRoutes.ts -> @/modules/identity-access/public/participants',
       // RFC-517: Intent's platform inventory participant moved from the module root to application.
       'packages/backend/src/modules/digital-employee/application/platformInventoryParticipant.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/digital-employee/public/participants.ts -> @/modules/identity-access/public/participants',
+      // RFC-561: the inventory types (and their authority import) moved from public/participants into the module's ports.
+      'packages/backend/src/modules/digital-employee/application/ports/platformInventory.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/event-center/composition/required-ports.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/integration/application/ports/scheduledTaskPersistence.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/integration/application/scheduledTasks.ts -> @/modules/identity-access/public/participants',
@@ -353,6 +354,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/intent/application/platformInventoryParticipant.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/ports/intentApplyOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/ports/intentPersistence.ts -> @/modules/identity-access/public/participants',
+      // RFC-561: Intent's platform inventory names its two cross-context sources with its own ports.
+      'packages/backend/src/modules/intent/application/ports/platformInventorySources.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/resourceCatalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/composition/resourceCatalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts -> @/modules/identity-access/public/participants',
@@ -400,6 +403,8 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-550: the descriptor factories and the command / query ports left system-operations' public (no other module
       // read them) and took their CommandContext / QueryContext imports along; the descriptor contracts stay public.
       'packages/backend/src/modules/system-operations/application/operationDescriptors.ts -> @/modules/identity-access/public/participants',
+      // RFC-561: the system overview names its five sources with its own ports.
+      'packages/backend/src/modules/system-operations/application/ports/systemOverviewSources.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/application/systemOperationPorts.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
@@ -409,6 +414,8 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-370 §9.2 V4: recovery requests act as the requesting platform user's AW account.
       'packages/backend/src/modules/task-execution/application/ports/taskClarifyDirectiveRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts -> @/modules/identity-access/public/participants',
+      // RFC-561: the task overview query type (and its authority import) moved here from public/queries.
+      'packages/backend/src/modules/task-execution/application/ports/taskOverviewQuery.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> @/modules/identity-access/public/participants',
       // RFC-423: the hosted recovery selection and the recovery selection contracts moved into infrastructure.
       'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedRecoverySelection.ts -> @/modules/identity-access/public/participants',
@@ -430,7 +437,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/public/commands.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/task-execution/public/queries.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/accountRepositoryTransportCredentials.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
