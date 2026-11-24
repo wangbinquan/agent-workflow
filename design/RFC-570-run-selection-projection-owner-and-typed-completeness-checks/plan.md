@@ -15,7 +15,7 @@
 - [x] AC-1 平台文件不存在、全部源码不取它；投影在 task-execution 的 domain，resource-catalog 用自己的形状
 - [x] AC-2 两个完整性检查收具名类型，拒绝行为不变
 - [x] AC-3 `PUBLIC_SURFACE_DEBT` 删去 3 条，`public-surface-deviations` 35 → 32；新增 RFC-570 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（70 / 70）
 
 ## 集中验证
 
@@ -48,11 +48,13 @@
 - **架构报告**（候选与对照各出一份）：60 个计数里只有 `public-surface-deviations` 变了，35 → 32（删去的正是清单里那 3 条，隔离工作区合同里的
   日志器与函数类型条目的归属没有移动）；public 面的符号数（989）、变更入口普查（2393，逐条相同）与生产文件数不变（删一个平台文件、加一个 domain
   文件）；跨 context import 7532 → 7528（少的是 task-execution 的三处与 resource-catalog 的一处对那个平台文件的类型引用）；其余各节不变。
-- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，见提交说明。
+- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，46 / 46 通过。
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `26c56a6ee`（实现，父提交是 `412767ff0`）：exact SHA 主 CI run 45470232600 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个
+  平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。同一提交触发的 windows-platform（run 45470232156）通过；同一提交上的定时运行
+  visual-regression-nightly（run 45474295089）与 evidence-soak-nightly（run 45472391777）通过。
 
 ## 实现门（本会话自审，只审功能）
 
@@ -67,5 +69,5 @@
 
 ## PR / 提交
 
-一个提交（单个 RFC 对应单个提交）：三件套、RFC 索引与 `STATE.md` 条目与实现、用例一起提交；RFC-569 的主 CI 在本提交时仍在跑，它的转 Done 随后一个提交。走私有 index、
+一个提交（单个 RFC 对应单个提交）：三件套、RFC 索引与 `STATE.md` 条目与实现、用例一起提交；RFC-569 的主 CI 在本提交时仍在跑；它与本 RFC 的转 Done 在随后的一个文档提交里。走私有 index、
 按路径清单提交，在共享发布锁下 fetch / ff / push。推送后按 exact SHA 跟 CI。

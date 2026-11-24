@@ -15,7 +15,7 @@
 - [x] AC-1 五个 public 根的闭包里不再有函数类型节点或裸 `typeof`；`PUBLIC_SURFACE_DEBT` 删去 5 条，`public-surface-deviations` 40 → 35
 - [x] AC-2 行为不变（既有用例与新增断言）
 - [x] AC-3 新增 RFC-569 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（70 / 70）
 
 ## 集中验证
 
@@ -54,11 +54,16 @@
 - **架构报告**（候选与对照各出一份）：60 个计数里只有 `public-surface-deviations` 变了，40 → 35（删去的正是清单里那 5 条）；public 面的符号数
   （989）、变更入口普查（2393，逐条相同）、跨 context import（7532）、生产文件数与其余各节不变。public 面里十个条目的形状记录随之变化：回调变成
   方法后，`TaskRouteOperations` 的方法计数 27 → 29、`DevelopmentMissionOperations` 24 → 26（字段数不变）。
-- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，见提交说明。
+- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，46 / 46 通过。
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `412767ff0`（实现，父提交是 `0a1069435`）：exact SHA 主 CI run 45464888702 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个
+  平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。同一提交触发的 windows-platform（run 45464888629）通过；同一提交上的定时运行
+  git-protocols-e2e（run 45468226002）、integration-opencode（run 45465516785）与 Release upgrade nightly（run 45465191167，87 个 job）通过。
+- **给前四个 RFC 的后继证据**：这个 run 里 macOS 的四个 e2e 分片都分到了 runner 并通过，其中 `shard 4/4` 是 RFC-565～RFC-568 四次主 CI 都没有跑到的
+  那一格。`412767ff0` 是这四个提交的后继（`ff3442970`、`948d2353c`、`f8dc493ec`、`0a1069435` 都是它的祖先），其间没有改 e2e 用例、前端与 Playwright
+  配置，所以这一格的结果对它们同样成立。
 
 ## 实现门（本会话自审，只审功能）
 

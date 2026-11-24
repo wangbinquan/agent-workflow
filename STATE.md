@@ -1,4 +1,4 @@
-## 2026-11-24 RFC-570 工作组运行选择投影归 task-execution，source-control 的两个完整性检查收具名类型（In Progress；`design/RFC-570-run-selection-projection-owner-and-typed-completeness-checks/`）
+## 2026-11-24 RFC-570 工作组运行选择投影归 task-execution，source-control 的两个完整性检查收具名类型（Done；`design/RFC-570-run-selection-projection-owner-and-typed-completeness-checks/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT` 的 35 条里有三条不动检测规则就能收：task-execution 的 public 合同带着一个声明在 platform 的业务投影
   （`WorkgroupRunSelectionProjection`，放在 platform 只为让 resource-catalog 也取得到）；source-control 的两个接收者完整性检查把入参写成 `unknown`
@@ -19,8 +19,12 @@
   工作组用例认出），类型层变异落在 resource-catalog 的两个房间适配文件与检查的两个调用点上；架构报告 60 个计数里只有 public 类型偏差变了。实现门
   PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-569 `412767ff0` 的 windows-platform 通过，主 CI 仍在跑。
+- **CI**：主 CI run 45470232600 70 / 70 全绿，windows-platform 通过。
+- **S9 余项**：`PUBLIC_SURFACE_DEBT` 余 32 条，已在 RFC-294 plan 的 S9 一节按下一步分成四类——要先定检测规则的 9 条（日志器类型、借贷式入参、
+  平台机制类型、不透明身份引用，改规则须用户确认）、能力 / 凭据 / 身份一族 13 条（另立 RFC，等 RFC-546 的 Q1～Q3）、要补全具名 DTO 的 `unknown`
+  8 条、其他 2 条。不需要裁决就能收的条目已经收完。
 
-## 2026-11-24 RFC-569 public 合同上的四处回调成员与一处裸 typeof 收成闭合形状（In Progress；`design/RFC-569-public-callback-members-closed/`）
+## 2026-11-24 RFC-569 public 合同上的四处回调成员与一处裸 typeof 收成闭合形状（Done；`design/RFC-569-public-callback-members-closed/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT` 还有 40 条。把检测器报的 101 个类型节点逐个定位后，其中五条可以直接收成闭合形状，收完代码也更简单，而且不需要
   讨论检测规则。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次
@@ -41,6 +45,8 @@
   调用点与通知的两处调用上；架构报告 60 个计数里只有 public 类型偏差变了。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-568 `0a1069435` 主 CI 68 / 70（macOS e2e 4/4 没有分到 runner）、windows-platform 的 push 运行被同一提交的定时运行顶替（后者通过），
   环境性、未重跑，转 Done。macOS e2e 4/4 自 `4f1dcae66` 之后的四个提交都没有结果。
+- **CI**：主 CI run 45464888702 70 / 70 全绿，windows-platform 通过。macOS 的四个 e2e 分片都分到了 runner 并通过，其中 4/4 是 RFC-565～RFC-568 四次
+  主 CI 都缺的那一格；`412767ff0` 是这四个提交的后继，其间没有改 e2e 用例、前端与 Playwright 配置，这一格的后继证据由此补上。
 
 ## 2026-11-24 RFC-568 resource-catalog 的两个执行资源查询工厂撤出 public，由 bootstrap 交给消费方（Done；`design/RFC-568-execution-resource-query-bindings/`）
 

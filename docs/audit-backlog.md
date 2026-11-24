@@ -37,6 +37,8 @@
 
 **2026-11-24 再补记**：RFC-568 `0a1069435`（run 45451751255）的 macOS e2e 4/4 同样没有分到 runner，当天连续四个提交都缺这一格（ubuntu 与 windows 上的同一套 e2e 每次都通过）。同一提交还撞上另一种与提交无关的取消：windows-platform 的 push 运行（run 45451751345）跑到 `Typecheck` 时被工作流的并发组取消，注记 `Canceling since a higher priority waiting request for windows-platform-refs/heads/main exists`——同一个工作流的定时运行（run 45452927828）在 17:50（UTC）对同一个提交启动并顶替了它。**判据**：注记含 `higher priority waiting request` 就是并发组顶替，不是用例红；取顶替它的那次运行（同一提交时就是 exact SHA 的结果）作证据，不必重跑。
 
+**2026-11-24 收口**：RFC-569 `412767ff0`（run 45464888702）70 / 70 全绿，macOS 的四个 e2e 分片都分到了 runner 并通过；它是上面四个提交的后继，其间没有改 e2e 用例、前端与 Playwright 配置，所以缺了四次的 macOS 4/4 由这一次按祖先关系补上。四次都没有重跑。
+
 ## CI：`ubuntu-latest` 切到 Ubuntu 26.04，Playwright 1.60.0 装不上 chromium（2026-11-03 起，e2e-full 夜跑红）
 
 **现象**：`e2e-full-nightly` 的四个 Playwright full tier 分片在 2026-11-03（run 41646305256，`2eeaf4585`）与 2026-11-04（run 41841464254，`19ba4671b`）两晚都在装浏览器这一步失败：`Cannot install dependencies for ubuntu26.04-x64 with Playwright 1.60.0!` → `ERROR: Playwright does not support chromium on ubuntu26.04-x64`。`RFC-319 覆盖账本对账` 随之拒绝对账（语料不完整）。两晚的 runner 镜像分别是 `ubuntu26/20261025.179` 与同系列，11-02 及以前的夜跑全绿。
