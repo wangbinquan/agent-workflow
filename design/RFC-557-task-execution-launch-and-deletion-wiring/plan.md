@@ -15,7 +15,7 @@
 - [x] AC-1 task-execution 不再取 resource-catalog 与 source-control 的非 public 文件（指定 adapter 按类型取 required-ports 除外）
 - [x] AC-2 行为与装配结局不变
 - [x] AC-3 目标 DAG 与 Mermaid 同批登记；跨 context 内部文件对 10 → 7；各清单、减速带与读旧路径的用例随之更新；新增 RFC-557 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -42,7 +42,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `014a79f85`（实现，父提交是 `e11512bb1`）：exact SHA 主 CI run 45315786441 66 / 70。四格红逐格归因，都与本 RFC 无关：`Markdown link check
+(design/)` 是 RFC-378 research.md 外部链接 503；后端 41/44 分片是 `rfc398-start-auto-upgrade-takeover` 的「…acquires after takeover」到点（185.3 s，
+  `docs/audit-backlog.md` 第六次，同次另两例走同一启动路径且通过，本机单独跑 3 / 3）；`Playwright e2e (ubuntu-24.04 shard 2/3)` 在 runner 执行
+  `bunx playwright install-deps chromium` 卡了约 20 分钟后被取消、用例没跑；`CI required` 是汇总 job。未重跑。windows-platform 通过。
+- 后继证据：RFC-558 的 `aee8de63c` 以本提交为祖先、本 RFC 改的文件之间无差异，它的主 CI run 45317311399 70 / 70（后端 41/44 分片与 e2e 2/3 分片都
+  通过）——补上了本提交 run 里没跑成的 e2e 2/3 分片；这是后继提交的证据，不是本提交 exact SHA 的。
 
 ## 实现门（本会话自审，只审功能）
 

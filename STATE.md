@@ -1,4 +1,4 @@
-## 2026-11-23 RFC-560 knowledge-evolution 的 fusion 引擎任务端口经 required-ports 交给 task-execution（In Progress；`design/RFC-560-fusion-engine-task-port/`）
+## 2026-11-23 RFC-560 knowledge-evolution 的 fusion 引擎任务端口经 required-ports 交给 task-execution（Done；`design/RFC-560-fusion-engine-task-port/`）
 
 - **来由**：fusion 引擎任务端口是 knowledge-evolution 向 task-execution 要的启动面（consumer-owned），却声明在 knowledge-evolution 的 `public/participants.ts`，
   task-execution 的两个文件从那里取——DAG 外 offered 边 35 条中的 2 条。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
@@ -18,8 +18,9 @@
 - **CI 侧**：RFC-557 `014a79f85`（run 45315786441）的后端 41/44 分片红的是 `rfc398-start-auto-upgrade-takeover` 的「…acquires after takeover」（185.3 s，
   `barrier/readiness timed out`），与 `docs/audit-backlog.md` 记过的五次同形，同次另两例走同一启动路径且通过、本机单独跑 3 / 3 通过——记为第六次、
   未重跑；同 run 的 e2e 2/3 取消与 design/ 链接检查见 RFC-559 条目。RFC-555～559 的 run 仍未跑完。
+- **CI**：主 CI run 45323075393 70 / 70，windows-platform 通过。
 
-## 2026-11-23 RFC-559 task-execution 与 collaboration 不再取 memory 的 public（In Progress；`design/RFC-559-memory-consumer-owned-ports/`）
+## 2026-11-23 RFC-559 task-execution 与 collaboration 不再取 memory 的 public（Done；`design/RFC-559-memory-consumer-owned-ports/`）
 
 - **来由**：DAG 外 offered 边（44 条）里 9 条是 task-execution / collaboration 取 memory 的 public（注入查询、注入预算、蒸馏入队），方向与目标 DAG 相反；
   目标 DAG 早已把记忆注入写成 task-execution 自有的 `TaskMemoryInjectionPort`，代码里却没有这个类型。用户 2026-11-02「好，你继续推进RFC294，过程中你
@@ -39,8 +40,9 @@
 - **CI 侧**：RFC-554 转 Done（实现提交 68 / 70，两格红是 RFC-370～372 既有文档链接的外部 503 与随之红的汇总 job）。RFC-557 `014a79f85`（run 45315786441）
   的 `Playwright e2e (ubuntu-24.04 shard 2/3)` 在 `bunx playwright install-deps chromium` 卡了约 20 分钟后被取消（runner 侧装依赖，本 RFC 不碰前端与 e2e），
   `Markdown link check (design/)` 是 RFC-378 research.md 外部链接 503；RFC-555～558 的 run 仍未跑完。
+- **CI**：主 CI run 45320530953 70 / 70，windows-platform 与 integration-opencode 通过。
 
-## 2026-11-23 RFC-558 integration 的 webhook 入站只认自己声明的事件中心窄端口（In Progress；`design/RFC-558-webhook-ingress-event-center-port/`）
+## 2026-11-23 RFC-558 integration 的 webhook 入站只认自己声明的事件中心窄端口（Done；`design/RFC-558-webhook-ingress-event-center-port/`）
 
 - **来由**：integration 的 `composition/webhookIngress.ts` 从事件中心只用三件事（记观察、跑通知、提示代码平台活动源），参数类型却取 event-center
   composition 交出的整个 `EventCenterModule`——跨 context 内部文件对 7 条中的一条。integration → event-center 是 offered 边，`observe` 的合同与
@@ -60,8 +62,9 @@
 - **CI 侧**：RFC-554 落档提交 `a4ea67ce9` 主 CI run 45306006668 70 / 70 通过。RFC-555 `2263968b9`（run 45310123056）与 RFC-556 `e11512bb1`（run
   45312758378）的 `Markdown link check (design/)` 红：`design/RFC-378-mindmap-decision-review/research.md` 里外部 GitHub 链接回 503（两次本 RFC 都不碰
   该文件），与 RFC-554 实现提交那次同属外部服务 503，等用户对 RFC-371 / RFC-378 链接项的决定；其余 job 通过或仍在跑，转 Done 随下一个 RFC 的提交。
+- **CI**：主 CI run 45317311399 70 / 70。
 
-## 2026-11-23 RFC-557 工作组启动资源面归 resource-catalog，本地删除选择由 bootstrap 装配（In Progress；`design/RFC-557-task-execution-launch-and-deletion-wiring/`）
+## 2026-11-23 RFC-557 工作组启动资源面归 resource-catalog，本地删除选择由 bootstrap 装配（Done；`design/RFC-557-task-execution-launch-and-deletion-wiring/`）
 
 - **来由**：跨 context 内部文件对 10 条里 task-execution 还剩三条：工作组启动资源面（读工作组行、ACL 判可见、名册检查——全是 resource-catalog 的能力，
   它的代理孪生已由 RFC-470 迁入 resource-catalog）取 resource-catalog 的 `composition/resourceAcl` 与 `infrastructure/legacy/workgroups`，本地删除效果
@@ -82,8 +85,10 @@
 - **CI 侧**：RFC-554 实现提交 `a74820d0b` 的主 CI run 45307552450 中 `Markdown link check (design/)` 红——7 条 raw.githubusercontent.com 链接回 503
   （都在 RFC-370 / RFC-371 / RFC-372 的既有文档里，RFC-554 不碰），与 RFC-378 那类 503 同形，属外部服务；其余 68 个 job 通过，汇总 job 排队中。
   RFC-554～556 的 run 仍在等 runner，转 Done 随下一个 RFC 的提交。
+- **CI**：主 CI run 45315786441 66 / 70（RFC-378 外部链接 503、`rfc398` 接管用例第六次到点、e2e 2/3 在装 Playwright 依赖时被取消、汇总 job，
+  逐格归因、未重跑），windows-platform 通过；后继提交 `aee8de63c`（祖先关系与本 RFC 文件无差异已核对）主 CI 70 / 70，补上 e2e 2/3 分片。
 
-## 2026-11-23 RFC-556 provider 实现别的 context 的端口一律经指定 adapter（In Progress；`design/RFC-556-provider-ports-through-designated-adapters/`）
+## 2026-11-23 RFC-556 provider 实现别的 context 的端口一律经指定 adapter（Done；`design/RFC-556-provider-ports-through-designated-adapters/`）
 
 - **来由**：跨 context 内部文件对 14 条里有四条同形——provider 实现 consumer 自有的端口，却在 adapter 以外的文件里取 consumer 的端口类型
   （task-execution 的两个目录源文件取 task-catalog 的 `TaskCatalogSource`、webhook 触发器取 integration 的 `WebhookTaskExecutionParticipant`，
@@ -105,8 +110,9 @@
   106 → 108、四条临时内部债边消失，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **提交**：三件套与实现同一个提交。RFC-554 / RFC-555 的 CI 仍在等 runner（RFC-554 落档提交的 run 69 个 job 已通过，汇总 job `CI required`
   排队中），它们的转 Done 随下一个 RFC 的提交。
+- **CI**：主 CI run 45312758378 68 / 70（红的同 RFC-555：RFC-378 外部链接 503 与汇总 job），windows-platform 通过。
 
-## 2026-11-23 RFC-555 development-automation 经 integration 的 required-ports 实现 Mission 续接（In Progress；`design/RFC-555-mission-continuation-required-port/`）
+## 2026-11-23 RFC-555 development-automation 经 integration 的 required-ports 实现 Mission 续接（Done；`design/RFC-555-mission-continuation-required-port/`）
 
 - **来由**：跨 context 内部文件对精确清单 15 条中的一条——development-automation 的 Mission 续接为标注返回类型直接取了 integration 的
   `application/ports/codeHostEventResponse`。RFC-294 对“consumer 自有、别的 context 实现”的端口有现成的目标形状（design §2 / §3 / §3.5：consumer 的
@@ -126,6 +132,7 @@
   候选导出里通过；四种变异都被认出；架构报告文件对 15 → 14、目标边 105 → 106、新边是 `required-implementation`，其余不变。实现门 PASS（本会话按路径
   限定自审，只审功能）。
 - **提交**：三件套与实现同一个提交（RFC-554 的 CI 仍在排队，它的转 Done 随下一个 RFC 的提交）。
+- **CI**：主 CI run 45310123056 68 / 70；红的是 RFC-378 research.md 外部链接 503 的 design/ 链接检查与随之红的汇总 job，环境性、未重跑。
 
 ## 2026-11-23 RFC-554 两个小结构门：死的 export-star 门面与 application 里的直接副作用（Done；`design/RFC-554-small-structural-gates/`）
 

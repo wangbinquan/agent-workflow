@@ -14,7 +14,7 @@
 - [x] AC-1 integration 取 event-center 非 public 文件的只剩指定 adapter；webhook 入站的装配用 `WebhookIngressEventCenter`
 - [x] AC-2 行为不变；事件中心模块满足端口由编译器检查
 - [x] AC-3 跨 context 内部文件对 7 → 6；清单与减速带随之更新；新增 RFC-558 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -40,7 +40,7 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `aee8de63c`（实现，父提交是 `014a79f85`）：exact SHA 主 CI run 45317311399 70 / 70 通过。
 
 ## 实现门（本会话自审，只审功能）
 

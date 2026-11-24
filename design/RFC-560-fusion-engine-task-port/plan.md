@@ -14,7 +14,7 @@
 - [x] AC-1 task-execution 取 knowledge-evolution 的只剩指定 adapter；端口归 knowledge-evolution 的 application/ports
 - [x] AC-2 行为与装配不变
 - [x] AC-3 目标 DAG 与 Mermaid 同批登记；DAG 外 offered 边 35 → 33；各清单与减速带随之更新；值类型撤出 public；新增 RFC-560 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -37,7 +37,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `c640d1132`（实现，父提交是 `83b179ac0`）：exact SHA 主 CI run 45323075393 70 / 70 通过；同一提交触发的 windows-platform（run 45323075455）
+  通过。
 
 ## 实现门（本会话自审，只审功能）
 

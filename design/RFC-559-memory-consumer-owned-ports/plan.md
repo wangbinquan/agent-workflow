@@ -14,7 +14,7 @@
 - [x] AC-1 task-execution 与 collaboration 的生产文件不再取 memory；三个端口由它们自己声明
 - [x] AC-2 行为不变；memory 的对象满足端口由编译器检查
 - [x] AC-3 DAG 外 offered 边 44 → 35；清单与减速带随之更新；失去消费方的 memory public 符号撤出；新增 RFC-559 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -42,7 +42,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `83b179ac0`（实现，父提交是 `aee8de63c`）：exact SHA 主 CI run 45320530953 70 / 70 通过；同一提交触发的 windows-platform（run 45320530877）与
+  integration-opencode（run 45320530873）通过。
 
 ## 实现门（本会话自审，只审功能）
 

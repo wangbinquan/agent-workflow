@@ -15,7 +15,7 @@
 - [x] AC-1 development-automation 只在指定 adapter 里按类型取 integration 的 required-ports；续接的 infrastructure 文件不再取 integration
 - [x] AC-2 行为与装配不变
 - [x] AC-3 目标 DAG 与 Mermaid 同批登记；跨 context 内部文件对 15 → 14；清单与减速带随之更新；新增 RFC-555 用例并登记；读旧位置的用例随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -39,7 +39,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `2263968b9`（实现，父提交是 `a74820d0b`）：exact SHA 主 CI run 45310123056 68 / 70 通过（含全部后端分片与真实 PostgreSQL、三个平台的构建与
+  全部 e2e 分片）。红的两格都是环境性的：`Markdown link check (design/)` 是 `design/RFC-378-mindmap-decision-review/research.md` 里外部 GitHub
+  链接回 503（本 RFC 不碰该文件），`CI required` 是汇总 job，随前者红；未重跑。
 
 ## 实现门（本会话自审，只审功能）
 

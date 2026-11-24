@@ -15,7 +15,7 @@
 - [x] AC-1 四个 provider 文件不再取 consumer 的内部；指定 adapter 是唯一取 consumer required-ports 的文件，且只按类型
 - [x] AC-2 行为与装配不变
 - [x] AC-3 目标 DAG 与 Mermaid 同批登记；跨 context 内部文件对 14 → 10；各清单与减速带随之更新；新增 RFC-556 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -42,7 +42,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `e11512bb1`（实现，父提交是 `2263968b9`）：exact SHA 主 CI run 45312758378 68 / 70 通过；红的两格同 RFC-555（RFC-378 research.md 外部链接 503 的
+  design/ 链接检查与随之红的汇总 job），环境性、未重跑。同一提交触发的 windows-platform（run 45312758340）通过。
 
 ## 实现门（本会话自审，只审功能）
 
