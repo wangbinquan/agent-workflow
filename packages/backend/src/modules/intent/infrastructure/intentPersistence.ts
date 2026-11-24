@@ -7,22 +7,28 @@
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IntentPersistence } from '../application/ports/intentPersistence'
-import { IntentSqlPersistence } from './intentSqlPersistence'
+import { IntentSqlPersistence, type IntentAgentQueriesFactory } from './intentSqlPersistence'
 import {
   AuthorizedIntentSqlProgramRunner,
   PlainIntentSqlProgramRunner,
   type IntentContextResourceAuthorizationFactoryDependency,
 } from './intentSqlProgramRunner'
 
-export function createIntentPersistence(db: PersistenceDb): IntentPersistence {
-  return new IntentSqlPersistence(new PlainIntentSqlProgramRunner(db))
+/** RFC-568: both constructions take Resource Catalog's agent read factory (bootstrap hands it over). */
+export function createIntentPersistence(
+  db: PersistenceDb,
+  createAgentExecutionQueries: IntentAgentQueriesFactory,
+): IntentPersistence {
+  return new IntentSqlPersistence(new PlainIntentSqlProgramRunner(db), createAgentExecutionQueries)
 }
 
 export function createAuthorizedIntentPersistence(input: {
   readonly db: PersistenceDb
   readonly contextAuthorization: IntentContextResourceAuthorizationFactoryDependency
+  readonly createAgentExecutionQueries: IntentAgentQueriesFactory
 }): IntentPersistence {
   return new IntentSqlPersistence(
     new AuthorizedIntentSqlProgramRunner(input.db, input.contextAuthorization),
+    input.createAgentExecutionQueries,
   )
 }

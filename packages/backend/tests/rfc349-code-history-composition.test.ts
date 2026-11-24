@@ -1,5 +1,5 @@
 import type { CodeHistoryReader } from '@/modules/code-capability/application/ports/historyReader'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-349 — the code-history HTTP surface consumes one provider-neutral
 // aggregate. A PostgreSQL composition must reach all four history endpoints
 // without the route selecting or reopening SQLite.

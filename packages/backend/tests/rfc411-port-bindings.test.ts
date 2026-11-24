@@ -8,7 +8,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import { agentFixture } from './helpers/model'
 

@@ -77,7 +77,6 @@ import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/com
 import { ForbiddenError, NotFoundError } from '@/util/errors'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
 import { composeTaskWorkspaceInsight } from '@/modules/workspace-insight/composition'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
@@ -89,6 +88,7 @@ import {
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import {
   composeMcpProbeOperations,
+  createAgentExecutionQueries,
   mcpOperationCoordinator,
 } from '@/modules/resource-catalog/composition'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'

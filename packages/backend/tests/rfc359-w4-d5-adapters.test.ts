@@ -23,6 +23,7 @@ import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/com
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeStandaloneSkillVersionCommitParticipantFactory } from './helpers/resourceCatalog'
 import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/domain/fusionRow'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const roots: string[] = []
 afterEach(() => {
@@ -145,6 +146,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
   const persistenceOf = (appHome: string) =>
     composeFusionPersistenceFor({
       db: harness.db,
+      createWorkflowExecutionQueries,
       appHome,
       memoryMembership: composeSkillMemoryFusionParticipantFactory(),
       skillVersionCommit: composeStandaloneSkillVersionCommitParticipantFactory(),

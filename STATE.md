@@ -1,4 +1,30 @@
-## 2026-11-24 RFC-567 工作流名片段撤出 resource-catalog 的 public，由 bootstrap 交给 task-execution 的任务读模型（In Progress；`design/RFC-567-workflow-name-fragment-binding/`）
+## 2026-11-24 RFC-568 resource-catalog 的两个执行资源查询工厂撤出 public，由 bootstrap 交给消费方（In Progress；`design/RFC-568-execution-resource-query-bindings/`）
+
+- **来由**：`PUBLIC_SURFACE_DEBT`（42 条）里还有两条是“public 交出的工厂收一个持久化句柄”：resource-catalog 的 `createAgentExecutionQueries(db)` 与
+  `createWorkflowExecutionQueries(db)`（返回的读类型是闭合的，问题只在入参）。读它们的是 task-execution 的七处、intent 与 knowledge-evolution 各
+  一处，都是目标 DAG 上的边。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、
+  2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、
+  实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：两个工厂由 resource-catalog 的装配根交出，闭合的读类型留在 public。九处消费方从构造入参拿到工厂引用，调用点照旧把自己手里的句柄传进去
+  （子任务铸造的锚点检查与工作组的快照读仍在各自的事务里）；task-execution 在 `infrastructure/executionResourceReads.ts` 声明两个工厂引用的类型与
+  “句柄加工作流读工厂”的 `WorkflowReadSource`，读任务详情的一串函数改收它；应用层的动作执行器不碰工厂，执行环境多一个读
+  `catalogWorkflowDefinition`；交给 collaboration 的任务主体查询由 `bindTaskSubjectQueries` 造出；bootstrap 的七个文件从装配根取工厂交入。35 个生产
+  文件；102 个用例文件与 14 个测试助手随改（构造处补入参、改从 resource-catalog 的 infrastructure 取工厂、更新钉着旧位置的断言），新增测试助手
+  `tests/helpers/taskDetailRead.ts` 与 RFC-568 用例；`PUBLIC_SURFACE_DEBT` 删 2 条。
+- **不做**：`IntentSkillArtifactOwner` 与 source-control 的 `repositoryScopeExistenceReads`（能力类合同，暂不动）；日志器类型、开放类型等其余 38 条。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 读的实现留在 resource-catalog 的 infrastructure，消费方只在构造入参里声明依赖；C11
+  resource-catalog 的 public 撤 2 个符号（public 面 991 → 989）；C12 RFC-568 用例覆盖全部模块的源码、九处消费方与 bootstrap 的交接；C13 public 类型
+  偏差 42 → 40，其余计数不升。S9 范围第 2 项里“收裸 db 句柄的查询工厂”在 task-execution、source-control 与 resource-catalog 三个 owner 上都已撤出
+  public（暂不动的两条能力类合同除外）。
+- **集中验证**（基于 `f8dc493ec`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷两处已修复并复验（漏查一处钉着任务详情读调用文本的
+  用例 `rfc292-trigger-source-locks`；一行注释里的单词让架构报告给一个不相干的 public 方法多登记了一条消费边，已改写）。tsc 0 错，eslint / promises /
+  prettier 无告警；选出 1286 个用例文件，修正后全部通过；读已提交源码的 166 个用例文件在候选导出里通过；十九种变异都被认出（九处消费方各有行为
+  用例同红），类型层变异让 `tsc` 在 bootstrap 的七个交接文件报错、消费方模块一处不报；架构报告 public 类型偏差 42 → 40，其余计数不变。实现门
+  PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-566 `948d2353c` 主 CI 64 / 70 与 RFC-567 `f8dc493ec` 主 CI 68 / 70，红格都是没有分到 runner 的 macOS 作业（及其下游），环境性、
+  未重跑，两个 RFC 转 Done；`docs/audit-backlog.md` 的 macOS runner 容量一节补记当天三次。macOS e2e 4/4 自 `4f1dcae66` 之后还没有新的结果。
+
+## 2026-11-24 RFC-567 工作流名片段撤出 resource-catalog 的 public，由 bootstrap 交给 task-execution 的任务读模型（Done；`design/RFC-567-workflow-name-fragment-binding/`）
 
 - **来由**：RFC-294 plan S9 的退出门点名四个 SQL 片段不再从任何 `public/*` 导出；前三个由 RFC-483 撤出，还剩 resource-catalog 的
   `workflowNameExpression`（按 id 取目录里可见的工作流名；签名带持久化句柄与 drizzle 类型，`PUBLIC_SURFACE_DEBT` 里占 3 条）。读它的是
@@ -19,8 +45,11 @@
   `tsc` 在 bootstrap 的两处交接报错；架构报告 public 类型偏差 45 → 42，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-565 `ff3442970` 主 CI 67 / 70（两个 macOS e2e 分片没有分到 runner，环境性、未重跑），转 Done。RFC-566 `948d2353c` 的
   windows-platform 通过，主 CI 仍在跑。
+- **CI**：主 CI run 45437638521 68 / 70；`Playwright e2e (macos-latest shard 4/4)` 没有分到 runner 被取消，`CI required` 随之红，环境性、未重跑；
+  全部后端分片、前端、检查、三个平台的构建与其余 e2e 分片通过，windows-platform 通过。这个 run 里 macOS 的构建与 e2e 1/4～3/4 通过，是 RFC-565
+  （2/4）与 RFC-566（构建与 1/4～3/4）的后继证据；macOS 的 4/4 自 `4f1dcae66` 之后还没有新的结果。
 
-## 2026-11-24 RFC-566 development-automation 不再按 integration 的名字取适配绑定与流水线执行类型（In Progress；`design/RFC-566-development-purpose-selection-bootstrap/`）
+## 2026-11-24 RFC-566 development-automation 不再按 integration 的名字取适配绑定与流水线执行类型（Done；`design/RFC-566-development-purpose-selection-bootstrap/`）
 
 - **来由**：DAG 外 offered 边（4 条）里有 2 条是 development-automation 取 integration 的 public——方向与目标 DAG 相反（integration 消费
   development-automation、实现它的 `development-effect-spi`）。一处是装配根为了声明四个“研发用途选择”接口取适配绑定类型（只有 bootstrap 读它们），
@@ -40,6 +69,8 @@
   prettier 无告警；选出 363 个用例文件，修正后全部通过；读已提交源码的用例在候选导出里通过；六种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的四个
   文件报错；架构报告 DAG 外 offered 边 4 → 2，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-565 `ff3442970` 的 CI 仍在跑，转 Done 随后续提交。
+- **CI**：主 CI run 45427856452 64 / 70；macOS 的构建与三个 e2e 分片没有分到 runner 被取消，分到 runner 的 `shard 4/4` 因缺 macOS 构建产物失败，
+  `CI required` 随之红，环境性、未重跑；全部后端分片、前端、检查与 ubuntu / windows 构建通过，windows-platform 通过。
 
 ## 2026-11-24 RFC-565 任务知识、触发与仓库身份的读由 bootstrap 交入：裸句柄的读撤出 task-execution 与 source-control 的 public（Done；`design/RFC-565-bound-owner-reads/`）
 

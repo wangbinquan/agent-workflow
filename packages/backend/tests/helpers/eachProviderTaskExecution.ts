@@ -129,6 +129,10 @@ import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import { createRootTaskLaunchKernelPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import {
+  createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
+} from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 /** Real catalog rows and owner decoders supply the validation inventory on either DB. */
 export async function loadTestDynamicWorkflowInventory(db: PersistenceDb) {
@@ -153,7 +157,7 @@ export function createTestDynamicWorkflowOperations(
   db: PersistenceDb,
 ): BoundRunTaskOptions['dynamicWorkflow'] {
   return Object.freeze({
-    persistence: composeDynamicWorkflowPersistence(db),
+    persistence: composeDynamicWorkflowPersistence(db, createAgentExecutionQueries),
     validation: Object.freeze({
       async load() {
         const inventory = await loadTestDynamicWorkflowInventory(db)
@@ -270,6 +274,7 @@ export async function createEachProviderTaskExecution(
     db,
     composeWorkgroupHostLedgerParticipantFactory({ collaboration: workgroupClarify }),
     createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
+    createAgentExecutionQueries,
   )
   const runtimeIdentity = {
     delegatedRequests: identityAccess.delegatedRequests,
@@ -353,6 +358,7 @@ export async function createEachProviderTaskExecution(
         recoverySelection: null,
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
+        createWorkflowExecutionQueries,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         // RFC-431: the provider runtime takes the deployment's workspace reads as stated.
         workspaceReads: createFileRepositoryWorkspaceReadQueries(),
@@ -495,10 +501,12 @@ export async function createEachProviderTaskExecution(
         return {
           agentLauncher: composeAgentActionExecution({
             ...deps,
+            createWorkflowExecutionQueries,
             onTerminal: options.onAgentTerminal,
           }),
           scriptLauncher: composeScriptActionExecution({
             ...deps,
+            createWorkflowExecutionQueries,
             onTerminal: options.onScriptTerminal,
           }),
         }
@@ -552,6 +560,7 @@ export async function createEachProviderTaskExecution(
       recoverySelection: null,
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
+      createWorkflowExecutionQueries,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       workspaceReads: createFileRepositoryWorkspaceReadQueries(),
       persistence,
@@ -703,10 +712,12 @@ export async function createEachProviderTaskExecution(
       return {
         agentLauncher: composeAgentActionExecution({
           ...deps,
+          createWorkflowExecutionQueries,
           onTerminal: options.onAgentTerminal,
         }),
         scriptLauncher: composeScriptActionExecution({
           ...deps,
+          createWorkflowExecutionQueries,
           onTerminal: options.onScriptTerminal,
         }),
       }

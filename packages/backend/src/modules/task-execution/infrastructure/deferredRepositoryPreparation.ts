@@ -52,6 +52,7 @@ import { createNodeRunQueries } from './nodeRunQueries'
 import { setNodeRunStatusTx as setNodeRunStatusInTransaction } from './nodeRunLifecycleTransition'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import type { WorkflowExecutionQueriesFactory } from './executionResourceReads'
 import { getTask } from './taskDetailRead'
 import { setNodeRunStatus, setTaskStatus } from './taskLifecycle'
 import type { TerminalWorkspacePrunePolicy } from './terminalWorkspacePrune'
@@ -72,6 +73,8 @@ type WorkspacePreparationRepositoryProjection = Parameters<
  */
 export interface DeferredRepositoryPreparationDependencies {
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory (the prepared task's detail names its workflow), from bootstrap. */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   /** RFC-534: the session's terminal workspace prune policy (the failure write hands it to the lifecycle writer). */
   readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   /** source-control 的物化、清理与组解析都经它（bootstrap 装配的 task 自有绑定）。 */
@@ -165,7 +168,7 @@ export function createDeferredRepositoryPreparationMechanics(input: {
 }): RepositoryPreparationMechanicsPort {
   return {
     async prepare({ descriptor, context }) {
-      const task = await getTask(input.deps.db, descriptor.taskId)
+      const task = await getTask(input.deps, descriptor.taskId)
       if (task === null) return { kind: 'terminal-won' }
       if (
         descriptor.hasPriorAttempt &&
@@ -840,7 +843,7 @@ async function runDeferredRepoPreparation(args: {
     // `task-still-running`、deleteTask 409 `task-active`、lifecycle 修复被
     // liveness gate 拒、orphanReconcile 与 gc 永久跳过它、`awaitTaskDriverStopped`
     // 永不 resolve（终止参与者跟着挂死）。只有重启 daemon 能解。
-    return { ok: false, preparedTask: (await getTask(deps.db, taskId)) as Task }
+    return { ok: false, preparedTask: (await getTask(deps, taskId)) as Task }
   }
   // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
   // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到
@@ -934,5 +937,5 @@ async function runDeferredRepoPreparation(args: {
   // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
   // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
   // 这里手抄一份投影更不容易走散。
-  return { ok: true, preparedTask: (await getTask(deps.db, taskId)) as Task }
+  return { ok: true, preparedTask: (await getTask(deps, taskId)) as Task }
 }

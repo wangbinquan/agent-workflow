@@ -242,10 +242,9 @@ export interface McpDiagnosticsQueries {
 
 // RFC-567: the SQL fragment `workflowNameExpression` left the public (its signature carries a database handle and drizzle
 // types). Bootstrap takes it from resource-catalog's composition and hands it to Task Execution's task read models.
-export {
-  createAgentExecutionQueries,
-  createWorkflowExecutionQueries,
-} from '../infrastructure/executionResourceQueries'
+// RFC-568: the two factories that take a database handle — `createAgentExecutionQueries` and
+// `createWorkflowExecutionQueries` — left the public too. Bootstrap hands them to the consumers (Task Execution, Intent,
+// Knowledge Evolution) as factory references; the closed reads they return stay here.
 export type {
   AgentExecutionQueries,
   WorkflowExecutionQueries,

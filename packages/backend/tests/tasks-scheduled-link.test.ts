@@ -13,7 +13,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTask(

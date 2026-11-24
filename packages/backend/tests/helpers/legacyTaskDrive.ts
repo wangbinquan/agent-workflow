@@ -49,7 +49,7 @@ import {
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './taskDetailRead'
 import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
 import { createLogger } from '@/util/log'

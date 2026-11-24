@@ -14,7 +14,7 @@ import {
   createHumanGatePersistenceParticipantInTx,
   createConsumedInputsParticipantInTx,
   createTaskClarifyDirectivePersistence,
-  createTaskSubjectQueries,
+  bindTaskSubjectQueries,
   createRunSelectionReader,
   createNodeRunQueries,
   createTaskGateQueries,
@@ -24,7 +24,10 @@ import {
   taskGateVisibleCondition,
   neverPruneTerminalWorkspaces,
 } from '@/modules/task-execution/composition'
-import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import {
+  createWorkflowExecutionQueries,
+  workflowNameExpression,
+} from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
   executionPermits: testExecutionPermits,
@@ -44,7 +47,8 @@ export const taskExecutionParticipants: TaskExecutionParticipantBindings = Objec
   createHumanGatePersistenceParticipantInTx,
   createConsumedInputsParticipantInTx,
   createTaskClarifyDirectivePersistence,
-  createTaskSubjectQueries,
+  // RFC-568: bound with Resource Catalog's workflow read factory, as bootstrap's cross-context closure does.
+  createTaskSubjectQueries: bindTaskSubjectQueries(createWorkflowExecutionQueries),
   createRunSelectionReader,
   createNodeRunQueries,
   createTaskGateQueries,

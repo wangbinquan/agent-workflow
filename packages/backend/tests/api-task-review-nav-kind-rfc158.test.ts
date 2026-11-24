@@ -31,6 +31,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -145,6 +146,7 @@ async function navKind(db: PersistenceDb, taskId: string, runId: string): Promis
     withO2Closure({
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
       db,
+      createWorkflowExecutionQueries,
     }),
     taskId,
   )

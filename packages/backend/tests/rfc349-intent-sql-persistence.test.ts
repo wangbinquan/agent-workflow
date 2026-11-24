@@ -24,6 +24,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider } from './helpers/eachProvider'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const SESSION: IntentSessionRecord = {
   id: 'intent-session-sql-rendering',
@@ -169,7 +170,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
         createdAt: 1,
         updatedAt: 1,
       })
-      const persistence = createIntentPersistence(db)
+      const persistence = createIntentPersistence(db, createAgentExecutionQueries)
 
       await persistence.createSession({ session: SESSION, userTurn: USER_TURN })
 
@@ -189,7 +190,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
         probeFence: 7,
         model: 'actual-intent-model',
       })
-      const persistence = createIntentPersistence(harness.db)
+      const persistence = createIntentPersistence(harness.db, createAgentExecutionQueries)
       await expect(
         persistence.resolveIntentRuntime('Intent observation runtime'),
       ).resolves.toMatchObject({
@@ -210,7 +211,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
 
   test('PostgreSQL createSession keeps table qualification out of INSERT columns', async () => {
     const fixture = postgresqlFixture()
-    const persistence = createIntentPersistence(fixture.db)
+    const persistence = createIntentPersistence(fixture.db, createAgentExecutionQueries)
 
     await persistence.createSession({ session: SESSION, userTurn: USER_TURN })
 
@@ -226,7 +227,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
 
   test('PostgreSQL update assignments keep table qualification out of SET targets', async () => {
     const fixture = postgresqlFixture()
-    const persistence = createIntentPersistence(fixture.db)
+    const persistence = createIntentPersistence(fixture.db, createAgentExecutionQueries)
 
     const result = await persistence.setStatus({
       ownerUserId: SESSION.ownerUserId,

@@ -1,4 +1,4 @@
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-349 — the repository capability matrix reads provider-owned facts while
 // application code remains the only owner of readiness and repair derivation.
 

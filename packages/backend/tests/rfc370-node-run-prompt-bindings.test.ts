@@ -59,6 +59,7 @@ import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function held<T>() {
   let resolve!: (value: T) => void
@@ -186,7 +187,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     const content = Object.freeze(new Content()),
       prompts = composeNodeRunPromptOperations(content)
     const detail = await taskNodeRunsProjection(
-      withO2Closure({ db, nodeRunPrompts: prompts }),
+      withO2Closure({ db, createWorkflowExecutionQueries, nodeRunPrompts: prompts }),
       taskId,
     )
     expect(detail.runs.map((run) => run.promptText)).toEqual([...bodies.values()])

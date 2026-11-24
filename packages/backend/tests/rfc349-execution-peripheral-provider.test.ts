@@ -11,6 +11,7 @@ import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describe('RFC-349 execution-peripheral provider boundary', () => {
   test('keeps database mechanisms out of peripheral orchestration services', () => {
@@ -102,7 +103,7 @@ describeEachProvider('RFC-349 execution-peripheral adapters（双引擎真库）
         },
       },
     })
-    const dynamicWorkflow = composeDynamicWorkflowPersistence(db)
+    const dynamicWorkflow = composeDynamicWorkflowPersistence(db, createAgentExecutionQueries)
 
     expect(agentLaunch).not.toHaveProperty('ensureHostWorkflow')
 

@@ -76,6 +76,10 @@ import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionM
 import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
+import {
+  createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
+} from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
@@ -209,6 +213,7 @@ export function composeTaskExecutionTestRuntime(
       isolationWorkspaces: createLocalIsolationWorkspaceFactory(),
       repositoryGitWorkspaces: createFileRepositoryGitWorkspaceFactory(),
       db,
+      createWorkflowExecutionQueries,
       ...singleProcessDeploymentPorts(db, terminalWorkspacePrune),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
       identityAccess: identity.resources,
@@ -231,12 +236,13 @@ export function composeTaskExecutionTestRuntime(
             composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
         }),
         createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
+        createAgentExecutionQueries,
       ),
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       runtimeRegistry: composeRuntimeRegistryOperations(db),
       nodeRunRuntime: composeNodeRunRuntimePersistence(db),
       dynamicWorkflow: {
-        persistence: composeDynamicWorkflowPersistence(db),
+        persistence: composeDynamicWorkflowPersistence(db, createAgentExecutionQueries),
         validation: composeDynamicWorkflowLayerOneValidation(db),
       },
       ...(options.codeHostConnections === undefined
@@ -394,7 +400,7 @@ export function runTaskWithRealTestTopology(
   const dynamicWorkflow =
     options.dynamicWorkflow ??
     Object.freeze({
-      persistence: composeDynamicWorkflowPersistence(options.db),
+      persistence: composeDynamicWorkflowPersistence(options.db, createAgentExecutionQueries),
       validation: composeDynamicWorkflowLayerOneValidation(options.db),
     })
   const runtime = composeTaskExecutionRuntime({
@@ -415,6 +421,7 @@ export function runTaskWithRealTestTopology(
       }),
       workspaceExcludeProfilesFor,
       db: options.db,
+      createWorkflowExecutionQueries,
       ...singleProcessDeploymentPorts(options.db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
       identityAccess,
@@ -440,6 +447,7 @@ export function runTaskWithRealTestTopology(
             composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
         }),
         createWorkgroupClarifyAskGate(options.db, taskExecutionParticipants),
+        createAgentExecutionQueries,
       ),
       runtimeSessionLeases,
       runtimeRegistry,
@@ -492,11 +500,13 @@ export function runTaskWithRealTestTopology(
               composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
           }),
           createWorkgroupClarifyAskGate(options.db, taskExecutionParticipants),
+          createAgentExecutionQueries,
         ),
       childLaunch:
         options.childLaunch ??
         createChildExecutionLaunchOperations({
           db: options.db,
+          createWorkflowExecutionQueries,
           persistence: createChildPersistence(options.db, {
             workspacePresence: createFileWorkspacePresenceQueries(),
             terminalWorkspacePrune: neverPruneTerminalWorkspaces,

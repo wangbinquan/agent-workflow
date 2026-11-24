@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 import { Paths } from '@/util/paths'
@@ -30,6 +30,7 @@ import {
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedFailedTask(
   db: PersistenceDb,
@@ -126,6 +127,7 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )

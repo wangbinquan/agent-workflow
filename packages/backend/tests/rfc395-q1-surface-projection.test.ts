@@ -18,6 +18,7 @@ import {
   TaskListItemSchema,
 } from '@agent-workflow/shared'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const definition = { $schema_version: 6, inputs: [], nodes: [], edges: [] }
 describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
@@ -44,7 +45,9 @@ describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
       spaceKind: 'scratch',
       repos: [],
     })
-    const task = TaskSchema.parse(await loadTaskProjection(h.db, 'q1-t'))
+    const task = TaskSchema.parse(
+      await loadTaskProjection({ db: h.db, createWorkflowExecutionQueries }, 'q1-t'),
+    )
     expect(task).toMatchObject({
       id: 'q1-t',
       workflowId: 'q1-w',
@@ -78,7 +81,10 @@ describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
       workflowName: task.workflowName,
     })
     await h.db.delete(tablesOf(h.db).workflows).where(eq(tablesOf(h.db).workflows.id, 'q1-w'))
-    expect((await loadTaskProjection(h.db, 'q1-t'))?.workflowName).toBeNull()
+    expect(
+      (await loadTaskProjection({ db: h.db, createWorkflowExecutionQueries }, 'q1-t'))
+        ?.workflowName,
+    ).toBeNull()
     const { taskDefinitions } = tablesOf(h.db)
     await h.db
       .update(taskDefinitions)

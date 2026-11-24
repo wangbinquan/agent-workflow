@@ -186,14 +186,15 @@ describe('RFC-567 —— S9 退出门点名的四个 SQL 片段不从任何 publ
     expect(exportedNames(composition, read(composition))).toContain(FRAGMENT)
   })
 
-  test('正对照：同一读法看得见 resource-catalog 的 public 仍交出的查询工厂与闭合读类型', () => {
+  // RFC-568: the two query factories that were still here left the public as well; the closed reads stay.
+  test('正对照：同一读法看得见 resource-catalog 的 public 仍交出的闭合读类型', () => {
     const path = `modules/${OWNER}/public/queries.ts`
     const kept = exportedNames(path, read(path))
     for (const name of [
-      'createAgentExecutionQueries',
-      'createWorkflowExecutionQueries',
       'AgentExecutionQueries',
       'WorkflowExecutionQueries',
+      'WorkflowReferenceSummary',
+      'WorkflowExecutionDocument',
     ])
       expect([name, kept.includes(name)]).toEqual([name, true])
   })

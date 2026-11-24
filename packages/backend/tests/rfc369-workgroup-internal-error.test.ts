@@ -44,6 +44,7 @@ import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const log: WorkgroupTurnLogger = {
   debug: () => {},
@@ -68,6 +69,7 @@ function injectedDrive(input: {
 }): Promise<WorkgroupTurnsOutcome> {
   const actual = createWorkgroupTurnsPersistence({
     db: input.db,
+    createAgentExecutionQueries,
     hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
       collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),

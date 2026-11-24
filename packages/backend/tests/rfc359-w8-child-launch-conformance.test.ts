@@ -94,6 +94,7 @@ import type { MaterializedSpace } from '@/modules/source-control/infrastructure/
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createDatabaseTaskDriverLifecyclePort } from './helpers/taskDriverLifecycle'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const NOW = 1_788_278_400_000
 const PARENT_TASK_ID = 'parent-task-0001'
@@ -409,6 +410,7 @@ function operationsFor(
     return {
       operations: createChildExecutionLaunchOperations({
         db,
+        createWorkflowExecutionQueries,
         persistence,
         // SQLite 组合根那一条（`taskExecutionRuntimeParticipants.ts` 逐字同形）。
         coordinatorFactory: testDriveFactory(
@@ -439,6 +441,7 @@ function operationsFor(
   })
   const operations = createChildExecutionLaunchOperations({
     db,
+    createWorkflowExecutionQueries,
     persistence,
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**。PG 这一侧绑实例的
     // `claimPersisted({ intentId })`；SQLite 组合根绑进程级单例的 `claim({ db, intentId })`

@@ -10,7 +10,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test } from 'bun:test'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function seedWorkflowWrite(db: PersistenceDb) {

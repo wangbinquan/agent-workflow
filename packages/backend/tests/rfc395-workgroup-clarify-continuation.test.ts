@@ -44,6 +44,7 @@ import {
   readTaskFixtures,
 } from './helpers/model'
 import { mkQ, seedTask } from './helpers/questionDispatchFixture'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const LEADER = '__wg_leader__'
 const CLARIFY = '__wg_clarify__'
@@ -124,6 +125,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
     )
     const persistence = createWorkgroupTurnsPersistence({
       db: h.db,
+      createAgentExecutionQueries,
       hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
         collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
       }),

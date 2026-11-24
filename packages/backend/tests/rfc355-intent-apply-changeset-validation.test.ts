@@ -38,6 +38,7 @@ import { composeIntentContextResourceAuthorizationFactory } from '../src/modules
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { composeStandaloneIntentApply } from './helpers/intentApply'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const OWNER = 'user_owner_rfc355_00000000'
 
@@ -95,6 +96,7 @@ async function createIntentSession(
   return createSession(
     composeIntentPersistence({
       db,
+      createAgentExecutionQueries,
       contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
     }),
     intentResourceVisibility({

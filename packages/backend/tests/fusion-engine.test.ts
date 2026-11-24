@@ -51,7 +51,7 @@ import {
   rejectFusion,
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { withTaskReviewMutationLock } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
@@ -73,6 +73,7 @@ import {
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
 } from './helpers/resourceScopeAuthority'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
@@ -212,6 +213,7 @@ async function build(): Promise<H> {
     operations: composeFusionOperationsFor({
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
+      createWorkflowExecutionQueries,
       appHome,
       memories: memoryCatalog,
       tasks: composeTestFusionTasks({

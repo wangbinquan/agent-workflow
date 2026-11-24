@@ -125,6 +125,7 @@ import {
   loadTestDynamicWorkflowInventory,
 } from './helpers/eachProviderTaskExecution'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const INFRASTRUCTURE = resolve(
   import.meta.dir,
@@ -180,6 +181,7 @@ function sharedInput(
 > {
   return {
     executionPermits: testExecutionPermits,
+    createWorkflowExecutionQueries,
     // RFC-533: the session's child-task budget is a direct dependency the factory only hands on.
     childTaskBudget: createChildTaskBudgetRuntime(db),
     // RFC-535: the session's terminal watch is likewise a direct dependency the factory only hands on.
@@ -235,6 +237,7 @@ function sqliteParticipants(db: PersistenceDb): TaskExecutionRuntimeParticipants
   const client = db as unknown as DbClient
   return createTaskExecutionRuntimeParticipants({
     ...sharedInput(db),
+    createWorkflowExecutionQueries,
     ...singleProcessDeploymentPorts(client),
   })
 }
@@ -268,6 +271,7 @@ function postgresqlParticipants(db: PersistenceDb): TaskExecutionRuntimeParticip
   }
   return createTaskExecutionRuntimeParticipants({
     ...input,
+    createWorkflowExecutionQueries,
     taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
     processConcurrencyScope: {},
     log: passthrough('log'),

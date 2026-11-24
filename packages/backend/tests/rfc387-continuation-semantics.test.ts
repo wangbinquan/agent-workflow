@@ -49,6 +49,7 @@ import { layoutBuiltinWorkflowSnapshotJson } from '@/modules/task-execution/doma
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { seedBundleTask, taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Bundle = ReturnType<ReturnType<typeof taskBundleInput>['compose']>
 const homes: string[] = []
@@ -345,6 +346,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       const preparation = composeDeferredRepositoryPreparation({
         repositoryPreparationLookup: composeRepositoryPreparationLookup(harness.db),
         db: harness.db,
+        createWorkflowExecutionQueries,
         terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         appHome,
         gitBaselineSyncWindowMs: 0,
@@ -583,6 +585,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       }
       const operations = createFusionEngineTaskOperations({
         db: harness.db,
+        createWorkflowExecutionQueries,
         workspaces: seed.workspaces,
         coordinator: launchCoordinator,
         cancellation: bundle.cancellation,
@@ -613,6 +616,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       }
       const operations = createFusionEngineTaskOperations({
         db: harness.db,
+        createWorkflowExecutionQueries,
         workspaces: seed.workspaces,
         cancellation: bundle.cancellation,
         coordinator: former
@@ -642,6 +646,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       seed = await fusionSeed(harness, appHome)
     await createFusionEngineTaskOperations({
       db: harness.db,
+      createWorkflowExecutionQueries,
       workspaces: seed.workspaces,
       coordinator: bundle.coordinator,
       cancellation: bundle.cancellation,
@@ -649,6 +654,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
     const canceled: string[] = []
     const operations = createFusionEngineTaskOperations({
       db: harness.db,
+      createWorkflowExecutionQueries,
       workspaces: seed.workspaces,
       coordinator: bundle.coordinator,
       cancellation: {

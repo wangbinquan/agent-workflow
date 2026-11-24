@@ -102,6 +102,7 @@ import {
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
 import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -116,7 +117,7 @@ const runDynamicWorkflowGenerate = (
   const { db, hooks, ...rest } = args
   return runDynamicWorkflowGenerateWithPorts(
     {
-      persistence: composeDynamicWorkflowPersistence(db),
+      persistence: composeDynamicWorkflowPersistence(db, createAgentExecutionQueries),
       nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
       validation: composeDynamicWorkflowLayerOneValidation(db),
       rules: { triggerPreflightIssue },

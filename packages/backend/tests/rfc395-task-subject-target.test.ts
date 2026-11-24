@@ -73,7 +73,10 @@ describeEachProvider('RFC-395 T five target subjects and task cascade', (harness
         .where(eq(taskDefinitions.taskId, subject.kind))
       expect(taskSubjectFromDefinition(definition!)).toEqual(subject)
       const projected = (
-        await new DatabaseTaskSubjectQueries(harness.db).taskDefinitionProjection([subject.kind])
+        await new DatabaseTaskSubjectQueries(
+          harness.db,
+          createWorkflowExecutionQueries,
+        ).taskDefinitionProjection([subject.kind])
       ).get(subject.kind)
       expect(projected?.workflowId).toBe(definitionAnchorId(subject))
       expect(projected?.origin).toBe(input.definition.definitionOrigin)
@@ -175,6 +178,7 @@ import { describeV2Providers, fixtureLookup } from './helpers/rfc395V2Harness'
 import { convertTaskFixtures, taskRow, writeTaskFixture } from './helpers/rfc395V2/taskFixtures'
 import { createTestDb } from './helpers/testDatabase'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describeV2Providers('RFC-395 W1 unknown historical task stays readable', (h) => {
   for (const [anchor, expectedBlock] of [
@@ -265,14 +269,19 @@ describeV2Providers('RFC-395 W1 unknown historical task stays readable', (h) => 
               initialTaskExecutionGeneration(id, 1001),
             )
           })
-          const detail = await createTaskDetailQueries(target.db).read(id)
+          const detail = await createTaskDetailQueries(
+            target.db,
+            createWorkflowExecutionQueries,
+          ).read(id)
           expect(detail?.task).toMatchObject({
             id,
             status,
             workflowId: anchor,
             workflowName: null,
           })
-          expect(await loadTaskProjection(target.db, id)).toMatchObject({
+          expect(
+            await loadTaskProjection({ db: target.db, createWorkflowExecutionQueries }, id),
+          ).toMatchObject({
             id,
             workflowId: anchor,
             workflowName: null,

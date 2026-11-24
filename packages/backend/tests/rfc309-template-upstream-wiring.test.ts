@@ -1,4 +1,4 @@
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-309 T16 — the T64 upstream link, connected to a caller at last.
 //
 // `domain/templateUpstream.ts` shipped with RFC-304, was unit-tested, and had

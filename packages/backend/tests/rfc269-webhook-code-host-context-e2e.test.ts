@@ -54,6 +54,7 @@ import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding
 import { createWorkflow } from './helpers/model/resourceWrites'
 import { applyIntentChangeset } from './helpers/intentApply'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const TOKEN = 'aw-rfc269-local-fixture-token' // gitleaks:allow
 const INTENT_RUNTIME = 'rfc292-intent-opencode'
@@ -330,7 +331,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       source: 'session',
     })
     const { session } = await createIntentSession(
-      createIntentPersistence(db),
+      createIntentPersistence(db, createAgentExecutionQueries),
       {
         currentAuthority: {
           authority: Object.freeze({}) as ResourceRequestContext,

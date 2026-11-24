@@ -92,6 +92,7 @@ import {
   createLocalIsolationWorkspaceFactory,
   createFileRepositoryWorkspaceReadQueries,
 } from '@/modules/source-control/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const TIMEOUT = 60_000
 const log = createLogger('single-nonroot-workspace-test')
@@ -502,7 +503,11 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const { task } = await fixture(shape)
         change(task)
         const diff = await taskDiffProjection(
-          { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: harness.db },
+          {
+            workspaceReads: createFileRepositoryWorkspaceReadQueries(),
+            db: harness.db,
+            createWorkflowExecutionQueries,
+          },
           task.id,
         )
         expect(diff.diff).toContain('+export function value() { return 2 }')

@@ -29,6 +29,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const nodeSlot: RunSlot = {
   kind: 'node',
@@ -386,6 +387,7 @@ describeEachProvider('RFC-395 target run mint identities', (h) => {
         ),
         memorySnapshots: composeTaskMemorySnapshotPort(),
         db: h.db,
+        createWorkflowExecutionQueries,
         clarifyNav: { latestRoundStatusByRun: async () => new Map() },
       },
       't',

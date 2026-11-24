@@ -56,6 +56,7 @@ import {
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const frame = { containerRunId: null, iteration: 0 }
 const log = createLogger('rfc395-w2fix-nb-test')
@@ -533,6 +534,7 @@ describeEachProvider('RFC-395 N-b wave-2 functional regressions', (h) => {
           ),
           memorySnapshots: composeTaskMemorySnapshotPort(),
           db: h.db,
+          createWorkflowExecutionQueries,
           clarifyNav: { latestRoundStatusByRun: async () => new Map() },
         },
         't',

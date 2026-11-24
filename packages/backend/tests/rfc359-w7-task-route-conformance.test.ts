@@ -78,6 +78,7 @@ import {
 } from '@/modules/source-control/composition'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const ulid = monotonicFactory()
 
@@ -206,6 +207,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
+      createWorkflowExecutionQueries,
       // RFC-567: Resource Catalog's workflow name fragment for the task list rows.
       workflowName: workflowNameExpression,
       // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
@@ -795,7 +797,13 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
       worktreePath: join(APP_HOME, 'wt', 'sync'),
     })
     expect(
-      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      await code(
+        ops.syncWorkflow({
+          actor: actorOf(OWNER),
+          taskId,
+          expectedVersion: 1,
+        }),
+      ),
     ).toBe('builtin-readonly')
   })
 
@@ -883,13 +891,25 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
 
     activeTaskIds.add(taskId)
     expect(
-      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      await code(
+        ops.syncWorkflow({
+          actor: actorOf(OWNER),
+          taskId,
+          expectedVersion: 1,
+        }),
+      ),
       '进程内还在跑时改工作流定义会和正在跑的节点抢同一棵工作树',
     ).toBe('task-not-syncable')
 
     activeTaskIds.clear()
     expect(
-      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      await code(
+        ops.syncWorkflow({
+          actor: actorOf(OWNER),
+          taskId,
+          expectedVersion: 1,
+        }),
+      ),
       '进程退出后这道门必须让开——否则任务永远同步不了',
     ).not.toBe('task-not-syncable')
   })
@@ -1016,7 +1036,13 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     })
     await patchTaskFixture(harness.db, { id: taskId }, { workspacePrunedAt: Date.now() })
     expect(
-      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      await code(
+        ops.syncWorkflow({
+          actor: actorOf(OWNER),
+          taskId,
+          expectedVersion: 1,
+        }),
+      ),
       '合并前只有 PG 在前置门拦，SQLite 穿过去到 resumeKick 才报',
     ).toBe('worktree-missing')
   })

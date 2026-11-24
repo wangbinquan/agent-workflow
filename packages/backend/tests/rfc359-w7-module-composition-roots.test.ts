@@ -47,6 +47,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const T0 = 1_700_000_000_000
 
@@ -367,7 +368,7 @@ describeEachProvider(
   'RFC-359 W7 —— task-execution 组合根（无需 daemon 装配的那几个）',
   (harness) => {
     test('动态工作流持久化：任务快照 / 节点运行计数 / 状态写回都落真库', async () => {
-      const persistence = composeDynamicWorkflowPersistence(harness.db)
+      const persistence = composeDynamicWorkflowPersistence(harness.db, createAgentExecutionQueries)
       const taskId = `t_${ulid()}`
       await seedTask(harness.db, taskId)
       expect(await persistence.loadTask(`t_${ulid()}`)).toBeNull()

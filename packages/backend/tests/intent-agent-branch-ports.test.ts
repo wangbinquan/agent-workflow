@@ -36,6 +36,7 @@ import type { IntentDumpAuxiliaryQueries } from '../src/modules/intent/applicati
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const OWNER = 'user_owner_bports_000000000'
 
@@ -53,6 +54,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
   persistence = composeIntentPersistence({
     db,
+    createAgentExecutionQueries,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-bports-'))

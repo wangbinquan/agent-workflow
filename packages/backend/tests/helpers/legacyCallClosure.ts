@@ -16,7 +16,7 @@
 // name fails the LAUNCH closed with id-only payloads (design-gate P2-6 —
 // names are display data the launcher may not be entitled to echo).
 
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 import { callEdgeKey, type FrozenCallClosure } from '@/modules/resource-catalog/domain/callClosure'
 import type { FrozenWorkflowRef, FrozenWorkgroupRef } from '@/modules/resource-catalog/public/types'
 import { tablesOf } from '@/platform/persistence/sessionTables'

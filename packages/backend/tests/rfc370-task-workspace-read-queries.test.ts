@@ -39,6 +39,7 @@ import {
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
 import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const TOKEN = 'w'.repeat(64)
 const MAX_DIFF = 1_048_576
@@ -213,12 +214,15 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     const f = mapped(ref, join(root, 'absent'))
     const id = await seedTask(provider.db, ref, null)
     await expect(
-      taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id),
+      taskDiffProjection(
+        { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
+        id,
+      ),
     ).rejects.toMatchObject({ code: 'task-no-base-commit', status: 409 })
     expect(f.store.calls).toEqual([])
     await patchTaskFixture(provider.db, { id }, { baseCommit: 'base' })
     const missing = await taskDiffProjection(
-      { db: provider.db, workspaceReads: f.reads },
+      { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
       id,
     ).catch((error: unknown) => error)
     expect(missing).toBeInstanceOf(DomainError)
@@ -231,7 +235,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     f.store.calls.length = 0
     mkdirSync(f.store.paths.get(ref)!)
     const invalid = await taskDiffProjection(
-      { db: provider.db, workspaceReads: f.reads },
+      { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
       id,
     ).catch((error: unknown) => error)
     expect(invalid).toMatchObject({
@@ -256,7 +260,10 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
         }
       }
       let finished = false
-      const operation = taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id).then(
+      const operation = taskDiffProjection(
+        { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
+        id,
+      ).then(
         (value) => {
           finished = true
           return value
@@ -345,7 +352,10 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
         await release.promise
       }
     }
-    const operation = taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id)
+    const operation = taskDiffProjection(
+      { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
+      id,
+    )
     try {
       await entered.promise
       expect(f.store.calls.map((call) => [call.method, call.reference])).toEqual([
@@ -402,12 +412,13 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
       }
     }
     let finished = false
-    const operation = taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id).then(
-      (value) => {
-        finished = true
-        return value
-      },
-    )
+    const operation = taskDiffProjection(
+      { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
+      id,
+    ).then((value) => {
+      finished = true
+      return value
+    })
     try {
       await entered.promise
       expect(finished).toBe(false)
@@ -422,7 +433,12 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     f.store.before = undefined
     await runGit(repo.root, ['checkout', '--', 'tracked.txt'])
     rmSync(join(repo.root, '中文未跟踪.txt'))
-    expect(await taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id)).toEqual({
+    expect(
+      await taskDiffProjection(
+        { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
+        id,
+      ),
+    ).toEqual({
       diff: '',
       baseCommit: null,
       truncated: false,
@@ -440,7 +456,10 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
         if (call.method === method) throw failure
       }
       await expect(
-        taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id),
+        taskDiffProjection(
+          { db: provider.db, createWorkflowExecutionQueries, workspaceReads: f.reads },
+          id,
+        ),
       ).rejects.toBe(failure)
     }
     f.store.calls.length = 0
@@ -458,19 +477,30 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
         },
       })
       await expect(
-        taskDiffProjection({ db: provider.db, workspaceReads: incomplete }, id),
+        taskDiffProjection(
+          { db: provider.db, createWorkflowExecutionQueries, workspaceReads: incomplete },
+          id,
+        ),
       ).rejects.toThrow('Repository workspace reads require a complete query implementation')
     }
     await expect(
       taskDiffProjection(
-        { db: provider.db, workspaceReads: null as unknown as RepositoryWorkspaceReadQueries },
+        {
+          db: provider.db,
+          createWorkflowExecutionQueries,
+          workspaceReads: null as unknown as RepositoryWorkspaceReadQueries,
+        },
         id,
       ),
     ).rejects.toThrow(TypeError)
     expect(f.store.calls).toEqual([])
     expect(
       await taskDiffProjection(
-        { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: provider.db },
+        {
+          workspaceReads: createFileRepositoryWorkspaceReadQueries(),
+          db: provider.db,
+          createWorkflowExecutionQueries,
+        },
         await seedTask(provider.db, repo.root, repo.base),
       ),
     ).toEqual({

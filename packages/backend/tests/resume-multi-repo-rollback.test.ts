@@ -35,7 +35,7 @@ import { tmpdir } from 'node:os'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'

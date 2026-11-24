@@ -34,6 +34,7 @@ import type { DaemonRepositoryCredentials } from './repositoryCredentials'
 import type { DaemonIntegrationModules } from './integration'
 
 import type { DeploymentSelections } from '../deploymentProfile'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/composition'
 export interface DaemonDevelopmentAutomationInput {
   readonly db: PersistenceDb
   readonly appHome: string
@@ -131,6 +132,8 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     approvalGateway: integration.developmentApprovalGateway,
     agentLauncher: composeAgentActionExecution({
       ...hostTasks,
+      // RFC-568: Resource Catalog's workflow read factory (a script action's workflow definition).
+      createWorkflowExecutionQueries,
       agents: { get: (id) => hostTasks.agents.get(id, 'agent-action-authority-not-admitted') },
       workspaceEntries: input.actionWorkspaceEntries,
       onTerminal: (executionRef) => {
@@ -139,6 +142,8 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     }),
     scriptLauncher: composeScriptActionExecution({
       ...hostTasks,
+      // RFC-568: Resource Catalog's workflow read factory (a script action's workflow definition).
+      createWorkflowExecutionQueries,
       agents: { get: (id) => hostTasks.agents.get(id, 'agent-action-authority-not-admitted') },
       workspaceEntries: input.actionWorkspaceEntries,
       onTerminal: (executionRef) => {

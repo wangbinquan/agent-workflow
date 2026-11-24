@@ -65,6 +65,7 @@ import {
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VALID_OPENCODE_RUNTIME = 'rfc319-test-opencode'
 
@@ -148,6 +149,7 @@ async function build(): Promise<Harness> {
       operations: composeFusionOperationsFor({
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
+        createWorkflowExecutionQueries,
         appHome,
         memories: memoryCatalog,
         tasks: composeTestFusionTasks({

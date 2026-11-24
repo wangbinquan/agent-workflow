@@ -37,6 +37,7 @@ import type { DaemonDigitalEmployeeModules } from './digitalEmployee'
 import type { DaemonObservationModules } from './observation'
 import type { DaemonProviderCore } from './providerCore'
 import type { DaemonResourceCatalogModules } from './resourceCatalog'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/composition'
 
 export interface DaemonIntentInput {
   readonly db: PersistenceDb
@@ -92,6 +93,8 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
   const persistence = composeIntentPersistence({
     db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
+    // RFC-568: Resource Catalog's agent query factory (agent port names for the resource catalog view).
+    createAgentExecutionQueries,
   })
   const graphValidation = createIntentWorkflowGraphValidation({
     validationQueries: resources.workflowCatalog.validationQueries,
@@ -164,7 +167,11 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     }),
     resourceCatalogFor,
   })
-  const maintenance = composeIntentMaintenanceSnapshotQueriesFor({ db, activity: applyOperations })
+  const maintenance = composeIntentMaintenanceSnapshotQueriesFor({
+    db,
+    createAgentExecutionQueries,
+    activity: applyOperations,
+  })
   const queuedResumption = composeIntentQueuedResumption({
     configuration,
     async resume(sessionIds, config) {

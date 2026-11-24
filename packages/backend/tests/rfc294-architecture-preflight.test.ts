@@ -380,8 +380,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-552: the fusion persistence port left knowledge-evolution's public with the maintenance functions (no other module
   // read it); its `Partial` patch is no longer a public deviation.
   'modules/resource-catalog/application/intent/artifactOwners.ts#IntentSkillArtifactOwner: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createAgentExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createWorkflowExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
+  // RFC-568: the two execution resource query factories left the public — bootstrap hands them to Task Execution, Intent
+  // and Knowledge Evolution as factory references; two entries settled.
   // RFC-567: the SQL fragment `workflowNameExpression` left the public — bootstrap takes it from resource-catalog's
   // composition and hands it to Task Execution's task read models; three entries settled (the last of the four SQL
   // fragments the S9 exit gate names).

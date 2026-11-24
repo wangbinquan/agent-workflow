@@ -3,6 +3,7 @@ import {
   createAuthorizedIntentPersistence,
   createIntentPersistence,
 } from '../infrastructure/intentPersistence'
+import type { IntentAgentQueriesFactory } from '../infrastructure/intentSqlPersistence'
 import type { IntentContextResourceAuthorizationFactoryDependency } from '../infrastructure/intentSqlProgramRunner'
 
 export { createIntentPersistence }
@@ -14,6 +15,8 @@ export { createIntentPersistence }
 export function composeIntentPersistence(input: {
   readonly db: PersistenceDb
   readonly contextAuthorization: IntentContextResourceAuthorizationFactoryDependency
+  /** RFC-568: Resource Catalog's agent read factory (agent port names), handed over by bootstrap. */
+  readonly createAgentExecutionQueries: IntentAgentQueriesFactory
 }) {
   return createAuthorizedIntentPersistence(input)
 }

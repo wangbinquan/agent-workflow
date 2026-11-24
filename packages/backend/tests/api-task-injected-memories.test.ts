@@ -19,6 +19,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -106,6 +107,7 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -128,6 +130,7 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -143,6 +146,7 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -158,6 +162,7 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )

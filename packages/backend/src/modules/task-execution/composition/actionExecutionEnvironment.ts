@@ -11,6 +11,7 @@
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RootTaskLaunchKernel } from '../application/launch/rootTaskLaunch'
+import type { WorkflowExecutionQueriesFactory } from '../infrastructure/executionResourceReads'
 import { launchActionHostTask } from '../infrastructure/hostTaskLaunch'
 import type { TaskExecutionReadModels } from '../public/types'
 import type {
@@ -29,6 +30,8 @@ import { getExecutionOutcome } from '../infrastructure/executionOutcome'
 
 export interface ActionExecutionEnvironmentDependencies {
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory (a script action's workflow definition), handed over by bootstrap. */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   /**
    * **惰性**取 actor：只有 `launchHostTask` 用得到它，而 SQLite 侧的组合根
    * （`server.ts` 的 `composeFallbackDevelopmentAutomation`）是**同步**函数，
@@ -75,6 +78,10 @@ export function createActionExecutionEnvironment(
     // daemon checks its own filesystem unless the deployment selected its workspace implementation's entries.
     workspaceEntries: deps.workspaceEntries ?? localActionWorkspaceEntries,
     taskStatus: (executionRef: string) => readTaskStatus(deps.db, executionRef),
+    // RFC-568: catalog rows only, as the runner read it before — built on this database on every call.
+    catalogWorkflowDefinition: async (workflowId: string) =>
+      (await deps.createWorkflowExecutionQueries(deps.db).documents([workflowId], true))[0]
+        ?.definition ?? null,
     executionOutcome: (executionRef: string) =>
       getExecutionOutcome(deps.readModels.executionOutcome, executionRef),
     awaitTerminal: (executionRef: string, pollMs: number) =>

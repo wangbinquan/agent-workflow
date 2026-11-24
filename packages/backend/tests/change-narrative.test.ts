@@ -52,7 +52,7 @@ import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { computeContentDigest } from '../src/modules/workspace-insight/domain/structuralDiff/digest'
 import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
 import type { SystemAgentRunResult } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { requireTaskMember } from '@/modules/collaboration/infrastructure/taskCollab'
 import { parseNumstatZ, runGit } from '../src/util/git'
 import {

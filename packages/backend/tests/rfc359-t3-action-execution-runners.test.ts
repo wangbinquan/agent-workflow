@@ -50,6 +50,7 @@ import { sha256Hex } from '@/util/hash'
 import { DrizzleTaskArtifactPathQueries } from '@/modules/task-execution/infrastructure/taskArtifactPathQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const BASELINE = 'a'.repeat(40)
 
@@ -74,6 +75,10 @@ function fakeEnvironment(
   const terminalWatch = createTaskTerminalWatch()
   const env: ActionExecutionEnvironment = {
     db,
+    // RFC-568: the environment binding's read, built on this db with Resource Catalog's workflow read factory.
+    catalogWorkflowDefinition: async (workflowId) =>
+      (await createWorkflowExecutionQueries(db).documents([workflowId], true))[0]?.definition ??
+      null,
     agents: { get: async () => over.agent ?? null },
     outcomes: {
       // 终态任务的结果读模型：只给最小的空产出，让 fetchOutcome 走到 exited 分支。

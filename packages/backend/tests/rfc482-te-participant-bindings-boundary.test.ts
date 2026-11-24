@@ -42,6 +42,11 @@ const WITHDRAWN = [
   'reselectRunInTx',
 ] as const
 const FACTORIES = WITHDRAWN.filter((name) => name !== 'reselectRunInTx')
+// RFC-568: the task subject queries read workflow names through Resource Catalog's workflow read factory, so
+// task-execution's composition hands out a binder and bootstrap binds it; the binding member keeps its name.
+const COMPOSITION_NAMES = FACTORIES.map((name) =>
+  name === 'createTaskSubjectQueries' ? 'bindTaskSubjectQueries' : name,
+)
 const slash = (path: string) => path.split('\\').join('/')
 const read = (path: string) => readFileSync(join(SRC, path), 'utf8')
 const parse = (path: string, text: string) =>
@@ -243,7 +248,7 @@ describe('RFC-482 —— collaboration 改经绑定取这五个工厂', () => {
           ? bindings.elements.map((element) => element.name.text)
           : []
       })
-    for (const name of FACTORIES) expect(fromComposition, name).toContain(name)
+    for (const name of COMPOSITION_NAMES) expect(fromComposition, name).toContain(name)
     const composer = closure.statements.find(
       (statement): statement is ts.FunctionDeclaration =>
         ts.isFunctionDeclaration(statement) &&
@@ -251,12 +256,20 @@ describe('RFC-482 —— collaboration 改经绑定取这五个工厂', () => {
     )
     expect(composer).toBeDefined()
     const handed: string[] = []
+    const bound = new Map<string, string>()
     const visit = (node: ts.Node): void => {
       if (ts.isShorthandPropertyAssignment(node)) handed.push(node.name.text)
+      if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
+        handed.push(node.name.text)
+        bound.set(node.name.text, node.initializer.getText())
+      }
       ts.forEachChild(node, visit)
     }
     visit(composer!)
     for (const name of FACTORIES) expect(handed, name).toContain(name)
+    expect(bound.get('createTaskSubjectQueries')).toBe(
+      'bindTaskSubjectQueries(createWorkflowExecutionQueries)',
+    )
   })
 })
 

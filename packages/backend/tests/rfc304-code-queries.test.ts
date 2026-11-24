@@ -4,7 +4,7 @@ import {
   seedEmptyCodeHistory,
   type HistoryFixtureInsert,
 } from './helpers/legacyCapabilitySeed'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-304 T31b — the read side of `/code`, and the command that flips a cell.
 //
 // What these pin is the part a page cannot work around:

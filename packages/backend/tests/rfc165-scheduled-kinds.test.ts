@@ -72,6 +72,7 @@ import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-c
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -132,6 +133,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
           withLocalRepositoryPreparation({ db, appHome }),
         ),
         db,
+        createWorkflowExecutionQueries,
         terminalWorkspacePrune: neverPruneTerminalWorkspaces,
         appHome,
       }),

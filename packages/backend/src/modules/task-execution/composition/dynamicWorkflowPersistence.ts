@@ -3,7 +3,12 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import { DrizzleDynamicWorkflowPersistence } from '../infrastructure/dynamicWorkflowPersistence'
+import type { AgentExecutionQueriesFactory } from '../infrastructure/executionResourceReads'
 
-export function composeDynamicWorkflowPersistence(db: PersistenceDb): DynamicWorkflowPersistence {
-  return new DrizzleDynamicWorkflowPersistence(db)
+/** RFC-568: bootstrap also hands over Resource Catalog's agent read factory. */
+export function composeDynamicWorkflowPersistence(
+  db: PersistenceDb,
+  createAgentExecutionQueries: AgentExecutionQueriesFactory,
+): DynamicWorkflowPersistence {
+  return new DrizzleDynamicWorkflowPersistence(db, createAgentExecutionQueries)
 }

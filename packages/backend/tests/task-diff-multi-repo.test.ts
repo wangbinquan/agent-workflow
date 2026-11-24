@@ -30,6 +30,7 @@ import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 interface Harness {
   db: DbClient
@@ -101,7 +102,11 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
     // Stage a change inside the worktree so the diff is non-empty.
     writeFileSync(join(task.worktreePath, 'README.md'), '# repo-0 (mutated)\n')
     const diff = await taskDiffProjection(
-      { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: h.db },
+      {
+        workspaceReads: createFileRepositoryWorkspaceReadQueries(),
+        db: h.db,
+        createWorkflowExecutionQueries,
+      },
       task.id,
     )
     expect(diff.baseCommit).not.toBeNull()
@@ -136,7 +141,11 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
     writeFileSync(join(wtB, 'README.md'), '# repo-B mutated\n')
 
     const diff = await taskDiffProjection(
-      { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: h.db },
+      {
+        workspaceReads: createFileRepositoryWorkspaceReadQueries(),
+        db: h.db,
+        createWorkflowExecutionQueries,
+      },
       task.id,
     )
     expect(diff.baseCommit).toBeNull()
@@ -174,7 +183,11 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
     writeFileSync(join(wtA, 'README.md'), '# repo-A mutated\n')
 
     const diff = await taskDiffProjection(
-      { workspaceReads: createFileRepositoryWorkspaceReadQueries(), db: h.db },
+      {
+        workspaceReads: createFileRepositoryWorkspaceReadQueries(),
+        db: h.db,
+        createWorkflowExecutionQueries,
+      },
       task.id,
     )
     expect(diff.baseCommit).toBeNull()

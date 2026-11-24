@@ -31,6 +31,7 @@ import {
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
 import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function withoutGeometry(definition: WorkflowDefinition): unknown {
   return {
@@ -187,6 +188,7 @@ describeEachProvider('built-in workflow automatic layout', (harness) => {
     const db = harness.db
     const fusion = composeFusionPersistenceFor({
       db,
+      createWorkflowExecutionQueries,
       appHome: '/tmp',
       ...TEST_FUSION_PARTICIPANTS,
     })

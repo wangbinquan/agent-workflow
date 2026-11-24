@@ -9,7 +9,7 @@ import {
   composeCodeHistoryQueries,
   type CodeHistoryQueries,
 } from '@/modules/code-capability/composition/historyQueries'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   seedEmptyCodeHistory,

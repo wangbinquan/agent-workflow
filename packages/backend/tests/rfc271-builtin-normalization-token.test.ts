@@ -38,6 +38,7 @@ import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evoluti
 import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { expectTokenOf } from '../src/modules/resource-catalog/application/package/preview'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const agentRow = async (
   db: PersistenceDb,
@@ -63,7 +64,12 @@ async function freshDb(db: PersistenceDb): Promise<PersistenceDb> {
 
 function seed(db: PersistenceDb): Promise<void> {
   return seedFusionResources(
-    composeSqliteFusionPersistence({ db, appHome: '/tmp', ...TEST_SQLITE_FUSION_PARTICIPANTS }),
+    composeSqliteFusionPersistence({
+      db,
+      createWorkflowExecutionQueries,
+      appHome: '/tmp',
+      ...TEST_SQLITE_FUSION_PARTICIPANTS,
+    }),
   )
 }
 

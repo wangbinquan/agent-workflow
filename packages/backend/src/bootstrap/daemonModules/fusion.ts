@@ -1,4 +1,5 @@
 import { composeFusionResourceSeedParticipant } from '@/modules/resource-catalog/composition/fusionResourceSeed'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/composition'
 import { composeFusionOperationsFor } from '@/modules/knowledge-evolution/composition/fusion'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
@@ -7,7 +8,7 @@ import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-
 export function composeDaemonFusionModules(
   input: Omit<
     Parameters<typeof composeFusionOperationsFor>[0],
-    'memoryMembership' | 'skillVersionCommit' | 'resourceSeed'
+    'memoryMembership' | 'skillVersionCommit' | 'resourceSeed' | 'createWorkflowExecutionQueries'
   > & {
     readonly skillContent: NonNullable<
       Parameters<typeof composeSkillVersionCommitParticipantFactory>[0]
@@ -20,6 +21,8 @@ export function composeDaemonFusionModules(
     memories: input.memories,
     tasks: input.tasks,
     resourceSeed: composeFusionResourceSeedParticipant(),
+    // RFC-568: Resource Catalog's workflow read factory (the built-in fusion workflow's summary).
+    createWorkflowExecutionQueries,
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
     skillVersionCommit: composeSkillVersionCommitParticipantFactory({
       skillContent: input.skillContent,

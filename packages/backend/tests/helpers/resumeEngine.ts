@@ -27,7 +27,7 @@ import {
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './taskDetailRead'
 import { createLogger } from '@/util/log'
 import { NotFoundError } from '@/util/errors'
 import type { Task } from '@agent-workflow/shared'

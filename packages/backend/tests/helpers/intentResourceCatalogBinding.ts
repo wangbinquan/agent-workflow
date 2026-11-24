@@ -60,6 +60,7 @@ import type {
   IntentDumpAuxiliaryQueries,
   IntentPlatformInventoryParticipant,
 } from '../../src/modules/intent/application/ports/intentAuxiliaryQueries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 type AgentDetailInput = Parameters<IntentResourceCatalogDetailQueries['agents']['get']>[0]
 type SkillContentInput = Parameters<IntentResourceCatalogDetailQueries['skills']['content']>[0]
 type SkillFileListInput = Parameters<IntentResourceCatalogDetailQueries['skillFiles']['list']>[0]
@@ -76,6 +77,7 @@ const EMPTY_PLATFORM_INVENTORY: IntentPlatformInventoryParticipant = Object.free
 export function intentPersistenceForTest(db: PersistenceDb): IntentPersistence {
   return composeIntentPersistence({
     db,
+    createAgentExecutionQueries,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
 }

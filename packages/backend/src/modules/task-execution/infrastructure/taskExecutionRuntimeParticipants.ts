@@ -72,12 +72,15 @@ import {
  * 那从来不是引擎差异，合并后一律由装配方交。
  */
 import { taskRunBindingPending, type TaskRunDriveBinding } from '../composition/taskRunSelection'
+import type { WorkflowExecutionQueriesFactory } from './executionResourceReads'
 
 export interface TaskExecutionRuntimeParticipantsInput {
   readonly historyRestrictions: HistoryRestrictionPort
   readonly workspacePresence: WorkspacePresenceQueries
   readonly observationInvocations: CallObservations
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory, for the child task launch (handed over by bootstrap). */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly memorySnapshots: TaskMemorySnapshotPort
@@ -138,6 +141,7 @@ export function createTaskExecutionRuntimeParticipants(
   })
   const childLaunch = createChildExecutionLaunchOperations({
     db: input.db,
+    createWorkflowExecutionQueries: input.createWorkflowExecutionQueries,
     persistence: input.persistence,
     // 会话工厂持有认领端口与实时配置；铸造机只选择子任务画像。
     coordinatorFactory: input.coordinatorFactory,

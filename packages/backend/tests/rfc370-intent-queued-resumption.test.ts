@@ -9,6 +9,7 @@ import ts from 'typescript'
 import { createIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function deferred<T>() {
   let accept!: (value: T) => void
@@ -293,7 +294,7 @@ describe('RFC-370 queued Intent admission lifetime', () => {
 
 describeEachProvider('RFC-370 queued admission selected database', (harness) => {
   test('each live notification uses its current selected snapshot with the same provider', async () => {
-    const persistence = createIntentPersistence(harness.db)
+    const persistence = createIntentPersistence(harness.db, createAgentExecutionQueries)
     const first = deferred<void>()
     const second = deferred<void>()
     const recording = harness.recordStatements()
@@ -332,7 +333,7 @@ describeEachProvider('RFC-370 queued admission selected database', (harness) => 
   })
 
   test('selected ACK precedes all provider queries; a stopped read cannot touch the DB', async () => {
-    const persistence = createIntentPersistence(harness.db)
+    const persistence = createIntentPersistence(harness.db, createAgentExecutionQueries)
     const entered = deferred<void>()
     const read = deferred<Config>()
     const recording = harness.recordStatements()
@@ -371,7 +372,7 @@ describeEachProvider('RFC-370 queued admission selected database', (harness) => 
   })
 
   test('read failure performs zero provider work without a local fallback', async () => {
-    const persistence = createIntentPersistence(harness.db)
+    const persistence = createIntentPersistence(harness.db, createAgentExecutionQueries)
     const reported = deferred<void>()
     const failure = new Error('selected-source-failed')
     const recording = harness.recordStatements()

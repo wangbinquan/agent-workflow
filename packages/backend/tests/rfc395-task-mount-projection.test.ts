@@ -309,6 +309,7 @@ import { DrizzleSchedulerCompletionPersistence } from '@/modules/task-execution/
 import { encodeCanonicalRunSlot } from '@/modules/task-execution/domain/runSelection/slotKey'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { createTaskDetailQueries } from '@/modules/task-execution/infrastructure/taskDetailQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 // Slowest case took 3.23 s on CI run 40433510287 including hooks; allow 20 s.
 setDefaultTimeout(20_000)
@@ -390,9 +391,11 @@ describeEachProvider(
       expect(
         (await harness.db.select().from(tables.taskRepositoryMounts))[0]!.readonlyDirtyCount,
       ).toBe(3)
-      expect((await createTaskDetailQueries(harness.db).read('borrowed'))!.task.spaceNodes).toEqual(
-        [{ path: '', origins: [] }],
-      )
+      expect(
+        (await createTaskDetailQueries(harness.db, createWorkflowExecutionQueries).read(
+          'borrowed',
+        ))!.task.spaceNodes,
+      ).toEqual([{ path: '', origins: [] }])
     })
     for (const via of ['creation', 'preparation'] as const)
       test(`${via} persists mount ancestors and explicit empty directories`, async () => {
@@ -430,7 +433,9 @@ describeEachProvider(
           'empty/dir',
         ])
         expect(
-          (await createTaskDetailQueries(harness.db).read(via))!.task
+          (await createTaskDetailQueries(harness.db, createWorkflowExecutionQueries).read(
+            via,
+          ))!.task
             .spaceNodes!.map((node) => node.path)
             .sort(),
         ).toEqual(['', 'apps', 'apps/api', 'apps/web', 'empty', 'empty/dir'])

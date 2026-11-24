@@ -63,6 +63,7 @@ import {
 } from './helpers/intentResourceCatalogBinding'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 let db: PersistenceDb
 let actor: Actor
@@ -203,6 +204,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
     identityAccess = createIdentityAccessRuntime({ db })
     persistence = composeIntentPersistence({
       db,
+      createAgentExecutionQueries,
       contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
     })
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
@@ -299,7 +301,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
     // e2e INTENT-X8 在生产二进制里看到的那一幕（变更被判 failed，会话永远转圈）。
     const { changeId } = await seedQueuedSuccessor()
     await resumeQueuedIntentWorkingSets({
-      persistence: createIntentPersistence(db),
+      persistence: createIntentPersistence(db, createAgentExecutionQueries),
       events: { publish: () => {} },
       ownerAdmission: composeDurableWorkOwnerAdmission(identityAccess),
       appHome: '/tmp',

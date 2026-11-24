@@ -3,11 +3,14 @@ import type { FailureCode, Task } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createRunHistoryBatchSnapshot } from '../application/runHistory'
 import { projectWorkflowSnapshotForRead } from '../domain/builtinWorkflowLayout'
+import type { WorkflowReadSource } from './executionResourceReads'
 import { createNodeRunQueries } from './nodeRunQueries'
 import { createTaskDetailQueries } from './taskDetailQueries'
 
-export async function getTask(db: PersistenceDb, id: string): Promise<Task | null> {
-  const detail = await createTaskDetailQueries(db).read(id)
+/** RFC-568: the detail read takes the handle together with Resource Catalog's workflow read factory. */
+export async function getTask(source: WorkflowReadSource, id: string): Promise<Task | null> {
+  const db = source.db
+  const detail = await createTaskDetailQueries(db, source.createWorkflowExecutionQueries).read(id)
   if (detail === null) return null
   const task = {
     ...detail.task,

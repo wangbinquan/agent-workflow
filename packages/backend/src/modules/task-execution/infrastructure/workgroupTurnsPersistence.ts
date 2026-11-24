@@ -36,7 +36,7 @@ import type {
   WorkgroupTurnsPersistencePort,
   WorkgroupTurnsSnapshot,
 } from '../application/ports/workgroupTurns'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import type { AgentExecutionQueriesFactory } from './executionResourceReads'
 import type { PersistenceTx } from '@/platform/persistence/querySurface'
 
 const ROSTER_CARD_PROMPT_BUDGET = 240
@@ -49,6 +49,11 @@ export interface WorkgroupHostLedgerParticipantFactory {
 
 export interface WorkgroupTurnsDependencies {
   readonly db: PersistenceDb
+  /**
+   * RFC-568: Resource Catalog's agent read factory — member agents are hydrated inside the snapshot read transaction, so
+   * the call site passes that transaction handle (bootstrap hands the factory over).
+   */
+  readonly createAgentExecutionQueries: AgentExecutionQueriesFactory
   readonly hostLedgerFactory: WorkgroupHostLedgerParticipantFactory
   /** RFC-359 T7e：反问许可判定（RFC-207 §3.7.2 唯一判定点）——RC 自有端口，bootstrap 用 collaboration 的实现接上。 */
   readonly clarifyAskGate: WorkgroupClarifyAllowedPort
@@ -144,6 +149,7 @@ async function loadSnapshot(
   transaction: PersistenceTx,
   hostLedger: WorkgroupHostLedgerParticipantInTx,
   taskId: string,
+  createAgentExecutionQueries: AgentExecutionQueriesFactory,
 ): Promise<WorkgroupTurnsSnapshot | null> {
   const hostSnapshot = await hostLedger.load(taskId)
   if (hostSnapshot === null) return null
@@ -187,7 +193,8 @@ async function loadSnapshot(
       ),
     ),
   ]
-  // RFC-411: member agents come through the resource catalog's public execution queries, in this read transaction.
+  // RFC-411: member agents come through the resource catalog's execution queries, in this read transaction (RFC-568:
+  // the factory is handed over by bootstrap).
   const hydratedAgents = await createAgentExecutionQueries(transaction).readMany(agentIds)
   const agentById = new Map(hydratedAgents.map((agent) => [agent.id, agent]))
   const agentMemberCount = config.members.filter((member) => member.memberType === 'agent').length
@@ -534,6 +541,7 @@ export function createWorkgroupTurnsPersistence(
             transaction,
             dependencies.hostLedgerFactory.inTransaction(transaction),
             taskId,
+            dependencies.createAgentExecutionQueries,
           ),
       )
     },

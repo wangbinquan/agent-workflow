@@ -3,7 +3,7 @@
 // RFC-370 §10 V20：技能的字节与版本写入归 resource-catalog。RFC-401 T5：apply 把提案树交给 RC 的 skill 写入场景，
 // 融合自身的重验、记忆标记与 applying → done 都在场景的提交事务里（`hooks`）；发布与候选清理是场景的可重试尾部。
 
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import type { WorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -179,8 +179,17 @@ export type PostgresqlFusionMemoryMembership = FusionMemoryMembership
 export type PostgresqlFusionSkillVersionCommit = FusionSkillVersionCommit
 export type PostgresqlFusedSkillReassignment = FusedSkillReassignment
 
+/**
+ * RFC-568: Resource Catalog's workflow read factory as the fusion persistence takes it (the built-in fusion workflow's
+ * summary). A factory reference — bootstrap hands over the owner's; the call passes this persistence's handle.
+ */
+export type FusionWorkflowQueriesFactory = (
+  db: PersistenceDb,
+) => Pick<WorkflowExecutionQueries, 'summaries'>
+
 export function createFusionPersistence(input: {
   readonly db: PersistenceDb
+  readonly createWorkflowExecutionQueries: FusionWorkflowQueriesFactory
   readonly memoryMembership: FusionMemoryMembership
   readonly fusedSkillReassignment: FusedSkillReassignment
   readonly skillVersionCommit: FusionSkillTrees
@@ -199,7 +208,8 @@ export function createFusionPersistence(input: {
     ownerUserId: string,
   ): Promise<string> {
     const row = await first(
-      createWorkflowExecutionQueries(db)
+      input
+        .createWorkflowExecutionQueries(db)
         .summaries([seed.id])
         .then((rows) =>
           rows.map((row) => ({

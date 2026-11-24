@@ -1,8 +1,8 @@
 import {
   assertWorkflowLaunchInputs,
-  createWorkflowExecutionQueries,
   parseFrozenWorkgroupGroup,
 } from '@/modules/resource-catalog/public/queries'
+import type { WorkflowExecutionQueriesFactory } from './executionResourceReads'
 import { lockTaskAggregateRoots } from './taskDefinitionWriteParticipant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -71,6 +71,11 @@ export interface ChildExecutionLaunchDependencies {
    * 事务走的已经是中立的 `withSerializableTaskExecution`。
    */
   readonly db: PersistenceDb
+  /**
+   * RFC-568: Resource Catalog's workflow read factory — the child's workflow anchor is checked inside the launch
+   * transaction, so the call site passes that transaction handle (bootstrap hands the factory over).
+   */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   readonly persistence: TaskExecutionPersistence
   /** RFC-386: the session factory owns the provider lifecycle and live configuration. */
   readonly coordinatorFactory: TaskDriveCoordinatorFactory
@@ -430,7 +435,8 @@ async function launchPreparedChild(
         )
       }
       const anchor = (
-        await createWorkflowExecutionQueries(tx)
+        await dependencies
+          .createWorkflowExecutionQueries(tx)
           .summaries([prepared.subject.subject.sourceId])
           .then((rows) => rows.map((row) => ({ id: row.id })))
       )[0]

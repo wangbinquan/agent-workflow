@@ -11,7 +11,6 @@
 // RFC-415: moved from composition/actionExecutionRunners.ts into the application layer; the task status read and the
 // workspace entry check arrive through the environment port.
 
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { ulid } from 'ulid'
 
 import { normalizeTaskPlatformInputPaths } from '../domain/taskPlatformInputPaths'
@@ -252,12 +251,8 @@ export function createScriptActionExecutionRunner(
         )
       }
 
-      const row = (
-        await createWorkflowExecutionQueries(env.db)
-          .documents([parsedRef.workflowId], true)
-          .then((rows) => rows.map((row) => ({ definition: row.definition })))
-      )[0]
-      if (row === undefined || sha256Hex(row.definition) !== parsedRef.digest) {
+      const storedDefinition = await env.catalogWorkflowDefinition(parsedRef.workflowId)
+      if (storedDefinition === null || sha256Hex(storedDefinition) !== parsedRef.digest) {
         return fail(
           'configuration',
           'de-script-revision-unavailable',
@@ -267,7 +262,7 @@ export function createScriptActionExecutionRunner(
       }
       let definition: WorkflowDefinition
       try {
-        definition = JSON.parse(row.definition) as WorkflowDefinition
+        definition = JSON.parse(storedDefinition) as WorkflowDefinition
       } catch {
         return fail(
           'configuration',

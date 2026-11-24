@@ -48,6 +48,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeStandaloneIntentApply } from './helpers/intentApply'
 import { composeStandaloneResourcePackageApplyMaintenance } from './helpers/resourceCatalog'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const OWNER = 'rfc359-intent-composition-owner'
 const SCRATCH_DIRECTORY = 'intent-scratch-composition'
@@ -111,6 +112,7 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
     apply: operations,
     snapshots: composeIntentMaintenanceSnapshotQueriesFor({
       db: harness.db,
+      createAgentExecutionQueries,
       activity: operations,
     }),
     maintenance: composeIntentMaintenanceCommandsForDatabase({

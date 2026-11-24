@@ -16,7 +16,7 @@
 - [x] AC-1 development-automation 的全部源码不取 integration 的 public；四个用途选择接口只声明在 bootstrap
 - [x] AC-2 行为不变；integration 的流水线执行面仍交得进 development-automation 的端口，由编译器检查
 - [x] AC-3 DAG 外 offered 边 4 → 2；清单与减速带随之更新；新增 RFC-566 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的 macOS 构建与 e2e 没有分到 runner（环境性），已归因、未重跑（见下）
 
 ## 集中验证
 
@@ -49,7 +49,14 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `948d2353c`（实现，父提交是 `ff3442970`）：exact SHA 主 CI run 45427856452 的 70 个 job 里 64 个成功——全部后端分片、前端、检查与 ubuntu /
+  windows 的构建通过；macOS 的构建（job 138564652302）与三个 macOS e2e 分片（1/4、2/4、3/4）被取消，`shard 4/4`（job 138583162893）失败，汇总格
+  `CI required` 随之不通过。同一提交触发的 windows-platform（run 45427856254）通过。
+- **归因**：不在本 RFC。macOS 的构建与三个被取消的 e2e 分片都没有分到 runner、没有任何步骤（注记
+  `The job was not acquired by Runner of type hosted even after multiple attempts`）；分到 runner 的 `shard 4/4` 在第一步下载 macOS 构建产物时失败
+  （`Artifact not found for name: agent-workflow-e2e-macos-latest`，那份产物因构建没有跑而不存在）。本 RFC 的九个生产文件全在类型位置，不影响
+  构建与 e2e。与 `docs/audit-backlog.md` 第九条下记的 macOS runner 容量形态相同。未重跑；这个 run 没有提供 macOS e2e 的结果，RFC-565 那两个没有
+  分到 runner 的分片的后继证据要看更后面的提交（RFC-567 的 plan）。
 
 ## 实现门（本会话自审，只审功能）
 

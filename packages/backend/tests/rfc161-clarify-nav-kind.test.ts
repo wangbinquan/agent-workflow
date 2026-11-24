@@ -32,6 +32,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type TaskStatus = 'running' | 'awaiting_human' | 'canceled' | 'failed' | 'interrupted' | 'done'
 
@@ -148,6 +149,7 @@ async function navKindOf(
     withO2Closure({
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
       db,
+      createWorkflowExecutionQueries,
     }),
     taskId,
   )
@@ -204,6 +206,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -233,6 +236,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -293,6 +297,7 @@ describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)'
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )

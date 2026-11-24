@@ -122,6 +122,7 @@ import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDe
 import { Paths } from '@/util/paths'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')
@@ -254,6 +255,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
+      createWorkflowExecutionQueries,
       // RFC-567: Resource Catalog's workflow name fragment for the task list rows.
       workflowName: workflowNameExpression,
       // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
@@ -703,7 +705,11 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       { definition: JSON.stringify(definition('w2')), version: 2 },
     )
 
-    await ops().syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 2 })
+    await ops().syncWorkflow({
+      actor: actorOf(OWNER),
+      taskId,
+      expectedVersion: 2,
+    })
 
     // RFC-109 F4：canceled 的写节点在 RFC-095 下是可再派发的，新定义会在同一棵工作树上
     // 继续跑——所以它上一次被取消时写了一半的东西必须先回滚掉。

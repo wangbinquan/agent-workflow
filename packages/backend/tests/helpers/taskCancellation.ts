@@ -6,7 +6,7 @@ import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestric
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger } from '@/util/log'
 import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './taskDetailRead'
 import { cancelAndReadTask } from '@/modules/task-execution/application/digitalEmployeeExecution'
 import {
   createTaskExecutionPersistence,

@@ -12,6 +12,7 @@ import {
   projectIntentTurnExecution,
 } from '@/modules/intent/application/turnSession'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedAgentTurn(db: PersistenceDb, id: string) {
   const { intentSessions, intentTurns } = tablesOf(db)
@@ -39,7 +40,7 @@ async function seedAgentTurn(db: PersistenceDb, id: string) {
     captureState: 'live',
     createdAt: 1,
   })
-  return { db, persistence: createIntentPersistence(db) }
+  return { db, persistence: createIntentPersistence(db, createAgentExecutionQueries) }
 }
 
 describeEachProvider('RFC-235 Intent turn Session capture', (harness) => {

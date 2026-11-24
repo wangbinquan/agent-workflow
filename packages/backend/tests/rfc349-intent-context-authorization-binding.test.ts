@@ -22,6 +22,7 @@ import type {
   IntentContextResourceAuthorizationSession,
   ResourceRequestContext,
 } from '@/modules/resource-catalog/public/participants'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const INTENT_ROOT = resolve(import.meta.dir, '../src/modules/intent')
 
@@ -110,6 +111,7 @@ describeEachProvider('RFC-349 Intent transaction-bound context authorization', (
     let authorizationCalls = 0
     const persistence = composeIntentPersistence({
       db,
+      createAgentExecutionQueries,
       contextAuthorization: {
         inTransaction(_transaction, pair) {
           factoryCalls += 1
@@ -144,6 +146,7 @@ describeEachProvider('RFC-349 Intent transaction-bound context authorization', (
     const current = authorization()
     const persistence = composeIntentPersistence({
       db,
+      createAgentExecutionQueries,
       contextAuthorization: {
         inTransaction() {
           return session(async () => null)

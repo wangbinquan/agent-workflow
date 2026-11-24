@@ -40,7 +40,13 @@ export function composeReviewUpstreamAgents(db: PersistenceDb) {
 export { createMcpRuntimeTestEventRetentionPhase } from './infrastructure/retentionPhase'
 // RFC-567: the same-statement workflow name fragment, for bootstrap to hand to Task Execution's task read models (the task
 // list page, the task list route, the lifecycle WS projection and the human-gate badge condition).
-export { workflowNameExpression } from './infrastructure/executionResourceQueries'
+// RFC-568: and the two execution resource query factories — bootstrap hands them over as factory references (each call
+// site passes the handle it holds, so a read inside a transaction stays inside it).
+export {
+  createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
+  workflowNameExpression,
+} from './infrastructure/executionResourceQueries'
 
 import { composeCollaborationTaskRolePolicy as bindCollaborationTaskRolePolicy } from './application/adapters/collaboration-adapter'
 import { resolveTaskRole } from './application/resourceDefaults'

@@ -19,6 +19,7 @@ import type { IntentArtifactContentPort } from '@/modules/intent/application/por
 import type { IntentScratchStore } from '@/modules/intent/application/ports/intentScratchStore'
 import type { IntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/intentApplyEngine'
 import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Input = {
   readonly db: PersistenceDb
@@ -36,6 +37,8 @@ export function composeIntentMaintenanceCommandsForDatabase(input: Input) {
   const pluginsDir = input.pluginsDir ?? join(input.appHome, 'plugins')
   const intent = composeIntentMaintenance({
     db: input.db,
+    // RFC-568: the Intent persistence takes Resource Catalog's agent read factory on every construction.
+    createAgentExecutionQueries,
     scratch:
       input.scratch ??
       composeLocalIntentScratch({

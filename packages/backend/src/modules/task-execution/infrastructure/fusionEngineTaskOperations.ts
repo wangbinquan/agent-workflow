@@ -1,11 +1,11 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskReadColumns } from './taskRepositorySql'
+import type { WorkflowExecutionQueriesFactory } from './executionResourceReads'
 // RFC-387: fusion uses the session's drive and cancellation commands on both engines.
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
 } from '../application/adapters/knowledge-evolution-adapter'
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import type {
   FusionWorkspaceEffects,
   FusionWorkspacePreparation,
@@ -29,6 +29,8 @@ import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 
 export interface FusionEngineTaskDependencies {
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory (the fusion workflow's stored document), handed over by bootstrap. */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   readonly coordinator: TaskDriveCoordinator
   readonly cancellation: TaskCancellationCommand
   readonly workspaces: FusionWorkspaceEffects
@@ -60,7 +62,8 @@ async function insertFusionTask(
   command: FusionEngineTaskLaunch,
   workspace: FusionWorkspacePreparation,
 ): Promise<string> {
-  const workflowRows = await createWorkflowExecutionQueries(dependencies.db)
+  const workflowRows = await dependencies
+    .createWorkflowExecutionQueries(dependencies.db)
     .documents([command.workflowId])
     .then((rows) =>
       rows.map((row) => ({ id: row.id, definition: row.definition, version: row.version })),

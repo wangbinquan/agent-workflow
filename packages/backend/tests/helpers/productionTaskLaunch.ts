@@ -48,7 +48,7 @@ import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './taskDetailRead'
 import { composeDeferredRepositoryPreparationStep } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
@@ -61,6 +61,7 @@ import { NotFoundError } from '@/util/errors'
 import type { WorktreeCleanupProvenance } from '@/util/git'
 import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export interface TestTaskLaunchOptions extends Omit<
   TaskContinuationDependencies,
@@ -279,6 +280,7 @@ export async function launchTestTask(
     })
     const launch = createChildExecutionLaunchOperations({
       db,
+      createWorkflowExecutionQueries,
       persistence,
       coordinatorFactory: {
         session: factory.session,
@@ -338,6 +340,7 @@ export async function launchTestTask(
         })
   const preparation = composeDeferredRepositoryPreparationStep({
     deps: {
+      createWorkflowExecutionQueries,
       repositoryPreparationLookup: composeRepositoryPreparationLookup(db),
       // RFC-534: the deferred preparation's failure write only goes to `failed`; the never-prune policy is exact.
       terminalWorkspacePrune: neverPruneTerminalWorkspaces,

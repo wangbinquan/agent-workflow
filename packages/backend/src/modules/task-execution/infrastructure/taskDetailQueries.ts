@@ -19,10 +19,15 @@ import {
 import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 import { type TaskReadRow, taskMountReadColumns, taskReadColumns } from './taskRepositorySql'
 
+import type { WorkflowExecutionQueriesFactory } from './executionResourceReads'
 import { DatabaseTaskSubjectQueries } from './taskSubjectQueries'
 import { taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
 
-export function createTaskDetailQueries(db: PersistenceDb): TaskDetailQueries {
+/** RFC-568: the detail read names the task's workflow through Resource Catalog's workflow read factory (handed over). */
+export function createTaskDetailQueries(
+  db: PersistenceDb,
+  createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory,
+): TaskDetailQueries {
   return {
     async read(id) {
       const { taskSpaceNodes } = tablesOf(db)
@@ -58,7 +63,10 @@ export function createTaskDetailQueries(db: PersistenceDb): TaskDetailQueries {
           ? webhookTaskSourceLinkOf(parsedTriggerContext.value)
           : null
       const definition = (
-        await new DatabaseTaskSubjectQueries(db).taskDefinitionProjection([id])
+        await new DatabaseTaskSubjectQueries(
+          db,
+          createWorkflowExecutionQueries,
+        ).taskDefinitionProjection([id])
       ).get(id)
       if (definition === undefined) return null
       const task = rowToTask(row.task, definition.workflowName, repository, webhookSourceLink)

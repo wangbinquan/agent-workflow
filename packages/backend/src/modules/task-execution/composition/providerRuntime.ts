@@ -8,6 +8,7 @@ import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoor
 import type { TaskRecoveryProviderSelection } from '../infrastructure/taskRecoverySelection'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { WorkflowExecutionQueriesFactory } from '../infrastructure/executionResourceReads'
 import type { WorkflowNameExpression } from '../infrastructure/taskRepositorySql'
 import type { FusionEngineTaskOperations } from '../application/adapters/knowledge-evolution-adapter'
 import type { CollaborationRepairPorts } from '../application/ports/collaborationRepair'
@@ -152,6 +153,7 @@ type ProviderRouteOperationsAssembled =
   | 'workspaceReads'
   | 'db'
   | 'workflowName'
+  | 'createWorkflowExecutionQueries'
   | 'persistence'
   | 'children'
   | 'activity'
@@ -183,6 +185,11 @@ export interface TaskExecutionProviderRuntimeDependencies {
    * projection (bootstrap hands over the owner's implementation from resource-catalog's composition).
    */
   readonly workflowName: WorkflowNameExpression
+  /**
+   * RFC-568: Resource Catalog's workflow read factory, for the task routes, the fusion task launch and the child task
+   * launch (a factory reference — each call site passes the handle it holds).
+   */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   readonly historyRestrictions: HistoryRestrictionPort
   readonly persistence: TaskExecutionPersistence
   readonly execution: TaskExecutionBinding
@@ -202,6 +209,7 @@ export interface TaskExecutionProviderRuntimeDependencies {
   readonly runtime: Omit<
     TaskExecutionRuntimeParticipantsInput,
     | 'db'
+    | 'createWorkflowExecutionQueries'
     | 'historyRestrictions'
     | 'persistence'
     | 'childLaunchWorkgroup'
@@ -226,7 +234,7 @@ export interface TaskExecutionProviderRuntimeDependencies {
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Omit<
     Parameters<typeof createFusionEngineTaskOperations>[0],
-    'db' | 'coordinator' | 'cancellation'
+    'db' | 'coordinator' | 'cancellation' | 'createWorkflowExecutionQueries'
   >
   readonly workgroupTaskRoom: Readonly<{
     readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
@@ -258,6 +266,7 @@ export function composeTaskExecutionProviderRuntime(
     bindProviderTaskRunParticipantsInput({
       ...dependencies.runtime,
       db,
+      createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
       historyRestrictions: dependencies.historyRestrictions,
       persistence,
       log,
@@ -311,6 +320,7 @@ export function composeTaskExecutionProviderRuntime(
     executionPermits: dependencies.runtime.executionPermits,
     db,
     workflowName: dependencies.workflowName,
+    createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
     clarifyNav: dependencies.clarifyNav,
     persistence,
     children: participants.children,
@@ -407,6 +417,7 @@ export function composeTaskExecutionProviderRuntime(
     overview: createTaskOverviewQuery(db),
     fusion: createFusionEngineTaskOperations({
       db,
+      createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
       ...dependencies.fusion,
       coordinator: dependencies.coordinatorFactory.session,
       cancellation,

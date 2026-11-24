@@ -4,6 +4,7 @@ import type { IntentMaintenancePersistence } from '../application/ports/intentPe
 import type { IntentScratchStore } from '../application/ports/intentScratchStore'
 import { createFileIntentScratchStore } from '../infrastructure/local/fileIntentScratchStore'
 import { createIntentPersistence } from '../infrastructure/intentPersistence'
+import type { IntentAgentQueriesFactory } from '../infrastructure/intentSqlPersistence'
 import type { IntentMaintenanceCommands } from '../public/commands'
 import { INTENT_SCRATCH_DIRNAME } from '../domain/scratchDirectory'
 import {
@@ -49,12 +50,14 @@ function composeIntentMaintenanceSnapshotQueries(input: {
  */
 export function composeIntentMaintenanceSnapshotQueriesFor(input: {
   readonly db: PersistenceDb
+  /** RFC-568: the persistence is one implementation; it takes Resource Catalog's agent read factory on every construction. */
+  readonly createAgentExecutionQueries: IntentAgentQueriesFactory
   /** The exact selected apply-operations instance; its process-local fence must
    * not be reconstructed from persisted journal rows. */
   readonly activity: IntentApplyActivitySource
 }): IntentMaintenanceSnapshotQueries {
   return composeIntentMaintenanceSnapshotQueries({
-    persistence: createIntentPersistence(input.db),
+    persistence: createIntentPersistence(input.db, input.createAgentExecutionQueries),
     activity: input.activity,
   })
 }
@@ -87,11 +90,12 @@ interface ProviderIntentMaintenanceCompositionInput {
 export function composeIntentMaintenanceCommandsForDatabase(
   input: ProviderIntentMaintenanceCompositionInput & {
     readonly db: PersistenceDb
+    readonly createAgentExecutionQueries: IntentAgentQueriesFactory
   },
 ): IntentMaintenanceCommands {
   const log = input.log ?? createLogger('intentMaintenance')
   return composeIntentMaintenanceCommands({
-    persistence: createIntentPersistence(input.db),
+    persistence: createIntentPersistence(input.db, input.createAgentExecutionQueries),
     scratch: input.scratch,
     log,
   })

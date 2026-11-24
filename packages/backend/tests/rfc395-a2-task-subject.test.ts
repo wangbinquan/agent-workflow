@@ -1,6 +1,6 @@
 import { humanGateBadgeViewer } from '@/modules/collaboration/application/humanGateBadges'
 import { createNodeRunQueries, createNodeOutputQueries } from '@/modules/task-execution/composition'
-import { createTaskSubjectQueries } from '@/modules/task-execution/composition'
+import { bindTaskSubjectQueries } from '@/modules/task-execution/composition'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { legacyContentRef } from '@/platform/content/contentRef'
@@ -33,7 +33,7 @@ import {
   taskWorkflowSyncPreviewProjection,
 } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createDatabaseTaskLifecycleWsProjection } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { layoutBuiltinWorkflowSnapshot } from '@/modules/task-execution/domain/builtinWorkflowLayout'
 import {
   getWorkflow,
@@ -77,6 +77,7 @@ import { createWorkflow } from './helpers/model/resourceWrites'
 import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
 import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const hosts = TASK_DEFINITION_HOSTS
 const cases: readonly StoredTaskSubject[] = [
@@ -258,7 +259,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     })
     const rows = cases.map((row) => fixture(row))
     await taskFixture(db, rows)
-    const queries = createTaskSubjectQueries(db)
+    const queries = bindTaskSubjectQueries(createWorkflowExecutionQueries)(db)
     const subjects = await queries.taskSubjectProjection(rows.map((row) => row.id!))
     const summaries = await taskListSummariesProjection(db, workflowNameExpression, {})
     for (const row of rows) {
@@ -268,7 +269,10 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
         workflowName: subject.kind === 'workflow' ? 'Live name' : hosts[subject.kind].name,
       }
       expect(subjects.get(row.id!)).toEqual(expected)
-      for (const detail of [await getTask(db, row.id!), await loadTaskProjection(db, row.id!)]) {
+      for (const detail of [
+        await getTask(db, row.id!),
+        await loadTaskProjection({ db: db, createWorkflowExecutionQueries }, row.id!),
+      ]) {
         expect(detail).toMatchObject({
           ...expected,
           workflowVersion: 7,
@@ -403,6 +407,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       const validateHostWorkflow = seam.validateHostWorkflow
       const dependencies = {
         db,
+        createWorkflowExecutionQueries,
         activity,
         resourceAuthorityFor,
         canViewWorkflow,
@@ -428,7 +433,11 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       ...dynamic,
       workgroupConfigJson: JSON.stringify({ mode: 'dynamic_workflow' }),
     })
-    await assertManualExecutionAllowedProjection({ db, resourceAuthorityFor }, actor, dynamic.id!)
+    await assertManualExecutionAllowedProjection(
+      { db, createWorkflowExecutionQueries, resourceAuthorityFor },
+      actor,
+      dynamic.id!,
+    )
     expect(await readWorkflowFixtures(db)).toEqual([])
   })
 

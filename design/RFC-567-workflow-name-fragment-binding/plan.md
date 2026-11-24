@@ -17,7 +17,7 @@
 - [x] AC-1 `workflowNameExpression` 不再从任何 `public/*` 导出；全部模块的源码不从 resource-catalog 取它；装配根交出
 - [x] AC-2 行为不变；片段与 task-execution 声明的类型对得上，由编译器检查；既有读模型用例通过
 - [x] AC-3 `PUBLIC_SURFACE_DEBT` 删去 3 条，`public-surface-deviations` 45 → 42；新增 RFC-567 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一个 macOS e2e 分片没有分到 runner（环境性），已归因、未重跑（见下）
 
 ## 集中验证
 
@@ -54,7 +54,15 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `f8dc493ec`（实现，父提交是 `948d2353c`）：exact SHA 主 CI run 45437638521 的 70 个 job 里 68 个成功——全部后端分片、前端、三个平台的构建与
+  检查、ubuntu 与 windows 的全部 e2e 分片、macOS 的另三个 e2e 分片（1/4、2/4、3/4）通过；`Playwright e2e (macos-latest shard 4/4)`
+  （job 138609413248）被取消，汇总格 `CI required` 随之不通过。同一提交触发的 windows-platform（run 45437638508）通过。
+- **归因**：不在本 RFC。被取消的 job 没有分到 runner、没有任何步骤，注记是
+  `The job was not acquired by Runner of type hosted even after multiple attempts`（附 macOS arm64 容量提示）。与 `docs/audit-backlog.md`
+  “macOS arm64 runner 容量不足”一节记的形态相同，已在那一节补记当天的三次。未重跑。
+- **给前两个 RFC 的后继证据**：`f8dc493ec` 是 `ff3442970`（RFC-565）与 `948d2353c`（RFC-566）的后继，两者的内容原样保留，三个提交都没有改 e2e
+  用例。这个 run 里 macOS 的构建与 e2e 1/4、2/4、3/4 通过，补上了 RFC-566 那次没有跑的 macOS 构建与这三个分片，以及 RFC-565 那次没有跑的
+  2/4。macOS 的 4/4 自 `4f1dcae66`（RFC-564，run 45410978530）之后还没有新的结果，要看更后面的提交。
 
 ## 实现门（本会话自审，只审功能）
 

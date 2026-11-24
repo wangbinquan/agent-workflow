@@ -1,4 +1,4 @@
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import type { AgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, inArray, isNotNull, lt, ne, notInArray, sql, type SQLWrapper } from 'drizzle-orm'
@@ -742,8 +742,19 @@ function validateCurrentDecisions(
 
 /** Provider-independent Intent table protocol. SQLite and PostgreSQL differ
  * only in how the statement generator is executed and transaction-scoped. */
+/**
+ * RFC-568: Resource Catalog's agent read factory as the Intent persistence takes it (agent port names for the resource
+ * catalog view). A factory reference — bootstrap hands over the owner's; the call passes the runner's current handle.
+ */
+export type IntentAgentQueriesFactory = (
+  db: PersistenceDb,
+) => Pick<AgentExecutionQueries, 'portNames'>
+
 export class IntentSqlPersistence implements IntentPersistence {
-  constructor(private readonly runner: IntentSqlProgramRunner) {}
+  constructor(
+    private readonly runner: IntentSqlProgramRunner,
+    private readonly createAgentExecutionQueries: IntentAgentQueriesFactory,
+  ) {}
 
   private get database(): PersistenceDb {
     return this.runner.db
@@ -805,7 +816,7 @@ export class IntentSqlPersistence implements IntentPersistence {
   async loadIntentAgentPortNames(
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, IntentAgentPortNames>> {
-    return createAgentExecutionQueries(this.database).portNames(ids)
+    return this.createAgentExecutionQueries(this.database).portNames(ids)
   }
 
   async findSession(id: string): Promise<IntentSessionRecord | null> {

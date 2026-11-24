@@ -33,6 +33,7 @@ import { DrizzleTaskArtifactPathQueries } from '@/modules/task-execution/infrast
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -162,7 +163,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 动态工作流状态持久化
       },
       { id: ulid(), taskId, nodeId: 'dw', status: 'done', retryIndex: 1, iteration: 0 },
     ])
-    const persistence = new DrizzleDynamicWorkflowPersistence(db)
+    const persistence = new DrizzleDynamicWorkflowPersistence(db, createAgentExecutionQueries)
     expect(await persistence.loadTask(taskId)).toMatchObject({
       workgroupConfig: decodeTaskWorkgroupConfig('{"k":1}'),
       dwStateJson: null,

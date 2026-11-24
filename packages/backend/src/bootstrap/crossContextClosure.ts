@@ -14,7 +14,7 @@ import {
   createHumanGatePersistenceParticipantInTx,
   createConsumedInputsParticipantInTx,
   createTaskClarifyDirectivePersistence,
-  createTaskSubjectQueries,
+  bindTaskSubjectQueries,
   createRunSelectionReader,
   createNodeRunQueries,
   createTaskGateQueries,
@@ -32,6 +32,7 @@ import {
 import {
   composeReviewUpstreamAgents,
   composeCollaborationTaskRolePolicy,
+  createWorkflowExecutionQueries,
   workflowNameExpression,
 } from '@/modules/resource-catalog/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
@@ -84,7 +85,8 @@ export function composeTaskExecutionParticipantBindings(
     createHumanGatePersistenceParticipantInTx,
     createConsumedInputsParticipantInTx,
     createTaskClarifyDirectivePersistence,
-    createTaskSubjectQueries,
+    // RFC-568: bound with Resource Catalog's workflow read factory (workflow names next to the task subjects).
+    createTaskSubjectQueries: bindTaskSubjectQueries(createWorkflowExecutionQueries),
     createRunSelectionReader,
     createNodeRunQueries,
     createTaskGateQueries,

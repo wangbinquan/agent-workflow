@@ -37,6 +37,7 @@ import { createFileWorkspacePresenceQueries } from '@/modules/source-control/com
 import { testTaskExecutionModule as taskExecutionModule } from './taskExecutionModule'
 import { awaitTaskDriverReleasedSettled, isTaskDriverActive } from './taskDriverLifecycle'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export interface RetryEngineOptions {
   readonly appHome?: string
@@ -173,6 +174,7 @@ export function createRetryEngine(
         {
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           db,
+          createWorkflowExecutionQueries,
           persistence,
           activity:
             options.isActive === undefined
@@ -285,6 +287,7 @@ async function retryRepositoryPreparation(
       repositoryPreparationLookup,
       repositoryPreparation: deps.repositoryPreparation,
       db,
+      createWorkflowExecutionQueries,
       terminalWorkspacePrune: neverPruneTerminalWorkspaces,
       appHome,
       ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),

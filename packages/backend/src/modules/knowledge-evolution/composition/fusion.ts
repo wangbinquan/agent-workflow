@@ -6,6 +6,7 @@ import {
   type FusionMemoryMembership,
   type FusionSkillTrees,
   type FusionSkillVersionCommit,
+  type FusionWorkflowQueriesFactory,
 } from '../infrastructure/fusionRepository'
 import type { MemoryCatalogOperations } from '../../memory/public/operations'
 import type { FusionEngineTaskOperations } from '../application/ports/fusionEngineTasks'
@@ -20,6 +21,8 @@ interface FusionCompositionDependencies {
 
 /** 跨聚合的两半（memory 的成员关系、resource-catalog 的版本提交），两个 provider 同一份工厂。 */
 export interface FusionParticipants {
+  /** RFC-568: Resource Catalog's workflow read factory (the built-in fusion workflow's summary). */
+  readonly createWorkflowExecutionQueries: FusionWorkflowQueriesFactory
   readonly memoryMembership: FusionMemoryMembership
   readonly skillVersionCommit: FusionSkillVersionCommit
   /** Restore-only recovery does not seed catalog resources. */
@@ -40,7 +43,7 @@ export interface FusionParticipants {
 function persistenceOf(
   input: { readonly db: PersistenceDb } & Pick<
     FusionParticipants,
-    'memoryMembership' | 'resourceSeed'
+    'memoryMembership' | 'resourceSeed' | 'createWorkflowExecutionQueries'
   >,
   skillTrees: FusionSkillTrees,
 ): FusionPersistence {
@@ -48,6 +51,7 @@ function persistenceOf(
   const session = databaseSessionFor(input.db)
   return createFusionPersistence({
     db: input.db,
+    createWorkflowExecutionQueries: input.createWorkflowExecutionQueries,
     memoryMembership,
     skillVersionCommit: skillTrees,
     ...(input.resourceSeed === undefined

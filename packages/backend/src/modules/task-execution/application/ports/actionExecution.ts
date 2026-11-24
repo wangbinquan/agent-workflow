@@ -122,6 +122,11 @@ export interface ActionExecutionEnvironment {
   readonly workspaceEntries: ActionWorkspaceEntries
   /** RFC-415: the task row's status (null when absent); the environment binding reads it. */
   taskStatus(executionRef: string): Promise<TaskStatus | null>
+  /**
+   * RFC-568: the stored definition of a catalog workflow, or null when it is absent (a script action's `scriptRef` names
+   * one). The environment binding reads it through Resource Catalog's workflow read on the environment's database.
+   */
+  catalogWorkflowDefinition(workflowId: string): Promise<string | null>
   /** RFC-415: the settled execution outcome projection (the binding uses the shared task-boundary projection). */
   executionOutcome(executionRef: string): Promise<{
     readonly outputs: Readonly<Record<string, { readonly content: string }>>

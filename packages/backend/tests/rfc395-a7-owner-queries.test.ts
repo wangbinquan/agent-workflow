@@ -17,7 +17,7 @@ import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructur
 import {
   createAgentExecutionQueries,
   createWorkflowExecutionQueries,
-} from '@/modules/resource-catalog/public/queries'
+} from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-567: the workflow name fragment left Resource Catalog's public; bootstrap takes it from the composition and binds
 // Task Execution's gate-open condition with it. This suite reads it where it is defined and binds the same way.
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'

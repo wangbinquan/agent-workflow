@@ -2,7 +2,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 —— 动态工作流状态持久化：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import type { AgentExecutionQueriesFactory } from './executionResourceReads'
 import { and, count, eq } from 'drizzle-orm'
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
@@ -12,7 +12,11 @@ import { DwStateSchema } from '@agent-workflow/shared'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 
 export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersistence {
-  constructor(private readonly db: PersistenceDb) {}
+  constructor(
+    private readonly db: PersistenceDb,
+    /** RFC-568: Resource Catalog's agent read factory (the planner's agent), handed over by bootstrap. */
+    private readonly createAgentExecutionQueries: AgentExecutionQueriesFactory,
+  ) {}
 
   async loadTask(taskId: string) {
     const { tasks, workgroupTaskState } = tablesOf(this.db)
@@ -30,7 +34,7 @@ export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersist
   }
 
   async loadAgent(agentId: string) {
-    return createAgentExecutionQueries(this.db).read(agentId)
+    return this.createAgentExecutionQueries(this.db).read(agentId)
   }
 
   async hasAwaitingConfirmationRun(taskId: string, cause: string): Promise<boolean> {

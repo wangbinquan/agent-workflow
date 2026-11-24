@@ -1,4 +1,3 @@
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
@@ -8,9 +7,14 @@ import type {
   TaskSubjectQueries,
 } from '../application/ports/taskSubjectQueries'
 import { projectTaskSubject, taskReadSubjectFromDefinition } from '../domain/taskSubject'
+import type { WorkflowExecutionQueriesFactory } from './executionResourceReads'
 
 export class DatabaseTaskSubjectQueries implements TaskSubjectQueries {
-  constructor(private readonly db: PersistenceDb) {}
+  constructor(
+    private readonly db: PersistenceDb,
+    /** RFC-568: Resource Catalog's workflow read factory (workflow names next to the task subjects), from bootstrap. */
+    private readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory,
+  ) {}
   async taskSubjectProjection(
     taskIds: readonly string[],
   ): Promise<ReadonlyMap<string, TaskSubjectProjection>> {
@@ -44,7 +48,7 @@ export class DatabaseTaskSubjectQueries implements TaskSubjectQueries {
       const names = new Map(
         (workflowIds.length === 0
           ? []
-          : await createWorkflowExecutionQueries(this.db).summaries(workflowIds)
+          : await this.createWorkflowExecutionQueries(this.db).summaries(workflowIds)
         ).map((row) => [row.id, row.name]),
       )
       for (const { row, subject } of subjects)

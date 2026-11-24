@@ -18,6 +18,7 @@ import {
 } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type HostLedger = ReturnType<WorkgroupHostLedgerParticipantFactory['inTransaction']>
 type HostSnapshot = Awaited<ReturnType<HostLedger['load']>>
@@ -93,6 +94,7 @@ function fixture(snapshot: HostSnapshot = null) {
   const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
   const persistence = createWorkgroupTurnsPersistence({
     db,
+    createAgentExecutionQueries,
     hostLedgerFactory: {
       inTransaction(transaction) {
         transactionHandle = transaction

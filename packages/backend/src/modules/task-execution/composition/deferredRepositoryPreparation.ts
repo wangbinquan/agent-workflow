@@ -47,6 +47,8 @@ export function composeDeferredRepositoryPreparation(input: {
   readonly repositoryPreparationLookup: RepositoryPreparationLookup
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory (the prepared task's detail), handed over by bootstrap. */
+  readonly createWorkflowExecutionQueries: DeferredRepositoryPreparationDependencies['createWorkflowExecutionQueries']
   /** RFC-534: the session's terminal workspace prune policy. */
   readonly terminalWorkspacePrune: TerminalWorkspacePrunePolicy
   readonly appHome: string
@@ -59,6 +61,7 @@ export function composeDeferredRepositoryPreparation(input: {
   return composeDeferredRepositoryPreparationStep({
     deps: {
       db: input.db,
+      createWorkflowExecutionQueries: input.createWorkflowExecutionQueries,
       terminalWorkspacePrune: input.terminalWorkspacePrune,
       repositoryPreparation: input.repositoryPreparation,
       repositoryPreparationLookup: input.repositoryPreparationLookup,

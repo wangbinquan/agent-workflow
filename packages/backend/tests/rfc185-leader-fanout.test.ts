@@ -75,6 +75,7 @@ import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/
 import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/application/ports/workgroupTurns'
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { createAgent, createWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 async function deriveWake(input: WakeInput) {
@@ -842,6 +843,7 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     let heldSnapshot = false
     const actual = createWorkgroupTurnsPersistence({
       db,
+      createAgentExecutionQueries,
       hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
         collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
       }),

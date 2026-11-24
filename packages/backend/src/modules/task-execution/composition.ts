@@ -157,7 +157,8 @@ export { createNodeRunWorkspaceRollback } from './infrastructure/nodeRollback'
 export { createHumanGatePersistenceParticipantInTx } from './infrastructure/humanGatePersistenceParticipant'
 export { createConsumedInputsParticipantInTx } from './infrastructure/consumedInputsParticipant'
 export { createTaskClarifyDirectivePersistence } from './infrastructure/taskClarifyDirectivePersistence'
-export { createTaskSubjectQueries } from './composition/taskSubjectQueries'
+// RFC-568: bound with Resource Catalog's workflow read factory by bootstrap.
+export { bindTaskSubjectQueries } from './composition/taskSubjectQueries'
 export { createRunSelectionReader } from './infrastructure/runSelection/table/reader'
 // RFC-485: the node-run, node-output and task-gate query factories reach collaboration through the same bindings and
 // memory through its assembly input (task-execution's public keeps only the closed read interfaces). The node-run factory

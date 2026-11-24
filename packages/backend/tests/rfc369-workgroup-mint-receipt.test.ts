@@ -33,6 +33,7 @@ import { o2Ports } from './helpers/o2Closure'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid(),
@@ -96,6 +97,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
       const persistences = clients.map((client, index) =>
         createWorkgroupTurnsPersistence({
           db: client,
+          createAgentExecutionQueries,
           hostLedgerFactory: {
             inTransaction(tx) {
               const participant = hostLedgerFactory.inTransaction(tx)
@@ -203,6 +205,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
     })
     const persistence = createWorkgroupTurnsPersistence({
       db,
+      createAgentExecutionQueries,
       hostLedgerFactory,
       clarifyAskGate: { allowed: async () => false },
     })
@@ -262,6 +265,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
     expect(await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).toHaveLength(0)
     const persistence = createWorkgroupTurnsPersistence({
       db,
+      createAgentExecutionQueries,
       hostLedgerFactory,
       clarifyAskGate: { allowed: async () => false },
     })

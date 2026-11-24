@@ -21,6 +21,7 @@ import {
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { POSTGRESQL_SERIALIZATION_ATTEMPTS } from '@/platform/persistence/postgresqlSerializationRetry'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type HostLedger = ReturnType<WorkgroupHostLedgerParticipantFactory['inTransaction']>
 type Apply = HostLedger['apply']
@@ -50,6 +51,7 @@ function persistenceOn(db: PersistenceDb, apply: Apply = async () => committed()
   const participants: unknown[] = []
   const persistence = createWorkgroupTurnsPersistence({
     db,
+    createAgentExecutionQueries,
     hostLedgerFactory: {
       inTransaction(transaction) {
         participants.push(transaction)

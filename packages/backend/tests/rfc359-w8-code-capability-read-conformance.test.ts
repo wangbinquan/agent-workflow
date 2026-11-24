@@ -3,7 +3,7 @@ import {
   historyFixtureReader,
   seedEmptyCodeHistory,
 } from './helpers/legacyCapabilitySeed'
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-359 W8 / W12 —— 能力矩阵与代码度量的双引擎行为对拍。
 // W8 钉住的页面内容在 W12 合一后仍须成立：两个真实数据库通过同一个
 // code-history 组合层返回相同的 readiness、issues、repairActions 和度量计数。

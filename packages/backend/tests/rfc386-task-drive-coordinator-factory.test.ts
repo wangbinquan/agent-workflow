@@ -58,6 +58,7 @@ import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/ea
 import { taskBundleInput, seedBundleTask, emptyWorkflow } from './helpers/daemonTaskExecutionBundle'
 import { composeTestChildLaunchWorkgroup } from './helpers/taskExecutionTestTopology'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Bundle = ReturnType<ReturnType<typeof taskBundleInput>['compose']>
 const homes: string[] = []
@@ -379,6 +380,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         const factory = former ? formerChildFactory(bundle) : bundle.coordinatorFactory
         const launch = createChildExecutionLaunchOperations({
           db: harness.db,
+          createWorkflowExecutionQueries,
           persistence: bundle.persistence,
           coordinatorFactory: factory,
           workgroup: composeTestChildLaunchWorkgroup(harness.db),
@@ -825,6 +827,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         bundle = fixture.compose()
       const launch = createChildExecutionLaunchOperations({
         db: harness.db,
+        createWorkflowExecutionQueries,
         persistence: bundle.persistence,
         coordinatorFactory: bundle.coordinatorFactory,
         workgroup: composeTestChildLaunchWorkgroup(harness.db),

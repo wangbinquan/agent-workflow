@@ -56,6 +56,7 @@ import {
   resourceScopeAuthority,
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
 } from './helpers/resourceScopeAuthority'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const enc = (text: string) => new TextEncoder().encode(text)
 const dec = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -172,6 +173,7 @@ describeEachProvider(
         memoryMembership: composeSkillMemoryFusionParticipantFactory(),
         skillVersionCommit: composeSkillVersionCommitParticipantFactory({ skillContent: binding }),
         db,
+        createWorkflowExecutionQueries,
         appHome,
         memories: composeMemoryCatalogOperations({
           db,

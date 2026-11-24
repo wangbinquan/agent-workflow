@@ -42,6 +42,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { awaitTaskDriverIdle } from './helpers/taskDriverLifecycle'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const homes: string[] = []
 afterEach(() => {
@@ -210,6 +211,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
     const effects = createFileFusionWorkspaceEffects({ appHome })
     const launch = createFusionEngineTaskOperations({
       db: harness.db,
+      createWorkflowExecutionQueries,
       workspaces: {
         ...effects,
         async release(request) {

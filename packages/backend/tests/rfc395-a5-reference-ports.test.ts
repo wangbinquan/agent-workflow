@@ -30,6 +30,7 @@ import {
   workflowFixture,
   readWorkflowFixtures,
 } from './helpers/model'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function unusedPort<T extends object>(): T {
   return new Proxy({} as T, {
@@ -359,6 +360,7 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
     let seedCalls = 0
     const persistence = createFusionPersistence({
       db: harness.db,
+      createWorkflowExecutionQueries,
       memoryMembership: unusedPort(),
       fusedSkillReassignment: unusedPort(),
       skillVersionCommit: unusedPort(),

@@ -12,6 +12,7 @@ import { assertTaskHistoryExecutableInTx } from './taskRecoveryOperations'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskNodeRunClarifyNavPort } from '../composition/required-ports'
+import type { WorkflowExecutionQueriesFactory, WorkflowReadSource } from './executionResourceReads'
 import {
   type TaskReadRow,
   type WorkflowNameExpression,
@@ -31,7 +32,6 @@ import {
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 
 import {
   canonicalRepoKeysWire,
@@ -232,6 +232,11 @@ export interface TaskRouteOperationsDependencies {
   /** RFC-567: Resource Catalog's same-statement workflow name fragment for the task list rows (handed over by bootstrap). */
   readonly workflowName: WorkflowNameExpression
   /**
+   * RFC-568: Resource Catalog's workflow read factory (the workflow identity next to a task, and the live version a
+   * workflow sync re-checks). A factory reference: each call passes the handle it holds.
+   */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
+  /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
    * 两条启动路由（JSON / multipart）都走它：路由只解析表单 + 跑路由级门，
    * 「冻结快照 → 版本围栏 → 静态校验 → 启动输入契约 → 根内核」那一串交给参与者。
@@ -319,13 +324,14 @@ async function failedCode(
  * 详情页照常渲染悬空引用。
  */
 async function workflowIdentities(
-  db: PersistenceDb,
+  source: WorkflowReadSource,
   workflowIds: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean; version: number }>>> {
   const wanted = [...new Set(workflowIds)].filter((id) => definitionHost(id) === null)
   if (wanted.length === 0) return new Map()
 
-  const rows = await createWorkflowExecutionQueries(db)
+  const rows = await source
+    .createWorkflowExecutionQueries(source.db)
     .summaries(wanted)
     .then((rows) =>
       rows.map((row) => ({
@@ -354,13 +360,14 @@ async function workflowIdentities(
  * SQLite 一致地不拦。
  */
 export async function builtinCandidateWorkflow(
-  db: PersistenceDb,
+  source: WorkflowReadSource,
   workflowId: string,
 ): Promise<Readonly<{ builtin: boolean; version: number }> | null> {
-  return (await workflowIdentities(db, [workflowId])).get(workflowId) ?? null
+  return (await workflowIdentities(source, [workflowId])).get(workflowId) ?? null
 }
 
-async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
+async function taskProjection(source: WorkflowReadSource, row: TaskRow): Promise<Task> {
+  const db = source.db
   const { taskSpaceNodes } = tablesOf(db)
   const { taskRepositoryMounts: taskRepos } = tablesOf(db)
   const [repoRows, nodeRows, failureCode, identities] = await Promise.all([
@@ -376,7 +383,7 @@ async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
       .where(eq(taskSpaceNodes.taskId, row.id)),
     failedCode(db, row),
     workflowIdentities(
-      db,
+      source,
       taskReadSubjectFromDefinition(row).kind === 'workflow' ? [row.workflowId] : [],
     ),
   ])
@@ -455,14 +462,18 @@ async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
  * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）—— `GET /api/tasks/:id` 的行投影，
  * 两个引擎共用一份。等价性由 `rfc359-w7-task-route-conformance` 的 A1 / A2 作证。
  */
-export async function loadTaskProjection(db: PersistenceDb, taskId: string): Promise<Task | null> {
-  return await loadTask(db, taskId)
+export async function loadTaskProjection(
+  source: WorkflowReadSource,
+  taskId: string,
+): Promise<Task | null> {
+  return await loadTask(source, taskId)
 }
 
-export async function loadTask(db: PersistenceDb, taskId: string): Promise<Task | null> {
+export async function loadTask(source: WorkflowReadSource, taskId: string): Promise<Task | null> {
+  const db = source.db
   const { tasks } = tablesOf(db)
   const rows = await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
-  return rows[0] === undefined ? null : await taskProjection(db, rows[0])
+  return rows[0] === undefined ? null : await taskProjection(source, rows[0])
 }
 
 export async function requireTaskRow(db: PersistenceDb, taskId: string): Promise<TaskRow> {
@@ -952,6 +963,8 @@ function commitPush(raw: string | null) {
 export async function taskNodeRunsProjection(
   dependencies: Readonly<{
     db: PersistenceDb
+    /** RFC-568: Resource Catalog's workflow read factory (the task detail read names the task's workflow). */
+    createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
     /** RFC-526: the deployment's prompt operations (required; the route operations give theirs). */
     nodeRunPrompts: NodeRunPromptOperations
     memorySnapshots: TaskMemorySnapshotPort
@@ -961,7 +974,7 @@ export async function taskNodeRunsProjection(
 ) {
   const nodeRunPrompts = dependencies.nodeRunPrompts
   requireNodeRunPromptOperations(nodeRunPrompts)
-  const task = await loadTask(dependencies.db, taskId)
+  const task = await loadTask(dependencies, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const { docVersions } = tablesOf(dependencies.db)
   const { nodeRunOutputs } = tablesOf(dependencies.db)
@@ -1265,12 +1278,14 @@ export async function nodeRunStdoutProjection(
 export async function taskDiffProjection(
   dependencies: Readonly<{
     db: PersistenceDb
+    /** RFC-568: Resource Catalog's workflow read factory (the task detail read names the task's workflow). */
+    createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
     /** RFC-527: required (the route operations give theirs). */
     workspaceReads: RepositoryWorkspaceReadQueries
   }>,
   taskId: string,
 ): Promise<TaskDiff> {
-  const task = await loadTask(dependencies.db, taskId)
+  const task = await loadTask(dependencies, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   if (isSingleRootRepository(task.repos.map((repo) => repo.mountPath))) {
@@ -1447,12 +1462,14 @@ async function syncRunSummary(db: PersistenceDb, taskId: string) {
 export async function assertManualExecutionAllowedProjection(
   dependencies: Readonly<{
     readonly db: PersistenceDb
+    /** RFC-568: Resource Catalog's workflow read factory (the task detail read names the task's workflow). */
+    readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
     readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   }>,
   actor: Actor,
   taskId: string,
 ): Promise<void> {
-  const task = await loadTask(dependencies.db, taskId)
+  const task = await loadTask(dependencies, taskId)
   if (task === null) return
   const frozenTask = await requireTaskRow(dependencies.db, taskId)
   const subject = taskSubjectFromDefinition(frozenTask)
@@ -1467,7 +1484,7 @@ export async function assertManualExecutionAllowedProjection(
   // 合成定义沿用宿主存在时的只读错误；不再读取 catalog 占位行。
   if (kind !== 'workflow') assertNotBuiltin('workflow', { builtin: true })
   // 判据缺口账本 01a —— 内置工作流不可被手动执行（403 `builtin-readonly`）。
-  const candidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
+  const candidate = await builtinCandidateWorkflow(dependencies, task.workflowId)
   if (candidate !== null) assertNotBuiltin('workflow', candidate)
   const authority = dependencies.resourceAuthorityFor(actor)
   workflowLaunchSnapshot(
@@ -1516,6 +1533,8 @@ export async function loadVisibleWorkflow(
 export async function taskWorkflowSyncPreviewProjection(
   dependencies: Readonly<{
     readonly db: PersistenceDb
+    /** RFC-568: Resource Catalog's workflow read factory (the task detail read names the task's workflow). */
+    readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
     readonly activity: ActiveTaskExecutionParticipant
     readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
     readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
@@ -1525,7 +1544,7 @@ export async function taskWorkflowSyncPreviewProjection(
   actor: Actor,
   taskId: string,
 ): Promise<WorkflowSyncPreview> {
-  const task = await loadTask(dependencies.db, taskId)
+  const task = await loadTask(dependencies, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const subject = taskSubjectFromDefinition(await requireTaskRow(dependencies.db, taskId))
   // 非工作流任务（agent / workgroup / code-round）没有可同步的工作流定义。
@@ -1739,6 +1758,8 @@ async function rollbackRunsForContinuation(
 export async function assertTaskWorkflowSyncable(
   dependencies: Readonly<{
     readonly db: PersistenceDb
+    /** RFC-568: Resource Catalog's workflow read factory (the task detail read names the task's workflow). */
+    readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
     readonly activity: ActiveTaskExecutionParticipant
     readonly canViewWorkflow: AgentLaunchResourceOperations['canViewWorkflow']
     readonly readWorkflow: AgentLaunchResourceOperations['readWorkflow']
@@ -1746,7 +1767,7 @@ export async function assertTaskWorkflowSyncable(
   actor: Actor,
   taskId: string,
 ): Promise<Readonly<{ task: Task; workflow: WorkflowCatalogDetail }>> {
-  const task = await loadTask(dependencies.db, taskId)
+  const task = await loadTask(dependencies, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const subject = taskSubjectFromDefinition(await requireTaskRow(dependencies.db, taskId))
   if (subject.kind === 'digital-employee') assertNotBuiltin('workflow', { builtin: true })
@@ -1793,6 +1814,8 @@ export async function assertTaskWorkflowSyncable(
  */
 export interface TaskWorkflowSyncDependencies {
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory (the task detail read, and the live version a sync re-checks). */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   readonly persistence: TaskExecutionPersistence
   readonly activity: ActiveTaskExecutionParticipant
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
@@ -1814,6 +1837,7 @@ export async function syncWorkflow(
   await assertTaskWorkflowSyncable(
     {
       db: dependencies.db,
+      createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
       activity: dependencies.activity,
       canViewWorkflow: dependencies.canViewWorkflow,
       readWorkflow: dependencies.readWorkflow,
@@ -1903,7 +1927,8 @@ export async function syncWorkflow(
   // RFC-109 F5 TOCTOU 复检:上面的校验 / diff 全是本地读,并发的 workflow PUT 可能在这个
   // 窗口里把版本推走。紧挨着准入 CAS 再断言一次,保证写进任务的永远是用户确认过的那一版。
   const liveVersion = (
-    await createWorkflowExecutionQueries(dependencies.db)
+    await dependencies
+      .createWorkflowExecutionQueries(dependencies.db)
       .summaries([row.workflowId])
       .then((rows) => rows.map((row) => ({ version: row.version })))
   )[0]
@@ -1956,7 +1981,7 @@ export async function syncWorkflow(
     reason: 'syncTaskWorkflow',
   })
   await dependencies.resumeTaskAs(input.actor, input.taskId)
-  const updated = await loadTask(dependencies.db, input.taskId)
+  const updated = await loadTask(dependencies, input.taskId)
   if (updated === null)
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
   return updated
@@ -2071,6 +2096,8 @@ async function finalizedParentCallRowStatus(
 export interface TaskRetryDependencies {
   readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
+  /** RFC-568: Resource Catalog's workflow read factory (the task detail read names the task's workflow). */
+  readonly createWorkflowExecutionQueries: WorkflowExecutionQueriesFactory
   readonly persistence: TaskExecutionPersistence
   readonly activity: ActiveTaskExecutionParticipant
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
@@ -2196,7 +2223,7 @@ export async function retryNodeProjection(
     await dependencies.repositoryPreparationRetry.retry(input.taskId, {
       actorUserId: input.actor.user.id,
     })
-    const prepared = await loadTask(dependencies.db, input.taskId)
+    const prepared = await loadTask(dependencies, input.taskId)
     if (prepared === null) {
       throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
     }
@@ -2452,7 +2479,7 @@ export async function retryNodeProjection(
   })
   await publishCommittedEventsAfterCommit(dependencies.db, minted)
   await dependencies.resumeTaskAs(input.actor, input.taskId)
-  const updated = await loadTask(dependencies.db, input.taskId)
+  const updated = await loadTask(dependencies, input.taskId)
   if (updated === null)
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
   return updated
@@ -2522,7 +2549,7 @@ export function createTaskRouteOperations(
         },
         filters,
       ),
-    get: (taskId) => loadTask(dependencies.db, taskId),
+    get: (taskId) => loadTask(dependencies, taskId),
     // 访问门 + 成员四件：存在性口径统一成「不存在即 404」。
     assertVisible: (actor, taskId) =>
       assertTaskVisibleProjection(dependencies.db, dependencies.taskMembership, actor, taskId),
@@ -2572,7 +2599,7 @@ export function createTaskRouteOperations(
       cancelAndReadTask(
         {
           cancel: (id) => dependencies.children.cancel({ taskId: id, cause: { kind: 'user' } }),
-          read: (id) => loadTask(dependencies.db, id),
+          read: (id) => loadTask(dependencies, id),
         },
         taskId,
       ),
@@ -2585,7 +2612,7 @@ export function createTaskRouteOperations(
       }),
     async resume({ actor, taskId }) {
       await resumeTaskAs(actor, taskId)
-      const task = await loadTask(dependencies.db, taskId)
+      const task = await loadTask(dependencies, taskId)
       if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return task
     },
@@ -2593,6 +2620,7 @@ export function createTaskRouteOperations(
       retryNodeProjection(
         {
           db: dependencies.db,
+          createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
           persistence: dependencies.persistence,
           activity: dependencies.activity,
           repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
@@ -2608,13 +2636,22 @@ export function createTaskRouteOperations(
       taskNodeRunsProjection(
         {
           db: dependencies.db,
+          createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
           nodeRunPrompts,
           clarifyNav: dependencies.clarifyNav,
           memorySnapshots: dependencies.memorySnapshots,
         },
         taskId,
       ),
-    diff: (taskId) => taskDiffProjection({ db: dependencies.db, workspaceReads }, taskId),
+    diff: (taskId) =>
+      taskDiffProjection(
+        {
+          db: dependencies.db,
+          createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
+          workspaceReads,
+        },
+        taskId,
+      ),
     stdout: (taskId, nodeRunId) =>
       nodeRunStdoutProjection(
         { db: dependencies.db, archivedEvents: dependencies.archivedEvents },
@@ -2630,7 +2667,11 @@ export function createTaskRouteOperations(
       ),
     assertManualExecutionAllowed: (actor, taskId) =>
       assertManualExecutionAllowedProjection(
-        { db: dependencies.db, resourceAuthorityFor: dependencies.resourceAuthorityFor },
+        {
+          db: dependencies.db,
+          createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+        },
         actor,
         taskId,
       ),
@@ -2638,6 +2679,7 @@ export function createTaskRouteOperations(
       taskWorkflowSyncPreviewProjection(
         {
           db: dependencies.db,
+          createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
           activity: dependencies.activity,
           resourceAuthorityFor: dependencies.resourceAuthorityFor,
           canViewWorkflow: dependencies.canViewWorkflow,
@@ -2651,6 +2693,7 @@ export function createTaskRouteOperations(
       syncWorkflow(
         {
           db: dependencies.db,
+          createWorkflowExecutionQueries: dependencies.createWorkflowExecutionQueries,
           persistence: dependencies.persistence,
           activity: dependencies.activity,
           resourceAuthorityFor: dependencies.resourceAuthorityFor,

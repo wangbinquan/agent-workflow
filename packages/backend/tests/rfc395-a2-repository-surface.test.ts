@@ -12,7 +12,7 @@ import {
 } from '@agent-workflow/shared'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { projectLaunchedTask } from '@/modules/task-execution/infrastructure/rootTaskAdmission'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import {
   loadTaskProjection,
   taskListSummariesProjection,
@@ -49,6 +49,7 @@ import {
   type TaskFixtureSpec,
 } from './helpers/model'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const definition = WorkflowDefinitionSchema.parse({
   $schema_version: WORKFLOW_SCHEMA_VERSION,
@@ -246,7 +247,7 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
       expect(stored.repos).toHaveLength(spec.repos!.length)
       for (const actual of [
         await getTask(harness.db, spec.id),
-        await loadTaskProjection(harness.db, spec.id),
+        await loadTaskProjection({ db: harness.db, createWorkflowExecutionQueries }, spec.id),
       ]) {
         expect(actual).not.toBeNull()
         expect(JSON.stringify(repositoryFields(actual!))).toBe(

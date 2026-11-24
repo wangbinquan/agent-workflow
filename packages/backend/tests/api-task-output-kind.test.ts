@@ -33,6 +33,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -98,6 +99,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -122,6 +124,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )
@@ -153,7 +156,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
       kind: 'string',
     })
 
-    const task = await loadTaskProjection(db, taskId)
+    const task = await loadTaskProjection({ db: db, createWorkflowExecutionQueries }, taskId)
     expect(task?.codeRoundId).toBe(codeRoundId)
     expect(taskExecutionKind(task!)).toBe('code-round')
     const projection = await taskNodeRunsProjection(
@@ -162,6 +165,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )

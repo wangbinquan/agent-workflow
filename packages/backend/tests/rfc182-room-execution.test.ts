@@ -26,6 +26,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
 describe('RFC-182 — pending 帧源级锁', () => {
@@ -102,6 +103,7 @@ describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCau
           createFileNodeRunPromptContent(Paths.runsDir),
         ),
         db,
+        createWorkflowExecutionQueries,
       }),
       taskId,
     )

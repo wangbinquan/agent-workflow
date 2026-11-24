@@ -52,6 +52,7 @@ import {
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 let db: PersistenceDb
 let actor: Actor
@@ -73,6 +74,7 @@ async function setupIntentFixture(selectedDb: PersistenceDb) {
   db = selectedDb
   persistence = composeIntentPersistence({
     db,
+    createAgentExecutionQueries,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   await seedBuiltinRuntimes(runtimeRegistryPersistence(db))

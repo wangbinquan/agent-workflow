@@ -9,10 +9,8 @@ import { createTaskDetailQueries } from '@/modules/task-execution/infrastructure
 import { createTaskPreparationQueries } from '@/modules/task-execution/infrastructure/taskPreparationQueries'
 // RFC-476: task deletion's queries left task-execution public with their only outside consumer.
 import { createTaskDeletionQueries } from '@/modules/task-execution/infrastructure/taskDeletionQueries'
-import {
-  getTask,
-  loadTaskFailureCodes,
-} from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { loadTaskFailureCodes } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   taskFixture,
@@ -23,6 +21,7 @@ import {
   patchTaskFixture,
   type TaskFixtureSpec,
 } from './helpers/model'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const definition = ' { "inputs": [], "nodes": [], "edges": [] } '
 
@@ -47,7 +46,7 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
   })
 
   test('Task detail retains legacy repository fallback, malformed payload fallback and subject revision', async () => {
-    const query = createTaskDetailQueries(h.db)
+    const query = createTaskDetailQueries(h.db, createWorkflowExecutionQueries)
     expect(await query.read('missing')).toBeNull()
     await task('old', {
       workflowSnapshot: '{broken',
@@ -100,18 +99,26 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
     await h.db
       .insert(taskSpaceNodes)
       .values({ taskId: 'mounts', nodePath: 'empty', schemaVersion: 1 })
-    const detail = await createTaskDetailQueries(h.db).read('mounts')
+    const detail = await createTaskDetailQueries(h.db, createWorkflowExecutionQueries).read(
+      'mounts',
+    )
     expect(detail?.task.repos.map((r) => r.mountPath)).toEqual(['a', 'b'])
     expect(detail?.task.spaceNodes?.map((node) => node.path)).toContain('empty')
     expect((await getTask(h.db, 'mounts'))?.workflowSnapshot).toEqual(JSON.parse(definition))
     await expect(
       h.session.transaction(async (tx) => {
         await patchTaskFixture(tx, { id: 'mounts' }, { name: 'inside' })
-        expect((await createTaskDetailQueries(tx).read('mounts'))?.task.name).toBe('inside')
+        expect(
+          (await createTaskDetailQueries(tx, createWorkflowExecutionQueries).read('mounts'))?.task
+            .name,
+        ).toBe('inside')
         throw new Error('rollback-detail')
       }),
     ).rejects.toThrow('rollback-detail')
-    expect((await createTaskDetailQueries(h.db).read('mounts'))?.task.name).toBe('task-mounts')
+    expect(
+      (await createTaskDetailQueries(h.db, createWorkflowExecutionQueries).read('mounts'))?.task
+        .name,
+    ).toBe('task-mounts')
   })
 
   test('preparation context decodes requested source and preserves missing/null/status facts', async () => {

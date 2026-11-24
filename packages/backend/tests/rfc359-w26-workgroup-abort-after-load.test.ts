@@ -22,6 +22,7 @@ import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/app
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function deferred() {
   let resolve = () => {}
@@ -148,6 +149,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
   let heldRunningSnapshot = false
   const actual = createWorkgroupTurnsPersistence({
     db,
+    createAgentExecutionQueries,
     hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
       collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),

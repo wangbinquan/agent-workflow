@@ -55,6 +55,7 @@ import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createAgent } from './helpers/model/resourceWrites'
 import { applyIntentChangeset } from './helpers/intentApply'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const OWNER = 'user_owner_rfc358_00000000'
 
@@ -517,6 +518,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
     beforeEach(() => {
       persistence = composeIntentPersistence({
         db,
+        createAgentExecutionQueries,
         contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
       })
       authorization = intentResourceVisibility(
@@ -680,6 +682,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
     beforeEach(() => {
       persistence = composeIntentPersistence({
         db,
+        createAgentExecutionQueries,
         contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
       })
       appHome = mkdtempSync(join(tmpdir(), 'aw-rfc358-'))

@@ -42,6 +42,7 @@ import {
 } from './helpers/model'
 import { patchLegacyRunSelectionFixture } from './helpers/model/runSelectionOracle'
 import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seed(db: PersistenceDb, suffix: string) {
   const taskId = `sites-b-${suffix}`
@@ -435,6 +436,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
         memorySnapshots: composeTaskMemorySnapshotPort(),
         clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
         db,
+        createWorkflowExecutionQueries,
         nodeRunPrompts: {
           async read() {
             return null

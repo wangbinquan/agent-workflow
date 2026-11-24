@@ -54,11 +54,13 @@ import {
   deriveWakeSet,
 } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 /** 生产账本的持久化面（与两个 bootstrap 装的是同一条）。 */
 function turnsLedger(client: PersistenceDb) {
   return createWorkgroupTurnsPersistence({
     db: client,
+    createAgentExecutionQueries,
     hostLedgerFactory: {
       inTransaction: (transaction) =>
         composeWorkgroupHostLedgerParticipantFactory({

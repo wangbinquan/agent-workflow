@@ -46,6 +46,7 @@ import { Paths } from '../../src/util/paths'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 /** SQLite test composition for Integration's closed TaskExecution participant. */
 export function createSqliteWebhookTaskExecutionParticipant(input: {
@@ -155,6 +156,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
           }),
         ),
         db: input.db,
+        createWorkflowExecutionQueries,
         terminalWorkspacePrune,
         appHome,
 

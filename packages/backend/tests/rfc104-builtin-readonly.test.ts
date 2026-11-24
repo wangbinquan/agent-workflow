@@ -56,6 +56,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ForbiddenError } from '../src/util/errors'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const TOKEN = 'a'.repeat(64) // 64-char hex → the __system__ ADMIN daemon actor
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -71,6 +72,7 @@ function seedFusionResourcesForDb(db: PersistenceDb): Promise<void> {
     composeSqliteFusionPersistence({
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
+      createWorkflowExecutionQueries,
       appHome: '/tmp',
     }),
   )

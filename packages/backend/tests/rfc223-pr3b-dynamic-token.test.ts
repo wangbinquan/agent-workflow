@@ -67,7 +67,7 @@ import {
   ORCHESTRATOR_WORKFLOW_PORT,
 } from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { buildActor } from '../src/auth/actor'
 import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
 import { createFileWorkspacePresenceQueries } from '../src/modules/source-control/composition'
@@ -87,6 +87,7 @@ import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createAgent } from './helpers/model/resourceWrites'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -100,7 +101,7 @@ const runDynamicWorkflowGenerate = (
   const { db, hooks, ...rest } = args
   return runDynamicWorkflowGenerateWithPorts(
     {
-      persistence: composeDynamicWorkflowPersistence(db),
+      persistence: composeDynamicWorkflowPersistence(db, createAgentExecutionQueries),
       nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
       validation: composeDynamicWorkflowLayerOneValidation(db),
       rules: { triggerPreflightIssue },

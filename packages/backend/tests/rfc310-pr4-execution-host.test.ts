@@ -55,6 +55,7 @@ import {
   neverPruneTerminalWorkspaces,
   createTaskTerminalWatch,
 } from '@/modules/task-execution/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 setDefaultTimeout(120_000)
 
@@ -200,6 +201,7 @@ function runner(
   // 这条用例证的仍是真子进程执行链，只是换了同一个内核入口。
   return composeAgentActionExecution({
     db: h.db,
+    createWorkflowExecutionQueries,
     agents: { get: async (id) => getAgentById(h.db, id) },
     resolveActor: async () => h.actor,
     resourceAuthorityFor: () => h.launchResources,

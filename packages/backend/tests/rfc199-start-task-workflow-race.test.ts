@@ -60,6 +60,7 @@ import {
   updateWorkflow,
   type WorkflowWritePrincipal,
 } from './helpers/model/resourceWrites'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 interface Harness {
   tmp: string
@@ -352,6 +353,7 @@ describe('RFC-199 production materialization cleanup', () => {
     let prepared = false
     const operations = createFusionEngineTaskOperations({
       db: harness.db,
+      createWorkflowExecutionQueries,
       workspaces: {
         ...effects,
         async prepare(request) {

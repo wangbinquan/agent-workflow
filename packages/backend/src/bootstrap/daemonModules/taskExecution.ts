@@ -31,7 +31,11 @@ import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/publ
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { workflowNameExpression } from '@/modules/resource-catalog/composition'
+import {
+  createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
+  workflowNameExpression,
+} from '@/modules/resource-catalog/composition'
 import {
   composeDynamicWorkflowLayerOneValidation,
   composeDynamicWorkflowValidationContext,
@@ -315,6 +319,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
         return composeDeferredRepositoryPreparation({
           repositoryPreparationLookup,
           db,
+          // RFC-568: Resource Catalog's workflow read factory (the prepared task's detail names its workflow).
+          createWorkflowExecutionQueries,
           terminalWorkspacePrune: input.terminalWorkspacePrune,
           appHome,
           secretBox,
@@ -334,6 +340,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     db,
     // RFC-567: Resource Catalog's workflow name fragment for the task list rows and the lifecycle WS projection.
     workflowName: workflowNameExpression,
+    // RFC-568: and its workflow read factory, for the task routes, the fusion task launch and the child task launch.
+    createWorkflowExecutionQueries,
     historyRestrictions: input.historyRestrictions,
     archiveCollaboration: closure.collaborationReads.archive,
     clarifyNav: closure.collaborationReads.clarifyNav,
@@ -382,13 +390,15 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
         db,
         composeWorkgroupHostLedgerParticipantFactory({ collaboration: workgroupClarify }),
         createWorkgroupClarifyAskGate(db, closure.taskExecutionParticipants),
+        // RFC-568: Resource Catalog's agent read factory (member agents, read inside the snapshot transaction).
+        createAgentExecutionQueries,
       ),
       identityAccess: {
         delegatedRequests: core.identityAccess.delegatedRequests,
         taskExecutionResources: resources,
       },
       dynamicWorkflow: {
-        persistence: composeDynamicWorkflowPersistence(db),
+        persistence: composeDynamicWorkflowPersistence(db, createAgentExecutionQueries),
         validation: composeDynamicWorkflowLayerOneValidation(db),
       },
       codeHostConnections: input.repository.codeHostConnections,

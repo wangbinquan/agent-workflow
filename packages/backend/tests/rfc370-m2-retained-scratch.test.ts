@@ -8,6 +8,7 @@ import { createHostedExecutionStore } from '@/modules/task-execution/infrastruct
 import { createHostedExecution } from '@/modules/task-execution/infrastructure/crewstation/execution'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describeEachProvider('RFC-370 retained scratch and remote writers', (harness) => {
   test('retention waits for remote cleanup ACK and leaves failed or running turns retained', async () => {
@@ -67,6 +68,7 @@ describeEachProvider('RFC-370 retained scratch and remote writers', (harness) =>
     })
     const commands = composeIntentMaintenanceCommandsForDatabase({
       db: harness.db,
+      createAgentExecutionQueries,
       scratch,
     })
     expect(await commands.scratch.sweep({ retentionHours: 24, now: 86_400_100 })).toEqual({

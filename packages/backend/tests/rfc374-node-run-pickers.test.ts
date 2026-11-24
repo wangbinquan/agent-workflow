@@ -60,6 +60,7 @@ import { createFileWorkspacePresenceQueries } from '@/modules/source-control/com
 import { createFileProgramToolSource } from '@/modules/task-execution/infrastructure/local/fileProgramToolSource'
 import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const frame = { containerRunId: null, iteration: 0 }
 function row(
@@ -341,6 +342,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
         memorySnapshots: composeTaskMemorySnapshotPort(),
         clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
         db,
+        createWorkflowExecutionQueries,
         nodeRunPrompts: {
           async read(row) {
             return row?.promptText ?? null

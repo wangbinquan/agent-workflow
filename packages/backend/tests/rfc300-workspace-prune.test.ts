@@ -30,7 +30,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { runGit, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
 
 const ulid = monotonicFactory()

@@ -52,6 +52,10 @@ import {
   type TaskFixtureSpec,
 } from './helpers/model'
 import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import {
+  createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
+} from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function readConfig(db: PersistenceDb, taskId: string) {
   const { tasks } = tablesOf(db)
@@ -250,6 +254,7 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
       })
       const dependencies: TaskWorkflowSyncDependencies = {
         db: harness.db,
+        createWorkflowExecutionQueries,
         persistence: {} as TaskWorkflowSyncDependencies['persistence'],
         activity: {
           async awaitReleasedSettled() {},
@@ -537,7 +542,12 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
       .where(eq(tasks.id, taskId))
     expect(launch?.value).toBeNull()
     expect(
-      (await new DrizzleDynamicWorkflowPersistence(harness.db).loadTask(taskId))?.workgroupConfig,
+      (
+        await new DrizzleDynamicWorkflowPersistence(
+          harness.db,
+          createAgentExecutionQueries,
+        ).loadTask(taskId)
+      )?.workgroupConfig,
     ).toBeNull()
     expect(
       (
@@ -563,7 +573,12 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
     const expected = decodeTaskWorkgroupConfig(bytes)
     expect(await readConfig(harness.db, taskId)).toEqual(expected)
     expect(
-      (await new DrizzleDynamicWorkflowPersistence(harness.db).loadTask(taskId))?.workgroupConfig,
+      (
+        await new DrizzleDynamicWorkflowPersistence(
+          harness.db,
+          createAgentExecutionQueries,
+        ).loadTask(taskId)
+      )?.workgroupConfig,
     ).toEqual(expected)
     expect(
       (await new DrizzleTaskEngineApplicationPersistence(harness.db).load(taskId))?.task

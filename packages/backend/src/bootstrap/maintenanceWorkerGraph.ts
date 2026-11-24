@@ -69,6 +69,7 @@ import type {
 import type { MaintenanceSystemOperations } from '@/modules/system-operations/composition'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
 import { composeMaintenanceSystemOperations } from '@/modules/system-operations/composition'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/composition'
 
 type GraphInput = Parameters<MaintenanceWorkerGraphFactory<MaintenanceWorkerEffectsSelections>>[0]
 type Request = GraphInput['request']
@@ -336,6 +337,8 @@ export const composeMaintenanceWorkerGraph = async (
   })
   const intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
     db: client,
+    // RFC-568: the Intent persistence takes Resource Catalog's agent read factory on every construction.
+    createAgentExecutionQueries,
     scratch: effects.intentScratch,
     log: createLogger('intentMaintenance'),
   })

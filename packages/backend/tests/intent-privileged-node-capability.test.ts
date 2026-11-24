@@ -62,6 +62,7 @@ import type { IntentPersistence } from '../src/modules/intent/application/ports/
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
 import { applyIntentChangeset, type ApplyIntentDeps } from './helpers/intentApply'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const PLAIN = 'user_plain_priv_0000000000'
 const BOSS = 'user_manager_priv_00000000'
@@ -306,6 +307,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
   persistence = composeIntentPersistence({
     db,
+    createAgentExecutionQueries,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-priv-'))

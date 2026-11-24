@@ -69,7 +69,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildFrontierMintPlan } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -84,6 +84,7 @@ import { composeTestFusionTasks } from './helpers/fusionTaskBundle'
 import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 import { createAgent, renameAgent } from './helpers/model/resourceWrites'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -381,6 +382,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       operations: composeFusionOperationsFor({
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
+        createWorkflowExecutionQueries,
         appHome,
         memories: composeMemoryCatalogOperations({
           db,

@@ -19,6 +19,7 @@ import type {
   WorkgroupTurnLogger,
   WorkgroupTurnsOutcome,
 } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export interface WorkgroupTurnsTestHooks {
   runHostNode: (request: WorkgroupTurnHostRequest) => Promise<WorkgroupTurnHostResult>
@@ -34,6 +35,7 @@ export function composeTestWorkgroupTurns(db: PersistenceDb) {
       collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(taskExecutionParticipants),
     }),
     createWorkgroupClarifyAskGate(db, taskExecutionParticipants),
+    createAgentExecutionQueries,
   )
 }
 

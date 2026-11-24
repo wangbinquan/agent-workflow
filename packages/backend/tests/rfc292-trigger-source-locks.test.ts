@@ -208,7 +208,11 @@ describe('RFC-292 trigger namespace source locks', () => {
       'function summaryProjection(',
       '\nfunction visibilityCondition(',
     )
-    expect(getTaskProjection).toContain('createTaskDetailQueries(db).read(id)')
+    // RFC-568: the detail read also takes Resource Catalog's workflow read factory (handed over); it still goes through
+    // the one detail query, where the frozen trigger JSON is folded into the derived link.
+    expect(getTaskProjection).toContain(
+      'createTaskDetailQueries(db, source.createWorkflowExecutionQueries).read(id)',
+    )
     expect(detailProjection).toContain('webhookTaskSourceLinkOf(parsedTriggerContext.value)')
     expect(detailProjection).toContain('row.task.triggerContextJson')
     expect(rowProjection).not.toContain('triggerContextJson')

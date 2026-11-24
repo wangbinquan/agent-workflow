@@ -41,7 +41,7 @@ import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTa
 
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
-import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { getTask } from './helpers/taskDetailRead'
 import { isTaskActive } from './helpers/taskDriverRegistry'
 import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
 import { sha1Hex } from '../src/util/hash'
