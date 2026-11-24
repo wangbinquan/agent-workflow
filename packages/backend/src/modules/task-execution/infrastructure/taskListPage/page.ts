@@ -17,6 +17,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { NotFoundError } from '@/util/errors'
 import { taskListVisibilityCondition, type TaskListViewer } from './authorization'
 import type { TaskListPageDb } from './db'
+import type { WorkflowNameExpression } from '../taskRepositorySql'
 import {
   encodeCursor,
   parseTaskOperationsQuery,
@@ -84,6 +85,8 @@ export async function hasUnrootedTasks(db: TaskListPageDb): Promise<boolean> {
 /** 页查询的完整装配：一个数据库客户端加两条页内富化查询。 */
 export interface TaskListPageDeps extends TaskListPageEnrichment {
   readonly db: TaskListPageDb
+  /** RFC-567: Resource Catalog's same-statement workflow name fragment, handed over by the assembly root. */
+  readonly workflowName: WorkflowNameExpression
 }
 
 export interface TaskListPage {
@@ -107,6 +110,7 @@ async function listPage(
   options: TaskOperationsPageOptions = {},
 ): Promise<TaskOperationsPage> {
   const db = deps.db
+  const workflowName = deps.workflowName
   const parsed = parseTaskOperationsQuery(viewer, rawQuery, options)
   if (parsed.parentId !== undefined) {
     await assertVisibleParent(db, viewer, parsed.parentId, options.catalogVisibility)
@@ -126,13 +130,19 @@ async function listPage(
     db,
     parsed.parentId === undefined
       ? options.pipeline === 'exhaustive'
-        ? rootQuery(db, viewer, parsed, options.catalogVisibility)
+        ? rootQuery(db, workflowName, viewer, parsed, options.catalogVisibility)
         : defaultFastPath
-          ? fastDefaultRootQuery(db, viewer, parsed)
+          ? fastDefaultRootQuery(db, workflowName, viewer, parsed)
           : filteredFastPath
-            ? fastFilteredRootQuery(db, viewer, parsed, options.catalogVisibility)
-            : rootQuery(db, viewer, parsed, options.catalogVisibility)
-      : childQuery(db, viewer, { ...parsed, parentId: parsed.parentId }, options.catalogVisibility),
+            ? fastFilteredRootQuery(db, workflowName, viewer, parsed, options.catalogVisibility)
+            : rootQuery(db, workflowName, viewer, parsed, options.catalogVisibility)
+      : childQuery(
+          db,
+          workflowName,
+          viewer,
+          { ...parsed, parentId: parsed.parentId },
+          options.catalogVisibility,
+        ),
   )) as OperationsSqlRow[]
 
   const pageRows = rawRows.filter((row) => row.id !== null)

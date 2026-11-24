@@ -1,4 +1,3 @@
-import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
@@ -17,7 +16,11 @@ import {
 } from 'drizzle-orm'
 import type { TaskGateQueries } from '../application/ports/taskGateQueries'
 import { taskVisibilityCondition, visibleTaskIdsFor } from './taskAuthorization'
-import { taskReadColumns, taskWorkflowNameSql } from './taskRepositorySql'
+import {
+  taskReadColumns,
+  taskWorkflowNameSql,
+  type WorkflowNameExpression,
+} from './taskRepositorySql'
 
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
@@ -72,38 +75,53 @@ export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
   }
 }
 
-/** 同语句的半连接，保留徽标计数的孤儿/终态语义与单次往返。 */
-export function taskGateOpenCondition(
+/** The task gate open condition as collaboration's badge read model takes it (RFC-483). */
+export type TaskGateOpenCondition = (
   db: PersistenceDb,
   taskId: AnyColumn | SQL,
-  includeMissing = false,
-  requireSubjectName = false,
-): SQL {
-  const { tasks } = tablesOf(db)
-  const present = db
-    .select({ one: sql`1` })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-  const open = exists(
-    db
+  includeMissing?: boolean,
+  requireSubjectName?: boolean,
+) => SQL
+
+/**
+ * 同语句的半连接，保留徽标计数的孤儿/终态语义与单次往返。RFC-567：“任务有主体名”那一支要取工作流名，片段由装配根交入
+ * （resource-catalog 的实现）——所以这个条件由绑定函数造出，签名与原来的 `taskGateOpenCondition` 相同。
+ */
+export function bindTaskGateOpenCondition(
+  workflowName: WorkflowNameExpression,
+): TaskGateOpenCondition {
+  return function taskGateOpenCondition(
+    db,
+    taskId,
+    includeMissing = false,
+    requireSubjectName = false,
+  ) {
+    const { tasks } = tablesOf(db)
+    const present = db
       .select({ one: sql`1` })
       .from(tasks)
-      .where(
-        and(
-          eq(tasks.id, taskId),
-          notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-          requireSubjectName ? isNotNull(taskGateSubjectName(db)) : undefined,
+      .where(eq(tasks.id, taskId))
+    const open = exists(
+      db
+        .select({ one: sql`1` })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+            requireSubjectName ? isNotNull(taskGateSubjectName(db, workflowName)) : undefined,
+          ),
         ),
-      ),
-  )
-  return includeMissing ? or(notExists(present), open)! : open
+    )
+    return includeMissing ? or(notExists(present), open)! : open
+  }
 }
 
 /** RFC-395 II-a: keep subject-name filtering in the badge's single SQL statement. */
-function taskGateSubjectName(db: PersistenceDb): SQL {
+function taskGateSubjectName(db: PersistenceDb, workflowName: WorkflowNameExpression): SQL {
   return taskWorkflowNameSql(
     { subjectKind: taskReadColumns(db).subjectKind },
-    workflowNameExpression(db, taskReadColumns(db).workflowId),
+    workflowName(db, taskReadColumns(db).workflowId),
   )
 }
 

@@ -26,6 +26,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
@@ -79,8 +80,8 @@ describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛�
   test('只差 origin 的两个并发列表查询不得互相污染', async () => {
     // **不 await 第一个就发第二个**——单飞窗口正是在这一刻。
     const [schedule, api] = await Promise.all([
-      taskListSummariesProjection(harness.db, { origin: 'scheduled' }),
-      taskListSummariesProjection(harness.db, { origin: 'api' }),
+      taskListSummariesProjection(harness.db, workflowNameExpression, { origin: 'scheduled' }),
+      taskListSummariesProjection(harness.db, workflowNameExpression, { origin: 'api' }),
     ])
     expect(
       schedule.map((task) => task.id),
@@ -104,8 +105,8 @@ describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛�
     ]
     for (const [left, right] of probes) {
       const [a, b] = await Promise.all([
-        taskListSummariesProjection(harness.db, left),
-        taskListSummariesProjection(harness.db, right),
+        taskListSummariesProjection(harness.db, workflowNameExpression, left),
+        taskListSummariesProjection(harness.db, workflowNameExpression, right),
       ])
       expect(
         a === b,
@@ -117,8 +118,8 @@ describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛�
   test('完全同形的并发查询仍然被合并（别把性能特性一起修没了）', async () => {
     const key = { status: 'done' as const, origin: 'scheduled' as const, limit: 50 }
     const [a, b] = await Promise.all([
-      taskListSummariesProjection(harness.db, { ...key }),
-      taskListSummariesProjection(harness.db, { ...key }),
+      taskListSummariesProjection(harness.db, workflowNameExpression, { ...key }),
+      taskListSummariesProjection(harness.db, workflowNameExpression, { ...key }),
     ])
     expect(a, '同形并发查询应当共享同一次库访问的结果').toBe(b)
     expect(a.map((task) => task.id)).toEqual(['tk-schedule-0001'])

@@ -83,6 +83,7 @@ import { standaloneDigitalEmployeeSelections } from './digitalEmployeeSelections
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 import { taskKnowledgeQueriesFor } from './taskKnowledge'
 import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export interface ProductionPerformanceApplicationInput {
   readonly db: PersistenceDb
@@ -148,7 +149,11 @@ export async function createProductionPerformanceApplication(
   await digitalEmployee.maintenance.ready()
   const taskCatalog = composeTaskCatalog({
     sources: [
-      ...composeTaskExecutionCatalogSources(db, composeOwnerIdentityQueries(db)),
+      ...composeTaskExecutionCatalogSources(
+        db,
+        composeOwnerIdentityQueries(db),
+        workflowNameExpression,
+      ),
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })

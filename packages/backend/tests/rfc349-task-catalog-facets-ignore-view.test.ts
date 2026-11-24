@@ -34,6 +34,7 @@ import type { TaskCatalogSource } from '@/modules/task-catalog/composition/requi
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { ValidationError } from '@/util/errors'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Db = PersistenceDb
 
@@ -66,7 +67,7 @@ const FIXTURE: ReadonlyArray<{ status: TaskStatus; alerts?: number }> = [
 async function catalogSource(db: Db): Promise<TaskCatalogSource> {
   await seed(db)
   return createTaskExecutionCatalogSourceFactory(
-    createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
+    createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db), workflowNameExpression),
   ).create('workflow')
 }
 

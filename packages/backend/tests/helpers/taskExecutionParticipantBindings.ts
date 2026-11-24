@@ -20,10 +20,11 @@ import {
   createTaskGateQueries,
   createNodeOutputQueries,
   nodeRunStatusCondition,
-  taskGateOpenCondition,
+  bindTaskGateOpenCondition,
   taskGateVisibleCondition,
   neverPruneTerminalWorkspaces,
 } from '@/modules/task-execution/composition'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
   executionPermits: testExecutionPermits,
@@ -49,6 +50,7 @@ export const taskExecutionParticipants: TaskExecutionParticipantBindings = Objec
   createTaskGateQueries,
   createNodeOutputQueries,
   nodeRunStatusCondition,
-  taskGateOpenCondition,
+  // RFC-567: bound with Resource Catalog's workflow name fragment, as bootstrap's cross-context closure does.
+  taskGateOpenCondition: bindTaskGateOpenCondition(workflowNameExpression),
   taskGateVisibleCondition,
 })

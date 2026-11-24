@@ -240,10 +240,11 @@ export interface McpDiagnosticsQueries {
 // RFC-467: `validateAgentDependencies` left this entry point — its only outside reader (`services/agentDeps`, used only by
 // the RFC-349 injection oracle) moved to the test helpers; Resource Catalog's own agent application imports it directly.
 
+// RFC-567: the SQL fragment `workflowNameExpression` left the public (its signature carries a database handle and drizzle
+// types). Bootstrap takes it from resource-catalog's composition and hands it to Task Execution's task read models.
 export {
   createAgentExecutionQueries,
   createWorkflowExecutionQueries,
-  workflowNameExpression,
 } from '../infrastructure/executionResourceQueries'
 export type {
   AgentExecutionQueries,

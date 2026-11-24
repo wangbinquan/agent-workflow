@@ -41,6 +41,13 @@ const CONDITIONS = [
   'taskGateOpenCondition',
   'taskGateVisibleCondition',
 ] as const
+// RFC-567: the gate-open condition reads Resource Catalog's workflow name fragment, so task-execution's composition hands
+// out its binder and bootstrap binds it; the other two conditions leave the composition as they are.
+const COMPOSITION_EXPORTS = [
+  'nodeRunStatusCondition',
+  'bindTaskGateOpenCondition',
+  'taskGateVisibleCondition',
+] as const
 const slash = (path: string) => path.split('\\').join('/')
 const read = (path: string) => readFileSync(join(SRC, path), 'utf8')
 const parse = (path: string, text: string) =>
@@ -189,7 +196,8 @@ describe('RFC-483 —— task-execution 的 public 撤出三个 SQL 条件片段
       [],
     )
     const composition = exportedNames(`${TE}composition.ts`, read(`${TE}composition.ts`))
-    for (const name of CONDITIONS) expect(composition, name).toContain(name)
+    for (const name of COMPOSITION_EXPORTS) expect(composition, name).toContain(name)
+    expect(composition).not.toContain('taskGateOpenCondition')
   })
 })
 
@@ -252,7 +260,7 @@ describe('RFC-483 —— 徽标读模型只经装配期绑定取谓词', () => {
     for (const name of CONDITIONS) expect(members, name).toContain(name)
     const closure = 'bootstrap/crossContextClosure.ts'
     const fromComposition = namesImportedFrom(closure, '@/modules/task-execution/composition')
-    for (const name of CONDITIONS) expect(fromComposition, name).toContain(name)
+    for (const name of COMPOSITION_EXPORTS) expect(fromComposition, name).toContain(name)
     const composer = parse(closure, read(closure)).statements.find(
       (statement): statement is ts.FunctionDeclaration =>
         ts.isFunctionDeclaration(statement) &&
@@ -260,12 +268,21 @@ describe('RFC-483 —— 徽标读模型只经装配期绑定取谓词', () => {
     )
     expect(composer).toBeDefined()
     const handed: string[] = []
+    const bound = new Map<string, string>()
     const visit = (node: ts.Node): void => {
       if (ts.isShorthandPropertyAssignment(node)) handed.push(node.name.text)
+      if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
+        handed.push(node.name.text)
+        bound.set(node.name.text, node.initializer.getText())
+      }
       ts.forEachChild(node, visit)
     }
     visit(composer!)
     for (const name of CONDITIONS) expect(handed, name).toContain(name)
+    // RFC-567: the member collaboration reads keeps its name; bootstrap binds it with the owner's fragment.
+    expect(bound.get('taskGateOpenCondition')).toBe(
+      'bindTaskGateOpenCondition(workflowNameExpression)',
+    )
   })
 })
 

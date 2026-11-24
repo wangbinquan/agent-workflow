@@ -32,6 +32,7 @@ import {
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { recordStatements } from './helpers/statementRecorder'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VIEWER: TaskListViewer = { userId: 'w25-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -225,6 +226,7 @@ async function compare(
 ): Promise<readonly Record<string, unknown>[]> {
   const query = fastFilteredRootQuery(
     db,
+    workflowNameExpression,
     VIEWER,
     parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
     OPTIONS.catalogVisibility,
@@ -330,7 +332,11 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
       { id: 'same-time-child', root: 'root-00', parent: 'root-00', startedAt: 1000 },
     ])
     const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
-    const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
+    const page = createDatabaseTaskListPage(
+      harness.db,
+      composeOwnerIdentityQueries(harness.db),
+      workflowNameExpression,
+    )
     let cursor: string | undefined
     const seen: string[] = []
     do {
@@ -375,12 +381,15 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
 // capability and passes the handle to `branchCtes`; the pre-I-b source still restores to bdb4e8fd….
 // T18 P3B: reviewed epoch-2 taskCatalogReadSql/subject_kind delta; inverse, binding and row proofs stay exact.
 // T18 PGX-D: only the page projection split changed; reversing that hunk restores 122eda37….
+// RFC-567: the page queries take Resource Catalog's workflow name fragment as an input (`workflowName`) instead of
+// importing it — the import, five signatures and the calls that pass it along. The rendered SQL is unchanged (the SQL,
+// binding and row proofs in this file stay exact); reversing those hunks restores the previous pin e3db2ed7….
 test('the inverse retains the exact complete W23 source', () => {
   expect(
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('e3db2ed782ba18c1dc0730b906a9a07980b496fb7815cc919936b3e8d9a4bb15')
+  ).toBe('4ac284b1e20e2e34199488b4cd589324c5af6db3ae6f13b23d8d201a2045927e')
 })
 test('the real PG compiler retains the original SQL and explains every additional binding', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []
@@ -413,6 +422,7 @@ test('the real PG compiler retains the original SQL and explains every additiona
     for (const raw of [RAW, { ...RAW, q: 'percent%_' }, withCursor(RAW, 890, 'root-11')]) {
       const query = fastFilteredRootQuery(
         db,
+        workflowNameExpression,
         VIEWER,
         parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
         OPTIONS.catalogVisibility,
@@ -464,6 +474,7 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
     await seed(db, independentRoots())
     const query = fastFilteredRootQuery(
       db,
+      workflowNameExpression,
       VIEWER,
       parseTaskOperationsQuery(VIEWER, RAW, OPTIONS),
       OPTIONS.catalogVisibility,
@@ -526,6 +537,7 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
       const deep = withCursor(RAW, 890, 'root-11')
       const deepQuery = fastFilteredRootQuery(
         db,
+        workflowNameExpression,
         VIEWER,
         parseTaskOperationsQuery(VIEWER, deep, OPTIONS),
         OPTIONS.catalogVisibility,

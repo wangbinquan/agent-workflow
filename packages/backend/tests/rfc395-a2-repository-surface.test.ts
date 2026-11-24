@@ -48,6 +48,7 @@ import {
   readTaskFixtures,
   type TaskFixtureSpec,
 } from './helpers/model'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const definition = WorkflowDefinitionSchema.parse({
   $schema_version: WORKFLOW_SCHEMA_VERSION,
@@ -274,14 +275,14 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
       definition,
     })
     await taskFixture(harness.db, cases)
-    const summaries = await taskListSummariesProjection(harness.db, {})
-    const ws = createDatabaseTaskLifecycleWsProjection(harness.db)
-    const page = createDatabaseTaskListPage(harness.db, owners)
+    const summaries = await taskListSummariesProjection(harness.db, workflowNameExpression, {})
+    const ws = createDatabaseTaskLifecycleWsProjection(harness.db, workflowNameExpression)
+    const page = createDatabaseTaskListPage(harness.db, owners, workflowNameExpression)
     const parsed = parseTaskOperationsQuery(viewer, { view: 'all', limit: '50' })
     for (const query of [rootQuery, fastDefaultRootQuery, fastFilteredRootQuery]) {
       const raw = await rawRows<OperationsSqlRow>(
         harness.db,
-        query(harness.db, viewer, parsed, 'public'),
+        query(harness.db, workflowNameExpression, viewer, parsed, 'public'),
       )
       const items = await mapRows(
         harness.db,

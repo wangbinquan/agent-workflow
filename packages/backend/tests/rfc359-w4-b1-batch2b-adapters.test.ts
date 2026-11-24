@@ -13,6 +13,7 @@ import { DrizzleChildTaskBudgetQueries } from '@/modules/task-execution/infrastr
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createDatabaseTaskLifecycleWsProjection } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -97,7 +98,7 @@ describeEachProvider('RFC-359 W4-B1 批 2b —— 任务生命周期 WS 投影',
   test('findCreatedTask：左连工作流名；未命中 null', async () => {
     const db = harness.db
     const { id, workflowId } = await seedTask(db, { spaceKind: 'local' })
-    const projection = createDatabaseTaskLifecycleWsProjection(db)
+    const projection = createDatabaseTaskLifecycleWsProjection(db, workflowNameExpression)
     expect(await projection.findCreatedTask(id)).toEqual({
       id,
       name: id,

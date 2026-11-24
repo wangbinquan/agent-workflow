@@ -29,6 +29,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedFailedTask(
   db: PersistenceDb,
@@ -100,12 +101,12 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
 
   test('listTasks batches the projection; non-failed tasks stay null-free', async () => {
     const { taskId } = await seedFailedTask(db, 'port-validation-failed')
-    const rows = await taskListSummariesProjection(db, {})
+    const rows = await taskListSummariesProjection(db, workflowNameExpression, {})
     const row = rows.find((r) => r.id === taskId)
     expect(row?.failureCode).toBe('port-validation-failed')
 
     const ownerRows = await taskListItemsProjection(
-      { db, owners: composeOwnerIdentityQueries(db) },
+      { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
       {},
     )
     expect(ownerRows.find((r) => r.id === taskId)?.failureCode).toBe('port-validation-failed')

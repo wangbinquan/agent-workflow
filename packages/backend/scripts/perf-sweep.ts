@@ -33,6 +33,7 @@ import {
 import { makeVersionedStubOpencode } from '../tests/fixtures/versionedStubOpencode'
 import { seedTestDefaultOpencodeRuntime } from '../tests/helpers/executionRuntimeFixture'
 import { taskListSummariesProjection as listTasks } from '@/modules/task-execution/infrastructure/taskRouteOperations'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 import { nodeRunEventsProjection as getNodeRunEvents } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { launchTestTask as startTask } from '../tests/helpers/productionTaskLaunch'
 import { createTaskExecutionTestTopology } from '../tests/helpers/taskExecutionTestTopology'
@@ -174,9 +175,13 @@ export async function scenarioTasksList(): Promise<void> {
   await taskFixture(db, rows)
   samples.push({ name: 'seed_100_tasks', ms: nowMs() - t0, rssDeltaKb: 0 })
 
-  await bench('tasks_list_500_limit', () => listTasks(db, { limit: 500 }))
-  await bench('tasks_list_filter_done', () => listTasks(db, { status: 'done', limit: 500 }))
-  await bench('tasks_list_filter_workflow', () => listTasks(db, { workflowId, limit: 500 }))
+  await bench('tasks_list_500_limit', () => listTasks(db, workflowNameExpression, { limit: 500 }))
+  await bench('tasks_list_filter_done', () =>
+    listTasks(db, workflowNameExpression, { status: 'done', limit: 500 }),
+  )
+  await bench('tasks_list_filter_workflow', () =>
+    listTasks(db, workflowNameExpression, { workflowId, limit: 500 }),
+  )
 
   db.$client.close()
 }

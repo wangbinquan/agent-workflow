@@ -121,6 +121,7 @@ import {
 import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 import { Paths } from '@/util/paths'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')
@@ -253,6 +254,8 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
+      // RFC-567: Resource Catalog's workflow name fragment for the task list rows.
+      workflowName: workflowNameExpression,
       // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
       // build (no app home here, so prompts under `Paths.runsDir`).
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
@@ -552,7 +555,7 @@ async function deliverLifecycleEvents(
     })
     await dispatcher.drain()
 
-    const projector = createDatabaseTaskLifecycleWsProjector(db)
+    const projector = createDatabaseTaskLifecycleWsProjector(db, workflowNameExpression)
     const { committedEvents } = tablesOf(db)
     const rows = await db
       .select()

@@ -23,6 +23,7 @@ import { createCommittedEventProjectionLedger } from '@/platform/events/committe
 import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function enableCollaborationCutover(db: PersistenceDb): Promise<void> {
   const { committedEventFamilyCutovers } = tablesOf(db)
@@ -55,7 +56,7 @@ export async function installCommittedEventProjectionHarness(
       persistence: createCommittedEventDeliveryPersistence(db),
       codecs,
       projectors: [
-        createDatabaseTaskLifecycleWsProjector(db),
+        createDatabaseTaskLifecycleWsProjector(db, workflowNameExpression),
         createCollaborationWsProjector(
           createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
         ),
@@ -137,7 +138,7 @@ export async function installCommittedEventDeliveryHarness(
     collaborationCommittedEventCodec,
   )
   const projectors = [
-    createDatabaseTaskLifecycleWsProjector(db),
+    createDatabaseTaskLifecycleWsProjector(db, workflowNameExpression),
     createCollaborationWsProjector(
       createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
     ),

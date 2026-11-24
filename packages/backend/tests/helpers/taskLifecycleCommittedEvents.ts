@@ -17,6 +17,7 @@ import { createAfterCommitEventPump } from '@/platform/events/committed/afterCom
 import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
 import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
   readonly onTerminalTask?: (
@@ -61,7 +62,7 @@ export function installTaskLifecycleAfterCommitTestPump(
       collaborationCommittedEventCodec,
     ),
     projectors: [
-      createDatabaseTaskLifecycleWsProjector(db),
+      createDatabaseTaskLifecycleWsProjector(db, workflowNameExpression),
       createCollaborationWsProjector(
         createCollaborationCommittedEventProjection(db, taskExecutionParticipants),
       ),

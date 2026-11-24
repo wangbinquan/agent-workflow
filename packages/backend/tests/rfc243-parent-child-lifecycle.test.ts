@@ -59,6 +59,7 @@ import type { MaterializedSpace } from '@/modules/source-control/infrastructure/
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
@@ -517,11 +518,15 @@ describe('RFC-243 §8 — 列表口径（PR-5 翻转）', () => {
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
-    const top = await taskListSummariesProjection(db, { topLevelOnly: true })
+    const top = await taskListSummariesProjection(db, workflowNameExpression, {
+      topLevelOnly: true,
+    })
     expect(top.map((t) => t.id)).toContain(parent)
     expect(top.map((t) => t.id)).not.toContain(child)
     expect(top.find((t) => t.id === parent)?.parentTaskId ?? null).toBeNull()
-    const children = await taskListSummariesProjection(db, { parentTaskId: parent })
+    const children = await taskListSummariesProjection(db, workflowNameExpression, {
+      parentTaskId: parent,
+    })
     expect(children.map((t) => t.id)).toEqual([child])
     expect(children[0]?.parentTaskId).toBe(parent)
   })

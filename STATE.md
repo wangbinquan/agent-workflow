@@ -1,3 +1,25 @@
+## 2026-11-24 RFC-567 工作流名片段撤出 resource-catalog 的 public，由 bootstrap 交给 task-execution 的任务读模型（In Progress；`design/RFC-567-workflow-name-fragment-binding/`）
+
+- **来由**：RFC-294 plan S9 的退出门点名四个 SQL 片段不再从任何 `public/*` 导出；前三个由 RFC-483 撤出，还剩 resource-catalog 的
+  `workflowNameExpression`（按 id 取目录里可见的工作流名；签名带持久化句柄与 drizzle 类型，`PUBLIC_SURFACE_DEBT` 里占 3 条）。读它的是
+  task-execution 的五处读模型。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、
+  2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、
+  实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：片段由 resource-catalog 的装配根交出；task-execution 在 `infrastructure/taskRepositorySql.ts` 声明它的类型，任务列表页（六个构造函数、
+  两个装配函数）、任务列表路由的投影、生命周期 WS 投影从入参拿到它，徽标条件改由 `bindTaskGateOpenCondition` 造出；provider runtime 的依赖多
+  `workflowName`；bootstrap 的 `daemonModules/taskExecution.ts` 与 `crossContextClosure.ts` 交入。15 个生产文件；构造这些读模型的 40 个用例文件、
+  7 个测试助手与 1 个脚本补入参；新增 RFC-567 用例；`PUBLIC_SURFACE_DEBT` 删 3 条。
+- **不做**：resource-catalog 另两个收句柄的查询工厂（消费方是 task-execution 的七个文件与 intent、knowledge-evolution 各一个，另立 RFC）。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 片段的实现留在 resource-catalog 的 infrastructure，task-execution 只在 infrastructure 的入参里声明
+  依赖；C11 resource-catalog 的 public 撤 1 个符号（public 面 992 → 991）；C12 RFC-567 用例覆盖全部模块的 public 文件与源码、五处读模型与九条结构绑定；
+  C13 public 类型偏差 45 → 42，其余计数不升。S9 退出门“四个 SQL 片段不再从任何 `public/*` 导出”成立。
+- **集中验证**（基于 `948d2353c`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷两处已修复并复验（漏查三个钉着列表页查询整份源码
+  摘要的对拍用例，按它们既有的做法更新摘要；一处入参注释里的用词改变了架构报告对一条变更入口的归类，已改写）。tsc 0 错，eslint / promises / prettier
+  无告警；选出 654 个用例文件，修正后全部通过；读已提交源码的用例在候选导出里通过；十种变异都被认出（五处读模型各有行为用例同红），类型层变异让
+  `tsc` 在 bootstrap 的两处交接报错；架构报告 public 类型偏差 45 → 42，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-565 `ff3442970` 主 CI 67 / 70（两个 macOS e2e 分片没有分到 runner，环境性、未重跑），转 Done。RFC-566 `948d2353c` 的
+  windows-platform 通过，主 CI 仍在跑。
+
 ## 2026-11-24 RFC-566 development-automation 不再按 integration 的名字取适配绑定与流水线执行类型（In Progress；`design/RFC-566-development-purpose-selection-bootstrap/`）
 
 - **来由**：DAG 外 offered 边（4 条）里有 2 条是 development-automation 取 integration 的 public——方向与目标 DAG 相反（integration 消费
@@ -19,7 +41,7 @@
   文件报错；架构报告 DAG 外 offered 边 4 → 2，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-565 `ff3442970` 的 CI 仍在跑，转 Done 随后续提交。
 
-## 2026-11-24 RFC-565 任务知识、触发与仓库身份的读由 bootstrap 交入：裸句柄的读撤出 task-execution 与 source-control 的 public（In Progress；`design/RFC-565-bound-owner-reads/`）
+## 2026-11-24 RFC-565 任务知识、触发与仓库身份的读由 bootstrap 交入：裸句柄的读撤出 task-execution 与 source-control 的 public（Done；`design/RFC-565-bound-owner-reads/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT`（56 条）里有 18 条是 public 交出的函数签名带着持久化句柄或 drizzle 类型；其中 11 条属于 task-execution 与
   source-control 的七个读——消费方（memory、integration、task-execution 的托管恢复选择）拿自己的句柄去调。用户 2026-11-02「好，你继续推进RFC294，
@@ -40,6 +62,9 @@
   架构报告 public 类型偏差 56 → 45（没有换名的），其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-563 `b2a26ea9b` 主 CI 70 / 70、windows-platform 通过，转 Done。RFC-564 `4f1dcae66` 主 CI 68 / 70：红的是 shard 16/44 的 RFC-311 过滤视图
   PostgreSQL 塌方探测（已知偶发，第六次，已补记 `docs/audit-backlog.md`）与随之红的 `CI required`，不在该 RFC、未重跑，转 Done。
+- **CI**：主 CI run 45423073198 67 / 70；两个 macOS e2e 分片（2/4、4/4）没有分到 runner、没有任何步骤即被取消，`CI required` 随之红，环境性、
+  未重跑；全部后端分片与另两个 macOS e2e 分片通过，windows-platform、maintenance-soak-nightly 通过。这个 run 里 shard 16/44 通过，作 RFC-564 那格
+  环境性红的后继证据。
 
 ## 2026-11-24 RFC-564 系统代理运行的词汇不再被 DAG 外的 context 按 runtime-management 的名字取（Done；`design/RFC-564-system-agent-run-vocabulary/`）
 

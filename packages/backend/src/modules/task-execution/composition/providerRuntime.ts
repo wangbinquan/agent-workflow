@@ -8,6 +8,7 @@ import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoor
 import type { TaskRecoveryProviderSelection } from '../infrastructure/taskRecoverySelection'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { WorkflowNameExpression } from '../infrastructure/taskRepositorySql'
 import type { FusionEngineTaskOperations } from '../application/adapters/knowledge-evolution-adapter'
 import type { CollaborationRepairPorts } from '../application/ports/collaborationRepair'
 import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
@@ -150,6 +151,7 @@ type ProviderRouteOperationsAssembled =
   | 'clarifyNav'
   | 'workspaceReads'
   | 'db'
+  | 'workflowName'
   | 'persistence'
   | 'children'
   | 'activity'
@@ -176,6 +178,11 @@ function cancellationCommand(
 /** RFC-388: one passive graph; callers select deployment bindings and shared participants. */
 export interface TaskExecutionProviderRuntimeDependencies {
   readonly db: PersistenceDb
+  /**
+   * RFC-567: Resource Catalog's same-statement workflow name fragment, for the task list route rows and the lifecycle WS
+   * projection (bootstrap hands over the owner's implementation from resource-catalog's composition).
+   */
+  readonly workflowName: WorkflowNameExpression
   readonly historyRestrictions: HistoryRestrictionPort
   readonly persistence: TaskExecutionPersistence
   readonly execution: TaskExecutionBinding
@@ -303,6 +310,7 @@ export function composeTaskExecutionProviderRuntime(
   const taskRoutes = createTaskRouteOperations({
     executionPermits: dependencies.runtime.executionPermits,
     db,
+    workflowName: dependencies.workflowName,
     clarifyNav: dependencies.clarifyNav,
     persistence,
     children: participants.children,
@@ -395,7 +403,7 @@ export function composeTaskExecutionProviderRuntime(
     autoResume,
     repositoryPreparationRetry,
     lifecycleRepair,
-    lifecycleProjector: createDatabaseTaskLifecycleWsProjector(db),
+    lifecycleProjector: createDatabaseTaskLifecycleWsProjector(db, dependencies.workflowName),
     overview: createTaskOverviewQuery(db),
     fusion: createFusionEngineTaskOperations({
       db,

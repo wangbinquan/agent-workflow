@@ -11,6 +11,7 @@ import { expect, test } from 'bun:test'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function seedWorkflowWrite(db: PersistenceDb) {
   const id = ulid()
@@ -224,9 +225,9 @@ describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
       }),
     })
 
-    const summary = (await taskListSummariesProjection(db, { limit: 100 })).find(
-      (row) => row.id === taskId,
-    )
+    const summary = (
+      await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+    ).find((row) => row.id === taskId)
     expect(summary).toBeDefined()
     expect(summary).not.toHaveProperty('webhookSourceLink')
   })

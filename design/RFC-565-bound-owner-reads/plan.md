@@ -18,7 +18,7 @@
 - [x] AC-1 七个符号不再从任何 `public/*` 导出；两个装配根交出；全部模块的源码不再从别的 context 取它们
 - [x] AC-2 行为不变；消费方的入参与 owner 的实现对得上，由编译器检查
 - [x] AC-3 `PUBLIC_SURFACE_DEBT` 删去 11 条，`public-surface-deviations` 56 → 45；新增 RFC-565 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 两格环境性红（macOS e2e 没有分到 runner），已归因、未重跑（见下）
 
 ## 集中验证
 
@@ -56,7 +56,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `ff3442970`（实现，父提交是 `4f1dcae66`）：exact SHA 主 CI run 45423073198 的 70 个 job 里 67 个成功——全部后端分片、前端、构建与检查、另两个
+  macOS e2e 分片（1/4、3/4）通过；`Playwright e2e (macos-latest shard 2/4)`（job 138549864917）与 `shard 4/4`（job 138549864736）被取消，汇总格
+  `CI required` 随之不通过。同一提交触发的 windows-platform（run 45423073251）与 maintenance-soak-nightly（run 45423072759）通过。
+- **归因**：不在本 RFC。两个被取消的 job 都没有分到 runner、没有任何步骤，注记是
+  `The job was not acquired by Runner of type hosted even after multiple attempts`（附 macOS arm64 容量提示）；同一 run 里 macOS 的
+  构建与另两个 e2e 分片通过。与 `docs/audit-backlog.md` 第九条下记的 macOS runner 容量形态相同。未重跑；后继提交的 CI 结果见 RFC-566 的 plan。
 
 ## 实现门（本会话自审，只审功能）
 

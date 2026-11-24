@@ -76,6 +76,7 @@ import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { createWorkflow } from './helpers/model/resourceWrites'
 import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
 import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const hosts = TASK_DEFINITION_HOSTS
 const cases: readonly StoredTaskSubject[] = [
@@ -155,7 +156,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       },
     ])
     const factory = createTaskExecutionCatalogSourceFactory(
-      createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
+      createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db), workflowNameExpression),
     )
     const pages = await Promise.all(
       (['workflow', 'workgroup', 'agent'] as const).map((sourceId) =>
@@ -259,7 +260,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     await taskFixture(db, rows)
     const queries = createTaskSubjectQueries(db)
     const subjects = await queries.taskSubjectProjection(rows.map((row) => row.id!))
-    const summaries = await taskListSummariesProjection(db, {})
+    const summaries = await taskListSummariesProjection(db, workflowNameExpression, {})
     for (const row of rows) {
       const subject = legacySubjectOracle(row as StoredTaskSubject)
       const expected = {
@@ -278,7 +279,9 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       }
       expect(summaries.find((summary) => summary.id === row.id)).toMatchObject(expected)
       expect(
-        await createDatabaseTaskLifecycleWsProjection(db).findCreatedTask(row.id!),
+        await createDatabaseTaskLifecycleWsProjection(db, workflowNameExpression).findCreatedTask(
+          row.id!,
+        ),
       ).toMatchObject(expected)
     }
     await patchWorkflowFixture(db, { id: 'authored' }, { name: 'Renamed live' })

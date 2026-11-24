@@ -2,7 +2,7 @@
 import {
   createTaskGateQueries,
   createNodeOutputQueries,
-  taskGateOpenCondition,
+  bindTaskGateOpenCondition,
   taskGateVisibleCondition,
 } from '@/modules/task-execution/composition'
 import { beforeEach, expect, test } from 'bun:test'
@@ -17,8 +17,10 @@ import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructur
 import {
   createAgentExecutionQueries,
   createWorkflowExecutionQueries,
-  workflowNameExpression,
 } from '@/modules/resource-catalog/public/queries'
+// RFC-567: the workflow name fragment left Resource Catalog's public; bootstrap takes it from the composition and binds
+// Task Execution's gate-open condition with it. This suite reads it where it is defined and binds the same way.
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 import {
   createRepositoryIdentityQueries,
   existingRepositoryIds,
@@ -36,6 +38,7 @@ import {
 } from './helpers/model'
 
 const definition = ' { "nodes" : [], "edges": [], "inputs": [] } '
+const taskGateOpenCondition = bindTaskGateOpenCondition(workflowNameExpression)
 
 describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
   async function task(id: string, extra: Partial<TaskFixtureSpec> = {}) {
@@ -143,6 +146,24 @@ describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
         .sort()
     expect(await select(false)).toEqual(['hidden', 'member', 'open'])
     expect(await select(true)).toEqual(['hidden', 'member', 'missing', 'open', 'owner'])
+    // RFC-567: the "task has a subject name" arm reads the workflow name through the fragment the condition was bound
+    // with — Resource Catalog's names every open task here; a fragment that finds no name leaves none.
+    const named = async (fragment: Parameters<typeof bindTaskGateOpenCondition>[0]) =>
+      (
+        await harness.db
+          .select({ id: users.id })
+          .from(users)
+          .where(
+            and(
+              inArray(users.id, [...ids, 'owner']),
+              bindTaskGateOpenCondition(fragment)(harness.db, users.id, false, true),
+            ),
+          )
+      )
+        .map((row) => row.id)
+        .sort()
+    expect(await named(workflowNameExpression)).toEqual(['hidden', 'member', 'open'])
+    expect(await named(() => sql<string | null>`NULL`)).toEqual([])
     const visible = async (canReadAllTasks: boolean) =>
       (
         await harness.db

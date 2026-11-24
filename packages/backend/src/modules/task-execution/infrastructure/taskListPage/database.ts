@@ -5,6 +5,7 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { loadTaskFailureCodes } from '../taskDetailRead'
+import type { WorkflowNameExpression } from '../taskRepositorySql'
 
 import { createTaskListPage, type TaskListPage } from './page'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/queries'
@@ -12,10 +13,13 @@ import type { OwnerIdentityQueries } from '@/modules/identity-access/public/quer
 export function createDatabaseTaskListPage(
   db: PersistenceDb,
   owners: OwnerIdentityQueries,
+  /** RFC-567: Resource Catalog's workflow name fragment — injected like `owners`, by the assembly root. */
+  workflowName: WorkflowNameExpression,
 ): TaskListPage {
   return createTaskListPage({
     db,
     owners,
+    workflowName,
     failureCodes: async (rows) => await loadTaskFailureCodes(db, rows),
   })
 }

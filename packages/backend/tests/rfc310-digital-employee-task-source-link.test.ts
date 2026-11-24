@@ -12,6 +12,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describe('RFC-310 digital employee task source link', () => {
   describeEachProvider('database behavior', (harness) => {
@@ -45,9 +46,9 @@ describe('RFC-310 digital employee task source link', () => {
       })
 
       expect((await getTask(db, taskId))?.digitalEmployeeCaseId).toBe('case-42')
-      const summary = (await taskListSummariesProjection(db, { limit: 100 })).find(
-        (row) => row.id === taskId,
-      )
+      const summary = (
+        await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+      ).find((row) => row.id === taskId)
       expect(summary).toBeDefined()
       expect(summary).not.toHaveProperty('digitalEmployeeCaseId')
     })

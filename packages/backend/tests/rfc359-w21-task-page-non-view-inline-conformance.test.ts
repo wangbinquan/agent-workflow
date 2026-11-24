@@ -25,6 +25,7 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 // Slowest case took 3.03 s on CI run 40433510287 including hooks (1.01 s before RFC-395 II-b); allow 20 s.
 setDefaultTimeout(20_000)
@@ -165,6 +166,7 @@ async function compareSql(
 ): Promise<readonly Record<string, unknown>[]> {
   const query = fastFilteredRootQuery(
     db,
+    workflowNameExpression,
     VIEWER,
     parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
     OPTIONS.catalogVisibility,
@@ -197,7 +199,11 @@ describeEachProvider('RFC-359 W21 non-view CTE inlining', (harness) => {
     const storedBefore = await readTaskFixtures(harness.db, undefined, {
       orderBy: [{ field: 'id' }],
     })
-    const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
+    const page = createDatabaseTaskListPage(
+      harness.db,
+      composeOwnerIdentityQueries(harness.db),
+      workflowNameExpression,
+    )
     const cases: readonly TaskOperationsRawQuery[] = [
       { subject: 'workflow', limit: '1' },
       { view: 'active', limit: '2' },
@@ -306,6 +312,7 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
     ]) {
       const query = fastFilteredRootQuery(
         db,
+        workflowNameExpression,
         VIEWER,
         { ...parsed, cursor },
         OPTIONS.catalogVisibility,

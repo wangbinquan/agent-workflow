@@ -15,6 +15,7 @@ import {
   listScheduledTasks,
 } from './helpers/integrationTriggerResourceBinding'
 import { OWNER_IDENTITY_SQL_BATCH_SIZE } from '@/modules/identity-access/application/ports/ownerIdentityQueries'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const SCHEDULE_SPEC = JSON.stringify({ kind: 'daily', at: '09:00', timezone: 'UTC' })
 
@@ -212,7 +213,10 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
     ).rejects.toThrow()
     await db.delete(users).where(eq(users.id, 'departing-owner'))
 
-    const rows = await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {})
+    const rows = await taskListItemsProjection(
+      { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
+      {},
+    )
     expect(rows.find((row) => row.id === 'task-owner-null')).toMatchObject({
       ownerUserId: null,
       owner: null,

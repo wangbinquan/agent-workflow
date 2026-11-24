@@ -61,6 +61,7 @@ describeEachProvider('RFC-395 T task facet target SQL', (harness) => {
       harness.db,
       sql`with recursive ${baseCtes(
         harness.db,
+        workflowNameExpression,
         sql`select id from tasks`,
         sql`1=1`,
         sql`1=1`,
@@ -72,13 +73,14 @@ describeEachProvider('RFC-395 T task facet target SQL', (harness) => {
     ])
     const predicate = nonViewCondition(
       harness.db,
+      workflowNameExpression,
       { userId: 'viewer', canReadAllTasks: true },
       { view: 'all', statuses: [], subject: 'agent', scope: 'all', origin: 'event' },
       'b',
     )
     const filtered = await rawRows<{ id: string }>(
       harness.db,
-      sql`with recursive ${baseCtes(harness.db, sql`select id from tasks`, predicate, sql`1=1`)} select id from non_view_matches`,
+      sql`with recursive ${baseCtes(harness.db, workflowNameExpression, sql`select id from tasks`, predicate, sql`1=1`)} select id from non_view_matches`,
     )
     expect(filtered).toEqual([{ id: 'two' }])
     const { taskDefinitions, taskLaunchContexts } = tablesOf(harness.db)
@@ -102,6 +104,7 @@ import { listSourceTerminationTargets } from '@/modules/task-execution/infrastru
 import { findTaskAutomationReceipt } from '@/modules/task-execution/infrastructure/taskAutomationReceipts'
 import { taskListSummariesProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { taskWorkgroupConfigSelection } from '@/modules/task-execution/infrastructure/taskWorkgroupConfig'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describeEachProvider('RFC-395 W1 indexed launch lookups and nullable config', (harness) => {
   test('keyed lookups predicate directly on launch context columns', async () => {
@@ -146,7 +149,9 @@ describeEachProvider('RFC-395 W1 indexed launch lookups and nullable config', (h
       ).toEqual([{ id: 'older' }])
       expect(
         (
-          await taskListSummariesProjection(harness.db, { scheduledTaskId: 'schedule-current' })
+          await taskListSummariesProjection(harness.db, workflowNameExpression, {
+            scheduledTaskId: 'schedule-current',
+          })
         ).map((row) => row.id),
       ).toEqual(['current'])
       const reads = recording.selects().map((statement) => statement.sql)

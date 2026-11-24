@@ -382,9 +382,9 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/resource-catalog/application/intent/artifactOwners.ts#IntentSkillArtifactOwner: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createAgentExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createWorkflowExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/resource-catalog/infrastructure/executionResourceQueries.ts#workflowNameExpression: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/resource-catalog/infrastructure/executionResourceQueries.ts#workflowNameExpression: forbidden type import drizzle-orm#SQL',
-  'modules/resource-catalog/infrastructure/executionResourceQueries.ts#workflowNameExpression: forbidden type import drizzle-orm#SQLWrapper',
+  // RFC-567: the SQL fragment `workflowNameExpression` left the public — bootstrap takes it from resource-catalog's
+  // composition and hands it to Task Execution's task read models; three entries settled (the last of the four SQL
+  // fragments the S9 exit gate names).
   'modules/resource-catalog/public/participants.ts#HostedIntentResourceArtifacts: unsafe/open type UnknownKeyword',
   'modules/resource-catalog/public/participants.ts#SkillVersionCommitHooks: unsafe/open type FunctionType',
   'modules/resource-catalog/public/queries.ts#AgentResourceIntegrityQueries: unsafe/open type TypeQuery',

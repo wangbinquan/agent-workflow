@@ -17,6 +17,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { describeEachProviderWebSocketApplication } from './helpers/providerWebSocketScope'
 import { createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -219,7 +220,7 @@ describeEachProviderWebSocketApplication(
       ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
       await waitUntil(() => hasType(received, 'hello'))
 
-      await createDatabaseTaskLifecycleWsProjector(h.db).handle({
+      await createDatabaseTaskLifecycleWsProjector(h.db, workflowNameExpression).handle({
         eventId: `task-lifecycle:${taskId}:2`,
         eventGroupId: `task-lifecycle:${taskId}:2`,
         eventGroupOrdinal: 0,

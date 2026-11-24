@@ -45,6 +45,7 @@ import { composeOwnerIdentityQueries } from '@/modules/identity-access/compositi
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const OWNER = 'u_b2f_owner'
@@ -293,7 +294,7 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— 任务列表页绑定与目录
     const db = harness.db
     const taskId = await seedTask(db)
     const owners = ownerIdentityQueriesFor(db)
-    const page = createDatabaseTaskListPage(db, owners)
+    const page = createDatabaseTaskListPage(db, owners, workflowNameExpression)
     const actor = buildActor({
       user: {
         id: OWNER,
@@ -306,8 +307,12 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— 任务列表页绑定与目录
     })
     const listed = await page.list(taskListViewerOf(actor), { q: taskId }, {})
     expect(listed.items.map((item) => item.id)).toEqual([taskId])
-    expect(createDatabaseTaskExecutionCatalogSourceFactory(db, owners)).toBeDefined()
-    expect(composeTaskExecutionCatalogSources(db, owners).length).toBeGreaterThan(0)
+    expect(
+      createDatabaseTaskExecutionCatalogSourceFactory(db, owners, workflowNameExpression),
+    ).toBeDefined()
+    expect(
+      composeTaskExecutionCatalogSources(db, owners, workflowNameExpression).length,
+    ).toBeGreaterThan(0)
   })
 })
 

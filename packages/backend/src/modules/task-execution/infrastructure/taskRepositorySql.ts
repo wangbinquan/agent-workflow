@@ -1,4 +1,5 @@
 import { taskMountWorktreePath } from '../domain/taskMountPath'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { requestedSourceCachedRepoSql } from '@/platform/persistence/taskRepositorySurface'
 import { engineForHandle, tablesOf } from '@/platform/persistence/sessionTables'
 import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
@@ -9,6 +10,7 @@ import {
   sql,
   type Column,
   type GetColumnData,
+  type SQL,
   type SQLWrapper,
 } from 'drizzle-orm'
 import type { SelectResultFields } from 'drizzle-orm/query-builders/select.types'
@@ -198,6 +200,16 @@ export function taskSubjectSqlColumns(alias: string) {
 export function taskSubjectKindSql(columns: { readonly subjectKind: SQLWrapper }) {
   return sql<string>`${columns.subjectKind}`
 }
+/**
+ * RFC-567: Resource Catalog's same-statement workflow name fragment — the name of a catalog workflow by id, or NULL — as
+ * the task read models compose it next to the task row (`taskWorkflowNameSql` below takes its result as `liveName`).
+ * Bootstrap hands over the owner's implementation; neither side references the other's tables.
+ */
+export type WorkflowNameExpression = (
+  db: PersistenceDb,
+  workflowId: SQLWrapper,
+) => SQL<string | null>
+
 export function taskWorkflowNameSql(
   columns: { readonly subjectKind: SQLWrapper },
   liveName: SQLWrapper,

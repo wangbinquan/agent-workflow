@@ -20,7 +20,7 @@ import {
   createTaskGateQueries,
   createNodeOutputQueries,
   nodeRunStatusCondition,
-  taskGateOpenCondition,
+  bindTaskGateOpenCondition,
   taskGateVisibleCondition,
 } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -32,6 +32,7 @@ import {
 import {
   composeReviewUpstreamAgents,
   composeCollaborationTaskRolePolicy,
+  workflowNameExpression,
 } from '@/modules/resource-catalog/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 
@@ -89,7 +90,8 @@ export function composeTaskExecutionParticipantBindings(
     createTaskGateQueries,
     createNodeOutputQueries,
     nodeRunStatusCondition,
-    taskGateOpenCondition,
+    // RFC-567: the open condition's "task has a subject name" arm reads Resource Catalog's workflow name fragment.
+    taskGateOpenCondition: bindTaskGateOpenCondition(workflowNameExpression),
     taskGateVisibleCondition,
   })
 }

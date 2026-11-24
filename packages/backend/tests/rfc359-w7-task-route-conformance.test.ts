@@ -77,6 +77,7 @@ import {
   createFileWorkspaceUploadContentFactory,
 } from '@/modules/source-control/composition'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const ulid = monotonicFactory()
 
@@ -205,6 +206,8 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
+      // RFC-567: Resource Catalog's workflow name fragment for the task list rows.
+      workflowName: workflowNameExpression,
       // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
       // build (no app home here, so prompts under `Paths.runsDir`).
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),

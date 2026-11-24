@@ -174,6 +174,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { describeV2Providers, fixtureLookup } from './helpers/rfc395V2Harness'
 import { convertTaskFixtures, taskRow, writeTaskFixture } from './helpers/rfc395V2/taskFixtures'
 import { createTestDb } from './helpers/testDatabase'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describeV2Providers('RFC-395 W1 unknown historical task stays readable', (h) => {
   for (const [anchor, expectedBlock] of [
@@ -276,11 +277,12 @@ describeV2Providers('RFC-395 W1 unknown historical task stays readable', (h) => 
             workflowId: anchor,
             workflowName: null,
           })
-          expect(await taskListSummariesProjection(target.db, {})).toMatchObject([
-            { id, workflowId: anchor, workflowName: null },
-          ])
+          expect(
+            await taskListSummariesProjection(target.db, workflowNameExpression, {}),
+          ).toMatchObject([{ id, workflowId: anchor, workflowName: null }])
           const page = createTaskListPage({
             db: target.db,
+            workflowName: workflowNameExpression,
             owners: {
               async loadOwnerIdentities() {
                 return new Map()

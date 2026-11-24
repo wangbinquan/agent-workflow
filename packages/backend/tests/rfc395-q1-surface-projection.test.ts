@@ -17,6 +17,7 @@ import {
   TaskSummarySchema,
   TaskListItemSchema,
 } from '@agent-workflow/shared'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const definition = { $schema_version: 6, inputs: [], nodes: [], edges: [] }
 describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
@@ -56,7 +57,7 @@ describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
       branch: 'original-branch',
     })
     expect(task.repos[0]).toMatchObject({ mountPath: '', worktreeDirName: '' })
-    const summaries = await taskListSummariesProjection(h.db, {})
+    const summaries = await taskListSummariesProjection(h.db, workflowNameExpression, {})
     const summary = TaskSummarySchema.parse(summaries.find((r) => r.id === 'q1-t'))
     expect(summary).toMatchObject({
       workflowId: task.workflowId,
@@ -65,7 +66,11 @@ describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
       repoCount: 1,
     })
     const items = await taskListItemsProjection(
-      { db: h.db, owners: { loadOwnerIdentities: async () => new Map() } },
+      {
+        db: h.db,
+        workflowName: workflowNameExpression,
+        owners: { loadOwnerIdentities: async () => new Map() },
+      },
       {},
     )
     expect(TaskListItemSchema.parse(items.find((r) => r.id === 'q1-t'))).toMatchObject({
@@ -80,7 +85,9 @@ describeEachProvider('RFC-395 Q-1 design section 8 projection fields', (h) => {
       .set({ subjectKind: 'unknown' })
       .where(eq(taskDefinitions.taskId, 'q1-t'))
     expect(
-      await createDatabaseTaskLifecycleWsProjection(h.db).findCreatedTask('q1-t'),
+      await createDatabaseTaskLifecycleWsProjection(h.db, workflowNameExpression).findCreatedTask(
+        'q1-t',
+      ),
     ).toMatchObject({
       id: 'q1-t',
       workflowId: 'q1-w',

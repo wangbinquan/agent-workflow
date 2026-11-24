@@ -1,8 +1,8 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { taskReadColumns } from './taskRepositorySql'
+import { taskReadColumns, type WorkflowNameExpression } from './taskRepositorySql'
 // RFC-359 W4-B1 —— 任务生命周期 WS 投影：一份实现，两个 provider 共用。
+// RFC-567：工作流名片段由装配根交入（resource-catalog 的实现），与任务行同一条语句取回。
 
-import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
 import { eq } from 'drizzle-orm'
 import { projectTaskSubject, taskReadSubjectFromDefinition } from '../domain/taskSubject'
 import { projectStoredTaskRepositorySummary } from './taskRepositorySurface'
@@ -17,6 +17,7 @@ import { createTaskLifecycleWsProjector } from './taskLifecycleWsProjector'
 
 export function createDatabaseTaskLifecycleWsProjection(
   db: PersistenceDb,
+  workflowName: WorkflowNameExpression,
 ): TaskLifecycleWsProjection {
   return Object.freeze({
     async findCreatedTask(taskId: string): Promise<TaskLifecycleCreatedProjection | null> {
@@ -24,7 +25,7 @@ export function createDatabaseTaskLifecycleWsProjection(
       const rows = await db
         .select({
           task: taskReadColumns(db),
-          workflowName: workflowNameExpression(db, taskReadColumns(db).workflowId),
+          workflowName: workflowName(db, taskReadColumns(db).workflowId),
         })
         .from(tasks)
         .where(eq(tasks.id, taskId))
@@ -51,6 +52,9 @@ export function createDatabaseTaskLifecycleWsProjection(
   })
 }
 
-export function createDatabaseTaskLifecycleWsProjector(db: PersistenceDb) {
-  return createTaskLifecycleWsProjector(createDatabaseTaskLifecycleWsProjection(db))
+export function createDatabaseTaskLifecycleWsProjector(
+  db: PersistenceDb,
+  workflowName: WorkflowNameExpression,
+) {
+  return createTaskLifecycleWsProjector(createDatabaseTaskLifecycleWsProjection(db, workflowName))
 }

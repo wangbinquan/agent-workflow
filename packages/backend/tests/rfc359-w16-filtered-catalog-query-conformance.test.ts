@@ -18,6 +18,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskListPage'
 import { describeEachProvider } from './helpers/eachProvider'
 import { computeForestBackfill } from './helpers/taskForestBackfill'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 interface SeedTask {
   id: string
@@ -112,7 +113,11 @@ async function addAlerts(db: PersistenceDb): Promise<void> {
 }
 
 function catalog(db: PersistenceDb) {
-  const page = createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db))
+  const page = createDatabaseTaskListPage(
+    db,
+    composeOwnerIdentityQueries(db),
+    workflowNameExpression,
+  )
   const viewer = taskListViewerOf(
     buildActor({
       user: {

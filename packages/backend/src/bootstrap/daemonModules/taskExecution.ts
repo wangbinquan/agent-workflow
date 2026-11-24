@@ -31,6 +31,7 @@ import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/publ
 import { DAEMON_GENERATION } from '@/platform/execution/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
+import { workflowNameExpression } from '@/modules/resource-catalog/composition'
 import {
   composeDynamicWorkflowLayerOneValidation,
   composeDynamicWorkflowValidationContext,
@@ -331,6 +332,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   const provider = composeTaskExecutionProviderRuntime({
     collaborationRepair: composeCollaborationRepairPorts(db, closure.taskExecutionParticipants),
     db,
+    // RFC-567: Resource Catalog's workflow name fragment for the task list rows and the lifecycle WS projection.
+    workflowName: workflowNameExpression,
     historyRestrictions: input.historyRestrictions,
     archiveCollaboration: closure.collaborationReads.archive,
     clarifyNav: closure.collaborationReads.clarifyNav,
@@ -497,7 +500,11 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     coordinatorFactory,
     runConfiguration,
     validationContext,
-    catalogSources: composeTaskExecutionCatalogSources(db, input.resources.owners),
+    catalogSources: composeTaskExecutionCatalogSources(
+      db,
+      input.resources.owners,
+      workflowNameExpression,
+    ),
     gateContinuation,
     roomContinuation,
     activeTaskIds: () =>

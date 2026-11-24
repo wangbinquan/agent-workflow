@@ -15,6 +15,7 @@ import {
   type TaskOperationsRawQuery,
 } from '@/modules/task-execution/infrastructure/taskListPage'
 import type { TaskOperationsPage } from '@agent-workflow/shared'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export async function listTaskOperationsPage(
   db: PersistenceDb,
@@ -22,9 +23,9 @@ export async function listTaskOperationsPage(
   rawQuery: TaskOperationsRawQuery,
   options: TaskOperationsPageOptions = {},
 ): Promise<TaskOperationsPage> {
-  return await createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)).list(
-    taskListViewerOf(actor),
-    rawQuery,
-    options,
-  )
+  return await createDatabaseTaskListPage(
+    db,
+    composeOwnerIdentityQueries(db),
+    workflowNameExpression,
+  ).list(taskListViewerOf(actor), rawQuery, options)
 }

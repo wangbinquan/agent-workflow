@@ -10,18 +10,24 @@ import {
 } from '../application/adapters/task-catalog-adapter'
 import { createTaskExecutionCatalogSourceFactory } from './taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from './taskListPage'
+import type { WorkflowNameExpression } from './taskRepositorySql'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/queries'
 
 export function createDatabaseTaskExecutionCatalogSourceFactory(
   db: PersistenceDb,
   owners: OwnerIdentityQueries,
+  /** RFC-567: Resource Catalog's workflow name fragment for the page query (handed over by the assembly root). */
+  workflowName: WorkflowNameExpression,
 ): TaskExecutionCatalogSourceFactory {
-  return createTaskExecutionCatalogSourceFactory(createDatabaseTaskListPage(db, owners))
+  return createTaskExecutionCatalogSourceFactory(
+    createDatabaseTaskListPage(db, owners, workflowName),
+  )
 }
 
 export function composeTaskExecutionCatalogSources(
   db: PersistenceDb,
   owners: OwnerIdentityQueries,
+  workflowName: WorkflowNameExpression,
 ): TaskCatalogSource[] {
-  return composeSources(createDatabaseTaskExecutionCatalogSourceFactory(db, owners))
+  return composeSources(createDatabaseTaskExecutionCatalogSourceFactory(db, owners, workflowName))
 }

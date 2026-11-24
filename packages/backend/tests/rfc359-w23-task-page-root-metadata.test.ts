@@ -25,6 +25,7 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VIEWER: TaskListViewer = { userId: 'w21-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -263,6 +264,7 @@ async function compareSql(
 ): Promise<readonly Record<string, unknown>[]> {
   const query = fastFilteredRootQuery(
     db,
+    workflowNameExpression,
     VIEWER,
     parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
     OPTIONS.catalogVisibility,
@@ -304,7 +306,11 @@ describeEachProvider('RFC-359 W23 selected-family root metadata', (harness) => {
     const storedBefore = await readTaskFixtures(harness.db, undefined, {
       orderBy: [{ field: 'id' }],
     })
-    const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
+    const page = createDatabaseTaskListPage(
+      harness.db,
+      composeOwnerIdentityQueries(harness.db),
+      workflowNameExpression,
+    )
     const cases: readonly TaskOperationsRawQuery[] = [
       { subject: 'workflow', limit: '1' },
       { view: 'active', limit: '2' },
@@ -413,6 +419,7 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
     ]) {
       const query = fastFilteredRootQuery(
         db,
+        workflowNameExpression,
         VIEWER,
         { ...parsed, cursor },
         OPTIONS.catalogVisibility,

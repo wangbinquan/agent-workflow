@@ -17,6 +17,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
@@ -67,13 +68,13 @@ describeEachProvider('RFC-108 T22 — listTasks openAlertCount', (harness) => {
     await addAlert(db, stuck, true) // resolved → not counted
     await addAlert(db, healthy, true) // resolved only → 0
 
-    const list = await taskListSummariesProjection(db, {})
+    const list = await taskListSummariesProjection(db, workflowNameExpression, {})
     const byId = new Map(list.map((s) => [s.id, s.openAlertCount ?? 0]))
     expect(byId.get(stuck)).toBe(2)
     expect(byId.get(healthy)).toBe(0)
 
     const ownerRows = await taskListItemsProjection(
-      { db, owners: composeOwnerIdentityQueries(db) },
+      { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
       {},
     )
     const ownerById = new Map(ownerRows.map((s) => [s.id, s.openAlertCount ?? 0]))

@@ -28,6 +28,7 @@ import {
   rootQuery,
 } from '@/modules/task-execution/infrastructure/taskListPage/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VIEWER: TaskListViewer = { userId: 'fixture-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -298,7 +299,11 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
       await seed(harness.db)
       expect(await readStoredTaskRows(harness.db)).toEqual(expectedStoredRows())
       const rawJsonBefore = await storedJson(harness.db)
-      const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
+      const page = createDatabaseTaskListPage(
+        harness.db,
+        composeOwnerIdentityQueries(harness.db),
+        workflowNameExpression,
+      )
       const matrix = scenarios()
       expect(matrix).toHaveLength(63)
       let nonEmptyScenarios = 0
@@ -311,11 +316,23 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
           const parsed = parseTaskOperationsQuery(VIEWER, request, OPTIONS)
           const expectedRows = await rawRows(
             harness.db,
-            rootQuery(harness.db, VIEWER, parsed, OPTIONS.catalogVisibility),
+            rootQuery(
+              harness.db,
+              workflowNameExpression,
+              VIEWER,
+              parsed,
+              OPTIONS.catalogVisibility,
+            ),
           )
           const actualRows = await rawRows(
             harness.db,
-            fastFilteredRootQuery(harness.db, VIEWER, parsed, OPTIONS.catalogVisibility),
+            fastFilteredRootQuery(
+              harness.db,
+              workflowNameExpression,
+              VIEWER,
+              parsed,
+              OPTIONS.catalogVisibility,
+            ),
           )
           expect(actualRows, JSON.stringify(request)).toEqual(expectedRows)
           expect(JSON.stringify(actualRows)).toBe(JSON.stringify(expectedRows))
@@ -391,7 +408,11 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
 
   test('the actual page statement seeds qualified from page family and removes the two full spools', async () => {
     await seed(harness.db)
-    const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
+    const page = createDatabaseTaskListPage(
+      harness.db,
+      composeOwnerIdentityQueries(harness.db),
+      workflowNameExpression,
+    )
     const recording = harness.recordStatements()
     try {
       const actual = await page.list(VIEWER, { subject: 'workflow', limit: '3' }, OPTIONS)
@@ -420,7 +441,11 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
     await seed(harness.db)
     await patchTaskFixture(harness.db, { id: 'c09' }, { parentTaskId: 'c09' })
     expect(await readStoredTaskRows(harness.db)).toEqual(expectedStoredRows(true))
-    const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
+    const page = createDatabaseTaskListPage(
+      harness.db,
+      composeOwnerIdentityQueries(harness.db),
+      workflowNameExpression,
+    )
     const actual = await page.list(VIEWER, { statuses: 'running', limit: '50' }, OPTIONS)
     expect(actual.items.map((item) => item.id)).toEqual(['r03', 'r01', 'r07'])
     expect(actual.items.find((item) => item.id === 'r07')?.listContext).toEqual({

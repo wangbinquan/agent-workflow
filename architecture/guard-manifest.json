@@ -3535,7 +3535,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc483-human-gate-badge-read-model-boundary.test.ts",
       "id": "rfc483-human-gate-badge-read-model-boundary",
-      "lines": 434,
+      "lines": 451,
       "mechanism": "ast",
       "minCorpusFiles": 150,
       "negativeFixture": true,
@@ -4486,6 +4486,18 @@
       "lines": 359,
       "mechanism": "ast",
       "minCorpusFiles": 2600,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc567-workflow-name-fragment-binding-boundary.test.ts",
+      "id": "rfc567-workflow-name-fragment-binding-boundary",
+      "lines": 296,
+      "mechanism": "ast",
+      "minCorpusFiles": 2500,
       "negativeFixture": true,
       "runner": "bun"
     }

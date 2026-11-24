@@ -42,6 +42,7 @@ import {
 } from '../src/ws/broadcaster'
 
 import type { TaskStatus, TaskWsMessage, TasksListWsMessage } from '@agent-workflow/shared'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 /**
  * A "type | type" tag is enough to lock the sequence — payload details
@@ -209,7 +210,7 @@ async function projectStatus(
     canceledNodeRuns?: readonly { id: string; nodeId: string }[]
   },
 ): Promise<void> {
-  await createDatabaseTaskLifecycleWsProjector(db).handle({
+  await createDatabaseTaskLifecycleWsProjector(db, workflowNameExpression).handle({
     eventId: `task-lifecycle:${input.taskId}:${input.revision}`,
     eventGroupId: `task-lifecycle:${input.taskId}:${input.revision}`,
     eventGroupOrdinal: 0,

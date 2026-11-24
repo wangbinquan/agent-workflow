@@ -175,7 +175,11 @@ export { nonTerminalTaskExists } from './infrastructure/nonTerminalTaskExists'
 // RFC-483: the task scope conditions collaboration's badge read model composes into its single-statement counts
 // (RFC-359 AC-11), handed over through its participant bindings rather than the public.
 export { nodeRunStatusCondition } from './infrastructure/nodeRunQueries'
-export { taskGateOpenCondition, taskGateVisibleCondition } from './infrastructure/taskGateQueries'
+// RFC-567: the open condition is bound with Resource Catalog's workflow name fragment (bootstrap hands it over).
+export {
+  bindTaskGateOpenCondition,
+  taskGateVisibleCondition,
+} from './infrastructure/taskGateQueries'
 // RFC-477: the daemon's resource-limit tick runs task-execution's policy; bootstrap composes its operations (task facts
 // plus system-operations' cancel audit) and schedules it.
 export {

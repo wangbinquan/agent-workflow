@@ -21,6 +21,7 @@ import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgres
 import { expectRfc357PageScenario } from './helpers/rfc357PageScenario'
 import { seedRfc357Page } from './helpers/rfc357PageSeed'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const URL_ENV = 'RFC357_DATABASE_URL'
 const realTest = process.env[URL_ENV] === undefined ? test.skip : test
@@ -52,7 +53,7 @@ describe('RFC-357 shared page scenario — real PostgreSQL', () => {
         const db = createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding })
         await seedRfc357Page(db)
         await expectRfc357PageScenario(
-          createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
+          createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db), workflowNameExpression),
         )
       } finally {
         await runtime.close?.()

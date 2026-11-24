@@ -12,6 +12,7 @@ import {
   taskSubjectKindSql,
   taskSubjectSqlColumns,
 } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 export async function readTaskSubjectSqlFixtures(db: PersistenceDb) {
   return rawRows<{ id: string; kind: string }>(
@@ -40,6 +41,6 @@ export async function readTaskSubjectFacetFixtures(
   const parsed = parseTaskOperationsQuery(viewer, { subject, scope: 'all' })
   return rawRows<{ id: string }>(
     db,
-    sql`SELECT t.id FROM ${taskReadSql(db, 't')} WHERE ${nonViewCondition(db, viewer, parsed.filters, 't')}`,
+    sql`SELECT t.id FROM ${taskReadSql(db, 't')} WHERE ${nonViewCondition(db, workflowNameExpression, viewer, parsed.filters, 't')}`,
   )
 }

@@ -70,6 +70,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const roots: string[] = []
 const taskIds: string[] = []
@@ -388,7 +389,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         (
           await taskListItemsProjection(
-            { db, owners: composeOwnerIdentityQueries(db) },
+            { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
             { catalogVisibility: 'public' },
           )
         ).map((item) => item.id),
@@ -556,7 +557,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         (
           await taskListItemsProjection(
-            { db, owners: composeOwnerIdentityQueries(db) },
+            { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
             { catalogVisibility: 'public' },
           )
         ).map((item) => item.id),

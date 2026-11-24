@@ -12,19 +12,26 @@ import { seedRfc357Page } from './helpers/rfc357PageSeed'
 import { expectRfc357PageScenario, RFC357_ADMIN } from './helpers/rfc357PageScenario'
 
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describeEachProvider('RFC-357 shared page scenario', (harness) => {
   test('the whole scenario holds', async () => {
     const db = harness.db
     await seedRfc357Page(db)
-    await expectRfc357PageScenario(createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)))
+    await expectRfc357PageScenario(
+      createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db), workflowNameExpression),
+    )
   })
 
   // 场景本身必须有预言力：如果它在一个空库上也「通过」，那 PostgreSQL 那一遍
   // 就成了摆设。这条用空库把场景钉成会红的。
   test('the scenario has teeth — it fails against an unseeded database', async () => {
     const db = harness.db
-    const page = createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db))
+    const page = createDatabaseTaskListPage(
+      db,
+      composeOwnerIdentityQueries(db),
+      workflowNameExpression,
+    )
     let threw = false
     try {
       await expectRfc357PageScenario(page)

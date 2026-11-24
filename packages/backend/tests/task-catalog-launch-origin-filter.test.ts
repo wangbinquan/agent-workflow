@@ -39,6 +39,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { ValidationError } from '@/util/errors'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describe('launch-origin filter maps to the stored column, once', () => {
   test('every list choice resolves to an explicit set of stored origins', () => {
@@ -144,7 +145,7 @@ async function seed(db: Db): Promise<void> {
 
 async function idsFor(db: Db, origin: TaskListOrigin | undefined): Promise<string[]> {
   const items = await taskListItemsProjection(
-    { db, owners: composeOwnerIdentityQueries(db) },
+    { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
     origin === undefined ? {} : { origin },
   )
   return items.map((item) => item.id).sort()
@@ -215,7 +216,7 @@ function actor(): Actor {
 /** 目录源（用户真正打到的那一层）建在同一个真库上，不再假造 provider。 */
 async function catalogSource(db: Db) {
   return createTaskExecutionCatalogSourceFactory(
-    createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
+    createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db), workflowNameExpression),
   ).create('workflow')
 }
 

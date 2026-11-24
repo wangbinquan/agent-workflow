@@ -29,6 +29,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedWorkflow(db: PersistenceDb, id: string, name: string): Promise<void> {
   const now = Date.now()
@@ -99,7 +100,9 @@ describeEachProvider(
         }),
       })
 
-      const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
+      const row = (
+        await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+      ).find((r) => r.id === tId)!
       expect(row.workgroupId).toBe(groupId)
       expect(row.workgroupName).toBe('design-crew') // frozen config, not 'live-name'
       // RFC-395: the compatibility host name is projected with no catalog host row;
@@ -120,7 +123,9 @@ describeEachProvider(
       })
       await db.update(workgroups).set({ name: 'renamed-live' }).where(eq(workgroups.id, groupId))
 
-      const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
+      const row = (
+        await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+      ).find((r) => r.id === tId)!
       expect(row.workgroupName).toBe('design-crew') // still frozen, not 'renamed-live'
     })
 
@@ -130,7 +135,9 @@ describeEachProvider(
       await seedWorkflow(db, wfId, 'plain-wf')
       const tId = await seedTask(db, { name: 'solo', workflowId: wfId })
 
-      const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
+      const row = (
+        await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+      ).find((r) => r.id === tId)!
       expect(row.workgroupId).toBeNull()
       expect(row.workgroupName).toBeNull()
     })
@@ -145,7 +152,9 @@ describeEachProvider(
         workgroupConfigJson: '{ not valid json',
       })
 
-      const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
+      const row = (
+        await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+      ).find((r) => r.id === tId)!
       expect(row.workgroupId).toBe(groupId) // soft link still surfaces (badge)
       expect(row.workgroupName).toBeNull() // but the name degrades safely
     })
@@ -225,7 +234,9 @@ describeEachProvider('RFC-177 — sourceAgentId projected into the list summary'
       sourceAgentName: 'coder',
       sourceAgentId: 'ag-stable-1',
     })
-    const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
+    const row = (
+      await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+    ).find((r) => r.id === tId)!
     expect(row.sourceAgentName).toBe('coder')
     expect(row.sourceAgentId).toBe('ag-stable-1')
     const detail = (await getTask(db, tId))!
@@ -237,7 +248,9 @@ describeEachProvider('RFC-177 — sourceAgentId projected into the list summary'
     const wfId = ulid()
     await seedWorkflow(db, wfId, 'plain')
     const tId = await seedTask(db, { name: 'wf', workflowId: wfId })
-    const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
+    const row = (
+      await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
+    ).find((r) => r.id === tId)!
     expect(row.sourceAgentId ?? null).toBeNull()
   })
 })

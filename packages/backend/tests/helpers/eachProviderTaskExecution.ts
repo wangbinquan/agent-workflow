@@ -128,6 +128,7 @@ import { createTestRepositoryPublicationTransport } from './taskExecutionTestTop
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import { createRootTaskLaunchKernelPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 /** Real catalog rows and owner decoders supply the validation inventory on either DB. */
 export async function loadTestDynamicWorkflowInventory(db: PersistenceDb) {
@@ -343,6 +344,8 @@ export async function createEachProviderTaskExecution(
     const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
       withO2Closure({
         collaborationRepair: composeCollaborationRepairPorts(db, taskExecutionParticipants),
+        // RFC-567: Resource Catalog's workflow name fragment, as bootstrap hands it over.
+        workflowName: workflowNameExpression,
         archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
         // RFC-526: the archive binding is required — the local archive content the provider runtime used to build.
         archive: { content: createFileTaskArchiveContent() },
@@ -541,6 +544,7 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
     withO2Closure({
       collaborationRepair: composeCollaborationRepairPorts(db, taskExecutionParticipants),
+      workflowName: workflowNameExpression,
       archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
       // RFC-526: the archive binding is required — the local archive content the provider runtime used to build.
       archive: { content: createFileTaskArchiveContent() },

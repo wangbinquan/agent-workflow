@@ -6,7 +6,6 @@
 //     `taskListOriginMatches`——`origin` 的映射在 PostgreSQL 目录源上曾另写一份并猜错
 //     （「事件」/「API」筛选直接 400），2026-09-04 收成一份判据后这里跟着用同一份。
 
-import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
 import {
   TASK_LIST_ACTIVE_STATUSES,
   TASK_LIST_ATTENTION_STATUSES,
@@ -26,7 +25,11 @@ import {
 } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
-import { taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskRepositorySql'
+import {
+  taskSubjectSqlColumns,
+  taskWorkflowNameSql,
+  type WorkflowNameExpression,
+} from '../taskRepositorySql'
 import { taskWorkgroupNameExpression } from '../taskWorkgroupConfig'
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
@@ -199,6 +202,8 @@ export function catalogVisibilityCondition(
 }
 export function nonViewCondition(
   db: TaskListPageDb,
+  /** RFC-567: Resource Catalog's workflow name fragment (the fast path matches the search term against it). */
+  workflowName: WorkflowNameExpression,
   viewer: TaskListViewer,
   filters: TaskOperationsFilters,
   // 旧管线在已物化的 `base b` 上求值；G1 的快路径直接打 `tasks t`，谓词逐字
@@ -246,7 +251,7 @@ export function nonViewCondition(
       if (name === 'workflow_name') {
         return taskWorkflowNameSql(
           taskSubjectSqlColumns(alias),
-          workflowNameExpression(db, col('workflow_id')),
+          workflowName(db, col('workflow_id')),
         )
       }
       return workgroupNameExpression(db, alias)

@@ -5,7 +5,6 @@ import { taskReadSql, taskReadColumns } from '../taskRepositorySql'
 // RFC-395 I-b：方言函数由 EngineCapabilities 渲染；其余结构使用两个原生 builder 共用的 SQL（
 // `MATERIALIZED`、行值比较、递归 CTE 两方言同义 / 搜索两侧都已 `lower()`）。
 
-import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   TASK_LIST_ACTIVE_STATUSES,
@@ -15,7 +14,11 @@ import {
   type TaskOperationsFilters,
 } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
-import { taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskRepositorySql'
+import {
+  taskSubjectSqlColumns,
+  taskWorkflowNameSql,
+  type WorkflowNameExpression,
+} from '../taskRepositorySql'
 
 import {
   taskListOwnershipScopeCondition,
@@ -71,6 +74,8 @@ function taskCatalogReadSql(db: TaskListPageDb, alias: string): SQL {
 const MAX_TREE_DEPTH = 64
 export function baseCtes(
   db: TaskListPageDb,
+  /** RFC-567: Resource Catalog's workflow name fragment, composed into the catalog row projection. */
+  workflowName: WorkflowNameExpression,
   authorizedIds: SQL,
   nonView: SQL,
   view: SQL,
@@ -94,7 +99,7 @@ export function baseCtes(
         t.name,
         t.workflow_id,
       t.subject_kind,
-        ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
+        ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowName(db, sql`t.workflow_id`))} AS workflow_name,
         t.repo_path,
         t.repo_url,
         t.cached_repo_id,
@@ -208,6 +213,7 @@ export function projectedRows(limit: number, cursor: TaskPageCursorV1 | undefine
 }
 export function rootQuery(
   db: TaskListPageDb,
+  workflowName: WorkflowNameExpression,
   viewer: TaskListViewer,
   parsed: ParsedTaskOperationsQuery,
   catalogVisibility?: TaskCatalogVisibility,
@@ -223,8 +229,9 @@ export function rootQuery(
   `
   const base = baseCtes(
     db,
+    workflowName,
     authorizedIds,
-    nonViewCondition(db, viewer, parsed.filters),
+    nonViewCondition(db, workflowName, viewer, parsed.filters),
     viewCondition(parsed.filters.view),
     parsed.filters.q !== undefined,
   )
@@ -267,6 +274,7 @@ export function rootQuery(
 }
 export function childQuery(
   db: TaskListPageDb,
+  workflowName: WorkflowNameExpression,
   viewer: TaskListViewer,
   parsed: ParsedTaskOperationsQuery & { parentId: string },
   catalogVisibility?: TaskCatalogVisibility,
@@ -293,8 +301,9 @@ export function childQuery(
   `
   const base = baseCtes(
     db,
+    workflowName,
     authorizedIds,
-    nonViewCondition(db, viewer, parsed.filters),
+    nonViewCondition(db, workflowName, viewer, parsed.filters),
     viewCondition(parsed.filters.view),
     parsed.filters.q !== undefined,
   )
@@ -366,6 +375,7 @@ function openAlertTasksJoin(): SQL {
 
 export function fastDefaultRootQuery(
   db: TaskListPageDb,
+  workflowName: WorkflowNameExpression,
   viewer: TaskListViewer,
   parsed: ParsedTaskOperationsQuery,
 ): SQL {
@@ -404,7 +414,7 @@ export function fastDefaultRootQuery(
       t.name,
       t.workflow_id,
       t.subject_kind,
-      ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
+      ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowName(db, sql`t.workflow_id`))} AS workflow_name,
       t.repo_path,
       t.repo_url,
       t.cached_repo_id,
@@ -542,6 +552,7 @@ export function canUseFilteredFastPath(viewer: TaskListViewer): boolean {
  */
 export function fastFilteredRootQuery(
   db: TaskListPageDb,
+  workflowName: WorkflowNameExpression,
   viewer: TaskListViewer,
   parsed: ParsedTaskOperationsQuery,
   catalogVisibility?: TaskCatalogVisibility,
@@ -557,7 +568,7 @@ export function fastFilteredRootQuery(
   const openAlertTasks = openAlertTasksJoin()
   // 合格集的两层：non_view 决定 facets 的分母，再叠 view 得到真正的匹配集。
   // 与旧管线共用 nonViewCondition / viewCondition，只是换了别名。
-  const nonView = nonViewCondition(db, viewer, parsed.filters, 't')
+  const nonView = nonViewCondition(db, workflowName, viewer, parsed.filters, 't')
   const boundary =
     parsed.cursor === undefined
       ? sql`1 = 1`
@@ -692,7 +703,7 @@ export function fastFilteredRootQuery(
         t.name,
         t.workflow_id,
       t.subject_kind,
-        ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
+        ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowName(db, sql`t.workflow_id`))} AS workflow_name,
         t.repo_path,
         t.repo_url,
         t.cached_repo_id,

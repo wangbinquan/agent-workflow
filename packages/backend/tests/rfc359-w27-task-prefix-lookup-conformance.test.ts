@@ -30,6 +30,7 @@ import { resolve } from 'node:path'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VIEWER: TaskListViewer = { userId: 'w27-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -258,6 +259,7 @@ async function storedRows(db: PersistenceDb) {
 function queryFor(db: PersistenceDb, raw: TaskOperationsRawQuery): SQL {
   return fastFilteredRootQuery(
     db,
+    workflowNameExpression,
     VIEWER,
     parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
     OPTIONS.catalogVisibility,
@@ -432,12 +434,15 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
 // RFC-395 I-b: the inverse includes the shared instr capability; SQL and bindings are still compared on both providers.
 // T18 P3B: reviewed epoch-2 taskCatalogReadSql/subject_kind delta; inverse, binding and row proofs stay exact.
 // T18 PGX-D: only the page projection split changed; reversing that hunk restores 8d09b429….
+// RFC-567: the page queries take Resource Catalog's workflow name fragment as an input (`workflowName`) instead of
+// importing it — the import, five signatures and the calls that pass it along. The rendered SQL is unchanged (the SQL,
+// binding and row proofs in this file stay exact); reversing those hunks restores the previous pin 4c26456e….
 test('the inverse retains the complete W26 source and all original interpolation sites', () => {
   expect(
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('4c26456e21d3ae8c93ec36262bb0215a65410e0b797338bf7177af7d7d7e1295')
+  ).toBe('330218a931834406ec24ba0b9ca1f6dfc6614a84604d47a05efd83409569a296')
 })
 test('the actual PG compiler preserves original SQL and bindings without executing PG', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []
@@ -470,6 +475,7 @@ test('the actual PG compiler preserves original SQL and bindings without executi
     for (const raw of [RAW, { ...RAW, q: 'percent%_' }, withCursor(RAW, 890, 'root-11')]) {
       const query = fastFilteredRootQuery(
         db,
+        workflowNameExpression,
         VIEWER,
         parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
         OPTIONS.catalogVisibility,

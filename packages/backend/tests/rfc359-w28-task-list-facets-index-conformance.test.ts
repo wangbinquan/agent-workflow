@@ -24,6 +24,7 @@ import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration
 import { renderPostgresqlUpgradeSql } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement } from './helpers/statementRecorder'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const INDEX = 'idx_tasks_list_facets_cover'
 const FROZEN_INDEX = 'idx_tasks_list_facets_cover'
@@ -124,6 +125,7 @@ async function observe(harness: ProviderHarness, db: PersistenceDb, raw: TaskOpe
       db,
       fastFilteredRootQuery(
         db,
+        workflowNameExpression,
         VIEWER,
         parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
         OPTIONS.catalogVisibility,
@@ -155,11 +157,11 @@ async function observe(harness: ProviderHarness, db: PersistenceDb, raw: TaskOpe
   expect(statement.params).toBe(statement.values.length)
   const pageRecording = harness.recordStatements()
   try {
-    const page = await createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)).list(
-      VIEWER,
-      raw,
-      OPTIONS,
-    )
+    const page = await createDatabaseTaskListPage(
+      db,
+      composeOwnerIdentityQueries(db),
+      workflowNameExpression,
+    ).list(VIEWER, raw, OPTIONS)
     expect(page.kind).toBe('root')
     return {
       raw,

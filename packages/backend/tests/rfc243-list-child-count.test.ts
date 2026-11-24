@@ -24,6 +24,7 @@ import { sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Db = ReturnType<typeof createInMemoryDb>
 
@@ -132,7 +133,7 @@ describe('RFC-243 — list childCount', () => {
       ])
 
       const rows = await taskListItemsProjection(
-        { db, owners: composeOwnerIdentityQueries(db) },
+        { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
         {},
       )
       expect(countOf(rows, 'p-two')).toBe(2)
@@ -155,7 +156,10 @@ describe('RFC-243 — list childCount', () => {
       // exactly the rows a user most needs to open when diagnosing a failure.
       expect(
         countOf(
-          await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {}),
+          await taskListItemsProjection(
+            { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
+            {},
+          ),
           'p-failed',
         ),
       ).toBe(1)
@@ -178,7 +182,7 @@ describe('RFC-243 — list childCount', () => {
     ])
 
     const asAlice = await taskListItemsProjection(
-      { db, owners: composeOwnerIdentityQueries(db) },
+      { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
       {
         visibility: { actorUserId: 'alice', scope: 'mine' },
       },
@@ -190,7 +194,10 @@ describe('RFC-243 — list childCount', () => {
     // Unfiltered (admin scope=all) sees the true total.
     expect(
       countOf(
-        await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {}),
+        await taskListItemsProjection(
+          { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
+          {},
+        ),
         'p-alice',
       ),
     ).toBe(2)
@@ -208,14 +215,14 @@ describe('RFC-243 — list childCount', () => {
       ])
 
       const children = await taskListItemsProjection(
-        { db, owners: composeOwnerIdentityQueries(db) },
+        { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
         { parentTaskId: 'root' },
       )
       expect(children.map((r) => r.id)).toEqual(['mid'])
       expect(countOf(children, 'mid')).toBe(1)
 
       const grandchildren = await taskListItemsProjection(
-        { db, owners: composeOwnerIdentityQueries(db) },
+        { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
         { parentTaskId: 'mid' },
       )
       expect(countOf(grandchildren, 'leaf')).toBe(0)
@@ -248,7 +255,10 @@ describe('RFC-243 — list childCount', () => {
       return realPrepare(text, ...(rest as []))
     }) as typeof raw.prepare
 
-    const rows = await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {})
+    const rows = await taskListItemsProjection(
+      { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
+      {},
+    )
     raw.prepare = realPrepare
 
     expect(rows.filter((r) => r.id.startsWith('p')).every((r) => r.childCount === 1)).toBe(true)

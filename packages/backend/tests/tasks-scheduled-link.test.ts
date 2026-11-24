@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTask(
   db: PersistenceDb,
@@ -58,12 +59,14 @@ describe('RFC-159 — tasks.scheduled_task_id link', () => {
       await seedTask(db, 't-c', 'sched-2')
       await seedTask(db, 't-manual', null)
 
-      const runs = await taskListSummariesProjection(db, { scheduledTaskId: 'sched-1' })
+      const runs = await taskListSummariesProjection(db, workflowNameExpression, {
+        scheduledTaskId: 'sched-1',
+      })
       expect(new Set(runs.map((t) => t.id))).toEqual(new Set(['t-a', 't-b']))
       expect(runs.every((t) => t.scheduledTaskId === 'sched-1')).toBe(true)
 
       // Unfiltered list still returns everything (filter is opt-in).
-      expect((await taskListSummariesProjection(db, {})).length).toBe(4)
+      expect((await taskListSummariesProjection(db, workflowNameExpression, {})).length).toBe(4)
     })
   })
 

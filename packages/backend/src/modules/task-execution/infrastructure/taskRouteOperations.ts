@@ -14,6 +14,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskNodeRunClarifyNavPort } from '../composition/required-ports'
 import {
   type TaskReadRow,
+  type WorkflowNameExpression,
   taskMountReadColumns,
   taskReadColumns,
   taskWorkflowNameSql,
@@ -30,10 +31,7 @@ import {
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
-import {
-  createWorkflowExecutionQueries,
-  workflowNameExpression,
-} from '@/modules/resource-catalog/public/queries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 
 import {
   canonicalRepoKeysWire,
@@ -231,6 +229,8 @@ export interface TaskRouteOperationsDependencies {
   /** RFC-526: the deployment's prompt operations (required; the daemon gives its task run selection's). */
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly db: PersistenceDb
+  /** RFC-567: Resource Catalog's same-statement workflow name fragment for the task list rows (handed over by bootstrap). */
+  readonly workflowName: WorkflowNameExpression
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
    * 两条启动路由（JSON / multipart）都走它：路由只解析表单 + 跑路由级门，
@@ -576,6 +576,7 @@ type TaskListRow = {
 
 async function listRows(
   db: PersistenceDb,
+  workflowName: WorkflowNameExpression,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListRow[]> {
   const predicates: SQL<unknown>[] = []
@@ -625,7 +626,7 @@ async function listRows(
         {
           subjectKind: taskReadColumns(db).subjectKind,
         },
-        workflowNameExpression(db, taskReadColumns(db).workflowId),
+        workflowName(db, taskReadColumns(db).workflowId),
       ),
     })
     .from(tasks)
@@ -636,9 +637,10 @@ async function listRows(
 
 async function listSummaries(
   db: PersistenceDb,
+  workflowName: WorkflowNameExpression,
   filters: TaskRouteListFilters,
 ): Promise<readonly Readonly<{ summary: TaskSummary; ownerUserId: string | null }>[]> {
-  const rows = await listRows(db, filters)
+  const rows = await listRows(db, workflowName, filters)
   if (rows.length === 0) return []
   const ids = rows.map((row) => row.id)
   const { lifecycleAlerts } = tablesOf(db)
@@ -711,26 +713,34 @@ function taskListFlightKey(filters: TaskRouteListFilters): string {
  */
 export async function taskListSummariesProjection(
   db: PersistenceDb,
+  workflowName: WorkflowNameExpression,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskSummary[]> {
   return await taskListFlight(db)(taskListFlightKey(filters), async () =>
-    (await listSummaries(db, filters)).map((row) => row.summary),
+    (await listSummaries(db, workflowName, filters)).map((row) => row.summary),
   )
 }
 
 /** RFC-359 AC-1（同上）—— `GET /api/tasks?include_owner=true` 的行投影，两个引擎共用一份。 */
+/** RFC-567: the list projections also take Resource Catalog's workflow name fragment. */
+type TaskListItemsDependencies = Readonly<{
+  db: PersistenceDb
+  owners: OwnerIdentityQueries
+  workflowName: WorkflowNameExpression
+}>
+
 export async function taskListItemsProjection(
-  dependencies: Readonly<{ db: PersistenceDb; owners: OwnerIdentityQueries }>,
+  dependencies: TaskListItemsDependencies,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListItem[]> {
   return await listItems(dependencies, filters)
 }
 
 export async function listItems(
-  dependencies: Readonly<{ db: PersistenceDb; owners: OwnerIdentityQueries }>,
+  dependencies: TaskListItemsDependencies,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListItem[]> {
-  const rows = await listSummaries(dependencies.db, filters)
+  const rows = await listSummaries(dependencies.db, dependencies.workflowName, filters)
   if (rows.length === 0) return []
   const ownerIds = rows.map((row) => row.ownerUserId)
   const owners = await dependencies.owners.loadOwnerIdentities(ownerIds)
@@ -2501,9 +2511,17 @@ export function createTaskRouteOperations(
     nodeRunPrompts,
     archivedEvents: dependencies.archivedEvents,
     // 列表三件：筛选 / 倒序 / 告警数 / owner 身份 / 子任务数由 `rfc359-w7` 的 A1–A5 对拍锁住。
-    list: (filters) => taskListSummariesProjection(dependencies.db, filters),
+    list: (filters) =>
+      taskListSummariesProjection(dependencies.db, dependencies.workflowName, filters),
     listItems: (filters) =>
-      listItems({ db: dependencies.db, owners: dependencies.owners }, filters),
+      listItems(
+        {
+          db: dependencies.db,
+          owners: dependencies.owners,
+          workflowName: dependencies.workflowName,
+        },
+        filters,
+      ),
     get: (taskId) => loadTask(dependencies.db, taskId),
     // 访问门 + 成员四件：存在性口径统一成「不存在即 404」。
     assertVisible: (actor, taskId) =>

@@ -12,6 +12,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getTask } from '@/modules/task-execution/infrastructure/taskDetailRead'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 async function seedTask(db: PersistenceDb, name: string) {
   const wfId = ulid()
@@ -55,7 +56,7 @@ describeEachProvider('RFC-037 — task row mappers include `name`', (harness) =>
     const db = harness.db
     await seedTask(db, 'one')
     await seedTask(db, 'two')
-    const rows = await taskListSummariesProjection(db, { limit: 100 })
+    const rows = await taskListSummariesProjection(db, workflowNameExpression, { limit: 100 })
     const names = rows.map((r) => r.name).sort()
     expect(names).toEqual(['one', 'two'])
   })

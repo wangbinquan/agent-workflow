@@ -17,6 +17,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskListPage/filters'
 import { fastFilteredRootQuery } from '@/modules/task-execution/infrastructure/taskListPage/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 const VIEWER = { userId: 'w27-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -363,7 +364,13 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
         })
       }
       const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
-      const candidate = fastFilteredRootQuery(db, VIEWER, parsed, OPTIONS.catalogVisibility)
+      const candidate = fastFilteredRootQuery(
+        db,
+        workflowNameExpression,
+        VIEWER,
+        parsed,
+        OPTIONS.catalogVisibility,
+      )
       const original = originalQuery(candidate)
       const recording = harness.recordStatements()
       let originalRows: Record<string, unknown>[]
@@ -448,11 +455,14 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
 // the previous pin matches its input exactly. Gate text, bindings and VM proofs stay unchanged.
 // T18 PGX-D: only the page projection split (walk/filter facts, display after LIMIT) changed;
 // reversing that hunk restores the previous pin 165ae3e3….
+// RFC-567: the page queries take Resource Catalog's workflow name fragment as an input (`workflowName`) instead of
+// importing it — the import, five signatures and the calls that pass it along. The rendered SQL is unchanged (the SQL,
+// binding and row proofs in this file stay exact); reversing those hunks restores the previous pin c5141b57….
 test('the gate inverse retains the complete published W38 query source', () => {
   const source = readFileSync(SOURCE_PATH, 'utf8')
   expect(source.split(GATE)).toHaveLength(2)
   expect(source.split(GATED_FROM)).toHaveLength(2)
   expect(createHash('sha256').update(restoreText(source)).digest('hex')).toBe(
-    'c5141b5729d60a2b3c22a4db4d7039098795fafa9b0aa78e6455b37cc3bdeebf',
+    'f4c038f45261c4d1394df29301993811a8f433575758efc807f2d2e7d05e0e5d',
   )
 })

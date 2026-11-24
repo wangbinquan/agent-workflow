@@ -19,6 +19,7 @@ import { taskFixture, workflowFixture } from './helpers/model'
 import { buildActor } from '../src/auth/actor'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/taskCatalogSources'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 function task(
   id: string,
@@ -121,6 +122,7 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
     const workflowSource = composeTaskExecutionCatalogSources(
       db,
       composeOwnerIdentityQueries(db),
+      workflowNameExpression,
     ).find((source) => source.sourceId === 'workflow')
     if (workflowSource === undefined) throw new Error('workflow source is missing')
 
@@ -138,9 +140,9 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
     expect(second.nextCursor).toBeNull()
 
     const [legacyRows, legacyItems] = await Promise.all([
-      taskListSummariesProjection(db, { catalogVisibility: 'public' }),
+      taskListSummariesProjection(db, workflowNameExpression, { catalogVisibility: 'public' }),
       taskListItemsProjection(
-        { db, owners: composeOwnerIdentityQueries(db) },
+        { db, workflowName: workflowNameExpression, owners: composeOwnerIdentityQueries(db) },
         { catalogVisibility: 'public' },
       ),
     ])
