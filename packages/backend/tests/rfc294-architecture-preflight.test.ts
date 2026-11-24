@@ -332,7 +332,8 @@ describe('RFC-294 W0-R target architecture scanner contract', () => {
 const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
   'packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts -> packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts',
-  'packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts -> packages/backend/src/modules/integration/application/ports/codeHostEventResponse.ts',
+  // RFC-555: the Mission continuation implements Integration's port in development-automation's designated
+  // integration adapter, type-only through `composition/required-ports` (a required-implementation edge).
   'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
   'packages/backend/src/modules/integration/composition/webhookIngress.ts -> packages/backend/src/modules/event-center/composition.ts',
   'packages/backend/src/modules/integration/composition/webhookTerminalControl.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',

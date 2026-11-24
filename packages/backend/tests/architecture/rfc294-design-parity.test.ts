@@ -110,8 +110,9 @@ describe('RFC-376 G11 design parity', () => {
     // RFC-395 O adds 4 SC, 8 O2 closure and 1 Doctor required-SPI edges; RFC-488 adds the local MCP diagnostic
     // execution required-SPI edge (99 -> 100); RFC-489 adds the four run-family binding edges bootstrap now binds
     // (smoke into runtime management, native providers, task agent material references, workspace contents) (-> 104);
-    // RFC-491 adds runtime-management's in-flight inventory read bound to Task Execution's port (-> 105).
-    expect(designEdges(DESIGN)).toHaveLength(105)
+    // RFC-491 adds runtime-management's in-flight inventory read bound to Task Execution's port (-> 105); RFC-555 adds
+    // Development Automation's integration adapter implementing the code-host event continuation (-> 106).
+    expect(designEdges(DESIGN)).toHaveLength(106)
     expect(designPublicContexts(DESIGN)).toHaveLength(18)
   })
   test('in-memory design mutations add and remove edges, rename a context, or delete the IA row', () => {

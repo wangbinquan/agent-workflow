@@ -1,3 +1,24 @@
+## 2026-11-23 RFC-555 development-automation 经 integration 的 required-ports 实现 Mission 续接（In Progress；`design/RFC-555-mission-continuation-required-port/`）
+
+- **来由**：跨 context 内部文件对精确清单 15 条中的一条——development-automation 的 Mission 续接为标注返回类型直接取了 integration 的
+  `application/ports/codeHostEventResponse`。RFC-294 对“consumer 自有、别的 context 实现”的端口有现成的目标形状（design §2 / §3 / §3.5：consumer 的
+  `composition/required-ports.ts` 只由 bootstrap 与指定 provider adapter 取；RFC-399 已这样落了 resource-catalog 的 `integration-adapter`）。改取
+  integration 的 public 不可取：development-automation → integration 不是 offered 边，只会换成一条 DAG 外的 offered 边。用户 2026-11-02「好，你继续推进
+  RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新
+  的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：integration 的 required-ports 交出续接端口；development-automation 新增指定 adapter `application/adapters/integration-adapter.ts`，
+  续接逻辑原样挪入、infrastructure 只做数据库绑定；目标 DAG（`rfc294Target.ts`）与 RFC-294 design §3.1 的 Mermaid 同批登记虚线边；两份精确清单、
+  减速带与 design 边总数随之更新；`rfc310-pr7b` 读源码的断言改读 adapter；新增 RFC-555 用例。
+- **不做**：其余 14 条跨 context 内部文件对；development-automation 现有两条取 integration `public/participants` 的 DAG 外 offered 边。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 端口事实源在 integration 的 required-ports、实现在指定 adapter、infrastructure 只做绑定；C11 两个
+  context 的 public 不变；C12 RFC-555 用例覆盖 development-automation 全部源码取 integration 非 public 文件的边、端口与装配、目标 DAG 的边，并用内存
+  存储复核续接行为；C13 跨 context 内部文件对 15 → 14，其余计数不升，目标 DAG 多一条虚线 required 边。
+- **集中验证**（基于 `a74820d0b`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷一处已修复并复验（`rfc294-design-parity`
+  的 design 边总数 105 → 106 漏改）。tsc 0 错，eslint / promises / prettier 无告警；选出 184 个用例文件，修复后全部通过；读已提交源码的两个用例在
+  候选导出里通过；四种变异都被认出；架构报告文件对 15 → 14、目标边 105 → 106、新边是 `required-implementation`，其余不变。实现门 PASS（本会话按路径
+  限定自审，只审功能）。
+- **提交**：三件套与实现同一个提交（RFC-554 的 CI 仍在排队，它的转 Done 随下一个 RFC 的提交）。
+
 ## 2026-11-23 RFC-554 两个小结构门：死的 export-star 门面与 application 里的直接副作用（In Progress；`design/RFC-554-small-structural-gates/`）
 
 - **来由**：RFC-294 design §14 的两个结构门各剩少量条目：`export-star-barrels` 唯一一条是 runtime-management 注册表文件末尾两条通配转出（实测没有

@@ -34,7 +34,7 @@
       "minCorpusFiles": null,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 153
+      "lines": 154
     },
     {
       "assertsAbsence": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1056
+      "lines": 1057
     },
     {
       "assertsAbsence": true,
@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 545,
+      "lines": 546,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -4342,6 +4342,18 @@
       "lines": 101,
       "mechanism": "ast",
       "minCorpusFiles": 1500,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc555-mission-continuation-required-port-boundary.test.ts",
+      "id": "rfc555-mission-continuation-required-port-boundary",
+      "lines": 196,
+      "mechanism": "ast",
+      "minCorpusFiles": 200,
       "negativeFixture": true,
       "runner": "bun"
     }

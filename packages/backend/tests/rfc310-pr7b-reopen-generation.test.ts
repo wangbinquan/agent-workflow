@@ -217,8 +217,10 @@ describeEachProvider(
           'src',
           'modules',
           'development-automation',
-          'infrastructure',
-          'missionCodeHostEventContinuation.ts',
+          // RFC-555: the continuation logic moved into the designated integration adapter.
+          'application',
+          'adapters',
+          'integration-adapter.ts',
         ),
         'utf8',
       )
