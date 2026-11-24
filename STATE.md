@@ -1,4 +1,16 @@
-## 2026-11-23 RFC-552 public/operations 的类型检查豁免收窄到操作描述工厂（In Progress；`design/RFC-552-public-operations-exemption-narrowing/`）
+## 2026-11-23 RFC-553 knowledge-evolution 不再取 task-execution 的内部（In Progress；`design/RFC-553-knowledge-evolution-task-initiator-port/`）
+
+- **来由**：S9 第 5 项（跨 context 内部文件对）。knowledge-evolution 的融合编排从 task-execution 的 domain 取启动人类型、融合路由从它的 inbound
+  取启动人投影，是精确清单里的两条，后一条也是全仓唯一的模块分层违规。投影读遗留 `@/auth/actor` 的认证来源，按 RFC-301 只许 inbound 看见。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10
+  「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为
+  已批准，不派 Codex。
+- **范围**：类型经 task-execution 的 `public/types`；融合路由多一个 consumer 自有端口 `directTaskInitiator`，bootstrap 用 task-execution composition
+  交出的同一个投影绑定；两份精确清单、模块分层违规清单与减速带随之降低；新增 RFC-553 用例。
+- **不做**：其余 15 条跨 context 内部文件对；S9 的其他项。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-552 转 Done 同一提交），实现与验证后再提交。
+
+## 2026-11-23 RFC-552 public/operations 的类型检查豁免收窄到操作描述工厂（Done；`design/RFC-552-public-operations-exemption-narrowing/`）
 
 - **来由**：S9 第 1 项“`public/operations` 收口”的检测器部分与退出门“检测器不再整体豁免 `public/operations`”。public 类型污染检测整个跳过这个
   入口（RFC-344：描述工厂的 `invoke` 本来就可执行）；RFC-294 design §3.2 把豁免限定为只为描述工厂而设，仓储、生命周期函数与写原子不得借它导出。
@@ -20,6 +32,7 @@
   连锁。tsc 0 错，eslint / promises / prettier 无告警；首轮 605 个用例文件 603 个通过、连锁后重选 654 个 653 个通过（红的就是这两处，另有 RFC-551
   留下的 `rfc376-report` 已单独修正），改后复跑通过；读已提交源码的两个用例在候选导出里通过；八种变异都被认出；架构报告偏差 53 → 59、未消费
   仍为 0、其余门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI 70 / 70（run 45288856738），windows-platform 与 maintenance-soak-nightly 通过；落档提交 `eb9ae2485` 主 CI 70 / 70。
 
 ## 2026-11-23 RFC-551 identity-access 与 source-control 的未消费 public 符号清零（Done；`design/RFC-551-public-unconsumed-sweep-identity-source-control/`）
 

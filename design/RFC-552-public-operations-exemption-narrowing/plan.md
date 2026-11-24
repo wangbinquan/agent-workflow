@@ -18,7 +18,7 @@
 - [x] AC-1 检测器不再整体豁免 `public/operations`；合同类型 import 与描述工厂按 design §1 处理
 - [x] AC-2 knowledge-evolution 的运维函数不再从 public 导出、bootstrap 改取 composition；`OwnerIdentityQueries` 在 `public/queries`
 - [x] AC-3 显形的偏差逐条入账并写明后继；`public/operations` 的导出逐条入账；新增 RFC-552 用例并登记
-- [ ] AC-4 行为不变；受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 行为不变；受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -59,7 +59,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `f9c709afa`（实现，父提交是 `eb9ae2485`）：exact SHA 主 CI run 45288856738 70 / 70 通过（含全部后端分片与真实 PostgreSQL、三个平台的构建与
+  全部 e2e 分片）；同一提交触发的 windows-platform 与 maintenance-soak-nightly 通过。
+- 落档提交 `eb9ae2485`（RFC-551 转 Done、RFC-552 落档，只改文档）：主 CI run 45288707336 70 / 70 通过。
 
 ## 实现门（本会话自审，只审功能）
 
