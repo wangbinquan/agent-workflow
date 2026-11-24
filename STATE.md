@@ -1,3 +1,25 @@
+## 2026-11-24 RFC-570 工作组运行选择投影归 task-execution，source-control 的两个完整性检查收具名类型（In Progress；`design/RFC-570-run-selection-projection-owner-and-typed-completeness-checks/`）
+
+- **来由**：`PUBLIC_SURFACE_DEBT` 的 35 条里有三条不动检测规则就能收：task-execution 的 public 合同带着一个声明在 platform 的业务投影
+  （`WorkgroupRunSelectionProjection`，放在 platform 只为让 resource-catalog 也取得到）；source-control 的两个接收者完整性检查把入参写成 `unknown`
+  再断言。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：投影搬到 task-execution 的 `domain/runSelection/workgroupProjection.ts`，它的三个读者改取；resource-catalog 的房间投影声明自己的
+  `WorkgroupRoomRunSelection`（只有 `sequence` 与 `legacyGroupCurrent`）；`platform/runSelectionProjection.ts` 删除。两个检查函数收
+  `IsolationWorkspaceScope` / `WorkspaceUploadContent`、返回 `void`，判定原样。7 个生产路径（含一个新增、一个删除）；3 个用例文件随改，新增
+  RFC-570 用例；`PUBLIC_SURFACE_DEBT` 删 3 条。
+- **不做**：public 合同上的 `CommittedEventRef`（平台的事件机制类型，属于检测规则的讨论）；隔离工作区合同里的日志器与借贷式入参；运行时探测回执的
+  视图类型（收紧它要给存量回执加形状校验，会改变旧回执的显示）。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 投影在 owner 的 domain、消费方的形状在它自己的 application；C11 public 面的符号数不变；C12
+  RFC-570 用例覆盖全部生产源码（平台文件的读者）、投影的声明与读者、两个检查；C13 public 类型偏差 35 → 32，其余计数不升，platform 少一个业务投影
+  文件。
+- **集中验证**（基于 `412767ff0`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。没有查出产品缺陷。tsc 0 错，eslint / promises / prettier 无
+  告警；选出 359 个用例文件，一次全部通过；读已提交源码的 165 个用例文件在候选导出里通过；十一种变异都被认出（房间投影的两种行为变异由既有的
+  工作组用例认出），类型层变异落在 resource-catalog 的两个房间适配文件与检查的两个调用点上；架构报告 60 个计数里只有 public 类型偏差变了。实现门
+  PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-569 `412767ff0` 的 windows-platform 通过，主 CI 仍在跑。
+
 ## 2026-11-24 RFC-569 public 合同上的四处回调成员与一处裸 typeof 收成闭合形状（In Progress；`design/RFC-569-public-callback-members-closed/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT` 还有 40 条。把检测器报的 101 个类型节点逐个定位后，其中五条可以直接收成闭合形状，收完代码也更简单，而且不需要

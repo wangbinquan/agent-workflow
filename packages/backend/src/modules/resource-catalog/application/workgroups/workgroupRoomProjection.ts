@@ -4,7 +4,6 @@
 // PostgreSQL room adapters therefore share one history/current-run/budget
 // grammar without either provider importing the other's infrastructure.
 
-import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
 import {
   parseBatchShardKey,
   parseMsgShardKey,
@@ -42,9 +41,18 @@ export function resolveMessageTurnTriggerId(
   return best
 }
 
+/**
+ * RFC-570: the run-selection facts this projection reads off a host run — its own shape. Task Execution computes the
+ * selection and hands rows carrying its full projection; these two fields are all the room and budget grammar uses.
+ */
+export interface WorkgroupRoomRunSelection {
+  readonly sequence: number
+  readonly legacyGroupCurrent: boolean
+}
+
 /** Minimal host-run snapshot consumed by the room projection. */
 export interface WorkgroupRoomHostRun {
-  readonly selection: WorkgroupRunSelectionProjection
+  readonly selection: WorkgroupRoomRunSelection
   readonly seq: number
   readonly id: string
   readonly nodeId: string
@@ -291,7 +299,7 @@ export function deriveMemberCurrentRuns(
 
 /** Minimal host-ledger row consumed by the round-budget projection. */
 export interface RoundLedgerRow {
-  readonly selection: WorkgroupRunSelectionProjection
+  readonly selection: WorkgroupRoomRunSelection
   readonly seq: number
   readonly id: string
   readonly nodeId: string

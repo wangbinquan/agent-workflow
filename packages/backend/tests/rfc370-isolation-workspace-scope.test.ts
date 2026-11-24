@@ -47,7 +47,8 @@ describe('RFC-370 isolation scope selection', () => {
       ).toThrow('Isolation requires a complete workspace factory')
     }
     for (const value of [null, {}, { create: () => undefined }]) {
-      expect(() => requireIsolationWorkspaceScope(value)).toThrow(
+      // RFC-570: the check takes the port type; an incomplete receiver is passed on purpose.
+      expect(() => requireIsolationWorkspaceScope(value as never)).toThrow(
         'Isolation requires a complete workspace scope',
       )
     }

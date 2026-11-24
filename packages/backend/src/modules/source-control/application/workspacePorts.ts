@@ -12,9 +12,8 @@ import type {
   WorkspaceUploadContentFactory,
 } from './ports/workspaceUploadContent'
 
-export function requireIsolationWorkspaceScope(
-  value: unknown,
-): asserts value is IsolationWorkspaceScope {
+/** RFC-570: takes the port type (every caller already holds one); the completeness check itself is unchanged. */
+export function requireIsolationWorkspaceScope(value: IsolationWorkspaceScope): void {
   const methods: readonly (keyof IsolationWorkspaceScope)[] = [
     'recoverKey',
     'chooseGeneration',
@@ -34,7 +33,7 @@ export function requireIsolationWorkspaceScope(
   if (
     value === null ||
     typeof value !== 'object' ||
-    methods.some((name) => typeof (value as IsolationWorkspaceScope)[name] !== 'function')
+    methods.some((name) => typeof value[name] !== 'function')
   ) {
     throw new TypeError('Isolation requires a complete workspace scope')
   }
@@ -72,9 +71,8 @@ export function requireRepositoryGitWorkspaceFactory(factory: RepositoryGitWorks
   }
 }
 
-export function requireWorkspaceUploadContent(
-  value: unknown,
-): asserts value is WorkspaceUploadContent {
+/** RFC-570: takes the port type (the caller already holds one); the completeness check itself is unchanged. */
+export function requireWorkspaceUploadContent(value: WorkspaceUploadContent): void {
   const methods: readonly (keyof WorkspaceUploadContent)[] = [
     'prepareTarget',
     'file',
@@ -86,7 +84,7 @@ export function requireWorkspaceUploadContent(
   if (
     value === null ||
     typeof value !== 'object' ||
-    methods.some((name) => typeof (value as WorkspaceUploadContent)[name] !== 'function')
+    methods.some((name) => typeof value[name] !== 'function')
   ) {
     throw new TypeError('Workspace uploads require a complete content receiver')
   }

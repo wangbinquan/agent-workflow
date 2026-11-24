@@ -31,7 +31,7 @@ import type {
   TaskStatus,
   TriggerContext,
 } from '@agent-workflow/shared'
-import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
+import type { WorkgroupRunSelectionProjection } from '../domain/runSelection/workgroupProjection'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type {
   AuthenticatedAuthoritySnapshot,

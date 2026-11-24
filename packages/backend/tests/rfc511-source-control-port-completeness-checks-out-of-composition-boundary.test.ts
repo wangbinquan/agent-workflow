@@ -570,11 +570,12 @@ const without = (names: readonly string[], missing: string) =>
 
 describe('RFC-511 ④ 端口完整性核对', () => {
   test('隔离工作区：作用域的 14 个方法与工厂的 bind', () => {
-    expect(() => requireIsolationWorkspaceScope(methods(ISOLATION_SCOPE))).not.toThrow()
+    // RFC-570: the two receiver checks take the port types, like the factory checks; the stand-ins are cast.
+    expect(() => requireIsolationWorkspaceScope(methods(ISOLATION_SCOPE) as never)).not.toThrow()
     for (const missing of ISOLATION_SCOPE)
-      expect(() => requireIsolationWorkspaceScope(without(ISOLATION_SCOPE, missing))).toThrow(
-        new TypeError('Isolation requires a complete workspace scope'),
-      )
+      expect(() =>
+        requireIsolationWorkspaceScope(without(ISOLATION_SCOPE, missing) as never),
+      ).toThrow(new TypeError('Isolation requires a complete workspace scope'))
     expect(() => requireIsolationWorkspaceFactory({ bind: fn } as never)).not.toThrow()
     for (const factory of [null, {}, { bind: 'x' }])
       expect(() => requireIsolationWorkspaceFactory(factory as never)).toThrow(
@@ -602,11 +603,11 @@ describe('RFC-511 ④ 端口完整性核对', () => {
   })
 
   test('上传内容：内容收发的 6 个方法与工厂的 bind', () => {
-    expect(() => requireWorkspaceUploadContent(methods(UPLOAD_CONTENT))).not.toThrow()
+    expect(() => requireWorkspaceUploadContent(methods(UPLOAD_CONTENT) as never)).not.toThrow()
     for (const missing of UPLOAD_CONTENT)
-      expect(() => requireWorkspaceUploadContent(without(UPLOAD_CONTENT, missing))).toThrow(
-        new TypeError('Workspace uploads require a complete content receiver'),
-      )
+      expect(() =>
+        requireWorkspaceUploadContent(without(UPLOAD_CONTENT, missing) as never),
+      ).toThrow(new TypeError('Workspace uploads require a complete content receiver'))
     expect(() => requireWorkspaceUploadContentFactory({ bind: fn } as never)).not.toThrow()
     expect(() => requireWorkspaceUploadContentFactory({} as never)).toThrow(
       new TypeError('Workspace uploads require a complete content factory'),

@@ -1,7 +1,7 @@
 // RFC-480: the workgroup-turn and host-ledger port types are declared here. Until RFC-480 this file re-exported them from
 // public/commands, where no other context named them (the turn command and the ledger are wired inside this module).
 import type { Agent, FailureCode, NodeRunStatus } from '@agent-workflow/shared'
-import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
+import type { WorkgroupRunSelectionProjection } from '../../domain/runSelection/workgroupProjection'
 import type { TaskWorkgroupConfig } from '../../domain/taskWorkgroupConfig'
 
 /**

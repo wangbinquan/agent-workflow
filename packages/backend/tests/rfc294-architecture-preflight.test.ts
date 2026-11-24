@@ -405,8 +405,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // public root).
   // RFC-492: `modelKey` is no longer offered by runtime-management's public (only the driver family read it).
   'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',
-  'modules/source-control/application/workspacePorts.ts#requireIsolationWorkspaceScope: unsafe/open type UnknownKeyword',
-  'modules/source-control/application/workspacePorts.ts#requireWorkspaceUploadContent: unsafe/open type UnknownKeyword',
+  // RFC-570: the workgroup run selection projection is declared by its owner (task-execution's domain) instead of a
+  // platform file, and source-control's two receiver completeness checks take the port types; three entries settled.
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/util/log#Logger',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: unsafe/open type FunctionType',
   'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type FunctionType',
@@ -442,7 +442,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // `createTaskTriggerQueries` and the fragment `nonTerminalTaskExists`: bootstrap builds them on the root handle from
   // task-execution's composition and hands them to memory and integration; six entries settled.
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).
-  'modules/task-execution/public/commands.ts#WorkgroupTaskRoomHostRunSnapshot: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomTaskParticipantInTx: forbidden type import @/platform/events/committed/types#CommittedEventRef',
   // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.
 ]

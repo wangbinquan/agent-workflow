@@ -1,5 +1,5 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
-import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
+import type { WorkgroupRunSelectionProjection } from '../../domain/runSelection/workgroupProjection'
 import { createRunHistorySnapshot } from '../../application/runHistory'
 import type { RunSlot } from '../../application/ports/runSelection'
 
