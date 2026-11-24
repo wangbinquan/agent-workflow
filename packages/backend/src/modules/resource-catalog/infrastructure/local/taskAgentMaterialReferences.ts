@@ -1,21 +1,23 @@
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
 import type { NativeSkillContent, RuntimePlugin } from '../../domain/nativeAgentMaterialContents'
 import type {
   TaskAgentMaterialReferences,
-  TaskAgentResourceMaterial,
+  TaskAgentPluginMaterial as MaterialPlugin,
+  TaskAgentResourceContentReference as ContentReference,
+  TaskAgentSkillMaterial as MaterialSkill,
 } from '../../application/ports/taskAgentMaterialReferences'
 
-type MaterialSkill = TaskAgentResourceMaterial['skills'][number]
-type MaterialPlugin = TaskAgentResourceMaterial['plugins'][number]
-type ContentReference = AgentMaterialIntent['workspace']
+/** RFC-563: a material as the compiler hands it back — this receiver looks its content reference up by identity. */
+interface IssuedMaterial {
+  readonly content: object
+}
 
 /** Local content locations stay in this selected owner. Constructing the binding
  * performs no content read. Weak bindings have the invocation reference lifetime. */
 export function createLocalTaskAgentMaterialReferences(input: { readonly appHome: string }) {
-  const skills = new WeakMap<ContentReference, NativeSkillContent>()
-  const plugins = new WeakMap<ContentReference, RuntimePlugin>()
+  const skills = new WeakMap<object, NativeSkillContent>()
+  const plugins = new WeakMap<object, RuntimePlugin>()
   const references: TaskAgentMaterialReferences = {
     references(snapshot) {
       const scope = ulid()
@@ -71,12 +73,12 @@ export function createLocalTaskAgentMaterialReferences(input: { readonly appHome
     references,
     /** Private native receiver passed only to the chosen local compiler. */
     contents: {
-      skill(reference: MaterialSkill): NativeSkillContent {
+      skill(reference: IssuedMaterial): NativeSkillContent {
         const value = skills.get(reference.content)
         if (value === undefined) throw new Error('task-agent-skill-content-unavailable')
         return value
       },
-      plugin(reference: MaterialPlugin): RuntimePlugin {
+      plugin(reference: IssuedMaterial): RuntimePlugin {
         const value = plugins.get(reference.content)
         if (value === undefined) throw new Error('task-agent-plugin-content-unavailable')
         return value

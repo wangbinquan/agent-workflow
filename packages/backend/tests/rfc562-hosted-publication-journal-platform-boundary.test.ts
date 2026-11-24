@@ -37,7 +37,7 @@ interface ModuleSpecifier {
   readonly typeOnly: boolean
 }
 
-/** Module specifiers of imports, re-exports and dynamic imports, each with whether it is type-only. */
+/** Module specifiers of imports, re-exports, dynamic imports and `import('…')` types, each with whether it is type-only. */
 function moduleSpecifiers(path: string, text: string): ModuleSpecifier[] {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const out: ModuleSpecifier[] = []
@@ -68,6 +68,12 @@ function moduleSpecifiers(path: string, text: string): ModuleSpecifier[] {
       ts.isStringLiteral(node.arguments[0])
     )
       out.push({ text: node.arguments[0].text, typeOnly: false })
+    if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal)
+    )
+      out.push({ text: node.argument.literal.text, typeOnly: true })
     ts.forEachChild(node, visit)
   }
   visit(source)
@@ -118,6 +124,7 @@ describe('RFC-562 —— 业务模块只经指定 adapter 取 system-operations'
           "export type { C } from '../../../system-operations/application/ports/hostedRestoreNormalization'\n" +
           "const d = () => import('@/modules/system-operations/public/commands')\n" +
           "import { type E } from '@/modules/system-operations/composition/required-ports'\n" +
+          "type H = import('@/modules/system-operations/public/types').RestorePlanView\n" +
           "import type { F } from '@/platform/content/hostedObjectPublications'\n" +
           "import type { G } from '@/modules/source-control/public/participants'\n",
       ),
@@ -127,6 +134,7 @@ describe('RFC-562 —— 业务模块只经指定 adapter 取 system-operations'
       'application/ports/hostedRestoreNormalization (type)',
       'public/commands (value)',
       'composition/required-ports (type)',
+      'public/types (type)',
     ])
   })
 })

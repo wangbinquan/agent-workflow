@@ -380,7 +380,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-552: the fusion persistence port left knowledge-evolution's public with the maintenance functions (no other module
   // read it); its `Partial` patch is no longer a public deviation.
   'modules/resource-catalog/application/intent/artifactOwners.ts#IntentSkillArtifactOwner: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts#TaskAgentMaterialReferences: forbidden type import @/util/log#Logger',
   'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createAgentExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/resource-catalog/infrastructure/executionResourceQueries.ts#createWorkflowExecutionQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/resource-catalog/infrastructure/executionResourceQueries.ts#workflowNameExpression: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
@@ -389,6 +388,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/resource-catalog/public/participants.ts#HostedIntentResourceArtifacts: unsafe/open type UnknownKeyword',
   'modules/resource-catalog/public/participants.ts#SkillVersionCommitHooks: unsafe/open type FunctionType',
   'modules/resource-catalog/public/queries.ts#AgentResourceIntegrityQueries: unsafe/open type TypeQuery',
+  // RFC-563: the material intent's logger was first reached from Resource Catalog's material references (they named the
+  // intent type); those are declared with Resource Catalog's own shapes now, so the same deviation is recorded at the
+  // intent owner's own public root.
+  'modules/runtime-management/application/ports/agentMaterial.ts#AgentMaterialCompiler: forbidden type import @/util/log#Logger',
   'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/util/log#Logger',
   'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: unsafe/open type FunctionType',
   // RFC-465: newly visible once the session capture / sweep contracts moved into the module (it replaces the three

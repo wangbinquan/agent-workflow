@@ -1,3 +1,25 @@
+## 2026-11-24 RFC-563 source-control 与 resource-catalog 用自己的形状声明任务代理的内容引用与资源材料（In Progress；`design/RFC-563-content-reference-own-shapes/`）
+
+- **来由**：DAG 外 offered 边（11 条）里 4 条是内容 owner 为了给自己发出的引用与材料写类型，按名字取 runtime-management 的材料意图
+  `AgentMaterialIntent`（source-control 的工作区内容一处，resource-catalog 的材料端口、本机引用实现与托管插件读取三处）；目标 DAG 上这两条边都不画。
+  用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10
+  「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，
+  不派 Codex。
+- **范围**：resource-catalog 的 `application/ports/taskAgentMaterialReferences.ts` 新增 `TaskAgentResourceContentReference`、`TaskAgentSkillMaterial`、
+  `TaskAgentPluginMaterial`，`TaskAgentResourceMaterial` 改用它们；本机引用实现按对象身份查内容、托管插件读取的入参写成本模块的形状；source-control
+  的工作区内容声明自己读写的两个形状。入参写得比意图宽、出参更具体，bootstrap 与 task-execution 不改。两份精确清单、减速带与
+  `PUBLIC_SURFACE_DEBT` 的一条记名随之更新；新增 RFC-563 用例；RFC-561 / 562 / 563 三个边界用例的 import 判据补上类型位置的 `import('…')`。
+- **不做**：resource-catalog 的 MCP 诊断仍取 runtime-management 的两处（另立）；其余 5 条 DAG 外 offered 边（其中 source-control 取 task-execution 终态维护
+  认领类型那一条与认领凭据的声明处绑在一起，和 integration 的来源终止凭据一样暂不动）。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 形状归发出它的 owner；C11 两个 context 的 public 导出名单不变，resource-catalog 的材料不再够到
+  意图；C12 RFC-563 用例覆盖两个 context 全部源码取 runtime-management 的边、形状与结构绑定（`tsc`）；C13 DAG 外 offered 边 11 → 7，其余计数不升
+  （public 类型偏差仍是 56，一条改记在意图 owner 的根上）。
+- **集中验证**（基于 `b3850ff9a`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷一处已修复并复验（预判那条 public 类型偏差会消失，
+  实测是换到 runtime-management 的根上记名、条数不变）。tsc 0 错，eslint / promises / prettier 无告警；选出 165 个用例文件，修正账本后全部通过；
+  读已提交源码的用例在候选导出里通过；六种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的绑定与 task-execution 的使用处报错；架构报告 DAG 外
+  offered 边 11 → 7，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-562 `b3850ff9a` 的 windows-platform 通过，主 CI（run 45401036761）仍在跑，转 Done 随后续提交。
+
 ## 2026-11-24 RFC-562 托管对象发布日志归内容 owner（platform/content），恢复归一参与者改为 system-operations 的 required 端口（In Progress；`design/RFC-562-hosted-publication-journal-platform/`）
 
 - **来由**：DAG 外 offered 边（26 条）里 15 条指向 system-operations——14 个 owner 文件按类型取它 public 里的托管对象发布日志，task-execution 的恢复归一

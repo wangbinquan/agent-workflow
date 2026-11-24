@@ -1,4 +1,4 @@
-import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
+import type { Plugin } from '@agent-workflow/shared'
 import type { BusinessNativePlugin } from '@/platform/crewstation/nativeMaterial'
 import type { createHostedPluginGenerations } from './pluginGenerations'
 
@@ -7,9 +7,16 @@ import type { createHostedPluginGenerations } from './pluginGenerations'
 export function createHostedNativePluginReader(
   generations: Pick<ReturnType<typeof createHostedPluginGenerations>, 'read'>,
 ) {
-  return async (
-    plugin: NonNullable<AgentMaterialIntent['injection']['plugins']>[number],
-  ): Promise<BusinessNativePlugin> => {
+  // RFC-563: a plugin material as the hosted compiler hands it back, in this module's own shape — the owner is checked
+  // before the reference is interpreted, so any owner's reference is accepted here.
+  return async (plugin: {
+    readonly declaration: Readonly<Pick<Plugin, 'id' | 'name' | 'options'>>
+    readonly content: {
+      readonly owner: string
+      readonly reference: string
+      readonly version: string | number | null
+    }
+  }): Promise<BusinessNativePlugin> => {
     if (plugin.content.owner !== 'resource-catalog')
       throw new Error('hosted-plugin-content-owner-mismatch')
     const manifest = await generations.read(plugin.content.reference)

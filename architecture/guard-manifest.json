@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 513,
+      "lines": 491,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1027
+      "lines": 1025
     },
     {
       "assertsAbsence": true,
@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 542,
+      "lines": 545,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -4423,7 +4423,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc561-aggregate-read-source-ports-boundary.test.ts",
       "id": "rfc561-aggregate-read-source-ports-boundary",
-      "lines": 276,
+      "lines": 284,
       "mechanism": "ast",
       "minCorpusFiles": 150,
       "negativeFixture": true,
@@ -4435,9 +4435,21 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc562-hosted-publication-journal-platform-boundary.test.ts",
       "id": "rfc562-hosted-publication-journal-platform-boundary",
-      "lines": 238,
+      "lines": 246,
       "mechanism": "ast",
       "minCorpusFiles": 2400,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc563-content-reference-own-shapes-boundary.test.ts",
+      "id": "rfc563-content-reference-own-shapes-boundary",
+      "lines": 222,
+      "mechanism": "ast",
+      "minCorpusFiles": 330,
       "negativeFixture": true,
       "runner": "bun"
     }

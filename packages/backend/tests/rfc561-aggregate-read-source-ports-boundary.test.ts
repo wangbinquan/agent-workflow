@@ -52,7 +52,7 @@ interface ModuleSpecifier {
   readonly typeOnly: boolean
 }
 
-/** Module specifiers of imports, re-exports and dynamic imports, each with whether it is type-only. */
+/** Module specifiers of imports, re-exports, dynamic imports and `import('…')` types, each with whether it is type-only. */
 function moduleSpecifiers(path: string, text: string): ModuleSpecifier[] {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const out: ModuleSpecifier[] = []
@@ -83,6 +83,12 @@ function moduleSpecifiers(path: string, text: string): ModuleSpecifier[] {
       ts.isStringLiteral(node.arguments[0])
     )
       out.push({ text: node.arguments[0].text, typeOnly: false })
+    if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal)
+    )
+      out.push({ text: node.argument.literal.text, typeOnly: true })
     ts.forEachChild(node, visit)
   }
   visit(source)
@@ -170,6 +176,7 @@ describe('RFC-561 —— 两个聚合读不取来源 context', () => {
         "import { c } from '@/modules/digital-employee/composition'\n" +
         "export type { D } from '../../development-automation/application/configOperations'\n" +
         "const e = () => import('@/modules/digital-employee/application/ports/platformInventory')\n" +
+        "type K = import('@/modules/development-automation/public/types').DevelopmentPurpose\n" +
         "import type { F } from '@/modules/identity-access/public/participants'\n" +
         "import { g } from '@/modules/identity-access/public/participants'\n" +
         "import type { H } from './ports/platformInventorySources'\n" +
@@ -182,10 +189,11 @@ describe('RFC-561 —— 两个聚合读不取来源 context', () => {
       'digital-employee/composition (value)',
       'development-automation/application/configOperations (type)',
       'digital-employee/application/ports/platformInventory (value)',
+      'development-automation/public/types (type)',
       'identity-access/public/participants (type)',
       'identity-access/public/participants (value)',
     ])
-    expect(found.filter((edge) => !isAuthorityEdge(edge))).toHaveLength(6)
+    expect(found.filter((edge) => !isAuthorityEdge(edge))).toHaveLength(7)
   })
 })
 
