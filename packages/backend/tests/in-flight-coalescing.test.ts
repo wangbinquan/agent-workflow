@@ -2,7 +2,7 @@
 // one in-progress DB projection, while later requests still observe fresh data.
 
 import { describe, expect, test } from 'bun:test'
-import { createInFlightCoalescer } from '../src/util/inFlight'
+import { createInFlightCoalescer } from '../src/platform/contracts/inFlight'
 
 describe('in-flight request coalescing', () => {
   test('overlapping callers share one loader and settled values are never cached', async () => {

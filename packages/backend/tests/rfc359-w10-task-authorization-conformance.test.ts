@@ -39,7 +39,7 @@ import {
   createTaskAuthorizationQueries,
 } from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { SQL_IN_CHUNK } from '@/util/sqlChunk'
+import { SQL_IN_CHUNK } from '@/platform/persistence/sqlChunk'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'

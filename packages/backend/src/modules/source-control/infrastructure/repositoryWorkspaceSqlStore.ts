@@ -14,7 +14,7 @@ import type {
   RepositoryGroupSnapshot,
   RepositoryScheduleRecord,
 } from '../ports/repositoryWorkspaceStore'
-import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/platform/contracts/inFlight'
 
 export interface RepositoryWorkspaceSqlExecutor {
   readonly db: PersistenceDb

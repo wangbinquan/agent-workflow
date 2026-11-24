@@ -4,7 +4,7 @@ import type {
   SystemOverviewAuthority,
   SystemOverviewQuery,
 } from '@/modules/system-operations/public/queries'
-import { createInFlightCoalescer } from '@/util/inFlight'
+import { createInFlightCoalescer } from '@/platform/contracts/inFlight'
 import type { SystemOverviewSources } from './ports/systemOverviewSources'
 
 const WINDOW_7D_MS = 7 * 86_400_000

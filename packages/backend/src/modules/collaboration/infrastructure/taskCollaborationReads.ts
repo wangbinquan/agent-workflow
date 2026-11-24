@@ -6,7 +6,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import type {
   RecoveryHumanGateFacts,
   NodeRunClarifyNav,

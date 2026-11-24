@@ -29,7 +29,7 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import type {
   HumanGateNodeRunLifecycleParticipantInTx,
   HumanGateNodeRunMintInput,

@@ -1,12 +1,13 @@
 // RFC-571 — `util/` 的八个通用原语归 platform（RFC-294 W9-D 后继）。
 //
 // 为什么存在：legacy 横向目录 `util/` 里有一批与业务无关、没有任何内部依赖的原语，RFC-294 design §2 与架构报告的归属表给它们的去向都是 platform。
-// RFC-571 原样搬了八个，读者一次改指，旧位置不留转出。锁三件事：
-// ① 八个旧路径不存在；`src` / `tests` / `scripts` 里没有任何说明符（别名、相对路径、动态 import、`mock.module`）再解析到它们（判据带负对照）。
-// ② 新位置的八个文件只取登记过的第三方库——不取模块、不取 `util/` 与其他 legacy 目录、不取文件系统与进程。
+// RFC-571 原样搬了八个，读者一次改指，旧位置不留转出；当时因为读者里有身份认证与任务授权的文件而留下的 `inFlight` 与 `sqlChunk`，在 RFC-572
+// 定下“这类文件只改 import 说明符一行”之后按同样的做法补迁，一并锁在这里（共十个）。锁三件事：
+// ① 十个旧路径不存在；`src` / `tests` / `scripts` 里没有任何说明符（别名、相对路径、动态 import、`mock.module`）再解析到它们（判据带负对照）。
+// ② 新位置的十个文件只取登记过的第三方库——不取模块、不取 `util/` 与其他 legacy 目录、不取文件系统与进程。
 // ③ 每个文件导出的名字与搬迁前相同。
 //
-// 覆盖范围（C12）：① 覆盖 backend 的 `src`、`tests`、`scripts` 与仓库根 `scripts` 的全部 TS / MJS 文件；② ③ 只读八个新文件。各原语的行为由它们
+// 覆盖范围（C12）：① 覆盖 backend 的 `src`、`tests`、`scripts` 与仓库根 `scripts` 的全部 TS / MJS 文件；② ③ 只读十个新文件。各原语的行为由它们
 // 既有的用例覆盖（`keyed-serial-queue`、`rfc271-zip-roundtrip`、`zip-fixed-mtime-timezone`、`zod4-contracts`、`rfc143` 的 semver 一条、
 // `rfc284-microhelpers` 的 monotonic 一条等）。
 import { describe, expect, test } from 'bun:test'
@@ -44,6 +45,14 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
   ],
   ['util/zip', 'platform/content/zip', ['ZipFile', 'encodeZip'], ['fflate']],
   ['util/version', 'platform/execution/version', ['BUILD_VERSION', 'appVersion'], []],
+  // The RFC-571 follow-up: the two leaves left behind at first.
+  [
+    'util/inFlight',
+    'platform/contracts/inFlight',
+    ['InFlightCoalescer', 'createInFlightCoalescer'],
+    [],
+  ],
+  ['util/sqlChunk', 'platform/persistence/sqlChunk', ['SQL_IN_CHUNK', 'chunkedAll'], []],
 ]
 const OLD = new Set(MOVED.map(([old]) => old))
 
@@ -149,7 +158,7 @@ function rawSpecifiers(path: string): string[] {
   )
 }
 
-describe('RFC-571 —— 八个原语离开 util/', () => {
+describe('RFC-571 —— 十个原语离开 util/', () => {
   test('旧路径不存在，新路径存在', () => {
     for (const [old, next] of MOVED) {
       expect([old, existsSync(join(SRC, `${old}.ts`))]).toEqual([old, false])
@@ -186,6 +195,8 @@ describe('RFC-571 —— 八个原语离开 util/', () => {
           "const queue = require('./util/keyedSerialQueue')\n" +
           "mock.module('@/util/frontmatter', () => ({}))\n" +
           "type J = import('./util/jsonDocument').JsonDocument\n" +
+          "import { chunkedAll } from '@/util/sqlChunk'\n" +
+          "import { createInFlightCoalescer } from './util/inFlight'\n" +
           "import { toInputJsonSchema } from './platform/operations/zodJsonSchema'\n" +
           "import { z } from 'zod'\n",
       ).filter((target) => OLD.has(target)),
@@ -197,6 +208,8 @@ describe('RFC-571 —— 八个原语离开 util/', () => {
       'util/keyedSerialQueue',
       'util/frontmatter',
       'util/jsonDocument',
+      'util/sqlChunk',
+      'util/inFlight',
     ])
     const fromTests = join(BACKEND, 'tests', 'helpers', 'probe.ts')
     expect(

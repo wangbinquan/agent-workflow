@@ -51,3 +51,23 @@
   **C13**：`legacy-horizontal-files` 123 → 115，其余计数不升。
 - **本 RFC 承担的演进**：W9-D 里 `util/` 通用原语迁入 platform 的第一批。
 - **留下的债**：`util/` 余 27 个（proposal 非目标一节）。
+
+## 7. 补迁（2026-11-24）：`inFlight` 与 `sqlChunk`
+
+本 RFC 动手前把这两个文件留在了 `util/`（proposal 非目标一节）：它们自己没有任何 import，但读者里有两个身份认证文件与任务授权文件。RFC-572 迁进程 /
+执行一族时遇到同样的情形（读者里有凭据与工作区边界的文件），做法是这类读者只改 import 说明符那一行、别的不动。按同样的做法把这两个补上。数字取
+HEAD `9507dea6e`。
+
+| 原位置               | 新位置                      | 说明                                                                                                                                   |
+| -------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `S/util/inFlight.ts` | `P/contracts/inFlight.ts`   | 并发原语（同一个键上重叠的调用合并成一次），与同目录的 `keyedSerialQueue.ts`、`semaphore.ts` 同类；零 import                           |
+| `S/util/sqlChunk.ts` | `P/persistence/sqlChunk.ts` | 按绑定参数上限分块执行查询；读者是三个模块 infrastructure 里的查询与同目录的 `capabilities.ts`，`batchInsert.ts` 的注释引它；零 import |
+
+- **读者**：15 个生产文件、3 个用例文件与 1 个测试助手各改一行 import 说明符（解析器式改写，同 §2）。两个身份认证文件（`httpAuthentication.ts`、
+  `crewStationAuthentication.ts`）只有这一行；`taskAuthorization.ts` 除这一行外另有一行注释写着旧路径，随改。另外三处注释里的旧路径
+  （`capabilities.ts`、`batchInsert.ts`、`taskArchiveContentCoordinator.ts`）同样只改路径。两个文件自身逐字节不变。
+- **门与用例**：架构报告的归属表删去这两行；`counts.json` 的 `legacy-horizontal-files` 上限 109 → 107。不另立用例文件——RFC-571 用例的迁移清单从
+  八个扩到十个，三条判据与负对照一并覆盖这两个。
+- **动手前的检索**：按 RFC-572 记进 `docs/dev-gotchas.md` 的清单查了旧路径的文本提及、分段拼出的路径、已提交的 JSON 账本、工作流与
+  dependency-cruiser 配置和文档；除 import 之外只有归属表的两行与上面四处注释。
+- **留下的债**：`util/` 余 19 个。

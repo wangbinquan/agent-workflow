@@ -1,4 +1,18 @@
-## 2026-11-24 RFC-572 `util/` 的进程 / 执行一族归 platform（In Progress；`design/RFC-572-util-process-family-into-platform/`）
+## 2026-11-24 RFC-571 补迁：`util/inFlight` 与 `util/sqlChunk` 归 platform（等 CI；`design/RFC-571-util-primitives-into-platform-1/` design §7、plan「补迁」一节）
+
+- **来由**：RFC-571 动手前把这两个零依赖的原语留在了 `util/`，因为读者里有两个身份认证文件与任务授权文件。RFC-572 对同类情形（读者里有凭据与
+  工作区边界的文件）的做法是只改 import 说明符那一行；按同样的做法补上。两个文件的原样搬迁，按“纯重命名”处理、不另立 RFC，记在 RFC-571 里。
+- **范围**：`inFlight` 进 `platform/contracts/`，`sqlChunk` 进 `platform/persistence/`，逐字节不变；15 个生产读者、3 个用例文件与 1 个测试助手各改
+  一行 import 说明符，四处注释里的旧路径随改（两个身份认证文件只有 import 那一行）；架构报告的归属表删两行，`legacy-horizontal-files`
+  109 → 107；RFC-571 用例的迁移清单从八个扩到十个。旧位置不留转出。
+- **集中验证**（基于 `9507dea6e`，详见 plan「补迁」一节）：本地只跑 SQLite，PostgreSQL 以 CI 为准。没有查出缺陷。tsc 0 错，eslint / promises /
+  prettier 无告警；选出 318 个用例文件（这次把“按完整相对路径读被改动文件源码”的用例也选进来），一次全部通过；读已提交源码的 184 个用例文件在
+  候选导出里通过；六种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **`util/` 余 19 个**：`errors` / `hash` / `log` / `paths` / `http` 读者数百处的另立；git、凭据、文件信任、Windows ACL、OIDC、脱敏与安全路径一族
+  不动；`fsReclaim`（Windows 工作流的路径清单里有它）、`migrationsFolder`（`rfc359-w5-same-file-provider-pairs` 按路径钉着它）、`daemonInfo` 与
+  `timeoutSignal` 是下一批的候选。
+
+## 2026-11-24 RFC-572 `util/` 的进程 / 执行一族归 platform（Done；`design/RFC-572-util-process-family-into-platform/`）
 
 - **来由**：W9-D 的第二批。`util/` 余下的 27 个文件里有六个是闭合的依赖集（彼此引用，对外只取 `util/log`），而 `platform/execution/local/` 已经是
   本机进程执行机制的位置、Windows 的 CI 也按这个目录的通配触发。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
@@ -19,8 +33,8 @@
 - **CI 侧**：RFC-571 转 Done 的文档提交 `7c9c778d4` 主 CI run 45495905499 70 / 70 全绿。
 - **CI**：`cbbcf4692` 主 CI run 45502183866 68 / 70——后端分片 41/44 里一条用例红（`rfc456-services-single-owner-placement` 的对照把 `cli/stop.ts`
   取 platform 的 import 列表整份钉住，本 RFC 让它多了一条），**本 RFC 引入**，已改成只断言它要证的那一条并随修正提交上库；本地选集没有选“把被
-  改写的读者文件当源码读”的用例，所以没查出来。windows-platform、integration-opencode、git-protocols-e2e、visual-regression-nightly 通过。本 RFC
-  等修正提交的 CI 再转 Done。
+  改写的读者文件当源码读”的用例，所以没查出来。windows-platform、integration-opencode、git-protocols-e2e、visual-regression-nightly 通过。修正提交
+  `9507dea6e` 主 CI run 45508080489 70 / 70 全绿（含上一次红的分片 41/44），本 RFC 转 Done。
 
 ## 2026-11-24 RFC-571 `util/` 的八个通用原语归 platform（Done；`design/RFC-571-util-primitives-into-platform-1/`）
 

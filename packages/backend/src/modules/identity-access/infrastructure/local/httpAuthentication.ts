@@ -1,7 +1,7 @@
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { hashAuthToken } from '@/auth/application/authRuntime'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
-import { createInFlightCoalescer } from '@/util/inFlight'
+import { createInFlightCoalescer } from '@/platform/contracts/inFlight'
 import type { DirectAuthorityIdentity } from '../../public/participants'
 import type { HttpAuthenticationParticipant } from '../../public/participants'
 import { parseLocalBearerHeader } from '../../domain/localBearerCredential'

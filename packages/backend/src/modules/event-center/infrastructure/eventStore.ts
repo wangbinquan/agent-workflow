@@ -10,7 +10,7 @@ import { TriggerContextSchema } from '@agent-workflow/shared'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import type { EventStorePort, ObservationStoreReceipt } from '../application/ports/eventStore'
 import {
   eventSourceDescriptorSchema,

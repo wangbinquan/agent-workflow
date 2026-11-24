@@ -44,7 +44,7 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 
 import { postgresqlSerializationFailureCode } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
-import { SQL_IN_CHUNK } from '@/util/sqlChunk'
+import { SQL_IN_CHUNK } from '@/platform/persistence/sqlChunk'
 
 /** SQLite 的绑定参数预算：保守值，见 `EngineCapabilities.batchInsertMax` 的注释。 */
 const SQLITE_MAX_BIND_PARAMETERS = 32_766
@@ -95,7 +95,7 @@ export interface EngineCapabilities {
    *
    * **参数预算是保守值而不是实测硬顶**：同日实测本机 bun 1.3.13 上两个引擎的真实上限都是
    * 65535 个参数（10922×6=65532 过、10923×6=65538 抛）——SQLite 侧是 bun:sqlite 绑定层的限制、
-   * PostgreSQL 侧是 wire protocol 的 int16 参数计数。`util/sqlChunk.ts` 已记过「SQLite 的上限
+   * PostgreSQL 侧是 wire protocol 的 int16 参数计数。`platform/persistence/sqlChunk.ts` 已记过「SQLite 的上限
    * 随构建而变」，所以矩阵继续按保守预算切批，不去贴那个会飘的天花板。
    */
   batchInsertMax(columnCount: number): number

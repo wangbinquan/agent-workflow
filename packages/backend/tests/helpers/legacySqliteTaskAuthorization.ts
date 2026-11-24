@@ -17,7 +17,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { type SQL, type SQLWrapper, and, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import {
   defaultTaskListRowRef,
   taskListOwnershipScopeCondition,

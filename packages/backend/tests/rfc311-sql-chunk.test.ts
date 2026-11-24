@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { SQL_IN_CHUNK, chunkedAll } from '../src/util/sqlChunk'
+import { SQL_IN_CHUNK, chunkedAll } from '../src/platform/persistence/sqlChunk'
 
 describe('chunkedAll', () => {
   test('empty input never calls the executor', async () => {

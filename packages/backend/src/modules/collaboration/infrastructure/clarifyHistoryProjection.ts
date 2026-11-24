@@ -10,7 +10,7 @@ import {
   type PersistenceTables,
 } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
 
 export type ClarifyHistoryRound = PersistenceTables['clarifyRounds']['$inferSelect'] & {

@@ -5,7 +5,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 // 各一份，查询逐字相同。PostgreSQL 那份由本文件替代；SQLite 的同步孪生在其余 dbTxSync
 // 调用方迁完前保留（W4 pair-deletion）。
 
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import { and, eq, inArray, or, type Placeholder, type SQL, type SQLWrapper } from 'drizzle-orm'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -142,7 +142,7 @@ export function taskVisibilityCondition(
  *
  * **仓里唯一的一份**。此前四处各写一遍同一个「按 500 分块 + 逐块查存在性与可见性」的循环，
  * 其中 `collaborationTaskAccess.ts` 与 `reviewTaskAccess.ts` 的两份**逐字相同**、还各自把
- * 分块大小硬写成字面量 500（`util/sqlChunk.ts` 的 `SQL_IN_CHUNK` 就是这个数，它存在的理由
+ * 分块大小硬写成字面量 500（`platform/persistence/sqlChunk.ts` 的 `SQL_IN_CHUNK` 就是这个数，它存在的理由
  * 正是「别把某个具体数字写进判据」）。
  */
 export async function visibleTaskIdsFor(

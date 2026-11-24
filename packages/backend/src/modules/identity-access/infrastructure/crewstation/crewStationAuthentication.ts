@@ -7,7 +7,7 @@
 // PAT belonging to that same account; local sessions/passwords and the daemon
 // bootstrap token cannot replace the platform identity.
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
-import { createInFlightCoalescer } from '@/util/inFlight'
+import { createInFlightCoalescer } from '@/platform/contracts/inFlight'
 import { PAT_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { AdmittedPatCredential } from '../../public/participants'

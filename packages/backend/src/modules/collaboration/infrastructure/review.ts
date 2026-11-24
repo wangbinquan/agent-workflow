@@ -159,7 +159,7 @@ import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/c
 import type { ReviewGateOpenDocumentDraft } from '@/modules/collaboration/application/prepareReviewGateOpen'
 
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 
 import { assertNodeRunSourceTerminationAdmission } from '@/platform/persistence/nodeRunLifecycleCore'
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'

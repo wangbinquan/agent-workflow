@@ -47,7 +47,7 @@ import {
 import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { chunkedAll } from '@/util/sqlChunk'
+import { chunkedAll } from '@/platform/persistence/sqlChunk'
 
 import { NotFoundError } from '@/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'

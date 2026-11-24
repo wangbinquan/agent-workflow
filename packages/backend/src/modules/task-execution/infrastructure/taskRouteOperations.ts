@@ -172,7 +172,7 @@ import { createWorkflowSyncPreviewReads } from './workflowSyncPreviewReads'
 
 import { deleteTask } from './taskDelete'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/platform/contracts/inFlight'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { killStaleRunProcessTree } from '@/platform/execution/local/process'

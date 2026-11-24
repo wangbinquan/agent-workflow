@@ -4543,7 +4543,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc571-util-primitives-into-platform-boundary.test.ts",
       "id": "rfc571-util-primitives-into-platform-boundary",
-      "lines": 225,
+      "lines": 238,
       "mechanism": "ast",
       "minCorpusFiles": 6000,
       "negativeFixture": true,

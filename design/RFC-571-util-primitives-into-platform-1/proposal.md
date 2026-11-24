@@ -1,6 +1,6 @@
 # RFC-571 `util/` 的八个通用原语归 platform（RFC-294 W9-D 后继）
 
-- **状态**：Done（2026-11-24，落地 `2335b2bcc`）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+- **状态**：Done（2026-11-24，落地 `2335b2bcc`；同日补迁 `inFlight` 与 `sqlChunk`，见 design §7 与 plan「补迁」一节）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
   （2026-11-09、2026-11-17、2026-11-24 再次下达），2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」，2026-11-19「你加速推
   进RFC294」：本会话按 2026-11-09 刷新后的 RFC-294 总纲调研、设计、实施与集中验证，按授权记为已批准（取舍见 design §4，可推翻）；不派
   Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
@@ -33,6 +33,8 @@ legacy 横向目录还剩 123 个文件，其中 `util/` 35 个。架构报告�
 - `util/` 余下的 27 个：`errors` / `hash` / `log` 三个读者上千处的另立；git、凭据、文件信任、Windows ACL 与 OIDC 一族不在本 RFC；依赖其他 `util/`
   文件或文件系统的（`archive`、`fsReclaim`、`migrationsFolder`、`spawnDiagnostics`、`daemonInfo` 等）随它们的依赖一起迁。
 - `timeoutSignal`、`inFlight` 与 `sqlChunk`：读者里有 `auth/oidc/`、身份认证与任务授权的文件，本 RFC 不碰那几处，随它们各自的后继。
+  **2026-11-24 补迁**：RFC-572 对这类读者的做法是只改 import 说明符那一行；`inFlight` 与 `sqlChunk` 按同样的做法迁入 platform（design §7、
+  plan「补迁」一节）。`timeoutSignal` 这次没有动。
 
 ## 4. 用户可见变化
 

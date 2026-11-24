@@ -49,7 +49,7 @@ import type {
 //     `terminalMaintenanceClaim.ts`，同一张状态转移表只此一份。
 //
 // IN-list 分块用 `SQL_IN_CHUNK`（500）而不是 PG 侧原来的 2000：SQLite 有
-// `SQLITE_MAX_VARIABLE_NUMBER` 上限且随构建而变（`util/sqlChunk.ts`），中立实现按最保守构建取值。
+// `SQLITE_MAX_VARIABLE_NUMBER` 上限且随构建而变（`platform/persistence/sqlChunk.ts`），中立实现按最保守构建取值。
 // JSONL 的写批次仍是 2000 行一段——那只关乎 `appendFileSync` 的粒度，与绑定参数无关。
 
 import { readNodeRunLegacyEvidence } from './nodeRunLegacyEvidence'
@@ -64,7 +64,7 @@ import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createLogger } from '@/util/log'
-import { chunkedAll, SQL_IN_CHUNK } from '@/util/sqlChunk'
+import { chunkedAll, SQL_IN_CHUNK } from '@/platform/persistence/sqlChunk'
 import type {
   ArchivedTaskTreeReceipt,
   TaskArchiveConfig,
