@@ -365,12 +365,8 @@ const CONTENT_DEBT_SUCCESSORS: Readonly<Record<string, string>> = {
     'users|task-execution/infrastructure/taskRouteLaunchOperations.ts',
   'users|resource-catalog/infrastructure/workgroupMutationParticipant.ts':
     'users|resource-catalog/infrastructure/workgroupRepository.ts',
-  'contentObjects|system-operations/infrastructure/crewstation/objectPublications.ts':
-    'hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts',
-  'contentPublications|system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts':
-    'hostedObjectPublications|system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts',
-  'contentPublications|system-operations/infrastructure/crewstation/objectPublications.ts':
-    'hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts',
+  // RFC-562: the three hosted publication successors are settled — the journal moved into platform/content (the owner
+  // of both tables) and System Operations' restore normalization releases through the journal's closed operation.
 }
 
 /**
@@ -674,6 +670,10 @@ const GLOBAL_INFRASTRUCTURE: Readonly<
   'platform/content/infrastructure/contentStore.ts': {
     tables: ['contentBytes', 'contentObjects', 'contentPublications'],
     why: 'RFC-395 II-b: ContentStore owns its object, bytes and publication tables; this is not a cross-context business-table exemption.',
+  },
+  'platform/content/infrastructure/hostedObjectPublications.ts': {
+    tables: ['contentObjects', 'contentPublications'],
+    why: "RFC-562: the hosted object publication journal is the content owner's mechanism (moved here from system-operations); it reads and writes its own object and publication tables, not a cross-context business table.",
   },
   'platform/content/migration/probes.ts': {
     tables: ['contentBytes', 'contentObjects', 'contentPublications'],

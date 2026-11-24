@@ -102,36 +102,23 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-491：只供契约用例的本机兼容运行迁入 tests/helpers，它指向 source-control 的一对销账。
   ],
   'off-dag-offered-file-context-pairs': [
+    // RFC-562: the hosted object publication journal moved into platform/content and the restore normalization participant
+    // became a System Operations required port — the 15 pairs into system-operations are settled.
     // RFC-559: task-execution and collaboration take memory through their own ports (memory injection and distill).
-    'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts -> system-operations',
-    'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts -> system-operations',
     'packages/backend/src/modules/development-automation/composition.ts -> integration',
-    'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts -> system-operations',
-    'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
-    'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts -> system-operations',
     // RFC-561: Intent's platform inventory names its two cross-context sources with its own ports; bootstrap binds them.
     'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/crewstationNativePlugin.ts -> runtime-management',
     'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts -> runtime-management',
-    'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts -> system-operations',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts -> runtime-management',
     'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts -> task-execution',
     'packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts -> runtime-management',
     // RFC-561: the system overview names its five sources with its own ports; bootstrap binds the owners' queries.
     'packages/backend/src/modules/system-operations/composition.ts -> source-control',
-    'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts -> system-operations',
     // RFC-560: task-execution implements the fusion engine task port through its knowledge-evolution adapter.
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/materialObjectUploads.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/nodeEventArchive.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/portArtifactContent.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArchiveContent.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArtifacts.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskInputFiles.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts -> system-operations',
     // RFC-491：本机兼容运行的入参迁入 tests/helpers，它指向 memory 的一对销账。
   ],
   'platform-to-modules-file-pairs': [],

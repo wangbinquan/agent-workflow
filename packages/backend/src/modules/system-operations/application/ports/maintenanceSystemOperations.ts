@@ -1,8 +1,6 @@
+import type { HostedObjectPublicationMaintenance } from '@/platform/content/hostedObjectPublications'
 import type { MaintenanceJobExecutionResult } from '@/platform/contracts/maintenanceJob'
-import type {
-  DatabaseBackupMaintenance,
-  HostedObjectPublicationMaintenance,
-} from '../../public/commands'
+import type { DatabaseBackupMaintenance } from '../../public/commands'
 
 export interface MaintenanceSystemOperations {
   readonly databaseBackups?: DatabaseBackupMaintenance

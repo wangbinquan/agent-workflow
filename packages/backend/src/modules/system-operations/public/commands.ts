@@ -1,7 +1,5 @@
 import type { Config } from '@agent-workflow/shared'
 
-export type { HostedObjectPublicationMaintenance } from '../infrastructure/crewstation/objectPublicationContract'
-
 /** Catalog retention. Stale building backups are failed first; physical unpin
  * of released archives belongs to the hosted object maintenance job. */
 export interface DatabaseBackupMaintenance {

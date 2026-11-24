@@ -45,7 +45,7 @@ import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/in
 import {
   createHostedObjectPublications,
   hostedPublicationId,
-} from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+} from '@/platform/content/infrastructure/hostedObjectPublications'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 import {

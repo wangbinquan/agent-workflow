@@ -7,10 +7,8 @@ import type { PostgresqlDatabaseClientOptions } from '@/platform/persistence/pos
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
-import type {
-  DatabaseBackupMaintenance,
-  HostedObjectPublicationMaintenance,
-} from '@/modules/system-operations/public/commands'
+import type { DatabaseBackupMaintenance } from '@/modules/system-operations/public/commands'
+import type { HostedObjectPublicationMaintenance } from '@/platform/content/hostedObjectPublications'
 import type {
   PluginGenerationFilesystemGcPort,
   ResourcePackageApplyArtifactRecoveryPort,

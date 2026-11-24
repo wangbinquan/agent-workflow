@@ -10,7 +10,7 @@
 // from the deleted recovery-input test (its recovery machinery was removed).
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 import { createHostedTaskInputFiles } from '@/modules/task-execution/infrastructure/crewstation/taskInputFiles'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'

@@ -1,7 +1,7 @@
 import { canonicalJson } from '@agent-workflow/shared'
 import { createReadStream, lstatSync } from 'node:fs'
 import { z } from 'zod'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type {
   CrewStationStreamObjectStorage,
   HostedObjectStream,

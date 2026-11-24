@@ -1,6 +1,6 @@
 import { isAbsolute, join, posix } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { createDevelopmentObjectIndex } from './objectIndex'

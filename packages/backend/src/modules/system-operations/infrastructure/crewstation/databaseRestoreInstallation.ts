@@ -26,7 +26,7 @@ import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresq
 import { type PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
-import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
+import type { HostedRestoreNormalizationParticipant } from '../../application/ports/hostedRestoreNormalization'
 import { openHostedDatabaseBackupArchive } from './databaseRestoreArtifact'
 import {
   recordRestoredDatabaseDigests,

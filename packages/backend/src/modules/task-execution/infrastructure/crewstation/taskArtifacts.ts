@@ -9,7 +9,7 @@ import {
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedObjectReceipt } from '@/modules/system-operations/public/participants'
+import type { HostedObjectReceipt } from '@/platform/content/hostedObjectPublications'
 
 export const HOSTED_TASK_ARTIFACT_OWNER = 'task-artifact'
 

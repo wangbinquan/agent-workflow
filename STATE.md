@@ -1,4 +1,28 @@
-## 2026-11-24 RFC-561 两个跨 context 的聚合读用自己的端口点名来源：系统总览与 Intent 平台清单（In Progress；`design/RFC-561-aggregate-read-source-ports/`）
+## 2026-11-24 RFC-562 托管对象发布日志归内容 owner（platform/content），恢复归一参与者改为 system-operations 的 required 端口（In Progress；`design/RFC-562-hosted-publication-journal-platform/`）
+
+- **来由**：DAG 外 offered 边（26 条）里 15 条指向 system-operations——14 个 owner 文件按类型取它 public 里的托管对象发布日志，task-execution 的恢复归一
+  实现取它 public 里的参与者合同。日志自称平台中立、只依赖 platform、读写的两张表归 platform/content，DAG 外边账本与表归属账本都写明它该下沉为平台内容
+  机制。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：发布日志的合同与实现原样迁入 `platform/content/hostedObjectPublications.ts` 与 `platform/content/infrastructure/hostedObjectPublications.ts`；
+  五个 owner context 的 14 个文件、system-operations 的装配 / 备份 / 维护端口与 bootstrap 改从平台取；system-operations 的恢复归一改调日志新增的闭合
+  操作 `releaseHostedPublicationsInTx`（原来它自己写的那条 UPDATE）；恢复归一参与者挪进 system-operations 的 `application/ports`、经 required-ports
+  交出，task-execution 经已有的 system-operations adapter 取类型、经装配根交出实现（不再经 public）；目标 DAG 与 RFC-294 design 的 Mermaid 同批登记
+  虚线边；DAG 外边、表归属、public 类型偏差三处的清单与减速带随之更新；新增 RFC-562 的边界用例与行为用例。
+- **不做**：把托管对象发布并入 platform/content 已有的 `ContentStore` 发布账本（换实现，另立）；其余 11 条 DAG 外 offered 边。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 发布日志归 platform/content，恢复归一参与者归 system-operations 的 application/ports 并经
+  required-ports 交出；C11 system-operations 的 public 收窄 9 个符号、task-execution 收窄 1 个，platform 不取任何模块；C12 RFC-562 两个用例覆盖边界
+  （system-operations 以外全部模块取它的边、日志的位置与依赖面、参与者的声明与取法、恢复归一不直接碰发布表、目标 DAG 的边）与行为（闭合释放操作）；
+  C13 DAG 外 offered 边 26 → 11、表归属债 120 → 117、public 类型偏差 59 → 56，其余计数不升，目标 DAG 多一条虚线 required 边。
+- **集中验证**（基于 `7e5b37e36`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷一处已修复并复验（新增行为用例的夹具写了两个同时在
+  构建的备份，表只允许一个）；生产代码没有因集中验证改动。tsc 0 错，eslint / promises / prettier 无告警；选出 1184 个用例文件，除
+  `rfc167-dynamic-workflow-engine` 一例在本机满载时到 5 秒结算期限（既记三次同形，单独再跑 3 / 3 通过，记为第四次）外全部通过；读已提交源码的用例在
+  候选导出里通过；十种变异都被认出；架构报告 DAG 外 offered 边 26 → 11、public 类型偏差 59 → 56、public 面 −10、目标边 110 → 111，其余不变。实现门 PASS
+  （本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-561 `7e5b37e36` 的主 CI（run 45393780218）70 / 70，windows-platform 通过，转 Done。
+
+## 2026-11-24 RFC-561 两个跨 context 的聚合读用自己的端口点名来源：系统总览与 Intent 平台清单（Done；`design/RFC-561-aggregate-read-source-ports/`）
 
 - **来由**：DAG 外 offered 边（33 条）里 7 条出自两个把多个 context 的结果拼成一张表的只读聚合——system-operations 的首页总览取 resource-catalog /
   source-control / integration / memory / task-execution 的 public，intent 的平台清单取 development-automation / digital-employee 的 public；目标 DAG 都不画。
@@ -20,6 +44,7 @@
   选出 650 个用例文件，除 `rfc167-dynamic-workflow-engine` 一例在本机满载时到 5 秒结算期限（既记两次同形，单独再跑 3 / 3 通过，记为第三次）外
   全部通过；读已提交源码的用例在候选导出里通过；七种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的两个交接处报错；架构报告 DAG 外 offered 边
   33 → 26、public 面 −8，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：主 CI run 45393780218 70 / 70，windows-platform 通过。
 
 ## 2026-11-23 RFC-560 knowledge-evolution 的 fusion 引擎任务端口经 required-ports 交给 task-execution（Done；`design/RFC-560-fusion-engine-task-port/`）
 

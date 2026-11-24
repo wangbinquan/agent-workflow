@@ -12,3 +12,7 @@ export interface DoctorTaskLifecyclePort {
     readonly quarantined: number
   }>
 }
+
+// RFC-562: each owner normalizes only its own rows after a hosted restore; task-execution implements this through
+// its system-operations adapter.
+export type { HostedRestoreNormalizationParticipant } from '../application/ports/hostedRestoreNormalization'

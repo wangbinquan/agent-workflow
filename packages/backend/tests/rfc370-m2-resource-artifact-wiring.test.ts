@@ -19,7 +19,7 @@ import {
   composeCrewStationIntentPluginRetention,
 } from '@/modules/intent/composition/crewstationArtifacts'
 import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/infrastructure/crewstation/crewstationArtifacts'
-import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 import { LIVE_TREE, readTree } from '@/modules/resource-catalog/infrastructure/databaseSkillTrees'
 import {
   composeCrewStationWorkerFence,

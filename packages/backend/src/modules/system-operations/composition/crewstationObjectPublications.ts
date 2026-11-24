@@ -7,9 +7,9 @@ import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/obje
 import type {
   HostedObjectOwnerSweep,
   HostedObjectPublicationMaintenance,
-} from '../infrastructure/crewstation/objectPublicationContract'
+} from '@/platform/content/hostedObjectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 import { createHostedBackupReleaseHorizon } from '../infrastructure/crewstation/backupReleaseHorizon'
-import { createHostedObjectPublications } from '../infrastructure/crewstation/objectPublications'
 
 export function composeCrewStationObjectPublications(input: {
   readonly db: PersistenceDb

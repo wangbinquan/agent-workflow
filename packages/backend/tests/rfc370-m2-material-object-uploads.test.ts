@@ -6,7 +6,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 import {
   createHostedMaterialObjectUploads,
   HOSTED_MATERIAL_OWNER,

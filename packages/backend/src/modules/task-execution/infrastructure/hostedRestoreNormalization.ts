@@ -10,7 +10,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 //     instance, and boot recovery cancels and settles it instead of adopting it;
 //   · platform recovery requests still in flight end as failed: resuming a
 //     task now is the user's informed choice, not a backup-era request's.
-import type { HostedRestoreNormalizationParticipant } from '@/modules/system-operations/public/participants'
+import type { HostedRestoreNormalizationParticipant } from '../application/adapters/system-operations-adapter'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { DAEMON_RESTART_ERROR_SUMMARY, LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'

@@ -18,11 +18,11 @@ import {
   hostedPublicationPin,
   HOSTED_PUBLICATION_ABANDON_MS,
   HOSTED_PUBLICATION_RETENTION_MS,
-} from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+} from '@/platform/content/infrastructure/hostedObjectPublications'
 import type {
   HostedObjectContent,
   HostedObjectOwnerSweep,
-} from '@/modules/system-operations/public/participants'
+} from '@/platform/content/hostedObjectPublications'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 

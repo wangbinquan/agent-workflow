@@ -25,7 +25,7 @@ import {
 import {
   createHostedObjectPublications,
   hostedPublicationId,
-} from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+} from '@/platform/content/infrastructure/hostedObjectPublications'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'

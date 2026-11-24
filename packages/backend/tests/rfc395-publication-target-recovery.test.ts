@@ -10,7 +10,7 @@ import { contentRefColumns } from '@/platform/content/contentStore'
 import {
   createHostedObjectPublications,
   HOSTED_PUBLICATION_ABANDON_MS,
-} from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+} from '@/platform/content/infrastructure/hostedObjectPublications'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'

@@ -4,7 +4,7 @@ import type {
   CrewStationStreamObjectStorage,
   HostedObjectStream,
 } from '@/platform/crewstation/objectStorage'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import {
   DEVELOPMENT_EVIDENCE_OWNER,
   retainDevelopmentObjectInTx,

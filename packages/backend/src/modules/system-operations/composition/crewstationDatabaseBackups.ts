@@ -9,7 +9,7 @@ import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLo
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
-import type { HostedObjectPublications } from '../infrastructure/crewstation/objectPublicationContract'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import { createHostedBackupCatalog } from '../infrastructure/crewstation/databaseBackupCatalog'
 import { readHostedDatabaseBackupProvenance } from '../infrastructure/crewstation/databaseBackupProvenance'
 import { createHostedDatabaseBackups } from '../infrastructure/crewstation/databaseBackups'

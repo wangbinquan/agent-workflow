@@ -23,8 +23,8 @@ import { composeCrewStationTaskInputFiles } from '@/modules/task-execution/compo
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import { composeSelectedDaemonDatabaseInstallation } from '@/modules/system-operations/composition/daemonDatabaseInstallation'
 import { composeCrewStationObjectPublications } from '@/modules/system-operations/composition/crewstationObjectPublications'
-import type { HostedRestoreNormalizationParticipant } from '@/modules/system-operations/public/participants'
-import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/public/participants'
+import type { HostedRestoreNormalizationParticipant } from '@/modules/system-operations/composition/required-ports'
+import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/composition'
 import { composeCrewStationHumanGateRecovery } from '@/modules/collaboration/composition/crewstationHumanGateRecovery'
 import { composeCrewStationNodeEventArchive } from '@/modules/task-execution/composition/crewstationNodeEventArchive'
 import {

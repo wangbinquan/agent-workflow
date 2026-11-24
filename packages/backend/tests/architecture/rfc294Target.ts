@@ -150,6 +150,8 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   ['resource-catalog', 'task-execution', 'WorkgroupRouteLaunchResources'],
   // RFC-560: Task Execution's knowledge-evolution adapter (the fusion engine task operations).
   ['task-execution', 'knowledge-evolution', 'FusionEngineTaskOperations'],
+  // RFC-562: Task Execution's system-operations adapter also carries the hosted restore normalization participant.
+  ['task-execution', 'system-operations', 'HostedRestoreNormalizationParticipant'],
 ]
 
 const AUTHORITY_CONTEXTS = TARGET_PUBLIC_CONTEXTS.filter((context) => context !== 'identity-access')

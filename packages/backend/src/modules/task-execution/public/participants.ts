@@ -222,9 +222,6 @@ export type {
 } from '../application/ports/systemAgentRunFamily'
 export { classifyMissingEnvelope } from '../application/systemAgentRun'
 
-/** RFC-370 v3 V5: Task Execution's hosted restore normalization participant. */
-export { createHostedRestoreTaskNormalization } from '../infrastructure/hostedRestoreNormalization'
-
 export type {
   ConsumedInputsParticipantInTx,
   ConsumedInputsWrite,

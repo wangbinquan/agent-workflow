@@ -19,7 +19,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { and, asc, eq, gt, gte, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type {
   EventsArchiveContent,
   ArchivedEventsReader,

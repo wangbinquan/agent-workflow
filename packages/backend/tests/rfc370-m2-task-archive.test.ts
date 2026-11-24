@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 import type { HostedStoredObject } from '@/platform/crewstation/objectStorage'
 import {
   createHostedTaskArchiveContent,

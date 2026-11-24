@@ -8,7 +8,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   HostedObjectOwnerSweep,
   HostedObjectPublications,
-} from '@/modules/system-operations/public/participants'
+} from '@/platform/content/hostedObjectPublications'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

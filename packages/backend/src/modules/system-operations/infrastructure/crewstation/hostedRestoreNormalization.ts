@@ -2,13 +2,16 @@
 // Operations rows are touched; every other context normalizes through its own
 // participant. The snapshot carries the backed-up instance's execution lease
 // and its own still-building backup row: neither may become live state here.
+import {
+  adoptHostedPublicationInTx,
+  releaseHostedPublicationsInTx,
+} from '@/platform/content/infrastructure/hostedObjectPublications'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedStoredObject } from '@/platform/crewstation/objectStorage'
-import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
+import type { HostedRestoreNormalizationParticipant } from '../../application/ports/hostedRestoreNormalization'
 import { HOSTED_BACKUP_OWNER, type HostedBackupSidecar } from './databaseBackupFormat'
-import { adoptHostedPublicationInTx, hostedPublicationId } from './objectPublications'
 
 export function createHostedSystemRestoreNormalization(input: {
   readonly sidecar: HostedBackupSidecar
@@ -19,7 +22,6 @@ export function createHostedSystemRestoreNormalization(input: {
     name: 'system-operations',
     async normalize(tx: PersistenceDb, { now }) {
       const { hostedExecutionControl, hostedDatabaseBackups } = tablesOf(tx)
-      const { contentPublications: hostedObjectPublications } = tablesOf(tx)
       // The restored database starts without execution authority.
       const control = await tx
         .update(hostedExecutionControl)
@@ -36,26 +38,12 @@ export function createHostedSystemRestoreNormalization(input: {
           ),
         )
         .returning({ id: hostedDatabaseBackups.id })
-      if (abandoned.length > 0)
-        await tx
-          .update(hostedObjectPublications)
-          .set({
-            state: 'releasing',
-            releasedAt: now,
-            updatedAt: now,
-            nextAttemptAt: 0,
-            sourceSealed: null,
-          })
-          .where(
-            and(
-              eq(hostedObjectPublications.owner, HOSTED_BACKUP_OWNER),
-              inArray(hostedObjectPublications.state, ['pending', 'ready']),
-              inArray(
-                hostedObjectPublications.id,
-                abandoned.map((row) => hostedPublicationId(HOSTED_BACKUP_OWNER, row.id)),
-              ),
-            ),
-          )
+      // RFC-562: the content owner releases their publications (the journal's own table).
+      await releaseHostedPublicationsInTx(tx, {
+        owner: HOSTED_BACKUP_OWNER,
+        keys: abandoned.map((row) => row.id),
+        now,
+      })
       // The restore source completed after its snapshot: record its archive.
       const ready = {
         kind: sidecar.kind,

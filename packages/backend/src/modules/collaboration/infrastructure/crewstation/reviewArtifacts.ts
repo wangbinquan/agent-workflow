@@ -17,7 +17,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type {
   CrewStationStreamObjectStorage,
   HostedStoredObject,

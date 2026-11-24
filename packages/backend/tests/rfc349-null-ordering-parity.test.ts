@@ -40,8 +40,8 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
   'platform/content/infrastructure/contentStore.ts': {
     scope: '同一个 WHERE 里有 isNotNull(contentPublications.scope)，随后按 scope 分页',
   },
-  // RFC-370 v3 V6：中立托管对象发布日志的两处有序读取。
-  'modules/system-operations/infrastructure/crewstation/objectPublications.ts': {
+  // RFC-370 v3 V6：中立托管对象发布日志的两处有序读取（RFC-562：日志随内容 owner 进了 platform/content）。
+  'platform/content/infrastructure/hostedObjectPublications.ts': {
     scope: '同一个 WHERE 里有 `scope IS NOT NULL`（按 scope 分页的 owner 范围枚举）',
     releasedAt: '只读 state=releasing 的行；转为 releasing 的同一次更新写入 releasedAt',
   },

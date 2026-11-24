@@ -8,6 +8,8 @@ import {
   parseHostedObject,
 } from '@/platform/content/locations/hostedObject'
 // RFC-370 v3 V6 — the one platform-neutral hosted object publication journal.
+// RFC-562: implemented by the content owner (moved here unchanged from system-operations), beside the content
+// store whose object and publication tables it reads and writes.
 //
 // State machine of one (owner, key):
 //   pending ──upload/link──▶ ready ──owner release──▶ releasing ──unpin──▶ released
@@ -48,7 +50,7 @@ import type {
   HostedObjectPublications,
   HostedObjectReceipt,
   HostedObjectReleaseSelection,
-} from './objectPublicationContract'
+} from '../hostedObjectPublications'
 
 type StoredRow = PersistenceTables['contentPublications']['$inferSelect']
 type Row = StoredRow & { readonly objectId: string | null }
@@ -772,6 +774,36 @@ export function createHostedObjectPublications(input: {
 }
 
 export type HostedObjectPublicationJournal = ReturnType<typeof createHostedObjectPublications>
+
+/** Restore normalization only: publications the snapshot still carried as pending or ready for owner rows that never
+ * completed (RFC-562: the release System Operations used to write on this table itself). It runs in the restore
+ * transaction, where no execution fence is live; physical unpin stays with maintenance. */
+export async function releaseHostedPublicationsInTx(
+  tx: PersistenceDb,
+  input: { readonly owner: string; readonly keys: readonly string[]; readonly now: number },
+): Promise<void> {
+  if (input.keys.length === 0) return
+  const { contentPublications: hostedObjectPublications } = tablesOf(tx)
+  await tx
+    .update(hostedObjectPublications)
+    .set({
+      state: 'releasing',
+      releasedAt: input.now,
+      updatedAt: input.now,
+      nextAttemptAt: 0,
+      sourceSealed: null,
+    })
+    .where(
+      and(
+        eq(hostedObjectPublications.owner, input.owner),
+        inArray(hostedObjectPublications.state, ['pending', 'ready']),
+        inArray(
+          hostedObjectPublications.id,
+          input.keys.map((key) => hostedPublicationId(input.owner, key)),
+        ),
+      ),
+    )
+}
 
 /** Restore normalization only: a backup's own archive was published after its
  * snapshot, so the restored journal re-adopts that exact deterministic pin. */

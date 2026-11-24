@@ -4,6 +4,8 @@
 // non-terminal task resumes automatically and no intent recorded by the backed-up
 // instance is replayed as if this instance had issued it. System Operations
 // never writes another context's tables; bootstrap wires the participants.
+// RFC-562: a required port of System Operations — owners take it through `composition/required-ports` in their
+// designated adapter (it used to be handed out from `public/participants`).
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 export interface HostedRestoreNormalizationParticipant {

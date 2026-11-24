@@ -46,8 +46,8 @@ import {
 import {
   createHostedObjectPublications,
   hostedPublicationId,
-} from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
-import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/public/participants'
+} from '@/platform/content/infrastructure/hostedObjectPublications'
+import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/infrastructure/hostedRestoreNormalization'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'

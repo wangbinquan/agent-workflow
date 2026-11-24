@@ -1,7 +1,7 @@
 // RFC-370 v3 V6 — assemble the hosted task archive content binding. Assembly
 // only: archive sources and the index live in task-execution infrastructure.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
   CrewStationStreamObjectStorage,

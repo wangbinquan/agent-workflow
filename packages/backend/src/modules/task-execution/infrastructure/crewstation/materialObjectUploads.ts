@@ -10,7 +10,7 @@ import type { BusinessMaterialFile } from '@/platform/crewstation/nativeMaterial
 import type {
   HostedObjectPublications,
   HostedObjectReceipt,
-} from '@/modules/system-operations/public/participants'
+} from '@/platform/content/hostedObjectPublications'
 import { sha256Hex } from '@/util/hash'
 
 export const HOSTED_MATERIAL_OWNER = 'agent-material'

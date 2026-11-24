@@ -1,4 +1,5 @@
 // RFC-370 v3 V6 — the one platform-neutral hosted object publication journal.
+// RFC-562: the contract lives with the content owner (it moved here unchanged from system-operations).
 //
 // A publication is one application reference (pin) of one immutable CS object,
 // identified by (owner, key). Owners bind publications inside their own

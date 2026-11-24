@@ -11,7 +11,7 @@ import { hostedDatabaseGeneration } from '@/platform/persistence/generationValid
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
-import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
+import type { HostedRestoreNormalizationParticipant } from '../../application/ports/hostedRestoreNormalization'
 import { parseHostedBackupReference } from './databaseBackupFormat'
 import { restoreHostedDatabaseInstallation } from './databaseRestoreInstallation'
 import { verifyHostedDatabaseRestore } from './databaseRestoreVerification'

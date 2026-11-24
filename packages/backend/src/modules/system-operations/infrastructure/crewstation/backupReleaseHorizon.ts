@@ -9,7 +9,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedBackupReleaseHorizon } from './objectPublicationContract'
+import type { HostedBackupReleaseHorizon } from '@/platform/content/hostedObjectPublications'
 
 export const HOSTED_BACKUP_HORIZON_MARGIN_MS = 5 * 60_000
 

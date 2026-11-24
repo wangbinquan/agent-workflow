@@ -9,7 +9,7 @@ import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/infrastructure/crewstation/backupReleaseHorizon'
-import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 import { createHostedTaskObjectSweep } from '@/modules/task-execution/infrastructure/crewstation/hostedObjectSweep'
 import {
   createHostedNodeEventArchive,

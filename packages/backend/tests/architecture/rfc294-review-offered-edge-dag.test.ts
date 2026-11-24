@@ -276,24 +276,9 @@ export function offDagOfferedEdges(
  */
 // Recomputed from committed HEAD 2a70c93285000d9413dfb7c2c835714a99701e2d; individual successor reasons retained.
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
+  // RFC-562：指向 system-operations 的 15 条销账——托管对象发布日志（合同与实现）进了 platform/content（collaboration、development-automation、
+  // digital-employee、resource-catalog、task-execution 的 14 个文件改取平台合同），恢复归一参与者成了 system-operations 的 required 端口
+  // （task-execution 经指定 adapter 实现）。
   {
     from: 'packages/backend/src/modules/development-automation/composition.ts',
     to: 'integration',
@@ -301,22 +286,10 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
-    from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
     from: 'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
     to: 'integration',
     why: 'RFC-370 Purpose 完整效果家族的 delivery provider 持有所选 pipeline 执行合同，由 Integration exact public 提供。该实际 offered type 边随 provider 接线显式登记，在 A-T7 收敛 required SPI 归属，不改变原效果、目标 DAG、分类器或集合断言。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
-    from: 'packages/backend/src/modules/digital-employee/infrastructure/crewstation/crewstationContent.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   // RFC-561：intent 的平台清单聚合（`application/platformInventoryParticipant.ts`）取 development-automation / digital-employee public 的
   // 2 条销账——两个来源改由它自己的端口声明（`application/ports/platformInventorySources.ts`），bootstrap 绑定。
@@ -343,12 +316,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'runtime-management',
     why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
     from: 'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts',
@@ -378,60 +345,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   },
   // RFC-481：task-execution → collaboration 的 8 条（`PreparedHumanGateRef`、`CollaborationRuntimeMechanics`、
   // `TaskDagCollaborationOperations` 与转手的协作上下文）销账——三组端口改由 task-execution 声明、collaboration 实现。
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/materialObjectUploads.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/nodeEventArchive.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/portArtifactContent.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArchiveContent.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArtifacts.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskInputFiles.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V5：托管数据库恢复在导入事务内调用各 owner 的恢复后归一参与者（HostedRestoreNormalizationParticipant 由 system-operations public participants 声明）；task-execution 实现该参与者的 offered 边尚未进入目标 DAG，精确登记，随 RestoreParticipant 物理恢复协议（W9-E）收敛。',
-    removeAfterWave: 'W9-E（物理恢复协议）',
-  },
   // RFC-491: `local/nativeTaskAgentRunOptions.ts` (contract tests only) moved to tests/helpers — its memory edge settled.
 
   {

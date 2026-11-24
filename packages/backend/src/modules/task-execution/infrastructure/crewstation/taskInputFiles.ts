@@ -18,7 +18,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectPublications,
   HostedObjectReceipt,
-} from '@/modules/system-operations/public/participants'
+} from '@/platform/content/hostedObjectPublications'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { sha256Hex } from '@/util/hash'
 import type { TaskInputFiles } from '../../application/ports/taskInputFiles'

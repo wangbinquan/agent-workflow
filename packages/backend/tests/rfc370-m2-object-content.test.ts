@@ -13,7 +13,7 @@ import {
 } from '@/modules/source-control/infrastructure/crewstation/workspaceUploads'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
+import { createHostedObjectPublications } from '@/platform/content/infrastructure/hostedObjectPublications'
 
 describeEachProvider('RFC-370 hosted employee object content', (harness) => {
   test('stream objects verify full bodies and exact ranges, and employee metadata retains durable owner refs', async () => {

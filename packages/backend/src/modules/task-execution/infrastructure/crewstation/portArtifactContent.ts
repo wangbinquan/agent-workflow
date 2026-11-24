@@ -13,7 +13,7 @@ import {
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { CrewStationObjectStorage } from '@/platform/crewstation/objectStorage'

@@ -121,6 +121,9 @@ export { createTaskStatusCounts } from './infrastructure/taskStatusCounts'
 export function composeSystemOperationsTaskPorts() {
   return composeDoctorTaskLifecyclePort(createTaskLifecycleCounts())
 }
+// RFC-562: Task Execution's hosted restore normalization participant — System Operations' other required port. The
+// hosted restore composition takes it here; it is no longer handed out from public/participants.
+export { createHostedRestoreTaskNormalization } from './infrastructure/hostedRestoreNormalization'
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createTaskExecutionMaintenanceJobHandlers } from './application/maintenanceJobs'

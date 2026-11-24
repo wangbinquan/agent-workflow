@@ -156,7 +156,7 @@ test('target content adapters never reintroduce text-encoded skill bytes or the 
   const publications = readFileSync(
     resolve(
       import.meta.dir,
-      '../../src/modules/system-operations/infrastructure/crewstation/objectPublications.ts',
+      '../../src/platform/content/infrastructure/hostedObjectPublications.ts',
     ),
     'utf8',
   )

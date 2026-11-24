@@ -15,7 +15,7 @@ import {
 import type {
   HostedObjectPublicationRequest,
   HostedObjectPublications,
-} from '@/modules/system-operations/public/participants'
+} from '@/platform/content/hostedObjectPublications'
 import {
   isHostedArchiveTemporary,
   hostedArchiveRoot,

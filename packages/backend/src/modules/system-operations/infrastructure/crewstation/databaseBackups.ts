@@ -15,7 +15,7 @@ import type { LogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import type { PortableBackupApplicationAssets } from '@/platform/persistence/portableBackupArchive'
 import { DomainError } from '@/util/errors'
 import type { AdminBackupCoordinatorPort } from '../../application/ports/adminBackupCoordinator'
-import type { HostedObjectPublications } from './objectPublicationContract'
+import type { HostedObjectPublications } from '@/platform/content/hostedObjectPublications'
 import type { DatabaseBackupMaintenance } from '../../public/commands'
 import {
   createHostedDatabaseBackupArchive,

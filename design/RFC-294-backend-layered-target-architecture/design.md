@@ -167,6 +167,7 @@ flowchart LR
   INTEG -. "implements RepositoryProviderEndpointDiscoveryPort" .-> SC
   INTEG -. "implements GlobalRepositoryTransportProjectionPort" .-> SC
   TE -. "implements DoctorTaskLifecyclePort" .-> SO["system-operations"]
+  TE -. "implements HostedRestoreNormalizationParticipant" .-> SO
   TE -. "implements WorkspaceGcTaskPort" .-> SC
   TE -. "implements TaskWorkspacePruneParticipant" .-> SC
   TE -. "implements CachedRepositoryTaskUsagePort" .-> SC

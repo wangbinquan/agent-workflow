@@ -8,7 +8,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectOwnerSweep,
   HostedObjectPublications,
-} from '@/modules/system-operations/public/participants'
+} from '@/platform/content/hostedObjectPublications'
 import { HOSTED_REVIEW_OWNER } from './reviewArtifacts'
 
 export const HOSTED_REVIEW_OBJECT_GRACE_MS = 60 * 60_000

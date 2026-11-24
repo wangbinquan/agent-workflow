@@ -425,9 +425,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // session records (whose payloads stay opaque by design) and printed verbatim by
   // `db migration auto --json`; typing it closed means typing every record payload first.
   'modules/system-operations/domain/epochSwitch/autoUpgrade.ts#AutoUpgradeConclusion: unsafe/open type UnknownKeyword',
-  'modules/system-operations/infrastructure/crewstation/objectPublicationContract.ts#HostedObjectPublications: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/system-operations/infrastructure/crewstation/objectPublicationContract.ts#HostedObjectPublications: unsafe/open type FunctionType',
-  'modules/system-operations/infrastructure/crewstation/restoreNormalizationContract.ts#HostedRestoreNormalizationParticipant: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
+  // RFC-562: the hosted object publication journal is the content owner's contract (platform/content) and the restore
+  // normalization participant is a System Operations required port; neither is on a module's public surface any more.
   'modules/system-operations/public/commands.ts#ApplicationConfigurationCommands: unsafe/open type UnknownKeyword',
   'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/util/log#Logger',
   // RFC-399 A8: the clarify directive route port moved from TE public/types into TE application/ports

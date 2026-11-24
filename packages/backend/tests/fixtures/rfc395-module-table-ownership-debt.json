@@ -183,36 +183,6 @@
       "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/committed-events 的 collaborationCommittedEventWsProjector 提供闭合读写操作并移除此站点。"
     },
     {
-      "table": "contentObjects",
-      "owner": "platform/content",
-      "file": "system-operations/infrastructure/crewstation/objectPublications.ts",
-      "module": "system-operations",
-      "tableId": "content_objects",
-      "kind": "other",
-      "why": "system-operations/infrastructure/crewstation/objectPublications.ts 仍直接使用 hosted_object_publications 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。 T18 / window decision T-4: same publication operation now uses the target content table; this is an exact successor of hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts.",
-      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/content 的 objectPublications 提供闭合读写操作并移除此站点。"
-    },
-    {
-      "table": "contentPublications",
-      "owner": "platform/content",
-      "file": "system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts",
-      "module": "system-operations",
-      "tableId": "content_publications",
-      "kind": "other",
-      "why": "system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts 仍直接使用 hosted_object_publications 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。 T18 / window decision T-4: same publication operation now uses the target content table; this is an exact successor of hostedObjectPublications|system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts.",
-      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/content 的 hostedRestoreNormalization 提供闭合读写操作并移除此站点。"
-    },
-    {
-      "table": "contentPublications",
-      "owner": "platform/content",
-      "file": "system-operations/infrastructure/crewstation/objectPublications.ts",
-      "module": "system-operations",
-      "tableId": "content_publications",
-      "kind": "other",
-      "why": "system-operations/infrastructure/crewstation/objectPublications.ts 仍直接使用 hosted_object_publications 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。 T18 / window decision T-4: same publication operation now uses the target content table; this is an exact successor of hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts.",
-      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/content 的 objectPublications 提供闭合读写操作并移除此站点。"
-    },
-    {
       "table": "digitalEmployees",
       "owner": "development-automation",
       "file": "resource-catalog/infrastructure/resourceVisibility.ts",
