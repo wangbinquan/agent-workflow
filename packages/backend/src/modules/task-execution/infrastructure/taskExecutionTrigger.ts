@@ -5,17 +5,10 @@ import {
   StartTaskSchema,
 } from '@agent-workflow/shared'
 
-import type { WebhookTaskExecutionParticipant } from '@/modules/integration/application/ports/webhookExecution'
-import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
+import type { TaskExecutionTriggerParticipant } from '../application/adapters/integration-adapter'
 import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
-import type { ExecutionInvoker } from '../public/commands'
 import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
 import type { TaskExecutionLaunchParticipant } from '../application/launch/taskExecutionLaunchParticipant'
-
-export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<
-  TaskExecutionResourceAuthority,
-  ExecutionInvoker
->
 
 /**
  * RFC-359 AC-1（plan §5hn 批次二 ①②）—— 触发器参与者，**两个引擎唯一的一份**。

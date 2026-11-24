@@ -20,7 +20,8 @@ const PREPARATION_GC = TE + 'infrastructure/workspacePreparationGc.ts'
 const OWNERS = new Map([
   ['createTaskExecutionTriggerParticipant', TRIGGER],
   ['createBuildScheduleLaunch', TRIGGER],
-  ['TaskExecutionTriggerParticipant', TRIGGER],
+  // RFC-556: the instantiated webhook participant type lives in Task Execution's designated integration adapter.
+  ['TaskExecutionTriggerParticipant', TE + 'application/adapters/integration-adapter.ts'],
   ['TaskRecoveryDeploymentSelection', RECOVERY_SELECTION],
   ['TaskRecoveryProviderSelection', RECOVERY_SELECTION],
   ['createHostedRecoverySelection', HOSTED_RECOVERY],

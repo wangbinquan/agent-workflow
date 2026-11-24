@@ -33,7 +33,8 @@ import { createTaskExecutionTriggerParticipant } from '../../src/modules/task-ex
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
-import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/webhookDispatch'
+// RFC-556: the webhook participant port is exposed once, through Integration's required ports.
+import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/required-ports'
 import type { TaskExecutionResourceAuthority } from '../../src/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
 import type { ExecutionInvoker } from '../../src/modules/task-execution/public/commands'
 import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'

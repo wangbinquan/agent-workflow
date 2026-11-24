@@ -78,8 +78,8 @@ import { composeTaskAutoResumeCommand } from './taskAutoResume'
 import {
   createBuildScheduleLaunch,
   createTaskExecutionTriggerParticipant,
-  type TaskExecutionTriggerParticipant,
 } from '../infrastructure/taskExecutionTrigger'
+import type { TaskExecutionTriggerParticipant } from '../application/adapters/integration-adapter'
 import {
   composeWorkgroupTaskRoomTaskParticipantFactory,
   type WorkgroupTaskRoomClarifyParticipantFactory,

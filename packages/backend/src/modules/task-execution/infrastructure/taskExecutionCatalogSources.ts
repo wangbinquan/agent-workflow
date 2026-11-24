@@ -11,8 +11,8 @@
 import { projectStoredTaskRepositorySummary } from './taskRepositorySurface'
 import type { TaskCatalogListItem, TaskOperationsListItem } from '@agent-workflow/shared'
 
-import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import type {
+  TaskCatalogSource,
   TaskExecutionCatalogSourceFactory,
   TaskExecutionCatalogSourceId,
 } from '../application/adapters/task-catalog-adapter'

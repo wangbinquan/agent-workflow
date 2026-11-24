@@ -1,7 +1,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import type { RuntimeProfileUsageReader } from '@/modules/runtime-management/application/ports/runtimeProfileParticipants'
+import type { RuntimeProfileUsageReader } from '../../application/adapters/runtime-management-adapter'
 import type { RuntimeProfileTestInvalidationInTx } from '../../public/participants'
 import { createRuntimeProfileTestInvalidationInTx } from '../../application/runtimeProfileTestInvalidation'
 import { transitionRuntimeTests } from '../mcpRuntimeTestTransitions'

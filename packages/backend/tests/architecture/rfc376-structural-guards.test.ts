@@ -91,16 +91,14 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
     // RFC-553: knowledge-evolution takes the launch initiator type from task-execution's public/types and the projection
     // through its fusion routes' own port; both knowledge-evolution -> task-execution pairs are settled.
-    'packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts -> packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts',
+    // RFC-556: four provider implementations take the consumer's port only through their designated adapter (task-catalog's
+    // source port twice, integration's webhook task-execution participant, runtime-management's usage reader).
     // RFC-489：task-execution 的运行族根、本机调用与本机兼容运行的协议不再取 runtime-management、resource-catalog、source-control 的
     // 内部（bootstrap 绑定提供者，运行时管理由 runtime-management 自己装配），21 对销账。
     'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
     // RFC-526：运行生命周期持久化的工作区存在性改为必填选择，不再取 source-control 组合层的本机实现，一对销账。
     // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
     // RFC-491：只供契约用例的本机兼容运行迁入 tests/helpers，它指向 source-control 的一对销账。
-    'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
-    'packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',
     'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
     'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
   ],

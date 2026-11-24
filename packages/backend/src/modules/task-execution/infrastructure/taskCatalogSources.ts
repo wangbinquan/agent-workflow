@@ -3,10 +3,9 @@
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
-
 import {
   composeTaskExecutionCatalogSources as composeSources,
+  type TaskCatalogSource,
   type TaskExecutionCatalogSourceFactory,
 } from '../application/adapters/task-catalog-adapter'
 import { createTaskExecutionCatalogSourceFactory } from './taskExecutionCatalogSources'

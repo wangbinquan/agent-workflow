@@ -143,6 +143,9 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   ['source-control', 'task-execution', 'RepositoryPreparationLookup'],
   // RFC-555: Development Automation's integration adapter implements the code-host event continuation.
   ['development-automation', 'integration', 'CodeHostEventContinuationPort'],
+  // RFC-556: Task Execution's integration adapter and Resource Catalog's runtime-management adapter.
+  ['task-execution', 'integration', 'WebhookTaskExecutionParticipant'],
+  ['resource-catalog', 'runtime-management', 'RuntimeProfileUsageReader'],
 ]
 
 const AUTHORITY_CONTEXTS = TARGET_PUBLIC_CONTEXTS.filter((context) => context !== 'identity-access')

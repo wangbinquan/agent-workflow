@@ -1,5 +1,8 @@
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 
+// RFC-556: Task Execution's infrastructure takes Task Catalog's source port from this designated adapter only.
+export type { TaskCatalogSource }
+
 export type TaskExecutionCatalogSourceId = 'agent' | 'workflow' | 'workgroup'
 
 export interface TaskExecutionCatalogSourceFactory {

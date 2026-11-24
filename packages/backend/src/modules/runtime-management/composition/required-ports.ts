@@ -13,3 +13,7 @@ export interface RealtimeTaskFactsPort {
 export interface RealtimeResourceAclPort {
   find(kind: RealtimeAclResourceType, id: string): Promise<RealtimeResourceRow | null>
 }
+
+// RFC-556: Resource Catalog implements the runtime profile usage reader; its designated runtime-management adapter takes
+// this port type-only.
+export type { RuntimeProfileUsageReader } from '../application/ports/runtimeProfileParticipants'

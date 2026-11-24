@@ -341,16 +341,14 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
   // RFC-553: both knowledge-evolution -> task-execution pairs are settled (the launch initiator type through public/types,
   // the projection through the fusion routes' own port).
-  'packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts -> packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts',
+  // RFC-556: four provider implementations take the consumer's port only through their designated adapter (task-catalog's
+  // source port twice, integration's webhook task-execution participant, runtime-management's usage reader).
   // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
   // runtime-management, resource-catalog or source-control internals (bootstrap binds the providers) — 21 pairs settled.
   'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
   // RFC-526: the lifecycle persistence's workspace presence is a required selection — its source-control pair settled.
   // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
   // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers — its source-control pair settled.
-  'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
 ]

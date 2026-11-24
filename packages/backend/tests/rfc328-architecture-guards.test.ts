@@ -279,7 +279,7 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // 参与者自己不再 compose 别的 context。这条债因此从 infrastructure 挪到组合根，
   // 与 PostgreSQL 那一支同形（那边一直是 bootstrap 交）。
   // RFC-423：触发器参与者整体迁入 infrastructure（`taskExecutionTrigger.ts`），这条债随文件改指。
-  'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts',
+  // RFC-556: the trigger participant's port type comes from Task Execution's designated integration adapter (required-ports).
   // RFC-470：`agentLaunchResourceOperations.ts` 迁入 resource-catalog（实现 task-execution 的端口、装配根注入），这三条桥销账。
   // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组启动的资源面收成两个 provider 唯一的一份，
   // 形状与紧邻的 `agentLaunchResourceOperations.ts` 三条**逐字对称**（同一处置、同一层）。
@@ -296,8 +296,7 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-526: the lifecycle persistence's workspace presence is a required selection — its source-control bridge retired.
-  'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts',
-  'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts',
+  // RFC-556: both catalog source files take the source port from Task Execution's designated task-catalog adapter.
 ])
 
 function crossContextProviderBridges(units: readonly GuardUnit[]): string[] {

@@ -1,3 +1,26 @@
+## 2026-11-23 RFC-556 provider 实现别的 context 的端口一律经指定 adapter（In Progress；`design/RFC-556-provider-ports-through-designated-adapters/`）
+
+- **来由**：跨 context 内部文件对 14 条里有四条同形——provider 实现 consumer 自有的端口，却在 adapter 以外的文件里取 consumer 的端口类型
+  （task-execution 的两个目录源文件取 task-catalog 的 `TaskCatalogSource`、webhook 触发器取 integration 的 `WebhookTaskExecutionParticipant`，
+  resource-catalog 的运行时档案参与者取 runtime-management 的 `RuntimeProfileUsageReader`）；前三条也是 `rfc328` 的 provider-bridge 精确债务。形状同
+  RFC-555。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按
+  授权记为已批准，不派 Codex。
+- **范围**：integration 与 runtime-management 的 required-ports 交出端口类型；task-catalog adapter 转出 `TaskCatalogSource`，task-execution 新增
+  integration adapter（声明 `TaskExecutionTriggerParticipant`），resource-catalog 的 runtime-management adapter 转出 `RuntimeProfileUsageReader`；四个
+  provider 文件改从 adapter 取；删去 integration 分发装配里那条同名类型转出（唯一的读者是测试助手，改从 required-ports 取）；目标 DAG 与 RFC-294
+  design 的 Mermaid 同批登记两条虚线边；精确清单、`rfc328` 债务、减速带、design 边总数与 `rfc423` 的符号归属随之更新；新增 RFC-556 用例。
+- **不做**：其余 10 条跨 context 内部文件对。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 端口事实源在 consumer 的 required-ports，provider 只经指定 adapter 取；C11 四个 context 的 public
+  不变；C12 RFC-556 用例覆盖 task-execution 与 resource-catalog 全部源码取这几个 consumer 非 public 文件的边、端口与 adapter、目标 DAG 的边；C13 跨
+  context 内部文件对 14 → 10，其余计数不升，目标 DAG 多两条虚线 required 边。
+- **集中验证**（基于 `2263968b9`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷两处已修复并复验（分发装配那条转出
+  有一个测试助手读者、调研时搜索结果被截断而漏看；用例里一条源码断言的正则太窄）。tsc 0 错，eslint / promises / prettier 无告警；选出 253 个用例
+  文件，252 个通过、红的一个即那条断言，修复后通过；读已提交源码的两个用例在候选导出里通过；五种变异都被认出；架构报告文件对 14 → 10、目标边
+  106 → 108、四条临时内部债边消失，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **提交**：三件套与实现同一个提交。RFC-554 / RFC-555 的 CI 仍在等 runner（RFC-554 落档提交的 run 69 个 job 已通过，汇总 job `CI required`
+  排队中），它们的转 Done 随下一个 RFC 的提交。
+
 ## 2026-11-23 RFC-555 development-automation 经 integration 的 required-ports 实现 Mission 续接（In Progress；`design/RFC-555-mission-continuation-required-port/`）
 
 - **来由**：跨 context 内部文件对精确清单 15 条中的一条——development-automation 的 Mission 续接为标注返回类型直接取了 integration 的

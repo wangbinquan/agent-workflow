@@ -10,7 +10,6 @@ import { createWebhookTriggerAdministration } from '../infrastructure/webhookTri
 import { createWebhookLaunchAdmission } from '../application/webhookAdmission'
 import { createWebhookRepositoryResolver } from '../infrastructure/webhookRepositoryResolver'
 
-export type { WebhookTaskExecutionParticipant } from '../application/ports/webhookExecution'
 // RFC-437：分发器与其合同随 Webhook 家族归入本模块，bootstrap 经此取用。
 export { createWebhookDispatcher, type WebhookDispatchDeps } from '../application/webhookDispatch'
 export {
