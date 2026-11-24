@@ -5746,7 +5746,7 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办：先确认机制（在该用例的测试仓里强制一次 `git gc` 的变异应能稳定复现）；再决定是测试仓关闭 `gc.auto`，还是树快照把 `info/refs`
   这类 git 自维护产物排除在越界判定之外（后者是产品语义，需对托管越界规则单独评估）。
 
-## 启动自动升级的多进程接管：`rfc398-start-auto-upgrade-takeover` 一例偶发到点（2026-11-23 第五次，CI 偶发，未处置）
+## 启动自动升级的多进程接管：`rfc398-start-auto-upgrade-takeover` 一例偶发到点（2026-11-23 第六次，CI 偶发，未处置）
 
 - 现象：后端 ubuntu 41/44 分片里 RFC-398 的多进程接管用例到点失败——`barrier/readiness timed out`，子进程输出
   `JSON Parse error: Unable to parse JSON string`，用时约 184 s。五次都落在与该用例无关的提交上：
@@ -5760,6 +5760,9 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
     全过（「…before takeover」20.4 s）。
   - 第五次（2026-11-23，run 45233526348，`9612c16e6` RFC-548 实现）红的是「…acquires after takeover」（184.7 s）；「…acquires before
     takeover」与「takeover between…」同次通过（28.3 s、26.5 s），父提交 `d60586a26` 的同一分片通过。
+  - 第六次（2026-11-23，run 45315786441，`014a79f85` RFC-557 实现）红的是「…acquires after takeover」（185.3 s）；「…acquires before
+    takeover」（30.7 s）与「takeover between…」（30.2 s）同次通过。RFC-557 改了 standalone bootstrap 交删除效果的那一行，但同次另两例走的
+    是同一条子进程启动路径且通过；本机单独跑该文件 3 / 3 通过。
 - 归因：五次提交都没有改到启动升级与接管路径（第一次改开发交付的代码托管桥，第二次只改了五个文档文件，第三次改 MCP 诊断的装配，
   启动时只建闭包、不读 JSON，第四次只改了九个文档文件，第五次改 source-control 的批量导入与缓存仓库读缓存，启动时只多建一份批量导入实例、不读 JSON），父提交的同一分片同一用例通过；用例属 RFC-398，未改、未重跑。子进程在 barrier 前没有写出完整的 JSON
   就号称就绪，像是多进程握手在 runner 负载下的时序问题；同组两例都撞过，不是某一例独有的路径。

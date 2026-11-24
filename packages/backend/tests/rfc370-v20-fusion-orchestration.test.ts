@@ -37,8 +37,8 @@ import { composeFusionResourceSeedParticipant } from '../src/modules/resource-ca
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
-} from '../src/modules/knowledge-evolution/public/participants'
-import type { FusionEngineTaskResult } from '../src/modules/knowledge-evolution/public/types'
+} from '../src/modules/knowledge-evolution/application/ports/fusionEngineTasks'
+import type { FusionEngineTaskResult } from '../src/modules/knowledge-evolution/application/ports/fusionEngineTasks'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import {
   composeMemoryCatalogOperations,

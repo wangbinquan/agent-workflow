@@ -1,53 +1,7 @@
-// RFC-353 T5（RFC-294 W4-E3）—— knowledge-evolution 对外的 fusion **participant** 合同。
-//
-// `FusionPersistence` 是 fusion 聚合自己的仓储面；`FusionEngineTaskOperations` 是 KE 向
-// task-execution 要的启动面（TE 侧已有 exact adapter，本刀不动它）。
-// `FusionOperations` 把三者装配成 application 的取用点。
-//
-// 注意 `FusionPersistence` 今天仍带着跨聚合写入（skill 版本、memory 成员关系），
-// 那是 T6 要换成 resource-catalog / memory 各自 offered participant 的部分——
-// 本刀只做归位，不改形状，避免「表已归位、跨聚合直写还在」与「形状改了但还在 legacy」
-// 两种半截状态同时存在。
-
-import type { TaskStatus } from '@agent-workflow/shared'
-
-import type { FusionEngineTaskResult, FusionWorkspaceSeed } from './types'
-
-export interface FusionEngineTaskRecord {
-  readonly status: TaskStatus
-  readonly errorSummary: string | null
-  readonly worktreePath: string
-  readonly baseCommit: string | null
-}
-
-/**
- * RFC-370 §10 V20：KE 只交出种子树（技能字节），工作区由 task-execution 经 source-control 准备——
- * 本地是 `fusions/<id>/iter<n>/work` 的 Git 仓，托管是引擎任务自己卷里的工作副本。
- */
-export interface FusionEngineTaskLaunch {
-  readonly taskId: string
-  readonly fusionId: string
-  readonly iteration: number
-  readonly seed: FusionWorkspaceSeed
-  readonly workflowId: string
-  readonly name: string
-  readonly inputs: Readonly<Record<string, string>>
-  readonly collaboratorUserIds?: readonly string[]
-  readonly ownerUserId: string
-  readonly initiator: 'manual' | 'api'
-  readonly platformInputPaths: readonly string[]
-  readonly completionMode?: 'background' | 'await-settle'
-}
-
-export interface FusionEngineTaskOperations {
-  launch(command: FusionEngineTaskLaunch): Promise<void>
-  load(taskId: string): Promise<FusionEngineTaskRecord | null>
-  /** The settled task's proposal; `null` when the task no longer exists. */
-  collect(taskId: string): Promise<FusionEngineTaskResult | null>
-  /** Gives the task's workspace back once its proposal is no longer needed there. */
-  release(taskId: string): Promise<void>
-  cancel(taskId: string): Promise<void>
-}
+// RFC-560 (RFC-294 S9 step 15): the fusion engine task port (`FusionEngineTaskOperations`, its launch command and task
+// record) left this entry point — it is a consumer-owned required port of knowledge-evolution, declared in
+// `application/ports/fusionEngineTasks.ts` and handed to its implementer (task-execution's designated
+// knowledge-evolution adapter) through `composition/required-ports.ts`.
 
 // ---------------------------------------------------------------------------
 // RFC-353 T7（RFC-294 W4-E3）—— 技能回滚的成员关系协调，KE offered。

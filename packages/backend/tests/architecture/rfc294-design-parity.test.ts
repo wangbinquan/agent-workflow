@@ -113,8 +113,9 @@ describe('RFC-376 G11 design parity', () => {
     // RFC-491 adds runtime-management's in-flight inventory read bound to Task Execution's port (-> 105); RFC-555 adds
     // Development Automation's integration adapter implementing the code-host event continuation (-> 106); RFC-556 adds
     // Task Execution's webhook participant and Resource Catalog's runtime profile usage reader (-> 108); RFC-557 adds
-    // Resource Catalog's workgroup launch resources (-> 109).
-    expect(designEdges(DESIGN)).toHaveLength(109)
+    // Resource Catalog's workgroup launch resources (-> 109); RFC-560 adds Task Execution's fusion engine task operations
+    // (-> 110).
+    expect(designEdges(DESIGN)).toHaveLength(110)
     expect(designPublicContexts(DESIGN)).toHaveLength(18)
   })
   test('in-memory design mutations add and remove edges, rename a context, or delete the IA row', () => {

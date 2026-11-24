@@ -34,7 +34,7 @@
       "minCorpusFiles": null,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 156
+      "lines": 157
     },
     {
       "assertsAbsence": true,
@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 650,
+      "lines": 638,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -198,7 +198,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
       "id": "rfc317-module-boundary",
-      "lines": 504,
+      "lines": 502,
       "mechanism": "ast",
       "minCorpusFiles": 500,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1046
+      "lines": 1045
     },
     {
       "assertsAbsence": true,
@@ -4402,6 +4402,18 @@
       "lines": 146,
       "mechanism": "ast",
       "minCorpusFiles": 900,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc560-fusion-engine-task-port-boundary.test.ts",
+      "id": "rfc560-fusion-engine-task-port-boundary",
+      "lines": 159,
+      "mechanism": "ast",
+      "minCorpusFiles": 700,
       "negativeFixture": true,
       "runner": "bun"
     }

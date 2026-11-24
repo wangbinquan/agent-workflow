@@ -8,7 +8,7 @@ import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoor
 import type { TaskRecoveryProviderSelection } from '../infrastructure/taskRecoverySelection'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
+import type { FusionEngineTaskOperations } from '../application/adapters/knowledge-evolution-adapter'
 import type { CollaborationRepairPorts } from '../application/ports/collaborationRepair'
 import type { BuildScheduleLaunch } from '../application/ports/scheduledLaunch'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'

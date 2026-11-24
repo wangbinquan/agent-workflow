@@ -391,10 +391,8 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
   },
   // RFC-550：`integration/public/events.ts` 的那处（事件标签的 `Record<string, { zh-CN, en-US }>`）随代码平台事件目录挪进
   // integration 的 `application/codeHostEvents.ts`（模块外零消费），不再是 public 面，销账。
-  {
-    site: 'modules/knowledge-evolution/public/participants.ts: Record<string, string>',
-    why: 'Fusion task input 是由 workflow / agent 声明生成的开放命名映射；键来自资源合同，不能由 Memory 模块预先穷尽。',
-  },
+  // RFC-560：`knowledge-evolution/public/participants.ts` 的那处（fusion 任务启动命令的 `inputs`）随端口挪进 KE 的
+  // `application/ports/fusionEngineTasks.ts`（经 required-ports 交给 task-execution），不再是 public 面，销账。
   {
     // RFC-358（`877c80e09`）新增的两处：`outputKinds`（review 的 markdown 判据按端口名读）
     // 与 `outputWrapperPortNames`（wrapper-fanout 的 outlet 重命名）。理由取自那一笔自己的

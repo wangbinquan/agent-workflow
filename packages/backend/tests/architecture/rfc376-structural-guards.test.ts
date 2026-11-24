@@ -128,7 +128,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/system-operations/application/overview.ts -> task-execution',
     'packages/backend/src/modules/system-operations/composition.ts -> source-control',
     'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/composition/providerRuntime.ts -> knowledge-evolution',
+    // RFC-560: task-execution implements the fusion engine task port through its knowledge-evolution adapter.
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/materialObjectUploads.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/nodeEventArchive.ts -> system-operations',
@@ -136,7 +136,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArchiveContent.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArtifacts.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskInputFiles.ts -> system-operations',
-    'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts -> knowledge-evolution',
     'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts -> system-operations',
     // RFC-491：本机兼容运行的入参迁入 tests/helpers，它指向 memory 的一对销账。
   ],

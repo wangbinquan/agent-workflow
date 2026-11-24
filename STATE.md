@@ -1,3 +1,24 @@
+## 2026-11-23 RFC-560 knowledge-evolution 的 fusion 引擎任务端口经 required-ports 交给 task-execution（In Progress；`design/RFC-560-fusion-engine-task-port/`）
+
+- **来由**：fusion 引擎任务端口是 knowledge-evolution 向 task-execution 要的启动面（consumer-owned），却声明在 knowledge-evolution 的 `public/participants.ts`，
+  task-execution 的两个文件从那里取——DAG 外 offered 边 35 条中的 2 条。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话
+  调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：端口挪进 knowledge-evolution 的 `application/ports/fusionEngineTasks.ts`，经新增 `composition/required-ports.ts` 交出启动命令与操作端口；
+  task-execution 新增 `application/adapters/knowledge-evolution-adapter.ts`，两个实现文件改从它取；种子树与提案结果随端口走，树文件与结果清单进
+  `domain/fusionTree.ts`，空出来的 `public/types.ts` 删除；目标 DAG 与 RFC-294 design 的 Mermaid 同批登记虚线边；精确清单、减速带、design 边总数与
+  `rfc317` 的开放 Record 账随之更新；新增 RFC-560 用例。
+- **不做**：其余 33 条 DAG 外 offered 边；技能回滚成员关系协调（仍在 knowledge-evolution 的 public）。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 端口事实源在 knowledge-evolution 的 required-ports，实现方只经指定 adapter 取，值类型归 domain；C11
+  knowledge-evolution 的 public 收窄 7 个符号、task-execution 的 public 不变；C12 RFC-560 用例覆盖 task-execution 全部源码取 knowledge-evolution 的边、端口
+  与 adapter 的交出面、值类型的位置与 `public/types.ts` 已删、目标 DAG 的边；C13 DAG 外 offered 边 35 → 33，其余计数不升，目标 DAG 多一条虚线 required 边。
+- **集中验证**（基于 `83b179ac0`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准；没有查出本人缺陷。tsc 0 错，eslint / promises / prettier
+  无告警；选出 347 个用例文件全部通过；读已提交源码的两个用例在候选导出里通过；四种变异都被认出；架构报告 DAG 外 offered 边 35 → 33、public 面 −7、目标边
+  109 → 110，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-557 `014a79f85`（run 45315786441）的后端 41/44 分片红的是 `rfc398-start-auto-upgrade-takeover` 的「…acquires after takeover」（185.3 s，
+  `barrier/readiness timed out`），与 `docs/audit-backlog.md` 记过的五次同形，同次另两例走同一启动路径且通过、本机单独跑 3 / 3 通过——记为第六次、
+  未重跑；同 run 的 e2e 2/3 取消与 design/ 链接检查见 RFC-559 条目。RFC-555～559 的 run 仍未跑完。
+
 ## 2026-11-23 RFC-559 task-execution 与 collaboration 不再取 memory 的 public（In Progress；`design/RFC-559-memory-consumer-owned-ports/`）
 
 - **来由**：DAG 外 offered 边（44 条）里 9 条是 task-execution / collaboration 取 memory 的 public（注入查询、注入预算、蒸馏入队），方向与目标 DAG 相反；

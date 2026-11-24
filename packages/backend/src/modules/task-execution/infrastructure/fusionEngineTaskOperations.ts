@@ -4,7 +4,7 @@ import { taskReadColumns } from './taskRepositorySql'
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
-} from '@/modules/knowledge-evolution/public/participants'
+} from '../application/adapters/knowledge-evolution-adapter'
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import type {
   FusionWorkspaceEffects,

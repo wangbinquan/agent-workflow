@@ -148,6 +148,8 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   ['resource-catalog', 'runtime-management', 'RuntimeProfileUsageReader'],
   // RFC-557: Resource Catalog's task-execution adapter (the workgroup launch resources).
   ['resource-catalog', 'task-execution', 'WorkgroupRouteLaunchResources'],
+  // RFC-560: Task Execution's knowledge-evolution adapter (the fusion engine task operations).
+  ['task-execution', 'knowledge-evolution', 'FusionEngineTaskOperations'],
 ]
 
 const AUTHORITY_CONTEXTS = TARGET_PUBLIC_CONTEXTS.filter((context) => context !== 'identity-access')

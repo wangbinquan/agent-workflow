@@ -423,12 +423,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
-    to: 'knowledge-evolution',
-    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
@@ -469,12 +463,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts',
-    to: 'knowledge-evolution',
-    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts',

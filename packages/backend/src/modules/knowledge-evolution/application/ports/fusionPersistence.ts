@@ -1,6 +1,6 @@
 // RFC-552 (RFC-294 S9): the fusion persistence port and the records, patches, seeds and receipts it carries. They sat on
 // `public/`, reachable only through the maintenance functions' signatures; no other module reads them.
-import type { FusionTreeFile } from '../../public/types'
+import type { FusionTreeFile } from '../../domain/fusionTree'
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { FusionStatus, ResourceAccess } from '@agent-workflow/shared'
 import type { FusionBuiltinWorkflowSeed } from '../../domain/fusionWorkflowSeed'

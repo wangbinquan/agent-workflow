@@ -8,7 +8,7 @@ import {
   type FusionSkillVersionCommit,
 } from '../infrastructure/fusionRepository'
 import type { MemoryCatalogOperations } from '../../memory/public/operations'
-import type { FusionEngineTaskOperations } from '../public/participants'
+import type { FusionEngineTaskOperations } from '../application/ports/fusionEngineTasks'
 import type { FusionOperations } from '../application/ports/fusionOperations'
 import type { FusionPersistence } from '../application/ports/fusionPersistence'
 

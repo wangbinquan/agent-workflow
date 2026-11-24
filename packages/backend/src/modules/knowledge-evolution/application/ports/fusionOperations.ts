@@ -2,7 +2,7 @@
 // functions left the public entry no other module read it.
 import type { MemoryCatalogOperations } from '@/modules/memory/public/operations'
 import type { SkillTreeVersionOperations } from '@/modules/resource-catalog/public/participants'
-import type { FusionEngineTaskOperations } from '../../public/participants'
+import type { FusionEngineTaskOperations } from './fusionEngineTasks'
 import type { FusionPersistence } from './fusionPersistence'
 
 export interface FusionOperations {
