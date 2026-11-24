@@ -16,13 +16,13 @@ import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
-import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
+import type { CollaborationMemoryDistillPort } from '../application/ports/taskFeedbackMemoryDistill'
 import type { TaskActorRole } from '@agent-workflow/shared'
 import { createCollaborationCommandContext } from './collaborationCommandContext'
 
 export function createClarifyDecisionCommand(
   db: PersistenceDb,
-  memoryDistillEnqueuer: MemoryDistillEnqueuer,
+  memoryDistillEnqueuer: CollaborationMemoryDistillPort,
   taskLock: HumanGateTaskLockPort,
   options: {
     readonly historyRestrictions: HistoryRestrictionPort
@@ -84,7 +84,7 @@ export function createClarifyDecisionCommandContext(input: {
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
-  readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
+  readonly memoryDistillEnqueuer: CollaborationMemoryDistillPort
 }): CollaborationCommandContext<'clarifyDecisions'> {
   return createCollaborationCommandContext({
     taskExecutionParticipants: input.taskExecutionParticipants,

@@ -87,7 +87,8 @@ import { type RuntimePlugin } from '@/modules/runtime-management/infrastructure/
 
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
 
-import { type ScopeBudget } from '@/modules/memory/public/types'
+// RFC-559: the run options carry Task Execution's own memory injection budget.
+import type { TaskMemoryInjectionBudget } from '@/modules/task-execution/application/ports/taskMemoryInjection'
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
@@ -387,7 +388,7 @@ export interface RunNodeOptions {
    * scheduler/daemon reads `config.memoryInjectionBudget` and passes it
    * through; tests omit to use the design.md §3.3 defaults.
    */
-  memoryInjectionBudget?: ScopeBudget
+  memoryInjectionBudget?: TaskMemoryInjectionBudget
   /** Provider-neutral memory read participant selected by daemon composition. */
   memorySnapshots: TaskMemorySnapshotPort
   memoryInjectionQueries: MemoryInjectionQueries

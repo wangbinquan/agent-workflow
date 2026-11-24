@@ -1,3 +1,24 @@
+## 2026-11-23 RFC-559 task-execution 与 collaboration 不再取 memory 的 public（In Progress；`design/RFC-559-memory-consumer-owned-ports/`）
+
+- **来由**：DAG 外 offered 边（44 条）里 9 条是 task-execution / collaboration 取 memory 的 public（注入查询、注入预算、蒸馏入队），方向与目标 DAG 相反；
+  目标 DAG 早已把记忆注入写成 task-execution 自有的 `TaskMemoryInjectionPort`，代码里却没有这个类型。用户 2026-11-02「好，你继续推进RFC294，过程中你
+  以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、
+  2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：task-execution 新增 `application/ports/taskMemoryInjection.ts`（`TaskMemoryInjectionPort`、`TaskMemoryInjectionBudget`）与
+  `application/ports/taskMemoryDistill.ts`，collaboration 新增 `application/ports/taskFeedbackMemoryDistill.ts`；九个文件改用；bootstrap 的 task-execution
+  装配按 memory 自己的合同标注蒸馏命令；`ScopeBudget` 撤出 memory 的 public/types，测试助手改用 task-execution 的预算类型；两份精确清单与减速带
+  随之更新；新增 RFC-559 用例。
+- **不做**：其余 35 条 DAG 外 offered 边。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 端口归 consumer 的 application/ports，只取 shared；C11 task-execution 与 collaboration 的 public 合同不变
+  （`createTaskFeedback` 的参数改为自有端口），memory 只撤出失去消费方的 `ScopeBudget`；C12 RFC-559 用例覆盖两个 context 全部源码不取 memory、三个端口只取
+  shared、memory 对象满足端口（`tsc`）与撤出；C13 DAG 外 offered 边 44 → 35，其余计数不升。
+- **集中验证**（基于 `aee8de63c`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷两处已修复并复验（clarify 自动分派那次入队
+  漏看；bootstrap 的蒸馏命令按 collaboration 的参数类型标注）。tsc 0 错，eslint / promises / prettier 无告警；选出 531 个用例文件全部通过；读已提交源码的
+  两个用例在候选导出里通过；四种变异都被认出；架构报告 DAG 外 offered 边 44 → 35、public 面 −1，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-554 转 Done（实现提交 68 / 70，两格红是 RFC-370～372 既有文档链接的外部 503 与随之红的汇总 job）。RFC-557 `014a79f85`（run 45315786441）
+  的 `Playwright e2e (ubuntu-24.04 shard 2/3)` 在 `bunx playwright install-deps chromium` 卡了约 20 分钟后被取消（runner 侧装依赖，本 RFC 不碰前端与 e2e），
+  `Markdown link check (design/)` 是 RFC-378 research.md 外部链接 503；RFC-555～558 的 run 仍未跑完。
+
 ## 2026-11-23 RFC-558 integration 的 webhook 入站只认自己声明的事件中心窄端口（In Progress；`design/RFC-558-webhook-ingress-event-center-port/`）
 
 - **来由**：integration 的 `composition/webhookIngress.ts` 从事件中心只用三件事（记观察、跑通知、提示代码平台活动源），参数类型却取 event-center
@@ -85,7 +106,7 @@
   限定自审，只审功能）。
 - **提交**：三件套与实现同一个提交（RFC-554 的 CI 仍在排队，它的转 Done 随下一个 RFC 的提交）。
 
-## 2026-11-23 RFC-554 两个小结构门：死的 export-star 门面与 application 里的直接副作用（In Progress；`design/RFC-554-small-structural-gates/`）
+## 2026-11-23 RFC-554 两个小结构门：死的 export-star 门面与 application 里的直接副作用（Done；`design/RFC-554-small-structural-gates/`）
 
 - **来由**：RFC-294 design §14 的两个结构门各剩少量条目：`export-star-barrels` 唯一一条是 runtime-management 注册表文件末尾两条通配转出（实测没有
   任何文件经它们取名字），`application-direct-effect-files` 两条之一是 integration 的仓库端点发现——按内容是代码平台 HTTP 适配器（拼路径与鉴权头、
@@ -101,6 +122,8 @@
   了 `export type *` 那条）都没有读者。tsc 0 错，eslint / promises / prettier 无告警；选出 470 个用例文件 469 个通过（`rfc167` 一例在高负载下的
   5 秒期限处到点，单独再跑 3 次通过，已记入 `docs/audit-backlog.md`）；读已提交源码的两个用例在候选导出里通过；三种变异都被认出；架构报告
   两个门各降一、其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI run 45307552450 68 / 70；红的 `Markdown link check (design/)` 是 RFC-370 / 371 / 372 既有文档里 7 条 raw.githubusercontent.com
+  链接回 503（本 RFC 不碰），`CI required` 随之红，环境性、未重跑。落档提交 `a4ea67ce9` 主 CI 70 / 70。
 
 ## 2026-11-23 RFC-553 knowledge-evolution 不再取 task-execution 的内部（Done；`design/RFC-553-knowledge-evolution-task-initiator-port/`）
 

@@ -80,8 +80,7 @@ import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
 
-import { type ScopeBudget } from '@/modules/memory/public/types'
-import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
+import type { TaskMemoryInjectionBudget, TaskMemoryInjectionPort } from './taskMemoryInjection'
 import type { FailureCode } from '@agent-workflow/shared'
 
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
@@ -408,10 +407,10 @@ export interface TaskAgentRunPolicy {
    * scheduler/daemon reads `config.memoryInjectionBudget` and passes it
    * through; tests omit to use the design.md §3.3 defaults.
    */
-  memoryInjectionBudget?: ScopeBudget
+  memoryInjectionBudget?: TaskMemoryInjectionBudget
   /** Provider-neutral memory read participant selected by daemon composition. */
   memorySnapshots: TaskMemorySnapshotPort
-  memoryInjectionQueries: MemoryInjectionQueries
+  memoryInjectionQueries: TaskMemoryInjectionPort
   /**
    * RFC-048: cadence + failure tolerance for the live subagent capture
    * poller. Omitted (or `pollMs === 0`) falls back to RFC-027 behavior —

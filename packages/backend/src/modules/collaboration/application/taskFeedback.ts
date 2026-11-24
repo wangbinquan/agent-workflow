@@ -1,6 +1,6 @@
 import { ulid } from 'ulid'
 import type { TaskFeedback } from '@agent-workflow/shared'
-import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
+import type { CollaborationMemoryDistillPort } from './ports/taskFeedbackMemoryDistill'
 import type { ReviewActor } from '../public/types'
 import type { ReviewTaskAccessPort } from './ports/reviewTaskAccess'
 import type { TaskFeedbackStore } from './ports/taskFeedbackStore'
@@ -38,7 +38,7 @@ export class TaskFeedbackService {
 
   async create(
     input: CreateTaskFeedbackInput,
-    memoryDistillEnqueuer: MemoryDistillEnqueuer,
+    memoryDistillEnqueuer: CollaborationMemoryDistillPort,
   ): Promise<CreateTaskFeedbackResult> {
     const id = this.mintId()
     await this.store.insert({

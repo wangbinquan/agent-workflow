@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 704,
+      "lines": 650,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1054
+      "lines": 1046
     },
     {
       "assertsAbsence": true,
@@ -4390,6 +4390,18 @@
       "lines": 118,
       "mechanism": "ast",
       "minCorpusFiles": 120,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc559-memory-consumer-owned-ports-boundary.test.ts",
+      "id": "rfc559-memory-consumer-owned-ports-boundary",
+      "lines": 146,
+      "mechanism": "ast",
+      "minCorpusFiles": 900,
       "negativeFixture": true,
       "runner": "bun"
     }

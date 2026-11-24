@@ -5,7 +5,7 @@ export type { HumanGateArtifactRecovery } from '../application/recoverHumanGateO
 import { requireReviewTaskAccess, requireTaskFeedbackStore } from '../application/commandContext'
 import type { CollaborationCommandContext, ReviewActor } from './types'
 import { TaskFeedbackService } from '../application/taskFeedback'
-import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
+import type { CollaborationMemoryDistillPort } from '../application/ports/taskFeedbackMemoryDistill'
 
 export function createTaskFeedback(
   context: CollaborationCommandContext,
@@ -14,7 +14,7 @@ export function createTaskFeedback(
     readonly taskId: string
     readonly bodyMd: string
   },
-  memoryDistillEnqueuer: MemoryDistillEnqueuer,
+  memoryDistillEnqueuer: CollaborationMemoryDistillPort,
 ) {
   return new TaskFeedbackService(
     requireTaskFeedbackStore(context),

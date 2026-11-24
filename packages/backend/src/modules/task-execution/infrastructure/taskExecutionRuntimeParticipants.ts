@@ -18,7 +18,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
 import type { TaskDagCollaborationOperations } from '../application/ports/taskDagCollaborationOperations'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
-import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
+import type { TaskMemoryInjectionPort } from '../application/ports/taskMemoryInjection'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type {
@@ -81,7 +81,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly memorySnapshots: TaskMemorySnapshotPort
-  readonly memoryInjectionQueries: MemoryInjectionQueries
+  readonly memoryInjectionQueries: TaskMemoryInjectionPort
   /** 运行时**档案**注册表（`getRuntime(name)`）——与下面的 `stop` 同名不同物。 */
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence

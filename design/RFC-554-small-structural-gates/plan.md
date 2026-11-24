@@ -14,7 +14,7 @@
 - [x] AC-1 `runtimeRegistry.ts` 没有 `export *`；仓库端点发现在 integration 的 infrastructure
 - [x] AC-2 行为不变
 - [x] AC-3 清单与减速带随之降低；新增 RFC-554 用例并登记；读旧位置的用例随改
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -37,7 +37,10 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `a74820d0b`（实现，父提交是 `a4ea67ce9`）：exact SHA 主 CI run 45307552450 68 / 70 通过（含全部后端分片与真实 PostgreSQL、三个平台的构建与
+  全部 e2e 分片）。红的两格都是环境性的：`Markdown link check (design/)` 是 7 条 raw.githubusercontent.com 链接回 503——都在 RFC-370 / RFC-371 /
+  RFC-372 的既有文档里，本 RFC 不碰；`CI required` 是汇总 job，随前者红。没有重跑追绿；与 RFC-378 那类外部 503 同属等用户决定的链接项。
+- 落档提交 `a4ea67ce9`（RFC-553 转 Done、RFC-554 落档，只改文档）：主 CI run 45306006668 70 / 70 通过。
 
 ## 实现门（本会话自审，只审功能）
 

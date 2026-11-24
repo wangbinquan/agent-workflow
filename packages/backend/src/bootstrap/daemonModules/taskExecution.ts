@@ -1,3 +1,4 @@
+import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import {
   createChildTaskBudgetRuntime,
   createExecutionPermitRegistry,
@@ -131,7 +132,8 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
   >
   readonly memory: Pick<DaemonMemoryModules, 'memoryInjectionQueries' | 'memorySnapshots'> & {
     readonly memoryOperations: {
-      readonly distillCommands: Parameters<typeof createClarifyDecisionCommand>[1]
+      // RFC-559: memory's own contract — collaboration's and task-execution's distill ports both accept it.
+      readonly distillCommands: MemoryDistillEnqueuer
     }
   }
   readonly selection: Required<

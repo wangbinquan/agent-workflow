@@ -102,13 +102,9 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-491：只供契约用例的本机兼容运行迁入 tests/helpers，它指向 source-control 的一对销账。
   ],
   'off-dag-offered-file-context-pairs': [
-    'packages/backend/src/modules/collaboration/application/taskFeedback.ts -> memory',
-    'packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts -> memory',
-    'packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts -> memory',
-    'packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts -> memory',
+    // RFC-559: task-execution and collaboration take memory through their own ports (memory injection and distill).
     'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts -> system-operations',
     'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts -> system-operations',
-    'packages/backend/src/modules/collaboration/public/commands.ts -> memory',
     'packages/backend/src/modules/development-automation/composition.ts -> integration',
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts -> system-operations',
@@ -131,11 +127,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/system-operations/application/overview.ts -> source-control',
     'packages/backend/src/modules/system-operations/application/overview.ts -> task-execution',
     'packages/backend/src/modules/system-operations/composition.ts -> source-control',
-    'packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts -> memory',
-    'packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts -> memory',
     'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts -> system-operations',
     'packages/backend/src/modules/task-execution/composition/providerRuntime.ts -> knowledge-evolution',
-    'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> memory',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/materialObjectUploads.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/crewstation/nodeEventArchive.ts -> system-operations',
@@ -146,7 +139,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts -> knowledge-evolution',
     'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts -> system-operations',
     // RFC-491：本机兼容运行的入参迁入 tests/helpers，它指向 memory 的一对销账。
-    'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> memory',
   ],
   'platform-to-modules-file-pairs': [],
   'application-direct-effect-files': [

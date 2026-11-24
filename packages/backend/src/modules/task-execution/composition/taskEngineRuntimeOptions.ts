@@ -22,7 +22,7 @@ import type { Logger } from '@/util/log'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type { TaskExecutionResourceBinding } from '../application/ports/taskExecutionResourceSnapshots'
-import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
+import type { TaskMemoryInjectionPort } from '../application/ports/taskMemoryInjection'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
@@ -47,7 +47,7 @@ export interface RunTaskOptions {
    * Optional only at legacy direct-test construction sites; the TaskEngine
    * composition rejects a real drive before reading task state when absent. */
   memorySnapshots?: TaskMemorySnapshotPort
-  memoryInjectionQueries?: MemoryInjectionQueries
+  memoryInjectionQueries?: TaskMemoryInjectionPort
   /** RFC-349 bootstrap-selected task-execution persistence bundle. */
   persistence?: TaskExecutionPersistence
   /** RFC-349 bootstrap-selected native runtime session ownership operations. */
@@ -241,7 +241,7 @@ export interface RunTaskOptions {
 export type BoundRunTaskOptions = RunTaskOptions & {
   readonly observationInvocations: CallObservations
   readonly memorySnapshots: TaskMemorySnapshotPort
-  readonly memoryInjectionQueries: MemoryInjectionQueries
+  readonly memoryInjectionQueries: TaskMemoryInjectionPort
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly runtimeRegistry: RuntimeExecutionQueries

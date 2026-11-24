@@ -32,7 +32,8 @@ export {
   type CandidateVisibilityOptions,
 } from '../domain/candidateVisibility'
 
-export { type ScopeBudget } from '../domain/injectionRendering'
+// RFC-559: `ScopeBudget` left this entry point — its only outside reader (task-execution's run options) now uses
+// Task Execution's own `TaskMemoryInjectionBudget`; memory's injection keeps the domain type.
 
 // RFC-434: the memory catalog contract, folded in from the former non-exact `public/catalog`.
 export interface MemoryWithChain {

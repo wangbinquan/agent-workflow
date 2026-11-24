@@ -76,7 +76,7 @@ import {
   type ClarifyDecisionArgs,
 } from '../clarifyDecision'
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
-import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
+import type { CollaborationMemoryDistillPort } from '../../application/ports/taskFeedbackMemoryDistill'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '../humanGateDecisionE2eBarrier'
 import {
@@ -263,7 +263,7 @@ export interface AutoDispatchClarifyRoundArgs {
   readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   db: PersistenceDb
   /** Provider-selected, bootstrap-owned post-commit memory participant. */
-  memoryDistillEnqueuer: MemoryDistillEnqueuer
+  memoryDistillEnqueuer: CollaborationMemoryDistillPort
   /** The clarify / cross-clarify round's intermediary node_run id (= the route's :nodeRunId =
    *  clarify_rounds.intermediaryNodeRunId = task_questions.originNodeRunId). */
   originNodeRunId: string
@@ -664,7 +664,7 @@ async function rebuildCommittedClarifyDispatch(
 export async function finishCommittedClarifyAutoDispatch(input: {
   readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly db: PersistenceDb
-  readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
+  readonly memoryDistillEnqueuer: CollaborationMemoryDistillPort
   readonly operationId: string
   readonly expectedTaskId?: string
   readonly expectedOriginNodeRunId?: string

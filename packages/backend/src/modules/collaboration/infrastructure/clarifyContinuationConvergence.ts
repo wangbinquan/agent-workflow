@@ -1,6 +1,6 @@
 import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
+import type { CollaborationMemoryDistillPort } from '../application/ports/taskFeedbackMemoryDistill'
 import { finishCommittedClarifyAutoDispatch } from './clarify/autoDispatch'
 import type {
   ClarifyContinuationConvergence,
@@ -21,7 +21,7 @@ import type {
 export function createClarifyContinuationConvergence(input: {
   readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly db: PersistenceDb
-  readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
+  readonly memoryDistillEnqueuer: CollaborationMemoryDistillPort
 }): ClarifyContinuationConvergence {
   return Object.freeze({
     async finish(request: ClarifyContinuationConvergenceRequest) {

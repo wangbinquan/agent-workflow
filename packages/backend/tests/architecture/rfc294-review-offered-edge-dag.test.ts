@@ -277,30 +277,6 @@ export function offDagOfferedEdges(
 // Recomputed from committed HEAD 2a70c93285000d9413dfb7c2c835714a99701e2d; individual successor reasons retained.
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   {
-    from: 'packages/backend/src/modules/collaboration/application/taskFeedback.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
     from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
@@ -311,12 +287,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/public/commands.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/crewstationEvidence.ts',
@@ -447,18 +417,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   // RFC-481：task-execution → collaboration 的 8 条（`PreparedHumanGateRef`、`CollaborationRuntimeMechanics`、
   // `TaskDagCollaborationOperations` 与转手的协作上下文）销账——三组端口改由 task-execution 声明、collaboration 实现。
   {
-    from: 'packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts',
-    to: 'memory',
-    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts',
-    to: 'memory',
-    why: 'RFC-366 给 task-execution 加了「agent 运行结束」这个中性事实的对外通知口（application/ports/agentRunSettledObserver），本文件是把它接到 memory exact public participant `MemoryDistillEnqueuer` 上的 adapter。TE→memory 不在 design §3.1 的 offered DAG 上，但同一对已有先例在账（taskRouteOperations.ts|memory、collaboration/application/taskFeedback.ts|memory）——本刀只是同一条未收敛的 context 对上多一个精确文件，形态没变。目标形态是 task-execution 经自己的 port 拿这份入队能力，属 TE 侧 adapter 收口。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：执行结束通知改经 TE 侧 memory port）',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
@@ -469,12 +427,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'knowledge-evolution',
     why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
     removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts',
@@ -532,12 +484,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   },
   // RFC-491: `local/nativeTaskAgentRunOptions.ts` (contract tests only) moved to tests/helpers — its memory edge settled.
 
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
   {
     from: 'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts',
     to: 'runtime-management',
