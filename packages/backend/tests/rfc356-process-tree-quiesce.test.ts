@@ -22,8 +22,8 @@ import {
   isProcessTreeAlive,
   processTreeOwnershipStatus,
   TREE_QUIESCE_BUDGET_MS,
-} from '../src/util/process'
-import { processTreeOwnershipDiagnosis } from '../src/util/windowsJobObject'
+} from '../src/platform/execution/local/process'
+import { processTreeOwnershipDiagnosis } from '../src/platform/execution/local/windowsJobObject'
 
 const isWindows = process.platform === 'win32'
 
@@ -83,7 +83,7 @@ describe('RFC-356 · Job Object 接线（防止再次退化成死代码）', () 
   })
 
   test('带外杀树也补了静默跳（resume 前回滚会紧接着往那棵树里写 git）', () => {
-    const src = readSource('util', 'process.ts')
+    const src = readSource('platform', 'execution', 'local', 'process.ts')
     const at = src.indexOf('export async function killStaleRunProcessTree')
     expect(at).toBeGreaterThan(-1)
     const body = src.slice(at)
@@ -93,7 +93,7 @@ describe('RFC-356 · Job Object 接线（防止再次退化成死代码）', () 
 
 describe('RFC-356 · RFC-254 归属契约修正（T7/T8）', () => {
   test('terminate 不再关句柄，dispose 是唯一关句柄点', () => {
-    const src = readSource('util', 'windowsJobObject.ts')
+    const src = readSource('platform', 'execution', 'local', 'windowsJobObject.ts')
     const terminateAt = src.indexOf('terminate: () => {')
     const liveCountAt = src.indexOf('liveCount: () => {')
     expect(terminateAt).toBeGreaterThan(-1)
@@ -108,7 +108,7 @@ describe('RFC-356 · RFC-254 归属契约修正（T7/T8）', () => {
   })
 
   test('killProcessTreeWin32 尊重 terminate 的返回值，且不在杀树时丢归属', () => {
-    const src = readSource('util', 'process.ts')
+    const src = readSource('platform', 'execution', 'local', 'process.ts')
     const at = src.indexOf('function killProcessTreeWin32')
     const body = codeOnly(src.slice(at, src.indexOf('\n}', at)))
     expect(body, '必须回传 syscall 的真值').toContain('return owned.terminate()')

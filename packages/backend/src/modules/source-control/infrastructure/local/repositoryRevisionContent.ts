@@ -14,7 +14,7 @@ import {
   isGitWorkTree,
   readBlobAtRef,
 } from '@/util/git'
-import { toPortableRelativePath } from '@/util/platformExec'
+import { toPortableRelativePath } from '@/platform/execution/local/platformExec'
 import type {
   RepositoryClassIndex,
   RepositoryRevisionContent,

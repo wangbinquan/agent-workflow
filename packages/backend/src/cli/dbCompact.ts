@@ -20,8 +20,8 @@ import {
   currentSqlitePath,
 } from '@/platform/persistence/databaseProviderRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { isProcessAlive } from '@/util/process'
-import { readPidFromLock } from '@/util/lock'
+import { isProcessAlive } from '@/platform/execution/local/process'
+import { readPidFromLock } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/util/paths'
 
 export interface DbCompactResult {

@@ -12,7 +12,7 @@ import { createDatabaseMigrationApplication } from '@/modules/system-operations/
 import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
 import type { DatabaseMigrationStatusView } from '@/modules/system-operations/public/types'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'
-import { DaemonLockHeldError, type Lock } from '@/util/lock'
+import { DaemonLockHeldError, type Lock } from '@/platform/execution/local/daemonLock'
 
 const target = {
   provider: 'postgresql' as const,

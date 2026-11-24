@@ -608,7 +608,7 @@ describe('RFC-497 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
       `import { createRepositoryBaselineResolverFromLocations } from '../infrastructure/gitBaselineReader'`,
       `import type { DevelopmentAutomationModule } from '../composition'`,
       `import { composeDevelopmentConfigOperationsFor } from '../composition/configOperations'`,
-      `import { isLexicallyInsideForHost } from '@/util/platformExec'`,
+      `import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'`,
       `export async function run() { await import('node:path'); const at = Date.now(); process.exit(at); await fetch('x') }`,
       `const at = new Date(0).toISOString()`,
     ].join('\n')
@@ -618,7 +618,7 @@ describe('RFC-497 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
       'import ../infrastructure/gitBaselineReader',
       'import ../composition',
       'import ../composition/configOperations',
-      'import @/util/platformExec',
+      'import @/platform/execution/local/platformExec',
     ]
     expect(purityFindings(file, source, SURFACES[MISSION]!)).toEqual([
       'import ../engine/policy/evaluatePolicy',

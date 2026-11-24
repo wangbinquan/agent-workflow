@@ -12,11 +12,11 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import { hardenGitArgs } from '@/util/gitHardening'
-import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
+import { NULL_DEVICE_FOR_HOST } from '@/platform/execution/local/platformExec'
 import type { Logger } from '@/util/log'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import { sha1Hex } from '@/util/hash'
-import { raceWithFallback } from '@/util/process'
+import { raceWithFallback } from '@/platform/execution/local/process'
 
 export interface GitRunResult {
   stdout: string

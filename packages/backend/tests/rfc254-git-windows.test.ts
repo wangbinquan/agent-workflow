@@ -16,7 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { hardenGitArgs, hardenedGitLeadingArgs } from '@/util/gitHardening'
-import { nullDevice } from '@/util/platformExec'
+import { nullDevice } from '@/platform/execution/local/platformExec'
 import { join, resolve } from 'node:path'
 
 const HOME = '/tmp/aw-rfc254-git-test-home'

@@ -22,7 +22,7 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, copyFileS
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
-import { extractTarGz } from '../src/util/archive'
+import { extractTarGz } from '../src/platform/persistence/archive'
 import {
   readDbMigrationIdentity,
   readManifest,

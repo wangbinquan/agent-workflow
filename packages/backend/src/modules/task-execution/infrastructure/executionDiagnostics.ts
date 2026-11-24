@@ -2,7 +2,7 @@ import {
   IsoWorkspaceBlockedError,
   MergeAgentChildUnreapedError,
 } from '@/platform/workspace/local/isolation'
-import { processTreeOwnershipStatus } from '@/util/process'
+import { processTreeOwnershipStatus } from '@/platform/execution/local/process'
 import { describeEffectError } from '../domain/effectErrorDescription'
 
 export function describeIsoFailure(code: string, error: unknown): string {

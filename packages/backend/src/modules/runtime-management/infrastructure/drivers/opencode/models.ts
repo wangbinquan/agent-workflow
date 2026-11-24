@@ -22,7 +22,7 @@
 
 import type { OpencodeModel } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
-import { spawnVersionProbe } from '@/util/process'
+import { spawnVersionProbe } from '@/platform/execution/local/process'
 import type { ListModelsOpts, RuntimeModelList } from '../types'
 
 const log = createLogger('opencode-models')
@@ -80,7 +80,7 @@ export async function listOpencodeModels(
   if (opts?.refresh) cmd.push('--refresh')
 
   // RFC-284 T8：spawn/双流 capped 读/有界组死 reap 骨架收敛
-  // util/process.spawnVersionProbe（models 形态：maxBytes + awaitReapMs；POSIX
+  // platform/execution/local/process 的 spawnVersionProbe（models 形态：maxBytes + awaitReapMs；POSIX
   // detached 进程组，Windows flat spawn + taskkill）。本函数只留 models 策略
   //（超时/非零抛错、解析、缓存）；「plain proc.kill 留活孙进程」的 CI 教训与
   // 平台分流理由见骨架头注。

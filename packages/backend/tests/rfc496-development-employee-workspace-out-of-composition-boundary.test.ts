@@ -613,7 +613,7 @@ describe('RFC-496 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
       `import { selectedAutomationWorkspaceEffects } from '../infrastructure/automationWorkspaceEffects'`,
       `import { composeDevelopmentEmployeeWorkspace } from '../composition/digitalEmployeeWorkspace'`,
       `import type { EmployeeCase } from '@/modules/digital-employee/domain/model'`,
-      `import { isLexicallyInsideForHost } from '@/util/platformExec'`,
+      `import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'`,
       `export async function run() { await import('node:path'); const at = Date.now(); process.exit(at); await fetch('x') }`,
       `const at = new Date(0).toISOString()`,
     ].join('\n')
@@ -622,7 +622,7 @@ describe('RFC-496 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
       'import ../infrastructure/automationWorkspaceEffects',
       'import ../composition/digitalEmployeeWorkspace',
       'import @/modules/digital-employee/domain/model',
-      'import @/util/platformExec',
+      'import @/platform/execution/local/platformExec',
       'import() node:path',
       'Date.now',
       'process.exit',

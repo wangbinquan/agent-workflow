@@ -112,12 +112,12 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       '转发的进度，天然有界；父进程转发 SIGINT/SIGTERM 并等待退出。按设计它可在父进程被 ' +
       'SIGKILL 后独自完成持久会话，因此不建进程组、不整组杀。',
   },
-  'util/archive.ts': {
+  'platform/persistence/archive.ts': {
     governance: 'short-lived',
     count: 2,
     why: 'tar czf/xzf 单模块收敛点（文件头自述存在目的就是防散落的手搓 tar spawn）。',
   },
-  'util/process.ts': {
+  'platform/execution/local/process.ts': {
     governance: 'kernel',
     count: 5,
     why: '平台杀链自身的 ps/探测 spawnSync ×3 + RFC-284 T8 的 spawnVersionProbe 骨架（三胞胎探针唯一 spawn 点）+ isProcessAlive 的 `ps -o stat=` 僵尸判定：POSIX `kill(pid,0)` 对等待回收的僵尸同样成功，把僵尸当活会让 TERM→KILL 恢复误判「agent 还活着」并中止 daemon 启动，故必须另读进程状态位。',
@@ -136,7 +136,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
   'platform/execution/local/controlListener.ts': {
     governance: 'short-lived',
     count: 1,
-    why: 'hardKill 的同步 kill/taskkill 兜底（杀进程原语，同 util/process 豁免理由）。',
+    why: 'hardKill 的同步 kill/taskkill 兜底（杀进程原语，同 platform/execution/local/process 豁免理由）。',
   },
   // RFC-453: moved from services/structuralDiff/deep/runner.ts.
   'modules/workspace-insight/infrastructure/deep/indexerRunner.ts': {

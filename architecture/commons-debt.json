@@ -86,7 +86,7 @@
         "docs/audit-backlog.md:688-689",
         "packages/backend/src/services/pluginInstaller.ts:775-799",
         "packages/backend/src/services/scriptRun.ts:275-279",
-        "packages/backend/src/util/process.ts:376"
+        "packages/backend/src/platform/execution/local/process.ts:376"
       ],
       "findingId": "EK-09",
       "kind": "stale-assertion",
@@ -510,8 +510,8 @@
     },
     {
       "anchors": [
-        "packages/backend/src/util/process.ts:174-185",
-        "packages/backend/src/util/process.ts:246-257",
+        "packages/backend/src/platform/execution/local/process.ts:174-185",
+        "packages/backend/src/platform/execution/local/process.ts:246-257",
         "packages/backend/src/services/runner.ts:1715-1730",
         "packages/backend/src/services/scheduler.ts:5060-5067"
       ],

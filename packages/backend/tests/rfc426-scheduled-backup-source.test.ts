@@ -16,7 +16,7 @@ import { createLegacyPlatformRecoveryAdapter } from '@/modules/system-operations
 import type { RestoreArtifactPathResolver } from '@/modules/system-operations/infrastructure/restoreArtifactIngress'
 import type { BackupOptions } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
-import { extractTarGz } from '@/util/archive'
+import { extractTarGz } from '@/platform/persistence/archive'
 
 const roots: string[] = []
 afterEach(() => {

@@ -18,7 +18,7 @@
 import { LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join, sep } from 'node:path'
-import { extractTarGz, tarGz } from '@/util/archive'
+import { extractTarGz, tarGz } from '@/platform/persistence/archive'
 import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 

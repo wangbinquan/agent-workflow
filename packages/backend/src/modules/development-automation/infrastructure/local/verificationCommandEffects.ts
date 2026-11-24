@@ -1,8 +1,12 @@
 import { existsSync, lstatSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { detachedProcessGroup, killProcessTree, reapDetachedGroup } from '@/util/process'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
+import {
+  detachedProcessGroup,
+  killProcessTree,
+  reapDetachedGroup,
+} from '@/platform/execution/local/process'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 import { readVerificationEnvironment } from './verificationEnvironment'
 import type { EvidenceArtifactPort } from '../../application/ports/evidenceArtifacts'
@@ -155,7 +159,7 @@ export function createLocalVerificationCommandEffects(deps: {
       let timedOut = false
       const killer = setTimeout(() => {
         timedOut = true
-        // 整组杀：TERM 宽限 → KILL，与平台受管进程同一条杀链（util/process.killProcessTree）。
+        // 整组杀：TERM 宽限 → KILL，与平台受管进程同一条杀链（platform/execution/local/process 的 killProcessTree）。
         // 改造前是 `proc.kill('SIGTERM')` → 2s → `proc.kill('SIGKILL')`，只作用于直接子进程。
         killProcessTree(proc.pid, 'SIGTERM')
         setTimeout(() => killProcessTree(proc.pid, 'SIGKILL'), VERIFICATION_KILL_GRACE_MS).unref?.()

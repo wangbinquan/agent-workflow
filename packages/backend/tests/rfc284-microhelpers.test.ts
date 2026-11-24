@@ -6,7 +6,7 @@
 //   - `createHash('sha1')` 在 src 仅 util/hash.ts 一处；
 //   - `createHash('sha256')` 仅存合法集合（多步 builder 族 + raw-digest +
 //     shared 镜像桥），单步 idiom 副本若回潮此集合必涨；
-//   - `Math.max(Date.now(),` 仅 platform/contracts/monotonicNow.ts（RFC-571 自 util/time.ts 迁入）；drained-race 模式仅 util/process.ts。
+//   - `Math.max(Date.now(),` 仅 platform/contracts/monotonicNow.ts（RFC-571 自 util/time.ts 迁入）；drained-race 模式仅 platform/execution/local/process.ts（RFC-572 自 util/process.ts 迁入）。
 
 import { describe, expect, test } from 'bun:test'
 import { createHash, randomBytes } from 'node:crypto'
@@ -14,7 +14,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { sha1Hex, sha256Hex } from '../src/util/hash'
 import { monotonicNow } from '../src/platform/contracts/monotonicNow'
-import { raceWithFallback } from '../src/util/process'
+import { raceWithFallback } from '../src/platform/execution/local/process'
 
 const SRC_ROOT = join(import.meta.dir, '../src')
 
@@ -105,8 +105,8 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
     )
   })
 
-  test('monotonic 公式仅 platform/contracts/monotonicNow.ts；drained-race 模式仅 util/process.ts', () => {
+  test('monotonic 公式仅 platform/contracts/monotonicNow.ts；drained-race 模式仅 platform/execution/local/process.ts', () => {
     expect(hits(/Math\.max\(Date\.now\(\)/)).toEqual(['platform/contracts/monotonicNow.ts'])
-    expect(hits(/Promise\.race\(\[p, new Promise/)).toEqual(['util/process.ts'])
+    expect(hits(/Promise\.race\(\[p, new Promise/)).toEqual(['platform/execution/local/process.ts'])
   })
 })

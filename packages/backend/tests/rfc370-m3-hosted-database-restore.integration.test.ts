@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { extractTarGz } from '@/util/archive'
+import { extractTarGz } from '@/platform/persistence/archive'
 import {
   captureEpochMetadata,
   verifyEpochMetadataSnapshot,

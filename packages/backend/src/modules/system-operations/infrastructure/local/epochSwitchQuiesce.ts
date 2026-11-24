@@ -1,4 +1,9 @@
-import { readPidFromLock, acquireLock, isProcessAlive, type Lock } from '@/util/lock'
+import {
+  readPidFromLock,
+  acquireLock,
+  isProcessAlive,
+  type Lock,
+} from '@/platform/execution/local/daemonLock'
 import { readControlFile, requestShutdown } from '@/platform/execution/local/controlListener'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import type { QuiescePort, SessionLockPort } from '../../application/ports/epochSwitch'

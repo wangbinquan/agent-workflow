@@ -21,7 +21,7 @@ import { readLogicalDatabaseBackupEnvelope } from '../src/platform/persistence/l
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createBackup } from '../src/platform/persistence/sqlite/systemProviderBackup'
 import { readManifest } from '../src/platform/persistence/sqlite/systemBackupManifest'
-import { tarBin } from '../src/util/archive'
+import { tarBin } from '../src/platform/persistence/archive'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { createWorkflow } from './helpers/model/resourceWrites'
 

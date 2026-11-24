@@ -5,7 +5,7 @@
 import { archiveEntry } from '@/platform/content/locations/directories'
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 import { createLogger } from '@/util/log'
 import {
   type BackupKind,

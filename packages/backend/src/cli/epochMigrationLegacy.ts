@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { LegacyMigrationFinalizePort } from '@/modules/system-operations/public/commands'
 import { readMigrationSourcePointer } from '@/platform/persistence/migration/generationPointerSource'
 import { formatDatabaseMigrationStatus, type DatabaseCliResult } from '@/cli/database'
-import { acquireLock } from '@/util/lock'
+import { acquireLock } from '@/platform/execution/local/daemonLock'
 
 export async function legacyEpochMigrationCommand(input: {
   readonly appHome: string

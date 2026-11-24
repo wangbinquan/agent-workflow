@@ -24,7 +24,7 @@
 import {
   adoptProcessTree,
   processTreeOwnershipDiagnosis,
-} from '../packages/backend/src/util/windowsJobObject'
+} from '../packages/backend/src/platform/execution/local/windowsJobObject'
 
 function fail(message: string): never {
   process.stderr.write(`FAIL: ${message}\n`)

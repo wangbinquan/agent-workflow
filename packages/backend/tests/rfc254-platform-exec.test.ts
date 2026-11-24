@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { resetTarProbeForTests, tarAvailable } from '@/util/archive'
+import { resetTarProbeForTests, tarAvailable } from '@/platform/persistence/archive'
 import { isWindowsBatchShim } from '@/modules/workspace-insight/domain/deep/indexers'
 import { isAbsolute, resolve, resolve as resolvePath, win32 } from 'node:path'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
@@ -21,7 +21,7 @@ import {
   pathListJoin,
   pathListSplit,
   platformSpawnOptions,
-} from '@/util/platformExec'
+} from '@/platform/execution/local/platformExec'
 
 describe('RFC-254 platformExec', () => {
   test('null device differs per platform', () => {
@@ -147,11 +147,14 @@ describe('RFC-254 T25b — archive prerequisites', () => {
   test('a missing tar fails with an actionable message, not a bare ENOENT', async () => {
     // The failure an operator sees must name the platform's own remedy. A raw
     // spawn error says "ENOENT", which reads like a corrupt backup path.
-    const { tarGz } = await import('@/util/archive')
+    const { tarGz } = await import('@/platform/persistence/archive')
     if (Bun.which('tar') !== null) {
       // tar exists here, so assert the message shape from the source instead of
       // faking absence (the probe is module-level state shared with real runs).
-      const src = readFileSync(resolve(import.meta.dir, '..', 'src/util/archive.ts'), 'utf8')
+      const src = readFileSync(
+        resolve(import.meta.dir, '..', 'src/platform/persistence/archive.ts'),
+        'utf8',
+      )
       expect(src).toContain('tar is not available on PATH')
       expect(src).toContain('System32')
       expect(typeof tarGz).toBe('function')

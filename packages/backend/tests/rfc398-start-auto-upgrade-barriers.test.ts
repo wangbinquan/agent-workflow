@@ -4,7 +4,7 @@
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { readPidFromLock } from '@/util/lock'
+import { readPidFromLock } from '@/platform/execution/local/daemonLock'
 import { autoUpgradeFixture } from './helpers/rfc398AutoUpgrade'
 
 for (const barrier of [

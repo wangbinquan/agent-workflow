@@ -6,7 +6,7 @@ import {
 } from '../application/recovery/heartbeatKill'
 import { DAEMON_CADENCE } from '@/platform/background/daemonCadence'
 import { reconcileDeadRunningRuns } from '../infrastructure/local/deadRunReconcile'
-import { killStaleRunProcessTree } from '@/util/process'
+import { killStaleRunProcessTree } from '@/platform/execution/local/process'
 import type { TaskExecutionModule } from '../composition'
 import type { TaskAutoResumeCommand } from '../application/ports/taskAutoResumeCommand'
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'

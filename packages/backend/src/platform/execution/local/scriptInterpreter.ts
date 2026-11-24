@@ -7,7 +7,7 @@
 import { existsSync } from 'node:fs'
 import { win32 } from 'node:path'
 import type { ScriptLanguage } from '@agent-workflow/shared'
-import { spawnVersionProbe } from '@/util/process'
+import { spawnVersionProbe } from '@/platform/execution/local/process'
 
 /**
  * File extension + argv shape per language.

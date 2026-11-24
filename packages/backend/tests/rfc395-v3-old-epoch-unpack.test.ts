@@ -3,7 +3,7 @@ import { setDefaultTimeout, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } from 'node:fs'
 import { join } from 'node:path'
 import { describeV1Providers } from './helpers/rfc395V1Harness'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 import {
   unpackOldEpochBackup,
   detectOldEpochBackup,

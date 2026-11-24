@@ -8,7 +8,10 @@
 // design/RFC-284-commons-dedup-and-guardrails/design.md §1.5。
 
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '../src/util/process'
+import {
+  DEFAULT_VERSION_PROBE_TIMEOUT_MS,
+  spawnVersionProbe,
+} from '../src/platform/execution/local/process'
 
 const SH = '/bin/sh'
 

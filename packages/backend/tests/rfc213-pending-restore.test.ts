@@ -41,7 +41,7 @@ import {
   validateBackupForStage,
 } from '../src/platform/persistence/sqlite/systemProviderRestore'
 import { writeManifest } from '../src/platform/persistence/sqlite/systemBackupManifest'
-import { tarGz } from '../src/util/archive'
+import { tarGz } from '../src/platform/persistence/archive'
 import { quickCheckDbFile } from '../src/db/integrity'
 import { readFileSync } from 'node:fs'
 import { restoreCommand } from '../src/cli/restore'

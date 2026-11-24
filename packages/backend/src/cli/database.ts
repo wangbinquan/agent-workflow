@@ -8,8 +8,8 @@ import {
   databaseMigrationStartIdempotencyKeyWith,
   databaseMigrationStartIdentityFromOverview,
 } from '@agent-workflow/shared'
-import type { Lock } from '@/util/lock'
-import { acquireLock, DaemonLockHeldError } from '@/util/lock'
+import type { Lock } from '@/platform/execution/local/daemonLock'
+import { acquireLock, DaemonLockHeldError } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/util/paths'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { DATABASE_PROVIDERS } from '@/platform/persistence/databaseProviders'

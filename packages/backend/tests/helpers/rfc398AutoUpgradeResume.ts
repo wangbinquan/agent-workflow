@@ -9,7 +9,7 @@ import { expect, test } from 'bun:test'
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isProcessAlive } from '@/util/process'
+import { isProcessAlive } from '@/platform/execution/local/process'
 import {
   autoUpgradeFixture,
   acknowledgeFixture,

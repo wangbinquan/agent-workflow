@@ -6,7 +6,7 @@
 // exit without ever spawning the target command.
 
 import { MANAGED_PROCESS_LAUNCHER_SOURCE } from '@/embed.generated'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import {
   appendFileSync,
   closeSync,

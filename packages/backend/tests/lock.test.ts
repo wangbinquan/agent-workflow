@@ -7,7 +7,7 @@ import {
   adoptCurrentProcessLock,
   DaemonLockHeldError,
   writePidFileForTest,
-} from '../src/util/lock'
+} from '../src/platform/execution/local/daemonLock'
 
 describe('flock (PID-file)', () => {
   let tmp: string

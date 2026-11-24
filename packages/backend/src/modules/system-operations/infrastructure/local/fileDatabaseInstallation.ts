@@ -14,7 +14,7 @@ import {
   resolvePostgresqlAdditiveRowBridge,
   type PostgresqlMigrationHistory,
 } from '@/platform/persistence/postgresqlMigrationSequence'
-import { acquireLock, type Lock } from '@/util/lock'
+import { acquireLock, type Lock } from '@/platform/execution/local/daemonLock'
 import { createDatabaseMigrationControlPlane } from '../../application/databaseMigrationControlPlane'
 import {
   createDatabaseMigrationCoordinator,

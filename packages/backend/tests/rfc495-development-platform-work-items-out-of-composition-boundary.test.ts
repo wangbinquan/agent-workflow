@@ -406,7 +406,7 @@ describe('RFC-495 ④ 新文件的依赖面是闭集、不用进程全局', () =
       `import { EvidenceStore } from '../infrastructure/evidenceStore'`,
       `import { composeDevelopmentEmployeePlatformWorkItems } from '../composition/digitalEmployeePlatformWorkItems'`,
       `import type { EmployeeCase } from '@/modules/digital-employee/domain/model'`,
-      `import { isLexicallyInsideForHost } from '@/util/platformExec'`,
+      `import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'`,
       `export async function run() { await import('node:path'); const at = Date.now(); process.exit(at); await fetch('x') }`,
       `const at = new Date(0).toISOString()`,
     ].join('\n')
@@ -415,7 +415,7 @@ describe('RFC-495 ④ 新文件的依赖面是闭集、不用进程全局', () =
       'import ../infrastructure/evidenceStore',
       'import ../composition/digitalEmployeePlatformWorkItems',
       'import @/modules/digital-employee/domain/model',
-      'import @/util/platformExec',
+      'import @/platform/execution/local/platformExec',
       'import() node:path',
       'Date.now',
       'process.exit',

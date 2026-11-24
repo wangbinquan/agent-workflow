@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { utf16MinLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
-import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'
 import {
   developmentToolInputSchemasV2,
   type DevelopmentToolContractIdV2,

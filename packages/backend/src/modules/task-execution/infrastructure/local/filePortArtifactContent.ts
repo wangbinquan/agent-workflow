@@ -16,7 +16,7 @@ import {
 } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readInsideRoot, existsInsideRoot } from '@/platform/content/local/rootFileQueries'
-import { toPortableRelativePath } from '@/util/platformExec'
+import { toPortableRelativePath } from '@/platform/execution/local/platformExec'
 import { createLogger } from '@/util/log'
 import { encodePortSegment } from '../../domain/portArtifacts'
 import { portArchiveRootRel } from '../../application/portArtifacts'

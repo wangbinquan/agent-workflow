@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join, basename } from 'node:path'
-import { extractTarGz } from '@/util/archive'
+import { extractTarGz } from '@/platform/persistence/archive'
 import { readManifest } from '../legacy/backupManifest'
 import {
   logicalArtifactFileDigest,

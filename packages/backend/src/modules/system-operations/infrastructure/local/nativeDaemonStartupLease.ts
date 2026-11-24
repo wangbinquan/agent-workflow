@@ -1,4 +1,9 @@
-import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
+import {
+  acquireLock,
+  adoptCurrentProcessLock,
+  DaemonLockHeldError,
+  type Lock,
+} from '@/platform/execution/local/daemonLock'
 import { readControlFile, requestShutdown } from '@/platform/execution/local/controlListener'
 import { sha256Hex } from '@/util/hash'
 import type { DaemonStartupLeasePort } from '../../application/ports/daemonStartupLease'

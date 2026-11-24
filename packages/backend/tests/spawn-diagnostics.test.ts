@@ -9,7 +9,7 @@
 // the smoke's evidence detail.
 
 import { describe, expect, test } from 'bun:test'
-import { explainSpawnEnoent, outputTail } from '../src/util/spawnDiagnostics'
+import { explainSpawnEnoent, outputTail } from '../src/platform/execution/local/spawnDiagnostics'
 
 const ENOENT_BWRAP = "ENOENT: no such file or directory, posix_spawn '/usr/bin/bwrap'"
 

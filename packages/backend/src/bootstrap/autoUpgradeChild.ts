@@ -2,7 +2,7 @@
 import { resolve } from 'node:path'
 import { IS_EMBEDDED } from '@/embed'
 import { createLogger } from '@/util/log'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 
 export async function runAutoUpgradeChild(): Promise<void> {
   const argv = IS_EMBEDDED

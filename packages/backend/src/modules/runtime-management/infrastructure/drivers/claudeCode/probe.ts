@@ -7,7 +7,10 @@ import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '../types'
 // RFC-143 PR-5: shared best-effort semver extraction (display telemetry only).
 import { extractVersion } from '@/platform/contracts/semver'
-import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/process'
+import {
+  DEFAULT_VERSION_PROBE_TIMEOUT_MS,
+  spawnVersionProbe,
+} from '@/platform/execution/local/process'
 
 const log = createLogger('claude-code')
 
@@ -53,7 +56,7 @@ export async function probeClaudeCode(
   let ran = false
   try {
     // RFC-284 T8：spawn 骨架（POSIX detached 进程组 / Windows flat spawn /
-    // exit 先行 / 有界读 / POSIX finally 组 reap）收敛到 util/process.spawnVersionProbe，本函数只留
+    // exit 先行 / 有界读 / POSIX finally 组 reap）收敛到 platform/execution/local/process 的 spawnVersionProbe，本函数只留
     // claude 侧策略（告警文案 + best-effort version telemetry）。
     const r = await spawnVersionProbe([...head, '--version'], {
       // RFC-317 T36（EK-02 / C4）—— 省略 timeoutMs 曾意味着「无进程组、无树杀、

@@ -22,7 +22,7 @@ import {
   killStaleRunProcessTree,
   pidCommandContainsBinary,
   STALE_RUN_PID_MAX_AGE_MS,
-} from '../src/util/process'
+} from '../src/platform/execution/local/process'
 import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 const spawned: Bun.Subprocess[] = []

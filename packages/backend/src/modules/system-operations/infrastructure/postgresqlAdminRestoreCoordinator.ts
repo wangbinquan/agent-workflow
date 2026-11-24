@@ -16,7 +16,7 @@ import {
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { DomainError } from '@/util/errors'
-import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
+import { acquireLock, isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
 import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'
 import { settleEpochSwitchBeforePointerReplacement } from './epochSwitch/pointerReplacement'

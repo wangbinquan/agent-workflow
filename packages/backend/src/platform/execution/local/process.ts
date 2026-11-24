@@ -1,16 +1,16 @@
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import { createLogger } from '@/util/log'
 import {
   adoptProcessTree,
   processTreeOwnershipDiagnosis,
   type ProcessTreeOwnership,
-} from '@/util/windowsJobObject'
+} from '@/platform/execution/local/windowsJobObject'
 
 const log = createLogger('process-tree')
 
 // RFC-098 WP-8 (scheduler audit S-15) — process-tree governance primitives.
 //
-// `isProcessAlive` moved here from util/lock.ts (still re-exported there for
+// `isProcessAlive` moved here from the daemon lock (daemonLock.ts beside this file; still re-exported there for
 // the daemon single-instance lock callers) so service-level pid governance —
 // orphan reaping (modules/task-execution/infrastructure/local/orphanRunReap.ts), resume/retry pre-rollback kills
 // (services/task.ts) and the runner's kill escalation (task-execution's application task agent run) —
@@ -287,7 +287,7 @@ export async function awaitProcessTreeQuiesced(
   }
 }
 
-/** 只用到 warn 的最小日志面——避免 util/process 反向依赖 util/log 的完整接口。 */
+/** 只用到 warn 的最小日志面——避免本文件依赖 util/log 的完整接口。 */
 export interface TreeQuiesceLog {
   warn(msg: string, fields?: Record<string, unknown>): void
 }

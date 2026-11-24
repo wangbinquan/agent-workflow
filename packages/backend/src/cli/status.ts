@@ -1,7 +1,7 @@
 // `agent-workflow status` — print daemon state.
 
 import { type DaemonInfo, readDaemonInfo } from '@/util/daemonInfo'
-import { isProcessAlive, readPidFromLock } from '@/util/lock'
+import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/util/paths'
 
 export interface HealthReport {

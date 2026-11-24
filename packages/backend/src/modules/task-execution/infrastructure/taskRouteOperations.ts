@@ -175,7 +175,7 @@ import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/ut
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import { killStaleRunProcessTree } from '@/util/process'
+import { killStaleRunProcessTree } from '@/platform/execution/local/process'
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import { requireNodeRunPromptOperations } from '../application/nodeRunPrompt'
 

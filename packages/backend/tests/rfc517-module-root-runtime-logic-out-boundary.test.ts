@@ -34,7 +34,7 @@ import {
   TaskExecutionModule,
   createTaskExecutionShutdownController,
 } from '@/modules/task-execution/infrastructure/taskExecutionModule'
-import { acquireLock } from '@/util/lock'
+import { acquireLock } from '@/platform/execution/local/daemonLock'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const BACKEND = resolve(import.meta.dir, '..')
@@ -157,7 +157,7 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   [BOOT]: [
     'import node:path: dirname',
     'import platform/persistence/databaseProviderRuntime: prepareEpoch2DatabaseProviderRuntime',
-    'import util/lock: acquireLock',
+    'import platform/execution/local/daemonLock: acquireLock',
     'import modules/system-operations/application/ports/databaseConfiguration: DatabaseConfigurationPort',
     'import modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator: prepareDatabaseSchemaUpgrade, DatabaseSchemaUpgradeOptions',
     'import modules/system-operations/infrastructure/epochSwitch/bootAdmission: admitEpochBoot',

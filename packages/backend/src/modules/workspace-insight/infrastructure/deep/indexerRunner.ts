@@ -7,7 +7,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { killProcessTree } from '@/util/process'
+import { killProcessTree } from '@/platform/execution/local/process'
 import type { IndexerRunResult } from '../../domain/deep/deepIndexing'
 import type { IndexerSpec } from '../../domain/deep/indexers'
 

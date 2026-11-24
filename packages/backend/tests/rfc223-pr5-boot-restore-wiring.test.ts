@@ -8,7 +8,7 @@ import {
   validateBackupForStage,
   restoreBackup,
 } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 import { openDb } from '@/db/client'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'

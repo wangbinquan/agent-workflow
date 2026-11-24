@@ -15,7 +15,7 @@
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 
 /**
  * RFC-254 T25b: invoke tar by ABSOLUTE `System32\tar.exe` (bsdtar) on win32, not

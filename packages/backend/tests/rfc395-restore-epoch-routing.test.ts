@@ -11,7 +11,7 @@ import { resolveConfigurationValue } from '@/platform/configuration/configuratio
 import { openDb } from '@/db/client'
 import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { writeManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 import { openFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
 import { restoreSqliteBackupForTest } from './helpers/sqlitePostRestoreRecovery'
 import { workflowFixture, readWorkflowFixtures } from './helpers/model'

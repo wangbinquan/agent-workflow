@@ -3,7 +3,7 @@
 // runtime preparation.
 import { dirname } from 'node:path'
 import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { acquireLock } from '@/util/lock'
+import { acquireLock } from '@/platform/execution/local/daemonLock'
 import type { DatabaseConfigurationPort } from '../../application/ports/databaseConfiguration'
 import type {
   prepareDatabaseSchemaUpgrade,

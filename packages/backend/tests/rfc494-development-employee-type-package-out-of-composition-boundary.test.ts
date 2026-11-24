@@ -355,7 +355,7 @@ describe('RFC-494 ④ 新文件的依赖面是闭集、没有 effect', () => {
       `import { model } from '@/modules/digital-employee/domain/model'`,
       `import { adapter } from '../infrastructure/automationWorkspaceEffects'`,
       `import { developmentEmployeeTypePackage } from '../composition/employeeTypePackage'`,
-      `import { isLexicallyInsideForHost } from '@/util/platformExec'`,
+      `import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'`,
       'const wrapper = `import { spawnSync } from "node:child_process"`',
       `export async function run() { await import('node:path'); process.exit(1) }`,
     ].join('\n')
@@ -364,7 +364,7 @@ describe('RFC-494 ④ 新文件的依赖面是闭集、没有 effect', () => {
       'import @/modules/digital-employee/domain/model',
       'import ../infrastructure/automationWorkspaceEffects',
       'import ../composition/employeeTypePackage',
-      'import @/util/platformExec',
+      'import @/platform/execution/local/platformExec',
       'async',
       'await',
       'import() node:path',

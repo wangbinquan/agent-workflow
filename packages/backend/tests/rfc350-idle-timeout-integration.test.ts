@@ -23,7 +23,7 @@ import { o2Ports } from './helpers/o2Closure'
 //   - 只开收割不开归档 ⇒ 只终结、不出库、仍可查看（AC-10）；
 //   - 软删除任务一根汗毛都不碰（AC-14）。
 //
-// 进程终止在这里注入成桩：真去 kill 一个 pid 属于 util/process 的职责（它自己有
+// 进程终止在这里注入成桩：真去 kill 一个 pid 属于 platform/execution/local/process 的职责（它自己有
 // PID 复用窗口与身份门的测试），本文件要证的是收割链，不是信号。
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'

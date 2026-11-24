@@ -16,7 +16,7 @@ import { dirname } from 'node:path'
 
 import { isProcessAlive } from './process'
 
-// RFC-098 WP-8: `isProcessAlive` moved to util/process.ts (shared with the
+// RFC-098 WP-8: `isProcessAlive` moved to process.ts beside this file (shared with the
 // services-level pid governance); re-exported here so existing lock callers
 // keep their import path.
 export { isProcessAlive }

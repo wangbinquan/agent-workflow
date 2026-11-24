@@ -4,7 +4,7 @@ import type { Config } from '@agent-workflow/shared'
 import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
   type StaleRunKillOutcome,
-} from '@/util/process'
+} from '@/platform/execution/local/process'
 import { ValidationError } from '@/util/errors'
 import { startInterval } from '@/platform/background/intervalTimer'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'

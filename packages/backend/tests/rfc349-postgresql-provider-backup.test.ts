@@ -24,7 +24,7 @@ import type {
 import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import type { PortableBackupApplicationAssets } from '@/platform/persistence/portableBackupArchive'
 import { captureWorktreeRows } from '@/platform/persistence/worktreeBackup'
-import { extractTarGz } from '@/util/archive'
+import { extractTarGz } from '@/platform/persistence/archive'
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { workflowFixture } from './helpers/model'
 

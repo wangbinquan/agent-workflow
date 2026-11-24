@@ -23,7 +23,7 @@
 //    追加在作者所有其他键（尤其 '*'）之后。这就是本函数做的事。
 
 import { readdirSync } from 'node:fs'
-import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import { join } from 'node:path'

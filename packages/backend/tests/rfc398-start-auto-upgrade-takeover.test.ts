@@ -2,7 +2,7 @@
 // verify. Split from rfc398-start-auto-upgrade.test.ts so each file fits a backend CI shard.
 import { expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { readPidFromLock } from '@/util/lock'
+import { readPidFromLock } from '@/platform/execution/local/daemonLock'
 import { autoUpgradeFixture } from './helpers/rfc398AutoUpgrade'
 
 for (const order of ['before', 'after'] as const)

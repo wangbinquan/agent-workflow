@@ -19,8 +19,12 @@ import {
   processTreeOwnershipAvailable,
   processTreeOwnershipDiagnosis,
   WIN32_JOB_LAYOUT,
-} from '@/util/windowsJobObject'
-import { adoptSpawnedProcessTree, isProcessTreeAlive, killProcessTree } from '@/util/process'
+} from '@/platform/execution/local/windowsJobObject'
+import {
+  adoptSpawnedProcessTree,
+  isProcessTreeAlive,
+  killProcessTree,
+} from '@/platform/execution/local/process'
 
 /**
  * Ask the OS whether a pid still exists, independently of anything under test.

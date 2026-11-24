@@ -9,6 +9,16 @@ import * as facade from '@/services/gitSubmodule'
 import * as git from '@/util/git'
 import { importEdges, sourceUnit } from './architecture/census'
 
+/**
+ * RFC-572: the two process / exec leaves git has always used moved from `util/` into platform's execution directory.
+ * They stay leaves (RFC-572's lock pins their imports: each other, `util/log`, node built-ins and `bun:ffi`), so the git
+ * primitives may name exactly these two; every other platform file is still an upper layer here.
+ */
+const PROCESS_LEAVES = new Set([
+  '@/platform/execution/local/platformExec',
+  '@/platform/execution/local/process',
+])
+
 function forbiddenEdges(text: string): string[] {
   return importEdges(sourceUnit('packages/backend/src/util/git.ts', text))
     .map((edge) => edge.specifier)
@@ -21,7 +31,8 @@ function forbiddenEdges(text: string): string[] {
         firstParty &&
         specifier !== '@agent-workflow/shared' &&
         !specifier.startsWith('@/util/') &&
-        !specifier.startsWith('./')
+        !specifier.startsWith('./') &&
+        !PROCESS_LEAVES.has(specifier)
       )
     })
 }
@@ -57,6 +68,16 @@ describe('RFC-377 util/git leaf', () => {
     expect(forbiddenEdges("import { caps } from '../services/gitVersion'")).toEqual([
       '../services/gitVersion',
     ])
+    // RFC-572: only the two process / exec leaves are admitted — their neighbours in the same directory are not.
+    expect(
+      forbiddenEdges(
+        "import { spawnManaged } from '@/platform/execution/local/managedProcess'\n" +
+          "import { acquireLock } from '@/platform/execution/local/daemonLock'",
+      ),
+    ).toEqual([
+      '@/platform/execution/local/managedProcess',
+      '@/platform/execution/local/daemonLock',
+    ])
   })
 
   test('accepts shared, sibling utilities and external primitives', () => {
@@ -64,6 +85,8 @@ describe('RFC-377 util/git leaf', () => {
       forbiddenEdges(`
         import { redactGitUrl } from '@agent-workflow/shared'
         import { sha1Hex } from '@/util/hash'
+        import { killProcessTree } from '@/platform/execution/local/process'
+        import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
         export { run } from './process'
         import type { Logger } from './log'
         import { existsSync } from 'node:fs'

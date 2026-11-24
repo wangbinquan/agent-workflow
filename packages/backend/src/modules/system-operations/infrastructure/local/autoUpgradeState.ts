@@ -1,7 +1,7 @@
 // Read-only boot projection. Keep converter/application dependencies out of runtime entries.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isProcessAlive } from '@/util/process'
+import { isProcessAlive } from '@/platform/execution/local/process'
 import {
   foldAutoUpgradeSession,
   type AutoUpgradeRecord,

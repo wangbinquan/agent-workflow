@@ -1,3 +1,23 @@
+## 2026-11-24 RFC-572 `util/` 的进程 / 执行一族归 platform（In Progress；`design/RFC-572-util-process-family-into-platform/`）
+
+- **来由**：W9-D 的第二批。`util/` 余下的 27 个文件里有六个是闭合的依赖集（彼此引用，对外只取 `util/log`），而 `platform/execution/local/` 已经是
+  本机进程执行机制的位置、Windows 的 CI 也按这个目录的通配触发。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速
+  推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`platformExec`、`windowsJobObject`、`process`、`spawnDiagnostics` 与 `lock`（改名 `daemonLock`）迁入 `platform/execution/local/`，
+  `archive` 迁入 `platform/persistence/`；59 个生产读者、42 个用例文件、4 个助手与夹具、1 个仓库脚本改指，旧位置不留转出。随改：
+  `windows-platform.yml` 两份路径清单（三行由既有的目录通配覆盖）、架构报告的归属表、公共内核清单与它的三个行号锚点、`rfc377` 的 `util/git` 叶子锁
+  （放行执行目录里的两个叶子）与十余处钉着旧路径的用例；新增 RFC-572 用例。
+- **不做**：`util/` 余下的 21 个——`errors` / `hash` / `log` / `paths` / `http` 读者数百处的另立；git、凭据、文件信任、Windows ACL、OIDC、脱敏与安全
+  路径一族；`fsReclaim`、`migrationsFolder`、`daemonInfo` 随各自的依赖；`timeoutSignal`、`inFlight`、`sqlChunk` 见 RFC-571。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 进程 / 执行机制进 platform 的执行目录、tar 封装进持久化目录；C11 不涉及 public；C12 RFC-572
+  用例覆盖 `src` / `tests` / `scripts` 的全部说明符、六个新文件与工作流的两份路径清单；C13 `legacy-horizontal-files` 115 → 109，其余计数不升。
+- **集中验证**（基于 `7c9c778d4`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。本人缺陷四处已修复并复验，都是钉着旧路径而检索
+  没有扫到的地方（两份已提交的账本、一个分段拼路径的用例、`util/git` 的叶子锁；其中查账本的那条命令被 shell 的通配报错中止，等于没查）。tsc 0 错，
+  eslint / promises / prettier 无告警；选出 587 个用例文件，修正后全部通过；读已提交源码的 187 个用例文件在候选导出里通过；十一种变异都被认出；
+  架构报告 60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-571 转 Done 的文档提交 `7c9c778d4` 主 CI run 45495905499 70 / 70 全绿。
+
 ## 2026-11-24 RFC-571 `util/` 的八个通用原语归 platform（Done；`design/RFC-571-util-primitives-into-platform-1/`）
 
 - **来由**：S9 里不需要裁决就能收的条目已经收完（见下一条），转做 W9-D。legacy 横向目录还剩 123 个文件，`util/` 占 35 个；RFC-294 design §2 与

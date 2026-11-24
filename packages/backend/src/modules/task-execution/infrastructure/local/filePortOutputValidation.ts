@@ -1,4 +1,4 @@
-import { toPortableRelativePath } from '@/util/platformExec'
+import { toPortableRelativePath } from '@/platform/execution/local/platformExec'
 import { checkLexicalThenRealpath } from '@/util/safePath'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, relative } from 'node:path'

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { IS_EMBEDDED } from '@/embed'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import { readHostedGitRuntimeBindings, sshGitTarget } from './gitCredentials'
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`

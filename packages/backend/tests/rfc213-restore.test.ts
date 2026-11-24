@@ -50,9 +50,9 @@ import { restoreCommand } from '../src/cli/restore'
 import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
 import { composeStandaloneLocalSystemOperationsSelection } from './helpers/systemOperations'
 import { hasPendingRestore } from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
-import { writePidFileForTest } from '../src/util/lock'
+import { writePidFileForTest } from '../src/platform/execution/local/daemonLock'
 import { appVersion } from '../src/platform/execution/version'
-import { extractTarGz, tarGz } from '../src/util/archive'
+import { extractTarGz, tarGz } from '../src/platform/persistence/archive'
 import { restoreSqliteBackupForTest as restoreBackup } from './helpers/sqlitePostRestoreRecovery'
 
 // 预算而非性能门：本文件每条用例都在做真实 I/O —— seed → backup(tar+gzip) →
@@ -366,7 +366,7 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     sqliteOf(db).close()
     // Repack after applying the real native successor; a manifest timestamp is not the gate.
     const staging = tmp('rfc213-down-stage-')
-    const { extractTarGz } = await import('../src/util/archive')
+    const { extractTarGz } = await import('../src/platform/persistence/archive')
     await extractTarGz(backup.path, staging)
     const incoming = new Database(join(staging, 'db.sqlite'))
     try {

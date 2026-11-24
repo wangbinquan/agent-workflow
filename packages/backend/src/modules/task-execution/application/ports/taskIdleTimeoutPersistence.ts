@@ -4,7 +4,7 @@
 // 只认这几个方法。`cancelTask` / `killRunProcessTree` / `recordReapAudit` 同样由
 // bootstrap 注入——本端口**不伪造任何 provider 兜底**（RFC-349 的准入纪律）。
 
-import type { StaleRunKillOutcome } from '@/util/process'
+import type { StaleRunKillOutcome } from '@/platform/execution/local/process'
 import type { TaskActivityRecord } from '../../domain/idleTimeoutPolicy'
 
 /** 树内一条仍非终态的 node_run 的进程身份快照（收割前要杀的那些）。 */

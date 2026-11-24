@@ -17,7 +17,7 @@ import {
   type SqlitePostRestoreRecovery,
   validateBackupForStage,
 } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
+import { acquireLock, isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
 import type { AdminBackupCoordinatorPort } from '../application/ports/adminBackupCoordinator'
 import { SCHEDULED_BACKUP_REQUEST } from '../domain/backup'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'

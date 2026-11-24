@@ -25,7 +25,7 @@ import type {
   IdleTimeoutTreeSnapshot,
   TaskIdleTimeoutOperations,
 } from '../src/modules/task-execution/application/ports/taskIdleTimeoutPersistence'
-import type { StaleRunKillOutcome } from '../src/util/process'
+import type { StaleRunKillOutcome } from '../src/platform/execution/local/process'
 
 const HOUR = 3_600_000
 const NOW = 1_788_278_400_000

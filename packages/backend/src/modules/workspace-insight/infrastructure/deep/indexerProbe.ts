@@ -1,7 +1,7 @@
 // RFC-083 PR-E — SCIP indexer discovery: `<bin> --version` on PATH (or a settings override), exactly like the
 // daemon already finds `opencode` / `git`. RFC-453: split from the indexer registry (`domain/deep/indexers.ts`).
 
-import { spawnVersionProbe } from '@/util/process'
+import { spawnVersionProbe } from '@/platform/execution/local/process'
 import {
   isWindowsBatchShim,
   resolveIndexerBin,

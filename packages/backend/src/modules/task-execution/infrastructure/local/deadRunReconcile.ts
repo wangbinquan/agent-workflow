@@ -41,7 +41,7 @@ import {
   pidCommandContainsBinary,
   type StaleRunKillOutcome,
   type StaleRunKillOpts,
-} from '@/util/process'
+} from '@/platform/execution/local/process'
 import { createLogger } from '@/util/log'
 import {
   isTerminalTaskStatus,

@@ -41,7 +41,10 @@ import { snapshotMissingDetail } from '../domain/nodeRunRollbackOutcome'
 import { reserveTaskReviewMutationSlot } from './reviewMutationQueue'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { killStaleRunProcessTree, type StaleRunKillOutcome } from '@/util/process'
+import {
+  killStaleRunProcessTree,
+  type StaleRunKillOutcome,
+} from '@/platform/execution/local/process'
 import type {
   RepositoryPreparationStepOutcome,
   TaskDriveContext,

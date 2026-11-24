@@ -72,7 +72,7 @@ import {
   reconstructWorktrees,
 } from '@/platform/persistence/portableApplicationAssets'
 import { createTaskStatusCounts } from '@/modules/task-execution/composition'
-import { extractTarGz } from '@/util/archive'
+import { extractTarGz } from '@/platform/persistence/archive'
 import { DomainError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 

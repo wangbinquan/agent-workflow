@@ -1,7 +1,7 @@
 // Test fixture: takes a lock at the given path and waits forever.
 // Used by tests/lock.test.ts to verify cross-process lock contention.
 
-import { acquireLock } from '../../src/util/lock'
+import { acquireLock } from '../../src/platform/execution/local/daemonLock'
 
 const path = process.argv[2]
 if (!path) {

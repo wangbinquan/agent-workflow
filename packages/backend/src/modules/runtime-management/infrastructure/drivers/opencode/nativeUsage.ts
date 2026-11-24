@@ -7,7 +7,7 @@ import {
   openReadonlySqliteDatabase,
   type ReadonlySqliteDatabase,
 } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
-import { platformHomeEnv } from '@/util/platformExec'
+import { platformHomeEnv } from '@/platform/execution/local/platformExec'
 import type { RuntimeUsageModel } from '../../../domain/usageMeter'
 
 /** Delegation depth below a root session that the summary follows. */

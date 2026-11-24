@@ -19,7 +19,7 @@ import {
   gitBashFromGitPath,
   interpreterCandidatePaths,
 } from '@/platform/execution/local/scriptInterpreter'
-import { buildScriptPath } from '@/util/platformExec'
+import { buildScriptPath } from '@/platform/execution/local/platformExec'
 import { SCRIPT_RESERVED_ENV_KEYS, scriptReservedEnvKeyIssue } from '@agent-workflow/shared'
 
 const win = (p: string) => p.replaceAll('/', '\\')

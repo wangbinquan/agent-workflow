@@ -5,7 +5,7 @@
 // 的 legacy 桥，实现搬进本模块后那层顾虑消失，改回普通静态装配。这里仍**不伪造任何 provider
 // 兜底**——RFC-349 的准入纪律。
 
-import { killStaleRunProcessTree } from '@/util/process'
+import { killStaleRunProcessTree } from '@/platform/execution/local/process'
 
 import type {
   IdleTimeoutRunSnapshot,

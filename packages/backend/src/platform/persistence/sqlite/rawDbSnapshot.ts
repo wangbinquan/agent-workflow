@@ -26,7 +26,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { sqliteRawDbSnapshotMechanisms } from '@/platform/persistence/sqlite/rawDbSnapshotMechanisms'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import {

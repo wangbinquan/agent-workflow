@@ -13,7 +13,7 @@ import { stagePendingRestore } from '@/modules/system-operations/infrastructure/
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 import {
   supportsDatabaseMigration,
   supportsProviderMove,

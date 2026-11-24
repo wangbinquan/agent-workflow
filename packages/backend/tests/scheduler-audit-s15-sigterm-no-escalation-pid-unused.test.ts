@@ -16,8 +16,8 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 //      final reap deadline (grace + margin, armed at first kill / at exit);
 //      overrun ⟹ status='failed' + errorMessage='child-unkillable' (with
 //      pid), stream readers canceled (`LinePump.cancel`), `child.unref()`.
-//   3. pid governance — `util/process.ts` owns isProcessAlive (re-exported
-//      from util/lock.ts) + killProcessTree + killStaleRunProcessTree (the
+//   3. pid governance — `platform/execution/local/process.ts` owns isProcessAlive (re-exported
+//      from daemonLock.ts beside it) + killProcessTree + killStaleRunProcessTree (the
 //      kill-then-proceed helper with the 48h startedAt window and the
 //      `ps -o command=` PID-reuse gates). orphans.ts kills live orphans
 //      before flipping rows; task.ts resumeTask/retryNode kill before the
@@ -31,7 +31,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { detachedProcessGroup } from '../src/util/process'
+import { detachedProcessGroup } from '../src/platform/execution/local/process'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -75,8 +75,9 @@ const RETRY_OPERATIONS = resolve(
   'infrastructure',
   'taskRouteOperations.ts',
 )
-const PROCESS_UTIL = resolve(BACKEND_SRC, 'util', 'process.ts')
-const LOCK_UTIL = resolve(BACKEND_SRC, 'util', 'lock.ts')
+// RFC-572: the process helpers and the daemon lock moved from util/ into platform/execution/local.
+const PROCESS_UTIL = resolve(BACKEND_SRC, 'platform', 'execution', 'local', 'process.ts')
+const LOCK_UTIL = resolve(BACKEND_SRC, 'platform', 'execution', 'local', 'daemonLock.ts')
 
 function isCommentLine(line: string): boolean {
   const trimmed = line.trim()
@@ -123,7 +124,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
     expect(detachedProcessGroup('win32')).toBe(false)
     expect(detachedProcessGroup('linux')).toBe(true)
     expect(detachedProcessGroup('darwin')).toBe(true)
-    // killTree delegates the group signal to killProcessTree (util/process),
+    // killTree delegates the group signal to killProcessTree (platform/execution/local/process),
     // keeping the single-process `child.kill` fallback.
     expect(countNonCommentMatches(mpSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)
     expect(mpSrc).toContain("child.kill(signal === 'SIGKILL' ? 9 : 15)")
@@ -172,7 +173,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
 })
 
 describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
-  test('util/process.ts owns the liveness + kill-tree vocabulary; lock.ts re-exports', () => {
+  test('process.ts owns the liveness + kill-tree vocabulary; daemonLock.ts re-exports', () => {
     const processSrc = readFileSync(PROCESS_UTIL, 'utf8')
     expect(countNonCommentMatches(processSrc, /export function isProcessAlive/g)).toBe(1)
     expect(countNonCommentMatches(processSrc, /export function killProcessTree/g)).toBe(1)

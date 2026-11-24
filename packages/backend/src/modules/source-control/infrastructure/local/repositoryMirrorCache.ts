@@ -56,14 +56,14 @@ import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services
 // util/git.ts imports neither config nor this module; callers inject
 // resolveSubmoduleParams into its submodule-aware entry points.
 import { KeyedSerialQueue } from '@/platform/contracts/keyedSerialQueue'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import {
   forgetVolatileRepoUrl,
   rememberVolatileRepoUrl,
   unsealRepoUrl,
 } from '@/services/repoCredentials'
 import { sha1Hex } from '@/util/hash'
-import { raceWithFallback } from '@/util/process'
+import { raceWithFallback } from '@/platform/execution/local/process'
 
 const log = createLogger('git-repo-cache')
 

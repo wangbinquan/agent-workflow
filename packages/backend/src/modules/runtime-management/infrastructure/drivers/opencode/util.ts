@@ -6,7 +6,10 @@
 import { createLogger } from '@/util/log'
 import { extractVersion } from '@/platform/contracts/semver'
 import { recordOpencodeBinaryVersion } from './versionRegistry'
-import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/process'
+import {
+  DEFAULT_VERSION_PROBE_TIMEOUT_MS,
+  spawnVersionProbe,
+} from '@/platform/execution/local/process'
 // RFC-282 C0 (设计门 P2-7) — the probe-options shape lives on the runtime
 // contract surface; this module re-exports it so existing `util/opencode`
 // import sites keep resolving until C3 relocates the whole module.
@@ -63,7 +66,7 @@ export async function probeOpencode(
   let version: string | null = null
   let ran = false
   try {
-    // RFC-284 T8：spawn 骨架收敛 util/process.spawnVersionProbe（POSIX 用 detached
+    // RFC-284 T8：spawn 骨架收敛 platform/execution/local/process 的 spawnVersionProbe（POSIX 用 detached
     // 进程组；Windows 保持 flat spawn，避免 `.cmd` wrapper 丢 pipe 输出；exit 先行
     // 防孙进程持管道；finally 仅在 POSIX 做组 reap）。
     // 本函数只留 opencode 侧策略：告警文案 + flag-spelling registry 记录。

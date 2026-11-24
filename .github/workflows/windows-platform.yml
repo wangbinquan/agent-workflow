@@ -27,9 +27,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/backend/src/util/platformExec.ts'
       - 'packages/backend/src/util/fileTrust.ts'
-      - 'packages/backend/src/util/process.ts'
       - 'packages/backend/src/util/git.ts'
       - 'packages/backend/src/util/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
@@ -485,7 +483,6 @@ on:
       - 'packages/backend/tests/runner-inventory-integration.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
-      - 'packages/backend/src/util/windowsJobObject.ts'
       - 'packages/system-mocks/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
@@ -495,9 +492,7 @@ on:
     # git, gitHardening were watched on push only), and the existing guard only
     # checks push ⊇ pull_request, so it structurally cannot see the reverse.
     paths:
-      - 'packages/backend/src/util/platformExec.ts'
       - 'packages/backend/src/util/fileTrust.ts'
-      - 'packages/backend/src/util/process.ts'
       - 'packages/backend/src/util/git.ts'
       - 'packages/backend/src/util/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
@@ -953,7 +948,6 @@ on:
       - 'packages/backend/tests/runner-inventory-integration.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
-      - 'packages/backend/src/util/windowsJobObject.ts'
       - 'packages/system-mocks/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'

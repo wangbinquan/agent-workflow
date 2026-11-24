@@ -3,7 +3,7 @@ import { createReadStream, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runGit, nonInteractiveGitEnv } from '@/util/git'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import type { BaselineFileReader, BaselineStat } from '../../application/uploadPlan'
 import type {
   RepositoryBaselineEffects,

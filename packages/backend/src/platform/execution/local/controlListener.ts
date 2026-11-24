@@ -40,7 +40,7 @@
 
 import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { platformSpawnOptions } from '@/util/platformExec'
+import { platformSpawnOptions } from '@/platform/execution/local/platformExec'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
 /** What the control file carries. Written by `start`, read by `stop`. */

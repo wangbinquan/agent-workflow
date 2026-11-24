@@ -330,7 +330,8 @@ function scan(): Occurrence[] {
   for (const { path, text } of allProductionTypeScript()) {
     // The destination modules necessarily CONTAIN the forms they replace —
     // that is what makes them the single implementation.
-    if (path === 'util/platformExec.ts' || path === 'util/fileTrust.ts') continue
+    if (path === 'platform/execution/local/platformExec.ts' || path === 'util/fileTrust.ts')
+      continue
     const code = text.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/(^|[^:])\/\/[^\n]*/g, '$1')
     for (const rule of RULES) {
       for (const match of code.matchAll(rule.pattern)) {

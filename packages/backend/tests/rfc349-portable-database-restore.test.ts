@@ -37,7 +37,7 @@ import type {
 } from '@/platform/persistence/schemaContract'
 import { writeManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import { createPortableBackupArchive } from '@/platform/persistence/portableBackupArchive'
-import { extractTarGz, tarGz } from '@/util/archive'
+import { extractTarGz, tarGz } from '@/platform/persistence/archive'
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { captureEpochMetadata } from '@/platform/persistence/schema/history/metadataSnapshot'

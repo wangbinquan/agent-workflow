@@ -7,7 +7,7 @@
 import type { AgentPermission } from '@agent-workflow/shared'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'
 
 // ---------------------------------------------------------------------------
 // RFC-281 T2/T3 — claude 侧：per-run settings 的**写**边界

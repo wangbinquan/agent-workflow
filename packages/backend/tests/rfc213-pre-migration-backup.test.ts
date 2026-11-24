@@ -28,8 +28,8 @@ import { column } from '@/platform/persistence/schema/dsl'
 import { maybePreMigrationBackup } from '../src/platform/background/providerBackupScheduler'
 
 import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
-import { acquireLock } from '@/util/lock'
-import { extractTarGz } from '@/util/archive'
+import { acquireLock } from '@/platform/execution/local/daemonLock'
+import { extractTarGz } from '@/platform/persistence/archive'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 
 // RFC-549: each case boots as the successor through the bootstrap seam; afterEach swaps the binary's own history back.

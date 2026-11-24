@@ -16,9 +16,9 @@ import {
   detachedProcessGroup,
   killProcessTree,
   releaseProcessTreeOwnership,
-} from '@/util/process'
-import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+} from '@/platform/execution/local/process'
+import { explainSpawnEnoent } from '@/platform/execution/local/spawnDiagnostics'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import {
   MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,

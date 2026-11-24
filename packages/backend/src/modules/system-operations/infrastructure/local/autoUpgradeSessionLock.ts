@@ -15,7 +15,7 @@ import {
   isProcessAlive,
   DaemonLockHeldError,
   type Lock,
-} from '@/util/lock'
+} from '@/platform/execution/local/daemonLock'
 import type { SessionLockPort } from '../../application/ports/epochSwitch'
 import { writeEpochFile, syncEpochDirectory } from '../epochSwitch/fileJournal'
 import { autoUpgradeRoot, liveAutoUpgrade, readActiveAutoUpgrade } from './autoUpgradeState'

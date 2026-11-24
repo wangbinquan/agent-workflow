@@ -17,7 +17,7 @@ import type { HumanGateOpenParticipantFactory } from '@/modules/task-execution/c
 import type { TaskRepositoryPreparationBinding } from '@/modules/task-execution/infrastructure/repositoryPreparationBinding'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { killStaleRunProcessTree } from '@/util/process'
+import type { killStaleRunProcessTree } from '@/platform/execution/local/process'
 import type { GitCommitIdentity, Language, ScriptLanguage } from '@agent-workflow/shared'
 
 export interface TaskContinuationDependencies {

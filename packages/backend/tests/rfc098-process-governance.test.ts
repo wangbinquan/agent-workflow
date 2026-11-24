@@ -41,7 +41,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import { runNode } from './helpers/runner'
 import { createResumeEngine } from './helpers/resumeEngine'
-import { isProcessAlive, STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
+import { isProcessAlive, STALE_RUN_PID_MAX_AGE_MS } from '../src/platform/execution/local/process'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 

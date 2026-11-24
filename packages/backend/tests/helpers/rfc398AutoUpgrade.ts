@@ -20,7 +20,7 @@ import {
 import { parseEpochSwitchJournal } from '@/modules/system-operations/domain/epochSwitch/model'
 import { readAutoUpgradeSessions } from '@/modules/system-operations/infrastructure/local/autoUpgradeState'
 import { readDaemonInfo } from '@/util/daemonInfo'
-import { isProcessAlive } from '@/util/process'
+import { isProcessAlive } from '@/platform/execution/local/process'
 import { frozenValues } from './rfc395V2/contentFixtures'
 
 export const rfc398Main = resolve(import.meta.dir, '../../src/main.ts')

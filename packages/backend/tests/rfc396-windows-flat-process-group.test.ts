@@ -11,14 +11,18 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { detachedProcessGroup } from '../src/util/process'
+import { detachedProcessGroup } from '../src/platform/execution/local/process'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 const EXECUTORS = [
   'modules/development-automation/infrastructure/local/verificationCommandEffects.ts',
   'modules/integration/infrastructure/local/developmentAdapterProgram.ts',
 ]
-const SITES = ['util/process.ts', 'platform/execution/local/managedProcess.ts', ...EXECUTORS]
+const SITES = [
+  'platform/execution/local/process.ts',
+  'platform/execution/local/managedProcess.ts',
+  ...EXECUTORS,
+]
 
 /** Source without comments, so a rationale that quotes `detached: true` cannot satisfy or trip a check. */
 function code(rel: string): string {
@@ -52,7 +56,7 @@ describe('RFC-396 Windows keeps owned spawns flat', () => {
       )
       expect(src.match(/reapDetachedGroup\(/g), rel).toHaveLength(1)
     }
-    expect(code('util/process.ts')).toContain(
+    expect(code('platform/execution/local/process.ts')).toContain(
       'if (detachedProcessGroup()) await reapDetachedGroup(',
     )
   })

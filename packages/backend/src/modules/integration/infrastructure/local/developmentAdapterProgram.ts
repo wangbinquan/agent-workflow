@@ -17,13 +17,13 @@ import type {
   RequirementAdapterEffects,
 } from '../../application/ports/developmentAdapterEffects'
 import type { DevelopmentAdapterOperation } from '../../application/developmentAdapterOperation'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import {
   detachedProcessGroup,
   killProcessTree,
   readStreamCapped,
   reapDetachedGroup,
-} from '@/util/process'
+} from '@/platform/execution/local/process'
 
 const STDOUT_LIMIT = 256 * 1024
 /** TERM 之后给整组的宽限。 */

@@ -1,4 +1,4 @@
-import { acquireLock, DaemonLockHeldError } from '@/util/lock'
+import { acquireLock, DaemonLockHeldError } from '@/platform/execution/local/daemonLock'
 import { join } from 'node:path'
 /** Both publication and sweeping use the same process-owned filesystem lease. */
 export function contentExclusive(appHome: string) {

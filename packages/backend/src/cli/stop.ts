@@ -21,7 +21,7 @@ import {
   removeControlFile,
   requestShutdown,
 } from '@/platform/execution/local/controlListener'
-import { isProcessAlive, readPidFromLock } from '@/util/lock'
+import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/util/paths'
 
 export interface StopOptions {

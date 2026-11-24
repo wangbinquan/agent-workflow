@@ -66,7 +66,7 @@ import {
   checkDbIntegrity,
   checkSealedCredentials,
 } from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
-import { tarGz } from '@/util/archive'
+import { tarGz } from '@/platform/persistence/archive'
 
 const generationId = 'dbg_rfc398_wal_fixture'
 const directories: string[] = []

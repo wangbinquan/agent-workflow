@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 import { sourcePathReads } from './architecture/sourcePathReads'
 import ts from 'typescript'
-import { toPortableRelativePath } from '@/util/platformExec'
+import { toPortableRelativePath } from '@/platform/execution/local/platformExec'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const TEST_ROOTS = [

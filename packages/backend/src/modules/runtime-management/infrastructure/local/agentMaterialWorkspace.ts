@@ -6,7 +6,7 @@ import type {
   AgentMaterialSeedFile,
   AgentMaterialWorkspace,
 } from '../../application/ports/agentMaterialWorkspace'
-import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'
 
 /** Only the explicit native compatibility binding owns physical locations. */
 export type NativeAgentMaterialWorkspaceInput =

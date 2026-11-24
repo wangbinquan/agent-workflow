@@ -562,7 +562,7 @@
       "claimAudit": "Holds as a platform kernel. It does host caller-family-specific helpers (buildScriptPath for script nodes, GIT_NULL_CONFIG_PATH for git, disabledShellCommand for drivers), but each is named for its family and takes no hidden identity branch — honest placement debt, not a smuggled special case.",
       "core": false,
       "files": [
-        "packages/backend/src/util/platformExec.ts"
+        "packages/backend/src/platform/execution/local/platformExec.ts"
       ],
       "guards": [],
       "id": "platformexec",
@@ -576,7 +576,7 @@
       "claimAudit": "Partially. The three --version twins really did converge here. But `detached` is gated on `timeoutMs !== undefined` to preserve one caller family's legacy flat spawn, so the skeleton has a mode in which none of its governance runs (see EK-05).",
       "core": false,
       "files": [
-        "packages/backend/src/util/process.ts"
+        "packages/backend/src/platform/execution/local/process.ts"
       ],
       "guards": [],
       "id": "spawnversionprobe-killprocesstree",
