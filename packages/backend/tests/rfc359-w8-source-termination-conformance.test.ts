@@ -85,6 +85,7 @@ import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
+import { prunePolicyOf } from './helpers/terminalWorkspacePrune'
 
 const BINDING = 'gitlab:group/proj!42'
 const DELIVERY = 'dlv-rfc359-w8'
@@ -101,7 +102,7 @@ function participantFor(harness: ProviderHarness): TaskSourceTerminationParticip
   return createTaskSourceTerminationParticipant({
     db: harness.db,
     runtimeRegistry: testTaskExecutionModule.runtimeRegistry,
-    terminalWorkspacePrune: (row, to) => prune(row, to),
+    terminalWorkspacePrune: prunePolicyOf((row, to) => prune.decide(row, to)),
   })
 }
 
@@ -591,23 +592,25 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
     // 「读到 priorStatus 之后、终态写之前」await 它一次，所以在这里落一次并发终态写，
     // 就必然让本次的终态 CAS 输掉——不靠 sleep、不靠墙钟。
     let raced = false
-    usePrunePolicy(async () => {
-      if (!raced) {
-        raced = true
-        const { tasks } = tablesOf(harness.db)
-        await patchTaskFixture(
-          harness.db,
-          { id: taskId },
-          {
-            status: 'done',
-            finishedAt: 99,
-            runningSince: null,
-            lifecycleEventRevision: sqlExpr`${tasks.lifecycleEventRevision} + 1`,
-          },
-        )
-      }
-      return { prune: false }
-    })
+    usePrunePolicy(
+      prunePolicyOf(async () => {
+        if (!raced) {
+          raced = true
+          const { tasks } = tablesOf(harness.db)
+          await patchTaskFixture(
+            harness.db,
+            { id: taskId },
+            {
+              status: 'done',
+              finishedAt: 99,
+              runningSince: null,
+              lifecycleEventRevision: sqlExpr`${tasks.lifecycleEventRevision} + 1`,
+            },
+          )
+        }
+        return { prune: false }
+      }),
+    )
 
     // 两侧的复原机制不同（SQLite 手写 catch + 复读赢家；PostgreSQL 由 SERIALIZABLE 的
     // 40001 重放整笔），但用户看到的必须逐字一样：投递不报错，围栏照样落章，收据按**赢家**
@@ -665,16 +668,18 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
   test('⑱ 处理首目标期间出现的子任务在固定点重扫中取消，每个目标仅有一条收据和终态事件', async () => {
     const parent = await seed(harness.db, { taskId: 'task-fixed-point-parent' })
     let inserted: Seeded | null = null
-    usePrunePolicy(async () => {
-      if (inserted === null) {
-        inserted = await seed(harness.db, {
-          taskId: 'task-fixed-point-child',
-          parentTaskId: parent.taskId,
-          invocationDepth: 1,
-        })
-      }
-      return { prune: false }
-    })
+    usePrunePolicy(
+      prunePolicyOf(async () => {
+        if (inserted === null) {
+          inserted = await seed(harness.db, {
+            taskId: 'task-fixed-point-child',
+            parentTaskId: parent.taskId,
+            invocationDepth: 1,
+          })
+        }
+        return { prune: false }
+      }),
+    )
 
     const receipts = await apply(harness, effect('fence-closed', 5))
 

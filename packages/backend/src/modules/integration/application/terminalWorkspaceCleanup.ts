@@ -60,18 +60,20 @@ export function createWebhookTerminalWorkspacePrunePolicy(deps: {
   /** 每次转移都重读，配置保持热更新（沿用 RFC-300 既有语义）。 */
   readonly enabled: () => boolean | Promise<boolean>
 }): TerminalWorkspacePrunePolicy {
-  return async (row, to) => {
-    const attribution = await deps.attribution.load(row.taskId)
-    if (attribution === null) return { prune: false }
-    const prune = shouldRequestWebhookWorkspacePrune(await deps.enabled(), {
-      to,
-      webhookTriggerId: attribution.webhookTriggerId,
-      eventSubscriptionId: attribution.eventSubscriptionId,
-      spaceKind: row.spaceKind,
-      workspacePruningAt: row.workspacePruningAt,
-      workspacePruneCause: row.workspacePruneCause,
-      workspacePrunedAt: row.workspacePrunedAt,
-    })
-    return prune ? { prune: true, cause: 'webhook-terminal' } : { prune: false }
+  return {
+    async decide(row, to) {
+      const attribution = await deps.attribution.load(row.taskId)
+      if (attribution === null) return { prune: false }
+      const prune = shouldRequestWebhookWorkspacePrune(await deps.enabled(), {
+        to,
+        webhookTriggerId: attribution.webhookTriggerId,
+        eventSubscriptionId: attribution.eventSubscriptionId,
+        spaceKind: row.spaceKind,
+        workspacePruningAt: row.workspacePruningAt,
+        workspacePruneCause: row.workspacePruneCause,
+        workspacePrunedAt: row.workspacePrunedAt,
+      })
+      return prune ? { prune: true, cause: 'webhook-terminal' } : { prune: false }
+    },
   }
 }

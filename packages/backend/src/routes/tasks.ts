@@ -87,7 +87,7 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
   })
 }
 
-/** RFC-452: where a diagnose pass reports alert changes — the same broadcasts the repair path sends. */
+/** RFC-452: where a diagnose pass reports alert changes; RFC-569: the repair path passes the same object. */
 const LIFECYCLE_ALERT_NOTICES: TaskLifecycleAlertNotices = Object.freeze({
   alert: broadcastLifecycleAlert,
   resolved: broadcastLifecycleAlertResolved,
@@ -858,8 +858,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
         taskId: c.req.param('id'),
         alertId: c.req.param('alertId'),
         optionId: parsed.data.optionId,
-        onAlert: broadcastLifecycleAlert,
-        onResolved: broadcastLifecycleAlertResolved,
+        // RFC-569: the same notices object the diagnose route passes.
+        notices: LIFECYCLE_ALERT_NOTICES,
       })
       return c.json(result)
     },

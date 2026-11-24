@@ -17,7 +17,7 @@
 - [x] AC-1 两个工厂不再从任何 `public/*` 导出；全部模块的源码不从 resource-catalog 取它们；装配根交出
 - [x] AC-2 行为不变；消费方的入参与 owner 的工厂对得上，由编译器检查；事务里的读仍用事务句柄
 - [x] AC-3 `PUBLIC_SURFACE_DEBT` 删去 2 条，`public-surface-deviations` 42 → 40；新增 RFC-568 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一个 macOS e2e 分片没有分到 runner、windows-platform 的 push 运行被同一提交的定时运行顶替（环境性），已归因、未重跑（见下）
 
 ## 集中验证
 
@@ -63,11 +63,22 @@
   2394 → 2393（装配文件里的 `createTaskSubjectQueries` 改名为 `bindTaskSubjectQueries` 后不再匹配普查的名字模式，其余逐条相同）；跨 context import
   7529 → 7532，其中模块之间的 6289 → 6285，bootstrap 取 resource-catalog 的 208 → 215（交接处）；生产文件多 1 个（`executionResourceReads.ts`）；
   目标边（111）、DAG 外 offered 边（2）、跨 context 内部文件对（6）与其余各节不变（任务执行权限、任务自有效果、事务外效果三节只有行号后移）。
-- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的用例文件，见提交说明。
+- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，46 / 46 通过。
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `0a1069435`（实现，父提交是 `f8dc493ec`）：exact SHA 主 CI run 45451751255 的 70 个 job 里 68 个成功——全部后端分片、前端、三个平台的构建与
+  检查、ubuntu 与 windows 的全部 e2e 分片、macOS 的另三个 e2e 分片（1/4、2/4、3/4）通过；`Playwright e2e (macos-latest shard 4/4)`
+  （job 138658353003）被取消，汇总格 `CI required` 随之不通过。同一提交触发的 git-protocols-e2e（run 45451751445）通过；windows-platform 的 push
+  运行（run 45451751345）被取消。
+- **归因**：都不在本 RFC。① macOS 那个分片没有分到 runner、没有任何步骤，注记是
+  `The job was not acquired by Runner of type hosted even after multiple attempts`（附 macOS arm64 容量提示），与当天前三个提交同一形态。
+  ② windows-platform 的 push 运行跑到 `Typecheck` 一步时被工作流的并发组取消，注记是
+  `Canceling since a higher priority waiting request for windows-platform-refs/heads/main exists`：同一个工作流的定时运行（run 45452927828，
+  `schedule` 事件）在 17:50（UTC）对**同一个提交** `0a1069435` 启动，顶替了它；那次定时运行全部通过，是这个提交在 windows-platform 上的结果。
+  两处都未重跑，`docs/audit-backlog.md` 的 macOS runner 容量一节一并补记。
+- **macOS e2e 4/4**：自 `4f1dcae66`（RFC-564）之后的四个提交（RFC-565～RFC-568）都没有这一格的结果；同一套 e2e 在 ubuntu 的三个分片与 windows 的
+  四个分片上每次都通过。要看更后面的提交。
 
 ## 实现门（本会话自审，只审功能）
 

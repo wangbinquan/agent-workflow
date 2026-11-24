@@ -24,6 +24,8 @@ import {
 import { backendUnits, sourceUnit, type SourceUnit } from './architecture/census'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { describeEachProvider } from './helpers/eachProvider'
+import { prunePolicyOf } from './helpers/terminalWorkspacePrune'
+import type { TerminalWorkspacePruneCandidate } from '@/modules/task-execution/domain/terminalWorkspacePrune'
 
 const REPO = resolve(import.meta.dir, '../../..')
 const SRC = 'packages/backend/src/'
@@ -173,7 +175,7 @@ describe('RFC-534 ① 两条策略没有进程级登记；daemon 把它们交进
 })
 
 describe('RFC-534 ② 会话策略的行为', () => {
-  const row: Parameters<TerminalWorkspacePrunePolicy>[0] = {
+  const row: TerminalWorkspacePruneCandidate = {
     taskId: 'rfc534-task',
     spaceKind: 'remote',
     workspacePruningAt: null,
@@ -184,19 +186,23 @@ describe('RFC-534 ② 会话策略的行为', () => {
   test('判定只在 done / canceled 问交入的策略；策略抛错给不回收；具名的从不回收', async () => {
     const policy = mock(async () => ({ prune: true, cause: 'webhook-terminal' }) as const)
     for (const to of ['failed', 'interrupted', 'running'] as const)
-      expect(await resolveTerminalWorkspacePruneDecision(policy, row, to)).toEqual({ prune: false })
+      expect(await resolveTerminalWorkspacePruneDecision(prunePolicyOf(policy), row, to)).toEqual({
+        prune: false,
+      })
     expect(policy).not.toHaveBeenCalled()
-    expect(await resolveTerminalWorkspacePruneDecision(policy, row, 'canceled')).toEqual({
+    expect(
+      await resolveTerminalWorkspacePruneDecision(prunePolicyOf(policy), row, 'canceled'),
+    ).toEqual({
       prune: true,
       cause: 'webhook-terminal',
     })
-    const throwing: TerminalWorkspacePrunePolicy = async () => {
+    const throwing: TerminalWorkspacePrunePolicy = prunePolicyOf(async () => {
       throw new Error('rfc534 corrupt config')
-    }
+    })
     expect(await resolveTerminalWorkspacePruneDecision(throwing, row, 'done')).toEqual({
       prune: false,
     })
-    expect(await neverPruneTerminalWorkspaces(row, 'done')).toEqual({ prune: false })
+    expect(await neverPruneTerminalWorkspaces.decide(row, 'done')).toEqual({ prune: false })
   })
 
   test('入队按交入的蒸馏策略准入：同一份 store，两份策略各判各的', async () => {
@@ -229,8 +235,8 @@ describeEachProvider('RFC-534 ② 持久化聚合带的是装配时交入的那�
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       })
-    const a: TerminalWorkspacePrunePolicy = async () => ({ prune: false })
-    const b: TerminalWorkspacePrunePolicy = async () => ({ prune: false })
+    const a: TerminalWorkspacePrunePolicy = prunePolicyOf(async () => ({ prune: false }))
+    const b: TerminalWorkspacePrunePolicy = prunePolicyOf(async () => ({ prune: false }))
     expect(build(a).terminalWorkspacePrune).toBe(a)
     expect(build(b).terminalWorkspacePrune).toBe(b)
   })

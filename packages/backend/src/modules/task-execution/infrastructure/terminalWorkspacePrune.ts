@@ -16,10 +16,12 @@ import type { TaskStatus } from '@agent-workflow/shared'
 
 import { createLogger } from '@/util/log'
 import type {
+  TerminalWorkspacePruneCandidate,
   TerminalWorkspacePrunePolicy,
   TerminalWorkspacePruneDecision,
 } from '../domain/terminalWorkspacePrune'
 export type {
+  TerminalWorkspacePruneCandidate,
   TerminalWorkspacePrunePolicy,
   TerminalWorkspacePruneDecision,
 } from '../domain/terminalWorkspacePrune'
@@ -30,8 +32,8 @@ const lifecycleLog = createLogger('lifecycle')
  * RFC-534: the named "never prune" policy — the maintenance worker's (a separate realm the daemon's policy never
  * reached, and it only writes `interrupted`) and tests' that do not exercise reclamation.
  */
-export const neverPruneTerminalWorkspaces: TerminalWorkspacePrunePolicy = async () => ({
-  prune: false,
+export const neverPruneTerminalWorkspaces: TerminalWorkspacePrunePolicy = Object.freeze({
+  decide: async (): Promise<TerminalWorkspacePruneDecision> => ({ prune: false }),
 })
 
 /** Provider-neutral policy evaluation shared by the SQLite lifecycle writer
@@ -41,14 +43,14 @@ export const neverPruneTerminalWorkspaces: TerminalWorkspacePrunePolicy = async 
  * assembly), no longer a process-level registration. */
 export async function resolveTerminalWorkspacePruneDecision(
   policy: TerminalWorkspacePrunePolicy,
-  row: Parameters<TerminalWorkspacePrunePolicy>[0],
+  row: TerminalWorkspacePruneCandidate,
   to: TaskStatus,
 ): Promise<TerminalWorkspacePruneDecision> {
   if (to !== 'done' && to !== 'canceled') {
     return { prune: false }
   }
   try {
-    return await policy(row, to)
+    return await policy.decide(row, to)
   } catch (err) {
     // Config is validated on normal daemon writes, but an out-of-band corrupt
     // file must not turn a successfully executed task into a lifecycle error.

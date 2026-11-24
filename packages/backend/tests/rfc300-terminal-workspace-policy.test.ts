@@ -24,6 +24,7 @@ import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycle
 import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
+import { prunePolicyOf } from './helpers/terminalWorkspacePrune'
 
 const ulid = monotonicFactory()
 
@@ -403,9 +404,11 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
       })
 
       const throwingId = await seedTask()
-      usePrunePolicy(() => {
-        throw new Error('corrupt config fixture')
-      })
+      usePrunePolicy(
+        prunePolicyOf(() => {
+          throw new Error('corrupt config fixture')
+        }),
+      )
       await setTaskStatus({
         db,
         terminalWorkspacePrune: prune,

@@ -13,11 +13,11 @@ import type {
 } from '@agent-workflow/shared'
 import type { TaskRouteLifecycleAlertNotice } from '../../public/types'
 
-/** Where a diagnose pass reports alert changes (the route broadcasts them on the tasks-list channel). */
+/** Where a diagnose pass or a repair reports alert changes (the route broadcasts them on the tasks-list channel). */
 export interface TaskLifecycleAlertNotices {
   /** A new open alert, or an existing one promoted from warning to error. */
   alert(notice: TaskRouteLifecycleAlertNotice, transition: 'new' | 'promoted'): void
-  /** The task's open alert set shrank during the pass. */
+  /** The task's open alert set shrank during the pass (or the repair resolved its alert). */
   resolved(taskId: string): void
 }
 

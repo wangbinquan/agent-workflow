@@ -54,7 +54,6 @@ import { runStuckTaskDetector } from '../application/lifecycleAlerts/stuckTaskDe
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
-import type { TaskRouteLifecycleAlertNotice } from '../public/types'
 import type { TaskRouteOperations } from '../public/commands'
 import type { TaskLifecycleAutoRepairBinding } from './taskLifecycleAutoRepairCommand'
 
@@ -1494,17 +1493,6 @@ async function openAlerts(
     .orderBy(asc(lifecycleAlerts.detectedAt))
 }
 
-function noticeCallback(
-  callback:
-    | ((row: TaskRouteLifecycleAlertNotice, transition: 'new' | 'promoted') => void)
-    | undefined,
-): ((row: LifecycleAlertRow, transition: 'new' | 'promoted') => void) | undefined {
-  if (callback === undefined) return undefined
-  return (row, transition) => {
-    callback({ taskId: row.taskId, rule: row.rule, severity: row.severity }, transition)
-  }
-}
-
 function optionForPreflight(definition: OptionDefinition, result: Preflight): RepairOption {
   return {
     ...definition,
@@ -1720,7 +1708,7 @@ export function createTaskRouteRepairOperations(
   return Object.freeze({
     repairOptions,
     async applyRepair(input: Parameters<RepairOperations['applyRepair']>[0]) {
-      const onAlert = noticeCallback(input.onAlert)
+      const notices = input.notices
       const result = await applyRepair({
         taskId: input.taskId,
         alertId: input.alertId,
@@ -1729,8 +1717,10 @@ export function createTaskRouteRepairOperations(
         resume: async (taskId) => {
           await dependencies.resumeTaskAs(input.actor, taskId)
         },
-        ...(onAlert === undefined ? {} : { onAlert }),
-        onResolved: input.onResolved,
+        // RFC-569: the route's notices (a closed interface); an alert row leaves with its three public fields only.
+        onAlert: (row, transition) =>
+          notices.alert({ taskId: row.taskId, rule: row.rule, severity: row.severity }, transition),
+        onResolved: (taskId) => notices.resolved(taskId),
       })
       return result.response
     },

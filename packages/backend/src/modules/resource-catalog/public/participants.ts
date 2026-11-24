@@ -319,8 +319,8 @@ export interface SkillTreeVersionOperations {
  * 那是用户可见的行为漂移。`after` 拿得到刚写下的版本号（融合在这里把记忆标记为已融合）。
  */
 export interface SkillVersionCommitHooks<R> {
-  readonly before?: () => R
-  readonly after?: (versionIndex: number) => R
+  before?(): R
+  after?(versionIndex: number): R
 }
 
 /** The caller supplies the runtime names it changed; Resource Catalog owns only test sessions. */

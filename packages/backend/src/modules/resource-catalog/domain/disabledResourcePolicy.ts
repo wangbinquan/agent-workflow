@@ -57,7 +57,9 @@ export interface DisabledPolicyEntry {
  *  come from" has exactly one grep-able answer. RFC-477 moved the declaration here from this module's `public/types.ts`
  *  — once the disabled-resource policy left `services/`, no other context imports the code itself (the public issue
  *  union still names it by type). */
-export const PLUGIN_DISABLED_ERROR_CODE = 'plugin-disabled' as const
+export const PLUGIN_DISABLED_ERROR_CODE: PluginDisabledErrorCode = 'plugin-disabled'
+/** RFC-569: the code's type, declared next to the constant so contracts name it without `typeof`. */
+export type PluginDisabledErrorCode = 'plugin-disabled'
 
 /** The real `plugin-disabled` emitters (all preserved verbatim — v2 has zero
  *  product behavior change; four upstream launch gates consume them). */

@@ -374,7 +374,9 @@ test('the managed-skill predicate is spelled once in shared (managedSkillsOf)', 
 describe('RFC-282 B3 — plugin-disabled code is single-sourced', () => {
   // RFC-477: the declaration moved with the disabled-resource policy into resource-catalog's domain.
   test("the 'plugin-disabled' literal exists only at the Resource Catalog declaration site", () => {
-    const allowed = new Map([['modules/resource-catalog/domain/disabledResourcePolicy.ts', 1]])
+    // RFC-569: the declaration site spells the literal twice on adjacent lines — the code's named type and the constant
+    // annotated with it (so contracts name the type without `typeof`); the annotation makes the compiler tie the two.
+    const allowed = new Map([['modules/resource-catalog/domain/disabledResourcePolicy.ts', 2]])
     for (const f of FILES) {
       const hits = stripComments(f.text).split("'plugin-disabled'").length - 1
       expect(

@@ -1,4 +1,26 @@
-## 2026-11-24 RFC-568 resource-catalog 的两个执行资源查询工厂撤出 public，由 bootstrap 交给消费方（In Progress；`design/RFC-568-execution-resource-query-bindings/`）
+## 2026-11-24 RFC-569 public 合同上的四处回调成员与一处裸 typeof 收成闭合形状（In Progress；`design/RFC-569-public-callback-members-closed/`）
+
+- **来由**：`PUBLIC_SURFACE_DEBT` 还有 40 条。把检测器报的 101 个类型节点逐个定位后，其中五条可以直接收成闭合形状，收完代码也更简单，而且不需要
+  讨论检测规则。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次
+  下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，
+  按授权记为已批准，不派 Codex。
+- **范围**：`TaskRouteOperations.applyRepair` 的两个回调换成既有的 `TaskLifecycleAlertNotices`，修复路由与诊断路由传同一个对象；
+  `TerminalWorkspacePrunePolicy` 由函数类型别名改为只有 `decide` 的接口（入参是具名的 `TerminalWorkspacePruneCandidate`），task-execution 与
+  integration 的两个实现、唯一的调用点随改；`SkillVersionCommitHooks` 的两个钩子改为可选方法；`DevelopmentMissionFileView` 继承
+  `EvidenceDownloadHandle`；“插件已停用”问题码声明具名类型 `PluginDisabledErrorCode`。11 个生产文件；12 个用例文件与 1 个测试助手随改，新增测试
+  助手 `tests/helpers/terminalWorkspacePrune.ts` 与 RFC-569 用例；`PUBLIC_SURFACE_DEBT` 删 5 条。
+- **不做**：借贷式的高阶入参与日志器类型（是否算合同的正当形态要先定检测规则，须用户确认）；能力 / 凭据 / 身份一族；development-automation 两个
+  操作面上的 `unknown`（约四十处，另立）。
+- **收口对账**（RFC-294 C10～C13，design §9）：C10 策略类型在 task-execution 的 domain、通知接口在它的 application 端口；C11 public 面的符号数不变
+  （收的是形状）；C12 RFC-569 用例覆盖五个声明、两个路由调用点与策略的调用点；C13 public 类型偏差 40 → 35，其余计数不升。
+- **集中验证**（基于 `0a1069435`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷一处已修复并复验（漏查读端口形状的结构守卫
+  `rfc317-lifecycle-origin-neutrality`，它的两个读法只认函数类型别名；改成读接口方法后对真实端口做的两种变异都红）。tsc 0 错，eslint / promises /
+  prettier 无告警；选出 639 个用例文件，修正后全部通过；读已提交源码的 169 个用例文件在候选导出里通过；十六种变异都被认出，类型层变异落在策略的
+  调用点与通知的两处调用上；架构报告 60 个计数里只有 public 类型偏差变了。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-568 `0a1069435` 主 CI 68 / 70（macOS e2e 4/4 没有分到 runner）、windows-platform 的 push 运行被同一提交的定时运行顶替（后者通过），
+  环境性、未重跑，转 Done。macOS e2e 4/4 自 `4f1dcae66` 之后的四个提交都没有结果。
+
+## 2026-11-24 RFC-568 resource-catalog 的两个执行资源查询工厂撤出 public，由 bootstrap 交给消费方（Done；`design/RFC-568-execution-resource-query-bindings/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT`（42 条）里还有两条是“public 交出的工厂收一个持久化句柄”：resource-catalog 的 `createAgentExecutionQueries(db)` 与
   `createWorkflowExecutionQueries(db)`（返回的读类型是闭合的，问题只在入参）。读它们的是 task-execution 的七处、intent 与 knowledge-evolution 各
@@ -23,6 +45,8 @@
   PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-566 `948d2353c` 主 CI 64 / 70 与 RFC-567 `f8dc493ec` 主 CI 68 / 70，红格都是没有分到 runner 的 macOS 作业（及其下游），环境性、
   未重跑，两个 RFC 转 Done；`docs/audit-backlog.md` 的 macOS runner 容量一节补记当天三次。macOS e2e 4/4 自 `4f1dcae66` 之后还没有新的结果。
+- **CI**：主 CI run 45451751255 68 / 70；`Playwright e2e (macos-latest shard 4/4)` 没有分到 runner 被取消，`CI required` 随之红，环境性、未重跑。
+  windows-platform 的 push 运行被同一工作流对同一提交的定时运行（run 45452927828，通过）顶替而取消；git-protocols-e2e 通过。
 
 ## 2026-11-24 RFC-567 工作流名片段撤出 resource-catalog 的 public，由 bootstrap 交给 task-execution 的任务读模型（Done；`design/RFC-567-workflow-name-fragment-binding/`）
 

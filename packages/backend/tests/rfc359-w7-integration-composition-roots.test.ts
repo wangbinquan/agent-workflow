@@ -622,7 +622,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
       workspacePruneCause: null,
       workspacePrunedAt: null,
     }
-    expect(await policy(row, 'done')).toEqual({ prune: false })
+    expect(await policy.decide(row, 'done')).toEqual({ prune: false })
 
     const workflowId = `wf_${ulid()}`
     await workflowFixture(harness.db, {
@@ -645,10 +645,12 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
       spaceKind: 'remote',
       webhookTriggerId: `wt_${ulid()}`,
     })
-    expect(await policy(row, 'done')).toEqual({ prune: true, cause: 'webhook-terminal' })
+    expect(await policy.decide(row, 'done')).toEqual({ prune: true, cause: 'webhook-terminal' })
     // 非终态、以及已认领墓碑列的行都不回收。
-    expect(await policy(row, 'running')).toEqual({ prune: false })
-    expect(await policy({ ...row, workspacePrunedAt: T0 }, 'canceled')).toEqual({ prune: false })
+    expect(await policy.decide(row, 'running')).toEqual({ prune: false })
+    expect(await policy.decide({ ...row, workspacePrunedAt: T0 }, 'canceled')).toEqual({
+      prune: false,
+    })
   })
 })
 

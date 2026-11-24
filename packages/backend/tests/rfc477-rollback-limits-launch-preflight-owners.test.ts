@@ -437,6 +437,8 @@ describe('RFC-477 —— 落位与 public 收口', () => {
           'DisabledPolicyEntry',
           'PLUGIN_DISABLED_ERROR_CODE',
           'PLUGIN_DISABLED_SITES',
+          // RFC-569: the code's named type (the public issue union names it without `typeof`).
+          'PluginDisabledErrorCode',
           'notModeledDisabledKinds',
         ],
       ],

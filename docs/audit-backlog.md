@@ -35,6 +35,8 @@
 
 **2026-11-24 补记**：同一形态在 11-24 再次出现，连续三个提交的主 CI 受影响，都未重跑：RFC-565 `ff3442970`（run 45423073198）的 macOS e2e 2/4、4/4 没有分到 runner；RFC-566 `948d2353c`（run 45427856452）的 macOS 构建与 e2e 1/4～3/4 没有分到 runner，分到 runner 的 4/4 在第一步下载构建产物时失败（`Artifact not found for name: agent-workflow-e2e-macos-latest`——构建没有跑时，下游分片是这种红法，同样与提交无关）；RFC-567 `f8dc493ec`（run 45437638521）的 macOS e2e 4/4 没有分到 runner。三次的非 macOS 作业（含 ubuntu / windows 的同一套 e2e）全部通过。后继证据按祖先关系取：`f8dc493ec` 的 run 里 macOS 构建与 e2e 1/4～3/4 通过，覆盖前两个提交缺的那几格；macOS 的 4/4 自 `4f1dcae66`（run 45410978530）之后没有新的结果。
 
+**2026-11-24 再补记**：RFC-568 `0a1069435`（run 45451751255）的 macOS e2e 4/4 同样没有分到 runner，当天连续四个提交都缺这一格（ubuntu 与 windows 上的同一套 e2e 每次都通过）。同一提交还撞上另一种与提交无关的取消：windows-platform 的 push 运行（run 45451751345）跑到 `Typecheck` 时被工作流的并发组取消，注记 `Canceling since a higher priority waiting request for windows-platform-refs/heads/main exists`——同一个工作流的定时运行（run 45452927828）在 17:50（UTC）对同一个提交启动并顶替了它。**判据**：注记含 `higher priority waiting request` 就是并发组顶替，不是用例红；取顶替它的那次运行（同一提交时就是 exact SHA 的结果）作证据，不必重跑。
+
 ## CI：`ubuntu-latest` 切到 Ubuntu 26.04，Playwright 1.60.0 装不上 chromium（2026-11-03 起，e2e-full 夜跑红）
 
 **现象**：`e2e-full-nightly` 的四个 Playwright full tier 分片在 2026-11-03（run 41646305256，`2eeaf4585`）与 2026-11-04（run 41841464254，`19ba4671b`）两晚都在装浏览器这一步失败：`Cannot install dependencies for ubuntu26.04-x64 with Playwright 1.60.0!` → `ERROR: Playwright does not support chromium on ubuntu26.04-x64`。`RFC-319 覆盖账本对账` 随之拒绝对账（语料不完整）。两晚的 runner 镜像分别是 `ubuntu26/20261025.179` 与同系列，11-02 及以前的夜跑全绿。

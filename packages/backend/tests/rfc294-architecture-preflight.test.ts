@@ -368,7 +368,9 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // file view's stream openers; successor: close them on the routes' zod schemas (S9 item 2).
   'modules/development-automation/application/configOperations.ts#DevelopmentConfigIdentityView: unsafe/open type UnknownKeyword',
   'modules/development-automation/application/configOperations.ts#DevelopmentConfigOperations: unsafe/open type UnknownKeyword',
-  'modules/development-automation/application/missionOperations.ts#DevelopmentMissionFileView: unsafe/open type FunctionType',
+  // RFC-569: five declarations closed — the repair notices reuse TaskLifecycleAlertNotices, the terminal workspace prune
+  // policy and the skill version commit hooks are method interfaces, the requirement file view extends the download handle,
+  // and the plugin-disabled issue code has a named literal type; five entries settled.
   'modules/development-automation/application/missionOperations.ts#DevelopmentMissionOperations: unsafe/open type UnknownKeyword',
   // RFC-552: visible once the operations exemption narrowed — the OIDC provider repository re-exported for the legacy
   // `auth/oidc/providers.ts`; successor: that provider management moves into identity-access (W9-D).
@@ -386,8 +388,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // composition and hands it to Task Execution's task read models; three entries settled (the last of the four SQL
   // fragments the S9 exit gate names).
   'modules/resource-catalog/public/participants.ts#HostedIntentResourceArtifacts: unsafe/open type UnknownKeyword',
-  'modules/resource-catalog/public/participants.ts#SkillVersionCommitHooks: unsafe/open type FunctionType',
-  'modules/resource-catalog/public/queries.ts#AgentResourceIntegrityQueries: unsafe/open type TypeQuery',
   // RFC-563: the material intent's logger was first reached from Resource Catalog's material references (they named the
   // intent type); those are declared with Resource Catalog's own shapes now, so the same deviation is recorded at the
   // intent owner's own public root.
@@ -435,7 +435,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-480: public/operations (exempt from this scan as an RFC-344 operation entrypoint) was retired; the consumer-owned prune
   // policy integration implements is the same contract on public/types, so its function type is visible here (S12 replaces the
   // process-level registration that takes it).
-  'modules/task-execution/domain/terminalWorkspacePrune.ts#TerminalWorkspacePrunePolicy: unsafe/open type FunctionType',
   // RFC-483: the SQL conditions `nodeRunStatusCondition`, `taskGateOpenCondition` and `taskGateVisibleCondition` left the
   // public — collaboration's badge read model takes them through its participant bindings — eight entries settled.
   // RFC-565: the remaining RFC-395 II-a transitional owner reads bound to the caller's handle left the public too —
@@ -443,7 +442,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // `createTaskTriggerQueries` and the fragment `nonTerminalTaskExists`: bootstrap builds them on the root handle from
   // task-execution's composition and hands them to memory and integration; six entries settled.
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).
-  'modules/task-execution/public/commands.ts#TaskRouteOperations: unsafe/open type FunctionType',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomHostRunSnapshot: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomTaskParticipantInTx: forbidden type import @/platform/events/committed/types#CommittedEventRef',
   // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.

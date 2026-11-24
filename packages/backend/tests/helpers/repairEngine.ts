@@ -165,8 +165,11 @@ export function createRepairEngine(
         taskId: input.taskId,
         alertId: input.alertId,
         optionId: input.optionId,
-        onAlert: input.onAlert ?? (() => {}),
-        onResolved: input.onResolved ?? (() => {}),
+        // RFC-569: the route operation takes the closed notices interface; the helper keeps its optional callbacks.
+        notices: {
+          alert: (row, transition) => input.onAlert?.(row, transition),
+          resolved: (taskId) => input.onResolved?.(taskId),
+        },
       })
     },
   }

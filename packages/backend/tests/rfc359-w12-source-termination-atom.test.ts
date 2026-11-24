@@ -41,6 +41,7 @@ import { __hasTaskReviewMutationQueueForTesting } from '@/modules/task-execution
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
+import { prunePolicyOf } from './helpers/terminalWorkspacePrune'
 
 // RFC-537: a test's pump rides on the database it publishes on; every attached pump is released after the test.
 const pumpReleases: Array<() => void> = []
@@ -168,7 +169,7 @@ for (const { provider, table, bind } of [
 // RFC-534: the source termination target takes the session's prune policy; the live wrapper reads the one a case set
 // (where it used to register a process-level policy).
 let prune: TerminalWorkspacePrunePolicy = neverPruneTerminalWorkspaces
-const livePrune: TerminalWorkspacePrunePolicy = (row, to) => prune(row, to)
+const livePrune: TerminalWorkspacePrunePolicy = prunePolicyOf((row, to) => prune.decide(row, to))
 function usePrunePolicy(policy: TerminalWorkspacePrunePolicy): void {
   prune = policy
 }
@@ -451,10 +452,12 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
       })
       const before = await rows(harness.db, taskId)
       let pruneCalls = 0
-      usePrunePolicy(async () => {
-        pruneCalls += 1
-        return { prune: false }
-      })
+      usePrunePolicy(
+        prunePolicyOf(async () => {
+          pruneCalls += 1
+          return { prune: false }
+        }),
+      )
       const receipts = await apply(harness)
       const actual = await rows(harness.db, taskId)
       expect(receipts[0]).toMatchObject({
@@ -489,29 +492,31 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
   test('an in-transaction terminal winner makes the source CAS miss without inventing a canceled lifecycle event', async () => {
     const { taskId, nodeRunId } = await seed(harness.db)
     let winner: Awaited<ReturnType<typeof writeTaskRuntimeLifecycleInTx>> | undefined
-    usePrunePolicy(async () => {
-      // The named writer commits the winner into the same actual transaction.
-      // This targets the CAS-miss branch on both engines; external PostgreSQL
-      // serialization/retry remains the separate W8 concurrency predicate.
-      winner = await harness.session.transaction(
-        async (tx) =>
-          await writeTaskRuntimeLifecycleInTx(tx, {
-            taskId,
-            from: 'running',
-            to: 'done',
-            now: 777,
-            expectedLifecycleRevision: 1,
-            workspacePruneDecision: { prune: false },
-            previousErrorSummary: null,
-            extra: {
-              finishedAt: 777,
-              errorSummary: 'winner summary',
-              errorMessage: 'winner detail',
-            },
-          }),
-      )
-      return { prune: false }
-    })
+    usePrunePolicy(
+      prunePolicyOf(async () => {
+        // The named writer commits the winner into the same actual transaction.
+        // This targets the CAS-miss branch on both engines; external PostgreSQL
+        // serialization/retry remains the separate W8 concurrency predicate.
+        winner = await harness.session.transaction(
+          async (tx) =>
+            await writeTaskRuntimeLifecycleInTx(tx, {
+              taskId,
+              from: 'running',
+              to: 'done',
+              now: 777,
+              expectedLifecycleRevision: 1,
+              workspacePruneDecision: { prune: false },
+              previousErrorSummary: null,
+              extra: {
+                finishedAt: 777,
+                errorSummary: 'winner summary',
+                errorMessage: 'winner detail',
+              },
+            }),
+        )
+        return { prune: false }
+      }),
+    )
     const receipts = await apply(harness)
     const actual = await rows(harness.db, taskId)
     expect(winner?.lifecycleEventRevision).toBe(2)

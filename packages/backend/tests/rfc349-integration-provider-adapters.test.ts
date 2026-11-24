@@ -476,7 +476,7 @@ describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
     })
 
     await expect(
-      policy(
+      policy.decide(
         {
           taskId: 'task-1',
           spaceKind: 'remote',

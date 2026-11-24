@@ -41,6 +41,10 @@ const unitOf = (rel: string): SourceUnit =>
 //   · `KERNEL` —— 通用状态写点本体。「kernel 不许自己铸回收原因」钉的是**它**；
 //     语料下限（>10k 字符）也是它的规模，证明确实解析到了那台 kernel。
 //   · `PORT` —— 策略端口的**形状**（入参中立、返回闭合联合）。端口搬家，判据跟着端口走。
+//
+// RFC-569：端口从函数类型别名改成只有一个方法的闭合接口（`TerminalWorkspacePrunePolicy.decide(row, to)`，入参是具名的
+// `TerminalWorkspacePruneCandidate`）。两条形状判据随之改读这个方法：入参属性集取第一个参数的类型（内联的字面量类型，或同一
+// 文件里声明的接口 / 字面量别名），返回类型取方法的返回类型。端口不是“带这个方法的接口”时两个读法都回 null，不假绿。
 const KERNEL = 'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts'
 const PORT = 'packages/backend/src/modules/task-execution/domain/terminalWorkspacePrune.ts'
 
@@ -57,44 +61,66 @@ export function columnEnumValues(tables: readonly TableDefinition[], column: str
   ].sort()
 }
 
-/** `export type X = (row: { … }, …) => R` 的第一个参数的属性名集合。 */
-export function portSubjectProperties(unit: SourceUnit, typeName: string): string[] | null {
-  let found: string[] | null = null
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isTypeAliasDeclaration(node) &&
-      node.name.text === typeName &&
-      ts.isFunctionTypeNode(node.type)
-    ) {
-      const first = node.type.parameters[0]
-      if (first !== undefined && first.type !== undefined && ts.isTypeLiteralNode(first.type)) {
-        found = first.type.members
-          .filter((member): member is ts.PropertySignature => ts.isPropertySignature(member))
-          .flatMap((member) => (ts.isIdentifier(member.name) ? [member.name.text] : []))
-          .sort()
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(unit.source)
-  return found
+/** The port's one method: `export interface X { <method>(row: …, …): R }`, or null when the port has another shape. */
+function portMethod(
+  unit: SourceUnit,
+  typeName: string,
+  methodName: string,
+): ts.MethodSignature | null {
+  const port = unit.source.statements.find(
+    (statement): statement is ts.InterfaceDeclaration =>
+      ts.isInterfaceDeclaration(statement) && statement.name.text === typeName,
+  )
+  const method = port?.members.find(
+    (member): member is ts.MethodSignature =>
+      ts.isMethodSignature(member) &&
+      ts.isIdentifier(member.name) &&
+      member.name.text === methodName,
+  )
+  return method ?? null
 }
 
-/** 同一个类型别名的返回类型写成了什么（用类型名判断，不看结构）。 */
-export function portReturnTypeName(unit: SourceUnit, typeName: string): string | null {
-  let found: string | null = null
-  const visit = (node: ts.Node): void => {
+/** The members of a parameter type: an inline type literal, or an interface / literal alias declared in the same file. */
+function subjectMembers(unit: SourceUnit, type: ts.TypeNode): readonly ts.TypeElement[] | null {
+  if (ts.isTypeLiteralNode(type)) return type.members
+  if (!ts.isTypeReferenceNode(type) || !ts.isIdentifier(type.typeName)) return null
+  const name = type.typeName.text
+  for (const statement of unit.source.statements) {
+    if (ts.isInterfaceDeclaration(statement) && statement.name.text === name)
+      return statement.heritageClauses === undefined ? statement.members : null
     if (
-      ts.isTypeAliasDeclaration(node) &&
-      node.name.text === typeName &&
-      ts.isFunctionTypeNode(node.type)
-    ) {
-      found = node.type.type.getText(unit.source)
-    }
-    ts.forEachChild(node, visit)
+      ts.isTypeAliasDeclaration(statement) &&
+      statement.name.text === name &&
+      ts.isTypeLiteralNode(statement.type)
+    )
+      return statement.type.members
   }
-  visit(unit.source)
-  return found
+  return null
+}
+
+/** 端口方法（`X.<method>(row, …)`）第一个参数的属性名集合。 */
+export function portSubjectProperties(
+  unit: SourceUnit,
+  typeName: string,
+  methodName: string,
+): string[] | null {
+  const first = portMethod(unit, typeName, methodName)?.parameters[0]
+  if (first?.type === undefined) return null
+  const members = subjectMembers(unit, first.type)
+  if (members === null) return null
+  return members
+    .filter((member): member is ts.PropertySignature => ts.isPropertySignature(member))
+    .flatMap((member) => (ts.isIdentifier(member.name) ? [member.name.text] : []))
+    .sort()
+}
+
+/** 同一个端口方法的返回类型写成了什么（用类型名判断，不看结构）。 */
+export function portReturnTypeName(
+  unit: SourceUnit,
+  typeName: string,
+  methodName: string,
+): string | null {
+  return portMethod(unit, typeName, methodName)?.type?.getText(unit.source) ?? null
 }
 
 const kernelUnit = unitOf(KERNEL)
@@ -135,7 +161,7 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
 
   test('port 入参逐字等于中立集合（加一列集成归属就红）', () => {
     expect(
-      portSubjectProperties(portUnit, 'TerminalWorkspacePrunePolicy'),
+      portSubjectProperties(portUnit, 'TerminalWorkspacePrunePolicy', 'decide'),
       'port 的入参里出现了只有某个集成才有的列。kernel 为了喂它就得在自己的 SELECT 里' +
         '选那一列——于是这个通用写点的类型签名与查询双双点名该集成，再也无法脱离它被抽取',
     ).toEqual(NEUTRAL_SUBJECT)
@@ -143,7 +169,7 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
 
   test('port 返回闭合联合而不是裸 boolean（退回 boolean 就红）', () => {
     expect(
-      portReturnTypeName(portUnit, 'TerminalWorkspacePrunePolicy'),
+      portReturnTypeName(portUnit, 'TerminalWorkspacePrunePolicy', 'decide'),
       '返回 boolean 意味着「要不要回收」外置了、「叫什么名字」没外置——半次反转，' +
         'cause 只能由 kernel 自己铸',
     ).toBe('Promise<TerminalWorkspacePruneDecision>')
@@ -203,21 +229,56 @@ describe('RFC-317 T28 自变异 —— 三条判据各配正反 fixture', () => 
   test('入参属性集：多一列就不等（这条 fixture 锁住 toEqual 的方向）', () => {
     const neutral = sourceUnit(
       'probe.ts',
-      `export type P = (row: { taskId: string; spaceKind: S }, to: T) => D\n`,
+      `export interface Row { readonly taskId: string; readonly spaceKind: S }\n` +
+        `export interface P { decide(row: Row, to: T): D }\n`,
     )
-    expect(portSubjectProperties(neutral, 'P')).toEqual(['spaceKind', 'taskId'])
+    expect(portSubjectProperties(neutral, 'P', 'decide')).toEqual(['spaceKind', 'taskId'])
 
     const leaky = sourceUnit(
       'probe.ts',
-      `export type P = (row: { taskId: string; webhookTriggerId: string | null }, to: T) => D\n`,
+      `export interface Row { readonly taskId: string; readonly webhookTriggerId: string | null }\n` +
+        `export interface P { decide(row: Row, to: T): D }\n`,
     )
-    expect(portSubjectProperties(leaky, 'P')).toEqual(['taskId', 'webhookTriggerId'])
+    expect(portSubjectProperties(leaky, 'P', 'decide')).toEqual(['taskId', 'webhookTriggerId'])
+
+    // RFC-569: the three ways a subject can be spelled, and the shapes the reader refuses instead of passing.
+    const inline = sourceUnit(
+      'probe.ts',
+      `export interface P { decide(row: { taskId: string; webhookTriggerId: string }, to: T): D }\n`,
+    )
+    expect(portSubjectProperties(inline, 'P', 'decide')).toEqual(['taskId', 'webhookTriggerId'])
+    const alias = sourceUnit(
+      'probe.ts',
+      `type Row = { taskId: string }\nexport interface P { decide(row: Row, to: T): D }\n`,
+    )
+    expect(portSubjectProperties(alias, 'P', 'decide')).toEqual(['taskId'])
+    for (const text of [
+      // the old function alias, a subject declared elsewhere, an inherited subject, another method name
+      `export type P = (row: { taskId: string }, to: T) => D\n`,
+      `import type { Row } from './row'\nexport interface P { decide(row: Row, to: T): D }\n`,
+      `interface Base { webhookTriggerId: string }\ninterface Row extends Base { taskId: string }\n` +
+        `export interface P { decide(row: Row, to: T): D }\n`,
+      `export interface P { choose(row: { taskId: string }, to: T): D }\n`,
+    ])
+      expect([text, portSubjectProperties(sourceUnit('probe.ts', text), 'P', 'decide')]).toEqual([
+        text,
+        null,
+      ])
   })
 
-  test('返回类型读得出；不是函数类型时返回 null 而不是假绿', () => {
-    const fn = sourceUnit('probe.ts', `export type P = (row: {}, to: T) => Decision\n`)
-    expect(portReturnTypeName(fn, 'P')).toBe('Decision')
-    const notFn = sourceUnit('probe.ts', `export type P = { prune: boolean }\n`)
-    expect(portReturnTypeName(notFn, 'P')).toBe(null)
+  test('返回类型读得出；端口不是带这个方法的接口时返回 null 而不是假绿', () => {
+    const port = sourceUnit('probe.ts', `export interface P { decide(row: {}, to: T): Decision }\n`)
+    expect(portReturnTypeName(port, 'P', 'decide')).toBe('Decision')
+    const weak = sourceUnit('probe.ts', `export interface P { decide(row: {}, to: T): boolean }\n`)
+    expect(portReturnTypeName(weak, 'P', 'decide')).toBe('boolean')
+    for (const text of [
+      `export type P = { prune: boolean }\n`,
+      `export type P = (row: {}, to: T) => Decision\n`,
+      `export interface P { readonly decide: (row: {}, to: T) => Decision }\n`,
+    ])
+      expect([text, portReturnTypeName(sourceUnit('probe.ts', text), 'P', 'decide')]).toEqual([
+        text,
+        null,
+      ])
   })
 })

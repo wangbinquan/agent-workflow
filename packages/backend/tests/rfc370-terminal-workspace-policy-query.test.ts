@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import {
   resolveTerminalWorkspacePruneDecision,
-  type TerminalWorkspacePrunePolicy,
+  type TerminalWorkspacePruneCandidate,
 } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 
 function deferred<T>() {
@@ -15,7 +15,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-const row: Parameters<TerminalWorkspacePrunePolicy>[0] = {
+const row: TerminalWorkspacePruneCandidate = {
   taskId: 'hosted-terminal-task',
   spaceKind: 'remote',
   workspacePruningAt: null,
@@ -48,7 +48,7 @@ describe('RFC-370 asynchronous terminal workspace setting', () => {
     }
     const policy = createWebhookTerminalWorkspacePrunePolicy(dependencies)
     let settled = false
-    const pending = policy(row, 'done').finally(() => {
+    const pending = policy.decide(row, 'done').finally(() => {
       settled = true
     })
     try {
@@ -58,7 +58,7 @@ describe('RFC-370 asynchronous terminal workspace setting', () => {
       setting.resolve(true)
       expect(await pending).toEqual({ prune: true, cause: 'webhook-terminal' })
       current = false
-      expect(await policy(row, 'canceled')).toEqual({ prune: false })
+      expect(await policy.decide(row, 'canceled')).toEqual({ prune: false })
       expect(reads).toBe(2)
     } finally {
       setting.resolve(false)
@@ -77,7 +77,7 @@ describe('RFC-370 asynchronous terminal workspace setting', () => {
         throw new Error('unattributed task must not read configuration')
       },
     })
-    expect(await policy(row, 'done')).toEqual({ prune: false })
+    expect(await policy.decide(row, 'done')).toEqual({ prune: false })
   })
 
   test('rejected selected setting retains lifecycle false fallback', async () => {
@@ -92,7 +92,7 @@ describe('RFC-370 asynchronous terminal workspace setting', () => {
         throw failure
       },
     })
-    await expect(policy(row, 'done')).rejects.toBe(failure)
+    await expect(policy.decide(row, 'done')).rejects.toBe(failure)
     // RFC-534: the lifecycle writer evaluates the session's policy it was handed (no process-level registration).
     expect(await resolveTerminalWorkspacePruneDecision(policy, row, 'done')).toEqual({
       prune: false,

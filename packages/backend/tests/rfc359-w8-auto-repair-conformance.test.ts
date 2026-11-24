@@ -22,7 +22,10 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { LifecycleAlertRow } from '@/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
-import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/types'
+import type {
+  TaskLifecycleAlertNotices,
+  TaskRouteLifecycleAlertNotice,
+} from '@/modules/task-execution/public/types'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import type {
   TaskLifecycleAutoRepairCommand,
@@ -41,6 +44,9 @@ import { listOpenLifecycleAlertsForTask } from '@/modules/task-execution/applica
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
+
+/** RFC-569: notices that drop every report (cases that do not look at the broadcasts). */
+const SILENT_NOTICES: TaskLifecycleAlertNotices = Object.freeze({ alert() {}, resolved() {} })
 
 const NOW = 1_788_600_000_000
 /** 宽到不会自己跳闸的断路器；测断路器的用例自己收窄。 */
@@ -598,8 +604,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       actor,
       ...manual,
       optionId: 'S4.kick-task',
-      onAlert: () => {},
-      onResolved: () => {},
+      notices: SILENT_NOTICES,
     })
     expect(result).toEqual({
       ok: true,
@@ -636,8 +641,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
         actor,
         ...manual,
         optionId: 'S4.kick-task',
-        onAlert: () => {},
-        onResolved: () => {},
+        notices: SILENT_NOTICES,
       }),
     ).toEqual({
       ok: false,
@@ -744,8 +748,11 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       actor,
       ...manual,
       optionId: 'S4.kick-task',
-      onAlert: (row) => notices.push(row),
-      onResolved: (taskId) => resolved.push(taskId),
+      // RFC-569: the repair reports through the closed notices interface the diagnose pass takes.
+      notices: {
+        alert: (row) => void notices.push(row),
+        resolved: (taskId) => void resolved.push(taskId),
+      },
     })
     const [alert] = await listOpenLifecycleAlertsForTask(
       persistence.recoveryAdministration,
@@ -798,8 +805,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
             actor,
             ...entry,
             optionId: 'S4.kick-task',
-            onAlert: () => {},
-            onResolved: () => {},
+            notices: SILENT_NOTICES,
           }),
         ).rejects.toMatchObject({ code: 'repair-preflight-stale' })
       } else {

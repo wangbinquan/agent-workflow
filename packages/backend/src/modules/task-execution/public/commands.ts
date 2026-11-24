@@ -17,7 +17,7 @@ import type {
   NodeRunPromptOperations,
   TaskArchivedEventsReader,
   TaskRouteListFilters,
-  TaskRouteLifecycleAlertNotice,
+  TaskLifecycleAlertNotices,
   TaskRouteDeleteResult,
 } from './types'
 import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
@@ -353,7 +353,7 @@ export interface TaskRouteOperations {
     readonly taskId: string
     readonly alertId: string
     readonly optionId: string
-    readonly onAlert: (row: TaskRouteLifecycleAlertNotice, transition: 'new' | 'promoted') => void
-    readonly onResolved: (taskId: string) => void
+    /** RFC-569: where the repair reports alert changes — the closed interface the diagnose pass already takes. */
+    readonly notices: TaskLifecycleAlertNotices
   }): Promise<RepairResponse>
 }

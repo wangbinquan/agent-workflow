@@ -363,7 +363,7 @@ export interface ValidateAgentDependenciesInput {
 type AgentResourceRefKind = 'skill' | 'mcp' | 'plugin' | 'agent'
 // RFC-477: the exact wire code shared by every disabled-plugin integrity emitter is declared with the disabled-resource
 // policy (`domain/disabledResourcePolicy.ts`); the issue union below names it by type.
-import type { PLUGIN_DISABLED_ERROR_CODE } from '../domain/disabledResourcePolicy'
+import type { PluginDisabledErrorCode } from '../domain/disabledResourcePolicy'
 /** RFC-477 — the disabled MCP / plugin disposition table (the runtime self-check reports it); was services/execution/resourcePolicy.ts. */
 export {
   DISABLED_RESOURCE_POLICY,
@@ -377,7 +377,7 @@ type AgentResourceIssueCode =
   | 'skill-unavailable'
   | 'mcp-not-found'
   | 'plugin-not-found'
-  | typeof PLUGIN_DISABLED_ERROR_CODE
+  | PluginDisabledErrorCode
 type AgentResourceDisplayState = 'available' | 'hidden' | 'missing' | 'unavailable'
 
 interface AgentResourceDisplayRef {
