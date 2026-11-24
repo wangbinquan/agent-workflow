@@ -17,6 +17,10 @@
   eslint / promises / prettier 无告警；选出 587 个用例文件，修正后全部通过；读已提交源码的 187 个用例文件在候选导出里通过；十一种变异都被认出；
   架构报告 60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-571 转 Done 的文档提交 `7c9c778d4` 主 CI run 45495905499 70 / 70 全绿。
+- **CI**：`cbbcf4692` 主 CI run 45502183866 68 / 70——后端分片 41/44 里一条用例红（`rfc456-services-single-owner-placement` 的对照把 `cli/stop.ts`
+  取 platform 的 import 列表整份钉住，本 RFC 让它多了一条），**本 RFC 引入**，已改成只断言它要证的那一条并随修正提交上库；本地选集没有选“把被
+  改写的读者文件当源码读”的用例，所以没查出来。windows-platform、integration-opencode、git-protocols-e2e、visual-regression-nightly 通过。本 RFC
+  等修正提交的 CI 再转 Done。
 
 ## 2026-11-24 RFC-571 `util/` 的八个通用原语归 platform（Done；`design/RFC-571-util-primitives-into-platform-1/`）
 

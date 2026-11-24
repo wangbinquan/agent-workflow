@@ -100,9 +100,12 @@ describe('RFC-456 —— 14 个单一 owner 文件迁出 services/', () => {
     expect(isOld(targetOf(probe, '@/services/controlListener') ?? '')).toBe(true)
     expect(isOld(targetOf(probe, './execution/childBudget.ts') ?? '')).toBe(true)
     expect(isOld(targetOf(probe, './execution/childBudgetExtra') ?? '')).toBe(false)
-    expect(importsMatching([srcFile('cli/stop.ts')], (t) => t.startsWith('platform/'))).toEqual([
+    // The control is that the matcher sees a real alias import in a real file. RFC-572 moved the daemon lock into the
+    // same platform directory, so `cli/stop.ts` now has two platform imports; pinning the whole list made this control
+    // fail on an unrelated move (it reddened RFC-572's CI), so it asserts the one import it is about.
+    expect(importsMatching([srcFile('cli/stop.ts')], (t) => t.startsWith('platform/'))).toContain(
       'cli/stop.ts -> platform/execution/local/controlListener',
-    ])
+    )
   })
 })
 

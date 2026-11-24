@@ -13,7 +13,7 @@
 ## 验收清单
 
 - [x] AC-1 六个旧路径不存在、没有说明符再解析到它们；文件的可执行内容与原文件相同
-- [ ] AC-2 行为不变；Windows 平台工作流由这次提交触发并通过
+- [x] AC-2 行为不变；Windows 平台工作流由这次提交触发并通过（run 45502183776）
 - [x] AC-3 `legacy-horizontal-files` 上限 115 → 109；归属表删去登记过的行；新增 RFC-572 用例并登记
 - [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
@@ -58,7 +58,17 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `cbbcf4692`（实现，父提交是 `7c9c778d4`）：exact SHA 主 CI run 45502183866 的 70 个 job 里 68 个成功；
+  `Backend tests (ubuntu-latest shard 41/44)`（job 138828038086）失败，汇总格 `CI required` 随之不通过。同一提交按路径触发的另四个工作流全部通过：
+  windows-platform（run 45502183776，AC-2 的 Windows 一项）、integration-opencode（run 45502184034）、git-protocols-e2e（run 45502183763）与
+  visual-regression-nightly（run 45502184032）。
+- **归因：本 RFC 引入，本会话修复**。那个分片里只有一条用例红——`rfc456-services-single-owner-placement` 的负对照拿 `cli/stop.ts` 当真实样本，
+  把它“取 platform 的 import”整份列表钉成了只有 `controlListener` 一条；RFC-572 把 daemon 锁挪进同一目录后，这个文件多了一条 platform import，
+  列表不再相等。它证的是“判据认得出真实文件里的别名 import”，与 `cli/stop.ts` 还取不取别的 platform 文件无关，改成断言列表里包含那一条。
+- **本地为什么没查出来**：选集把 59 个“只改了 import 说明符”的生产文件按“谁直接 import 它”选用例，没有按“谁把它当源码读”选（按文件名做文本
+  匹配会把选集撑到两千多个，收窄时把这一类一起收掉了）。这条用例不 import `cli/stop.ts`，只按路径读它的源码。主 CI 的全量运行里整个后端只有这一条
+  红，所以没有第二处同类遗漏；教训写进 `docs/dev-gotchas.md`。
+- 修正提交的 CI 结果见下一条提交的记录；本 RFC 在那之后转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

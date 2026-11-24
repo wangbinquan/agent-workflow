@@ -705,6 +705,28 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   doctor 的文件本身却还在，按旧路径 grep 什么也扫不出来。改依赖时按「被测用例实际走到的文件」核对清单：实现方与绑定方都登记，
   `push` 与 `pull_request` 两份各一条。
 
+## 挪文件前的检索：文本检索扫不到的四处，以及“没搜到”可能是命令没跑（RFC-572 实撞，2026-11-24）
+
+把 `util/` 的六个文件挪进 platform 时，按旧路径（`util/process` 一类）在 `src` / `tests` / 脚本 / workflow 里搜过一遍、逐处改了，集中验证里仍然红了
+四个用例。漏的都不是 import，而是：
+
+- **已提交的 JSON 账本**：`architecture/commons-manifest.json` 把公共内核按文件路径登记，`commons-debt.json` 里有 `文件:行号` 锚点；
+  `rfc317-architecture-ledgers` 与 `rfc473` 会查“清单里的文件都在”。
+- **分段拼出来的路径**：`readSource('util', 'process.ts')`、`resolve(SRC, 'util', 'lock.ts')` 这类写法里没有 `util/process` 这个子串。按
+  `'util',\s*'<文件名>` 再搜一遍。
+- **别的边界锁的放行名单**：被挪走的文件若是某个“叶子”文件的依赖（`rfc377` 的 `util/git` 只许取 `@/util/` 与同目录），那把锁要同步——先想清楚它
+  锁的是什么，再按精确说明符放行，不要整目录放行。
+- **用例里的夹具字符串**：按正则改写 import 说明符的脚本，会把反例源码字符串里的 `from '…'` 一并改掉，对应的期望值要跟着改。改写后看一眼 diff 里
+  “不是真 import 的改动行”。
+- **把读者文件当样本的对照断言**：`rfc456` 的一条负对照拿 `cli/stop.ts` 当真实文件，把它取 platform 的 import 列表整份钉住；挪文件让这个读者多了
+  一条 import，对照就红了（这一条是推上去之后 CI 报的）。本地没查出来，是因为选用例时把“只改了一行 import 的读者文件”按“谁直接 import 它”
+  选，没有按“谁按路径读它的源码”选——按文件名做文本匹配会把选集撑到全量的四分之三，收窄时把这一类一起收掉了。读者文件多的搬迁，要么老实
+  按读者的**完整相对路径**（不是文件名）再选一遍，要么认下“本地选集有这个盲区、以 CI 的全量为准”并在记录里写明。
+
+另一半教训是**检索本身没跑**：zsh 里一条命令只要有一个通配没有匹配（`grep -rn pat architecture/ tests/architecture/*.json`，后一个目录下没有
+JSON），整条命令在执行前就中止，只打印一行 `no matches found`，看上去和“没搜到”一样。查空结果时先确认输出里没有这一行；需要通配时用
+`for f in dir/*.json; do grep … "$f"; done`，或者直接给目录。
+
 ## 文件挪进模块后，模块内部别再经**本模块的 public 入口**取值：public 反向 import composition barrel，barrel 一导出它就成了求值环（RFC-452 实撞，2026-11-05）
 
 - 现象：集中验证里 70 多个用例文件在一两秒内全红，报的都是 `ReferenceError: Cannot access 'taskExecutionModuleInternal' before
