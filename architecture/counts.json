@@ -3,8 +3,8 @@
   "note": "RFC-294 design §13.1 减速带，不是门。measured <= max 即通过（低于上限只报不红，design §13.4；RFC-484 撤回了 RFC-479 的低于即红）；RFC-294 的后继收口时把所触及计数的 max 收紧到实测（C13），dated review 核对；抬高 max 必须在同一提交，且 reason 含 max=<N>。无 provenance、无过期、无历史比较。",
   "counts": {
     "application-direct-effect-files": {
-      "max": 2,
-      "reason": "max=2: RFC-395 II-b T18 Q-2b live census decreases 3 -> 2; no growth authorized."
+      "max": 1,
+      "reason": "max=1: RFC-554 moves integration's repository endpoint discovery HTTP adapter into infrastructure/codeHost (2 -> 1, measured; the intent maintenance cleanup stays on RFC-375's retention list). max=2: RFC-395 II-b T18 Q-2b live census decreases 3 -> 2; no growth authorized."
     },
     "backend-value-scc": {
       "max": 0,
@@ -115,8 +115,8 @@
       "reason": "max=7: RFC-529 (RFC-294 S12 step 10) moved the eight business-module interval timers onto the platform's fixed-rate timer (platform/background/intervalTimer.ts), whose own setInterval is the one new site (14 - 8 + 1 = 7, measured); the remaining six are platform/background timers. max=14: RFC-395 II-b T18 source census decreases 15 -> 14; no growth authorized."
     },
     "export-star-barrels": {
-      "max": 1,
-      "reason": "max=1: RFC-479 (RFC-294 S11) tightens every max to the measured census (21 -> 1); a lower count now fails until this max is lowered in the same change; no growth authorized."
+      "max": 0,
+      "reason": "max=0: RFC-554 removes the runtime registry's two dead `export *` lines (no file took a name through them); a wildcard re-export fails here. max=1: RFC-479 (RFC-294 S11) tightens every max to the measured census (21 -> 1); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "legacy-horizontal-files": {
       "max": 125,

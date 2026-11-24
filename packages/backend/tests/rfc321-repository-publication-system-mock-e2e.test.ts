@@ -32,7 +32,7 @@ import {
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createRepositoryEndpointDiscovery } from '../src/modules/integration/application/repositoryEndpointDiscovery'
+import { createRepositoryEndpointDiscovery } from '../src/modules/integration/infrastructure/codeHost/repositoryEndpointDiscovery'
 import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,

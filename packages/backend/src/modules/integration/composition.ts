@@ -12,7 +12,7 @@ export {
   createRepositoryEndpointDiscovery,
   type RepositoryEndpointConnection,
   type RepositoryEndpointFetch,
-} from './application/repositoryEndpointDiscovery'
+} from './infrastructure/codeHost/repositoryEndpointDiscovery'
 // RFC-450：代码平台连接服务、两个路由合同与两组请求实现。
 export {
   codeHostNodeRequests,

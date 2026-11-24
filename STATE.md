@@ -8,6 +8,12 @@
 - **范围**：删去两条死的通配转出；仓库端点发现挪进 integration 的 `infrastructure/codeHost/`；两份精确清单与减速带降低；新增 RFC-554 用例。
 - **不做**：intent 的维护清理、部署分支字面量、不可达文件（RFC-375 的保留清单）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-553 转 Done 同一提交），实现与验证后再提交。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 HTTP 适配器归 infrastructure；C11 public 不变；C12 RFC-554 用例覆盖注册表文件与全部模块没有
+  通配转出、端点发现的位置与组合根的转出；C13 `export-star-barrels` 1 → 0、`application-direct-effect-files` 2 → 1，其余计数不升。
+- **集中验证**（基于 `a4ea67ce9`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准；没有查出本人缺陷。实测两条通配转出（design 漏记
+  了 `export type *` 那条）都没有读者。tsc 0 错，eslint / promises / prettier 无告警；选出 470 个用例文件 469 个通过（`rfc167` 一例在高负载下的
+  5 秒期限处到点，单独再跑 3 次通过，已记入 `docs/audit-backlog.md`）；读已提交源码的两个用例在候选导出里通过；三种变异都被认出；架构报告
+  两个门各降一、其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-553 knowledge-evolution 不再取 task-execution 的内部（Done；`design/RFC-553-knowledge-evolution-task-initiator-port/`）
 

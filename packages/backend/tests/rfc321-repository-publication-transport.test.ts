@@ -28,7 +28,7 @@ import {
   createRepositoryEndpointDiscovery,
   type RepositoryEndpointConnection,
   type RepositoryEndpointFetch,
-} from '../src/modules/integration/application/repositoryEndpointDiscovery'
+} from '../src/modules/integration/infrastructure/codeHost/repositoryEndpointDiscovery'
 import {
   composeRepositoryTransportCredentials,
   bindEmployeeCaseWorkspaceParticipant,

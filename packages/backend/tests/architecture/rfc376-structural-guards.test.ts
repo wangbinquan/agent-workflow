@@ -152,7 +152,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   ],
   'platform-to-modules-file-pairs': [],
   'application-direct-effect-files': [
-    'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
+    // RFC-554: the repository endpoint discovery HTTP adapter moved into integration's infrastructure/codeHost/.
     'packages/backend/src/modules/intent/application/maintenance.ts',
   ],
   'module-layer-violations': [
@@ -167,7 +167,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/integration/application/ports/crewStationEventInbox.ts#CrewStationEventChannel#port-literal#1',
   ],
   'export-star-barrels': [
-    'packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts',
+    // RFC-554: the runtime registry's two dead `export *` lines (no file took a name through them) are gone.
     // RFC-467：`services/skillBootVerify.ts` / `services/skillIdentityPaths.ts` 两个转出删除（唯一的生产消费方 RFC-349 注入预言迁入
     // `tests/helpers/`，改取 resource-catalog 定义处），销账。
     // RFC-470：最后两个 RFC-345 兼容转出 `services/workflow.ts` / `services/workflow.validator.ts` 删除（消费方改经 task-execution 的

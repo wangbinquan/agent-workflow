@@ -1,4 +1,6 @@
 // RFC-321 T7 — provider-owned GitHub/GitLab repository metadata query.
+// RFC-554: an HTTP adapter (request paths, auth headers, response parsing, the global `fetch` fallback), so it lives in
+// infrastructure, next to the code-host connections; it moved here from `application/`.
 // Integration resolves the daemon's global code-host connection at call time;
 // source-control receives only a secret-free endpoint candidate.
 

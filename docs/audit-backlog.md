@@ -5766,6 +5766,14 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 待办：先在用例里把子进程的原始 stdout / stderr 与退出码随失败一起打印（确认是半行输出还是进程被杀），再决定是给 readiness 改成按行协议、
   还是给 barrier 加超时后的诊断转储。
 
+## 动态工作流确认门：`rfc167-dynamic-workflow-engine` 的 `settleTask` 在 5 秒结算期限处到点（2026-11-23 两次，本机高负载，未处置）
+
+- 现象：本机集中验证时 `RFC-167 — dw-confirm gate + save-as (HTTP) > approve: snapshot swap + phase=executing land atomically; holder closes;
+  resumed run executes the new DAG` 两次失败：`settleTask` 的 5 秒轮询期限到点时任务仍是 running（期望 failed）。两次都在本机 1 分钟负载 19～42
+  （10 核）时（RFC-550 的复跑、RFC-554 的选集运行），同文件单独再跑各 3 次都通过（29 / 29）；CI 上未见。
+- 归因：恢复运行是 fire-and-forget 的，`settleTask` 的 5 秒是墙钟期限，机器满载时恢复来不及在期限内落到 failed；两次的改动都不碰动态工作流。
+- 待办：把期限改成等待恢复运行的完成信号（或按 RFC-395 的做法给这条用例显式预算），而不是固定 5 秒墙钟。
+
 ## run-now 路由门的 PostgreSQL 一例：`rfc159` 的 beforeEach 在 5 秒处到点（2026-11-23 首见，CI 偶发，未处置）
 
 - 现象：主 CI run 45258235483（`fe1db6768`，RFC-549 转 Done 与 RFC-550 落档，只改文档）的后端 42/44 分片里，`RFC-159 T7 — run-now route gate

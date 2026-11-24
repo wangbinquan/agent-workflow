@@ -646,6 +646,3 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
 }
 
 export type { RuntimeRegistryOperations }
-// Transitional named exports keep existing consumers on the single owner implementation.
-export * from '../domain/runtimeProfile'
-export type * from '../public/types'

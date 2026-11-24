@@ -376,7 +376,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
     )
     const endpointDiscovery = read(
-      'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
+      // RFC-554: the endpoint discovery HTTP adapter moved from application/ into infrastructure/codeHost/.
+      'packages/backend/src/modules/integration/infrastructure/codeHost/repositoryEndpointDiscovery.ts',
     )
     const nodeMechanics = [
       // RFC-405 / RFC-406: nodeMechanics.ts is gone; the agent executor's files replace it here.

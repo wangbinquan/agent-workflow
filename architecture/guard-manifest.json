@@ -2107,7 +2107,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc321-repository-publication-ratchet.test.ts",
       "id": "rfc321-repository-publication-ratchet",
-      "lines": 549,
+      "lines": 550,
       "mechanism": "ast",
       "minCorpusFiles": 750,
       "negativeFixture": true,
@@ -4330,6 +4330,18 @@
       "lines": 121,
       "mechanism": "ast",
       "minCorpusFiles": 20,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc554-small-structural-gates-boundary.test.ts",
+      "id": "rfc554-small-structural-gates-boundary",
+      "lines": 101,
+      "mechanism": "ast",
+      "minCorpusFiles": 1500,
       "negativeFixture": true,
       "runner": "bun"
     }
