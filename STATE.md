@@ -1,4 +1,4 @@
-## 2026-11-24 RFC-571 `util/` 的八个通用原语归 platform（In Progress；`design/RFC-571-util-primitives-into-platform-1/`）
+## 2026-11-24 RFC-571 `util/` 的八个通用原语归 platform（Done；`design/RFC-571-util-primitives-into-platform-1/`）
 
 - **来由**：S9 里不需要裁决就能收的条目已经收完（见下一条），转做 W9-D。legacy 横向目录还剩 123 个文件，`util/` 占 35 个；RFC-294 design §2 与
   架构报告的归属表给通用原语的去向是 platform。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
@@ -16,6 +16,11 @@
   eslint / promises / prettier 无告警；选出 439 个用例文件，一次全部通过；读已提交源码的 166 个用例文件在候选导出里通过；八种变异都被认出；架构报告
   60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-569、RFC-570 转 Done 的文档提交 `b872c6ca1` 主 CI run 45480807927 70 / 70 全绿。
+- **CI**：主 CI run 45489595961 70 / 70 全绿；按路径触发的 windows-platform、integration-opencode、git-protocols-e2e、visual-regression-nightly 与
+  maintenance-soak-nightly 也全部通过。
+- **W9-D 的下一步**（未立项）：`util/` 余 27 个。进程 / 执行一族（`platformExec`、`process`、`windowsJobObject`、`lock`、`archive`、`spawnDiagnostics`）
+  是一个闭合的依赖集，可以整族迁入 platform，但动手前要先定两件事：目标目录要与“单机 / 托管”分离的门一致（它们两种部署都用，不能放进
+  `platform/**/local/`），以及 `windows-platform.yml` 的路径过滤要同步改。`routes/` 的 50 个文件按 design §2 归各模块的 inbound，是更大的一步。
 
 ## 2026-11-24 RFC-570 工作组运行选择投影归 task-execution，source-control 的两个完整性检查收具名类型（Done；`design/RFC-570-run-selection-projection-owner-and-typed-completeness-checks/`）
 

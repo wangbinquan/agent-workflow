@@ -14,7 +14,7 @@
 - [x] AC-1 八个旧路径不存在、没有说明符再解析到它们；新文件内容与原文件相同
 - [x] AC-2 行为不变；新位置的文件不取模块、不取 `util/`
 - [x] AC-3 `legacy-horizontal-files` 上限 125 → 115；归属表删去登记过的七行；新增 RFC-571 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（70 / 70）
 
 ## 集中验证
 
@@ -43,11 +43,14 @@
   `monotonicNow` 不再严格递增（`rfc284-microhelpers` 红）。
 - **架构报告**（候选与对照各出一份）：60 个计数里只有 `legacy-horizontal-files` 变了，123 → 115（少的正是这八个文件）；public 面（989）、public
   类型偏差（32）、变更入口普查（2393）、跨 context import 的条数（7528）与生产文件数不变。
-- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，见提交说明。
+- **收口文档**：plan 与 `STATE.md` 定稿后，在工作树里重跑读这几处文档与 RFC 索引的 7 个用例文件，46 / 46 通过。
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `2335b2bcc`（实现，父提交是 `b872c6ca1`）：exact SHA 主 CI run 45489595961 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个
+  平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的另五个工作流也全部通过：windows-platform
+  （run 45489595966）、integration-opencode（run 45489596329）、git-protocols-e2e（run 45489596030）、visual-regression-nightly
+  （run 45489596034）与 maintenance-soak-nightly（run 45489595954）。
 
 ## 实现门（本会话自审，只审功能）
 
