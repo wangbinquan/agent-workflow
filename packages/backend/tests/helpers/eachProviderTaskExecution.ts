@@ -74,7 +74,7 @@ import {
   composePortArtifactOperations,
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './standaloneTaskDeletionEffects'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -448,7 +448,7 @@ export async function createEachProviderTaskExecution(
                   createFileNodeRunPromptContent(join(appHome, 'runs')),
                 )
               : taskRunRoot.nodeRunPrompts,
-          effects: composeLocalTaskDeletionEffects(),
+          effects: composeStandaloneTaskDeletionEffects(),
         }),
         lifecycleRepair: {},
         fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
@@ -636,7 +636,7 @@ export async function createEachProviderTaskExecution(
           taskRunRoot === undefined
             ? composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(appHome, 'runs')))
             : taskRunRoot.nodeRunPrompts,
-        effects: composeLocalTaskDeletionEffects(),
+        effects: composeStandaloneTaskDeletionEffects(),
       }),
       lifecycleRepair: {},
       fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },

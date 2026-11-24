@@ -1,3 +1,25 @@
+## 2026-11-23 RFC-557 工作组启动资源面归 resource-catalog，本地删除选择由 bootstrap 装配（In Progress；`design/RFC-557-task-execution-launch-and-deletion-wiring/`）
+
+- **来由**：跨 context 内部文件对 10 条里 task-execution 还剩三条：工作组启动资源面（读工作组行、ACL 判可见、名册检查——全是 resource-catalog 的能力，
+  它的代理孪生已由 RFC-470 迁入 resource-catalog）取 resource-catalog 的 `composition/resourceAcl` 与 `infrastructure/legacy/workgroups`，本地删除效果
+  的 composition 自己去 source-control 的 composition 拿 git 参与者。前两条也是 `rfc328` 的 provider-bridge 精确债务的最后两条。用户 2026-11-02「好，你
+  继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照
+  最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：工作组启动资源面（实现与 composition）原样迁入 resource-catalog，端口经 task-execution 的 required-ports 交出、resource-catalog 新增指定
+  adapter 按类型取，bootstrap 与用例改从 resource-catalog 取；`composeLocalTaskDeletionEffects(repositories)`，standalone bootstrap 交 git 参与者，用例
+  改走测试助手 `composeStandaloneTaskDeletionEffects()`；目标 DAG 与 RFC-294 design 的 Mermaid 同批登记虚线边；精确清单、`rfc328` 债务、减速带、design
+  边总数与读旧路径的用例随之更新；新增 RFC-557 用例。
+- **不做**：其余 7 条跨 context 内部文件对；代理启动资源面自写的端口形状（RFC-470）改走 required-ports（另案）。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 资源面实现归数据所有者 resource-catalog、端口事实源在 task-execution 的 required-ports、跨 context
+  选择只在 bootstrap；C11 public 不变；C12 RFC-557 用例覆盖 task-execution 全部源码取 resource-catalog / source-control 非 public 文件的边、资源面的位置
+  与装配、删除选择收参；C13 跨 context 内部文件对 10 → 7，其余计数不升，目标 DAG 多一条虚线 required 边，`rfc328` 的 provider-bridge 债务清空。
+- **集中验证**（基于 `e11512bb1`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷一处已修复并复验（`rfc328` 的债务集合清空
+  后推成 `Set<never>`）。tsc 0 错，eslint / promises / prettier 无告警；选出 599 个用例文件全部通过；读已提交源码的两个用例在候选导出里通过；五种变异
+  都被认出；架构报告文件对 10 → 7、目标边 108 → 109，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-554 实现提交 `a74820d0b` 的主 CI run 45307552450 中 `Markdown link check (design/)` 红——7 条 raw.githubusercontent.com 链接回 503
+  （都在 RFC-370 / RFC-371 / RFC-372 的既有文档里，RFC-554 不碰），与 RFC-378 那类 503 同形，属外部服务；其余 68 个 job 通过，汇总 job 排队中。
+  RFC-554～556 的 run 仍在等 runner，转 Done 随下一个 RFC 的提交。
+
 ## 2026-11-23 RFC-556 provider 实现别的 context 的端口一律经指定 adapter（In Progress；`design/RFC-556-provider-ports-through-designated-adapters/`）
 
 - **来由**：跨 context 内部文件对 14 条里有四条同形——provider 实现 consumer 自有的端口，却在 adapter 以外的文件里取 consumer 的端口类型

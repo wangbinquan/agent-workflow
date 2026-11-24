@@ -271,7 +271,8 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
  * transport layers are not represented here; any new deep cross-context edge
  * still fails both this exact inventory and the RFC-349 provider guard.
  */
-const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
+// RFC-557: every bridge is retired — the set is empty (the target state); any new deep edge fails as before.
+const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set<string>([
   // RFC-399 A8 retired the four task-execution -> collaboration bridges (human-gate open participant,
   // operation journal, clarify continuation convergence, operation persistence): task-execution now owns
   // the ports and bootstrap injects the collaboration implementations.
@@ -287,8 +288,7 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // 注入一份走资源目录的实现，三个组合根各自拼一遍；现在只剩这一个文件碰 legacy 资源读法。
   // 换掉 PG 那份是**功能修复**而不是整理：它把 actor 投影成 direct authority 再查目录，
   // 认不出定时 / webhook 的委派 actor，PostgreSQL 上定时启动代理 / 工作组任务当场 500。
-  'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
-  'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
+  // RFC-557: the workgroup launch resources moved into resource-catalog (like the agent twin, RFC-470) — both bridges retired.
   // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
   // runtime-management, resource-catalog or source-control internals — bootstrap binds the providers and
   // runtime-management assembles its own runtime management (21 bridges retired). RFC-491: the native compatibility run

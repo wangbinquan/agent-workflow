@@ -345,12 +345,11 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   // source port twice, integration's webhook task-execution participant, runtime-management's usage reader).
   // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
   // runtime-management, resource-catalog or source-control internals (bootstrap binds the providers) — 21 pairs settled.
-  'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
+  // RFC-557: the workgroup launch resources moved into resource-catalog (typed through Task Execution's required ports),
+  // and the standalone bootstrap hands Source Control's git participant to the local deletion effects.
   // RFC-526: the lifecycle persistence's workspace presence is a required selection — its source-control pair settled.
   // RFC-470：task-execution 的启动资源适配器迁入 resource-catalog（实现 task-execution 的端口、装配根注入），三对销账。
   // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers — its source-control pair settled.
-  'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-511: the two source-control completeness checks offered through public participants are declared in

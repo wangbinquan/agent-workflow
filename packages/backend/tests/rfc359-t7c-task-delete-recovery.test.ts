@@ -24,7 +24,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
@@ -121,7 +121,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         db,
         testExecutionPermits,
         undefined,
-        composeLocalTaskDeletionEffects(),
+        composeStandaloneTaskDeletionEffects(),
       ),
     ).toEqual({
       completed: [root],
@@ -154,7 +154,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         db,
         testExecutionPermits,
         undefined,
-        composeLocalTaskDeletionEffects(),
+        composeStandaloneTaskDeletionEffects(),
       ),
     ).toEqual({
       completed: [root],
@@ -178,7 +178,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         db,
         testExecutionPermits,
         undefined,
-        composeLocalTaskDeletionEffects(),
+        composeStandaloneTaskDeletionEffects(),
       ),
     ).toEqual({
       completed: [root],
@@ -198,7 +198,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         db,
         testExecutionPermits,
         undefined,
-        composeLocalTaskDeletionEffects(),
+        composeStandaloneTaskDeletionEffects(),
       ),
     ).toEqual({
       completed: [],
@@ -213,7 +213,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
           db,
           testExecutionPermits,
           undefined,
-          composeLocalTaskDeletionEffects(),
+          composeStandaloneTaskDeletionEffects(),
         )
       ).recoveryRequired,
     ).toEqual([root])
@@ -232,7 +232,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         db,
         testExecutionPermits,
         undefined,
-        composeLocalTaskDeletionEffects(),
+        composeStandaloneTaskDeletionEffects(),
       ),
     ).rejects.toMatchObject({
       code: 'task-terminal-maintenance-conflict',
@@ -258,7 +258,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         db,
         testExecutionPermits,
         undefined,
-        composeLocalTaskDeletionEffects(),
+        composeStandaloneTaskDeletionEffects(),
       ),
     ).toEqual({
       completed: [],

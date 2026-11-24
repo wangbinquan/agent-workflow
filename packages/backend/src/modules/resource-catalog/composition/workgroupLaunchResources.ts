@@ -1,8 +1,10 @@
+// RFC-557: moved from task-execution `composition/`, next to `agentLaunchResources.ts`; the assembly root hands the
+// result to Task Execution's workgroup launch resource port.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
+import type { AgentLaunchResourceIntegrityParticipant } from '../public/participants'
 
 import { createWorkgroupLaunchResourceOperations } from '../infrastructure/workgroupLaunchResourceOperations'
-import type { WorkgroupRouteLaunchResources } from '../application/ports/taskRouteLaunch'
+import type { WorkgroupRouteLaunchResources } from '../application/adapters/task-execution-adapter'
 
 /**
  * 组合根取工作组启动资源面的**唯一入口**（与 `agentLaunchResources.ts` 同形）：

@@ -73,7 +73,7 @@ import { composeAgentLaunchResourceOperations } from '../src/modules/resource-ca
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 
 // RFC-359 AC-6：`TestTaskLaunchOptions.db` 放宽到中立句柄之后，这里**仍然要窄回 `DbClient`**——
 // 本夹具驱动的是 SQLite 那台执行引擎（`composeTaskExecutionTestRuntime`，W5-T19f 的
@@ -1061,7 +1061,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const { createBuildScheduleLaunch, createTaskExecutionTriggerParticipant } =
       await import('@/modules/task-execution/infrastructure/taskExecutionTrigger')
     const { composeWorkgroupLaunchResourceOperations } =
-      await import('@/modules/task-execution/composition/workgroupLaunchResources')
+      await import('@/modules/resource-catalog/composition/workgroupLaunchResources')
     const { composeDeferredRepositoryPreparation } =
       await import('@/modules/task-execution/composition/deferredRepositoryPreparation')
     const { createTestTaskDriveCoordinator } = await import('./helpers/legacyTaskDrive')
@@ -2427,7 +2427,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     let code = ''
     try {
       await deleteTask(db, task.id, {
-        effects: composeLocalTaskDeletionEffects(),
+        effects: composeStandaloneTaskDeletionEffects(),
         executionPermits: testExecutionPermits,
         collaboration: createTaskDeletionCollaborationParticipantInTx,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },

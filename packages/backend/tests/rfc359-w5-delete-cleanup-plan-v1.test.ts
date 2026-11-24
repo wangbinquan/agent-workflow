@@ -37,7 +37,7 @@ import { join } from 'node:path'
 import { parseDeleteCleanupPlan } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
 import { Paths } from '@/util/paths'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 
 function member(taskId: string): MaintenanceMemberSnapshot {
   return {
@@ -77,7 +77,7 @@ test('v1 计划（PG 形状：无 directories）能被解析，directories 按 m
   const plan = parseDeleteCleanupPlan(
     json,
     [member('task_root'), member('task_child')],
-    composeLocalTaskDeletionEffects().content,
+    composeStandaloneTaskDeletionEffects().content,
   )
 
   expect(plan).not.toBeNull()
@@ -102,7 +102,7 @@ test('v1 的 worktrees 原样保留（PG 的条目多带一个 taskId 字段也�
   const plan = parseDeleteCleanupPlan(
     json,
     [member('task_root')],
-    composeLocalTaskDeletionEffects().content,
+    composeStandaloneTaskDeletionEffects().content,
   )
 
   expect(plan?.worktrees).toEqual([
@@ -113,7 +113,7 @@ test('v1 的 worktrees 原样保留（PG 的条目多带一个 taskId 字段也�
 
 test('v1 + 零成员 → 解析成功且 directories 为空（不是 null）', () => {
   const json = JSON.stringify({ v: 1, taskId: 'task_root', taskIds: [], worktrees: [] })
-  const plan = parseDeleteCleanupPlan(json, [], composeLocalTaskDeletionEffects().content)
+  const plan = parseDeleteCleanupPlan(json, [], composeStandaloneTaskDeletionEffects().content)
 
   expect(plan).not.toBeNull()
   expect(plan?.directories).toEqual([])
@@ -131,7 +131,7 @@ test('v1 不消费 directories 字段：即便带了个畸形的也照样按 mem
   const plan = parseDeleteCleanupPlan(
     json,
     [member('task_root')],
-    composeLocalTaskDeletionEffects().content,
+    composeStandaloneTaskDeletionEffects().content,
   )
 
   expect(plan?.directories).toEqual(expectedDirs(['task_root']))
@@ -153,7 +153,7 @@ test('v2 计划：directories 用计划里写死的那份，完全忽略 members
   const plan = parseDeleteCleanupPlan(
     json,
     [member('task_unrelated')],
-    composeLocalTaskDeletionEffects().content,
+    composeStandaloneTaskDeletionEffects().content,
   )
 
   expect(plan).toEqual({
@@ -176,7 +176,7 @@ test('v2 计划：空 directories 保持为空，不回退到 members 推导', (
   const plan = parseDeleteCleanupPlan(
     json,
     [member('task_root')],
-    composeLocalTaskDeletionEffects().content,
+    composeStandaloneTaskDeletionEffects().content,
   )
 
   expect(plan?.directories).toEqual([])
@@ -192,7 +192,7 @@ test('v2 计划：parentTaskId 非串时归一为 null', () => {
   })
 
   expect(
-    parseDeleteCleanupPlan(json, [], composeLocalTaskDeletionEffects().content)?.parentTaskId,
+    parseDeleteCleanupPlan(json, [], composeStandaloneTaskDeletionEffects().content)?.parentTaskId,
   ).toBeNull()
 })
 
@@ -225,7 +225,7 @@ for (const [label, payload] of REJECTED) {
       parseDeleteCleanupPlan(
         JSON.stringify(payload),
         [member('task_root')],
-        composeLocalTaskDeletionEffects().content,
+        composeStandaloneTaskDeletionEffects().content,
       ),
     ).toBeNull()
   })
@@ -236,7 +236,7 @@ test('非 JSON 串返回 null', () => {
     parseDeleteCleanupPlan(
       'not json at all',
       [member('task_root')],
-      composeLocalTaskDeletionEffects().content,
+      composeStandaloneTaskDeletionEffects().content,
     ),
   ).toBeNull()
 })

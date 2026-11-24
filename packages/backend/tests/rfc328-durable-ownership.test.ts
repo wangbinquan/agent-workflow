@@ -69,7 +69,7 @@ import { createLocalEffectAttemptObserver } from '@/modules/task-execution/appli
 import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { buildCodeHostRecoveryDescriptor } from '@/modules/task-execution/domain/codeHostRecovery'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { createTaskExecutionTestModule } from './helpers/taskExecutionModule'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
@@ -1478,7 +1478,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           database,
           testExecutionPermits,
           undefined,
-          composeLocalTaskDeletionEffects(),
+          composeStandaloneTaskDeletionEffects(),
         ),
       ).toEqual({
         completed: ['task-delete-recovery'],

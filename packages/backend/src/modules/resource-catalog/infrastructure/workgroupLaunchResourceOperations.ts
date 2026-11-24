@@ -1,11 +1,13 @@
-import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
-
+// RFC-557 (RFC-294 S9 step 12): moved verbatim from task-execution `infrastructure/`. Resource Catalog implements Task
+// Execution's workgroup launch resource port (the type comes through the designated task-execution adapter), next to the
+// agent twin (`agentLaunchResourceOperations.ts`, RFC-470); the assembly root hands the result to Task Execution.
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
-import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
-import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
-import type { WorkgroupRouteLaunchResources } from '../application/ports/taskRouteLaunch'
+import { canViewResource } from '../composition/resourceAcl'
+import { createAgentExecutionQueries } from './executionResourceQueries'
+import { getWorkgroupById } from './legacy/workgroups'
+import type { AgentLaunchResourceIntegrityParticipant } from '../public/participants'
+import type { WorkgroupRouteLaunchResources } from '../application/adapters/task-execution-adapter'
 
 /**
  * RFC-359 AC-1（plan §5hn 批次二 ①）—— 工作组启动的资源面，**两个 provider 唯一的一份**。

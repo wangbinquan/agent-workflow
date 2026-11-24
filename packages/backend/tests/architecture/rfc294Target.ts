@@ -146,6 +146,8 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   // RFC-556: Task Execution's integration adapter and Resource Catalog's runtime-management adapter.
   ['task-execution', 'integration', 'WebhookTaskExecutionParticipant'],
   ['resource-catalog', 'runtime-management', 'RuntimeProfileUsageReader'],
+  // RFC-557: Resource Catalog's task-execution adapter (the workgroup launch resources).
+  ['resource-catalog', 'task-execution', 'WorkgroupRouteLaunchResources'],
 ]
 
 const AUTHORITY_CONTEXTS = TARGET_PUBLIC_CONTEXTS.filter((context) => context !== 'identity-access')

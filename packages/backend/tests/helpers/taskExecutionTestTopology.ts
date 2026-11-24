@@ -60,7 +60,7 @@ import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/p
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTurnsOperations } from '../../src/modules/task-execution/composition/workgroupTurns'
 import { composeWorkgroupHostLedgerParticipantFactory } from '../../src/modules/task-execution/composition/workgroupHostLedger'
-import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/resource-catalog/composition/workgroupLaunchResources'
 import { createChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import { createTaskExecutionPersistence as createChildPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 

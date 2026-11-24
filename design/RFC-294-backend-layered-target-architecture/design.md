@@ -239,6 +239,7 @@ flowchart LR
   DA -. "implements CodeHostEventContinuationPort" .-> INTEG
   TE -. "implements WebhookTaskExecutionParticipant" .-> INTEG
   RC -. "implements RuntimeProfileUsageReader" .-> RM
+  RC -. "implements WorkgroupRouteLaunchResources" .-> TE
 ```
 
 虚线上的端口名是当时设计的称呼；代码中的实际类型名以实现它的后继 RFC 为准（例如 RFC-368 对 Reaction 两个端口的命名）。

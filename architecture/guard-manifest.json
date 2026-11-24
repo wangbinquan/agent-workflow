@@ -34,7 +34,7 @@
       "minCorpusFiles": null,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 155
+      "lines": 156
     },
     {
       "assertsAbsence": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1055
+      "lines": 1054
     },
     {
       "assertsAbsence": true,
@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 544,
+      "lines": 543,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -4366,6 +4366,18 @@
       "lines": 186,
       "mechanism": "ast",
       "minCorpusFiles": 300,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc557-task-execution-launch-deletion-wiring-boundary.test.ts",
+      "id": "rfc557-task-execution-launch-deletion-wiring-boundary",
+      "lines": 170,
+      "mechanism": "ast",
+      "minCorpusFiles": 700,
       "negativeFixture": true,
       "runner": "bun"
     }

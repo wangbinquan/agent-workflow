@@ -455,7 +455,8 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
     const hostLaunch = await readFile(
       join(
         BACKEND_SRC,
-        'modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
+        // RFC-557: the workgroup launch resources moved into resource-catalog.
+        'modules/resource-catalog/infrastructure/workgroupLaunchResourceOperations.ts',
       ),
       'utf8',
     )

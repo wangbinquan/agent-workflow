@@ -27,7 +27,7 @@ import { createIdentityAccessRuntime } from '@/modules/identity-access/compositi
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeAgentLaunchResourceOperations } from '@/modules/resource-catalog/composition/agentLaunchResources'
-import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '@/modules/resource-catalog/composition/workgroupLaunchResources'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { admitDaemonIdentity } from '@/modules/identity-access/composition/authentication'
 import { createUser } from './helpers/userFixture'

@@ -118,7 +118,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 import { Paths } from '@/util/paths'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
@@ -256,7 +256,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       // RFC-526: the route operations' prompt operations and deletion effects are required — the local ones they used to
       // build (no app home here, so prompts under `Paths.runsDir`).
       nodeRunPrompts: composeNodeRunPromptOperations(createFileNodeRunPromptContent(Paths.runsDir)),
-      effects: composeLocalTaskDeletionEffects(),
+      effects: composeStandaloneTaskDeletionEffects(),
       // RFC-527: the route operations' workspace reads are required — the local ones they used to build.
       workspaceReads: createFileRepositoryWorkspaceReadQueries(),
       collaboration: {} as never,

@@ -57,7 +57,7 @@ import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
-import { composeLocalTaskDeletionEffects } from '@/modules/task-execution/composition/taskDeletionEffects'
+import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const NOW = 1_788_364_800_000
@@ -201,7 +201,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     })
 
     const result = await deleteTask(legacy(db), childId, {
-      effects: composeLocalTaskDeletionEffects(),
+      effects: composeStandaloneTaskDeletionEffects(),
       executionPermits: testExecutionPermits,
       collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -249,7 +249,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     // 卡住每任务写锁：`deleteTask` 会先铸认领 + 推进到 io-complete，然后阻塞在这把锁上。
     const release = await getTaskWriteSem(taskId).acquire()
     const pending = deleteTask(legacy(db), taskId, {
-      effects: composeLocalTaskDeletionEffects(),
+      effects: composeStandaloneTaskDeletionEffects(),
       executionPermits: testExecutionPermits,
       collaboration: createTaskDeletionCollaborationParticipantInTx,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },

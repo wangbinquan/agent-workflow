@@ -44,7 +44,7 @@ import {
   createBuildScheduleLaunch,
   createTaskExecutionTriggerParticipant,
 } from '../src/modules/task-execution/infrastructure/taskExecutionTrigger'
-import { composeWorkgroupLaunchResourceOperations } from '../src/modules/task-execution/composition/workgroupLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '../src/modules/resource-catalog/composition/workgroupLaunchResources'
 import { composeDeferredRepositoryPreparation } from '../src/modules/task-execution/composition/deferredRepositoryPreparation'
 import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
 

@@ -86,3 +86,7 @@ export type {
 } from '../application/ports/humanGateOpenFactory'
 
 export type { RepositoryPreparationLookup } from '../application/ports/repositoryPreparationLookup'
+
+// RFC-557: Resource Catalog implements the workgroup launch resource port; its designated task-execution adapter takes
+// this port type-only.
+export type { WorkgroupRouteLaunchResources } from '../application/ports/taskRouteLaunch'
