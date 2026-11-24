@@ -3,10 +3,10 @@ import { describe, expect, test } from 'bun:test'
 import { composeSelectedDevelopmentPipelineEvidence } from '@/modules/development-automation/composition/pipelineEvidence'
 import { createSelectedApprovalExecutionAdapter } from '@/modules/integration/application/developmentApprovalAdapter'
 import type { DevelopmentAdapterContent } from '@/modules/integration/domain/developmentAdapterDefinition'
-import type {
-  AdapterConfigurationReference,
-  SelectedPipelineEvidenceExecution,
-} from '@/modules/integration/public/participants'
+// RFC-566: the execution type left Integration's public (Development Automation uses its own runner port); read it where
+// it is defined.
+import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/application/developmentPipelineAdapter'
+import type { AdapterConfigurationReference } from '@/modules/integration/public/participants'
 import {
   held,
   MemoryPurposeContent,

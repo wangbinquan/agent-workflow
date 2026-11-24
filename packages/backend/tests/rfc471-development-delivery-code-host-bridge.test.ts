@@ -196,21 +196,24 @@ describe('RFC-471 —— 结构同形与依赖方向', () => {
     expect([typeof handOver, typeof remoteForBinding]).toEqual(['function', 'function'])
   })
 
-  test('DA 的新文件不取 integration；交付 provider 只取 integration 的 public；integration 的组装不取 DA', () => {
+  // RFC-566：交付 provider 原先取 integration public 的流水线执行类型，现在用 development-automation 自己的端口，三处都不取 integration。
+  test('DA 的新文件与交付 provider 不取 integration；integration 的组装不取 DA', () => {
     const imports = (path: string) => specifiersIn(read(path))
     for (const path of [
       'modules/development-automation/composition/developmentDelivery.ts',
       'modules/development-automation/application/ports/developmentDelivery.ts',
+      'modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
     ])
       expect([path, imports(path).filter((s) => s.includes('modules/integration'))]).toEqual([
         path,
         [],
       ])
+    // 正对照：同一读法认得出交付 provider 仍取的本模块端口。
     expect(
       imports(
         'modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
-      ).filter((s) => s.includes('modules/integration')),
-    ).toEqual(['@/modules/integration/public/participants'])
+      ).filter((s) => s.includes('reconcilerPorts')),
+    ).toEqual(['../application/ports/reconcilerPorts'])
     // RFC-502: the bridge's implementation moved to integration's application; neither file takes DA.
     for (const path of [
       'modules/integration/composition/codeHostEffects.ts',

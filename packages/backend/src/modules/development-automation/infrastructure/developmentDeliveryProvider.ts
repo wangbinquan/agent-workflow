@@ -4,13 +4,14 @@
 // RFC-471（RFC-294 W9-D）：代码托管绑定（按远端 URL 选连接、拼调用依赖）归 integration 的
 // `createDevelopmentCodeHostBinding`（RFC-502 起在 application），它经本 provider 的 `resolveRepository` 取远端；
 // 这里只答仓库远端、MR 事实目标与 pipeline 执行。接口定义从 `services/developmentDeliveryDeps.ts` 迁来。
+// RFC-566：pipeline 执行面用本模块的端口 `SelectedPipelineEvidenceRunnerPort`（integration 的实现由 bootstrap 交入、结构上满足）。
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
+import type { SelectedPipelineEvidenceRunnerPort } from '../application/ports/reconcilerPorts'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 
 export interface DevelopmentDeliveryProvider {
@@ -22,7 +23,7 @@ export interface DevelopmentDeliveryProvider {
     readonly missionId: string
     readonly mrClaimId: string
   }): Promise<{ readonly repositoryId: string; readonly mrIid: string } | null>
-  readonly pipeline: SelectedPipelineEvidenceExecution
+  readonly pipeline: SelectedPipelineEvidenceRunnerPort
 }
 
 interface RepositoryRecord {
@@ -42,7 +43,7 @@ interface DevelopmentDeliveryDirectory {
 function providerFrom(input: {
   readonly directory: DevelopmentDeliveryDirectory
   readonly secretBox?: SecretBox
-  readonly pipeline: SelectedPipelineEvidenceExecution
+  readonly pipeline: SelectedPipelineEvidenceRunnerPort
   readonly volatileRepositoryUrl?: (row: RepositoryRecord) => string | null
 }): DevelopmentDeliveryProvider {
   const resolveUrl = (row: RepositoryRecord): string | null =>
@@ -108,7 +109,7 @@ function directoryOf(db: PersistenceDb): DevelopmentDeliveryDirectory {
 export function createDevelopmentDeliveryProvider(input: {
   readonly db: PersistenceDb
   readonly secretBox?: SecretBox
-  readonly pipeline: SelectedPipelineEvidenceExecution
+  readonly pipeline: SelectedPipelineEvidenceRunnerPort
 }): DevelopmentDeliveryProvider {
   return providerFrom({
     directory: directoryOf(input.db),

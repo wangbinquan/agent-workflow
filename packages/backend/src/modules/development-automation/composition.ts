@@ -80,15 +80,10 @@ import type { EvidenceArtifactPort } from './application/ports/evidenceArtifacts
 export type { EvidenceArtifactPort }
 import type { AttemptContextStorePort } from './application/ports/attemptContextStore'
 export type { AttemptContextStorePort }
-import type {
-  RequirementAdapterBinding,
-  PipelineAdapterBinding,
-  ApprovalAdapterBinding,
-  SelectedPipelineEvidenceExecution,
-} from '@/modules/integration/public/participants'
-// RFC-392: the purpose boundary also owns the existing selected pipeline contract import.
-export type { SelectedPipelineEvidenceExecution }
-import type { PipelineStagingFactories } from './application/ports/evidenceStaging'
+// RFC-566: the development purpose selection (the deployment's three purposes) is declared in bootstrap, which is the only
+// reader — this root no longer names Integration's adapter bindings or its pipeline execution type. The selection's
+// pipeline staging is this module's, handed to bootstrap as a type.
+export type { PipelineStagingFactories } from './application/ports/evidenceStaging'
 import {
   createActionBaselineResolver,
   createRepositoryLocationRead,
@@ -198,7 +193,7 @@ export interface DevelopmentAutomationCompositionOptions {
   /** RFC-524: the deployment's evidence artifacts (required; the composition no longer builds a local store). */
   readonly evidenceArtifacts: EvidenceArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
-  /** RFC-524: the requirement purpose's writer and staging (required, as in `RequirementPurposeSelection`). */
+  /** RFC-524: the requirement purpose's writer and staging (required, as in bootstrap's `RequirementPurposeSelection`). */
   readonly evidenceDocumentCommands: EvidenceDocumentCommands
   readonly requirementStaging: EvidenceStagingFactory
   readonly attemptContext?: AttemptContextStorePort
@@ -477,29 +472,6 @@ export function composeDevelopmentAutomation(
 }
 
 export type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
-
-export interface RequirementPurposeSelection extends RequirementAdapterBinding {
-  readonly staging: EvidenceStagingFactory
-  readonly documentCommands: EvidenceDocumentCommands
-}
-
-export interface PipelinePurposeSelection extends PipelineAdapterBinding {
-  readonly staging: PipelineStagingFactories
-}
-
-/** RFC-431: each deployment selects all three purposes (standalone: `composeLocalDevelopmentPurposes`). */
-export interface DevelopmentPurposeSelection {
-  readonly requirement: RequirementPurposeSelection
-  readonly pipeline: PipelinePurposeSelection
-  readonly approval: ApprovalAdapterBinding
-}
-
-export interface SelectedDevelopmentPurposeRoot {
-  readonly requirement: RequirementPurposeSelection
-  readonly pipeline: PipelinePurposeSelection
-  readonly approval: ApprovalAdapterBinding
-  readonly evidenceArtifacts: EvidenceArtifactPort
-}
 
 export { schemaContribution } from './composition/schema'
 

@@ -1,7 +1,10 @@
 // RFC-392: select one development purpose binding for all application participants.
 // RFC-431: every deployment selects all three purposes; the standalone ones are composed here.
+// RFC-566: the selection types are declared here — they join Integration's adapter bindings with Development Automation's
+// staging, document writer and evidence store, and only bootstrap reads them.
 import type {
   ApprovalAdapterBinding,
+  PipelineAdapterBinding,
   RequirementAdapterBinding,
 } from '@/modules/integration/public/participants'
 import { createLocalDevelopmentAdapterEffects } from '@/modules/integration/composition/developmentAdapterProgram'
@@ -13,13 +16,34 @@ import {
 } from '@/modules/development-automation/composition/evidenceStaging'
 import { assertEvidenceStagingFactory } from '@/modules/development-automation/public/participants'
 import { join } from 'node:path'
-import { type EvidenceArtifactPort } from '@/modules/development-automation/composition'
 import type {
-  RequirementPurposeSelection,
-  PipelinePurposeSelection,
-  DevelopmentPurposeSelection,
-  SelectedDevelopmentPurposeRoot,
+  EvidenceArtifactPort,
+  EvidenceDocumentCommands,
+  PipelineStagingFactories,
 } from '@/modules/development-automation/composition'
+
+export interface RequirementPurposeSelection extends RequirementAdapterBinding {
+  readonly staging: EvidenceStagingFactory
+  readonly documentCommands: EvidenceDocumentCommands
+}
+
+export interface PipelinePurposeSelection extends PipelineAdapterBinding {
+  readonly staging: PipelineStagingFactories
+}
+
+/** RFC-431: each deployment selects all three purposes (standalone: `composeLocalDevelopmentPurposes`). */
+export interface DevelopmentPurposeSelection {
+  readonly requirement: RequirementPurposeSelection
+  readonly pipeline: PipelinePurposeSelection
+  readonly approval: ApprovalAdapterBinding
+}
+
+export interface SelectedDevelopmentPurposeRoot {
+  readonly requirement: RequirementPurposeSelection
+  readonly pipeline: PipelinePurposeSelection
+  readonly approval: ApprovalAdapterBinding
+  readonly evidenceArtifacts: EvidenceArtifactPort
+}
 
 function assertPurposePair(
   selection: RequirementPurposeSelection | PipelinePurposeSelection | ApprovalAdapterBinding,

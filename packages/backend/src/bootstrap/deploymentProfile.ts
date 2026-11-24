@@ -20,7 +20,7 @@ import type {
 } from '@/modules/source-control/composition'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
-import type { DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
+import type { DevelopmentPurposeSelection } from './developmentPurposeRoot'
 import type { RuntimeManagementSelection, SystemAgentRuntimeBinder } from './runFamilyProviders'
 import type { SystemAgentRunFamilySelection } from '@/modules/task-execution/composition/systemAgentRunFamilySelection'
 import type { McpDiagnosticsSelection } from '@/modules/resource-catalog/composition/mcpDiagnostics'

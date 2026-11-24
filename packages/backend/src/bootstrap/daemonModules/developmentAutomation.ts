@@ -24,7 +24,7 @@ import { composeAgentActionExecution } from '@/modules/task-execution/compositio
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
-import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
+import type { SelectedDevelopmentPurposeRoot } from '../developmentPurposeRoot'
 import {
   type DevelopmentWriterCutover,
   type selectDevelopmentWorkspaceEffectBinding,

@@ -1,3 +1,24 @@
+## 2026-11-24 RFC-566 development-automation 不再按 integration 的名字取适配绑定与流水线执行类型（In Progress；`design/RFC-566-development-purpose-selection-bootstrap/`）
+
+- **来由**：DAG 外 offered 边（4 条）里有 2 条是 development-automation 取 integration 的 public——方向与目标 DAG 相反（integration 消费
+  development-automation、实现它的 `development-effect-spi`）。一处是装配根为了声明四个“研发用途选择”接口取适配绑定类型（只有 bootstrap 读它们），
+  一处是给流水线证据执行面写类型（本模块早有自己的端口）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进
+  RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：四个接口原文搬到 bootstrap 的 `developmentPurposeRoot.ts`，读它们的三个 bootstrap 文件改从那里取；development-automation 的装配根删去它们与对
+  integration public 的 import，两个装配文件与交付 provider 用本模块的 `SelectedPipelineEvidenceRunnerPort`；integration 的 public 撤出
+  `SelectedPipelineEvidenceExecution`。9 个生产文件，全在类型位置。两份精确清单与减速带随之更新；钉着旧位置的 `rfc471` 用例随改；新增 RFC-566 用例。
+- **不做**：其余 2 条 DAG 外 offered 边（source-control 取 task-execution 终态维护认领类型的一条与 system-operations 取 source-control 备份准备参与者的
+  一条，属能力 / 凭据类合同，暂不动）。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 部署选择的类型归 bootstrap，流水线执行面的合同归消费方 development-automation 的 application/ports；
+  C11 integration 的 public 撤 1 个类型（public 面 993 → 992）；C12 RFC-566 用例覆盖 development-automation 全部源码、全部模块与 bootstrap 里的声明处、
+  九条结构绑定（`tsc`）；C13 DAG 外 offered 边 4 → 2，其余计数不升。
+- **集中验证**（基于 `ff3442970`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷三处已修复并复验（漏查钉着旧位置的 `rfc471` 用例；新用例
+  里一个没量过的下限；交付 provider 的 `pipeline` 只做了子串匹配，一种变异没被认出，改成整行匹配并加双向编译期断言）。tsc 0 错，eslint / promises /
+  prettier 无告警；选出 363 个用例文件，修正后全部通过；读已提交源码的用例在候选导出里通过；六种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的四个
+  文件报错；架构报告 DAG 外 offered 边 4 → 2，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-565 `ff3442970` 的 CI 仍在跑，转 Done 随后续提交。
+
 ## 2026-11-24 RFC-565 任务知识、触发与仓库身份的读由 bootstrap 交入：裸句柄的读撤出 task-execution 与 source-control 的 public（In Progress；`design/RFC-565-bound-owner-reads/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT`（56 条）里有 18 条是 public 交出的函数签名带着持久化句柄或 drizzle 类型；其中 11 条属于 task-execution 与

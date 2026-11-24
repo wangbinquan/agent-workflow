@@ -109,8 +109,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-562: the hosted object publication journal moved into platform/content and the restore normalization participant
     // became a System Operations required port — the 15 pairs into system-operations are settled.
     // RFC-559: task-execution and collaboration take memory through their own ports (memory injection and distill).
-    'packages/backend/src/modules/development-automation/composition.ts -> integration',
-    'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
+    // RFC-566: the development purpose selection is declared in bootstrap and Development Automation types the pipeline
+    // execution with its own runner port — its two pairs into integration are settled.
     // RFC-561: Intent's platform inventory names its two cross-context sources with its own ports; bootstrap binds them.
     'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts -> task-execution',
     // RFC-561: the system overview names its five sources with its own ports; bootstrap binds the owners' queries.

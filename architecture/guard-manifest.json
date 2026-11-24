@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 474,
+      "lines": 465,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -4474,6 +4474,18 @@
       "lines": 474,
       "mechanism": "ast",
       "minCorpusFiles": 2500,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc566-development-purpose-selection-bootstrap-boundary.test.ts",
+      "id": "rfc566-development-purpose-selection-bootstrap-boundary",
+      "lines": 359,
+      "mechanism": "ast",
+      "minCorpusFiles": 2600,
       "negativeFixture": true,
       "runner": "bun"
     }

@@ -8,6 +8,7 @@ import type {
   MrEffectsPort,
   PipelineEvidencePort,
   RepoRemotePort,
+  SelectedPipelineEvidenceRunnerPort,
 } from '../application/ports/reconcilerPorts'
 import type { DevelopmentMrFactsSourcePort } from '../application/ports/developmentDelivery'
 import type { PipelineStagingFactories } from '../application/ports/evidenceStaging'
@@ -16,7 +17,6 @@ import {
   createDevelopmentMrFactsCollector,
 } from '../application/developmentMrFacts'
 import type { DevelopmentDeliveryProvider } from '../infrastructure/developmentDeliveryProvider'
-import type { SelectedPipelineEvidenceExecution } from '../composition'
 import { composeSelectedDevelopmentPipelineEvidence } from './pipelineEvidence'
 
 export function composeDevelopmentDeliveryDeps(deps: {
@@ -97,7 +97,7 @@ export function composeDevelopmentMrFactsCollector(deps: {
 
 /** Roots pass a complete neutral staging selection (RFC-524: the legacy single-argument bridge is gone). */
 export function composeDevelopmentPipelineDeps(
-  runner: SelectedPipelineEvidenceExecution,
+  runner: SelectedPipelineEvidenceRunnerPort,
   staging: PipelineStagingFactories,
 ): {
   readonly pipelineEvidence: PipelineEvidencePort

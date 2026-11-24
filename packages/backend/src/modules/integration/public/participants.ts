@@ -40,7 +40,8 @@ export interface DigitalEmployeeWorkStartPort {
   }): Promise<{ readonly caseId: string }>
 }
 
-export type { SelectedPipelineEvidenceExecution } from '../application/developmentPipelineAdapter'
+// RFC-566: `SelectedPipelineEvidenceExecution` left the public — Development Automation types the pipeline execution with
+// its own runner port, and bootstrap hands this module's implementation over (it satisfies that port structurally).
 export type {
   RequirementAdapterBinding,
   PipelineAdapterBinding,
