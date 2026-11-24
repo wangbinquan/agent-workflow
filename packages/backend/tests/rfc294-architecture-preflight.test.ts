@@ -338,8 +338,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/integration/composition/webhookTerminalControl.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
   'packages/backend/src/modules/intent/composition/apply.ts -> packages/backend/src/modules/resource-catalog/composition/intentApply.ts',
   'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
-  'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts',
-  'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts -> packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts',
+  // RFC-553: both knowledge-evolution -> task-execution pairs are settled (the launch initiator type through public/types,
+  // the projection through the fusion routes' own port).
   'packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts -> packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts',
   // RFC-489: the run-family roots, the local invocation and the native compatibility run's protocol no longer import
   // runtime-management, resource-catalog or source-control internals (bootstrap binds the providers) — 21 pairs settled.

@@ -31,7 +31,7 @@ import {
   TERMINAL_TASK_STATUSES,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
+import type { DirectTaskInitiator } from '@/modules/task-execution/public/types'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import type { FusionTreeFile } from '@/modules/knowledge-evolution/public/types'

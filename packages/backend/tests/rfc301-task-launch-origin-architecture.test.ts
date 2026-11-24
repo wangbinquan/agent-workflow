@@ -100,7 +100,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       'modules/knowledge-evolution/inbound/fusionRoutes.ts': 1,
     })
     expect(Object.fromEntries(identifierCalls('directTaskInitiatorFromActorSource'))).toEqual({
-      'modules/knowledge-evolution/inbound/fusionRoutes.ts': 2,
+      // RFC-553: the fusion routes take the initiator through their own port; bootstrap binds the same projection once.
+      'bootstrap/daemonHttpComposition.ts': 1,
       // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 那一处随门面删除。
       // RFC-486：直连启动的 initiator 映射只在 composition 装配这一处（`createRootTaskLaunchKernelPorts`），
       // 内核经注入的 `directTaskInitiator` 取得——actor source 仍只在 inbound 函数里观察。

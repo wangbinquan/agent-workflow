@@ -215,9 +215,11 @@ describe('RFC-390 neutral HTTP binding', () => {
     )
     if (!contract || !ts.isInterfaceDeclaration(contract))
       throw new Error('fusion route contract missing')
+    // RFC-553: the launch initiator projection reaches the fusion routes as their own port (bound by bootstrap).
     expect(contract.members.map((member) => member.name?.getText(fusion.source))).toEqual([
       'operations',
       'directAuthority',
+      'directTaskInitiator',
     ])
   })
   test('application precedes maintenance and supplies its apply activity to both providers', () => {

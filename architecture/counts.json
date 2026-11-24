@@ -99,8 +99,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 17,
-      "reason": "max=17: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); RFC-491 moves the contract-test-only native task agent run out of production (22 -> 21: its source-control git observation pair); RFC-523 drops intent apply's resource-catalog ACL read repository, MCP transaction lifecycle and persistence-port pairs once the daemon composes the resource binding (21 -> 18); RFC-526 drops task-execution's lifecycle persistence -> source-control local workspace presence pair once the presence is a required selection (18 -> 17); no growth authorized."
+      "max": 15,
+      "reason": "max=15: RFC-553 (RFC-294 S9 ninth step) settles knowledge-evolution's two task-execution internal pairs (the launch initiator type through public/types, the projection through the fusion routes' own port): 17 -> 15, measured. max=17: RFC-479 (RFC-294 S11) tightens every max to the measured census (48 -> 43); a lower count now fails until this max is lowered in the same change; RFC-489 retires the 18 task-execution -> runtime-management pairs and the local task agent root's resource-catalog / source-control pairs (43 -> 22: bootstrap binds the run-family providers, runtime-management assembles its own runtime management); RFC-491 moves the contract-test-only native task agent run out of production (22 -> 21: its source-control git observation pair); RFC-523 drops intent apply's resource-catalog ACL read repository, MCP transaction lifecycle and persistence-port pairs once the daemon composes the resource binding (21 -> 18); RFC-526 drops task-execution's lifecycle persistence -> source-control local workspace presence pair once the presence is a required selection (18 -> 17); no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,
@@ -131,8 +131,8 @@
       "reason": "max=0: RFC-479 (RFC-294 S11) tightens every max to the measured census (42 -> 0); a lower count now fails until this max is lowered in the same change; no growth authorized."
     },
     "module-layer-violations": {
-      "max": 1,
-      "reason": "max=1: RFC-395 II-b T18 source census decreases 2 -> 1; no growth authorized."
+      "max": 0,
+      "reason": "max=0: RFC-553 (RFC-294 S9 ninth step) settles the last one (the fusion routes took task-execution's inbound projection); a module file reaching another context's internal layer fails here. max=1: RFC-395 II-b T18 source census decreases 2 -> 1; no growth authorized."
     },
     "node-runs-insert-sites": {
       "max": 1,

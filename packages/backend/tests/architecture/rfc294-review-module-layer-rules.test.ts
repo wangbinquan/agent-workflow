@@ -44,15 +44,9 @@ export function moduleLayerViolations(units: readonly SourceUnit[]): ModuleLayer
  * 存量分层违规（RFC-376 阶段 B，committed HEAD `2a70c9328` 重算）。
  * 每条一个 `rule|file|specifier`；只降不升。
  */
-export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = [
-  {
-    rule: 'inbound-context-internal-import',
-    file: 'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts',
-    specifier: '@/modules/task-execution/inbound/directTaskInitiator',
-    why: 'RFC-376 Phase B committed baseline; move cross-context assembly and inbound calls behind exact public contracts.',
-    removeAfterWave: 'RFC-294 S5/S6',
-  },
-]
+// RFC-553: the last entry (knowledge-evolution's fusion routes took task-execution's inbound projection) is settled; the
+// projection now reaches them through their own port, bound by bootstrap.
+export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = []
 
 const UNITS = backendUnits(REPO_ROOT).filter(isModuleUnit)
 

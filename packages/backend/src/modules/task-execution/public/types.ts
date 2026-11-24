@@ -6,6 +6,8 @@ import type {
 } from '@agent-workflow/shared'
 import type { TaskReadSubject } from '../domain/taskSubject'
 import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
+// RFC-553: the closed manual/api launch initiator other contexts launching tasks record (knowledge-evolution's fusions).
+export type { DirectTaskInitiator } from '../domain/taskLaunchOrigin'
 // RFC-480: the terminal workspace prune policy is a consumer-owned contract that integration implements; it moved here
 // from the retired `public/operations` (the registration itself is wired by bootstrap through `composition.ts`).
 export type {

@@ -61,6 +61,7 @@ import { createOidcProvidersService } from '@/auth/oidc/providers'
 import {
   composeTaskDiagnostics,
   composeTaskWorkspaceQueries,
+  directTaskInitiatorFromActorSource,
 } from '@/modules/task-execution/composition'
 import {
   composeCachedRepositoryOperations,
@@ -635,6 +636,8 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       fusion: Object.freeze({
         operations: fusionOperations,
         directAuthority: identityAccess.directAuthority,
+        // RFC-553: task-execution's projection of the actor onto the launch initiator, bound as the fusion routes' own port.
+        directTaskInitiator: (actor: Actor) => directTaskInitiatorFromActorSource(actor.source),
       }),
       // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
       // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。

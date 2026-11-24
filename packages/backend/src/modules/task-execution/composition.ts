@@ -3,6 +3,9 @@ export { createFileTaskOperationConfiguration } from './infrastructure/local/fil
 // RFC-534: the terminal workspace prune policy is a required Task Execution dependency (bootstrap hands integration's
 // webhook policy to the session's assembly); the named never-prune policy is for the maintenance worker and tests.
 export { neverPruneTerminalWorkspaces } from './infrastructure/terminalWorkspacePrune'
+// RFC-553: the inbound projection of an authenticated actor's source onto the launch initiator (RFC-301: only inbound sees
+// the source). Bootstrap binds it into other contexts' launch routes (knowledge-evolution's fusions) as their own port.
+export { directTaskInitiatorFromActorSource } from './inbound/directTaskInitiator'
 import {
   bindTaskWorkspaceReadScope,
   type TaskWorkspaceReadDependencies,

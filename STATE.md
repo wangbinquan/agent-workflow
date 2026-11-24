@@ -9,6 +9,13 @@
   交出的同一个投影绑定；两份精确清单、模块分层违规清单与减速带随之降低；新增 RFC-553 用例。
 - **不做**：其余 15 条跨 context 内部文件对；S9 的其他项。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-552 转 Done 同一提交），实现与验证后再提交。
+- **收口对账**（RFC-294 C10～C13，design §4）：C10 投影仍在 task-execution 的 inbound、经 composition 交给 bootstrap，knowledge-evolution 拥有自己的
+  端口；C11 task-execution 的 public 多一个有读者的类型转出；C12 RFC-553 用例覆盖 knowledge-evolution 取 task-execution 只经 public、类型与端口
+  的位置、bootstrap 的绑定与投影的行为；C13 跨 context 内部文件对 17 → 15、模块分层违规 1 → 0，其余计数不升。
+- **集中验证**（基于 `f9c709afa`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。查出四处本人缺陷并修正：新用例的文件名缺守卫
+  关键词（guard-manifest 的三条对账看不见它）、新用例的语料下限高于实际文件数、`rfc390` 与 `rfc301` 两条源码锁钉着旧形状。tsc 0 错，eslint /
+  promises / prettier 无告警；选出 1,162 个用例文件 1,156 个通过（红的就是这四处），改后 24 个相关用例文件复跑通过；读已提交源码的两个用例在
+  候选导出里通过；五种变异都被认出；架构报告文件对 17 → 15、分层违规 1 → 0、其余门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 
 ## 2026-11-23 RFC-552 public/operations 的类型检查豁免收窄到操作描述工厂（Done；`design/RFC-552-public-operations-exemption-narrowing/`）
 

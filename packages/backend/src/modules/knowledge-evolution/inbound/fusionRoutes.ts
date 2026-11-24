@@ -17,8 +17,8 @@
 
 import { FusionStatusSchema, LaunchFusionSchema, RejectFusionSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { actorOf } from '@/auth/actor'
-import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
+import { actorOf, type Actor } from '@/auth/actor'
+import type { DirectTaskInitiator } from '@/modules/task-execution/public/types'
 import { registerRoute } from '@/routes/registry'
 // RFC-353 T12：inbound 是本 context 自己的投递适配器，直接取 `application/`。
 // **不经自己的 `public/`**——那一层是给别的 context 用的，只被自家 inbound 消费的
@@ -48,6 +48,11 @@ import type { FusionOperations } from '../application/ports/fusionOperations'
 export interface FusionRouteDependencies {
   readonly operations: FusionOperations
   readonly directAuthority: DirectAuthorityBinding
+  /**
+   * RFC-553: who launched the fusion task, as task-execution records it (manual / api). Bootstrap binds task-execution's
+   * own inbound projection here — the same one its root launch uses — so this module never reads the actor's source.
+   */
+  readonly directTaskInitiator: (actor: Actor) => DirectTaskInitiator
 }
 
 export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): void {
@@ -86,7 +91,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
         parsed.data,
         await fusionDeps(),
         scopeAuthority,
-        directTaskInitiatorFromActorSource(actor.source),
+        deps.directTaskInitiator(actor),
       )
       return c.json(fusion, 201)
     },
@@ -196,7 +201,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
           c.req.param('id'),
           parsed.data.feedback,
           actor,
-          directTaskInitiatorFromActorSource(actor.source),
+          deps.directTaskInitiator(actor),
         ),
       )
     },

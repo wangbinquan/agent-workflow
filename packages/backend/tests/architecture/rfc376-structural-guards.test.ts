@@ -88,8 +88,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/integration/composition/webhookTerminalControl.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
     'packages/backend/src/modules/intent/composition/apply.ts -> packages/backend/src/modules/resource-catalog/composition/intentApply.ts',
     'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
-    'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts',
-    'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts -> packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts',
+    // RFC-553: knowledge-evolution takes the launch initiator type from task-execution's public/types and the projection
+    // through its fusion routes' own port; both knowledge-evolution -> task-execution pairs are settled.
     'packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts -> packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts',
     // RFC-489：task-execution 的运行族根、本机调用与本机兼容运行的协议不再取 runtime-management、resource-catalog、source-control 的
     // 内部（bootstrap 绑定提供者，运行时管理由 runtime-management 自己装配），21 对销账。
@@ -156,7 +156,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/intent/application/maintenance.ts',
   ],
   'module-layer-violations': [
-    'inbound-context-internal-import|packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts|@/modules/task-execution/inbound/directTaskInitiator',
+    // RFC-553: the last one (the fusion routes took task-execution's inbound projection) is settled.
   ],
   'composition-forbidden-import-files': [
     // RFC-518: the last twelve (RFC-370 task-image and hosted adapters) moved to infrastructure/crewstation.
