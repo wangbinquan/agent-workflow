@@ -1,3 +1,25 @@
+## 2026-11-24 RFC-564 系统代理运行的词汇不再被 DAG 外的 context 按 runtime-management 的名字取（In Progress；`design/RFC-564-system-agent-run-vocabulary/`）
+
+- **来由**：DAG 外 offered 边（7 条）里最后 3 条指向 runtime-management 的，都是为了给一次系统代理运行的请求写类型——resource-catalog 的托管 MCP 诊断
+  端口取材料意图的八个字段、事件接收与用量快照，托管诊断取托管能力，memory 的蒸馏端口取协议、观察身份、内容引用与事件接收。用户 2026-11-02
+  「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计
+  已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：resource-catalog 的 `application/ports/mcpDiagnosticExecution.ts` 新增 `McpDiagnosticProfile`、`McpDiagnosticIntent`、
+  `McpDiagnosticUsageSnapshot`，请求里的事件接收用本模块已有的 `McpDiagnosticEventSink`；托管诊断读的托管能力写成文件内的形状；memory 的
+  `application/ports/distillWorkStore.ts` 从 task-execution 的 `SystemAgentRunRequest` 上取六个类型（文件内别名取名 `DistillRuntime*`）。bootstrap、
+  task-execution 的两个诊断运行器与 runtime-management 不改。两份精确清单与减速带随之更新；钉着旧位置的三个用例随改；新增 RFC-564 用例。
+- **不做**：其余 4 条 DAG 外 offered 边（development-automation 取 integration 的两条待定归属；source-control 取 task-execution 终态维护认领类型的一条与
+  system-operations 取 source-control 备份准备参与者的一条暂不动）。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 诊断请求的词汇归 resource-catalog 的 application/ports，蒸馏的运行词汇取自 task-execution 的 public
+  合同；C11 两个 context 的 public 导出名单不变；C12 RFC-564 用例覆盖 runtime-management 以外全部模块的源码、三处形状与十条结构绑定（`tsc`）；C13
+  DAG 外 offered 边 7 → 4，其余计数不升。此后按名字取 runtime-management 的只有目标 DAG 上的消费方与 resource-catalog 的指定 adapter。
+- **集中验证**（基于 `b2a26ea9b`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷三处已修复并复验（漏查三个钉着旧位置的用例；新用例的
+  guard-manifest 条目与事实不符；memory 端口的两个别名被架构报告误记成变更入口，已改名）。tsc 0 错，eslint / promises / prettier 无告警；选出 270 个
+  用例文件，修正后全部通过；读已提交源码的用例在候选导出里通过；六种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的两处绑定报错；架构报告 DAG 外
+  offered 边 7 → 4，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-562 `b3850ff9a` 的主 CI（run 45401036761）70 / 70，windows-platform 通过，转 Done。RFC-563 `b2a26ea9b` 的 windows-platform 通过，
+  主 CI（run 45405881445）仍在跑。
+
 ## 2026-11-24 RFC-563 source-control 与 resource-catalog 用自己的形状声明任务代理的内容引用与资源材料（In Progress；`design/RFC-563-content-reference-own-shapes/`）
 
 - **来由**：DAG 外 offered 边（11 条）里 4 条是内容 owner 为了给自己发出的引用与材料写类型，按名字取 runtime-management 的材料意图
@@ -20,7 +42,7 @@
   offered 边 11 → 7，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-562 `b3850ff9a` 的 windows-platform 通过，主 CI（run 45401036761）仍在跑，转 Done 随后续提交。
 
-## 2026-11-24 RFC-562 托管对象发布日志归内容 owner（platform/content），恢复归一参与者改为 system-operations 的 required 端口（In Progress；`design/RFC-562-hosted-publication-journal-platform/`）
+## 2026-11-24 RFC-562 托管对象发布日志归内容 owner（platform/content），恢复归一参与者改为 system-operations 的 required 端口（Done；`design/RFC-562-hosted-publication-journal-platform/`）
 
 - **来由**：DAG 外 offered 边（26 条）里 15 条指向 system-operations——14 个 owner 文件按类型取它 public 里的托管对象发布日志，task-execution 的恢复归一
   实现取它 public 里的参与者合同。日志自称平台中立、只依赖 platform、读写的两张表归 platform/content，DAG 外边账本与表归属账本都写明它该下沉为平台内容
@@ -43,6 +65,7 @@
   候选导出里通过；十种变异都被认出；架构报告 DAG 外 offered 边 26 → 11、public 类型偏差 59 → 56、public 面 −10、目标边 110 → 111，其余不变。实现门 PASS
   （本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-561 `7e5b37e36` 的主 CI（run 45393780218）70 / 70，windows-platform 通过，转 Done。
+- **CI**：主 CI run 45401036761 70 / 70，windows-platform 通过。
 
 ## 2026-11-24 RFC-561 两个跨 context 的聚合读用自己的端口点名来源：系统总览与 Intent 平台清单（Done；`design/RFC-561-aggregate-read-source-ports/`）
 

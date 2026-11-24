@@ -39,6 +39,8 @@ const NEW_FILES: Readonly<
   },
   'modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects': {
     declared: [
+      // RFC-564: the hosted capabilities the diagnostics read, in this module's own shape (file-local).
+      'HostedDiagnosticCapabilities',
       'LocalMcpDiagnosticsEffectInput',
       'HostedInput',
       'reconcileWhenFenceHeld',

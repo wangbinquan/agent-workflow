@@ -6,7 +6,6 @@ import { startInterval } from '@/platform/background/intervalTimer'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { DEFAULT_CONFIG_DIR_PROFILE, verifyStartup } from '@agent-workflow/shared'
-import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
 import { mcpOperationConfigHashOf } from '../../domain/mcpOperationRevision'
 import { ValidationError } from '@/util/errors'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
@@ -23,6 +22,22 @@ import type {
 import type { McpDiagnosticsDependencies } from '../../application/mcps/runtimeDiagnostics'
 import type { McpDiagnosticsEffectDependencies } from '../local/mcpDiagnosticsEffects'
 
+/**
+ * RFC-564: what the hosted diagnostics read from the release's tested capabilities, in this module's own shape. The
+ * selected profile entry travels whole into the runtime target snapshot, whatever else it carries.
+ */
+interface HostedDiagnosticCapabilities {
+  readonly releaseId: string
+  readonly agentProfiles: readonly {
+    readonly agentProfileId: string
+    readonly capabilities: {
+      readonly events: boolean
+      readonly mcp: boolean
+      readonly startupInventoryVersion?: 1
+    }
+  }[]
+}
+
 /** The fields the hosted effects read: the same shape the local composition input hands them (RFC-519). */
 type LocalMcpDiagnosticsEffectInput = McpDiagnosticsEffectDependencies &
   Omit<McpDiagnosticsDependencies, 'effects'>
@@ -38,7 +53,7 @@ export type HostedInput = {
     readonly agentProfileId: string
   }[]
   readonly startupInventoryAvailable?: (id: string) => Promise<boolean>
-  readonly capabilities: () => Promise<HostedRuntimeCapabilities>
+  readonly capabilities: () => Promise<HostedDiagnosticCapabilities>
   readonly locate: (reference: string) => { readonly taskId: string; readonly path: string }
 }
 

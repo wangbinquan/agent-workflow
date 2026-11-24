@@ -102,6 +102,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-491：只供契约用例的本机兼容运行迁入 tests/helpers，它指向 source-control 的一对销账。
   ],
   'off-dag-offered-file-context-pairs': [
+    // RFC-564: Resource Catalog's MCP diagnostics use their own request shapes and Memory's distill port reads the system
+    // agent run vocabulary off Task Execution's run contract — the last three pairs into runtime-management are settled.
     // RFC-563: Source Control and Resource Catalog declare the task agent content references and resource material they
     // issue with their own shapes — their four pairs into runtime-management are settled.
     // RFC-562: the hosted object publication journal moved into platform/content and the restore normalization participant
@@ -110,9 +112,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/development-automation/composition.ts -> integration',
     'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
     // RFC-561: Intent's platform inventory names its two cross-context sources with its own ports; bootstrap binds them.
-    'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts -> runtime-management',
-    'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts -> runtime-management',
-    'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts -> runtime-management',
     'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts -> task-execution',
     // RFC-561: the system overview names its five sources with its own ports; bootstrap binds the owners' queries.
     'packages/backend/src/modules/system-operations/composition.ts -> source-control',

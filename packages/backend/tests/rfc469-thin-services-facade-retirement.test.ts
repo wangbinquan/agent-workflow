@@ -120,7 +120,9 @@ describe('RFC-469 —— 会话 sink 类型经 runtime-management public', () =>
       expect([path, specifiersOf(path).includes(owner)]).toEqual([path, true])
   })
 
-  test('memory 的两个 infrastructure 文件取 memory 自己的端口，端口从 runtime-management 转出三个类型', () => {
+  // RFC-564：memory 的端口不再点名 runtime-management——这三个类型从 task-execution 的系统代理运行合同上取（memory 消费
+  // task-execution 是目标 DAG 上的边），两个 infrastructure 文件照旧只取 memory 自己的端口。
+  test('memory 的两个 infrastructure 文件取 memory 自己的端口，端口从 task-execution 的运行合同上取三个类型', () => {
     for (const path of MEMORY_SINK_CONSUMERS) {
       const specifiers = specifiersOf(path)
       expect([path, specifiers.includes('../application/ports/distillWorkStore')]).toEqual([
@@ -129,8 +131,16 @@ describe('RFC-469 —— 会话 sink 类型经 runtime-management public', () =>
       ])
       expect([path, specifiers.filter((s) => s.includes('runtime-management'))]).toEqual([path, []])
     }
-    expect(read(MEMORY_PORT)).toMatch(
-      /export type \{\s*SessionCaptureIncompleteReason,\s*SessionCaptureTerminalState,\s*SystemAgentEventSinkV1,\s*\} from '@\/modules\/runtime-management\/public\/participants'/,
+    const port = read(MEMORY_PORT)
+    expect(port).not.toMatch(/from '@\/modules\/runtime-management\//)
+    expect(port).toContain(
+      "export type SystemAgentEventSinkV1 = NonNullable<SystemAgentRunRequest['eventSink']>",
+    )
+    expect(port).toContain(
+      "export type SessionCaptureTerminalState = Parameters<SystemAgentEventSinkV1['markTerminal']>[0]",
+    )
+    expect(port).toMatch(
+      /export type SessionCaptureIncompleteReason = NonNullable<\s*Parameters<SystemAgentEventSinkV1\['markTerminal'\]>\[1\]\s*>/,
     )
   })
 })

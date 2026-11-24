@@ -1,8 +1,8 @@
 // RFC-563 — source-control 与 resource-catalog 用自己的形状声明任务代理的内容引用与资源材料（RFC-294 S9 第十八步）。
 //
 // 锁三件事：
-// ① source-control 的生产文件不取 runtime-management；resource-catalog 取它的只剩 MCP 诊断的两处（留给后续）与指定 adapter 按类型取
-//    `composition/required-ports`（判据带负对照）。
+// ① source-control 的生产文件不取 runtime-management；resource-catalog 取它的只剩指定 adapter 按类型取 `composition/required-ports`
+//    （判据带负对照；MCP 诊断的两处由 RFC-564 销账）。
 // ② 形状各归各家：resource-catalog 的端口文件声明内容引用、技能材料与插件材料；source-control 的工作区内容只声明自己读写的两个形状。
 // ③ 编译期断言：这些形状仍能交给 runtime-management 的材料意图与 task-execution 的本机端口（bootstrap 交的就是它们）。
 //
@@ -146,13 +146,12 @@ describe('RFC-563 —— 两个 owner 不按名字取 runtime-management 的材�
     expect(contextEdges('source-control', files)).toEqual([])
   }, 60_000)
 
-  test('resource-catalog 取 runtime-management 的只剩 MCP 诊断的两处与指定 adapter', () => {
+  // RFC-564: the MCP diagnostics settled their two pairs as well — only the designated adapter is left.
+  test('resource-catalog 取 runtime-management 的只剩指定 adapter', () => {
     const files = walk(join(MODULES, 'resource-catalog'))
     expect(files.length).toBeGreaterThanOrEqual(330)
     expect(contextEdges('resource-catalog', files)).toEqual([
       'application/adapters/runtime-management-adapter.ts -> composition/required-ports (type)',
-      'application/ports/mcpDiagnosticExecution.ts -> public/participants (type)',
-      'infrastructure/crewstation/mcpDiagnosticsEffects.ts -> public/types (type)',
     ])
   }, 60_000)
 

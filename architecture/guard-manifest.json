@@ -54,7 +54,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-offered-edge-dag",
-      "lines": 491,
+      "lines": 474,
       "mechanism": "ast",
       "minCorpusFiles": 300,
       "negativeFixture": true,
@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1025
+      "lines": 1024
     },
     {
       "assertsAbsence": true,
@@ -3943,7 +3943,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc519-hosted-implementations-out-of-composition-boundary.test.ts",
       "id": "rfc519-hosted-implementations-out-of-composition-boundary",
-      "lines": 470,
+      "lines": 472,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -4447,9 +4447,21 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc563-content-reference-own-shapes-boundary.test.ts",
       "id": "rfc563-content-reference-own-shapes-boundary",
-      "lines": 222,
+      "lines": 221,
       "mechanism": "ast",
       "minCorpusFiles": 330,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc564-system-agent-run-vocabulary-boundary.test.ts",
+      "id": "rfc564-system-agent-run-vocabulary-boundary",
+      "lines": 270,
+      "mechanism": "ast",
+      "minCorpusFiles": 2300,
       "negativeFixture": true,
       "runner": "bun"
     }

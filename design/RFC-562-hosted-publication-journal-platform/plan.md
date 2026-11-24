@@ -18,7 +18,7 @@
 - [x] AC-1 业务模块取 system-operations 的只剩 task-execution 的指定 adapter；发布日志的合同与实现在 platform/content，旧位置不存在
 - [x] AC-2 行为不变；恢复归一释放遗留发布的闭合操作有用例覆盖
 - [x] AC-3 DAG 外 offered 边 26 → 11、表归属债 120 → 117、public 类型偏差 59 → 56；清单、减速带与目标 DAG / Mermaid 随之更新；新增 RFC-562 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -51,7 +51,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `b3850ff9a`（实现，父提交是 `7e5b37e36`）：exact SHA 主 CI run 45401036761 70 / 70 通过；同一提交触发的 windows-platform（run 45401037131）
+  通过。
 
 ## 实现门（本会话自审，只审功能）
 

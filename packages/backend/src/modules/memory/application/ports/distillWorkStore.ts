@@ -1,4 +1,5 @@
 import type { ClarifyAnswerContent } from '@/modules/collaboration/public/types'
+import type { SystemAgentRunRequest } from '@/modules/task-execution/public/participants'
 import type { TaskWorkgroupConfig } from '@/modules/task-execution/public/types'
 import type {
   Memory,
@@ -8,23 +9,21 @@ import type {
   ResolvedDistillScope,
 } from '@agent-workflow/shared'
 import type { DistillTaskFacts } from '@/modules/memory/domain/distillAdmission'
-import type {
-  RuntimeKind,
-  RuntimeObservationIdentity,
-} from '@/modules/runtime-management/public/types'
-import type {
-  AgentMaterialContentReference,
-  SystemAgentEventSinkV1,
-} from '@/modules/runtime-management/public/participants'
 import type { MemoryDistillJobRecord } from './distillReadStore'
-// RFC-469: the session-event types memory's distill sink implements, re-exported from the one memory port that already
-// takes them from runtime-management, so memory's infrastructure reads them here (it used to go through a `services/`
-// facade; importing runtime-management directly from those files would add off-DAG offered pairs).
-export type {
-  SessionCaptureIncompleteReason,
-  SessionCaptureTerminalState,
-  SystemAgentEventSinkV1,
-} from '@/modules/runtime-management/public/participants'
+
+// RFC-564: the system agent run vocabulary the distillation uses — the protocol, the runtime's observation identity and
+// binding, and the session event sink memory implements — is read off Task Execution's run contract (memory consumes
+// task-execution; it no longer names runtime-management). RFC-469: memory's infrastructure reads the sink types here.
+type DistillRuntimeProtocol = SystemAgentRunRequest['protocol']
+type DistillRuntimeObservationIdentity = NonNullable<
+  SystemAgentRunRequest['runtimeObservationIdentity']
+>
+type DistillRuntimeBinding = NonNullable<SystemAgentRunRequest['runtimeBinding']>
+export type SystemAgentEventSinkV1 = NonNullable<SystemAgentRunRequest['eventSink']>
+export type SessionCaptureTerminalState = Parameters<SystemAgentEventSinkV1['markTerminal']>[0]
+export type SessionCaptureIncompleteReason = NonNullable<
+  Parameters<SystemAgentEventSinkV1['markTerminal']>[1]
+>
 
 export interface MemoryDistillTaskScopeRecord {
   readonly workflowSnapshot: string
@@ -253,11 +252,11 @@ export interface MemoryDistillReviewedArtifactReader {
 }
 
 export interface ResolvedMemoryDistillRuntime {
-  readonly protocol: RuntimeKind
+  readonly protocol: DistillRuntimeProtocol
   readonly binaryPath: string | null
   readonly model: string | null
   readonly isSandbox: boolean
-  readonly observationIdentity?: RuntimeObservationIdentity
+  readonly observationIdentity?: DistillRuntimeObservationIdentity
 }
 
 export interface NativeMemoryDistillRuntimeResolver {
@@ -269,7 +268,7 @@ export interface NativeMemoryDistillRuntimeResolver {
 }
 
 export type SelectedMemoryDistillRuntime = Omit<ResolvedMemoryDistillRuntime, 'binaryPath'> & {
-  readonly runtimeBinding: AgentMaterialContentReference | null
+  readonly runtimeBinding: DistillRuntimeBinding | null
 }
 
 export interface MemoryDistillRuntimeResolver {

@@ -293,20 +293,10 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   },
   // RFC-561：intent 的平台清单聚合（`application/platformInventoryParticipant.ts`）取 development-automation / digital-employee public 的
   // 2 条销账——两个来源改由它自己的端口声明（`application/ports/platformInventorySources.ts`），bootstrap 绑定。
-  {
-    from: 'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts',
-    to: 'runtime-management',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
+  // RFC-564：指向 runtime-management 的最后 3 条销账——resource-catalog 的 MCP 诊断端口与托管诊断改用自己的形状（诊断意图、用量快照、读到的托管
+  // 能力），memory 的蒸馏端口从 task-execution 的系统代理运行合同上取词汇（memory → task-execution 是目标 DAG 上的边）。
   // RFC-563：source-control 与 resource-catalog 取 runtime-management public 的 4 条销账——任务代理的内容引用与资源材料改由它们用自己的形状声明
   // （source-control 的工作区引用、resource-catalog 的技能 / 插件材料与托管插件读取的入参），bootstrap 照旧结构绑定。
-  {
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/mcpDiagnosticsEffects.ts',
-    to: 'runtime-management',
-    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
   {
     from: 'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts',
     to: 'task-execution',
@@ -324,13 +314,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   // RFC-481：task-execution → collaboration 的 8 条（`PreparedHumanGateRef`、`CollaborationRuntimeMechanics`、
   // `TaskDagCollaborationOperations` 与转手的协作上下文）销账——三组端口改由 task-execution 声明、collaboration 实现。
   // RFC-491: `local/nativeTaskAgentRunOptions.ts` (contract tests only) moved to tests/helpers — its memory edge settled.
-
-  {
-    from: 'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts',
-    to: 'runtime-management',
-    why: 'RFC-399 A7 将 resource-catalog/composition/crewstationMcpDiagnostics.ts 的 runtime-management 类型依赖移到 RC 自有的 mcpDiagnosticExecution 端口；复用原 material、event 与 usage 合同，执行值依赖已由 bootstrap 注入，类型边随 public/composition 收敛退役。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)
