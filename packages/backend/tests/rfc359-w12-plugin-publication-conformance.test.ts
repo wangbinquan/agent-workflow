@@ -41,7 +41,7 @@ import {
   plannedGenerationDir,
 } from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
 import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'

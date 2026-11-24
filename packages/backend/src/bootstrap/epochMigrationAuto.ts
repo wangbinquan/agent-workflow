@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { writeSync } from 'node:fs'
 import { loadConfig } from '@/config'
 import { Paths } from '@/util/paths'
-import { appVersion } from '@/util/version'
+import { appVersion } from '@/platform/execution/version'
 import { createMigrationProgressReporter } from '@/platform/persistence/migration/run/progress'
 import {
   autoUpgrade,

@@ -1,4 +1,4 @@
-import { toInputJsonSchema } from '@/util/zodJsonSchema'
+import { toInputJsonSchema } from '@/platform/operations/zodJsonSchema'
 import {
   CreateAgentSchema,
   WorkflowDefinitionSchema,

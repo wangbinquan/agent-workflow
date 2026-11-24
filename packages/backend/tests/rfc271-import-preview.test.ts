@@ -25,7 +25,7 @@ import { stringify } from 'yaml'
 import type { ResourceBundle } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { encodeZip } from '../src/util/zip'
+import { encodeZip } from '../src/platform/content/zip'
 import { parseResourcePackage } from '../src/modules/resource-catalog/application/package/parse'
 import { collectPackageRequirements } from '../src/modules/resource-catalog/application/package/requirements'
 import {

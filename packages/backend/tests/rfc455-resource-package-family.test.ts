@@ -15,7 +15,7 @@ import * as mcpRevision from '@/modules/resource-catalog/domain/mcpOperationRevi
 import * as pluginRevision from '@/modules/resource-catalog/domain/pluginOperationRevision'
 import * as rcQueries from '@/modules/resource-catalog/public/queries'
 import { decodeZip, ZIP_LIMITS } from '@/modules/resource-catalog/domain/zipArchive'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { ValidationError } from '@/util/errors'
 import { zipSync } from 'fflate'
 import { importEdges, sourceUnit } from './architecture/census'

@@ -18,7 +18,7 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { Database } from 'bun:sqlite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { appVersion } from '@/util/version'
+import { appVersion } from '@/platform/execution/version'
 
 export const MANIFEST_FILENAME = 'manifest.json'
 
@@ -65,7 +65,7 @@ export type BackupManifest = BackupManifestV1 | BackupManifestV2
 /** The running binary's identity for the pre-migration gate. Impl-gate P1-3
  *  (2026-07-22): was `env ?? '0.0.0'` with nothing setting the env — every two
  *  binaries compared equal and the gate never fired. Now delegates to
- *  util/version (build-time `--define` from git describe; dev = '0.0.0-dev'). */
+ *  platform/execution/version (build-time `--define` from git describe; dev = '0.0.0-dev'). */
 export function currentAppVersion(): string {
   return appVersion()
 }

@@ -51,7 +51,7 @@ import { composeLocalSystemOperations } from '../src/modules/system-operations/c
 import { composeStandaloneLocalSystemOperationsSelection } from './helpers/systemOperations'
 import { hasPendingRestore } from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
 import { writePidFileForTest } from '../src/util/lock'
-import { appVersion } from '../src/util/version'
+import { appVersion } from '../src/platform/execution/version'
 import { extractTarGz, tarGz } from '../src/util/archive'
 import { restoreSqliteBackupForTest as restoreBackup } from './helpers/sqlitePostRestoreRecovery'
 

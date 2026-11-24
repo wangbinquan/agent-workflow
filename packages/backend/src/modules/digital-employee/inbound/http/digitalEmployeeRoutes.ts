@@ -23,7 +23,7 @@ import { assertEmployeeToolWritable } from '../../application/toolAccess'
 import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-import { jsonDocumentResponse } from '@/util/jsonDocument'
+import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 function parseEmployeeTypeRef(value: string): {
   readonly typeId: string

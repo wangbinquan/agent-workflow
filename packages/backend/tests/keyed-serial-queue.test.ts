@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { KeyedSerialQueue } from '../src/util/keyedSerialQueue'
+import { KeyedSerialQueue } from '../src/platform/contracts/keyedSerialQueue'
 
 describe('KeyedSerialQueue', () => {
   test('same key is FIFO, different keys proceed independently, idle keys are removed', async () => {

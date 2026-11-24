@@ -30,7 +30,7 @@ import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catal
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { buildPackagePreviewFromReadPort } from '@/modules/resource-catalog/application/package/preview'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   composeStandaloneResourcePackageApplyMaintenance,

@@ -55,7 +55,7 @@ import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services
 // RFC-210 G9 / RFC-377: settings and capability policy remain in this service.
 // util/git.ts imports neither config nor this module; callers inject
 // resolveSubmoduleParams into its submodule-aware entry points.
-import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import { KeyedSerialQueue } from '@/platform/contracts/keyedSerialQueue'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import {
   forgetVolatileRepoUrl,

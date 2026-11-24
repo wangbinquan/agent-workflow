@@ -62,7 +62,7 @@ import {
 import type { ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'

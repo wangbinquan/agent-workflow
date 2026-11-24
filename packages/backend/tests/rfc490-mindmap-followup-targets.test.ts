@@ -39,7 +39,7 @@ import { createClarifyFollowupOperations } from '@/modules/collaboration/applica
 import { clarifyFollowupActivity } from '@/modules/collaboration/infrastructure/clarifyFollowupActivity'
 import type { ClarifyFollowupGenerator } from '@/modules/collaboration/application/ports/clarifyFollowup'
 import { ALL_TOOLS } from '@/mcp/tools'
-import { toInputJsonSchema } from '@/util/zodJsonSchema'
+import { toInputJsonSchema } from '@/platform/operations/zodJsonSchema'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const editor = { userId: 'fixture', displayName: 'Reviewer', role: 'owner' as const }

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
-import { toInputJsonSchema } from '@/util/zodJsonSchema'
+import { toInputJsonSchema } from '@/platform/operations/zodJsonSchema'
 import {
   canonicalJson,
   GraphDesignActionRequestSchema,

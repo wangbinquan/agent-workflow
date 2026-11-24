@@ -8,7 +8,7 @@ import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
-import { monotonicNow } from '@/util/time'
+import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import type {
   DigitalEmployeeAgentTemplateFence,
   DigitalEmployeeAgentTemplateRepository,

@@ -13,7 +13,7 @@
 // in `bootstrap/` and handed to the `cli/` handlers here; the deployment-level commands are operations of the selected
 // deployment.
 
-import { appVersion } from './util/version'
+import { appVersion } from './platform/execution/version'
 import { runGitCredentialSubcommand } from './util/gitCredentialLease'
 import { backupCommand } from './cli/backup'
 import { restoreCommand, parseRestoreArguments, RESTORE_USAGE } from './cli/restore'

@@ -11,7 +11,7 @@
 | 变量                                      | 读取点                                                                             | 语义                                                                                 |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                                                        | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
-| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                                                      | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
+| `AGENT_WORKFLOW_VERSION`                  | `backend/src/platform/execution/version.ts`                                                      | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
 | `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/bootstrap/daemonStart.ts`                                             | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
 | `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/bootstrap/daemonStart.ts`                                             | dev 模式下单实例 flock 交接的等待毫秒数                                              |
 | `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/bootstrap/daemonStart.ts`                                             | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
@@ -145,7 +145,7 @@ define 固定为 `false`，所以同名进程变量不会暂停正式服务。
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
 | `AW_E2E_BUILD`                    | `scripts/build-binary.ts` → `backend/src/modules/collaboration/infrastructure/humanGateDecisionE2eBarrier.ts`                  | 构建期 test-only binary 布尔开关                                             |
 | `AW_COMPILED_BUILD`               | `scripts/build-binary.ts` → `backend/src/platform/background/maintenanceWorkerSupervisor.ts`、`backend/src/services/backup.ts` | 构建期 define 注入的布尔常量，用于选择 bundled Worker 入口与编译产物备份实现 |
-| `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`）                                                   | 构建期 define 注入的全局常量                                                 |
+| `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/platform/execution/version.ts`（`declare const`）                                                   | 构建期 define 注入的全局常量                                                 |
 | `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                                                                      | 导出的 TS 常量名（内部 git spawn 的身份 env 集合）                           |
 | `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/platform/execution/local/managedProcessLauncher.ts`                                                               | launcher stderr 失败控制帧前缀（不是环境变量）                               |
 | `AW_MANAGED_PROCESS_LAUNCH_READY` | `backend/src/platform/execution/local/managedProcessLauncher.ts`                                                               | launcher stderr 就绪控制帧前缀（不是环境变量）                               |

@@ -30,7 +30,7 @@ import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { encodeZip } from '../src/util/zip'
+import { encodeZip } from '../src/platform/content/zip'
 import { parseResourcePackage } from '../src/modules/resource-catalog/application/package/parse'
 import {
   signPreviewToken,

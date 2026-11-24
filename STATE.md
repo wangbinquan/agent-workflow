@@ -1,3 +1,22 @@
+## 2026-11-24 RFC-571 `util/` 的八个通用原语归 platform（In Progress；`design/RFC-571-util-primitives-into-platform-1/`）
+
+- **来由**：S9 里不需要裁决就能收的条目已经收完（见下一条），转做 W9-D。legacy 横向目录还剩 123 个文件，`util/` 占 35 个；RFC-294 design §2 与
+  架构报告的归属表给通用原语的去向是 platform。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」
+  （2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进
+  RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：八个没有任何内部依赖的纯原语原样迁入 platform——`semver`、`time`（改名 `monotonicNow`）、`keyedSerialQueue` 进 `contracts`，
+  `jsonDocument` 进 `http`，`zodJsonSchema` 进 `operations`，`frontmatter`、`zip` 进 `content`，`version` 进 `execution`。读者改指（30 个生产文件、
+  31 个用例文件、3 个助手与夹具），旧位置不留转出；架构报告的归属表、入口白名单与几处钉着旧路径的用例、`docs/env-flags.md` 随改；新增 RFC-571
+  用例。
+- **不做**：`util/` 余下的 27 个——`errors` / `hash` / `log` 三个读者上千处的另立；git、凭据、文件信任、Windows ACL 与 OIDC 一族；依赖其他 `util/` 文件
+  或文件系统的随它们的依赖一起迁；`timeoutSignal`、`inFlight`、`sqlChunk` 的读者里有 `auth/oidc/`、身份认证与任务授权的文件，本 RFC 不碰。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 八个原语进 platform 的对应目录；C11 不涉及 public；C12 RFC-571 用例覆盖 `src` / `tests` /
+  `scripts` 的全部说明符与八个新文件；C13 `legacy-horizontal-files` 123 → 115，其余计数不升。
+- **集中验证**（基于 `b872c6ca1`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。没有查出产品缺陷；八个文件迁移前后逐字节相同。tsc 0 错，
+  eslint / promises / prettier 无告警；选出 439 个用例文件，一次全部通过；读已提交源码的 166 个用例文件在候选导出里通过；八种变异都被认出；架构报告
+  60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-569、RFC-570 转 Done 的文档提交 `b872c6ca1` 主 CI run 45480807927 70 / 70 全绿。
+
 ## 2026-11-24 RFC-570 工作组运行选择投影归 task-execution，source-control 的两个完整性检查收具名类型（Done；`design/RFC-570-run-selection-projection-owner-and-typed-completeness-checks/`）
 
 - **来由**：`PUBLIC_SURFACE_DEBT` 的 35 条里有三条不动检测规则就能收：task-execution 的 public 合同带着一个声明在 platform 的业务投影

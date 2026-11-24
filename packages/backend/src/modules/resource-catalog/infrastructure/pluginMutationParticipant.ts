@@ -13,7 +13,7 @@ import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
-import { monotonicNow } from '@/util/time'
+import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import type { PluginMutationParticipant } from '../application/ports/pluginMutation'
 import {
   insertPluginRowInTx,

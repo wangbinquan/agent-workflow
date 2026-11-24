@@ -39,7 +39,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
-import { parseFrontmatter } from '@/util/frontmatter'
+import { parseFrontmatter } from '@/platform/content/frontmatter'
 
 import type {
   SkillVersionContentChange,

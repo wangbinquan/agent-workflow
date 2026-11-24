@@ -20,7 +20,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import { KeyedSerialQueue } from '@/platform/contracts/keyedSerialQueue'
 
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { UploadPlacementPort } from '../application/ports/reconcilerPorts'

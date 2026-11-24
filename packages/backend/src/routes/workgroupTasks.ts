@@ -22,7 +22,7 @@ import type { WorkgroupOperationContext } from '@/modules/resource-catalog/publi
 import type { WorkgroupTaskRoomQueries } from '@/modules/resource-catalog/public/queries'
 import { registerRoute } from '@/routes/registry'
 import { safeJsonOrEmpty } from '@/util/http'
-import { jsonDocumentResponse } from '@/util/jsonDocument'
+import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 /** A room write may re-drive only a parked or interrupted task. */
 export function isWorkgroupKickResumable(status: string | undefined): boolean {

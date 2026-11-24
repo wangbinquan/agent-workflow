@@ -34,7 +34,7 @@ import { createLocalPluginInstaller } from '../../src/modules/resource-catalog/i
 import type { PluginOperationContext } from '../../src/modules/resource-catalog/public/participants'
 import { ResourceOperationCoordinator } from '../../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import { NotFoundError } from '../../src/util/errors'
-import { monotonicNow } from '../../src/util/time'
+import { monotonicNow } from '../../src/platform/contracts/monotonicNow'
 import type { PluginCatalogModule } from '@/modules/resource-catalog/application/catalogModules'
 
 type CreatePluginInput = z.input<typeof CreatePluginSchema>

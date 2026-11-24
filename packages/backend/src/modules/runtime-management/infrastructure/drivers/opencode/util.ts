@@ -4,7 +4,7 @@
 // command directly and does not make semver an admission boundary.
 
 import { createLogger } from '@/util/log'
-import { extractVersion } from '@/util/semver'
+import { extractVersion } from '@/platform/contracts/semver'
 import { recordOpencodeBinaryVersion } from './versionRegistry'
 import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/process'
 // RFC-282 C0 (设计门 P2-7) — the probe-options shape lives on the runtime
@@ -16,7 +16,7 @@ export type { ProbeOpts } from '../types'
 // RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
 // shared with the claude probe); re-exported so existing import sites
 // (opencode-version.test.ts) keep resolving from this module.
-export { compareSemver, extractVersion } from '@/util/semver'
+export { compareSemver, extractVersion } from '@/platform/contracts/semver'
 
 const log = createLogger('opencode')
 /**

@@ -12,7 +12,7 @@ import { parseOr422 } from '../src/modules/development-automation/application/co
 import { parseEmployeeInput } from '../src/modules/digital-employee/application/inputValidation'
 import { bodySchemasFor, KINDS_WITH_BODY_SCHEMAS, querySchemaFor } from '../src/mcp/resourceSchemas'
 import { ALL_TOOLS } from '../src/mcp/tools'
-import { toInputJsonSchema, withInputJsonSchema } from '../src/util/zodJsonSchema'
+import { toInputJsonSchema, withInputJsonSchema } from '../src/platform/operations/zodJsonSchema'
 import { graphOutputInstructions } from '../src/modules/development-automation/application/graph-development/builtinResources'
 import { GraphAssistOutputSchema } from '../src/modules/development-automation/application/graph-development/viewPlanning'
 import zod3SchemaDigests from './fixtures/zod3-json-schema-digests.json'

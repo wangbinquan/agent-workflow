@@ -37,7 +37,7 @@ import {
   type TriggerRule,
 } from '../domain/webhookTriggerMatching'
 import { ValidationError } from '@/util/errors'
-import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import { KeyedSerialQueue } from '@/platform/contracts/keyedSerialQueue'
 import { createLogger } from '@/util/log'
 import {
   CodeHostEventTypeSchema,

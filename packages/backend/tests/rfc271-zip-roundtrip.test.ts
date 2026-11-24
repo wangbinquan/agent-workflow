@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeZip } from '../src/modules/resource-catalog/domain/zipArchive'
-import { encodeZip } from '../src/util/zip'
+import { encodeZip } from '../src/platform/content/zip'
 
 const bytes = (s: string): Uint8Array => new TextEncoder().encode(s)
 const text = (u: Uint8Array): string => new TextDecoder().decode(u)

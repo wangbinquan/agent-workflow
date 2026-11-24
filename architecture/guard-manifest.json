@@ -3427,7 +3427,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc427-entry-root.test.ts",
       "id": "rfc427-entry-root",
-      "lines": 141,
+      "lines": 142,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -4534,6 +4534,18 @@
       "lines": 260,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc571-util-primitives-into-platform-boundary.test.ts",
+      "id": "rfc571-util-primitives-into-platform-boundary",
+      "lines": 225,
+      "mechanism": "ast",
+      "minCorpusFiles": 6000,
       "negativeFixture": true,
       "runner": "bun"
     }

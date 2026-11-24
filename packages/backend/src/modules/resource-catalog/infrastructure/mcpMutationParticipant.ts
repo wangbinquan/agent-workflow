@@ -13,7 +13,7 @@ import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { monotonicNow } from '@/util/time'
+import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import type { McpMutationParticipant } from '../application/ports/mcpMutation'
 import { validateMcpConfigForType } from '../domain/mcps/mcpConfig'
 import {

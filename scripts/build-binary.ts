@@ -433,7 +433,7 @@ async function main(): Promise<void> {
     `system-mock-tool-${platformSuffix()}${executableExtension()}`,
   )
   // RFC-213 impl-gate P1-3: stamp a real binary identity into the executable so
-  // the pre-migration restore gate can tell two releases apart (util/version.ts).
+  // the pre-migration restore gate can tell two releases apart (platform/execution/version.ts).
   // git describe gives the tag on releases and tag-N-gSHA on intermediate builds;
   // outside a git checkout fall back to a non-release marker.
   let buildVersion = '0.0.0-unknown'

@@ -43,7 +43,7 @@ import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-c
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { errorHandler } from '@/util/errors'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'

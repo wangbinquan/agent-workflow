@@ -1,7 +1,7 @@
 import type { Plugin } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { monotonicNow } from '@/util/time'
+import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import { createPluginApplication } from '../application/plugins/pluginApplication'
 import type {
   PluginAccessPort,

@@ -19,7 +19,7 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 
 import type { Hono, MiddlewareHandler } from 'hono'
 import { z } from 'zod'
-import { withInputJsonSchema } from '@/util/zodJsonSchema'
+import { withInputJsonSchema } from '@/platform/operations/zodJsonSchema'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { Actor } from '@/auth/actor'

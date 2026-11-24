@@ -37,7 +37,7 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { decodeZip } from '../src/modules/resource-catalog/domain/zipArchive'
-import { encodeZip } from '../src/util/zip'
+import { encodeZip } from '../src/platform/content/zip'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   MAX_DECLARED_BUILTINS,

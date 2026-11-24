@@ -14,7 +14,7 @@
 
 import { stringify as stringifyYaml } from 'yaml'
 
-import { parseFrontmatter } from '@/util/frontmatter'
+import { parseFrontmatter } from '@/platform/content/frontmatter'
 
 export interface SkillMarkdownDocument {
   readonly name: string

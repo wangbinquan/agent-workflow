@@ -4,7 +4,7 @@
 // `rfc271-overwrite-ownership.test.ts` 的归属边界用例。两边必须用**同一个**包，
 // 否则「覆盖别人的被拒」这类断言可能只是因为两边的包长得不一样。
 
-import { encodeZip } from '../../src/util/zip'
+import { encodeZip } from '../../src/platform/content/zip'
 
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
 

@@ -33,7 +33,7 @@ import {
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { skillFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/skillPersistence'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
-import { parseFrontmatter } from '@/util/frontmatter'
+import { parseFrontmatter } from '@/platform/content/frontmatter'
 import { renderSkillMarkdown } from '../skillMarkdown'
 import { safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'

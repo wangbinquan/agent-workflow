@@ -5,7 +5,7 @@ import { actorOf } from '@/auth/actor'
 import type { TaskCatalogQueries } from '@/modules/task-catalog/public/queries'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
-import { jsonDocumentResponse } from '@/util/jsonDocument'
+import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 // RFC-435: the catalog queries return typed documents; this inbound adapter owns their JSON encoding.
 export function mountTaskCatalogRoutes(

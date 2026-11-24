@@ -13,7 +13,7 @@ import type {
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { sha256Hex } from '@/util/hash'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/infrastructure/local/fileSkillContentBinding'
 import type { SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'

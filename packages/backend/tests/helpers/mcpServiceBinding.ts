@@ -21,7 +21,7 @@ import type { McpOperationContext } from '../../src/modules/resource-catalog/pub
 import type { McpCatalogResource } from '../../src/modules/resource-catalog/public/types'
 import { ResourceOperationCoordinator } from '../../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 import type { McpClosureQuery } from './mcpClosure'
-import { monotonicNow } from '../../src/util/time'
+import { monotonicNow } from '../../src/platform/contracts/monotonicNow'
 
 export interface McpCatalogTestBinding {
   readonly catalog: McpCatalogModule

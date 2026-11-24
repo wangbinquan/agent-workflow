@@ -30,7 +30,7 @@ import {
   assignSlugs,
   serializeClosure,
 } from '../src/modules/resource-catalog/application/package/serialize'
-import { encodeZip } from '../src/util/zip'
+import { encodeZip } from '../src/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
 

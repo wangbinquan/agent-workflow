@@ -59,7 +59,7 @@ import {
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { ValidationError } from '@/util/errors'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'
 

@@ -20,7 +20,7 @@
 // fields whose absence makes every update fail.
 
 import type { ZodType } from 'zod'
-import { toInputJsonSchema } from '@/util/zodJsonSchema'
+import { toInputJsonSchema } from '@/platform/operations/zodJsonSchema'
 import {
   CombinedSaveSkillSchema,
   CreateAgentSchema,

@@ -1,4 +1,4 @@
-// 锁住 `util/zip.ts` 的固定 mtime：任意时区都能导出，且导出字节与时区无关。
+// 锁住 `platform/content/zip.ts`（RFC-571 自 `util/zip.ts` 迁入）的固定 mtime：任意时区都能导出，且导出字节与时区无关。
 //
 // 为什么这条测试存在：`FIXED_MTIME` 曾是 `new Date(Date.UTC(1980, 0, 1))`。fflate 按**本地时间**的
 // 年月日时分秒写 DOS 时间字段，于是在 UTC 以西（例如 America/Los_Angeles）它变成 1979-12-31，fflate
@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
-const ZIP_MODULE = resolve(import.meta.dir, '../src/util/zip.ts')
+const ZIP_MODULE = resolve(import.meta.dir, '../src/platform/content/zip.ts')
 
 const SCRIPT = `
 const { encodeZip } = await import(${JSON.stringify(ZIP_MODULE)})

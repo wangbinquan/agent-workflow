@@ -9,7 +9,7 @@ import type { EventCenterModule } from '../../application/ports/eventCenterModul
 import { registerRoute } from '@/routes/registry'
 import { ConflictError, ForbiddenError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-import { jsonDocumentResponse } from '@/util/jsonDocument'
+import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 const exactRefSchema = z
   .object({ id: z.string().min(1), revision: z.number().int().positive() })

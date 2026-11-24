@@ -62,7 +62,7 @@ import { composePostgresqlResourcePackageProvider } from '@/modules/resource-cat
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider } from './helpers/eachProvider'
 import { dropAbortTrigger, installAbortTrigger } from './helpers/faultTrigger'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'

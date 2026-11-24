@@ -1,4 +1,4 @@
-import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import { KeyedSerialQueue } from '@/platform/contracts/keyedSerialQueue'
 
 // Config writes and probe receipts retain the same process-wide queue across all bindings.
 const runtimeProbeConfigFenceQueue = new KeyedSerialQueue<string>()

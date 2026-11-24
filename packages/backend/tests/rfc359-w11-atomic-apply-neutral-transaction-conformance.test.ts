@@ -48,7 +48,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { signPreviewToken } from '@/modules/resource-catalog/application/package/preview'
-import { encodeZip } from '@/util/zip'
+import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 // ─────────────────────────────────────────────────────────────────────────────

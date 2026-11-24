@@ -6,7 +6,7 @@
 import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '../types'
 // RFC-143 PR-5: shared best-effort semver extraction (display telemetry only).
-import { extractVersion } from '@/util/semver'
+import { extractVersion } from '@/platform/contracts/semver'
 import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/process'
 
 const log = createLogger('claude-code')

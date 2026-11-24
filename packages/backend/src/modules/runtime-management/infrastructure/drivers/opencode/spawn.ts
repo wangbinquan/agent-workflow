@@ -11,7 +11,7 @@
 // (RFC-154: the shared config-dir profile is a cross-package leaf import.)
 
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import { compareSemver, extractVersion } from '@/util/semver'
+import { compareSemver, extractVersion } from '@/platform/contracts/semver'
 import { envNameMatches } from '@agent-workflow/shared'
 
 /** Minimal shape buildCommand needs (a structural subset of RunNodeOptions). */

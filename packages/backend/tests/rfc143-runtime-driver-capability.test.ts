@@ -477,8 +477,9 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     )
   })
 
-  it('semver 单份：extractVersion/compareSemver 只定义在 util/semver.ts（claude probe 曾有逐字拷贝）', () => {
-    const semverSrc = SRC('util/semver.ts')
+  // RFC-571: the helper pair moved from util/semver.ts into platform/contracts.
+  it('semver 单份：extractVersion/compareSemver 只定义在 platform/contracts/semver.ts（claude probe 曾有逐字拷贝）', () => {
+    const semverSrc = SRC('platform/contracts/semver.ts')
     expect(semverSrc).toContain('export function extractVersion')
     expect(semverSrc).toContain('export function compareSemver')
     // 两个 probe 模块不再各自定义（import 使用不受限）。
@@ -492,7 +493,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     }
     // 搬迁后（RFC-282 C3）对既有 import 面保持 re-export（opencode-version.test.ts 锚定行为）。
     expect(SRC('modules/runtime-management/infrastructure/drivers/opencode/util.ts')).toContain(
-      "compareSemver, extractVersion } from '@/util/semver'",
+      "compareSemver, extractVersion } from '@/platform/contracts/semver'",
     )
   })
 

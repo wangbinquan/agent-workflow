@@ -26,7 +26,7 @@ import type {
 } from '../src/modules/identity-access/public/participants'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { errorHandler } from '../src/util/errors'
-import { encodeZip } from '../src/util/zip'
+import { encodeZip } from '../src/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'

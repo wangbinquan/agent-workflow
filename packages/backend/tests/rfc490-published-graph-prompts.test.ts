@@ -18,7 +18,7 @@ import {
   graphOutputInstructions,
 } from '@/modules/development-automation/application/graph-development/builtinResources'
 import { graphToolResultSchema } from '@/modules/development-automation/application/graph-development/toolContracts'
-import { toInputJsonSchema } from '@/util/zodJsonSchema'
+import { toInputJsonSchema } from '@/platform/operations/zodJsonSchema'
 
 const PUBLISHED: Record<string, string> = {
   [GRAPH_BUILTIN_IDS.designer]: '66cf9ae4f1fbd4c95735ff1624ab6ee4e4cc78da9c72652b77fc38caecd5fa76',
