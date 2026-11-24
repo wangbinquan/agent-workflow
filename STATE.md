@@ -1,4 +1,15 @@
-## 2026-11-23 RFC-553 knowledge-evolution 不再取 task-execution 的内部（In Progress；`design/RFC-553-knowledge-evolution-task-initiator-port/`）
+## 2026-11-23 RFC-554 两个小结构门：死的 export-star 门面与 application 里的直接副作用（In Progress；`design/RFC-554-small-structural-gates/`）
+
+- **来由**：RFC-294 design §14 的两个结构门各剩少量条目：`export-star-barrels` 唯一一条是 runtime-management 注册表文件末尾两条通配转出（实测没有
+  任何文件经它们取名字），`application-direct-effect-files` 两条之一是 integration 的仓库端点发现——按内容是代码平台 HTTP 适配器（拼路径与鉴权头、
+  解析响应、全局 `fetch` 回落）。另一条（intent 的维护清理）在 RFC-375 的保留清单上、后继是 RFC-370 收口。用户 2026-11-02「好，你继续推进RFC294，
+  过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的
+  设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：删去两条死的通配转出；仓库端点发现挪进 integration 的 `infrastructure/codeHost/`；两份精确清单与减速带降低；新增 RFC-554 用例。
+- **不做**：intent 的维护清理、部署分支字面量、不可达文件（RFC-375 的保留清单）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。三件套先提交（与 RFC-553 转 Done 同一提交），实现与验证后再提交。
+
+## 2026-11-23 RFC-553 knowledge-evolution 不再取 task-execution 的内部（Done；`design/RFC-553-knowledge-evolution-task-initiator-port/`）
 
 - **来由**：S9 第 5 项（跨 context 内部文件对）。knowledge-evolution 的融合编排从 task-execution 的 domain 取启动人类型、融合路由从它的 inbound
   取启动人投影，是精确清单里的两条，后一条也是全仓唯一的模块分层违规。投影读遗留 `@/auth/actor` 的认证来源，按 RFC-301 只许 inbound 看见。
@@ -16,6 +27,7 @@
   关键词（guard-manifest 的三条对账看不见它）、新用例的语料下限高于实际文件数、`rfc390` 与 `rfc301` 两条源码锁钉着旧形状。tsc 0 错，eslint /
   promises / prettier 无告警；选出 1,162 个用例文件 1,156 个通过（红的就是这四处），改后 24 个相关用例文件复跑通过；读已提交源码的两个用例在
   候选导出里通过；五种变异都被认出；架构报告文件对 17 → 15、分层违规 1 → 0、其余门与计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI**：实现提交主 CI 70 / 70（run 45297851280），windows-platform 通过；落档提交 `fe69bf5e2` 主 CI 70 / 70。
 
 ## 2026-11-23 RFC-552 public/operations 的类型检查豁免收窄到操作描述工厂（Done；`design/RFC-552-public-operations-exemption-narrowing/`）
 

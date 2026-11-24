@@ -15,7 +15,7 @@
 - [x] AC-1 knowledge-evolution 不再 import task-execution 的 domain / inbound；类型经 `public/types`，投影经路由依赖交入
 - [x] AC-2 融合任务的启动人与原先相同
 - [x] AC-3 跨 context 内部文件对 17 → 15、模块分层违规 1 → 0；清单与减速带随之更新；新增 RFC-553 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -40,7 +40,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `f21441af5`（实现，父提交是 `fe69bf5e2`）：exact SHA 主 CI run 45297851280 70 / 70 通过（含全部后端分片与真实 PostgreSQL、三个平台的构建与
+  全部 e2e 分片）；同一提交触发的 windows-platform 通过。
+- 落档提交 `fe69bf5e2`（RFC-552 转 Done、RFC-553 落档，只改文档）：主 CI run 45297720855 70 / 70 通过。
 
 ## 实现门（本会话自审，只审功能）
 
