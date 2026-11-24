@@ -1,3 +1,24 @@
+## 2026-11-23 RFC-558 integration 的 webhook 入站只认自己声明的事件中心窄端口（In Progress；`design/RFC-558-webhook-ingress-event-center-port/`）
+
+- **来由**：integration 的 `composition/webhookIngress.ts` 从事件中心只用三件事（记观察、跑通知、提示代码平台活动源），参数类型却取 event-center
+  composition 交出的整个 `EventCenterModule`——跨 context 内部文件对 7 条中的一条。integration → event-center 是 offered 边，`observe` 的合同与
+  `EventExactRef` 已在 event-center 的 public。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、
+  2026-11-17 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、
+  实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：integration 新增 `application/ports/webhookIngressEventCenter.ts`；入站与重放的两个装配函数改用它；两份精确清单、减速带与 RFC-310 的 OS
+  架构清单随之更新；新增 RFC-558 用例。
+- **不做**：其余 6 条跨 context 内部文件对（code-capability → resource-catalog 两条、integration → task-execution 的源终止能力两条、intent →
+  resource-catalog 两条）。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 端口归 consumer integration 的 application/ports，只取 event-center 的 exact public；C11 public 不变；
+  C12 RFC-558 用例覆盖 integration 全部源码取 event-center 非 public 文件的边、端口与入站装配，事件中心模块满足端口由 `tsc` 检查；C13 跨 context 内部
+  文件对 7 → 6，其余计数不升。
+- **集中验证**（基于 `014a79f85`，详见 plan）：本地无 Docker，只跑 SQLite，PostgreSQL 以 CI 为准。本人缺陷两处已修复并复验（RFC-310 的 OS 架构清单
+  漏改；用例里参数类型的正则只认前缀）。tsc 0 错，eslint / promises / prettier 无告警；选出 155 个用例文件，154 个通过、红的一个即那份清单，修复后通过；
+  读已提交源码的两个用例在候选导出里通过；三种变异都被认出；架构报告文件对 7 → 6，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-554 落档提交 `a4ea67ce9` 主 CI run 45306006668 70 / 70 通过。RFC-555 `2263968b9`（run 45310123056）与 RFC-556 `e11512bb1`（run
+  45312758378）的 `Markdown link check (design/)` 红：`design/RFC-378-mindmap-decision-review/research.md` 里外部 GitHub 链接回 503（两次本 RFC 都不碰
+  该文件），与 RFC-554 实现提交那次同属外部服务 503，等用户对 RFC-371 / RFC-378 链接项的决定；其余 job 通过或仍在跑，转 Done 随下一个 RFC 的提交。
+
 ## 2026-11-23 RFC-557 工作组启动资源面归 resource-catalog，本地删除选择由 bootstrap 装配（In Progress；`design/RFC-557-task-execution-launch-and-deletion-wiring/`）
 
 - **来由**：跨 context 内部文件对 10 条里 task-execution 还剩三条：工作组启动资源面（读工作组行、ACL 判可见、名册检查——全是 resource-catalog 的能力，

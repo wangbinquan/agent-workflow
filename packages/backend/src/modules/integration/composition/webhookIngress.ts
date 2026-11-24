@@ -1,6 +1,6 @@
 import type { CrewStationEventIngress } from './crewstationEvents'
 import type { SecretBox } from '@/auth/secretBox'
-import type { EventCenterModule } from '@/modules/event-center/composition'
+import type { WebhookIngressEventCenter } from '../application/ports/webhookIngressEventCenter'
 import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
@@ -61,7 +61,7 @@ export function composeWebhookIngressTransport(input: {
   /** RFC-527: the deployment's selection, given explicitly; standalone states `null`. */
   readonly crewStationEvents: CrewStationEventIngress | null
   readonly secretBox?: SecretBox
-  readonly digitalEmployeeEventCenter?: EventCenterModule
+  readonly digitalEmployeeEventCenter?: WebhookIngressEventCenter
   readonly webhookDispatcher?: WebhookDispatcher
   readonly webhookTerminalControl?: MrTerminalControl
   /** RFC-437：入站接收的限流器；缺省按两档默认速率新建（用例注入假时钟时传入）。 */
@@ -117,7 +117,7 @@ export function composeWebhookIngressTransport(input: {
  */
 export function composeWebhookDeliveryReplay(input: {
   readonly webhookDeliveryRuntime: WebhookDeliveryRuntime
-  readonly digitalEmployeeEventCenter?: EventCenterModule
+  readonly digitalEmployeeEventCenter?: WebhookIngressEventCenter
   readonly webhookDispatcher?: WebhookDispatcher
   readonly webhookTerminalControl?: MrTerminalControl
 }): WebhookDeliveryReplay | undefined {

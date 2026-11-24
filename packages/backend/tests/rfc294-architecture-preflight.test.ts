@@ -335,7 +335,7 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   // RFC-555: the Mission continuation implements Integration's port in development-automation's designated
   // integration adapter, type-only through `composition/required-ports` (a required-implementation edge).
   'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
-  'packages/backend/src/modules/integration/composition/webhookIngress.ts -> packages/backend/src/modules/event-center/composition.ts',
+  // RFC-558: webhook ingress types the Event Center through its own narrow port (event-center public types only).
   'packages/backend/src/modules/integration/composition/webhookTerminalControl.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
   'packages/backend/src/modules/intent/composition/apply.ts -> packages/backend/src/modules/resource-catalog/composition/intentApply.ts',
   'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
