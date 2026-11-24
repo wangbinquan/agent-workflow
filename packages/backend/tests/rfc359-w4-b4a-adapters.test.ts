@@ -1,5 +1,4 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
-import { createNodeRunQueries } from '@/modules/task-execution/composition'
 // RFC-359 W4-B4 批 a —— identity-access / memory / integration 七对只差客户端类型的适配器合一，两个引擎各跑一遍：
 // owner 身份批量查询、记忆蒸馏读存储、记忆注入读存储、终态工作区归属、webhook 端点管理、webhook 触发器管理、
 // webhook 派发执行运行时装配。
@@ -21,9 +20,10 @@ import { createWebhookDispatchOrchestrationRuntime } from '@/modules/integration
 import { createWebhookEndpointAdministration } from '@/modules/integration/infrastructure/webhookEndpointAdministration'
 import { createWebhookTriggerAdministration } from '@/modules/integration/infrastructure/webhookTriggerAdministration'
 import { DrizzleMemoryDistillReadStore } from '@/modules/memory/infrastructure/memoryDistillReadStore'
-import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -270,7 +270,7 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       injectedMemories: '[]',
     })
 
-    const injection = new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db))
+    const injection = memoryInjectionReadStoreFor(db)
     expect(await injection.findTaskContext(taskId)).toEqual({
       workflowId: expect.any(String),
       cachedRepoId: null,
@@ -298,7 +298,9 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       { seq: insertedRun!.seq, id: runId, status: 'done', injectedMemoriesJson: '[]' },
     ])
 
-    const attribution = createWebhookTerminalWorkspaceAttributionQueries(db)
+    const attribution = createWebhookTerminalWorkspaceAttributionQueries(
+      createTaskTriggerQueries(db),
+    )
     expect(await attribution.load(taskId)).toEqual({
       webhookTriggerId: null,
       eventSubscriptionId: null,

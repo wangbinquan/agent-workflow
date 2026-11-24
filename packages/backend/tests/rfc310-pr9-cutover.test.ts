@@ -55,6 +55,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const NOW = 1_755_500_000_000
 const ROUNDS_TOKEN = 'b'.repeat(64)
@@ -268,7 +269,12 @@ describeEachProviderHttpApplication(
           repoPath: event.repoPath,
         })
         const dispatcher = createWebhookDispatcher({
-          ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+          ...composeWebhookDispatchCore(
+            db,
+            box,
+            scheduledTaskRuntime(db).operations,
+            createTaskTriggerQueries(db),
+          ),
           ...integrationTriggerWebhookAuthorityDependencies(
             db,
             createIdentityAccessRuntime({ db }),

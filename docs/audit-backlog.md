@@ -5691,6 +5691,16 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 语句数、行数、最大参数仍是 4 / 52 / 50；同片其余 PostgreSQL 用例（如事件归档器 P95 1.13ms）正常。
 - 父提交 `c640d1132` 的同一分片通过（主 CI run 45323075393 70 / 70）；该提交只改文档，不可能改变查询计划。未重跑。
 
+2026-11-24 再次复现（仍未处置）：运行 45410978530（`4f1dcae66`，RFC-564）后端第 16/44 片（job 138504346782），同一条「过滤视图（G1 快路径）」
+[postgresql] 由 AC-11 塌方探测报红：PostgreSQL 的 P95 5813.61ms（SQLite 55.25ms，105.2 倍），整条用例 62.8 秒。
+
+- 语句数、行数、最大参数仍是 4 / 52 / 50；同片紧邻的 PostgreSQL 用例（`/api/overview` 计数面板 P95 3.50ms）正常。
+- 父提交 `b2a26ea9b` 的同一分片通过（主 CI run 45405881445 70 / 70）；该提交只改 resource-catalog 与 memory 三个端口文件里类型的出处，
+  没有一行可执行代码变化，不涉及任务目录查询。未重跑。
+- 连同第九条下「后端腿」三条补记（2026-11-02 的 RFC-401 A1、11-04 的 RFC-441、11-05 的 RFC-447），AC-11 塌方探测以同一形态报红已有六次
+  （2026-11-02 两次、11-04、11-05、11-23、11-24）：都在第 16/44 片的这一条用例上，PostgreSQL 的 P95 在 5.8～10.5 秒之间，记有整条用时的五次都
+  在 60 秒以上。
+
 ## Windows：单个 node.exe 启动偶发停顿 10 秒以上（2026-10-29，测试预算已与产品默认对齐，停顿原因未查明）
 
 - windows-platform 运行 40976735449（`c6a0248ad`）：`rfc310-event-center.test.ts` 的真实自定义观察器在第一次 validate 超时。结算记录显示 node.exe 已创建（pid 7104），10.6 秒内 stdout、stderr 都没有输出，连脚本第一条语句写的 stderr 标记也没有；同一 job 其余用例的耗时正常。10 月 11 日、13 日的 Windows 运行出现过同样的 `timeout/1`（见 `design/RFC-370-crewstation-hosted-deployment/ci-custom-observer-native-timeout-diagnostics.md`）。

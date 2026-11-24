@@ -5,7 +5,7 @@ import {
 } from '@/modules/task-execution/composition'
 import { beforeEach, expect, test } from 'bun:test'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { listNodeEventContents } from '@/modules/task-execution/public/queries'
+import { listNodeEventContents } from '@/modules/task-execution/infrastructure/nodeEventQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   taskFixture,

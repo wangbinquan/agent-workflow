@@ -50,6 +50,7 @@ import { createInMemoryDb } from '../src/db/client'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 function createMemoryDistillTestContext(db: PersistenceDb, root = appHome()) {
   return {
@@ -58,6 +59,7 @@ function createMemoryDistillTestContext(db: PersistenceDb, root = appHome()) {
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
     ),
     nodeRunPrompts: composeNodeRunPromptOperations(
       createFileNodeRunPromptContent(join(root, 'runs')),

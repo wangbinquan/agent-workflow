@@ -32,6 +32,7 @@ import { composeMrTerminalControl } from '@/modules/integration/composition/webh
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
+import { createTaskTriggerQueries } from '@/modules/task-execution/composition'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
@@ -117,10 +118,14 @@ export function composeDaemonIntegrationModules(input: {
         terminalWorkspacePrune: input.terminalWorkspacePrune,
       }),
     })
+  // RFC-565: Task Execution's trigger read, built once on the root db for the dispatch persistence and the delivery read
+  // model (they used to build it from their own handle on every call).
+  const taskTriggers = createTaskTriggerQueries(input.db)
   const dispatchCore = composeWebhookDispatchCore(
     input.db,
     input.secretBox,
     input.scheduledTaskRuntime.operations,
+    taskTriggers,
   )
   const webhookDeliveryPersistence = dispatchCore.deliveryPersistence
   const webhookDispatcher =
@@ -205,7 +210,7 @@ export function composeDaemonIntegrationModules(input: {
       },
     }),
   )
-  const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
+  const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db, taskTriggers)
   return Object.freeze({
     webhookTerminalControl,
     webhookDispatcher,
@@ -216,6 +221,7 @@ export function composeDaemonIntegrationModules(input: {
     webhookTriggerService: composeWebhookTriggerServiceDependenciesFor(
       input.db,
       createWebhookTriggerValidation(input.scheduledTaskRuntime.operations, input.configuration),
+      taskTriggers,
     ),
     eventAutomationWorkIntents,
     eventAutomationContexts,

@@ -49,7 +49,6 @@ import {
   countPendingReviews,
   getReviewDetail,
 } from '@/modules/collaboration/infrastructure/review'
-import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import { injectMemoryForRun } from '@/modules/memory/application/injection/injectMemory'
 import { resourceScopeAccessReads } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/resourceScopeAuthorization'
@@ -75,6 +74,8 @@ import {
 } from './helpers/model/taskSubject'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { createWorkflow } from './helpers/model/resourceWrites'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 const hosts = TASK_DEFINITION_HOSTS
 const cases: readonly StoredTaskSubject[] = [
@@ -467,7 +468,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
           resourceScopeAccessReads.scopeRow(tx, { kind: 'workflow', id: scopeId }),
         ),
       ).toEqual({ ownerUserId: null, visibility: 'public' })
-      const store = new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db))
+      const store = memoryInjectionReadStoreFor(db)
       expect(await store.findTaskContext(task.id!)).toMatchObject({ workflowId: scopeId })
       expect(
         await new DrizzleMemoryDistillWorkStore(
@@ -475,6 +476,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
           createClarifyAnswerQueries(db, taskExecutionParticipants),
           createNodeRunQueries(db),
           createNodeOutputQueries(db),
+          taskKnowledgeQueriesFor(db),
         ).findTaskScope(task.id!),
       ).toMatchObject({
         workflowId: scopeId,

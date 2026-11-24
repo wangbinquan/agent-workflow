@@ -84,6 +84,7 @@ import {
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const BINDING = 'gitlab:group/proj!42'
 const DELIVERY = 'dlv-rfc359-w8'
@@ -111,7 +112,7 @@ function participantFor(harness: ProviderHarness): TaskSourceTerminationParticip
 function registerProductionPrunePolicy(db: PersistenceDb): void {
   usePrunePolicy(
     createWebhookTerminalWorkspacePrunePolicy({
-      attribution: createWebhookTerminalWorkspaceAttributionQueries(db),
+      attribution: createWebhookTerminalWorkspaceAttributionQueries(createTaskTriggerQueries(db)),
       enabled: () => true,
     }),
   )

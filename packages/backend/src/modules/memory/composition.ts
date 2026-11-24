@@ -28,8 +28,15 @@ import {
 // RFC-534: the distill policy is a required input of the composition below (no process-level registration).
 export type { MemoryDistillPolicySource } from './application/distill/schedule'
 import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillReadStore'
-import { DrizzleMemoryDistillWorkStore } from './infrastructure/memoryDistillWorkStore'
-import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'
+import {
+  DrizzleMemoryDistillWorkStore,
+  type MemoryDistillTaskKnowledge,
+} from './infrastructure/memoryDistillWorkStore'
+import {
+  DrizzleMemoryInjectionReadStore,
+  type MemoryInjectionTaskKnowledge,
+  type RepositoryIdentityReads,
+} from './infrastructure/memoryInjectionReadStore'
 import {
   composeMemoryCatalogOperations,
   type MemoryCatalogTestHooks,
@@ -116,11 +123,19 @@ function composeMemoryInjectionQueries(store: MemoryInjectionReadStore): MemoryI
   })
 }
 
+/**
+ * RFC-565: besides the node-run reads (RFC-485), bootstrap hands over Task Execution's knowledge read and Source Control's
+ * repository identity read, each built on the same root db.
+ */
 export function composeMemoryInjectionQueriesFor(
   db: PersistenceDb,
   taskNodeRuns: TaskNodeRunReads,
+  taskKnowledge: MemoryInjectionTaskKnowledge,
+  repositories: RepositoryIdentityReads,
 ): MemoryInjectionQueries {
-  return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db, taskNodeRuns))
+  return composeMemoryInjectionQueries(
+    new DrizzleMemoryInjectionReadStore(db, taskNodeRuns, taskKnowledge, repositories),
+  )
 }
 export {}
 
@@ -136,6 +151,8 @@ export interface ComposeMemoryOperationsOptions {
   /** RFC-485: Task Execution's node-run and node-output reads (bootstrap builds them on the root db). */
   readonly taskNodeRuns: TaskNodeRunReads
   readonly taskNodeOutputs: TaskNodeOutputReads
+  /** RFC-565: Task Execution's knowledge read for the distillation (bootstrap builds it on the root db). */
+  readonly taskKnowledge: MemoryDistillTaskKnowledge
   readonly db: PersistenceDb
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly nodeRunPrompts: NodeRunPromptReader
@@ -176,6 +193,7 @@ export function composeMemoryOperationsFor(
       input.clarifyAnswers,
       input.taskNodeRuns,
       input.taskNodeOutputs,
+      input.taskKnowledge,
     ),
     runtimeResolver: {
       async resolve(request) {

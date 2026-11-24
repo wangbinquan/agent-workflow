@@ -133,10 +133,9 @@ export type {
   AgentWorkspaceGitControlSnapshot,
   AgentWorkspaceGitControlObservation,
 } from '../application/ports/agentWorkspaceGitControl'
-export {
-  readHostedWorkspaceOwnerForBusinessTask,
-  hostedWorkspaceOwnerFromReference,
-} from '../infrastructure/crewstation/workspaceOwnership'
+// RFC-565: `readHostedWorkspaceOwnerForBusinessTask` left the public (it takes a database handle); bootstrap hands Task
+// Execution's hosted recovery selection the bound read from source-control's composition.
+export { hostedWorkspaceOwnerFromReference } from '../infrastructure/crewstation/workspaceOwnership'
 /**
  * RFC-370 §9.2 V3 — volume-use facts Source Control's hosted parent lifecycle
  * needs but does not own. Implemented by task-execution and injected by the

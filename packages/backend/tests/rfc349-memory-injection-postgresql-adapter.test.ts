@@ -1,7 +1,5 @@
-import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import { expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
@@ -10,6 +8,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workflowFixture, taskFixture, taskRepoFixture, nodeRunFixture } from './helpers/model'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
 
 const primaryAgent = { id: 'agent-1' } as Agent
 
@@ -71,7 +70,7 @@ describeEachProvider('RFC-349 runtime memory injection', (h) => {
       })
     const recording = h.recordStatements()
     const fake = {
-      store: new DrizzleMemoryInjectionReadStore(h.db, createNodeRunQueries(h.db)),
+      store: memoryInjectionReadStoreFor(h.db),
       executions: recording.statements,
     }
 
@@ -123,7 +122,7 @@ describeEachProvider('RFC-349 runtime memory injection', (h) => {
       status: 'running',
       retryIndex: 1,
     })
-    const fake = { store: new DrizzleMemoryInjectionReadStore(h.db, createNodeRunQueries(h.db)) }
+    const fake = { store: memoryInjectionReadStoreFor(h.db) }
 
     await expect(
       loadInjectedSnapshotFromFirstAttempt(fake.store, {

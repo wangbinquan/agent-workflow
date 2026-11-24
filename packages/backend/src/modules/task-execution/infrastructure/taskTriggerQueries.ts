@@ -4,9 +4,11 @@ import { eq, inArray } from 'drizzle-orm'
 import type { TaskTriggerQueries } from '../application/ports/taskTriggerQueries'
 import { taskReadColumns } from './taskRepositorySql'
 
-/** Webhook 消费的启动归属、状态与工作区投影。 */
+/**
+ * Webhook 消费的启动归属、状态与工作区投影。RFC-565：bootstrap 在装配期就建好这份读交给 integration，所以这里只在方法运行时才按句柄
+ * 取表——构造不碰句柄（此前消费方每次调用现造一份，取表本来也发生在调用时）。
+ */
 export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries {
-  const { tasks, taskLaunchContexts: launch } = tablesOf(db)
   return {
     async frozenContext(taskId) {
       const { tasks } = tablesOf(db)
@@ -19,6 +21,7 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
       )[0]?.triggerContextJson
     },
     async workspaceAttribution(taskId: string) {
+      const { tasks } = tablesOf(db)
       return (
         (
           await db
@@ -33,6 +36,7 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
       )
     },
     async findByOrigin(input: { readonly fireId: string; readonly eventDeliveryId?: string }) {
+      const { tasks, taskLaunchContexts: launch } = tablesOf(db)
       return (
         (
           await db
@@ -60,6 +64,7 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
       )
     },
     async status(taskId: string) {
+      const { tasks } = tablesOf(db)
       return (
         (
           await db
@@ -72,6 +77,7 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
     },
     async terminalWorkspaces(taskIds: readonly string[]) {
       if (taskIds.length === 0) return []
+      const { tasks } = tablesOf(db)
       return db
         .select({
           id: tasks.id,

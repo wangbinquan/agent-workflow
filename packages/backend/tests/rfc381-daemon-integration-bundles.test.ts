@@ -24,6 +24,7 @@ import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const homes: string[] = []
 function home() {
@@ -348,7 +349,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
     const graph = integrationBundleFixture(harness.db, home(), {
       workspaceMaintenance,
       terminalWorkspacePrune: composeWebhookTerminalWorkspacePrunePolicy({
-        db: harness.db,
+        taskTriggers: createTaskTriggerQueries(harness.db),
         enabled: () => true,
       }),
     })

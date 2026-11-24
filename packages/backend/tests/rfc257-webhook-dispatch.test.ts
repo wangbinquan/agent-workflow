@@ -34,6 +34,7 @@ import {
   type WebhookDispatchDeps,
 } from '../src/modules/integration/application/webhookDispatch'
 import type { WebhookEndpointRow } from '../src/modules/integration/application/ports/webhookDispatcher'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
 
@@ -117,7 +118,12 @@ async function harness(): Promise<Harness> {
   const canceled: string[] = []
   const launchError: Harness['launchError'] = { current: null }
   const deps: WebhookDispatchDeps = {
-    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(
+      db,
+      box,
+      scheduledTaskRuntime(db).operations,
+      createTaskTriggerQueries(db),
+    ),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     getDefaultRuntime: async () => null,
     launch: async (actor, rendered, invoker) => {

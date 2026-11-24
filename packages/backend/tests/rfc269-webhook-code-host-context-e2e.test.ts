@@ -53,6 +53,7 @@ import { Paths } from '../src/util/paths'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createWorkflow } from './helpers/model/resourceWrites'
 import { applyIntentChangeset } from './helpers/intentApply'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const TOKEN = 'aw-rfc269-local-fixture-token' // gitleaks:allow
 const INTENT_RUNTIME = 'rfc292-intent-opencode'
@@ -257,7 +258,12 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       }),
     })
     const dispatcher = createWebhookDispatcher({
-      ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...composeWebhookDispatchCore(
+        db,
+        box,
+        scheduledTaskRuntime(db).operations,
+        createTaskTriggerQueries(db),
+      ),
       ...createWebhookDispatchOrchestrationRuntime({
         taskExecutions: createSqliteWebhookTaskExecutionParticipant({
           db,
@@ -462,7 +468,12 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     )
     const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
     const dispatcher = createWebhookDispatcher({
-      ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...composeWebhookDispatchCore(
+        db,
+        box,
+        scheduledTaskRuntime(db).operations,
+        createTaskTriggerQueries(db),
+      ),
       ...createWebhookDispatchOrchestrationRuntime({
         taskExecutions: createSqliteWebhookTaskExecutionParticipant({
           db,

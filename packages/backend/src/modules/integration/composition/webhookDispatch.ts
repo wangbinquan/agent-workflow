@@ -1,4 +1,5 @@
 import type { SecretBox } from '@/auth/secretBox'
+import type { TaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDispatchDeps } from '../application/webhookDispatch'
 import type { WebhookTriggerServiceDeps } from '../application/webhookTriggers'
@@ -22,6 +23,9 @@ export {
   createWebhookDispatchOrchestrationRuntime,
 } from '../infrastructure/webhookDispatchRuntime'
 
+/** RFC-565: the two trigger reads the dispatch persistence takes from Task Execution (bootstrap builds them on the root db). */
+export type WebhookDispatchTaskTriggers = Pick<TaskTriggerQueries, 'findByOrigin' | 'status'>
+
 export function composeWebhookDispatchPersistence(
   persistence: WebhookDispatchPersistencePort,
 ): WebhookDispatchPersistencePort {
@@ -35,8 +39,9 @@ export function composeWebhookDispatchPersistence(
  */
 export function composeWebhookDispatchPersistenceFor(
   db: PersistenceDb,
+  taskTriggers: WebhookDispatchTaskTriggers,
 ): WebhookDispatchPersistencePort {
-  return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
+  return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db, taskTriggers))
 }
 
 export function composeWebhookTriggerServiceDependencies(
@@ -59,10 +64,11 @@ export function composeWebhookTriggerServiceDependencies(
 export function composeWebhookTriggerServiceDependenciesFor(
   db: PersistenceDb,
   validateSaveable: WebhookTriggerServiceDeps['validateSaveable'],
+  taskTriggers: WebhookDispatchTaskTriggers,
 ): WebhookTriggerServiceDeps {
   return composeWebhookTriggerServiceDependencies({
     administration: createWebhookTriggerAdministration(db),
-    dispatchPersistence: createWebhookDispatchPersistence(db),
+    dispatchPersistence: createWebhookDispatchPersistence(db, taskTriggers),
     validateSaveable,
   })
 }
@@ -79,12 +85,13 @@ export function composeWebhookDispatchCore(
   db: PersistenceDb,
   secretBox: SecretBox,
   scheduledTasks: ScheduledTaskOperations,
+  taskTriggers: WebhookDispatchTaskTriggers,
 ): Pick<
   WebhookDispatchDeps,
   'persistence' | 'deliveryPersistence' | 'resolveRepo' | 'admitLaunch'
 > {
   return {
-    persistence: createWebhookDispatchPersistence(db),
+    persistence: createWebhookDispatchPersistence(db, taskTriggers),
     deliveryPersistence: createWebhookDeliveryPersistence(db),
     resolveRepo: createWebhookRepositoryResolver(db, secretBox),
     admitLaunch: createWebhookLaunchAdmission(scheduledTasks),

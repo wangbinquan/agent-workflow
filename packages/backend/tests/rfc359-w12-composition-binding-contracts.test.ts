@@ -36,6 +36,8 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 
 const roots: string[] = []
 afterEach(() => {
@@ -87,8 +89,14 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
       db: harness.db,
       clarifyAnswers: createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
       taskNodeRuns,
-      injectionQueries: composeMemoryInjectionQueriesFor(harness.db, taskNodeRuns),
+      injectionQueries: composeMemoryInjectionQueriesFor(
+        harness.db,
+        taskNodeRuns,
+        taskKnowledgeQueriesFor(harness.db),
+        createRepositoryIdentityQueries(harness.db),
+      ),
       taskNodeOutputs: createNodeOutputQueries(harness.db),
+      taskKnowledge: taskKnowledgeQueriesFor(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),
@@ -129,8 +137,14 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
       db: harness.db,
       clarifyAnswers: createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
       taskNodeRuns,
-      injectionQueries: composeMemoryInjectionQueriesFor(harness.db, taskNodeRuns),
+      injectionQueries: composeMemoryInjectionQueriesFor(
+        harness.db,
+        taskNodeRuns,
+        taskKnowledgeQueriesFor(harness.db),
+        createRepositoryIdentityQueries(harness.db),
+      ),
       taskNodeOutputs: createNodeOutputQueries(harness.db),
+      taskKnowledge: taskKnowledgeQueriesFor(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),

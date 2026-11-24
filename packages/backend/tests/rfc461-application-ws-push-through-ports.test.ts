@@ -28,6 +28,7 @@ import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/m
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
 import { importEdges, sourceUnit } from './architecture/census'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -139,6 +140,7 @@ describe('RFC-461 —— memory 工作存储的 events 发到原来的频道', (
       {} as ClarifyAnswerQueries,
       {} as TaskNodeRunReads,
       {} as TaskNodeOutputReads,
+      taskKnowledgeQueriesFor({} as PersistenceDb),
       () => {
         throw new Error('the session sink is not used here')
       },

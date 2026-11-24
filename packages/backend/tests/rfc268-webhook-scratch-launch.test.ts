@@ -37,6 +37,7 @@ import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopo
 import { createUser } from './helpers/userFixture'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const RUNTIME = 'rfc268-opencode'
 
@@ -209,7 +210,12 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     )
     const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
     const dispatcher = createWebhookDispatcher({
-      ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...composeWebhookDispatchCore(
+        db,
+        box,
+        scheduledTaskRuntime(db).operations,
+        createTaskTriggerQueries(db),
+      ),
       ...createWebhookDispatchOrchestrationRuntime({
         taskExecutions: createSqliteWebhookTaskExecutionParticipant({
           db,

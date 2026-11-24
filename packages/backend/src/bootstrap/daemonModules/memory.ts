@@ -3,7 +3,12 @@ import {
   createNodeOutputQueries,
   createNodeRunQueries,
   createTaskGateQueries,
+  createTaskKnowledgeQueries,
 } from '@/modules/task-execution/composition'
+import {
+  createRepositoryIdentityQueries,
+  repositoryExistsExpression,
+} from '@/modules/source-control/composition'
 import type {
   ComposeMemoryOperationsOptions,
   MemoryCatalogBinding,
@@ -18,7 +23,12 @@ import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalo
 export function composeDaemonMemoryModules(
   input: Omit<
     ComposeMemoryOperationsOptions,
-    'injectionQueries' | 'catalogBinding' | 'clarifyAnswers' | 'taskNodeRuns' | 'taskNodeOutputs'
+    | 'injectionQueries'
+    | 'catalogBinding'
+    | 'clarifyAnswers'
+    | 'taskNodeRuns'
+    | 'taskNodeOutputs'
+    | 'taskKnowledge'
   > & {
     readonly contexts: MemoryCatalogBinding['contexts']
   },
@@ -27,7 +37,15 @@ export function composeDaemonMemoryModules(
   // transactions only); collaboration's clarify answer queries take just the node-run and task-gate query factories.
   const taskNodeRuns = createNodeRunQueries(input.db)
   const taskNodeOutputs = createNodeOutputQueries(input.db)
-  const memoryInjectionQueries = composeMemoryInjectionQueriesFor(input.db, taskNodeRuns)
+  // RFC-565: Task Execution's knowledge read (its distillation scope composes Source Control's repository existence
+  // fragment into the one task row read) and Source Control's repository identity read, built on the same root db.
+  const taskKnowledge = createTaskKnowledgeQueries(input.db, repositoryExistsExpression)
+  const memoryInjectionQueries = composeMemoryInjectionQueriesFor(
+    input.db,
+    taskNodeRuns,
+    taskKnowledge,
+    createRepositoryIdentityQueries(input.db),
+  )
   const memoryOperations = composeMemoryOperationsFor({
     ...input,
     injectionQueries: memoryInjectionQueries,
@@ -37,6 +55,7 @@ export function composeDaemonMemoryModules(
     }),
     taskNodeRuns,
     taskNodeOutputs,
+    taskKnowledge,
     catalogBinding: {
       contexts: input.contexts,
       authorization: composeResourceScopeAccessParticipant(),

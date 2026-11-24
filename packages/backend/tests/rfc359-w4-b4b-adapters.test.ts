@@ -22,6 +22,7 @@ import { createWebhookDeliveryQueries } from '@/modules/integration/infrastructu
 import { createWebhookDispatchPersistence } from '@/modules/integration/infrastructure/webhookDispatchPersistence'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -148,7 +149,7 @@ describeEachProvider('RFC-359 W4-B4b —— 事件响应目录与派发持久化
     expect(await directory.has(enabled)).toBe(true)
     expect(await directory.has('missing')).toBe(false)
 
-    const dispatch = createWebhookDispatchPersistence(db)
+    const dispatch = createWebhookDispatchPersistence(db, createTaskTriggerQueries(db))
     expect(await dispatch.triggerEnabled(enabled)).toBe(true)
     expect(await dispatch.triggerEnabled(paused)).toBe(false)
     expect(await dispatch.triggerEnabled('missing')).toBeNull()
@@ -284,7 +285,7 @@ describeEachProvider('RFC-359 W4-B4b —— 投递审计读模型', (harness) =>
     ] as const) {
       await seedDelivery(db, endpointId, { repoPath, receivedAt, eventType: 'push' })
     }
-    const queries = createWebhookDeliveryQueries(db)
+    const queries = createWebhookDeliveryQueries(db, createTaskTriggerQueries(db))
     const page = await queries.page({ endpointId, page: 1, limit: 2 })
     expect(typeof page.total).toBe('number')
     expect(page).toMatchObject({ total: 4, page: 1, pageCount: 2 })

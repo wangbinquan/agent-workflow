@@ -177,12 +177,14 @@ describe('RFC-483 —— task-execution 的 public 撤出三个 SQL 条件片段
     const exported = publicFiles.flatMap((path) =>
       exportedNames(path, read(path)).map((name) => ({ path, name })),
     )
-    // 正对照：判据认得出留在 public 的另一个片段（integration 那一对的债，S9 后续）与 task gate 的上下文类型。
-    for (const name of ['nonTerminalTaskExists', 'TaskGateContext', 'TaskGateQueries'])
+    // 正对照：判据认得出留在 public 的 task gate 上下文类型。（当时留在 public 的另一个片段 `nonTerminalTaskExists` 由 RFC-565
+    // 撤出，改由 bootstrap 从装配根取、交给 integration 的保留清理。）
+    for (const name of ['TaskGateContext', 'TaskGateQueries'])
       expect(
         exported.some((entry) => entry.name === name),
         name,
       ).toBe(true)
+    expect(exported.filter(({ name }) => name === 'nonTerminalTaskExists')).toEqual([])
     expect(exported.filter(({ name }) => (CONDITIONS as readonly string[]).includes(name))).toEqual(
       [],
     )

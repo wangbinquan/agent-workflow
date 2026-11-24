@@ -15,6 +15,7 @@ import {
   type WebhookRateLimiters,
 } from '../application/webhookRateLimiter'
 import { createVerifiedWebhookIngress } from '../application/verifiedWebhookIngress'
+import type { TaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDeliveryRuntime } from '../application/ports/webhookDeliveryRuntime'
 import type { WebhookIngressPersistence } from '../application/ports/webhookIngressPersistence'
@@ -42,11 +43,15 @@ export function composeWebhookIngressPersistenceFor(db: PersistenceDb): WebhookI
   })
 }
 
-export function composeWebhookDeliveryRuntimeFor(db: PersistenceDb): WebhookDeliveryRuntime {
+/** RFC-565: the delivery read model takes Task Execution's trigger read (bootstrap builds it on the same root db). */
+export function composeWebhookDeliveryRuntimeFor(
+  db: PersistenceDb,
+  taskTriggers: Pick<TaskTriggerQueries, 'terminalWorkspaces'>,
+): WebhookDeliveryRuntime {
   const ingress = composeWebhookIngressPersistenceFor(db)
   return Object.freeze({
     ...ingress,
-    queries: createWebhookDeliveryQueries(db),
+    queries: createWebhookDeliveryQueries(db, taskTriggers),
   })
 }
 

@@ -109,6 +109,7 @@ import { createWebhookDispatcher } from '@/modules/integration/application/webho
 import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 setDefaultTimeout(180_000)
 
@@ -345,7 +346,12 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           launchWork: (request) => digitalEmployeeWorkStart.launch(request),
         })
         const webhookDispatcher = createWebhookDispatcher({
-          ...composeWebhookDispatchCore(db, webhookSecretBox, scheduledTaskRuntime(db).operations),
+          ...composeWebhookDispatchCore(
+            db,
+            webhookSecretBox,
+            scheduledTaskRuntime(db).operations,
+            createTaskTriggerQueries(db),
+          ),
           ...createWebhookDispatchExecutionRuntime({
             taskExecutions: {
               launch: async () => {

@@ -75,12 +75,20 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 
 function composeCapabilities(db: PersistenceDb, appHome: string) {
   const memory = composeMemoryOperationsFor({
-    injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
+    injectionQueries: composeMemoryInjectionQueriesFor(
+      db,
+      createNodeRunQueries(db),
+      taskKnowledgeQueriesFor(db),
+      createRepositoryIdentityQueries(db),
+    ),
     taskNodeRuns: createNodeRunQueries(db),
     taskNodeOutputs: createNodeOutputQueries(db),
+    taskKnowledge: taskKnowledgeQueriesFor(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),

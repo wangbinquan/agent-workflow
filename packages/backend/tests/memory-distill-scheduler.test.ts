@@ -65,6 +65,7 @@ import type {
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 /**
  * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
@@ -86,6 +87,7 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
     ),
     runtimeResolver: runtimeManagementDistillRuntimes(db),
     nodeRunPrompts: composeNodeRunPromptOperations(

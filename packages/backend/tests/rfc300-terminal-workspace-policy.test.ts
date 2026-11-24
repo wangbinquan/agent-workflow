@@ -23,6 +23,7 @@ import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifec
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { shouldRequestWebhookWorkspacePrune } from '../src/modules/integration/application/terminalWorkspaceCleanup'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const ulid = monotonicFactory()
 
@@ -175,7 +176,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     test('winning done CAS writes the claim with the same clock and wakes the effect', async () => {
       const taskId = await seedTask()
       const effects: Array<{ taskId: string; to: string }> = []
-      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
+      usePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          taskTriggers: createTaskTriggerQueries(db),
+          enabled: () => true,
+        }),
+      )
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune(_db, id, to) {
           effects.push({ taskId: id, to })
@@ -202,7 +208,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
     test('the setting is sampled at terminal transition, not when the task started', async () => {
       let enabled = false
-      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => enabled }))
+      usePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          taskTriggers: createTaskTriggerQueries(db),
+          enabled: () => enabled,
+        }),
+      )
 
       const startedWhileOff = await seedTask()
       enabled = true
@@ -240,7 +251,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     test('losing terminal CAS writes neither claim nor effect', async () => {
       const taskId = await seedTask()
       let effectCount = 0
-      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
+      usePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          taskTriggers: createTaskTriggerQueries(db),
+          enabled: () => true,
+        }),
+      )
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune() {
           effectCount += 1
@@ -275,7 +291,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     test('racing done/canceled transitions leave exactly one terminal winner with its claim', async () => {
       const taskId = await seedTask()
       const effects: Array<{ taskId: string; to: string }> = []
-      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
+      usePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          taskTriggers: createTaskTriggerQueries(db),
+          enabled: () => true,
+        }),
+      )
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune(_db, id, to) {
           effects.push({ taskId: id, to })
@@ -311,7 +332,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     })
 
     test('failed/interrupted and a context-only inherited child never gain a claim', async () => {
-      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }))
+      usePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          taskTriggers: createTaskTriggerQueries(db),
+          enabled: () => true,
+        }),
+      )
       let effectCount = 0
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
         onWorkspacePrune() {
@@ -357,7 +383,12 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
     test('disabled or throwing provider never blocks the terminal transition', async () => {
       const disabledId = await seedTask()
-      usePrunePolicy(composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => false }))
+      usePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          taskTriggers: createTaskTriggerQueries(db),
+          enabled: () => false,
+        }),
+      )
       await setTaskStatus({
         db,
         terminalWorkspacePrune: prune,

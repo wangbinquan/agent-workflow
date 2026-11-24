@@ -14,7 +14,7 @@
 - [x] AC-1 memory 与 resource-catalog 不再按 public 取 runtime-management；按名字取它的只属于目标 DAG 上的消费方与 resource-catalog 的指定 adapter
 - [x] AC-2 行为不变；形状与 runtime-management 的合同对得上，由编译器检查
 - [x] AC-3 DAG 外 offered 边 7 → 4；清单与减速带随之更新；新增 RFC-564 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 一格环境性红，已归因、未重跑（见下）
 
 ## 集中验证
 
@@ -47,7 +47,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `4f1dcae66`（实现，父提交是 `b2a26ea9b`）：exact SHA 主 CI run 45410978530 的 70 个 job 里 68 个成功；红的是 `Backend tests (ubuntu-latest shard 16/44)`（job 138504346782）里 `rfc311-perf-guards` 的「task-operations catalog — 过滤视图（G1 快路径）」AC-11 塌方探测（PostgreSQL 的 P95 5813.61ms 对 SQLite 55.25ms，那条 PostgreSQL 用例整条 62.8 秒）与随之不通过的汇总格 `CI required`。其余后端分片、前端、e2e、构建与检查全部通过；
+  windows-platform 的路径过滤没有命中本提交，未触发。
+- **归因**：不在本 RFC。本 RFC 的三个生产文件只换类型的出处，没有一行可执行代码变化，不触及任务目录的读路径；父提交 `b2a26ea9b` 的同一分片
+  通过（run 45405881445）；这条探测此前已多次以同一形态偶发红（语句数、行数、最大参数仍是 4 / 52 / 50），本次出现已补记在
+  `docs/audit-backlog.md`「RFC-311 两条 PostgreSQL 用例在 CI 上偶发超时」。未重跑；后继提交的 CI 结果见 RFC-565 的 plan。
 
 ## 实现门（本会话自审，只审功能）
 

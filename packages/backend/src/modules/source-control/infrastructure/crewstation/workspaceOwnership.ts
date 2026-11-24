@@ -45,3 +45,14 @@ export async function readHostedWorkspaceOwnerForBusinessTask(
     .limit(1)
   return row ?? null
 }
+
+/**
+ * RFC-565: the hosted workspace owner read, bound to one handle. Bootstrap builds it on the deployment's database and hands
+ * it to Task Execution's hosted recovery selection.
+ */
+export function createHostedWorkspaceOwnerQueries(db: PersistenceDb) {
+  return Object.freeze({
+    forBusinessTask: (businessTaskId: string) =>
+      readHostedWorkspaceOwnerForBusinessTask(db, businessTaskId),
+  })
+}

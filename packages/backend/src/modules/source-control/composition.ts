@@ -329,3 +329,12 @@ export { createSourceControlMaintenanceJobHandlers } from './application/mainten
 // RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
 export { composeCrewStationWorkspaceOwner } from './infrastructure/crewstation/crewstationWorkspace'
 export { executeTaskImageWorkspaceOperation } from './infrastructure/crewstation/taskImageWorkspace'
+
+// RFC-565: the reads that take a database handle left the public. Bootstrap builds the bound reads here and hands them to
+// memory (repository identity) and Task Execution (hosted workspace owner), and hands Task Execution's knowledge read the
+// same-statement repository existence fragment.
+export {
+  createRepositoryIdentityQueries,
+  repositoryExistsExpression,
+} from './infrastructure/repositoryIdentityQueries'
+export { createHostedWorkspaceOwnerQueries } from './infrastructure/crewstation/workspaceOwnership'

@@ -33,6 +33,7 @@ import type {
   SystemAgentRunResult,
 } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './taskKnowledge'
 
 type NativeRunFixture = (options: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
 
@@ -169,6 +170,7 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
     ),
     runtimeResolver: runtimeManagementDistillRuntimes(db),
     nodeRunPrompts: composeNodeRunPromptOperations(
@@ -191,6 +193,7 @@ export function createSqliteMemoryDistillEnqueuer(
     createClarifyAnswerQueries(db, taskExecutionParticipants),
     createNodeRunQueries(db),
     createNodeOutputQueries(db),
+    taskKnowledgeQueriesFor(db),
   )
   return Object.freeze({
     enqueue: async (input) => await enqueueDistillJob(store, distillPolicy, input),

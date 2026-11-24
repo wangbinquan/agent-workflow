@@ -41,6 +41,7 @@ import { appHome } from '../src/util/paths'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 const NONCE = 'deadbeefcafe0001'
 
@@ -156,6 +157,7 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
       () => ({
         append: async () => {},
         setRootSessionId: async () => {},

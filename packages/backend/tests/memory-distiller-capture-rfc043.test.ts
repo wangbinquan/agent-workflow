@@ -44,6 +44,7 @@ import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastruct
 import { appHome } from '../src/util/paths'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 function createMemoryDistillTestContext(db: PersistenceDb) {
   return {
@@ -52,6 +53,7 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
     ),
     nodeRunPrompts: composeNodeRunPromptOperations(
       createFileNodeRunPromptContent(join(appHome(), 'runs')),

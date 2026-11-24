@@ -10,7 +10,6 @@ import {
   FrozenMemoryInjectionQueries,
   FrozenMemoryDistillQueries,
 } from './helpers/model/frozenSelection/memoryQueries'
-import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
@@ -30,6 +29,8 @@ import {
 } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { StatementRecording } from './helpers/statementRecorder'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 // Scalar target projections contain nested SELECTs; stop only at the outer FROM.
 function outerProjection(statement: string): string {
@@ -155,16 +156,14 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
   test('memory injection and distillation preserve HEAD statement counts, narrow projections and batching', async () => {
     await seed()
     const oldInjection = new FrozenMemoryInjectionQueries(harness.db)
-    const injection = new DrizzleMemoryInjectionReadStore(
-      harness.db,
-      createNodeRunQueries(harness.db),
-    )
+    const injection = memoryInjectionReadStoreFor(harness.db)
     const oldDistill = new FrozenMemoryDistillQueries(harness.db)
     const distill = new DrizzleMemoryDistillWorkStore(
       harness.db,
       createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
       createNodeRunQueries(harness.db),
       createNodeOutputQueries(harness.db),
+      taskKnowledgeQueriesFor(harness.db),
     )
     const input = {
       taskId: 'query-a',

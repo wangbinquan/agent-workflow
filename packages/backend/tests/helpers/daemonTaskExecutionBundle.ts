@@ -56,6 +56,8 @@ import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/compositi
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import { createLocalPluginInstaller } from '@/modules/resource-catalog/composition/pluginOperations'
+import { taskKnowledgeQueriesFor } from './taskKnowledge'
+import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 
 function unused<T>(name: string): T {
   return new Proxy(
@@ -149,7 +151,12 @@ export function taskBundleInput(
     },
     memory: {
       memorySnapshots: composeTaskMemorySnapshotPort(),
-      memoryInjectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
+      memoryInjectionQueries: composeMemoryInjectionQueriesFor(
+        db,
+        createNodeRunQueries(db),
+        taskKnowledgeQueriesFor(db),
+        createRepositoryIdentityQueries(db),
+      ),
       memoryOperations: {
         distillCommands: {
           async enqueue(request) {

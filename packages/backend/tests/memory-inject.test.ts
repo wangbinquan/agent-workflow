@@ -1,4 +1,3 @@
-import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -39,8 +38,8 @@ import {
 } from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
-import { DrizzleMemoryInjectionReadStore } from '../src/modules/memory/infrastructure/memoryInjectionReadStore'
 import { describeEachProvider } from './helpers/eachProvider'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
 
 async function seedApprovedMemory(
   db: PersistenceDb,
@@ -102,16 +101,13 @@ describeEachProvider('loadInjectableMemories', (harness) => {
   })
 
   test('returns all-empty when no rows match', async () => {
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: ['a1'],
-        workflowId: 'w1',
-        repoIds: ['r1'],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: ['a1'],
+      workflowId: 'w1',
+      repoIds: ['r1'],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.agent).toEqual([])
     expect(set.byScope.workflow).toEqual([])
     expect(set.byScope.repo).toEqual([])
@@ -123,16 +119,13 @@ describeEachProvider('loadInjectableMemories', (harness) => {
     await seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'w1', title: 'W' })
     await seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'r1', title: 'R' })
     await seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'G' })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: ['a1'],
-        workflowId: 'w1',
-        repoIds: ['r1'],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: ['a1'],
+      workflowId: 'w1',
+      repoIds: ['r1'],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.agent.map((m) => m.title)).toEqual(['A'])
     expect(set.byScope.workflow.map((m) => m.title)).toEqual(['W'])
     expect(set.byScope.repo.map((m) => m.title)).toEqual(['R'])
@@ -158,16 +151,13 @@ describeEachProvider('loadInjectableMemories', (harness) => {
       title: 'D2',
       createdAt: 300,
     })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: ['primary', 'dep1', 'dep2'],
-        workflowId: null,
-        repoIds: [],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: ['primary', 'dep1', 'dep2'],
+      workflowId: null,
+      repoIds: [],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.agent.map((m) => m.title)).toEqual(['D2', 'D1', 'P'])
   })
 
@@ -177,16 +167,13 @@ describeEachProvider('loadInjectableMemories', (harness) => {
     await seedNonApprovedMemory(db, { scopeType: 'global', scopeId: null, status: 'superseded' })
     await seedNonApprovedMemory(db, { scopeType: 'global', scopeId: null, status: 'archived' })
     await seedNonApprovedMemory(db, { scopeType: 'global', scopeId: null, status: 'rejected' })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: [],
-        workflowId: null,
-        repoIds: [],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: [],
+      workflowId: null,
+      repoIds: [],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.global.map((m) => m.title)).toEqual(['approved'])
   })
 
@@ -194,16 +181,13 @@ describeEachProvider('loadInjectableMemories', (harness) => {
     await seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'w-not-active', title: 'W' })
     await seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'r-not-active', title: 'R' })
     await seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'G' })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: [],
-        workflowId: null,
-        repoIds: [],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: [],
+      workflowId: null,
+      repoIds: [],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.workflow).toEqual([])
     expect(set.byScope.repo).toEqual([])
     expect(set.byScope.global.map((m) => m.title)).toEqual(['G'])
@@ -211,32 +195,26 @@ describeEachProvider('loadInjectableMemories', (harness) => {
 
   test('agentIds dedupe: same id repeated → memory only appears once', async () => {
     await seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'a1', title: 'A' })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: ['a1', 'a1', 'a1'],
-        workflowId: null,
-        repoIds: [],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: ['a1', 'a1', 'a1'],
+      workflowId: null,
+      repoIds: [],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.agent.length).toBe(1)
   })
 
   test('workflow scope: only the active workflowId, not siblings', async () => {
     await seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'wf-1', title: 'mine' })
     await seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'wf-2', title: 'other' })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: [],
-        workflowId: 'wf-1',
-        repoIds: [],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: [],
+      workflowId: 'wf-1',
+      repoIds: [],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.workflow.map((m) => m.title)).toEqual(['mine'])
   })
 })
@@ -531,7 +509,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
   test('returns null when the task has no scope memories anywhere', async () => {
     const { taskId } = await seedTask()
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -541,7 +519,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
 
   test('returns null when taskId does not exist (degraded gracefully)', async () => {
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId: 't_nope',
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -553,7 +531,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     const { taskId, workflowId } = await seedTask()
     await seedApprovedMemory(db, { scopeType: 'workflow', scopeId: workflowId, title: 'WF' })
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -581,7 +559,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     const { taskId } = await seedTask({ repoUrl: url, cachedRepoId: 'cr-1' })
     await seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'cr-1', title: 'REPO' })
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -609,7 +587,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     })
     await seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'cr-priv', title: 'PRIV' })
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -622,7 +600,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     await seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'primary', title: 'P' })
     await seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'dep-1', title: 'D' })
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('primary'),
       dependents: [mkAgent('dep-1', 'dep-1')],
@@ -635,7 +613,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     const { taskId } = await seedTask()
     await seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'GG' })
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -648,7 +626,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     await seedApprovedMemory(db, { scopeType: 'workflow', scopeId: workflowId, title: 'WF' })
     await seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'GG' })
     const { block } = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],

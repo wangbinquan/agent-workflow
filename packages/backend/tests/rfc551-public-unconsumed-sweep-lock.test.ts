@@ -230,7 +230,8 @@ describe('RFC-551 —— 未消费符号撤出两个 context 的 public', () => 
       [IA + 'public/types.ts', 'UserAccessError', true],
       [SC + 'public/commands.ts', 'WorkspaceClaimFinalizationCommand', false],
       [SC + 'public/participants.ts', 'bindRepositoryGitWorkspace', true],
-      [SC + 'public/queries.ts', 'existingRepositoryIds', true],
+      // RFC-565: `existingRepositoryIds` left the public (it took a database handle); the control names a value still there.
+      [SC + 'public/queries.ts', 'selectRepositoryWorkspaceReadQueries', true],
       [SC + 'public/types.ts', 'RepositoryTransportCredentialError', true],
     ]
     const withNames = CONTEXTS.flatMap((context) =>

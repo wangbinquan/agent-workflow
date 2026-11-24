@@ -1,4 +1,26 @@
-## 2026-11-24 RFC-564 系统代理运行的词汇不再被 DAG 外的 context 按 runtime-management 的名字取（In Progress；`design/RFC-564-system-agent-run-vocabulary/`）
+## 2026-11-24 RFC-565 任务知识、触发与仓库身份的读由 bootstrap 交入：裸句柄的读撤出 task-execution 与 source-control 的 public（In Progress；`design/RFC-565-bound-owner-reads/`）
+
+- **来由**：`PUBLIC_SURFACE_DEBT`（56 条）里有 18 条是 public 交出的函数签名带着持久化句柄或 drizzle 类型；其中 11 条属于 task-execution 与
+  source-control 的七个读——消费方（memory、integration、task-execution 的托管恢复选择）拿自己的句柄去调。用户 2026-11-02「好，你继续推进RFC294，
+  过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新
+  刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：七个符号撤出两个 owner 的 public、由装配根交出；`listNodeEventContents` 并入 `TaskKnowledgeQueries.distillationEvents`；memory 的两个存储、
+  integration 的派发持久化 / 投递读模型 / 终态工作区归属 / 保留清理与 task-execution 的托管恢复选择改从构造入参拿到建好的读，bootstrap 在根句柄上
+  建好并交入（两个 SQL 片段仍是函数引用，拼进消费方自己的那条语句）。27 个生产文件；构造这些消费方的 47 个用例文件与 5 个测试助手随入参更新
+  （注入读存储统一经助手构造）；新增 RFC-565 用例；`PUBLIC_SURFACE_DEBT` 删 11 条。
+- **不做**：resource-catalog 的同类 6 条（含 S9 退出门点名的 `workflowNameExpression`，消费方是 task-execution 的十个文件，另立 RFC）；
+  `repositoryScopeExistenceReads`（能力类合同）；其余 38 条。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 读的实现留在 owner 的 infrastructure、闭合类型在 owner 的 application/ports，消费方只在构造入参里
+  声明依赖；C11 两个 owner 的 public 撤 8 个符号、新增 1 个类型（public 面 1000 → 993）；C12 RFC-565 用例覆盖全部模块的源码、六处结构绑定与“构造不碰
+  句柄”；C13 public 类型偏差 56 → 45，其余计数不升。
+- **集中验证**（基于 `4f1dcae66`，详见 plan）：本地只跑 SQLite，PostgreSQL 以 CI 为准。选出 1005 个用例文件，首轮全部通过。本人缺陷一处是实现门通读
+  时发现的（触发读在构造时取表，装配期建它会比原来更早碰句柄；改成调用时取表，补用例 ⑤ 与变异），修复后重跑 46 个相关文件通过。tsc 0 错，
+  eslint / promises / prettier 无告警；读已提交源码的用例在候选导出里通过；十二种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的三处交接报错；
+  架构报告 public 类型偏差 56 → 45（没有换名的），其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：RFC-563 `b2a26ea9b` 主 CI 70 / 70、windows-platform 通过，转 Done。RFC-564 `4f1dcae66` 主 CI 68 / 70：红的是 shard 16/44 的 RFC-311 过滤视图
+  PostgreSQL 塌方探测（已知偶发，第六次，已补记 `docs/audit-backlog.md`）与随之红的 `CI required`，不在该 RFC、未重跑，转 Done。
+
+## 2026-11-24 RFC-564 系统代理运行的词汇不再被 DAG 外的 context 按 runtime-management 的名字取（Done；`design/RFC-564-system-agent-run-vocabulary/`）
 
 - **来由**：DAG 外 offered 边（7 条）里最后 3 条指向 runtime-management 的，都是为了给一次系统代理运行的请求写类型——resource-catalog 的托管 MCP 诊断
   端口取材料意图的八个字段、事件接收与用量快照，托管诊断取托管能力，memory 的蒸馏端口取协议、观察身份、内容引用与事件接收。用户 2026-11-02
@@ -19,8 +41,11 @@
   offered 边 7 → 4，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-562 `b3850ff9a` 的主 CI（run 45401036761）70 / 70，windows-platform 通过，转 Done。RFC-563 `b2a26ea9b` 的 windows-platform 通过，
   主 CI（run 45405881445）仍在跑。
+- **CI**：主 CI run 45410978530 68 / 70；红的是 shard 16/44 的 RFC-311 过滤视图 PostgreSQL 塌方探测（已知偶发，本次已补记
+  `docs/audit-backlog.md`）与随之红的 `CI required`，不在本 RFC（只换类型的出处，父提交同一分片通过），环境性、未重跑；windows-platform 的
+  路径过滤没有命中，未触发。
 
-## 2026-11-24 RFC-563 source-control 与 resource-catalog 用自己的形状声明任务代理的内容引用与资源材料（In Progress；`design/RFC-563-content-reference-own-shapes/`）
+## 2026-11-24 RFC-563 source-control 与 resource-catalog 用自己的形状声明任务代理的内容引用与资源材料（Done；`design/RFC-563-content-reference-own-shapes/`）
 
 - **来由**：DAG 外 offered 边（11 条）里 4 条是内容 owner 为了给自己发出的引用与材料写类型，按名字取 runtime-management 的材料意图
   `AgentMaterialIntent`（source-control 的工作区内容一处，resource-catalog 的材料端口、本机引用实现与托管插件读取三处）；目标 DAG 上这两条边都不画。
@@ -41,6 +66,7 @@
   读已提交源码的用例在候选导出里通过；六种变异都被认出，类型层变异让 `tsc` 在 bootstrap 的绑定与 task-execution 的使用处报错；架构报告 DAG 外
   offered 边 11 → 7，其余不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-562 `b3850ff9a` 的 windows-platform 通过，主 CI（run 45401036761）仍在跑，转 Done 随后续提交。
+- **CI**：主 CI run 45405881445 70 / 70，windows-platform 通过。
 
 ## 2026-11-24 RFC-562 托管对象发布日志归内容 owner（platform/content），恢复归一参与者改为 system-operations 的 required 端口（Done；`design/RFC-562-hosted-publication-journal-platform/`）
 

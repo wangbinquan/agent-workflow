@@ -1,7 +1,6 @@
 // RFC-359 W4-B4 —— 记忆注入读存储：一份实现，两个 provider 共用。
 
-import { createTaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
-import { existingRepositoryIds } from '@/modules/source-control/public/queries'
+import type { TaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
 import type { TaskNodeRunReads } from '@/modules/task-execution/public/types'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, inArray } from 'drizzle-orm'
@@ -49,23 +48,37 @@ function recordOf(row: MemoryInjectionRecord): MemoryInjectionRecord {
   }
 }
 
+/** RFC-565: the two task knowledge reads the injection takes (Task Execution's closed read, built by bootstrap). */
+export type MemoryInjectionTaskKnowledge = Pick<
+  TaskKnowledgeQueries,
+  'injectionContext' | 'repositoryIds'
+>
+
+/** RFC-565: Source Control's repository identity read as the injection uses it (bootstrap hands over the owner's). */
+export interface RepositoryIdentityReads {
+  existingIds(ids: readonly string[]): Promise<readonly string[]>
+}
+
 export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore {
   constructor(
     private readonly db: PersistenceDb,
     /** RFC-485: Task Execution's node-run reads, built by bootstrap on the root db. */
     private readonly taskNodeRuns: TaskNodeRunReads,
+    /** RFC-565: Task Execution's knowledge read and Source Control's repository identity read, built the same way. */
+    private readonly taskKnowledge: MemoryInjectionTaskKnowledge,
+    private readonly repositories: RepositoryIdentityReads,
   ) {}
 
   async findTaskContext(taskId: string) {
-    return createTaskKnowledgeQueries(this.db).injectionContext(taskId)
+    return this.taskKnowledge.injectionContext(taskId)
   }
 
   async listTaskRepositoryIds(taskId: string): Promise<readonly string[]> {
-    return createTaskKnowledgeQueries(this.db).repositoryIds(taskId)
+    return this.taskKnowledge.repositoryIds(taskId)
   }
 
   async filterExistingRepositoryIds(repositoryIds: readonly string[]): Promise<readonly string[]> {
-    return existingRepositoryIds(this.db, repositoryIds)
+    return this.repositories.existingIds(repositoryIds)
   }
 
   async listApprovedMemories(

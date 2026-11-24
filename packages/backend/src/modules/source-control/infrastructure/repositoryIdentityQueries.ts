@@ -29,3 +29,13 @@ export function repositoryExistsExpression(
       .where(eq(cachedRepos.id, repositoryId)),
   )}`.mapWith(Boolean)
 }
+
+/**
+ * RFC-565: the repository identity read other contexts take, bound to one handle. Bootstrap builds it on the root handle
+ * and hands it over (the public no longer offers a function that takes a database handle).
+ */
+export function createRepositoryIdentityQueries(db: PersistenceDb) {
+  return Object.freeze({
+    existingIds: (ids: readonly string[]) => existingRepositoryIds(db, ids),
+  })
+}

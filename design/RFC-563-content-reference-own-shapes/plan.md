@@ -15,7 +15,7 @@
 - [x] AC-1 source-control 的生产文件不取 runtime-management；resource-catalog 取它的只剩 MCP 诊断的两处与指定 adapter
 - [x] AC-2 行为不变；两个 owner 的形状仍能交给材料意图与本机端口，由编译器检查
 - [x] AC-3 DAG 外 offered 边 11 → 7；清单与减速带随之更新；`PUBLIC_SURFACE_DEBT` 那一条按新的归属登记；新增 RFC-563 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -46,7 +46,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `b2a26ea9b`（实现，父提交是 `b3850ff9a`）：exact SHA 主 CI run 45405881445 70 / 70 通过；同一提交触发的 windows-platform（run 45405881372）
+  通过。
 
 ## 实现门（本会话自审，只审功能）
 

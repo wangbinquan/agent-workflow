@@ -1,6 +1,6 @@
 // RFC-359 W4-B4 —— webhook 投递审计 / 回放读模型：一份实现，两个 provider 共用。
 
-import { createTaskTriggerQueries } from '@/modules/task-execution/public/queries'
+import type { TaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
@@ -16,7 +16,11 @@ import { CREWSTATION_TARGET_RECEIPT_PREFIX } from './crewstation/eventContract'
 /** CrewStation redelivers one event a bounded number of times; the detail shows them all. */
 const PLATFORM_DELIVERY_LIMIT = 50
 
-export function createWebhookDeliveryQueries(db: PersistenceDb): WebhookDeliveryQueries {
+export function createWebhookDeliveryQueries(
+  db: PersistenceDb,
+  /** RFC-565: Task Execution's trigger read, built by bootstrap on the same root db. */
+  taskTriggers: Pick<TaskTriggerQueries, 'terminalWorkspaces'>,
+): WebhookDeliveryQueries {
   /** RFC-370 v3 — a delegated delivery's receipt names its frozen CrewStation target. */
   const platformEventOf = async (
     receipt: string,
@@ -163,7 +167,7 @@ export function createWebhookDeliveryQueries(db: PersistenceDb): WebhookDelivery
         .from(webhookMrControlTargets)
         .where(eq(webhookMrControlTargets.effectId, effect.id))
       const taskIds = targetRows.map((target) => target.taskId)
-      const taskRows = await createTaskTriggerQueries(db).terminalWorkspaces(taskIds)
+      const taskRows = await taskTriggers.terminalWorkspaces(taskIds)
       const membershipIds =
         actor.permissions.has('tasks:read:all') || actor.user.id === SYSTEM_USER_ID
           ? new Set(taskIds)

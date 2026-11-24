@@ -32,6 +32,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/application/terminalWorkspaceCleanup'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 interface Response {
   readonly objects?: readonly Record<string, unknown>[]
@@ -468,7 +469,9 @@ describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
   test('PostgreSQL terminal-workspace policy reads only provider-neutral attribution', async () => {
     const fake = fixture([{ values: [['trigger-1', 'subscription-1']] }])
     const policy = createWebhookTerminalWorkspacePrunePolicy({
-      attribution: createWebhookTerminalWorkspaceAttributionQueries(fake.db),
+      attribution: createWebhookTerminalWorkspaceAttributionQueries(
+        createTaskTriggerQueries(fake.db),
+      ),
       enabled: () => true,
     })
 

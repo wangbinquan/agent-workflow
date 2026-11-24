@@ -50,6 +50,7 @@ import { createWebhookDeliveryQueries } from '@/modules/integration/infrastructu
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { errorHandler } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 function fixture(type = 'gitlab.merge-request.open') {
   const producer = type.startsWith('gitlab.') ? 'gitlab' : 'github'
@@ -792,7 +793,10 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     await f.ingress().runPending(f.publisher)
     const { webhookDeliveries, csWebhookVerifications } = tablesOf(harness.db)
     const fact = (await harness.db.select().from(webhookDeliveries))[0]!
-    const detail = await createWebhookDeliveryQueries(harness.db).get(fact.id)
+    const detail = await createWebhookDeliveryQueries(
+      harness.db,
+      createTaskTriggerQueries(harness.db),
+    ).get(fact.id)
     expect(detail).toMatchObject({
       verificationMethod: 'cs-delegated',
       bodyRepresentation: 'reserialized-json',
@@ -808,7 +812,11 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     expect(detail).not.toHaveProperty('transportReceiptRef')
     // A delivery without a platform receipt has no platform provenance.
     await harness.db.delete(csWebhookVerifications)
-    expect(await createWebhookDeliveryQueries(harness.db).get(fact.id)).toMatchObject({
+    expect(
+      await createWebhookDeliveryQueries(harness.db, createTaskTriggerQueries(harness.db)).get(
+        fact.id,
+      ),
+    ).toMatchObject({
       verificationMethod: 'direct-signature',
       platformEvent: null,
     })

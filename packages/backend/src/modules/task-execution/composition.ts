@@ -167,6 +167,11 @@ export function createNodeRunQueries(db: PersistenceDb): NodeRunQueries {
 }
 export { createNodeOutputQueries } from './infrastructure/nodeOutputQueries'
 export { createTaskGateQueries } from './infrastructure/taskGateQueries'
+// RFC-565: the task knowledge and trigger reads, and the retention fragment, for bootstrap to build on the root handle and
+// hand to memory and integration (they left the public, which may not carry a database handle).
+export { createTaskKnowledgeQueries } from './infrastructure/taskKnowledgeQueries'
+export { createTaskTriggerQueries } from './infrastructure/taskTriggerQueries'
+export { nonTerminalTaskExists } from './infrastructure/nonTerminalTaskExists'
 // RFC-483: the task scope conditions collaboration's badge read model composes into its single-statement counts
 // (RFC-359 AC-11), handed over through its participant bindings rather than the public.
 export { nodeRunStatusCondition } from './infrastructure/nodeRunQueries'

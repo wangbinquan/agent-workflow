@@ -1,14 +1,29 @@
-import { repositoryExistsExpression } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, type SQL, type SQLWrapper } from 'drizzle-orm'
 import type { TaskKnowledgeQueries } from '../application/ports/taskKnowledgeQueries'
 import { definitionAnchorId, taskSubjectFromDefinition } from '../domain/taskSubject'
+import { listNodeEventContents } from './nodeEventQueries'
 import { taskReadColumns } from './taskRepositorySql'
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
-/** 注入与蒸馏消费的闭合投影；subject 解码和任务存储字段留在 owner。 */
-export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQueries {
+/**
+ * RFC-565: Source Control's same-statement repository existence fragment, as the distillation scope composes it into its
+ * one task row read. Bootstrap hands over the owner's implementation; neither side references the other's tables.
+ */
+export type RepositoryExistsExpression = (
+  db: PersistenceDb,
+  repositoryId: SQLWrapper,
+) => SQL<boolean>
+
+/**
+ * 注入与蒸馏消费的闭合投影；subject 解码和任务存储字段留在 owner。RFC-565：由 bootstrap 在根句柄上构造后交给 memory（不再从 public
+ * 交出收句柄的工厂）。
+ */
+export function createTaskKnowledgeQueries(
+  db: PersistenceDb,
+  repositoryExists: RepositoryExistsExpression,
+): TaskKnowledgeQueries {
   return {
     async injectionContext(taskId: string) {
       const { tasks } = tablesOf(db)
@@ -62,7 +77,7 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
             sourceAgentId: taskReadColumns(db).sourceAgentId,
             sourceAgentName: taskReadColumns(db).sourceAgentName,
             cachedRepoId: taskReadColumns(db).cachedRepoId,
-            cachedRepoExists: repositoryExistsExpression(db, taskReadColumns(db).cachedRepoId),
+            cachedRepoExists: repositoryExists(db, taskReadColumns(db).cachedRepoId),
             // RFC-366 admission facts — same row, no extra query.
             launchOrigin: taskReadColumns(db).launchOrigin,
             catalogVisibility: tasks.catalogVisibility,
@@ -104,6 +119,9 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
         })
         .from(tasks)
         .where(inArray(tasks.id, [...ids]))
+    },
+    async distillationEvents(nodeRunIds: readonly string[]) {
+      return listNodeEventContents(db, nodeRunIds)
     },
   }
 }

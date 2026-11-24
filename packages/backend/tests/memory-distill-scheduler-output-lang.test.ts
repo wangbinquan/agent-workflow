@@ -31,6 +31,7 @@ import { DEFAULT_DISTILL_POLICY, type Language } from '@agent-workflow/shared'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 /**
  * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
@@ -71,6 +72,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
         createClarifyAnswerQueries(db, taskExecutionParticipants),
         createNodeRunQueries(db),
         createNodeOutputQueries(db),
+        taskKnowledgeQueriesFor(db),
       ),
     }
   })

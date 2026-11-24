@@ -61,6 +61,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const T0 = 1_700_000_000_000
 
@@ -272,7 +273,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     expect(updated).toMatchObject({ id: record.id, enabled: false })
 
     // SQLite 别名同样是摆设；派发持久化只剩 PostgreSQL 这一个具名装配别名。
-    const dispatchPostgresql = composeWebhookDispatchPersistenceFor(asPostgresql(harness.db))
+    const dispatchPostgresql = composeWebhookDispatchPersistenceFor(
+      asPostgresql(harness.db),
+      createTaskTriggerQueries(asPostgresql(harness.db)),
+    )
     expect(await dispatchPostgresql.triggerEnabled(record.id)).toBe(false)
     expect(await dispatchPostgresql.triggerEnabled('wt_missing')).toBeNull()
     expect((await dispatchPostgresql.getTrigger(record.id))?.name).toBe(record.name)
@@ -343,6 +347,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
         scheduled.operations,
         composeFileApplicationConfigurationQueries('/tmp/aw-rfc359-w7.json'),
       ),
+      createTaskTriggerQueries(harness.db),
     )
 
     const record = triggerRecord(endpointId, owner.id)
@@ -459,8 +464,14 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
 
   test('webhookIngress 运行时：端点读、投递写、已验证投递接收、审计分页一体', async () => {
     const endpointId = await seedEndpoint(harness.db)
-    const sqliteRuntime = composeWebhookDeliveryRuntimeFor(asSqlite(harness.db))
-    const postgresqlRuntime = composeWebhookDeliveryRuntimeFor(asPostgresql(harness.db))
+    const sqliteRuntime = composeWebhookDeliveryRuntimeFor(
+      asSqlite(harness.db),
+      createTaskTriggerQueries(asSqlite(harness.db)),
+    )
+    const postgresqlRuntime = composeWebhookDeliveryRuntimeFor(
+      asPostgresql(harness.db),
+      createTaskTriggerQueries(asPostgresql(harness.db)),
+    )
     const postgresqlIngress = composeWebhookIngressPersistenceFor(asPostgresql(harness.db))
 
     expect((await sqliteRuntime.endpoints.get(endpointId))?.id).toBe(endpointId)
@@ -601,7 +612,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
 
   test('terminalWorkspaceCleanup 策略：归属列由策略自己读，缺行不回收，webhook 归属才回收', async () => {
     const policy = composeWebhookTerminalWorkspacePrunePolicy({
-      db: asPostgresql(harness.db),
+      taskTriggers: createTaskTriggerQueries(asPostgresql(harness.db)),
       enabled: () => true,
     })
     const row = {

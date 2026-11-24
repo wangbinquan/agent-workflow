@@ -51,6 +51,7 @@ import {
   workflowFixture,
   type TaskFixtureSpec,
 } from './helpers/model'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 async function readConfig(db: PersistenceDb, taskId: string) {
   const { tasks } = tablesOf(db)
@@ -545,6 +546,7 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
           createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
           createNodeRunQueries(harness.db),
           createNodeOutputQueries(harness.db),
+          taskKnowledgeQueriesFor(harness.db),
         ).findTaskScope(taskId)
       )?.workgroupConfig,
     ).toBeNull()
@@ -574,6 +576,7 @@ describeEachProvider('RFC-395 II-a A2 definition writer and workgroup read port'
           createClarifyAnswerQueries(harness.db, taskExecutionParticipants),
           createNodeRunQueries(harness.db),
           createNodeOutputQueries(harness.db),
+          taskKnowledgeQueriesFor(harness.db),
         ).findTaskScope(taskId)
       )?.workgroupConfig,
     ).toEqual(expected)

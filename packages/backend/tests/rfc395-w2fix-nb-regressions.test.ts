@@ -55,6 +55,7 @@ import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 const frame = { containerRunId: null, iteration: 0 }
 const log = createLogger('rfc395-w2fix-nb-test')
@@ -759,6 +760,7 @@ describeEachProvider('RFC-395 N-b wave-2 functional regressions', (h) => {
       createClarifyAnswerQueries(h.db, taskExecutionParticipants),
       createNodeRunQueries(h.db),
       createNodeOutputQueries(h.db),
+      taskKnowledgeQueriesFor(h.db),
     )
     expect(await store.listTaskNodeStatuses(['t'])).toEqual([
       {

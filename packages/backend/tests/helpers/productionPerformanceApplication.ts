@@ -81,6 +81,8 @@ import { createProductionOverviewQuery } from './productionOverview'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { standaloneDigitalEmployeeSelections } from './digitalEmployeeSelections'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
+import { taskKnowledgeQueriesFor } from './taskKnowledge'
+import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 
 export interface ProductionPerformanceApplicationInput {
   readonly db: PersistenceDb
@@ -151,9 +153,15 @@ export async function createProductionPerformanceApplication(
     ],
   })
   const memoryOperations = composeMemoryOperationsFor({
-    injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
+    injectionQueries: composeMemoryInjectionQueriesFor(
+      db,
+      createNodeRunQueries(db),
+      taskKnowledgeQueriesFor(db),
+      createRepositoryIdentityQueries(db),
+    ),
     taskNodeRuns: createNodeRunQueries(db),
     taskNodeOutputs: createNodeOutputQueries(db),
+    taskKnowledge: taskKnowledgeQueriesFor(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),

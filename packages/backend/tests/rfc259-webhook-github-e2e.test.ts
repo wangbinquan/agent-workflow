@@ -35,6 +35,7 @@ import {
 } from '../src/modules/integration/composition'
 import { codeHostEventCatalogJson } from '../src/modules/integration/public/events'
 import { mountWebhookIngressRoutes } from '../src/modules/integration/inbound/http/webhookIngressRoutes'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 4))
 const SECRET = 'gh-e2e-secret'
@@ -94,7 +95,12 @@ async function seedFixture(providerHarness: ProviderHarness) {
   })
   const canceled: string[] = []
   const dispatcher = createWebhookDispatcher({
-    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(
+      db,
+      box,
+      scheduledTaskRuntime(db).operations,
+      createTaskTriggerQueries(db),
+    ),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     getDefaultRuntime: async () => null,
     launch: async (actor, rendered, invoker) => {

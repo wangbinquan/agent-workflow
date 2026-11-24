@@ -8,6 +8,7 @@ import { expect, test } from 'bun:test'
 import { buildActor } from '@/auth/actor'
 import { createTaskExecutionTriggerParticipant } from '@/modules/task-execution/infrastructure/taskExecutionTrigger'
 import { createHostedRecoverySelection } from '@/modules/task-execution/infrastructure/crewstation/hostedRecoverySelection'
+import { createHostedWorkspaceOwnerQueries } from '@/modules/source-control/infrastructure/crewstation/workspaceOwnership'
 import {
   createWorkerWorkspaceMaintenance,
   createWorkspacePreparationMaintenance,
@@ -52,6 +53,7 @@ test('a hosted recovery selection refuses a context over another database', () =
     api: { getTask: async () => null } as never,
     log: { info() {}, warn() {} },
     requesterFor: () => ({ resolve: async () => null }),
+    workspaceOwners: { forBusinessTask: async () => null },
   })
   expect(() =>
     selection({ directAuthority: {} } as never)({
@@ -161,6 +163,8 @@ describeEachProvider('RFC-423 hosted recovery selection over a real database', (
             requestedBy === uuid('8') ? ({ actor: operator } as never) : null,
         }
       },
+      // RFC-565: the owner read bootstrap hands over, built on the same database.
+      workspaceOwners: createHostedWorkspaceOwnerQueries(harness.db),
     })
     const recovery = selection(identityAccess)({
       db: harness.db,

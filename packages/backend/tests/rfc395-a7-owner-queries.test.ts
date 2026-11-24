@@ -9,20 +9,21 @@ import { beforeEach, expect, test } from 'bun:test'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { TASK_DEFINITION_HOSTS, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import {
-  createTaskKnowledgeQueries,
-  createTaskTriggerQueries,
-  listNodeEventContents,
-} from '@/modules/task-execution/public/queries'
+// RFC-565: these reads left the owners' public (their signatures carry a database handle); bootstrap takes them from the
+// compositions, and this suite reads them where they are defined.
+import { listNodeEventContents } from '@/modules/task-execution/infrastructure/nodeEventQueries'
+import { createTaskKnowledgeQueries } from '@/modules/task-execution/infrastructure/taskKnowledgeQueries'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 import {
   createAgentExecutionQueries,
   createWorkflowExecutionQueries,
   workflowNameExpression,
 } from '@/modules/resource-catalog/public/queries'
 import {
+  createRepositoryIdentityQueries,
   existingRepositoryIds,
   repositoryExistsExpression,
-} from '@/modules/source-control/public/queries'
+} from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   taskFixture,
@@ -282,7 +283,7 @@ describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
         },
       ],
     })
-    const query = createTaskKnowledgeQueries(harness.db)
+    const query = createTaskKnowledgeQueries(harness.db, repositoryExistsExpression)
     expect(await query.injectionContext('knowledge')).toEqual({
       workflowId: 'workflow',
       cachedRepoId: 'repo',
@@ -320,6 +321,10 @@ describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
     ])
     expect(await existingRepositoryIds(harness.db, ['repo', 'missing'])).toEqual(['repo'])
     expect(await existingRepositoryIds(harness.db, [])).toEqual([])
+    // RFC-565: the bound read bootstrap hands to memory answers the same.
+    const repositories = createRepositoryIdentityQueries(harness.db)
+    expect(await repositories.existingIds(['repo', 'missing'])).toEqual(['repo'])
+    expect(await repositories.existingIds([])).toEqual([])
     const exists = async (id: string) =>
       (
         await harness.db
@@ -390,5 +395,9 @@ describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
     expect(rows.map((row) => row.payload)).toEqual(['first', 'second', 'last'])
     expect(rows[0]).toMatchObject({ sessionId: 's', parentSessionId: 'p' })
     expect(await listNodeEventContents(harness.db, [])).toEqual([])
+    // RFC-565: memory reads the same rows, in the same order, through the knowledge read's `distillationEvents`.
+    const knowledge = createTaskKnowledgeQueries(harness.db, repositoryExistsExpression)
+    expect(await knowledge.distillationEvents(['run', 'missing'])).toEqual(rows)
+    expect(await knowledge.distillationEvents([])).toEqual([])
   })
 })

@@ -23,7 +23,6 @@ import { freshestPriorRunWithOutput } from '@/modules/task-execution/application
 import { pickFreshestReviewRun } from '@/modules/collaboration/infrastructure/review'
 import { findSelfGateRunForShard } from '@/modules/collaboration/infrastructure/clarify/service'
 import { isTargetNodeConsumed } from '@/modules/collaboration/infrastructure/clarify/rerunLedger'
-import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { loadInjectedSnapshotFromFirstAttempt } from '@/modules/memory/application/injection/injectMemory'
 import {
   deriveBudgetUsed,
@@ -42,6 +41,7 @@ import {
   type NodeRunFixtureSpec,
 } from './helpers/model'
 import { patchLegacyRunSelectionFixture } from './helpers/model/runSelectionOracle'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
 
 async function seed(db: PersistenceDb, suffix: string) {
   const taskId = `sites-b-${suffix}`
@@ -272,7 +272,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
       injectedMemories: snapshot,
     })
     await add('retry', 'agent', { status: 'running', rerunCause: 'process-retry' })
-    const store = new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db))
+    const store = memoryInjectionReadStoreFor(db)
     expect(
       await loadInjectedSnapshotFromFirstAttempt(store, {
         taskId,

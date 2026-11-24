@@ -1,7 +1,6 @@
 // RFC-423: moved verbatim from composition/crewstationRecovery.ts — the hosted recovery consumer's business closure
 // and the tick only the execution-authority holder consumes.
 import type { DirectAuthorityIdentity } from '@/modules/identity-access/public/participants'
-import { readHostedWorkspaceOwnerForBusinessTask } from '@/modules/source-control/public/participants'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationPlatformApi } from '@/platform/crewstation/platformApi'
@@ -24,6 +23,13 @@ export function createHostedRecoverySelection(input: {
   readonly requesterFor: (identityAccess: Parameters<TaskRecoveryDeploymentSelection>[0]) => {
     resolve(requestedBy: string): Promise<DirectAuthorityIdentity | null>
   }
+  /**
+   * RFC-565: Source Control's hosted workspace owner read — the AW task owning the volume of one CrewStation parent task.
+   * Bootstrap builds it on the same database and hands it over (this file no longer calls the owner with its handle).
+   */
+  readonly workspaceOwners: {
+    forBusinessTask(businessTaskId: string): Promise<{ readonly taskId: string } | null>
+  }
 }): TaskRecoveryDeploymentSelection {
   return (identityAccess) => (context) => {
     if (context.db !== input.db) throw new Error('hosted-recovery-provider-changed')
@@ -35,7 +41,7 @@ export function createHostedRecoverySelection(input: {
       log: input.log,
       business: {
         async ownerTask(businessTaskId) {
-          const owner = await readHostedWorkspaceOwnerForBusinessTask(input.db, businessTaskId)
+          const owner = await input.workspaceOwners.forBusinessTask(businessTaskId)
           return owner?.taskId ?? null
         },
         async requester(requestedBy) {

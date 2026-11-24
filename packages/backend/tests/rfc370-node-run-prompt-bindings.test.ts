@@ -57,6 +57,8 @@ import { runNode } from './helpers/runner'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 
 function held<T>() {
   let resolve!: (value: T) => void
@@ -235,6 +237,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
         createClarifyAnswerQueries(db, taskExecutionParticipants),
         createNodeRunQueries(db),
         createNodeOutputQueries(db),
+        taskKnowledgeQueriesFor(db),
       ),
       noReviewedContent,
       [job],
@@ -289,6 +292,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
         createClarifyAnswerQueries(db, taskExecutionParticipants),
         createNodeRunQueries(db),
         createNodeOutputQueries(db),
+        taskKnowledgeQueriesFor(db),
       ),
       noReviewedContent,
       [job],
@@ -309,6 +313,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
         createClarifyAnswerQueries(db, taskExecutionParticipants),
         createNodeRunQueries(db),
         createNodeOutputQueries(db),
+        taskKnowledgeQueriesFor(db),
       ),
       noReviewedContent,
       [job],
@@ -358,9 +363,15 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       }
     }
     const memory = composeMemoryOperationsFor({
-      injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
+      injectionQueries: composeMemoryInjectionQueriesFor(
+        db,
+        createNodeRunQueries(db),
+        taskKnowledgeQueriesFor(db),
+        createRepositoryIdentityQueries(db),
+      ),
       taskNodeRuns: createNodeRunQueries(db),
       taskNodeOutputs: createNodeOutputQueries(db),
+      taskKnowledge: taskKnowledgeQueriesFor(db),
       clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
       systemAgentBinding: memorySystemAgentBindingForTest(),
       runtimeProfiles: runtimeManagementDistillRuntimes(db),

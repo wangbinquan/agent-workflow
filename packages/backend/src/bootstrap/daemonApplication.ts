@@ -5,7 +5,10 @@ import {
   createActiveHistoryRestrictionProvider,
 } from '@/modules/system-operations/composition/epochInstallation'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import {
+  composeSourceControlTaskPorts,
+  createTaskTriggerQueries,
+} from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
 import type { DeploymentKind, DeploymentSessionSelections } from './deploymentProfile'
 import {
@@ -446,8 +449,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   // RFC-534: the session's two policies (a process registration before, re-run on every resume): integration's webhook
   // terminal workspace prune policy for Task Execution and its source termination, and memory's distill admission policy.
   // Both re-read the configuration on every call, as the registered ones did.
+  // RFC-565: the policy reads a task's trigger attribution through Task Execution's trigger read, built on the root db.
   const terminalWorkspacePrune = composeWebhookTerminalWorkspacePrunePolicy({
-    db: input.db,
+    taskTriggers: createTaskTriggerQueries(input.db),
     enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
   })
   const distillPolicy = async () => {

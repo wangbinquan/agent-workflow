@@ -18,6 +18,7 @@ import type { InsertOidcProviderRecord } from '@/modules/identity-access/applica
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -208,6 +209,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
       (input) => {
         captured.push(input.distillJobId)
         return {
@@ -395,6 +397,31 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     expect(await store.listReviewSources(['missing'])).toEqual([])
     expect(await store.listReviewComments(['missing'])).toEqual([])
     expect(await store.listNodeRunEvents(['missing'])).toEqual([])
+    // RFC-565: the store reads event bodies through Task Execution's knowledge read — by event time, then stable id.
+    const { nodeRunEvents } = tablesOf(db)
+    await db.insert(nodeRunEvents).values([
+      { nodeRunId: runId, ts: 20, kind: 'text', payload: 'last' },
+      {
+        nodeRunId: runId,
+        ts: 10,
+        kind: 'text',
+        payload: 'first',
+        sessionId: 's',
+        parentSessionId: 'p',
+      },
+    ])
+    expect(
+      (await store.listNodeRunEvents([runId, 'missing'])).map((event) => [
+        event.nodeRunId,
+        event.ts,
+        event.payload,
+        event.sessionId,
+        event.parentSessionId,
+      ]),
+    ).toEqual([
+      [runId, 10, 'first', 's', 'p'],
+      [runId, 20, 'last', null, null],
+    ])
   })
 })
 

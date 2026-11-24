@@ -54,6 +54,8 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import { composeMemoryInjectionQueriesFor } from '@/modules/memory/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
+import { createRepositoryIdentityQueries } from '@/modules/source-control/infrastructure/repositoryIdentityQueries'
 
 const ulid = monotonicFactory()
 
@@ -88,9 +90,15 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
   const memoryOperations = composeMemoryOperationsFor({
-    injectionQueries: composeMemoryInjectionQueriesFor(db, createNodeRunQueries(db)),
+    injectionQueries: composeMemoryInjectionQueriesFor(
+      db,
+      createNodeRunQueries(db),
+      taskKnowledgeQueriesFor(db),
+      createRepositoryIdentityQueries(db),
+    ),
     taskNodeRuns: createNodeRunQueries(db),
     taskNodeOutputs: createNodeOutputQueries(db),
+    taskKnowledge: taskKnowledgeQueriesFor(db),
     clarifyAnswers: createClarifyAnswerQueries(db, taskExecutionParticipants),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     runtimeProfiles: runtimeManagementDistillRuntimes(db),

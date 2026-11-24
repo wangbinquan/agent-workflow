@@ -1,10 +1,7 @@
 import { contentRefOf, databaseContentText } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
-import {
-  listNodeEventContents,
-  createTaskKnowledgeQueries,
-} from '@/modules/task-execution/public/queries'
+import type { TaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
 import type { TaskNodeOutputReads, TaskNodeRunReads } from '@/modules/task-execution/public/types'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -28,6 +25,12 @@ import type { SystemAgentEventSinkV1 } from '../application/ports/distillWorkSto
 import { createMemoryDistillSessionEventSink } from './memoryDistillSessionEventSink'
 import { listMemoryDistillJobs } from './memoryDistillReadStore'
 
+/** RFC-565: the three task knowledge reads the distillation takes (Task Execution's closed read, built by bootstrap). */
+export type MemoryDistillTaskKnowledge = Pick<
+  TaskKnowledgeQueries,
+  'distillationScope' | 'distillationSources' | 'distillationEvents'
+>
+
 export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   /** RFC-461: the distill work's WS notifications, moved here verbatim from the application layer. */
   readonly events: MemoryDistillEvents = {
@@ -43,6 +46,8 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
     /** RFC-485: Task Execution's node-run and node-output reads, built by bootstrap on the root db. */
     private readonly taskNodeRuns: TaskNodeRunReads,
     private readonly taskNodeOutputs: TaskNodeOutputReads,
+    /** RFC-565: Task Execution's knowledge read (distillation scope, sources and event bodies), built the same way. */
+    private readonly taskKnowledge: MemoryDistillTaskKnowledge,
     /**
      * RFC-367 test seam; production omits it and gets the real
      * `memory_distill_events` writer. (It replaces the old `capture` argument,
@@ -54,7 +59,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async findTaskScope(taskId: string) {
-    return createTaskKnowledgeQueries(this.db).distillationScope(taskId)
+    return this.taskKnowledge.distillationScope(taskId)
   }
 
   async enqueue(input: Parameters<MemoryDistillWorkStore['enqueue']>[0]): Promise<void> {
@@ -293,7 +298,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   // RFC-366 task-run 源：任务本身的收尾快照。
   async listTaskRunSources(ids: readonly string[]) {
-    return createTaskKnowledgeQueries(this.db).distillationSources(ids)
+    return this.taskKnowledge.distillationSources(ids)
   }
 
   /**
@@ -326,7 +331,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listNodeRunEvents(ids: readonly string[]) {
-    return listNodeEventContents(this.db, ids)
+    return this.taskKnowledge.distillationEvents(ids)
   }
 
   async listApprovedMemories(

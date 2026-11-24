@@ -50,6 +50,7 @@ import { appHome } from '../src/util/paths'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { taskKnowledgeQueriesFor } from './helpers/taskKnowledge'
 
 const NONCE = 'deadbeefcafe0002'
 const SESSION_ID = 'ses_distill'
@@ -182,6 +183,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
       createClarifyAnswerQueries(db, taskExecutionParticipants),
       createNodeRunQueries(db),
       createNodeOutputQueries(db),
+      taskKnowledgeQueriesFor(db),
     ),
     nodeRunPrompts: composeNodeRunPromptOperations(
       createFileNodeRunPromptContent(join(appHome(), 'runs')),

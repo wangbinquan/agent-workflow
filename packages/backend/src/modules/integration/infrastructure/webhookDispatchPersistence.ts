@@ -1,6 +1,6 @@
 // RFC-359 W4-B4 —— webhook 派发持久化：一份实现，两个 provider 共用。
 
-import { createTaskTriggerQueries } from '@/modules/task-execution/public/queries'
+import type { TaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, sql } from 'drizzle-orm'
@@ -10,6 +10,8 @@ import type { WebhookDispatchPersistencePort } from '../application/ports/webhoo
 
 export function createWebhookDispatchPersistence(
   db: PersistenceDb,
+  /** RFC-565: Task Execution's trigger read, built by bootstrap on the same root db. */
+  taskTriggers: Pick<TaskTriggerQueries, 'findByOrigin' | 'status'>,
 ): WebhookDispatchPersistencePort {
   return {
     async triggerEnabled(triggerId) {
@@ -90,7 +92,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async findTaskByOrigin(input) {
-      return createTaskTriggerQueries(db).findByOrigin(input)
+      return taskTriggers.findByOrigin(input)
     },
 
     async getTrigger(triggerId) {
@@ -176,7 +178,7 @@ export function createWebhookDispatchPersistence(
           .limit(1)
       )[0]
       if (latest?.taskId == null) return null
-      return createTaskTriggerQueries(db).status(latest.taskId)
+      return taskTriggers.status(latest.taskId)
     },
 
     async markTriggerLaunchFailed(triggerId, error, now) {

@@ -1,4 +1,3 @@
-import { createNodeRunQueries } from '@/modules/task-execution/composition'
 // RFC-046 — locks the snapshot capture path added to memoryInject.ts:
 //   - injectMemoryForRun returns { block, snapshot } (parity wired in
 //     runner.ts at T4).
@@ -25,7 +24,7 @@ import {
 } from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
-import { DrizzleMemoryInjectionReadStore } from '../src/modules/memory/infrastructure/memoryInjectionReadStore'
+import { memoryInjectionReadStoreFor } from './helpers/memoryInjection'
 
 function mkAgent(id: string, name = id): Agent {
   return {
@@ -125,7 +124,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       approvedAt: 1_700_000_000_000,
     })
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -165,7 +164,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       createdAt: 1_000_000_000_000,
     })
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -179,7 +178,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
   test('B3: four-scope empty → block null AND snapshot null (in lock-step)', async () => {
     const { taskId } = await seedTask(db)
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -197,7 +196,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       tags: '{not-an-array',
     })
     const out = await injectMemoryForRun({
-      store: new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
+      store: memoryInjectionReadStoreFor(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -214,16 +213,13 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
       title: 'WF',
       tags: 'not-json-at-all',
     })
-    const set = await loadInjectableMemories(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        agentIds: [],
-        workflowId,
-        repoIds: [],
+    const set = await loadInjectableMemories(memoryInjectionReadStoreFor(db), {
+      agentIds: [],
+      workflowId,
+      repoIds: [],
 
-        repoGroupId: null,
-      },
-    )
+      repoGroupId: null,
+    })
     expect(set.byScope.workflow.length).toBe(1)
     expect(set.byScope.workflow[0]!.tags).toEqual([])
   })
@@ -297,17 +293,14 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       },
     ])
     const runId = await seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: payload })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        shardKey: null,
-        reviewIteration: 0,
-        runId,
-      },
-    )
+    const snap = await loadInjectedSnapshotFromFirstAttempt(memoryInjectionReadStoreFor(db), {
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      shardKey: null,
+      reviewIteration: 0,
+      runId,
+    })
     expect(snap?.length).toBe(1)
     expect(snap?.[0]?.id).toBe('m1')
   })
@@ -315,17 +308,14 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
   test('B7: attempt-0 column NULL → returns null (not throw)', async () => {
     const { taskId } = await seedTask(db)
     const runId = await seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: null })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        shardKey: null,
-        reviewIteration: 0,
-        runId,
-      },
-    )
+    const snap = await loadInjectedSnapshotFromFirstAttempt(memoryInjectionReadStoreFor(db), {
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      shardKey: null,
+      reviewIteration: 0,
+      runId,
+    })
     expect(snap).toBeNull()
   })
 
@@ -371,29 +361,23 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       shardKey: 'shard-b',
       json: payloadB,
     })
-    const snapA = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        shardKey: 'shard-a',
-        reviewIteration: 0,
-        runId: runIdA,
-      },
-    )
+    const snapA = await loadInjectedSnapshotFromFirstAttempt(memoryInjectionReadStoreFor(db), {
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      shardKey: 'shard-a',
+      reviewIteration: 0,
+      runId: runIdA,
+    })
     expect(snapA?.[0]?.id).toBe('mA')
-    const snapB = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        shardKey: 'shard-b',
-        reviewIteration: 0,
-        runId: runIdB,
-      },
-    )
+    const snapB = await loadInjectedSnapshotFromFirstAttempt(memoryInjectionReadStoreFor(db), {
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      shardKey: 'shard-b',
+      reviewIteration: 0,
+      runId: runIdB,
+    })
     expect(snapB?.[0]?.id).toBe('mB')
   })
 
@@ -434,17 +418,14 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       status: 'pending',
       json: null,
     })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        taskId,
-        nodeId: 'designer',
-        iteration: 0,
-        shardKey: null,
-        reviewIteration: 0,
-        runId: followupId,
-      },
-    )
+    const snap = await loadInjectedSnapshotFromFirstAttempt(memoryInjectionReadStoreFor(db), {
+      taskId,
+      nodeId: 'designer',
+      iteration: 0,
+      shardKey: null,
+      reviewIteration: 0,
+      runId: followupId,
+    })
     expect(snap?.[0]?.id).toBe('g1') // NOT 'g0' (the pre-fix regression)
   })
 
@@ -477,17 +458,14 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       status: 'pending',
       json: null,
     })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(
-      new DrizzleMemoryInjectionReadStore(db, createNodeRunQueries(db)),
-      {
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        shardKey: null,
-        reviewIteration: 0,
-        runId: followupId,
-      },
-    )
+    const snap = await loadInjectedSnapshotFromFirstAttempt(memoryInjectionReadStoreFor(db), {
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      shardKey: null,
+      reviewIteration: 0,
+      runId: followupId,
+    })
     expect(snap?.[0]?.id).toBe('gB')
   })
 })

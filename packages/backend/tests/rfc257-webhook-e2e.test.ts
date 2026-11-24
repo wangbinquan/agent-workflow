@@ -50,6 +50,7 @@ import { testTaskExecutionModule } from './helpers/taskExecutionModule'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { codeHostEventTypeRef } from '@/modules/integration/application/codeHostEvents'
 import type { MrTerminalControl } from '@/modules/integration/application/ports/mrTerminalControl'
+import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
 const SECRET = 'e2e-secret'
@@ -136,7 +137,12 @@ async function seedFixture(providerHarness: ProviderHarness) {
   // 真 dispatcher；只在 launch/cancel 处注入（fake launch 落真 tasks 行，
   // 让归属列与 supersede 走真实查询面）。
   const dispatcher = createWebhookDispatcher({
-    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(
+      db,
+      box,
+      scheduledTaskRuntime(db).operations,
+      createTaskTriggerQueries(db),
+    ),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     getDefaultRuntime: async () => null,
     terminalControl,

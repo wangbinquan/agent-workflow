@@ -59,6 +59,7 @@ import { createCrewStationBusinessExecution } from '@/platform/crewstation/busin
 import {
   composeCrewStationWorkspaceOwner,
   composeRemoteRepositoryMirrors,
+  createHostedWorkspaceOwnerQueries,
   idleRepositoryMirrorRefresh,
 } from '@/modules/source-control/composition'
 import { createCrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
@@ -355,6 +356,8 @@ export async function composeCrewStationProfile(
         log: createLogger('crewstation-recovery'),
         requesterFor: (identityAccess) =>
           composeCrewStationRecoveryRequester({ db, identityAccess }),
+        // RFC-565: Source Control's hosted workspace owner read, built on the deployment's database.
+        workspaceOwners: createHostedWorkspaceOwnerQueries(db),
       }),
       // RFC-429: reads, attempt contexts and mission input blobs are members of evidenceArtifacts.
       evidenceArtifacts: evidence.evidenceArtifacts,

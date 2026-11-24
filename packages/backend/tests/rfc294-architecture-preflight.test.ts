@@ -410,11 +410,9 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/util/log#Logger',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: unsafe/open type FunctionType',
   'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type FunctionType',
-  'modules/source-control/infrastructure/crewstation/workspaceOwnership.ts#readHostedWorkspaceOwnerForBusinessTask: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/source-control/infrastructure/repositoryIdentityQueries.ts#existingRepositoryIds: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/source-control/infrastructure/repositoryIdentityQueries.ts#repositoryExistsExpression: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/source-control/infrastructure/repositoryIdentityQueries.ts#repositoryExistsExpression: forbidden type import drizzle-orm#SQL',
-  'modules/source-control/infrastructure/repositoryIdentityQueries.ts#repositoryExistsExpression: forbidden type import drizzle-orm#SQLWrapper',
+  // RFC-565: `readHostedWorkspaceOwnerForBusinessTask`, `existingRepositoryIds` and the fragment `repositoryExistsExpression`
+  // left the public — bootstrap takes them from source-control's composition and hands over reads bound to the root handle
+  // (and the fragment to Task Execution's knowledge read); five entries settled.
   'modules/source-control/infrastructure/repositoryScopeAuthorization.ts#repositoryScopeExistenceReads: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
   'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: forbidden type import @/util/git#WorktreeCleanupProvenance',
   'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: unsafe/open type FunctionType',
@@ -438,16 +436,12 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // policy integration implements is the same contract on public/types, so its function type is visible here (S12 replaces the
   // process-level registration that takes it).
   'modules/task-execution/domain/terminalWorkspacePrune.ts#TerminalWorkspacePrunePolicy: unsafe/open type FunctionType',
-  // RFC-395 II-a transitional owner contracts bound to the caller's session / transaction / statement.
-  // Successor RFC-294 S5/S6: binding in composition; shared platform DTOs avoid new context edges.
-  'modules/task-execution/infrastructure/nodeEventQueries.ts#listNodeEventContents: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   // RFC-483: the SQL conditions `nodeRunStatusCondition`, `taskGateOpenCondition` and `taskGateVisibleCondition` left the
   // public — collaboration's badge read model takes them through its participant bindings — eight entries settled.
-  'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#AnyColumn',
-  'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#SQL',
-  'modules/task-execution/infrastructure/taskKnowledgeQueries.ts#createTaskKnowledgeQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
-  'modules/task-execution/infrastructure/taskTriggerQueries.ts#createTaskTriggerQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
+  // RFC-565: the remaining RFC-395 II-a transitional owner reads bound to the caller's handle left the public too —
+  // `listNodeEventContents` (now `TaskKnowledgeQueries.distillationEvents`), `createTaskKnowledgeQueries`,
+  // `createTaskTriggerQueries` and the fragment `nonTerminalTaskExists`: bootstrap builds them on the root handle from
+  // task-execution's composition and hands them to memory and integration; six entries settled.
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).
   'modules/task-execution/public/commands.ts#TaskRouteOperations: unsafe/open type FunctionType',
   'modules/task-execution/public/commands.ts#WorkgroupTaskRoomHostRunSnapshot: forbidden type import @/platform/runSelectionProjection#WorkgroupRunSelectionProjection',

@@ -86,12 +86,13 @@ export type {
   TaskGateDefinitionContext,
 } from '../application/ports/taskGateQueries'
 
-export { createTaskKnowledgeQueries } from '../infrastructure/taskKnowledgeQueries'
-export { createTaskTriggerQueries } from '../infrastructure/taskTriggerQueries'
-
-export { listNodeEventContents, type NodeEventContent } from '../infrastructure/nodeEventQueries'
+// RFC-565: the reads that took a bare database handle left the public — `createTaskKnowledgeQueries`,
+// `createTaskTriggerQueries`, `listNodeEventContents` (now `TaskKnowledgeQueries.distillationEvents`) and the SQL fragment
+// `nonTerminalTaskExists`. Bootstrap builds them on the root handle from task-execution's composition and hands them to
+// memory and integration, which type their inputs with the closed reads below.
 
 export type {
+  TaskDistillationEvent,
   TaskDistillationScope,
   TaskDistillationSource,
   TaskKnowledgeContext,
@@ -111,6 +112,5 @@ export type {
 
 // RFC-477: `callRowHumanWait` / `readTaskResourceUsage` / `parseCallHumanWait` left public with their only outside
 // consumer — the resource-limit policy, now task-execution's `application/resourceLimitEnforcement.ts`.
-export { nonTerminalTaskExists } from '../infrastructure/nonTerminalTaskExists'
 
 export { nextRetryIndex } from '../application/nextRetryIndex'
