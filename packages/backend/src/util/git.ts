@@ -3077,13 +3077,6 @@ export async function commitTree(
   return r.stdout.trim()
 }
 
-/** RFC-130 D30: pure oracle — does the text contain a residual git conflict marker?
- *  (Content conflicts only; modify-delete/binary/submodule leave NO markers, so
- *  this is a fast pre-check, NOT the authoritative resolution check.) */
-export function residualConflictMarkers(text: string): boolean {
-  return /^(<{7}|={7}|>{7})(\s|$)/m.test(text)
-}
-
 const GIT_MERGE_OPERATION_FILES = ['MERGE_HEAD', 'MERGE_MSG', 'MERGE_MODE', 'AUTO_MERGE'] as const
 
 interface GitMergeOperationFile {

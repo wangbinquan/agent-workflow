@@ -50,7 +50,7 @@ import {
   type MergeConflictManifest,
   parseConflictManifest,
   type ResolvedPathState,
-} from '@/services/mergeAgent'
+} from '../../domain/mergeConflictResolution'
 import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 // RFC-585: the two isolation errors Task Execution reads are declared in Source Control's domain (offered through public/types).
 import {

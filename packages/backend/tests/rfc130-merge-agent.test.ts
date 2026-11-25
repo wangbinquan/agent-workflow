@@ -1,6 +1,7 @@
 // RFC-130 §6 — pure-core unit tests for the built-in merge-conflict resolver.
 //
-// These lock the deterministic pieces of services/mergeAgent.ts: the built-in
+// These lock the deterministic pieces of the merge-conflict domain file (modules/source-control/domain/
+// mergeConflictResolution.ts since RFC-586; formerly services/mergeAgent.ts): the built-in
 // agent shape, the synthetic node-id helpers, the merge-tree conflict CLASSIFIER
 // (the crux — silent conflict classes must not be mis-read as content), the
 // prompt builder, and the framework's own resolution VERDICT (D6: success is
@@ -23,7 +24,7 @@ import {
   parseBinaryWarningPaths,
   parseConflictManifest,
   type MergeConflictManifest,
-} from '../src/services/mergeAgent'
+} from '../src/modules/source-control/domain/mergeConflictResolution'
 
 // Real stdout from `git merge-tree --write-tree` (git 2.x), verified empirically.
 const REAL_MERGE_TREE_STDOUT = `586043a0a6f37c7d86f3a5f2618d912480056f42

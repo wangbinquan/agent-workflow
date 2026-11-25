@@ -13,7 +13,14 @@
 // real `git merge-tree --write-tree` (git ≥ 2.38) — NOT recalled from memory.
 
 import { envelopeOpenTag, sanitizeInlineField, type Agent } from '@agent-workflow/shared'
-import { residualConflictMarkers } from '@/util/git'
+
+// RFC-586: moved verbatim from util/git.ts — only this file (and its unit test) uses it, and the domain takes no git module.
+/** RFC-130 D30: pure oracle — does the text contain a residual git conflict marker?
+ *  (Content conflicts only; modify-delete/binary/submodule leave NO markers, so
+ *  this is a fast pre-check, NOT the authoritative resolution check.) */
+export function residualConflictMarkers(text: string): boolean {
+  return /^(<{7}|={7}|>{7})(\s|$)/m.test(text)
+}
 
 /** Name of the framework-internal merge-resolver agent (never a user row). */
 export const MERGE_AGENT_NAME = 'aw-merge-resolver'
@@ -94,12 +101,12 @@ export type {
   MergeConflictType,
   MergeConflictEntry,
   MergeConflictManifest,
-} from '@/modules/source-control/public/types'
+} from './isolationConflict'
 import type {
   MergeConflictType,
   MergeConflictEntry,
   MergeConflictManifest,
-} from '@/modules/source-control/public/types'
+} from './isolationConflict'
 
 /**
  * Classify a single `CONFLICT (...)` informational line from `git merge-tree`

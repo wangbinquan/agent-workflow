@@ -191,3 +191,11 @@ export type {
  */
 export type { WorkspaceChangePublicationParticipant } from '../application/ports/workspaceChangePublication'
 export { bindWorkspaceChangePublication } from '../composition/workspaceChangePublication'
+
+// RFC-586: the merge-resolver template Task Execution's merge-conflict port binds (agent, node id and prompt share the
+// agent's output port, so they stay with the conflict parsing in Source Control's domain).
+export {
+  buildMergeAgent,
+  buildMergeResolvePrompt,
+  mergeResolveNodeId,
+} from '../domain/mergeConflictResolution'

@@ -22,11 +22,14 @@ import {
   isoRefName,
   materializeTree,
   mergeTreeInMemory,
-  residualConflictMarkers,
   runGit,
   snapshotFullState,
 } from '../src/util/git'
-import { parseConflictManifest } from '../src/services/mergeAgent'
+// RFC-586: the marker oracle moved from util/git into the merge-conflict domain file.
+import {
+  parseConflictManifest,
+  residualConflictMarkers,
+} from '../src/modules/source-control/domain/mergeConflictResolution'
 
 async function initRepo(seed: Record<string, string> = { 'base.txt': 'base\n' }): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc130-'))

@@ -60,7 +60,7 @@ import {
   mergeIsolatedWorkspace,
   resolveIsolatedConflict,
 } from '@/modules/task-execution/infrastructure/isolationWorkspaceView'
-import { buildMergeAgent } from '@/services/mergeAgent'
+import { buildMergeAgent } from '@/modules/source-control/domain/mergeConflictResolution'
 import { resolveSyntheticTaskAgentInjection } from '@/modules/task-execution/infrastructure/taskExecutionResources'
 import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'

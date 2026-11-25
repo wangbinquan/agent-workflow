@@ -30,7 +30,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { resolveInjection } from './helpers/legacyTaskExecutionInjectionResolver'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { buildCommitAgent } from '../src/modules/task-execution/domain/commitAgent'
-import { buildMergeAgent } from '../src/services/mergeAgent'
+import { buildMergeAgent } from '../src/modules/source-control/domain/mergeConflictResolution'
 import {
   activateBootReverifyForTest,
   markSkillBootVerified,

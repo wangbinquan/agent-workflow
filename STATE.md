@@ -1,3 +1,22 @@
+## 2026-11-25 RFC-586 合并冲突解决的纯逻辑归 source-control 的 domain（In Progress；`design/RFC-586-merge-conflict-resolution-into-source-control/`）
+
+- **来由**：RFC-585 之后 `services/mergeAgent.ts` 由 source-control 的隔离实现（冲突解析、判定与提示词）与 task-execution 的合并冲突端口（代理定义、
+  节点号与提示词）共用。提示词写着代理的输出端口名、代理定义声明同一个端口，两者必须在一处，而 source-control 的隔离实现要用提示词、又不能依赖
+  task-execution——整份归 source-control。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、
+  2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」、
+  2026-11-25「继续」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`services/mergeAgent.ts` 原样迁入 `modules/source-control/domain/mergeConflictResolution.ts`（冲突类型改取同目录的声明），`residualConflictMarkers`
+  逐字从 `util/git.ts` 移入（domain 不取 git 模块）；source-control 的 `public/participants` 交出 `buildMergeAgent`、`buildMergeResolvePrompt`、
+  `mergeResolveNodeId`，task-execution 的合并冲突装配改从那里取。随改：归属表、`counts.json` 两个上限、取冲突标记判定的用例；新增 RFC-586 用例。
+- **收口对账**（RFC-294 C10～C13，design §5）：C10 纯逻辑进 domain，task-execution 经 public 取；C11 source-control 的 public 面多三个被消费的模板函数；
+  C12 RFC-586 用例覆盖全部说明符；C13 legacy 横向文件 63 → 62、`services/` 业务实现 3 → 2（余 `codeRoundContract.ts` 与 `repoCredentials.ts`），其余
+  计数不升。
+- **集中验证**（基于 `c17e1e7fe`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；选出 421 个
+  用例文件、3480 条全部通过；读已提交源码的 364 个用例文件、3614 条在候选导出里通过（`rfc321` 在主树里 10 / 10）；五种变异都被认出；架构报告 60 个
+  计数里只有两个 legacy 计数下降，public 类型偏差、跨 context 内部文件对、模块分层违规与 DAG 之外的已提供文件对不变。实现门 PASS（本会话按路径限定
+  自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：`c17e1e7fe`（RFC-585）的 windows-platform 与 git-protocols-e2e 通过，主 CI 在跑（已过的 57 格无红）；RFC-585 待它全绿后转 Done。
+
 ## 2026-11-25 RFC-585 节点隔离工作区的实现一族归 source-control（In Progress；`design/RFC-585-node-isolation-family-into-source-control/`）
 
 - **来由**：RFC-294 W5——source-control 拥有 worktree / submodule，`util/git` 迁为本域 infrastructure 叶子。节点隔离工作区的本机实现停在
