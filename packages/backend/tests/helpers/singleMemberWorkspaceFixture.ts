@@ -19,7 +19,7 @@ import { createRootTaskLaunchKernel } from '@/modules/task-execution/application
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { createRepoGroup } from '@/modules/source-control/application/repositoryGroups'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type { ProviderHarness } from './eachProvider'
 import { createEachProviderTaskExecution } from './eachProviderTaskExecution'
 import { remoteUrlFor } from './gitHttpRemote'

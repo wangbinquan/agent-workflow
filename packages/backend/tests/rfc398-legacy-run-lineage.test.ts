@@ -13,7 +13,7 @@ import { submitReviewDecision } from '@/modules/collaboration/infrastructure/rev
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { ulid } from 'ulid'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import {

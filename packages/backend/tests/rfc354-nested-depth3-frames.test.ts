@@ -49,7 +49,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

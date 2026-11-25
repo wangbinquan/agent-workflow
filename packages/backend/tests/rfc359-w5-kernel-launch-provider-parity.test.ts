@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 

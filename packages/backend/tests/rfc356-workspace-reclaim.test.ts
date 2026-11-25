@@ -26,10 +26,10 @@ import {
 import {
   reclaimStaleRefLocks,
   reclaimWorktreePath,
-  runGit,
   STALE_REF_LOCK_MIN_AGE_MS,
   withWorktreeRegistryLock,
 } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const isWindows = process.platform === 'win32'

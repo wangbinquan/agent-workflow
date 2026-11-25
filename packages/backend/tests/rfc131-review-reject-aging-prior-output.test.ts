@@ -41,7 +41,7 @@ import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clari
 import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { reenterScheduler } from './reenter-scheduler'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createAgent } from './helpers/model/resourceWrites'

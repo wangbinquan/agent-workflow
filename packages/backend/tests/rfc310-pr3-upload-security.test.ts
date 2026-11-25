@@ -36,7 +36,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { MISSION_UPLOAD_MAX_BYTES } from '../src/modules/development-automation/inbound/http/missionInputUploadRoutes'
 import {
   previewDirectInput,

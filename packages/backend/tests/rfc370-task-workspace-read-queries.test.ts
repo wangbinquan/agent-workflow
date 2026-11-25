@@ -29,7 +29,7 @@ import {
 } from '@/modules/source-control/public/queries'
 import { taskDiffProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { DomainError } from '@/platform/errors/domainErrors'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 import { held } from './helpers/portArtifactContent'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

@@ -40,7 +40,7 @@ import {
 import { classifyRepositoryPushFailure } from '../src/modules/source-control/domain/repositoryPushFailure'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
-import { runGit as executeGit } from '../src/util/git'
+import { runGit as executeGit } from '../src/platform/execution/local/gitProcess'
 import { createUser } from './helpers/userFixture'
 
 const DIGEST = 'a'.repeat(64)

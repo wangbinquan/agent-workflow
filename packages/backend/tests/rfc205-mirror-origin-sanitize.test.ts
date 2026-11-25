@@ -18,7 +18,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 let db: PersistenceDb
 let tmp: string

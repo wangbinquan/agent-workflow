@@ -17,7 +17,8 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { commitTree, runGit, snapshotFullState } from '../src/util/git'
+import { commitTree, snapshotFullState } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 async function initRepo(): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc130-ident-'))

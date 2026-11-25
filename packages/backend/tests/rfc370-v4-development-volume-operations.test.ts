@@ -19,7 +19,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { scanRepositoryFacts } from '@/modules/development-automation/infrastructure/repositoryFactsScan'
 import { createRepositoryFactsCollectorFromLocations } from '@/modules/development-automation/infrastructure/repositoryFactsCollector'
 import {

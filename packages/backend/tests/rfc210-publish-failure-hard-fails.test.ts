@@ -23,7 +23,7 @@ import {
   snapshotNodeIsoFinal,
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import {
   WRAPPER_MECHANICS_SOURCE,
   AGENT_MECHANICS_SOURCE,

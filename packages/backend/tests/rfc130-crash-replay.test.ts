@@ -33,7 +33,7 @@ import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolation
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 interface Harness {
   db: DbClient

@@ -47,7 +47,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 // immediate mint created none.
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const actor = { userId: 'u1', role: 'owner' as const }

@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { runGit as defaultRunGit } from '@/util/git'
+import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import {
   detectSubmodules,
   listEffectiveSubmodules,

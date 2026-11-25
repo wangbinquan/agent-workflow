@@ -36,7 +36,7 @@ import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionT
 import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { __resetRecoveryCountersForTest } from '../src/platform/health/recoveryCounters'
 import { buildActor } from '../src/auth/actor'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 

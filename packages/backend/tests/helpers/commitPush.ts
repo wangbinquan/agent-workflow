@@ -6,7 +6,7 @@ import { COMMIT_PUSH_NODE_PREFIX } from '@agent-workflow/shared'
 import type { CommitPushDeps } from '../../src/modules/task-execution/infrastructure/commitPushAttempt'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
 import { createFileRepositoryGitWorkspaceFactory } from '@/modules/source-control/composition'
-import type { runGit } from '@/util/git'
+import type { runGit } from '@/platform/execution/local/gitProcess'
 
 type CommitPushTestOverrides = Partial<
   Pick<CommitPushDeps, 'log' | 'publicationTransport' | 'repositoryGitWorkspaces'>

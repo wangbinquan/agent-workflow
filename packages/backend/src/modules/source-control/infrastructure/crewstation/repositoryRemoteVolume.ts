@@ -12,7 +12,7 @@ import {
   type RepoRefsResponse,
 } from '@agent-workflow/shared'
 import { DomainError } from '@/platform/errors/domainErrors'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryRemoteFacts } from '../../application/ports/repositoryMirrors'
 import { assertHostedRepositoryUrl } from './repositoryUrl'
 

@@ -42,7 +42,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { deriveFrontier } from './helpers/frontierSelection'
 // RFC-408: the DAG structural graph moved to engine/scope/.
 import { buildScopeUpstreams } from '../src/modules/task-execution/engine/scope/dagGraph'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 

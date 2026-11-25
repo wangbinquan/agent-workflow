@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type { ActionWorkspaceEffects } from '../../application/ports/actionWorkspaceEffects'
 import { createFileAutomationWorkspaceEffectsFactory } from './fileAutomationWorkspaceEffects'
 

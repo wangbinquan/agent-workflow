@@ -20,7 +20,7 @@ import { join, resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createAgent, createWorkflow } from './helpers/model/resourceWrites'

@@ -6,7 +6,7 @@
 // daemon runs it in-process, a hosted one inside the development volume
 // (`repository-facts-scan`), and the cells are projected from the summary in
 // both.
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const EXTENSION_LANGUAGES: Readonly<Record<string, string>> = {
   '.java': 'java',

@@ -39,7 +39,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 
 import { deriveFrontier } from './helpers/frontierSelection'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 // 同毫秒内多次铸行时保证 id 单调（freshness 是纯 id-order）。
 const ulid = monotonicFactory()

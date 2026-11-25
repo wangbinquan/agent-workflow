@@ -54,7 +54,8 @@ import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/applica
 import type { SystemAgentRunResult } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
 import { getTask } from './helpers/taskDetailRead'
 import { requireTaskMember } from '@/modules/collaboration/infrastructure/taskCollab'
-import { parseNumstatZ, runGit } from '../src/util/git'
+import { parseNumstatZ } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   triggerChangeNarrative,
   type NativeChangeNarrativeDeps as ChangeNarrativeDeps,

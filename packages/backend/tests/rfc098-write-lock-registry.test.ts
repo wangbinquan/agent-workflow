@@ -54,7 +54,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const SRC = (f: string) => resolve(import.meta.dir, '..', 'src', 'services', f)

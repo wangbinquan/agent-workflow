@@ -11,7 +11,7 @@ import type {
   ResolvedRepoSource,
   WorkspaceCleanupReport,
 } from '@/modules/source-control/application/workspaceMaterialization'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { assertHostedRepositoryUrl } from '@/modules/source-control/infrastructure/crewstation/repositoryUrl'
 
 test('hosted remote locations retain SSH account names without embedding credentials', () => {

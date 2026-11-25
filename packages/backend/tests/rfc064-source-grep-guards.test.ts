@@ -24,7 +24,7 @@ import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

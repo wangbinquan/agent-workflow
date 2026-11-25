@@ -10,11 +10,11 @@ import {
   createIsolatedWorktree,
   createWorktree,
   materializeTree,
-  runGit,
   snapshotFullState,
   type CreateWorktreeOptions,
   type SubmoduleMode,
 } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const roots: string[] = []
 

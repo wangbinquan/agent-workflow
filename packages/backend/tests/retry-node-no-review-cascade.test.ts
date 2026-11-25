@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 

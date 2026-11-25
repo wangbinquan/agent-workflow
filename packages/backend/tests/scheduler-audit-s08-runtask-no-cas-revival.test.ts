@@ -44,7 +44,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 // 同毫秒多次 ulid() 的随机分量可逆序；monotonicFactory 保证后铸 id 恒更大
 // （先例与理由见 scheduler-clarify-dispatch.test.ts:33-40）。

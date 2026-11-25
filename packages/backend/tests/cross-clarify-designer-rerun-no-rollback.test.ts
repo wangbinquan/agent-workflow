@@ -42,7 +42,7 @@ import {
   reassignTaskQuestion,
 } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 
 const actor = { userId: 'u1', role: 'owner' as const }

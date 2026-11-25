@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import { runGit as defaultRunGit } from '../src/util/git'
+import { runGit as defaultRunGit } from '../src/platform/execution/local/gitProcess'
 import type { RepositoryGit } from '../src/modules/source-control/application/repositoryCommit'
 import {
   bindConflictMergeParticipant,

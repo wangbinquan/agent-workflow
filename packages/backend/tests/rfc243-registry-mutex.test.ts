@@ -14,10 +14,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
   createIsolatedWorktree,
-  runGit,
   snapshotFullState,
   withWorktreeRegistryLock,
 } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 async function initRepo(dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true })

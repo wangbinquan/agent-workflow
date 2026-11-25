@@ -1,4 +1,4 @@
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { captureAgentWorkspaceGitControlSnapshot } from '../../application/agentWorkspaceGitControl'
 import type { AgentWorkspaceGitControlObservation } from '../../application/ports/agentWorkspaceGitControl'
 

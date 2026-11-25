@@ -42,7 +42,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { createResumeEngine } from './helpers/resumeEngine'
 import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 

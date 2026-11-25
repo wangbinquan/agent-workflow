@@ -56,7 +56,7 @@ import {
   toContainerRelative,
 } from '@/modules/task-execution/application/portArtifacts'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()

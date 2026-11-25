@@ -52,7 +52,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { isDispatchable } from '../src/modules/task-execution/engine/scope/frontierRules'
 import { isNodeRunFresh } from '../src/modules/task-execution/application/runProvenance'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

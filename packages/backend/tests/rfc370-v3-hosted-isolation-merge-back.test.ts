@@ -19,7 +19,7 @@ import {
   parseHostedWorkspaceReference,
 } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const volume = mkdtempSync(join(tmpdir(), 'aw-hosted-iso-'))
 afterAll(() => rmSync(volume, { recursive: true, force: true }))

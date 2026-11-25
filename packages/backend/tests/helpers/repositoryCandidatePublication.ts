@@ -10,7 +10,7 @@ import type {
   RepositoryPublicationSession,
 } from '@/modules/source-control/public/types'
 import { createFileRepositoryCandidateEffectsFactory } from '@/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 export class CandidatePublicationStore {
   readonly locations = new Map<string, string>()

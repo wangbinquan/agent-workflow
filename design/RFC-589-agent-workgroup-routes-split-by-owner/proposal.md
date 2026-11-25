@@ -1,6 +1,6 @@
 # RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十一批）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（此前多次同样下达）：
+- **状态**：Done（2026-11-25，落地 `24d4e0a9f`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（此前多次同样下达）：
   落位按 RFC-587 条目里已裁定的“余下两批的落位”，不新增 DAG 边；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §2、§3 与 plan §4.6 W9-D；上一批见
   [RFC-588](../RFC-588-task-routes-split-by-owner/proposal.md)。

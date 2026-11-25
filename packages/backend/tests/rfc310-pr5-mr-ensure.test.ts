@@ -17,7 +17,7 @@ import {
   type StartedSystemMockSuite,
 } from '@agent-workflow/system-mocks'
 
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   ensureMergeRequest,
   observeMergeRequest,

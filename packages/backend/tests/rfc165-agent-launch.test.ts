@@ -94,7 +94,7 @@ import { autoResumeInterruptedTasks } from '../src/modules/task-execution/applic
 import { createUser } from './helpers/userFixture'
 import { buildWorkflowValidationContext } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

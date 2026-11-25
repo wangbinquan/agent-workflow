@@ -8,7 +8,7 @@ import {
   readRepositoryCommitPreview,
   type RepositoryGit,
 } from '../src/modules/source-control/application/repositoryCommit'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { bindRepositoryCommitParticipant } from '../src/modules/source-control/composition'
 import { createFileRepositoryPreviewIndexPort } from '../src/modules/source-control/infrastructure/local/fileRepositoryPreviewIndex'
 

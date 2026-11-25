@@ -34,7 +34,7 @@ import {
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-gl-home-'))
 const created: string[] = []

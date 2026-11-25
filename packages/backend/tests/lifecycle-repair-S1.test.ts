@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm'
 
 import { createRepairEngine } from './helpers/repairEngine'
 import { isoWorktreePathFor } from '@/modules/source-control/infrastructure/local/nodeIsolation'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 import { withTaskReviewMutationLock } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'
 import { cancelViaEngine } from './helpers/cancelEngine'

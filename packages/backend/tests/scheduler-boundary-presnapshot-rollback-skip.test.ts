@@ -38,7 +38,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,

@@ -48,7 +48,7 @@ import { ulid } from 'ulid'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'

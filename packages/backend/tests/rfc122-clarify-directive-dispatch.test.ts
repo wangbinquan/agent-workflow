@@ -49,7 +49,7 @@ import {
   type ClarifyQuestion,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,

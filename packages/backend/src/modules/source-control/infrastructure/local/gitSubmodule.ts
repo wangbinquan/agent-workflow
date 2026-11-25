@@ -8,12 +8,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   AW_INTERNAL_GIT_IDENTITY,
-  runGit,
   resolveSubmodulePool,
   submoduleGitDir,
   subSlug,
   type SubSnapshot,
 } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 export {
   detectSubmodules,

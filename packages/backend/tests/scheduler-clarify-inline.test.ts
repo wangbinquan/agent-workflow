@@ -36,7 +36,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { reenterScheduler } from './reenter-scheduler'
 
 // Multi-round runTask with mock-opencode and real git took about 1.7 s per PostgreSQL case on CI before

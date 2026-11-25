@@ -1,4 +1,4 @@
-import { nonInteractiveGitEnv } from '../../src/util/git'
+import { nonInteractiveGitEnv } from '../../src/platform/execution/local/gitProcess'
 
 const DEFAULT_ERROR_OUTPUT_LIMIT = 4_096
 const TIMED_OUT = Symbol('timed-out')

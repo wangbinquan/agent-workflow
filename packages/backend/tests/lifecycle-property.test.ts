@@ -41,7 +41,7 @@ import {
   dispatchReviewNode,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 // Invariant checker (copy of T1c's, minus the C1/T2/T3 rules we don't

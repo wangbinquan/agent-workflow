@@ -35,7 +35,7 @@ import { trySetTaskStatus } from '@/modules/task-execution/infrastructure/taskLi
 import { enforceLimits } from './helpers/resourceLimits'
 import { isTaskActive } from './helpers/taskDriverRegistry'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

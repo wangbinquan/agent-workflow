@@ -53,7 +53,7 @@ import { createIdentityAccessRuntime } from '../../src/modules/identity-access/c
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { taskExecutionResourceDependencies } from '../../src/bootstrap/taskExecutionResourceDependencies'
 import { createTaskExecutionResourceBinding } from '../../src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { runGit } from '../../src/util/git'
+import { runGit } from '../../src/platform/execution/local/gitProcess'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/public/participants'

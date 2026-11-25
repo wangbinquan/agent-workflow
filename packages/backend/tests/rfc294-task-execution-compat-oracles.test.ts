@@ -43,7 +43,7 @@ import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productio
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,

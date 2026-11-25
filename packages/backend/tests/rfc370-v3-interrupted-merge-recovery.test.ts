@@ -33,7 +33,7 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createNodeIso } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createProviderTaskExecutionTestTopology,

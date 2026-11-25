@@ -12,7 +12,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { nonInteractiveGitEnv } from '@/util/git'
+import { nonInteractiveGitEnv } from '@/platform/execution/local/gitProcess'
 import { envRecordGet } from '@agent-workflow/shared'
 
 describe('nonInteractiveGitEnv()', () => {
@@ -61,7 +61,8 @@ describe('nonInteractiveGitEnv()', () => {
 
 describe('git spawn sites wire nonInteractiveGitEnv()', () => {
   const SPAWN_SITES = [
-    'src/util/git.ts',
+    // RFC-591: runGit (the util/git spawn site) moved into platform's execution layer.
+    'src/platform/execution/local/gitProcess.ts',
     'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
   ]
   for (const rel of SPAWN_SITES) {

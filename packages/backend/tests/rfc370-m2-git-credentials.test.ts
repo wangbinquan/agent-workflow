@@ -27,7 +27,7 @@ import {
   workspaceHelperArguments,
   workspaceResultPath,
 } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const id = '01a1428d-05f5-7000-9af3-aef7382bfe08'

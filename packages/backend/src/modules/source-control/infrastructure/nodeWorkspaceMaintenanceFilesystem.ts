@@ -4,7 +4,8 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
-import { deleteSnapshotRefs, removeWorktree, runGit, withWorktreeRegistryLock } from '@/util/git'
+import { deleteSnapshotRefs, removeWorktree, withWorktreeRegistryLock } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { createLogger } from '@/platform/logging/logger'
 import type {
   WorkspaceMaintenanceFilesystem,

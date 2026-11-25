@@ -25,7 +25,7 @@ import {
 } from '../src/modules/workspace-insight/application/callGraph/callTargets'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { launchTestTask } from './helpers/productionTaskLaunch'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 

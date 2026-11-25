@@ -70,7 +70,7 @@ import {
 import { buildFrontierMintPlan } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { abortAllActiveTasks } from './helpers/taskDriverRegistry'
 import { getTask } from './helpers/taskDetailRead'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {

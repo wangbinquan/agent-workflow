@@ -45,7 +45,7 @@ import {
 } from '../src/modules/task-execution/composition/agentActionExecution'
 import { DIGITAL_EMPLOYEE_RESULT_PORT } from '../src/modules/task-execution/domain/digitalEmployeeHost'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

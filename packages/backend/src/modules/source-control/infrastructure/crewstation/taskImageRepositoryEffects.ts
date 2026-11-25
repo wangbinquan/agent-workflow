@@ -4,7 +4,8 @@
 // each and run the same application function as standalone, with the native
 // step effects against the volume. Paths arrive as volume paths and are
 // contained to it before any effect.
-import { gitCommitExists, runGit } from '@/util/git'
+import { gitCommitExists } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { mkdirSync, rmSync } from 'node:fs'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'

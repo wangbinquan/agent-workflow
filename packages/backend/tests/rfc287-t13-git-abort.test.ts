@@ -12,7 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runGit, GIT_ABORTED_EXIT_CODE } from '@/util/git'
+import { runGit, GIT_ABORTED_EXIT_CODE } from '@/platform/execution/local/gitProcess'
 
 function tmp(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix))

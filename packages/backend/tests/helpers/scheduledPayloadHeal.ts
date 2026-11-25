@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { rejectRetiredStartTaskKeys } from '@agent-workflow/shared'
 
 import type { Row, ScheduledTaskOperations } from '@/modules/integration/application/scheduledTasks'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 /**
  * RFC-165 (§9): one-shot boot healer — rewrite stored path-mode launch

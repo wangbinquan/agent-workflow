@@ -32,7 +32,7 @@ import {
   resolveCachedRepo,
 } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { refreshDueRepos } from '../src/modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   credentialedRemoteUrlFor,
   startGitHttpRemote,

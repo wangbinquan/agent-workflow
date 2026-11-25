@@ -54,7 +54,7 @@ import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { submitTaskContinuation } from '../src/modules/task-execution/application/submitTaskContinuation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence' // 同毫秒插入仍保 id 单调（pure-id freshness）
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 

@@ -71,7 +71,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
 

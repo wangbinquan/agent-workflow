@@ -18,7 +18,7 @@ import {
   createGitBaselineReader,
   createRepositoryBaselineResolverFromLocations,
 } from '@/modules/development-automation/infrastructure/gitBaselineReader'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const REFERENCE = 'cs:repository/opaque#baseline-input'
 const SHA = 'c'.repeat(40)

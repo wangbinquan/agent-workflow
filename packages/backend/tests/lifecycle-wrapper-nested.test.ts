@@ -42,7 +42,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { transitionTaskStatusByEvent } from '@/modules/task-execution/infrastructure/taskLifecycle'
 
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 

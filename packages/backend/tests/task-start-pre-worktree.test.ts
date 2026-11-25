@@ -36,7 +36,7 @@ import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { ulid } from 'ulid'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createAgent, createWorkflow } from './helpers/model/resourceWrites'

@@ -5,11 +5,11 @@ import { z } from 'zod'
 import {
   applySparseSubdir,
   repoSlug,
-  runGit,
   withWorktreeRegistryLock,
   type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
 } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { syncSubmodules } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { ConflictError } from '@/platform/errors/domainErrors'

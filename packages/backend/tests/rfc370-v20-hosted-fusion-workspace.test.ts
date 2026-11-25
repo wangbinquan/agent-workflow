@@ -28,7 +28,7 @@ import { createFileFusionWorkspaceEffects } from '@/modules/source-control/compo
 import { createHostedFusionWorkspaces } from '@/modules/source-control/infrastructure/crewstation/fusionWorkspace'
 import type { FusionWorkspaceFile } from '@/modules/source-control/public/participants'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const enc = (text: string) => new TextEncoder().encode(text)
 const roots: string[] = []

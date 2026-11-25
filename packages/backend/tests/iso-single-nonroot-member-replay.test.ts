@@ -46,7 +46,7 @@ import { type IsolatedAgentRunBinding } from '@/modules/task-execution/applicati
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { snapshotNodeIsoFinal } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { createLogger } from '@/platform/logging/logger'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'

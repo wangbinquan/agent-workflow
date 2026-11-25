@@ -45,7 +45,7 @@ import {
 } from './helpers/model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import {
   NODE_KIND_BEHAVIORS,
   nodeKindParticipatesInRetryCascade,

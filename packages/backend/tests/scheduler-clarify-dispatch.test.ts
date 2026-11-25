@@ -57,7 +57,7 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 import { setNodeClarifyDirective } from './helpers/clarifyDirectives'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // RFC-132 (PR-C): the unified flat injector (buildClarifyQueueContext) reads DISPATCHED

@@ -39,10 +39,10 @@ import {
   materializeTree,
   mergeTreeInMemory,
   reclaimWorktreePath,
-  runGit,
   snapshotFullState,
   usableSubmodules,
 } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import {
   buildMergeResolvePrompt,
   evaluateResolution,

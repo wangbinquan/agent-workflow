@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
 import type { WorkspaceExcludeProfileReceipt } from '@/modules/source-control/public/types'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const volume = mkdtempSync(join(tmpdir(), 'aw-hosted-exclude-'))
 afterAll(() => rmSync(volume, { recursive: true, force: true }))

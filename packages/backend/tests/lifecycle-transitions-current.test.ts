@@ -55,7 +55,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { reapOrphanRuns } from '../src/modules/task-execution/infrastructure/local/orphanRunReap'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 

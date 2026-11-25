@@ -40,7 +40,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { archivePortArtifacts } from '@/modules/task-execution/composition/portArtifacts'
 import { parseArchiveJson } from '@/modules/task-execution/domain/portArtifacts'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit, snapshotFullState } from '../src/util/git'
+import { snapshotFullState } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const ulid = monotonicFactory()
 

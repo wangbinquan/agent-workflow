@@ -19,7 +19,7 @@ import { LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join, sep } from 'node:path'
 import { extractTarGz, tarGz } from '@/platform/persistence/archive'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('worktreeBackup')

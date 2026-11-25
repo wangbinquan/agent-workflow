@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type {
   EmployeeCaseWorkspaceEffects,
   EmployeeCaseWorkspaceStepEffectsFactory,

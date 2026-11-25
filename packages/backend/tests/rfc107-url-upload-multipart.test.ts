@@ -65,7 +65,7 @@ import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLa
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { ValidationError } from '../src/platform/errors/domainErrors'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {

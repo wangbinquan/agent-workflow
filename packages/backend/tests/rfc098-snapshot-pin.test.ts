@@ -38,7 +38,8 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { rollbackNodeRunWorktrees } from '../src/modules/task-execution/infrastructure/nodeRollback'
 import type { RollbackTarget } from '../src/modules/task-execution/infrastructure/nodeRollback'
-import { createWorktree, runGit, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
+import { createWorktree, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createLogger } from '../src/platform/logging/logger'
 
 const ulid = monotonicFactory()

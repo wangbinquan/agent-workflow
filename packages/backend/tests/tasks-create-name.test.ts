@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

@@ -1,4 +1,4 @@
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { realpath, stat } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import {

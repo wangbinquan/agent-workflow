@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   runCommitPush,
   type CommitPushParams,

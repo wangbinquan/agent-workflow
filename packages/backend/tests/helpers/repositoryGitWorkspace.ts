@@ -10,7 +10,7 @@ import type {
 import type { RepositoryPreviewIndexScope } from '@/modules/source-control/application/ports/repositoryPreviewIndex'
 import { selectRepositoryGitWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { createFileRepositoryGitWorkspaceFactory } from '@/modules/source-control/composition'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 export interface GitWorkspaceCall {
   readonly workspaceRef: string

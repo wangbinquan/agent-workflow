@@ -36,7 +36,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 // Runtime-generated shim opencode (written into the per-test temp dir — not a
 // shared fixture). Contract mirrored from fixtures/mock-opencode.ts: argv

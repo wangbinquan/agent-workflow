@@ -21,7 +21,7 @@ import {
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 // RFC-254 T32: every case here is REAL git — init canonical repos, snapshot full
 // state, `worktree add` an iso, merge back. On a quiet Windows host the slowest

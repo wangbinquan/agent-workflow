@@ -26,7 +26,7 @@ import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/m
 import { localCodeReviewReads } from './helpers/workspaceInsightReads'
 import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { launchTestTask } from './helpers/productionTaskLaunch'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 

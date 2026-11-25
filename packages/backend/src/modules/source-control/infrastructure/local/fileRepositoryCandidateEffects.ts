@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { runGit as defaultRunGit } from '@/util/git'
+import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   RepositoryCandidateStepEffectsFactory,

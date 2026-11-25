@@ -48,7 +48,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { allocateNodeRunSeq } from './helpers/rfc374Fixtures'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const ulid = monotonicFactory()
 

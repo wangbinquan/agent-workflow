@@ -25,7 +25,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { runCommitPush } from '@/modules/task-execution/infrastructure/commitPushAttempt'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {

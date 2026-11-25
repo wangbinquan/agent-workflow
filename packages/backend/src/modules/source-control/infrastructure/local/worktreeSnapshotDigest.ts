@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 /** Files reported dirty/untracked by `status --porcelain -z`. */
 function dirtyPaths(porcelainZ: string): string[] {

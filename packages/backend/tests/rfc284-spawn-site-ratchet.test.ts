@@ -93,7 +93,8 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       '启动/重启调用共同拥有 watchdog、terminate、drain 与有界重启，后台重任务不再散落' +
       '到 HTTP 主事件循环。',
   },
-  'util/git.ts': {
+  // RFC-591: the git process runner (and its one spawn) moved from util/git.ts into platform's execution layer.
+  'platform/execution/local/gitProcess.ts': {
     governance: 'process-group',
     count: 1,
     why: 'git spawn 双点之一（RFC-208 组杀/超时特化语义，豁免有据；与 gitRepoCache 镜像互锁）。',
@@ -101,7 +102,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
   'modules/source-control/infrastructure/local/repositoryMirrorCache.ts': {
     governance: 'process-group',
     count: 1,
-    why: 'git spawn 双点之二（镜像 util/git.ts，注释互指防漂移；RFC-284 T18 加文本锁）。',
+    why: 'git spawn 双点之二（镜像 platform/execution/local/gitProcess.ts 的 runGit，注释互指防漂移；RFC-284 T18 加文本锁）。',
   },
   'bootstrap/autoUpgradeChild.ts': {
     governance: 'short-lived',

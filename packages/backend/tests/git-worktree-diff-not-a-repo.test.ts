@@ -17,7 +17,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { diffFailureMessage, gitDiffSnapshot, isGitWorkTree, runGit } from '../src/util/git'
+import { diffFailureMessage, gitDiffSnapshot, isGitWorkTree } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 interface Fixture {
   /** A real git work tree with one commit on `main`. */

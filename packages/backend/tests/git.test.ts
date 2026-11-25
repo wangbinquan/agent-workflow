@@ -18,8 +18,8 @@ import {
   removeWorktree,
   repoSlug,
   requireGitRepo,
-  runGit,
 } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 
 let baseTmp: string

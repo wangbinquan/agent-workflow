@@ -43,13 +43,13 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/platform/errors/domainErrors'
+import { classifyBaseRef } from '@/util/git'
 import {
-  classifyBaseRef,
   GIT_ABORTED_EXIT_CODE,
   GIT_TIMEOUT_EXIT_CODE,
   nonInteractiveGitEnv,
   runGit,
-} from '@/util/git'
+} from '@/platform/execution/local/gitProcess'
 import { hardenGitArgs } from '@/util/gitHardening'
 import { createLogger } from '@/platform/logging/logger'
 import { leaseGitCredential } from '@/util/gitCredentialLease'

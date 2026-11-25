@@ -107,7 +107,7 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
 } from '@/ws/broadcaster'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { createLogger } from '@/platform/logging/logger'
 import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

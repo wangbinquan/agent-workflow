@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import { runGit as defaultRunGit } from '@/util/git'
+import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryGit } from '../../application/repositoryCommit'
 import type { ConflictMergeWorkspaceEffects } from '../../application/ports/conflictMergeWorkspaceEffects'
 

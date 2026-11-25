@@ -16,7 +16,7 @@ import {
 } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import { isAbsolute } from 'node:path'
-import { runGit as defaultRunGit } from '@/util/git'
+import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryGit } from '../application/repositoryCommit'
 import { RepositoryTransportCredentials } from '../application/repositoryTransportCredentials'
 import {

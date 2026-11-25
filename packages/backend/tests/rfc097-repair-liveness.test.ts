@@ -28,7 +28,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { createRepairEngine } from './helpers/repairEngine'

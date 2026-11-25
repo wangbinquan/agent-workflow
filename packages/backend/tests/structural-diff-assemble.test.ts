@@ -13,7 +13,7 @@ import {
   computeFromWorktree,
   computeBetweenRefs,
 } from '../src/modules/workspace-insight/application/structuralDiff/revisionAnalysis'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 describe('assembleStructuralDiff — in-memory', () => {
   test('mixes code symbol changes + manifest dependency changes', async () => {

@@ -27,7 +27,7 @@ import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { nonInteractiveGitEnv, runGit } from '@/util/git'
+import { nonInteractiveGitEnv, runGit } from '@/platform/execution/local/gitProcess'
 
 const HIJACK_VARS = [
   'GIT_DIR',

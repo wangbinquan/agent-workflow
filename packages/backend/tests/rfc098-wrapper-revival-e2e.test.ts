@@ -46,7 +46,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { reenterScheduler } from './reenter-scheduler'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

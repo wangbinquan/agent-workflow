@@ -41,7 +41,7 @@ import {
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { bindCandidateDeliveryParticipant } from '../src/modules/source-control/composition/repositoryCandidate'
 import { createUser } from './helpers/userFixture'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const { push: pushCandidate } = bindCandidateDeliveryParticipant({
   candidateEffects: createLocalRepositoryCandidateEffects(),

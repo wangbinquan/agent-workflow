@@ -22,7 +22,7 @@ import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { syncSubmodules } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 let home = ''
 let prevHome: string | undefined

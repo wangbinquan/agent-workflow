@@ -32,7 +32,7 @@ import {
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const sha1 = (s: string) => createHash('sha1').update(s).digest('hex')
 const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 19))

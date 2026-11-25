@@ -43,7 +43,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createWorktree, runGit } from '../src/util/git'
+import { createWorktree } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const ulid = monotonicFactory()
 const DAY_MS = 24 * 60 * 60 * 1000

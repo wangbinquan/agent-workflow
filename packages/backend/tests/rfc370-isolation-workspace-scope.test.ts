@@ -15,7 +15,7 @@ import {
 } from '@/modules/source-control/composition/isolationWorkspaces'
 import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/infrastructure/local/localIsolationWorkspace'
 import { describeEffectError } from '@/modules/task-execution/domain/effectErrorDescription'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const binding: IsolationWorkspaceBinding = {

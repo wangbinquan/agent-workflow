@@ -48,7 +48,7 @@ import {
   workspaceResultPath,
   type WorkspaceHelper,
 } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const translate = (value: unknown, from: string, to: string): unknown => {
   if (typeof value === 'string' && (value === from || value.startsWith(from + '/')))

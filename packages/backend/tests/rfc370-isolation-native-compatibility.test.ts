@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import * as native from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { repoRelForcedPaths as taskPaths } from '@/modules/task-execution/domain/portArtifacts'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { repoRelForcedPaths as sourcePaths } from '@/platform/workspace/forcedWorkspacePaths'
 

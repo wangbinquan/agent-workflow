@@ -62,7 +62,7 @@ import {
   DIGITAL_EMPLOYEE_RESULT_PORT,
   DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { sha256Hex } from '@/platform/contracts/hash'
 import { legacyMissionScriptBody } from './fixtures/mock-opencode-legacy-mission'
 import {

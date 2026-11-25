@@ -28,7 +28,7 @@ import {
   workspaceResultPath,
   type WorkspaceHelper,
 } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
 
 beforeAll(startGitHttpRemote)

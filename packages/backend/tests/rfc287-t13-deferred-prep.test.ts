@@ -54,7 +54,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { ulid } from 'ulid'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
@@ -634,7 +634,11 @@ describe('RFC-287 G6 — 只有网络类占窗口（接线锁）', () => {
   })
 
   test('git 输出被强制 C locale（否则分类器在中文环境全灭）', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    // RFC-591: the non-interactive git environment moved with runGit into platform's execution layer.
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'platform', 'execution', 'local', 'gitProcess.ts'),
+      'utf8',
+    )
     expect(src).toMatch(/LC_ALL: 'C'/)
     expect(src).toMatch(/LANG: 'C'/)
   })

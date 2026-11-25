@@ -54,7 +54,7 @@ import {
 } from './helpers/providerTaskExecutionTestTopology'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { reenterScheduler } from './reenter-scheduler'
 
 // Clarify resume through loop and git wrappers took about 1.9 s per PostgreSQL case on CI before

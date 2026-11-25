@@ -49,7 +49,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 
 import { createRepoGroup } from '@/modules/source-control/application/repositoryGroups'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {
   composeSqliteRepositoryWorkspaceStore,

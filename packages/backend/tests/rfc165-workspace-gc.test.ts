@@ -54,7 +54,7 @@ import { DrizzleTerminalMaintenancePersistence } from '../src/modules/task-execu
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const ulid = monotonicFactory()
 const DAY_MS = 24 * 60 * 60 * 1000

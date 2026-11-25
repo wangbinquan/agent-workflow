@@ -16,7 +16,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   FILE_CONTENT_MAX_BYTES,
   getTaskFileContent,

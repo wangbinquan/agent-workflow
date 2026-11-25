@@ -19,7 +19,7 @@ import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-con
 import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { unsealRepoUrl } from '../src/services/repoCredentials'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
 

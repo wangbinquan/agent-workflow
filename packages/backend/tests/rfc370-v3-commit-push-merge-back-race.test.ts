@@ -18,7 +18,7 @@ import {
   prepareRepositoryCommit,
 } from '@/modules/source-control/application/repositoryCommit'
 import { createLocalIsolationWorkspaceFactory } from '@/modules/source-control/infrastructure/local/localIsolationWorkspace'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const roots: string[] = []
 afterAll(() => {

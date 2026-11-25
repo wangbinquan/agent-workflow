@@ -43,7 +43,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {

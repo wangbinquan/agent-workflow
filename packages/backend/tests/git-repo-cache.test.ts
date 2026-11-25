@@ -33,7 +33,7 @@ import {
 } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { resolveRepoSourceSingle } from './helpers/legacyTaskWorkspace'
 
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {
   composeSqliteRepositoryWorkspaceStore,

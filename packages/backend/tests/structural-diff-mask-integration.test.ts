@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { computeFromWorktree } from '../src/modules/workspace-insight/application/structuralDiff/revisionAnalysis'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 describe('RFC-087 masking integration (computeFromWorktree, Python #/docstring)', () => {
   const dirs: string[] = []

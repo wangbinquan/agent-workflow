@@ -31,7 +31,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { abortAllActiveTasks, isTaskActive } from './helpers/taskDriverRegistry'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 

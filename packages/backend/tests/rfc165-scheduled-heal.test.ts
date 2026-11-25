@@ -34,7 +34,7 @@ import {
   healScheduledLaunchPayloads,
 } from './helpers/integrationTriggerResourceBinding'
 import { updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask } from './helpers/integrationTriggerResourceBinding'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { pathToFileURL } from 'node:url'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 

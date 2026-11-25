@@ -1,7 +1,7 @@
 // RFC-370 A4 — the existing native fixture endpoint and Git mechanisms.
 import { describeRepositoryRemote } from '@agent-workflow/shared'
 import { isAbsolute } from 'node:path'
-import { runGit as defaultRunGit } from '@/util/git'
+import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryGit } from '../../application/repositoryCommit'
 import type { RepositoryPublicationSession } from '../../public/types'
 

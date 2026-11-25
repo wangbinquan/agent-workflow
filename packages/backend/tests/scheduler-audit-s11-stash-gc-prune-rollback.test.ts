@@ -32,7 +32,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rollbackToSnapshot, runGit, snapshotRefName } from '../src/util/git'
+import { rollbackToSnapshot, snapshotRefName } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 interface Repo {
   path: string

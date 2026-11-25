@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runGit as defaultRunGit } from '@/util/git'
+import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryGit } from '../../application/repositoryCommit'
 import type { RepositoryPreviewIndexPort } from '../../application/ports/repositoryPreviewIndex'
 

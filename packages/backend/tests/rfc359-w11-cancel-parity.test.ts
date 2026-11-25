@@ -45,7 +45,7 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 import { withTaskReviewMutationLock } from '@/modules/task-execution/infrastructure/reviewMutationQueue'

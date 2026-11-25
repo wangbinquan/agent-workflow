@@ -1,4 +1,4 @@
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md §⑥ 缺口1 (limits 墙钟把暂停时长计入)
 //
 // 当前缺陷行为（已对照源码核实）：

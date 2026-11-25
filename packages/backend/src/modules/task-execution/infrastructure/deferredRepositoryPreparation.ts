@@ -21,7 +21,8 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import { ConflictError, diagnosticTextOf } from '@/platform/errors/domainErrors'
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
-import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
+import { reclaimStaleRefLocks, withWorktreeRegistryLock } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { createLogger } from '@/platform/logging/logger'
 import type {
   RepositoryPreparationDescriptorReader,

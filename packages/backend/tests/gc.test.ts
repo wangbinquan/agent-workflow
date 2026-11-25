@@ -16,7 +16,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
-import { createWorktree, runGit } from '../src/util/git'
+import { createWorktree } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 interface Harness {
   db: PersistenceDb

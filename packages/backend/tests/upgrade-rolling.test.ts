@@ -38,7 +38,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { openFrozenEpoch1Db, migrateFrozenSqlite } from './migration-freeze'
 import { openDb } from '@/db/client'
 import { composeLocalEpochSwitch } from '@/bootstrap/epochMigration'

@@ -21,7 +21,7 @@ import {
   gitignoreDirectoryRule,
   planWorkspaceExcludeProfile,
 } from '../src/modules/source-control/domain/workspaceExcludeProfile'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const roots: string[] = []
 afterEach(() => {

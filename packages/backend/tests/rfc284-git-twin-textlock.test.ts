@@ -14,7 +14,8 @@ import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dir, '..')
-const gitTs = await Bun.file(join(ROOT, 'src/util/git.ts')).text()
+// RFC-591: runGit moved from util/git.ts into platform's execution layer.
+const gitTs = await Bun.file(join(ROOT, 'src/platform/execution/local/gitProcess.ts')).text()
 const cacheTs = await Bun.file(
   join(ROOT, 'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts'),
 ).text()
@@ -49,7 +50,11 @@ function extractTimeoutBlock(src: string, fnAnchor: string, label: string): stri
 
 describe('rfc284 T18: runGit ↔ spawnGit 镜像段落双向锁', () => {
   test('超时机器段（组杀 / exit 先行有界读 / 124 重映射）归一化后逐字相等', () => {
-    const a = extractTimeoutBlock(gitTs, 'export async function runGit(', 'util/git.ts')
+    const a = extractTimeoutBlock(
+      gitTs,
+      'export async function runGit(',
+      'platform/execution/local/gitProcess.ts',
+    )
     const b = extractTimeoutBlock(cacheTs, 'async function spawnGit(', 'gitRepoCache.ts')
     expect(normalize(a)).toBe(normalize(b))
   })

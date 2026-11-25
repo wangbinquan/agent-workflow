@@ -42,7 +42,7 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // ---------------------------------------------------------------------------

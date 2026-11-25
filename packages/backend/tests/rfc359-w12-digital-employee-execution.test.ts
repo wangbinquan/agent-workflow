@@ -44,7 +44,7 @@ import {
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { DigitalEmployeeExecutionCoreSnapshot } from '@/modules/task-execution/application/ports/digitalEmployeeExecutionCore'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'

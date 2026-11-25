@@ -36,7 +36,7 @@ import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { rollbackNodeRunWorktrees } from '../src/modules/task-execution/infrastructure/nodeRollback'
 import type { RollbackTarget } from '../src/modules/task-execution/infrastructure/nodeRollback'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createLogger } from '../src/platform/logging/logger'
 
 const ulid = monotonicFactory()

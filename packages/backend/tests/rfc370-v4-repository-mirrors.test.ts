@@ -48,7 +48,7 @@ import {
 } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { createRepoGroup } from '../src/modules/source-control/application/repositoryGroups'
 import { DomainError, errorHandler } from '../src/platform/errors/domainErrors'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 
 import type { RepositoryMirrors } from '@/modules/source-control/application/ports/repositoryMirrors'

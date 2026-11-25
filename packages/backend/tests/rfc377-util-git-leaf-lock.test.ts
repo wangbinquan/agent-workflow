@@ -17,6 +17,8 @@ import { importEdges, sourceUnit } from './architecture/census'
 const PROCESS_LEAVES = new Set([
   '@/platform/execution/local/platformExec',
   '@/platform/execution/local/process',
+  // RFC-591: the git process runner itself moved here; it imports only these process leaves and the git hardening.
+  '@/platform/execution/local/gitProcess',
 ])
 /**
  * RFC-573 moved the directory reclaim (`removeDirectoryWithRetry`) from `util/` into the workspace directory of

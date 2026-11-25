@@ -9,7 +9,7 @@ import type {
   RepositoryGitOutcome,
   RepositoryGitWorkspaceScope,
 } from '@/modules/source-control/application/ports/repositoryGitWorkspace'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { sha256Hex } from '@/platform/contracts/hash'
 import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 

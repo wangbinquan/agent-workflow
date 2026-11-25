@@ -16,7 +16,7 @@ import {
 } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-370 canonical development repository volume', (harness) => {

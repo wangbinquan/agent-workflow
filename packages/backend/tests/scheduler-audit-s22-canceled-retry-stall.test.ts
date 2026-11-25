@@ -1,5 +1,5 @@
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 

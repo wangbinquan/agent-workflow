@@ -44,7 +44,7 @@ import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
 import { WORKSPACE_ORPHAN_MIN_AGE_MS } from '@/modules/source-control/application/workspaceMaintenance'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 interface Harness {

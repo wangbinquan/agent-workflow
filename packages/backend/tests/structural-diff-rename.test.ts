@@ -21,8 +21,8 @@ import {
   gitChangedEntriesBetween,
   gitDiffSnapshot,
   parseNameStatusZ,
-  runGit,
 } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { computeFromWorktree } from '../src/modules/workspace-insight/application/structuralDiff/revisionAnalysis'
 import { canonicalRepoKeys, canonicalRepoKeysWire } from '@agent-workflow/shared'
 

@@ -29,7 +29,7 @@ import {
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-v3-subagent-home-'))
 const created: string[] = [appHome]

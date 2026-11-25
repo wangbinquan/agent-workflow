@@ -47,7 +47,7 @@ import {
   COMMIT_AGENT_NAME,
 } from '../src/modules/task-execution/domain/commitAgent'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 
 // Runtime-generated shim opencode (per-test temp dir, not a shared fixture).
 // One shim plays all roles, keyed by --agent:

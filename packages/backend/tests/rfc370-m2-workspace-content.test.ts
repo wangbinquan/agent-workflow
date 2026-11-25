@@ -34,7 +34,7 @@ import {
   prepareConflictMerge,
   finishConflictMerge,
 } from '@/modules/source-control/application/conflictMerge'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import {
   createHostedIsolationWorkspaces,
   mapHostedWorkspacePaths,

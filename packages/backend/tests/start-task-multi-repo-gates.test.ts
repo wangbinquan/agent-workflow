@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 

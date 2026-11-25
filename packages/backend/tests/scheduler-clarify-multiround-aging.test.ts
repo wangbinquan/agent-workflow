@@ -34,7 +34,7 @@ import {
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { dispatchTaskQuestions } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createAgent } from './helpers/model/resourceWrites'
 

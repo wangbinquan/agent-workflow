@@ -32,7 +32,8 @@ import {
   snapshotNodeIsoFinal,
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { materializeTree, runGit } from '@/util/git'
+import { materializeTree } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-np-home-'))
 const created: string[] = []

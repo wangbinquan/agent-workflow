@@ -22,7 +22,7 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 

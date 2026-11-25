@@ -1,3 +1,21 @@
+## 2026-11-25 RFC-591 git 进程运行器归 platform（In Progress；`design/RFC-591-git-process-runner-into-platform/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」——对本会话列出的待定事项（含 W5 的 `util/git` 怎么拆）
+  的回复。本会话按 RFC-294 总纲裁定为 RFC-586 条目里的方案（b）：通用的 git 进程运行器是厂商命令行客户端，进 platform；仓库语义归 source-control。这一条
+  偏离 RFC-294 design §8 / §15（“`util/git` 整份归 source-control”），在 RFC-591 design §0 列为偏离项、按授权记为已确认——整份归 source-control 会逼出
+  runtime-management、collaboration、system-operations → source-control 三条新 DAG 边，并把 platform 自己的版本探测、工作树备份与启动升级环境挪进模块。
+- **范围**：`GitRunResult`、`nonInteractiveGitEnv`、`runGit` 与两个退出码逐字迁入 `platform/execution/local/gitProcess.ts`（与进程、平台 spawn 选项的工具
+  同层），`util/git.ts` 不再导出它们、改从那里取；236 个读者的 import 拆开改指新位置；读源码断言运行器内容的用例改读新文件（孪生文本锁、spawn 站点账本、
+  非交互环境、`util/git` 叶子锁、C locale）；新增 RFC-591 用例。`util/gitHardening.ts`（暂缓的安全相邻一族）不动，新文件照旧 import 它。
+- **收口对账**（RFC-294 C10～C13）：C10 通用能力进 platform；C12 RFC-591 用例覆盖全部说明符与两个文件；C13 计数全部不变。
+- **集中验证**（基于 `3f07d748a`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出一处本人缺陷（`rfc287` 读 `util/git.ts` 断言 C locale，
+  那段随运行器迁走了），已改读新文件并复验。tsc 0 错，eslint / promises / prettier 无告警；候选导出里 541 个用例文件；五种变异都被认出；架构报告 60 个计数
+  全部不变。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话
+  执行，不阻塞本 RFC。
+- **下一步**：`util/git.ts` 余下的仓库语义整体归 source-control；其中跨模块的 6 个名字（`gitMetaDirsFor`、`withWorktreeRegistryLock`、
+  `worktreeFilesChanged`、`gitCommitExists`、`rollbackToSnapshot`、`reclaimStaleRefLocks`）要定 collaboration 与 runtime-management 怎么取。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-590 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（In Progress；`design/RFC-590-task-catalog-route-into-inbound/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」。RFC-577 design §5 把“一个模块可不可以只有入站
@@ -16,7 +34,7 @@
   限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：在跑（实现提交）。
 
-## 2026-11-25 RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（In Progress；`design/RFC-589-agent-workgroup-routes-split-by-owner/`）
+## 2026-11-25 RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（Done，`24d4e0a9f`；`design/RFC-589-agent-workgroup-routes-split-by-owner/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；落位按 RFC-587 条目里已裁定的“余下两批的落位”，
   不新增 DAG 边。
@@ -36,7 +54,9 @@
   候选导出里 782 个用例文件（改正之后复跑的 9 个与读 guard-manifest 的 23 个全部通过），`rfc321` 在主树里 10 / 10；六种变异都被认出；架构报告 60 个
   计数里只有 legacy 横向文件数变了，未消费 public 符号 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、
   已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-589 的提交 `24d4e0a9f`：exact SHA 主 CI run 45654967366 70 个 job 里 68 个成功（含 Markdown link check），windows-platform run 45654967387
+  通过。macOS e2e 第 3/4 片跑到 20 分钟上限被取消（CI required 随之不绿）——环境性：被取消时 111 条通过、0 条失败，日志 33 次 `event loop stalled`。后继证据：
+  RFC-590 提交的 run 45657867610 里同一片 141 条全部通过（4.9 分钟，无 stall）。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-588 任务路由按端点 owner 拆进 task-execution 与 workspace-insight 的 inbound（Done，`7ff4408d4`；`design/RFC-588-task-routes-split-by-owner/`）
 
@@ -59,7 +79,8 @@
   已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：RFC-588 的提交 `7ff4408d4`：exact SHA 主 CI run 45648695437 70 个 job 里 68 个成功（含 Markdown link check），windows-platform run 45648696009
   通过。macOS e2e 第 3/4 片跑到 20 分钟上限被取消（run 结论 cancelled，CI required 随之红）——环境性：日志反复 `event loop stalled`，被取消时仍在逐条通过；
-  其间红的两条在同一次 run 的 ubuntu 与 windows 上都通过，走的也不是本提交改动的代码。后继证据取 RFC-589 提交的 macOS e2e。2026-11-25 转 Done。
+  其间红的两条在同一次 run 的 ubuntu 与 windows 上都通过，走的也不是本提交改动的代码。后继证据：RFC-590 提交的 run 45657867610 里同一片 141 条全部通过
+  （4.9 分钟，含那两条；RFC-589 的同一片同样因 runner 慢被取消）。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-587 健康探测、任务归档与任务反馈三个路由按 owner 归入模块 inbound（Done，`3469a00e1`；`design/RFC-587-health-archive-feedback-routes-into-owner-modules/`）
 

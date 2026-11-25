@@ -2,7 +2,8 @@
 // algorithm at the physical owner; journaled Tasks must never enter this path.
 import { resolveRepoGroupLayout } from '../application/repositoryGroups'
 import { ConflictError, diagnosticTextOf as diagnosticText } from '@/platform/errors/domainErrors'
-import { runGit, withWorktreeRegistryLock } from '@/util/git'
+import { withWorktreeRegistryLock } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'

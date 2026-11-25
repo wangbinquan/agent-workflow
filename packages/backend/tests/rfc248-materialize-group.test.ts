@@ -46,7 +46,7 @@ import { getTask } from './helpers/taskDetailRead'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 import { DomainError } from '../src/platform/errors/domainErrors'
 import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

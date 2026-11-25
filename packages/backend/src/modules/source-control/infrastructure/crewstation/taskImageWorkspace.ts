@@ -9,7 +9,8 @@ import {
   listEffectiveSubmodules,
 } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { DomainError } from '@/platform/errors/domainErrors'
-import { gitDiffSnapshot, initScratchRepo, isGitWorkTree, runGit, worktreeDiff } from '@/util/git'
+import { gitDiffSnapshot, initScratchRepo, isGitWorkTree, worktreeDiff } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import { sha1Hex } from '@/platform/contracts/hash'
 import { gitUrlCacheKeyWith, parseGitUrl, type GitCommitIdentity } from '@agent-workflow/shared'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

@@ -6,7 +6,7 @@
 // interaction is stable from 2.5. Older git is rare on macOS/Linux dev
 // machines but the platform must not crash hard when it shows up.
 
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 import type { GitCapabilities, GitSemver } from '@/platform/contracts/gitVersion'
 import { capabilitiesFromVersion, parseGitVersion } from '@/platform/contracts/gitVersion'
 export type { GitCapabilities, GitSemver } from '@/platform/contracts/gitVersion'

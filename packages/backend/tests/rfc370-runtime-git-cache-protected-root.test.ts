@@ -15,7 +15,7 @@ import {
   GIT_METADATA_SKIP_PREFIXES,
   PLATFORM_OWNED_GIT_METADATA_PREFIXES,
 } from '@/modules/development-automation/domain/gitMetadataOwnership'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const roots: string[] = []
 afterEach(() => {

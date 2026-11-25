@@ -49,7 +49,7 @@ const closureActor = buildActor({
   user: { id: 'u-closure', username: 'closure', displayName: 'c', role: 'admin', status: 'active' },
   source: 'daemon',
 })
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { testTaskTerminalWatch } from './helpers/taskTerminalWatch'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'

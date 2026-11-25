@@ -24,7 +24,7 @@ import { executeCodeReviewVolumeOperation } from '@/modules/source-control/infra
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
 import { CrewStationApiError } from '@/platform/crewstation/platformApi'
 import { WorkspaceCommandFailedError } from '@/platform/crewstation/workspaceProtocol'
-import { runGit } from '@/util/git'
+import { runGit } from '@/platform/execution/local/gitProcess'
 
 const TASK = '01V16HOSTEDREVISIONCONTENT'
 const REF = `cs-workspace:${TASK}/worktrees/${TASK}`

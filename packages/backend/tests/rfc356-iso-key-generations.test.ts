@@ -24,7 +24,7 @@ import {
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 // RFC-585: the isolation errors are declared in Source Control's domain and offered through its public types.
 import { IsoWorkspaceBlockedError } from '@/modules/source-control/public/types'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/platform/execution/local/gitProcess'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const isWindows = process.platform === 'win32'
