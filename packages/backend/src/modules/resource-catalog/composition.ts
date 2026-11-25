@@ -87,3 +87,7 @@ export { executeTaskImagePlugin } from './infrastructure/crewstation/taskImagePl
 export { mountWorkflowRoutes } from './inbound/http/workflowRoutes'
 export { mountWorkgroupTaskRoutes } from './inbound/http/workgroupTaskRoutes'
 export { registerResourcePackageRoutes } from './inbound/http/resourcePackageRoutes'
+// RFC-581: the MCP, skill and plugin HTTP bindings joined this module's inbound layer.
+export { mountMcpRoutes } from './inbound/http/mcpRoutes'
+export { mountPluginRoutes } from './inbound/http/pluginRoutes'
+export { mountSkillRoutes } from './inbound/http/skillRoutes'

@@ -23,7 +23,7 @@ import type { SkillVersionContentStore } from '../application/skills/versionCont
 import { createSkillZipImportParticipant } from '../infrastructure/skillZipImportAdapter'
 import { createSkillOperationDescriptors } from './catalogOperationDescriptors'
 import type { SkillOperationContext } from '../public/participants'
-import type { SkillZipImportParticipant } from '../public/participants'
+import type { SkillZipImportParticipant } from '../application/skills/operationContracts'
 
 import type { SkillLifecycleContentStore } from '../application/skills/lifecycleContentStore'
 import type { SkillDeletionContentStore } from '../application/skills/deletionContentStore'

@@ -23,8 +23,12 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
 
     expect(existsSync(resolve(sourceRoot, 'services/mcp.ts'))).toBe(false)
     expect(existsSync(resolve(sourceRoot, 'services/plugin.ts'))).toBe(false)
-    expect(source('routes/plugins.ts')).toContain('PluginOperationDescriptors')
-    expect(source('routes/plugins.ts')).toContain('PluginQueries')
+    expect(source('modules/resource-catalog/inbound/http/pluginRoutes.ts')).toContain(
+      'PluginOperationDescriptors',
+    )
+    expect(source('modules/resource-catalog/inbound/http/pluginRoutes.ts')).toContain(
+      'PluginQueries',
+    )
     // RFC-467: the MCP / plugin closure helpers (only the RFC-349 injection oracle used them) moved to the test helpers.
     expect(existsSync(resolve(sourceRoot, 'services/mcpClosure.ts'))).toBe(false)
     expect(existsSync(resolve(sourceRoot, 'services/pluginClosure.ts'))).toBe(false)

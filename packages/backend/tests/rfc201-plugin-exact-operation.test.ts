@@ -327,7 +327,16 @@ describeEachProvider('generation GC safety', (harness) => {
 describe('production coordinator callsite ratchet', () => {
   test('Plugin mutations, Check/Upgrade, create, and generic ACL use the stable id fence', async () => {
     const route = await readFile(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'plugins.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'inbound',
+        'http',
+        'pluginRoutes.ts',
+      ),
       'utf8',
     )
     const retiredFacade = resolve(import.meta.dir, '..', 'src', 'services', 'plugin.ts')

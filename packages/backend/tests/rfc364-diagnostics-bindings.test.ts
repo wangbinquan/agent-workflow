@@ -124,7 +124,7 @@ describe('RFC-364 production bindings', () => {
     expect(source.text).toContain('runtimeTests: mcpRuntimeTests.reconciliation')
   })
   test('diagnostics HTTP handlers only decode, call and map; service facades are retired', () => {
-    const source = parse('routes/mcps.ts')
+    const source = parse('modules/resource-catalog/inbound/http/mcpRoutes.ts')
     const calls = nodes(
       source,
       (node) => ts.isCallExpression(node) && compact(node.expression, source) === 'registerRoute',

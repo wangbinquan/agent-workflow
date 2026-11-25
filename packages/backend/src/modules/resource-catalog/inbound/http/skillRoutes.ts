@@ -23,24 +23,22 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type {
   SkillFileCommands,
   SkillVersionCommands,
-} from '@/modules/resource-catalog/public/commands'
-import type { SkillOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  SkillOperationContext,
-  SkillZipImportParticipant,
-} from '@/modules/resource-catalog/public/participants'
+} from '../../application/skills/operationContracts'
+import type { SkillOperationDescriptors } from '../../application/skills/operationContracts'
+import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
+import type { SkillZipImportParticipant } from '../../application/skills/operationContracts'
 import type {
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
 } from '@/modules/resource-catalog/public/queries'
+import type { SkillCatalogResource } from '@/modules/resource-catalog/public/types'
 import type {
   CreateSkillCatalogInput,
   DeleteSkillCatalogInput,
   DeleteSkillCatalogReceipt,
   SaveSkillCatalogInput,
-  SkillCatalogResource,
-} from '@/modules/resource-catalog/public/types'
+} from '../../application/skills/operationContracts'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'

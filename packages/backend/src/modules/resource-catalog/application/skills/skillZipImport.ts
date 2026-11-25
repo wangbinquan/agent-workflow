@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer'
 import { SKILL_ZIP_LIMITS } from '@agent-workflow/shared'
 import { ValidationError } from '@/platform/errors/domainErrors'
-import type { SkillZipImportParticipant } from '../../public/participants'
-import type { SkillZipArchiveSubmission } from '../../public/types'
+import type { SkillZipImportParticipant } from './operationContracts'
+import type { SkillZipArchiveSubmission } from './operationContracts'
 import type { SkillZipImportPort } from './ports'
 
 const PADDED_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/

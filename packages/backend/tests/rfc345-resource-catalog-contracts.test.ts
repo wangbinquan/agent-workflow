@@ -50,7 +50,7 @@ import { resourceRef } from '../src/modules/resource-catalog/domain/resourceRef'
 import type {
   SkillFileCommands,
   SkillVersionCommands,
-} from '../src/modules/resource-catalog/public/commands'
+} from '@/modules/resource-catalog/application/skills/operationContracts'
 import type {
   AgentQueries,
   AgentReferenceQueries,
@@ -65,20 +65,20 @@ import type {
 } from '../src/modules/resource-catalog/public/queries'
 import type {
   McpAclIdentityParticipant,
-  SkillZipImportParticipant,
   TaskExecutionResourceSnapshotInTx,
 } from '../src/modules/resource-catalog/public/participants'
+import type { SkillZipImportParticipant } from '@/modules/resource-catalog/application/skills/operationContracts'
 import type { MemoryResourceScopeAccessParticipant } from '../src/modules/memory/application/ports/resourceScopeAccess'
 import type {
   AgentOperationDescriptors,
   McpCatalogModule,
   McpOperationDescriptors,
-  PluginOperationDescriptors,
   ResourcePackageCatalogModule,
   ResourcePackageOperationDescriptors,
-  SkillOperationDescriptors,
   WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
+import type { PluginOperationDescriptors } from '@/modules/resource-catalog/application/plugins/operationContracts'
+import type { SkillOperationDescriptors } from '@/modules/resource-catalog/application/skills/operationContracts'
 import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/application/workflows/operationContracts'
 import type { PostgresqlResourcePackageTransactionParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type {
@@ -1027,7 +1027,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('T5-M/T8 descriptor-backed HTTP and MCP bindings execute the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const route = readFileSync(resolve(sourceRoot, 'routes/mcps.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/mcpRoutes.ts'),
+      'utf8',
+    )
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/mcps/mcpApplication.ts'),
       'utf8',
@@ -1129,7 +1132,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('T5-P/T8 descriptor-backed HTTP binding executes the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const route = readFileSync(resolve(sourceRoot, 'routes/plugins.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/pluginRoutes.ts'),
+      'utf8',
+    )
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/plugins/pluginApplication.ts'),
       'utf8',
@@ -1496,7 +1502,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('T5-S active HTTP binding executes the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const route = readFileSync(resolve(sourceRoot, 'routes/skills.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/skillRoutes.ts'),
+      'utf8',
+    )
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/skills/skillApplication.ts'),
       'utf8',
@@ -1936,7 +1945,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/mcps.ts',
+        'modules/resource-catalog/inbound/http/mcpRoutes.ts',
         'mcp',
         [
           'operations.list|GET|/api/mcps',
@@ -1950,7 +1959,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/plugins.ts',
+        'modules/resource-catalog/inbound/http/pluginRoutes.ts',
         'plugin',
         [
           'operations.list|GET|/api/plugins',
@@ -1966,7 +1975,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/skills.ts',
+        'modules/resource-catalog/inbound/http/skillRoutes.ts',
         'skill',
         [
           'operations.list|GET|/api/skills',
@@ -2210,7 +2219,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/skills.ts',
+        'modules/resource-catalog/inbound/http/skillRoutes.ts',
         [
           'CreateSkillCatalogInput',
           'SaveSkillCatalogInput',
@@ -2219,7 +2228,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/mcps.ts',
+        'modules/resource-catalog/inbound/http/mcpRoutes.ts',
         [
           'CreateMcpCatalogInput',
           'UpdateMcpCatalogInput',
@@ -2229,7 +2238,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/plugins.ts',
+        'modules/resource-catalog/inbound/http/pluginRoutes.ts',
         [
           'CreatePluginCatalogInput',
           'UpdatePluginCatalogInput',

@@ -163,7 +163,7 @@ describe('hosted probe selection wiring', () => {
       'runProbe: (mcp, { startedAt }) => runner.probe(mcp, { startedAt }),',
     )
     expect(composition).toContain(') => probeMcp(mcp, { ...environment.options(), startedAt }),')
-    const route = await read('routes/mcps.ts')
+    const route = await read('modules/resource-catalog/inbound/http/mcpRoutes.ts')
     expect(route).toContain('module.probes.probe(')
     expect(route).not.toContain('probeRunner')
   })

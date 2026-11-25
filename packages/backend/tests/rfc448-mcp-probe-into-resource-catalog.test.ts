@@ -191,12 +191,15 @@ describe('RFC-448 —— 位置与引用', () => {
         const target = targetOf(path, specifier)
         if (target !== null && (OLD_PATHS as readonly string[]).includes(target))
           offenders.push(`${srcRelative(path)} -> ${specifier}`)
-        if (target === 'routes/mcps') routeImporters.push(srcRelative(path))
+        // RFC-581: the MCP binding moved into resource-catalog's inbound layer; the module's composition re-exports it
+        // (server.ts mounts it through there), and bootstrap/ still does not reach into it.
+        if (target === 'modules/resource-catalog/inbound/http/mcpRoutes')
+          routeImporters.push(srcRelative(path))
       }
     }
     expect(offenders).toEqual([])
-    // 非空对照：路由仍由 server.ts 挂载；装配根（bootstrap/）不再取路由里的时钟。
-    expect(routeImporters).toEqual(['server.ts'])
+    // 非空对照：路由只经模块的 composition 转出（server.ts 从那里挂载）；装配根（bootstrap/）不再取路由里的时钟。
+    expect(routeImporters).toEqual(['modules/resource-catalog/composition.ts'])
   }, 60_000)
 
   test('负对照：同一判据认得出别名与相对路径两种写法', () => {
@@ -207,12 +210,18 @@ describe('RFC-448 —— 位置与引用', () => {
     expect(targetOf(probe, '@agent-workflow/shared')).toBeNull()
   })
 
-  test('路由不 import services/，对 resource-catalog 只经 public', () => {
-    const targets = targetsOf('routes/mcps.ts')
+  // RFC-581: the binding lives in resource-catalog's inbound layer now, so besides the module's public it may take the
+  // module's own application layer; it still never reaches services/ or the module's infrastructure.
+  test('路由不 import services/，对 resource-catalog 只经 public 与本模块 application', () => {
+    const targets = targetsOf('modules/resource-catalog/inbound/http/mcpRoutes.ts')
     expect(targets.filter((target) => target.startsWith('services/'))).toEqual([])
     const rc = targets.filter((target) => target.startsWith(`${RC}/`))
     expect(rc.length).toBeGreaterThan(0)
-    for (const target of rc) expect(target.startsWith(`${RC}/public/`), target).toBe(true)
+    for (const target of rc)
+      expect(
+        target.startsWith(`${RC}/public/`) || target.startsWith(`${RC}/application/`),
+        target,
+      ).toBe(true)
     expect(rc).toContain(`${RC}/public/types`)
   })
 

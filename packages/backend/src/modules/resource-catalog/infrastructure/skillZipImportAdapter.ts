@@ -3,7 +3,7 @@ import { createSkillZipImportParticipant as createParticipant } from '../applica
 import type { SkillVersionContentStore } from '../application/skills/versionContentStore'
 import type { SkillCreationContentStore } from '../application/skills/creationContentStore'
 import type { SkillZipImportPort } from '../application/skills/ports'
-import type { SkillZipImportParticipant } from '../public/participants'
+import type { SkillZipImportParticipant } from '../application/skills/operationContracts'
 import { commitSkillZipBuffer, parseSkillZipBuffer } from './legacy/skill-zip'
 
 /** RFC-359 W4-D23c：一份 ZIP 导入适配器，两个数据库共用（底下的机器已是中立事务）。 */

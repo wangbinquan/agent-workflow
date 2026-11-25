@@ -9,21 +9,21 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { PluginOperationDescriptors } from '@/modules/resource-catalog/public/operations'
+import type { PluginOperationDescriptors } from '../../application/plugins/operationContracts'
 import type { PluginOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { PluginQueries } from '@/modules/resource-catalog/public/queries'
+import type { PluginCatalogResource } from '@/modules/resource-catalog/public/types'
 import type {
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
   CreatePluginCatalogInput,
   DeletePluginCatalogInput,
   DeletePluginCatalogReceipt,
-  PluginCatalogResource,
   RenamePluginCatalogInput,
   UpdatePluginCatalogInput,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
-} from '@/modules/resource-catalog/public/types'
+} from '../../application/plugins/operationContracts'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { serializePluginFor } from '@/auth/tokenRedaction'

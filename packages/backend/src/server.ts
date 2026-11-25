@@ -44,7 +44,6 @@ import { type IdentityAccessRuntime } from '@/modules/identity-access/compositio
 import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
 import { executionStatusOf } from '@/modules/system-operations/composition'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
-import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryDistillJobRoutes, mountMemoryRoutes } from '@/modules/memory/composition'
 import {
   mountCachedRepoRoutes,
@@ -56,7 +55,6 @@ import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPlantumlRoutes } from '@/routes/plantuml'
-import { mountPluginRoutes } from '@/routes/plugins'
 import { mountUserRoutes } from '@/routes/users'
 import {
   mountRuntimeRoutes,
@@ -71,7 +69,6 @@ import type {
   RuntimeDiagnosticCommands,
 } from '@/modules/runtime-management/public/commands'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
-import { mountSkillRoutes } from '@/routes/skills'
 import {
   mountClarifyRoutes,
   mountReviewRoutes,
@@ -113,6 +110,9 @@ import {
   mountWebhookTriggerRoutes,
 } from '@/modules/integration/composition'
 import {
+  mountMcpRoutes,
+  mountPluginRoutes,
+  mountSkillRoutes,
   mountWorkflowRoutes,
   mountWorkgroupTaskRoutes,
   registerResourcePackageRoutes,

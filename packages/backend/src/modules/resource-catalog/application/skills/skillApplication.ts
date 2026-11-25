@@ -11,12 +11,11 @@ import type {
   DeleteSkillCatalogInput,
   DeleteSkillCatalogReceipt,
   SaveSkillCatalogInput,
-} from '../../public/types'
-import type { SkillFileCommands, SkillVersionCommands } from '../../public/commands'
+} from './operationContracts'
+import type { SkillFileCommands, SkillVersionCommands } from './operationContracts'
 import type { SkillOperationContext } from '../../public/participants'
 import type { SkillFileQueries, SkillQueries, SkillVersionQueries } from '../../public/queries'
 import type {
-  DeleteSkillFileCatalogInput,
   DiffSkillVersionsCatalogInput,
   GetSkillCatalogInput,
   GetSkillContentCatalogInput,
@@ -24,10 +23,13 @@ import type {
   ListSkillFilesCatalogInput,
   ListSkillVersionsCatalogInput,
   ReadSkillFileCatalogInput,
-  RestoreSkillVersionCatalogInput,
   SkillCatalogResource,
-  WriteSkillFileCatalogInput,
 } from '../../public/types'
+import type {
+  DeleteSkillFileCatalogInput,
+  RestoreSkillVersionCatalogInput,
+  WriteSkillFileCatalogInput,
+} from './operationContracts'
 import type { SkillAccessPort, SkillDeleteConfirmationPort, SkillRepository } from './ports'
 
 export interface SkillApplicationDependencies {

@@ -11,16 +11,18 @@ import type {
 import type { ActorSource } from '@/auth/actor'
 import type { SkillOperationContext } from '../../public/participants'
 import type {
-  DeleteSkillFileCatalogReceipt,
-  RestoreSkillVersionCatalogReceipt,
   SkillCatalogContent,
   SkillCatalogVersion,
   SkillCatalogVersionContent,
   SkillCatalogVersionDiff,
+} from '../../public/types'
+import type {
+  DeleteSkillFileCatalogReceipt,
+  RestoreSkillVersionCatalogReceipt,
   CommitSkillZipCatalogReceipt,
   ParseSkillZipCatalogReceipt,
   WriteSkillFileCatalogReceipt,
-} from '../../public/types'
+} from './operationContracts'
 
 export interface SkillRepository {
   list(): Promise<readonly Skill[]>

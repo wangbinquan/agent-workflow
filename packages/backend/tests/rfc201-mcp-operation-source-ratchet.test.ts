@@ -7,7 +7,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
-const route = readFileSync(resolve(SRC, 'routes/mcps.ts'), 'utf8')
+const route = readFileSync(
+  resolve(SRC, 'modules/resource-catalog/inbound/http/mcpRoutes.ts'),
+  'utf8',
+)
 const aggregate = readFileSync(
   resolve(SRC, 'modules/resource-catalog/application/mcps/mcpApplication.ts'),
   'utf8',

@@ -111,7 +111,8 @@ describe('RFC-440 —— 引用与方向', () => {
   test('skills、memories、workgroups、workflows、plugins 五个路由不再 import services/', () => {
     // RFC-578: the memory route moved from `routes/memories.ts` into memory's inbound layer.
     const routes: ReadonlyArray<readonly [string, string]> = [
-      ['skills', join(SRC, 'routes', 'skills.ts')],
+      // RFC-581: the skill and plugin HTTP bindings moved into resource-catalog's inbound layer.
+      ['skills', join(SRC, 'modules', 'resource-catalog', 'inbound', 'http', 'skillRoutes.ts')],
       ['memories', join(SRC, 'modules', 'memory', 'inbound', 'http', 'memoryRoutes.ts')],
       ['workgroups', join(SRC, 'routes', 'workgroups.ts')],
       // RFC-580: the workflow HTTP binding moved into resource-catalog's inbound layer.
@@ -119,7 +120,7 @@ describe('RFC-440 —— 引用与方向', () => {
         'workflows',
         join(SRC, 'modules', 'resource-catalog', 'inbound', 'http', 'workflowRoutes.ts'),
       ],
-      ['plugins', join(SRC, 'routes', 'plugins.ts')],
+      ['plugins', join(SRC, 'modules', 'resource-catalog', 'inbound', 'http', 'pluginRoutes.ts')],
     ]
     for (const [name, path] of routes) {
       const found = specifiersOf(path)

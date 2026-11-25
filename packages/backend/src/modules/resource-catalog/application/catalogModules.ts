@@ -1,14 +1,11 @@
 // RFC-550 (RFC-294 S9): the shapes of the catalog modules this context composes. They sat on `public/operations` without
 // any other module consuming them; their queries, commands and descriptors stay public.
-import type { SkillFileCommands, SkillVersionCommands } from '../public/commands'
-import type {
-  AgentOperationDescriptors,
-  PluginOperationDescriptors,
-  SkillOperationDescriptors,
-  WorkgroupOperationDescriptors,
-} from '../public/operations'
+import type { SkillFileCommands, SkillVersionCommands } from './skills/operationContracts'
+import type { AgentOperationDescriptors, WorkgroupOperationDescriptors } from '../public/operations'
+import type { PluginOperationDescriptors } from './plugins/operationContracts'
+import type { SkillOperationDescriptors } from './skills/operationContracts'
 import type { WorkflowOperationDescriptors } from './workflows/operationContracts'
-import type { SkillZipImportParticipant } from '../public/participants'
+import type { SkillZipImportParticipant } from './skills/operationContracts'
 import type {
   AgentDependencyQueries,
   AgentImportQueries,

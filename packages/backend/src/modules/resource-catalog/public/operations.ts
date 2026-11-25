@@ -1,6 +1,6 @@
 // RFC-345 closed, data-only Resource Catalog operation descriptor and module contracts.
 
-import type { FileNode, ResourceAcl, Workgroup } from '@agent-workflow/shared'
+import type { ResourceAcl, Workgroup } from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type {
   CommandOperationDescriptor,
@@ -11,73 +11,38 @@ import type {
   AgentOperationContext,
   McpAclIdentityParticipant,
   McpOperationContext,
-  PluginOperationContext,
-  SkillOperationContext,
   WorkgroupOperationContext,
 } from './participants'
 import type { McpQueries } from './queries'
 import type {
   AgentCatalogResource,
   ApplyResourcePackage,
-  CheckPluginUpdateCatalogInput,
-  CheckPluginUpdateCatalogReceipt,
   CopyWorkgroupCatalogInput,
   CreateAgentCatalogInput,
   CreateMcpCatalogInput,
-  CreatePluginCatalogInput,
-  CreateSkillCatalogInput,
   CreateWorkgroupCatalogInput,
   DeleteAgentCatalogInput,
   DeleteAgentCatalogReceipt,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
-  DeletePluginCatalogInput,
-  DeletePluginCatalogReceipt,
-  DeleteSkillCatalogInput,
-  DeleteSkillCatalogReceipt,
-  DeleteSkillFileCatalogInput,
-  DeleteSkillFileCatalogReceipt,
   DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
-  DiffSkillVersionsCatalogInput,
   ExportResourcePackage,
   GetAgentCatalogInput,
   GetMcpCatalogInput,
-  GetPluginCatalogInput,
   GetResourceAclCatalogInput,
-  GetSkillCatalogInput,
-  GetSkillContentCatalogInput,
-  GetSkillVersionContentCatalogInput,
   GetWorkgroupCatalogInput,
   InspectResourcePackage,
-  ListSkillFilesCatalogInput,
-  ListSkillVersionsCatalogInput,
   McpCatalogResource,
-  PluginCatalogResource,
-  ReadSkillFileCatalogInput,
   RenameAgentCatalogInput,
   RenameMcpCatalogInput,
-  RenamePluginCatalogInput,
   RenameWorkgroupCatalogInput,
-  RestoreSkillVersionCatalogInput,
-  RestoreSkillVersionCatalogReceipt,
-  SaveSkillCatalogInput,
-  SkillCatalogContent,
-  SkillCatalogResource,
-  SkillCatalogVersion,
-  SkillCatalogVersionContent,
-  SkillCatalogVersionDiff,
   UpdateAgentCatalogInput,
   UpdateMcpCatalogInput,
-  UpdatePluginCatalogInput,
   UpdateResourceAclCatalogInput,
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
-  UpgradePluginCatalogInput,
-  UpgradePluginCatalogReceipt,
   WorkgroupCatalogDetail,
-  WriteSkillFileCatalogInput,
-  WriteSkillFileCatalogReceipt,
 } from './types'
 
 /** RFC-580: exported for the workflow descriptors that moved into `application/`; every ACL-governed descriptor here extends it. */
@@ -123,79 +88,6 @@ export interface AgentOperationDescriptors extends ResourceAclOperationDescripto
   >
 }
 
-export interface SkillOperationDescriptors extends ResourceAclOperationDescriptors<SkillOperationContext> {
-  readonly list: QueryOperationDescriptor<
-    Record<never, never>,
-    SkillCatalogResource[],
-    SkillOperationContext
-  >
-  readonly get: QueryOperationDescriptor<
-    GetSkillCatalogInput,
-    SkillCatalogResource | null,
-    SkillOperationContext
-  >
-  readonly create: CommandOperationDescriptor<
-    CreateSkillCatalogInput,
-    SkillCatalogResource,
-    SkillOperationContext
-  >
-  readonly save: CommandOperationDescriptor<
-    SaveSkillCatalogInput,
-    SkillCatalogContent,
-    SkillOperationContext
-  >
-  readonly delete: CommandOperationDescriptor<
-    DeleteSkillCatalogInput,
-    DeleteSkillCatalogReceipt,
-    SkillOperationContext
-  >
-  readonly content: QueryOperationDescriptor<
-    GetSkillContentCatalogInput,
-    SkillCatalogContent,
-    SkillOperationContext
-  >
-  readonly listFiles: QueryOperationDescriptor<
-    ListSkillFilesCatalogInput,
-    FileNode[],
-    SkillOperationContext
-  >
-  readonly readFile: QueryOperationDescriptor<
-    ReadSkillFileCatalogInput,
-    Readonly<{ path: string; content: string }>,
-    SkillOperationContext
-  >
-  readonly writeFile: CommandOperationDescriptor<
-    WriteSkillFileCatalogInput,
-    WriteSkillFileCatalogReceipt,
-    SkillOperationContext
-  >
-  readonly deleteFile: CommandOperationDescriptor<
-    DeleteSkillFileCatalogInput,
-    DeleteSkillFileCatalogReceipt,
-    SkillOperationContext
-  >
-  readonly listVersions: QueryOperationDescriptor<
-    ListSkillVersionsCatalogInput,
-    SkillCatalogVersion[],
-    SkillOperationContext
-  >
-  readonly diffVersions: QueryOperationDescriptor<
-    DiffSkillVersionsCatalogInput,
-    SkillCatalogVersionDiff,
-    SkillOperationContext
-  >
-  readonly getVersionContent: QueryOperationDescriptor<
-    GetSkillVersionContentCatalogInput,
-    SkillCatalogVersionContent,
-    SkillOperationContext
-  >
-  readonly restoreVersion: CommandOperationDescriptor<
-    RestoreSkillVersionCatalogInput,
-    RestoreSkillVersionCatalogReceipt,
-    SkillOperationContext
-  >
-}
-
 export interface McpOperationDescriptors extends ResourceAclOperationDescriptors<McpOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
@@ -235,49 +127,6 @@ export interface McpCatalogModule {
   readonly participants: Readonly<{
     aclIdentity: McpAclIdentityParticipant
   }>
-}
-
-export interface PluginOperationDescriptors extends ResourceAclOperationDescriptors<PluginOperationContext> {
-  readonly list: QueryOperationDescriptor<
-    Record<never, never>,
-    PluginCatalogResource[],
-    PluginOperationContext
-  >
-  readonly get: QueryOperationDescriptor<
-    GetPluginCatalogInput,
-    PluginCatalogResource | null,
-    PluginOperationContext
-  >
-  readonly create: CommandOperationDescriptor<
-    CreatePluginCatalogInput,
-    PluginCatalogResource,
-    PluginOperationContext
-  >
-  readonly update: CommandOperationDescriptor<
-    UpdatePluginCatalogInput,
-    PluginCatalogResource,
-    PluginOperationContext
-  >
-  readonly delete: CommandOperationDescriptor<
-    DeletePluginCatalogInput,
-    DeletePluginCatalogReceipt,
-    PluginOperationContext
-  >
-  readonly rename: CommandOperationDescriptor<
-    RenamePluginCatalogInput,
-    PluginCatalogResource,
-    PluginOperationContext
-  >
-  readonly checkUpdate: CommandOperationDescriptor<
-    CheckPluginUpdateCatalogInput,
-    CheckPluginUpdateCatalogReceipt,
-    PluginOperationContext
-  >
-  readonly upgrade: CommandOperationDescriptor<
-    UpgradePluginCatalogInput,
-    UpgradePluginCatalogReceipt,
-    PluginOperationContext
-  >
 }
 
 export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescriptors<WorkgroupOperationContext> {

@@ -183,7 +183,7 @@ describe('RFC-247 — every redactor has an outlet', () => {
   })
 
   test('redactMcpRecord is applied through serializeMcpFor on every mcps read (AC-12)', () => {
-    const mcps = read('routes/mcps.ts')
+    const mcps = read('modules/resource-catalog/inbound/http/mcpRoutes.ts')
     // Five serialization points; each must go through the single outlet.
     const uses = mcps.split('serializeMcpFor(').length - 1
     expect(uses).toBeGreaterThanOrEqual(5)
@@ -331,7 +331,10 @@ describe('RFC-247 impl-gate — redaction covers every door onto node output', (
   })
 
   test('every plugin serialization point goes through the outlet', () => {
-    const plugins = readFileSync(resolve(SRC, 'routes/plugins.ts'), 'utf8')
+    const plugins = readFileSync(
+      resolve(SRC, 'modules/resource-catalog/inbound/http/pluginRoutes.ts'),
+      'utf8',
+    )
     expect(plugins.split('serializePluginFor(').length - 1).toBeGreaterThanOrEqual(5)
   })
 })

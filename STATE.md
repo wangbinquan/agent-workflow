@@ -1,3 +1,29 @@
+## 2026-11-25 RFC-581 resource-catalog 的 MCP、技能与插件路由归入模块 inbound（In Progress；`design/RFC-581-resource-catalog-mcp-skill-plugin-routes-into-inbound/`）
+
+- **来由**：RFC-580 之后 resource-catalog 在 `routes/` 里还剩五个路由；`agents` 与 `workgroups` 等用户定（取 task-execution 的启动合同，见 RFC-580 条目），
+  `mcps`、`skills`、`plugins` 三个只取本模块与 identity-access 的授权类型，作为第六批。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行
+  自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、
+  2026-11-19「你加速推进RFC294」、2026-11-25「继续」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`routes/mcps`、`skills`、`plugins` 迁入 `modules/resource-catalog/inbound/http/`（`mcpRoutes.ts`、`skillRoutes.ts`、`pluginRoutes.ts`），挂载
+  函数经 `composition.ts` 转出，`server.ts` 改从那里取；挂载调用与顺序不变。42 个只被它们用的 public 符号：36 个声明（技能的描述合同、文件 / 版本
+  命令端口、zip 导入参与者与输入 / 回执，插件的描述合同与输入 / 回执，MCP 诊断的命令 / 查询端口与输入）连同一个只被它们用的局部形状逐字移进
+  `application/skills/operationContracts.ts`、`application/plugins/operationContracts.ts`、`application/mcps/diagnosticsContracts.ts`；6 个转出删去（读者改取
+  模块的 `application/mcps/ports` 与共享合同）。随改：归属表三行、`counts.json`、`rfc552` / `rfc305` 账本、ACL 写门守卫的委托表、`rfc222` 的删除确认
+  清单、`rfc345` 的两张路由表、`rfc448` 的导入方断言与十余个读源码的用例；新增 RFC-581 用例。
+- **不做**：`agents` 与 `workgroups`（等用户定）；task-execution 的路由；identity-access 与凭据相邻的路由；task-catalog；路由传输工具归位。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 resource-catalog 的 public 面
+  收窄 42 个只被本模块用的符号；C12 RFC-581 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、三个绑定、public 文件与三个落位文件、`server.ts`；C13
+  `legacy-horizontal-files` 74 → 71，其余计数不升。
+- **集中验证**（基于 `8a0d8516e`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。撤回的推算与候选报告一致（正是那 42 个，边的角色一起
+  核对过）。查出两处本人缺陷（一个只被移走声明用的局部形状、`rfc305` 账本的两条），均已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；
+  选出 484 个用例文件，修后 4395 条全部通过；读已提交源码的 279 个用例文件、2767 条在候选导出里通过（含只能在提交上跑的
+  `route-error-code-coverage`）；八种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话
+  按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-579 的补正 `ad64ba6e5`：windows-platform（run 45574363127）与 visual-regression-nightly（run 45574363167）通过；主 CI run
+  45574363157 里 macOS 的 e2e 分片 3/4 被取消——日志里 141 条用例全部通过（18.7 分钟），作业在收尾时撞上 20 分钟的作业时限，属运行器时长，不是
+  用例失败；按 CLAUDE.md 以包含它的后继提交的 CI 为证据，RFC-579 待后继的主 CI 全绿后转 Done。RFC-580 的提交 `8a0d8516e`：windows-platform
+  （run 45578856368）通过，主 CI 排队中。
+
 ## 2026-11-25 RFC-580 resource-catalog 的工作流、工作组任务房间与资源包路由归入模块 inbound（In Progress；`design/RFC-580-resource-catalog-workflow-workgroup-routes-into-inbound/`）
 
 - **来由**：RFC-579 之后 `routes/` 还剩 29 个文件，resource-catalog 的八个最多，一起迁要撤回 92 个 public 符号，其中 86 个是 public 文件里的声明，要给

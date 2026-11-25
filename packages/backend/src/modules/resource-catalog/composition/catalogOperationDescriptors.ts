@@ -44,11 +44,11 @@ import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 import type {
   AgentOperationDescriptors,
   McpOperationDescriptors,
-  PluginOperationDescriptors,
   ResourcePackageOperationDescriptors,
-  SkillOperationDescriptors,
   WorkgroupOperationDescriptors,
 } from '../public/operations'
+import type { PluginOperationDescriptors } from '../application/plugins/operationContracts'
+import type { SkillOperationDescriptors } from '../application/skills/operationContracts'
 import type { WorkflowOperationDescriptors } from '../application/workflows/operationContracts'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import { operationId } from '@/platform/operations/catalog'
@@ -59,39 +59,43 @@ import type {
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
 import type {
-  CheckPluginUpdateCatalogInput,
-  CheckPluginUpdateCatalogReceipt,
   CopyWorkgroupCatalogInput,
   CreateAgentCatalogInput,
   CreateMcpCatalogInput,
-  CreatePluginCatalogInput,
-  CreateSkillCatalogInput,
   CreateWorkgroupCatalogInput,
   DeleteAgentCatalogInput,
   DeleteAgentCatalogReceipt,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
-  DeletePluginCatalogInput,
-  DeletePluginCatalogReceipt,
-  DeleteSkillCatalogInput,
-  DeleteSkillCatalogReceipt,
   DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   GetResourceAclCatalogInput,
   RenameAgentCatalogInput,
   RenameMcpCatalogInput,
-  RenamePluginCatalogInput,
   RenameWorkgroupCatalogInput,
-  SaveSkillCatalogInput,
   UpdateAgentCatalogInput,
   UpdateMcpCatalogInput,
-  UpdatePluginCatalogInput,
   UpdateResourceAclCatalogInput,
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
+} from '../public/types'
+import type {
+  CheckPluginUpdateCatalogInput,
+  CheckPluginUpdateCatalogReceipt,
+  CreatePluginCatalogInput,
+  DeletePluginCatalogInput,
+  DeletePluginCatalogReceipt,
+  RenamePluginCatalogInput,
+  UpdatePluginCatalogInput,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
-} from '../public/types'
+} from '../application/plugins/operationContracts'
+import type {
+  CreateSkillCatalogInput,
+  DeleteSkillCatalogInput,
+  DeleteSkillCatalogReceipt,
+  SaveSkillCatalogInput,
+} from '../application/skills/operationContracts'
 import type {
   CopyWorkflowCatalogInput,
   CreateWorkflowCatalogInput,
@@ -100,7 +104,10 @@ import type {
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
 } from '../application/workflows/operationContracts'
-import type { SkillFileCommands, SkillVersionCommands } from '../public/commands'
+import type {
+  SkillFileCommands,
+  SkillVersionCommands,
+} from '../application/skills/operationContracts'
 import type {
   AgentOperationContext,
   McpOperationContext,
@@ -121,7 +128,6 @@ import type {
 } from '../public/queries'
 import type {
   AgentCatalogResource,
-  DeleteSkillFileCatalogInput,
   DiffSkillVersionsCatalogInput,
   GetMcpCatalogInput,
   GetAgentCatalogInput,
@@ -143,9 +149,12 @@ import type {
   ListSkillFilesCatalogInput,
   ListSkillVersionsCatalogInput,
   ReadSkillFileCatalogInput,
+} from '../public/types'
+import type {
+  DeleteSkillFileCatalogInput,
   RestoreSkillVersionCatalogInput,
   WriteSkillFileCatalogInput,
-} from '../public/types'
+} from '../application/skills/operationContracts'
 
 interface AgentCommands {
   create(

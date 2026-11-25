@@ -33,10 +33,10 @@ import type {
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
   McpCatalogResource,
-  McpProbeOperations,
   RenameMcpCatalogInput,
   UpdateMcpCatalogInput,
 } from '@/modules/resource-catalog/public/types'
+import type { McpProbeOperations } from '../../application/mcps/ports'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
@@ -44,8 +44,8 @@ import { assertDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfi
 import { serializeMcpFor } from '@/auth/tokenRedaction'
 import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-import type { McpDiagnosticsCommands } from '@/modules/resource-catalog/public/commands'
-import type { McpDiagnosticsQueries } from '@/modules/resource-catalog/public/queries'
+import type { McpDiagnosticsCommands } from '../../application/mcps/diagnosticsContracts'
+import type { McpDiagnosticsQueries } from '../../application/mcps/diagnosticsContracts'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface McpRouteDependencies {

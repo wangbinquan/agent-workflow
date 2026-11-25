@@ -132,7 +132,7 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   })
 
   test('Skill ZIP route consumes one provider-bound whole-tree participant', () => {
-    const route = source('routes/skills.ts')
+    const route = source('modules/resource-catalog/inbound/http/skillRoutes.ts')
     // RFC-455: the ZIP decoder moved from the legacy skill-zip module into resource-catalog
     // `domain/zipArchive.ts`; the skill ZIP participant reads it from there.
     const codec = source('modules/resource-catalog/domain/zipArchive.ts')
@@ -170,9 +170,10 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
     // RFC-580: the workflow and resource-package bindings moved into resource-catalog's inbound layer.
     for (const path of [
       'routes/agents.ts',
-      'routes/skills.ts',
-      'routes/mcps.ts',
-      'routes/plugins.ts',
+      // RFC-581: the skill, MCP and plugin bindings moved into resource-catalog's inbound layer.
+      'modules/resource-catalog/inbound/http/skillRoutes.ts',
+      'modules/resource-catalog/inbound/http/mcpRoutes.ts',
+      'modules/resource-catalog/inbound/http/pluginRoutes.ts',
       'modules/resource-catalog/inbound/http/workflowRoutes.ts',
       'routes/workgroups.ts',
       'modules/resource-catalog/inbound/http/resourcePackageRoutes.ts',

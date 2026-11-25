@@ -8,12 +8,7 @@ export type {
   SkillSource,
 } from '../domain/nativeAgentMaterialContents'
 
-import type {
-  BundleResourceType,
-  McpRuntimeTestCancelRequest,
-  McpRuntimeTestCreateRequest,
-  McpRuntimeTestMessageRequest,
-} from '@agent-workflow/shared'
+import type { BundleResourceType } from '@agent-workflow/shared'
 // RFC-352 T9 —— `resource-acl:bypass` 判定经 public 暴露。
 // 由来：memory 的两个 provider 此前从**不同地方**取同一个谓词——SQLite 侧走 legacy
 // `@/services/resourceAcl`、PostgreSQL 侧直接深入 `resource-catalog/domain/resourceAccess`
@@ -29,25 +24,19 @@ import type {
   CopyWorkgroupRequest,
   CreateAgent,
   CreateMcp,
-  CreatePlugin,
   CreateWorkgroup,
   DeleteMcp,
-  DeletePlugin,
   IntentOp,
   IntentResourceType,
   Mcp,
   McpOperationResource,
   Plugin,
-  PluginOperationRequest,
   PluginOperationResource,
-  PluginUpdateCheck,
-  PluginUpgradeResult,
   GrantResourceType,
   ResourceAccess,
   ResourceVisibility,
   RenameAgentRequest,
   RenameMcpRequest,
-  RenamePluginRequest,
   RenameWorkgroup,
   SaveWorkgroupReceipt,
   Skill,
@@ -55,12 +44,8 @@ import type {
   SkillVersion,
   SkillVersionContent,
   SkillVersionDiff,
-  SkillZipDecisionMap,
   UpdateMcpRequest,
-  UpdatePluginRequest,
   UpdateWorkgroup,
-  ParseSkillZipResponse,
-  CommitSkillZipResponse,
   WorkflowCandidateHash,
   WorkflowDetail,
   WorkflowDefinition,
@@ -171,24 +156,6 @@ export interface DeleteAgentCatalogReceipt {
   readonly deleted: Agent
 }
 
-export interface CreateSkillCatalogInput {
-  readonly submission: JsonBodySubmission
-}
-
-export interface SaveSkillCatalogInput {
-  readonly id: string
-  readonly submission: JsonBodySubmission
-}
-
-export interface DeleteSkillCatalogInput {
-  readonly id: string
-  readonly submission: JsonBodySubmission
-}
-
-export interface DeleteSkillCatalogReceipt {
-  readonly deleted: Skill
-}
-
 export type CreateMcpCatalogInput = CreateMcp
 
 export interface UpdateMcpCatalogInput {
@@ -209,40 +176,6 @@ export interface RenameMcpCatalogInput {
 export interface DeleteMcpCatalogReceipt {
   readonly deleted: McpOperationResource
 }
-
-export type CreatePluginCatalogInput = CreatePlugin
-
-export interface UpdatePluginCatalogInput {
-  readonly id: string
-  readonly update: UpdatePluginRequest
-}
-
-export interface DeletePluginCatalogInput {
-  readonly id: string
-  readonly deletion: DeletePlugin
-}
-
-export interface RenamePluginCatalogInput {
-  readonly id: string
-  readonly rename: RenamePluginRequest
-}
-
-export interface CheckPluginUpdateCatalogInput {
-  readonly id: string
-  readonly operation: PluginOperationRequest
-}
-
-export interface UpgradePluginCatalogInput {
-  readonly id: string
-  readonly operation: PluginOperationRequest
-}
-
-export interface DeletePluginCatalogReceipt {
-  readonly deleted: PluginOperationResource
-}
-
-export type CheckPluginUpdateCatalogReceipt = PluginUpdateCheck
-export type UpgradePluginCatalogReceipt = PluginUpgradeResult
 
 export type CreateWorkgroupCatalogInput = CreateWorkgroup
 
@@ -391,7 +324,6 @@ export interface AgentResourceClosureStatus {
 
 /** Closed provider persistence projection for one MCP probe. */
 // RFC-448 — the MCP probe use cases behind the HTTP probe endpoints.
-export type { McpProbeOperations, McpProbeReceipt } from '../application/mcps/ports'
 
 /** T5-S aggregate contract. Filesystem roots and persistence rows stay private. */
 export type SkillCatalogResource = Skill
@@ -399,11 +331,6 @@ export type SkillCatalogContent = SkillContent
 export type SkillCatalogVersion = SkillVersion
 export type SkillCatalogVersionContent = SkillVersionContent
 export type SkillCatalogVersionDiff = SkillVersionDiff
-
-interface SkillJsonSubmission {
-  readonly kind: 'json-body'
-  readonly body: string
-}
 
 export interface GetSkillCatalogInput {
   readonly id: string
@@ -422,34 +349,6 @@ export interface ReadSkillFileCatalogInput {
   readonly path: string
 }
 
-export interface WriteSkillFileCatalogInput {
-  readonly id: string
-  readonly path: string
-  readonly submission: SkillJsonSubmission
-}
-
-export interface WriteSkillFileCatalogReceipt {
-  readonly ok: true
-  readonly path: string
-  readonly token: string | null
-}
-
-export interface DeleteSkillFileCatalogInput {
-  readonly id: string
-  readonly path: string
-  readonly expectedToken?: string
-  readonly submission: SkillJsonSubmission
-}
-
-export interface DeleteSkillFileCatalogReceipt {
-  readonly deleted: Readonly<{
-    readonly skillId: string
-    readonly name: string
-    readonly path: string
-  }>
-  readonly token: string | null
-}
-
 export interface ListSkillVersionsCatalogInput {
   readonly id: string
 }
@@ -464,36 +363,6 @@ export interface GetSkillVersionContentCatalogInput {
   readonly id: string
   readonly version: string
 }
-
-export interface RestoreSkillVersionCatalogInput {
-  readonly id: string
-  readonly version: string
-  readonly submission: SkillJsonSubmission
-}
-
-export interface RestoreSkillVersionCatalogReceipt {
-  readonly version: SkillCatalogVersion
-  readonly unfusedMemoryIds: readonly string[]
-  readonly token: string | null
-}
-
-/** Closed transport envelope; archive bytes never expose a runtime buffer type. */
-export interface SkillZipArchiveSubmission {
-  readonly encoding: 'base64'
-  readonly content: string
-}
-
-export interface ParseSkillZipCatalogInput {
-  readonly archive: SkillZipArchiveSubmission
-}
-
-export interface CommitSkillZipCatalogInput {
-  readonly archive: SkillZipArchiveSubmission
-  readonly decisions: SkillZipDecisionMap
-}
-
-export type ParseSkillZipCatalogReceipt = ParseSkillZipResponse
-export type CommitSkillZipCatalogReceipt = CommitSkillZipResponse
 
 /** T5-WF aggregate contract. Persistence rows and raw submissions stay private. */
 export type WorkflowCatalogDetail = WorkflowDetail
@@ -873,29 +742,7 @@ export interface ExportResourcePackage {
 }
 
 /** MCP diagnostics retain their existing wire DTOs and request budgets. */
-export type {
-  McpRuntimeTestCreateReceipt,
-  McpRuntimeTestMessageReceipt,
-  McpRuntimeTestMutationReceipt,
-  McpRuntimeTestSessionDto,
-  SessionViewResponse as McpDiagnosticsTranscript,
-} from '@agent-workflow/shared'
-export interface McpDiagnosticsResourceRef {
-  readonly mcpId: string
-}
-export interface McpDiagnosticsSessionRef extends McpDiagnosticsResourceRef {
-  readonly sessionId: string
-}
-export interface StartMcpDiagnosticsInput extends McpDiagnosticsResourceRef {
-  readonly request: McpRuntimeTestCreateRequest
-}
-export interface SubmitMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef {
-  readonly request: McpRuntimeTestMessageRequest
-}
-export interface CancelMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef {
-  readonly request: McpRuntimeTestCancelRequest
-}
-
+export type { SessionViewResponse as McpDiagnosticsTranscript } from '@agent-workflow/shared'
 // Durable artifact data consumed by Intent and its owner-specific adapters.
 export type { IntentApplyArtifact } from '../application/intent/artifactOwners'
 export {

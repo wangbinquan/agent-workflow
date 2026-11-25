@@ -22,10 +22,6 @@ import type {
   FrozenTaskExecutionResourceSnapshot,
   GetAgentResourceClosureStatusInput,
   McpAclIdentity,
-  ParseSkillZipCatalogInput,
-  ParseSkillZipCatalogReceipt,
-  CommitSkillZipCatalogInput,
-  CommitSkillZipCatalogReceipt,
   TaskExecutionResourceRequest,
 } from './types'
 
@@ -192,18 +188,6 @@ export interface McpAclIdentityParticipant {
   readonly [mcpAclIdentityParticipantBrand]: 'mcp-acl-identity-participant'
   load(id: string): Promise<McpAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
-}
-
-/** Provider-bound whole-tree ZIP import; route owns only multipart decoding. */
-export interface SkillZipImportParticipant {
-  parse(
-    authority: SkillOperationContext,
-    input: ParseSkillZipCatalogInput,
-  ): Promise<ParseSkillZipCatalogReceipt>
-  commit(
-    authority: SkillOperationContext,
-    input: CommitSkillZipCatalogInput,
-  ): Promise<CommitSkillZipCatalogReceipt>
 }
 
 export interface TaskExecutionResourceSnapshotInTx {

@@ -293,8 +293,12 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
     )
 
   const GATED: Array<[string, RegExp]> = [
-    ['mcps.ts', deleteHandlerRe('/api/mcps/:id')],
-    ['plugins.ts', deleteHandlerRe('/api/plugins/:id')],
+    // RFC-581: the MCP and plugin HTTP bindings moved into resource-catalog's inbound layer.
+    ['../modules/resource-catalog/inbound/http/mcpRoutes.ts', deleteHandlerRe('/api/mcps/:id')],
+    [
+      '../modules/resource-catalog/inbound/http/pluginRoutes.ts',
+      deleteHandlerRe('/api/plugins/:id'),
+    ],
     ['tasks.ts', deleteHandlerRe('/api/tasks/:id')], // PR-3 lights this up
   ]
 
@@ -338,7 +342,10 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
   })
 
   test('skills DELETE delegates to the application-owned confirm gate', () => {
-    const route = readFileSync(resolve(ROUTES_DIR, 'skills.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(ROUTES_DIR, '..', 'modules', 'resource-catalog', 'inbound', 'http', 'skillRoutes.ts'),
+      'utf8',
+    )
     expect(deleteHandlerRe('/api/skills/:id').test(route)).toBe(true)
     expect(route).toContain('descriptor: operations.delete')
     expect(route).not.toContain('assertDeleteConfirm')
