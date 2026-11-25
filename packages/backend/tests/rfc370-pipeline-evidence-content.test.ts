@@ -26,6 +26,8 @@ import {
   composeStandaloneDevelopmentAutomationSelections,
   unusedDevelopmentProviders,
 } from './helpers/developmentAutomation'
+import { evidenceArtifactsWith } from './helpers/evidenceSelections'
+import { EvidenceStore } from '@/modules/development-automation/infrastructure/local/fileEvidenceStore'
 
 const roots: string[] = []
 const identityRuntimes: ReturnType<typeof createIdentityAccessRuntime>[] = []
@@ -181,13 +183,22 @@ describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => 
     }
     const appHome = mkdtempSync(join(tmpdir(), 'rfc370-selected-evidence-'))
     roots.push(appHome)
+    // RFC-598: content reads are a member of the deployment's evidence artifacts (the composition's `evidenceContents`
+    // override is gone); documents, downloads and the other capabilities stay local at `<appHome>/evidence`.
+    const local = new EvidenceStore(join(appHome, 'evidence'))
     const automation = composeDevelopmentAutomation({
-      ...composeStandaloneDevelopmentAutomationSelections({ db: harness.db, appHome }),
+      ...composeStandaloneDevelopmentAutomationSelections({
+        db: harness.db,
+        appHome,
+        evidenceArtifacts: evidenceArtifactsWith(
+          { contents, documents: local.documents, downloads: local.downloads },
+          join(appHome, 'evidence'),
+        ),
+      }),
       ...unusedDevelopmentProviders(),
       verificationCommands: createLocalVerificationCommandEffectsFactory(),
       db: harness.db,
       appHome,
-      evidenceContents: contents,
     })
     expect(automation.evidenceContents).toBe(contents)
     const operations = composeDevelopmentMissionOperations({

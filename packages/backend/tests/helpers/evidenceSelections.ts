@@ -3,13 +3,21 @@
 // used to inject the retired `evidenceRead` / `evidenceDocumentCommands` selections inject through these shapes.
 import { composeLocalDevelopmentPurposes } from '@/bootstrap/developmentPurposeRoot'
 import type { EvidenceDocumentCommands } from '@/modules/development-automation/composition'
-import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/application/ports/evidenceArtifacts'
 import { EvidenceStore } from '@/modules/development-automation/infrastructure/local/fileEvidenceStore'
 
+/**
+ * RFC-598: the read members of the evidence artifacts port (the retired composition-only `EvidenceReadBinding` had the
+ * same three members and types).
+ */
+export type EvidenceReadSelection = Pick<
+  EvidenceArtifactPort,
+  'contents' | 'documents' | 'downloads'
+>
+
 /** An evidence artifacts port whose read members are the selected ones and whose other capabilities are local. */
 export function evidenceArtifactsWith(
-  read: EvidenceReadBinding,
+  read: EvidenceReadSelection,
   root: string,
 ): EvidenceArtifactPort {
   const local = new EvidenceStore(root)

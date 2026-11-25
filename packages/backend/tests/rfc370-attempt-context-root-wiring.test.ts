@@ -31,26 +31,23 @@ test('the actual DA composition selects one context receiver and invokes its nat
   const native = calls(local, 'createAttemptContextStore')
   expect(native).toHaveLength(1)
   expect(native[0]!.arguments[0]!.getText(local)).toBe('this')
-  const selections: ts.BinaryExpression[] = []
+  // RFC-598: the composition's `attemptContext` override is gone — the port binding takes the deployment's
+  // evidenceArtifacts member and nothing else.
+  const bindings: ts.PropertyAssignment[] = []
   const visit = (node: ts.Node) => {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-      node.left.getText(composition) === 'deps.attemptContext'
-    )
-      selections.push(node)
+    if (ts.isPropertyAssignment(node) && node.name.getText(composition) === 'attemptContext')
+      bindings.push(node)
     ts.forEachChild(node, visit)
   }
   visit(composition)
-  expect(selections).toHaveLength(1)
-  expect(selections[0]!.right.getText(composition)).toBe('evidence.contexts')
-  expect(ts.isPropertyAssignment(selections[0]!.parent)).toBe(true)
-  if (!ts.isPropertyAssignment(selections[0]!.parent)) throw new Error('port binding is missing')
-  expect(selections[0]!.parent.name.getText(composition)).toBe('attemptContext')
+  expect(bindings.map((binding) => binding.initializer.getText(composition))).toEqual([
+    'evidence.contexts',
+  ])
+  expect(composition.text).not.toContain('deps.attemptContext')
 })
 
-// RFC-429: the attempt context is a member of the deployment's evidenceArtifacts (`deps.attemptContext ??
-// evidence.contexts` above); no root forwards a separate attemptContext and it is no deployment selection.
+// RFC-429: the attempt context is a member of the deployment's evidenceArtifacts (`evidence.contexts` above); no root
+// forwards a separate attemptContext and it is no deployment selection.
 test('every real root takes the attempt context from evidenceArtifacts, never a separate selection', () => {
   const start = load('bootstrap/daemonStart.ts')
   const pg = load('bootstrap/daemonApplication.ts')

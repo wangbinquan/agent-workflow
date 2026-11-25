@@ -4,8 +4,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { dirname, join } from 'node:path'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
-import { evidenceArtifactsWith } from './helpers/evidenceSelections'
+import { evidenceArtifactsWith, type EvidenceReadSelection } from './helpers/evidenceSelections'
 import type { EvidenceDownloadHandle } from '@/modules/development-automation/application/evidenceDownloads'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import type { RequirementBundleManifestV1 } from '@/modules/development-automation/domain/requirementManifest'
@@ -26,22 +25,22 @@ function stream(value: string): ReadableStream<Uint8Array> {
     },
   })
 }
-function inherited(store: EvidenceReadBinding): EvidenceReadBinding {
-  class Selection implements EvidenceReadBinding {
+function inherited(store: EvidenceReadSelection): EvidenceReadSelection {
+  class Selection implements EvidenceReadSelection {
     get contents() {
-      expect<EvidenceReadBinding>(this).toBe(receiver)
+      expect<EvidenceReadSelection>(this).toBe(receiver)
       return store.contents
     }
     get documents() {
-      expect<EvidenceReadBinding>(this).toBe(receiver)
+      expect<EvidenceReadSelection>(this).toBe(receiver)
       return store.documents
     }
     get downloads() {
-      expect<EvidenceReadBinding>(this).toBe(receiver)
+      expect<EvidenceReadSelection>(this).toBe(receiver)
       return store.downloads
     }
   }
-  const receiver: EvidenceReadBinding = Object.freeze(new Selection())
+  const receiver: EvidenceReadSelection = Object.freeze(new Selection())
   expect(Object.keys(receiver)).toEqual([])
   return receiver
 }
@@ -121,7 +120,7 @@ describeEachProviderHttpApplication(
             return stream(text.slice(start, endInclusive + 1))
           },
         }
-        const documents: EvidenceReadBinding['documents'] = {
+        const documents: EvidenceReadSelection['documents'] = {
           async readText(input) {
             expect(this).toBe(documents)
             expect(input).toEqual({
@@ -137,7 +136,7 @@ describeEachProviderHttpApplication(
             return mode === 'document-schema' ? '{}' : JSON.stringify(manifest)
           },
         }
-        const downloads: EvidenceReadBinding['downloads'] = {
+        const downloads: EvidenceReadSelection['downloads'] = {
           async open(ref) {
             expect(this).toBe(downloads)
             expect(ref).toBe(sha256)

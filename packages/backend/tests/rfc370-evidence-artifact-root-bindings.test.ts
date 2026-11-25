@@ -77,8 +77,10 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   // RFC-524: the evidence artifacts are a required input; the composition no longer builds a local store.
   expect(composition.text).toContain('  const evidence = deps.evidenceArtifacts\n')
   expect(composition.text).not.toContain('new EvidenceStore(')
+  // RFC-598: the automation effects are a stated selection; the composition only checks them (no derivation from the
+  // action effects' contents when they are left out).
   expect(composition.text).toContain(
-    'const factory = selectedAutomationWorkspaceEffects(\n    deps.automationWorkspaceEffects === undefined\n      ? actionWorkspaceEffects.contents\n      : deps.automationWorkspaceEffects,\n  )',
+    'const factory = selectedAutomationWorkspaceEffects(deps.automationWorkspaceEffects)\n',
   )
   for (const [path, expression, count] of [
     // RFC-370 §9.2 V3: one bundle overlay serves materialize and adopt on

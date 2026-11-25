@@ -5,14 +5,17 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { EvidenceDocumentCommands } from '@/modules/development-automation/composition'
-import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { EvidenceBundleRecord } from '@/modules/development-automation/domain/evidence'
 import { DIRECT_SUBMISSION_BUDGET } from '@/modules/development-automation/infrastructure/requirementMaterializer'
 import { createFileEvidenceDocumentQueries } from '@/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { evidenceArtifactsWith, requirementPurposeWith } from './helpers/evidenceSelections'
+import {
+  evidenceArtifactsWith,
+  requirementPurposeWith,
+  type EvidenceReadSelection,
+} from './helpers/evidenceSelections'
 
 const unused = (): never => {
   throw new Error('this answer request must not read pipeline/download content')
@@ -67,7 +70,7 @@ describeEachProviderHttpApplication(
             ? Object.freeze(prototype)
             : Object.freeze({ writeDocument: prototype.writeDocument })
         expect(Object.keys(writer)).toEqual(representation === 'inherited' ? [] : ['writeDocument'])
-        const documents: EvidenceReadBinding['documents'] = {
+        const documents: EvidenceReadSelection['documents'] = {
           async readText(input) {
             expect(this).toBe(documents)
             const selected = saved.get(input.bundleRef)

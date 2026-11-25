@@ -1,3 +1,15 @@
+## 2026-11-25 RFC-598 development-automation 的装配入参全部显式给出（In Progress；`design/RFC-598-development-automation-stated-composition-inputs/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；接 RFC-597 design §5 留下的一项（RFC-294 S12 第 1 项）。
+- **范围**：`composeDevelopmentAutomation` 的三组效果选择（`actionWorkspaceEffects`、`automationWorkspaceEffects`、`repositoryBaselines`）改为必填，装配只用
+  `select*` 核对它们、不再从动作效果推出自动化效果；三个证据读取覆盖（`evidenceContents`、`evidenceRead`、`attemptContext`）删去，证据的读取、下载、文档与
+  尝试上下文只从 `evidenceArtifacts` 取，`composition/evidenceReadBinding.ts` 删去（用例改用证据端口的 `Pick`）。RFC-524 的测试助手照此前的回落另给三组本机
+  效果；唯一给内容覆盖的用例改经 `evidenceArtifacts`；两个钉旧写法的 RFC-370 锁随改。新增 RFC-598 用例。装配入参从此没有可选成员。
+- **集中验证**（基于 `8cc1e0ff3`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 255 个
+  用例文件只有 `rfc321` 照例红（主树 10 / 10）；五种运行期变异与一种类型检查变异都被认出；架构计数都不变（生产文件少 1 个）。实现门 PASS（本会话按路径
+  限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-597 development-automation 的装配不再接受缺省的 provider（Done；`design/RFC-597-development-automation-required-providers/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 W4-E8（`ReconcilerPorts` 可选袋）的第一步。

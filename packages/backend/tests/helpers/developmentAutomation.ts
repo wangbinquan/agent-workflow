@@ -1,13 +1,16 @@
 // RFC-524 — what the development-automation compositions used to build when the caller left a selection out. The
 // compositions now take these as required inputs (the daemon always gave them); tests that relied on the fallbacks give
 // them through these helpers. Each member is built only when the test did not give it, exactly as the fallback did.
-// RFC-597 adds the doubles for the providers a test does not exercise (the composition requires all of them).
+// RFC-597 adds the doubles for the providers a test does not exercise (the composition requires all of them); RFC-598 adds
+// the three effect selections the composition used to build when they were left out.
 import { join } from 'node:path'
 import type { EvidenceDocumentCommands } from '@/modules/development-automation/application/evidenceDocumentCommands'
 import type { AdmissionLookup } from '@/modules/development-automation/application/ports/admissionLookup'
+import type { ActionWorkspaceEffects } from '@/modules/development-automation/application/ports/actionWorkspaceEffects'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/application/ports/automationWorkspaceEffects'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/application/ports/evidenceArtifacts'
 import type { EvidenceStagingFactory } from '@/modules/development-automation/application/ports/evidenceStaging'
+import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/application/ports/repositoryBaselineEffects'
 import { createAdmissionLookup } from '@/modules/development-automation/infrastructure/admissionLookup'
 import { selectedAutomationWorkspaceEffects } from '@/modules/development-automation/infrastructure/automationWorkspaceEffects'
 import { EvidenceStore } from '@/modules/development-automation/infrastructure/evidenceStore'
@@ -15,7 +18,9 @@ import {
   createLocalEvidenceStagingFactory,
   createLocalEvidenceStagingNamespace,
 } from '@/modules/development-automation/infrastructure/local/evidenceStaging'
+import { createFileActionWorkspaceEffects } from '@/modules/development-automation/infrastructure/local/fileActionWorkspaceEffects'
 import { createFileEvidenceDocumentCommands } from '@/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 import type { DevelopmentAutomationProviders } from '@/modules/development-automation/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
@@ -24,6 +29,9 @@ export interface StandaloneDevelopmentAutomationSelections {
   readonly admissionLookup: AdmissionLookup
   readonly requirementStaging: EvidenceStagingFactory
   readonly evidenceDocumentCommands: EvidenceDocumentCommands
+  readonly actionWorkspaceEffects: ActionWorkspaceEffects
+  readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
+  readonly repositoryBaselines: RepositoryBaselineEffectsFactory
 }
 
 /**
@@ -31,7 +39,9 @@ export interface StandaloneDevelopmentAutomationSelections {
  * composition built it at composition time), the admission lookup over the database, and — unless the test gave its own
  * staging — the local writer and requirement staging over the resolved evidence store at `<appHome>/evidence/staging`.
  * A test that gives staging gives its writer as well; it is passed through unchanged, so a missing writer is still
- * rejected by the composition with the same error.
+ * rejected by the composition with the same error. RFC-598: the three effect selections as the composition's fallbacks
+ * built them — the file action workspace effects, the automation effects as their `contents`, and the file baseline
+ * effects.
  */
 export function composeStandaloneDevelopmentAutomationSelections(input: {
   readonly db: PersistenceDb
@@ -40,18 +50,29 @@ export function composeStandaloneDevelopmentAutomationSelections(input: {
   readonly admissionLookup?: AdmissionLookup
   readonly requirementStaging?: EvidenceStagingFactory
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
+  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
 }): StandaloneDevelopmentAutomationSelections {
   const admissionLookup = input.admissionLookup ?? createAdmissionLookup(input.db)
   const evidence = input.evidenceArtifacts ?? new EvidenceStore(join(input.appHome, 'evidence'))
+  const actionWorkspaceEffects = input.actionWorkspaceEffects ?? createFileActionWorkspaceEffects()
+  const effects = {
+    actionWorkspaceEffects,
+    automationWorkspaceEffects: input.automationWorkspaceEffects ?? actionWorkspaceEffects.contents,
+    repositoryBaselines: input.repositoryBaselines ?? createFileRepositoryBaselineEffectsFactory(),
+  }
   if (input.requirementStaging !== undefined)
     return {
       evidenceArtifacts: evidence,
       admissionLookup,
       requirementStaging: input.requirementStaging,
       evidenceDocumentCommands: input.evidenceDocumentCommands as EvidenceDocumentCommands,
+      ...effects,
     }
   const stagingRoot = join(input.appHome, 'evidence', 'staging')
   return {
+    ...effects,
     evidenceArtifacts: evidence,
     admissionLookup,
     evidenceDocumentCommands:

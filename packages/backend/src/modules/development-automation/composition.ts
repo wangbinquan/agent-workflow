@@ -72,8 +72,6 @@ import type { RecoveryReaders } from './application/missionRecovery'
 import type { WakeSweepReaders } from './application/missionWakeSweep'
 import { createWorkspaceValidationAdapter } from './infrastructure/attemptSupport'
 import { adoptActionWorkspace, materializeActionWorkspace } from './application/actionWorkspace'
-import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
-import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
 import type { EvidenceDocumentCommands } from './application/evidenceDocumentCommands'
 export type { EvidenceDocumentCommands }
 import type { EvidenceArtifactPort } from './application/ports/evidenceArtifacts'
@@ -216,18 +214,19 @@ export interface DevelopmentAutomationProviders {
 
 export interface DevelopmentAutomationCompositionOptions extends DevelopmentAutomationProviders {
   readonly verificationCommands: VerificationCommandEffectsFactory
-  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
-  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
-  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  /** RFC-598: the deployment's three effect selections are stated (the daemon gives all three; tests give the local ones). */
+  readonly actionWorkspaceEffects: ActionWorkspaceEffects
+  readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
+  readonly repositoryBaselines: RepositoryBaselineEffectsFactory
   readonly appHome: string
-  readonly evidenceContents?: EvidenceContentQueries
-  /** RFC-524: the deployment's evidence artifacts (required; the composition no longer builds a local store). */
+  /**
+   * RFC-524: the deployment's evidence artifacts (required; the composition no longer builds a local store). RFC-598:
+   * its members are the only source of evidence reads, downloads, documents and attempt contexts.
+   */
   readonly evidenceArtifacts: EvidenceArtifactPort
-  readonly evidenceRead?: EvidenceReadBinding
   /** RFC-524: the requirement purpose's writer and staging (required, as in bootstrap's `RequirementPurposeSelection`). */
   readonly evidenceDocumentCommands: EvidenceDocumentCommands
   readonly requirementStaging: EvidenceStagingFactory
-  readonly attemptContext?: AttemptContextStorePort
   /** Bootstrap-selected admission configuration provider (RFC-524: required). */
   readonly admissionLookup: AdmissionLookup
 }
@@ -256,21 +255,16 @@ function composeDevelopmentAutomationFromPersistence(
   persistence: DevelopmentAutomationPersistenceBundle,
 ): DevelopmentAutomationModule {
   const actionWorkspaceEffects = selectActionWorkspaceEffects(deps.actionWorkspaceEffects)
-  const factory = selectedAutomationWorkspaceEffects(
-    deps.automationWorkspaceEffects === undefined
-      ? actionWorkspaceEffects.contents
-      : deps.automationWorkspaceEffects,
-  )
+  const factory = selectedAutomationWorkspaceEffects(deps.automationWorkspaceEffects)
 
   const now = (): number => Date.now()
   const store = persistence.store
   const lookup = persistence.admissionLookup
   const snapshots = persistence.snapshots
   const evidence = deps.evidenceArtifacts
-  const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
-  const evidenceDownloads = deps.evidenceRead?.downloads ?? evidence.downloads
+  const evidenceContents = evidence.contents
+  const evidenceDownloads = evidence.downloads
   const materializer = createSelectedRequirementMaterializer({
-    documents: deps.evidenceRead?.documents,
     ...selectedRequirementMaterializerContent({
       staging: deps.requirementStaging,
       documentCommands: deps.evidenceDocumentCommands,
@@ -340,7 +334,7 @@ function composeDevelopmentAutomationFromPersistence(
       discard: (reference) => actionWorkspaceEffects.discard(reference),
     },
     uploadPlanReader: persistence.uploadPlanReader,
-    attemptContext: deps.attemptContext ?? evidence.contexts,
+    attemptContext: evidence.contexts,
     actionTemplates: {
       content: async (id, revision) => {
         const row = await templates.getRevision(id, revision)
