@@ -15,7 +15,7 @@
 - [x] AC-1 旧路径不存在、没有说明符再解析到它；迁走的文件只改 import（另并入 `residualConflictMarkers`）；`util/git.ts` 不再有这个函数
 - [x] AC-2 两个使用方拿到同一份函数；合并代理、冲突解析与判定的用例通过
 - [x] AC-3 两个上限按实测收紧；未消费 public 符号保持 0；public 类型偏差不升；DAG 之外的边与跨 context 内部文件对不增加；新增 RFC-586 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`035f97026`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -46,7 +46,8 @@ HEAD 的另一份导出。导出之后只改了收口文档（本文件与 `STAT
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `035f97026`（实现）：exact SHA 主 CI run 45618436881 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片；按路径触发的 windows-platform（run 45618436863）通过。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

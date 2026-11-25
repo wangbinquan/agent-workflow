@@ -16,7 +16,7 @@
 - [x] AC-1 四个旧路径不存在、没有说明符再解析到它们；四个文件只改 import（`nodeIsolation.ts` 另改取 domain 的两个错误类）
 - [x] AC-2 task-execution 不取 source-control 的 infrastructure；视图没有本机退路；隔离相关用例通过
 - [x] AC-3 两个上限按实测收紧；未消费 public 符号保持 0；public 类型偏差不升；DAG 之外的边与跨 context 内部文件对不增加；新增 RFC-585 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`c17e1e7fe`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -56,7 +56,9 @@ HEAD 的另一份导出。导出之后只改了收口文档（本文件、`STATE
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `c17e1e7fe`（实现）：exact SHA 主 CI run 45613842620 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片；按路径触发的 windows-platform（run 45613842407）与 git-protocols-e2e（run 45613842465）通过。2026-11-25
+  转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

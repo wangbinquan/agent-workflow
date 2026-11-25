@@ -1,4 +1,4 @@
-## 2026-11-25 RFC-586 合并冲突解决的纯逻辑归 source-control 的 domain（In Progress；`design/RFC-586-merge-conflict-resolution-into-source-control/`）
+## 2026-11-25 RFC-586 合并冲突解决的纯逻辑归 source-control 的 domain（Done，`035f97026`；`design/RFC-586-merge-conflict-resolution-into-source-control/`）
 
 - **来由**：RFC-585 之后 `services/mergeAgent.ts` 由 source-control 的隔离实现（冲突解析、判定与提示词）与 task-execution 的合并冲突端口（代理定义、
   节点号与提示词）共用。提示词写着代理的输出端口名、代理定义声明同一个端口，两者必须在一处，而 source-control 的隔离实现要用提示词、又不能依赖
@@ -15,9 +15,15 @@
   用例文件、3480 条全部通过；读已提交源码的 364 个用例文件、3614 条在候选导出里通过（`rfc321` 在主树里 10 / 10）；五种变异都被认出；架构报告 60 个
   计数里只有两个 legacy 计数下降，public 类型偏差、跨 context 内部文件对、模块分层违规与 DAG 之外的已提供文件对不变。实现门 PASS（本会话按路径限定
   自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：`c17e1e7fe`（RFC-585）的 windows-platform 与 git-protocols-e2e 通过，主 CI 在跑（已过的 57 格无红）；RFC-585 待它全绿后转 Done。
+- **CI 侧**：RFC-586 的提交 `035f97026`：exact SHA 主 CI run 45618436881 70 / 70 全绿，windows-platform run 45618436863 通过；2026-11-25 转 Done。
+- **W5 的下一步待用户定**：`util/git.ts` 在 source-control 之外还有 8 个名字被用——`runGit` / `nonInteractiveGitEnv`（development-automation、
+  task-execution、platform）、`gitCommitExists` / `rollbackToSnapshot`（collaboration、task-execution）、`reclaimStaleRefLocks` /
+  `withWorktreeRegistryLock` / `worktreeFilesChanged`（task-execution）、`gitMetaDirsFor`（runtime-management）；platform 的版本探测、工作树备份与
+  启动升级环境也直接跑 git。RFC-294 design §8 / §15 写的是整份归 source-control，但 DAG 里 runtime-management、collaboration 与 system-operations 到
+  source-control 都没有边。可选：（a）补这几条 DAG 边，并把 platform 的三个 git 使用方迁给各自 owner；（b）偏离 design：通用的 git 进程运行器作为
+  厂商命令行客户端进 `platform/git/`，仓库语义归 source-control（需在 design 里列为偏离项呈用户确认）。在定之前 W5 停在这里。
 
-## 2026-11-25 RFC-585 节点隔离工作区的实现一族归 source-control（In Progress；`design/RFC-585-node-isolation-family-into-source-control/`）
+## 2026-11-25 RFC-585 节点隔离工作区的实现一族归 source-control（Done，`c17e1e7fe`；`design/RFC-585-node-isolation-family-into-source-control/`）
 
 - **来由**：RFC-294 W5——source-control 拥有 worktree / submodule，`util/git` 迁为本域 infrastructure 叶子。节点隔离工作区的本机实现停在
   `platform/workspace/local/`（`isolation`、`isolationReferences`、`submoduleParams`）并取 legacy 的 `services/gitSubmodule`、`services/mergeAgent` 与
@@ -41,7 +47,8 @@
   没有原历史，主树里 10 / 10）；六种变异都被认出；架构报告 60 个计数里只有上面两项变了，DAG 之外的 context 值对仍为 0、跨 context 内部文件对与
   platform → modules 不变。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由
   没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：RFC-583（`1e6e2a282`，主 CI 70 / 70）与 RFC-584（以补正 `11255a537` 的主 CI 70 / 70 为后继证据）本提交转 Done。
+- **CI 侧**：RFC-585 的提交 `c17e1e7fe`：exact SHA 主 CI run 45613842620 70 / 70 全绿，windows-platform run 45613842407 与
+  git-protocols-e2e run 45613842465 通过；2026-11-25 转 Done（RFC-583、RFC-584 已随 `c17e1e7fe` 转 Done）。
 
 ## 2026-11-25 RFC-584 RFC-370 收口后的不可达生产文件：契约用例专用的兼容入口迁入 tests/helpers，过时的 Intent 维护副本删除（Done，`dcbb373c3`；`design/RFC-584-rfc370-closure-unreachable-production-files/`）
 
