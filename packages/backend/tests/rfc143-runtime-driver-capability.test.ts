@@ -439,8 +439,9 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     expect(
       SRC('modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'),
     ).toContain('...context.runtime.runtime,')
-    for (const f of ['clarify', 'taskQuestions', 'reviews']) {
-      const src = SRC(`routes/${f}.ts`)
+    // RFC-579: the clarify, task-question and review routes moved into collaboration's inbound layer.
+    for (const f of ['clarifyRoutes', 'taskQuestionRoutes', 'reviewRoutes']) {
+      const src = SRC(`modules/collaboration/inbound/http/${f}.ts`)
       expect(src).not.toContain('resolveOpencodeCmd')
       expect(src).not.toContain('configPath: deps.configPath')
     }

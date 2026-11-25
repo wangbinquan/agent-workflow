@@ -24,14 +24,18 @@ import { DEVELOPMENT_CONFIG_API_BASE } from '@agent-workflow/shared'
 
 import { CONFIG_KIND_SPECS } from '../src/routes/code.config'
 
+// RFC-579: the development config HTTP binding moved into development-automation's inbound layer.
 const BACKEND_ROUTES = resolve(
   import.meta.dirname,
   '..',
   '..',
   'backend',
   'src',
-  'routes',
-  'developmentConfig.ts',
+  'modules',
+  'development-automation',
+  'inbound',
+  'http',
+  'developmentConfigRoutes.ts',
 )
 const BACKEND_OPERATIONS = resolve(
   import.meta.dirname,

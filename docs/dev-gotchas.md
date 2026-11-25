@@ -745,6 +745,12 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   正则。
 - **`grep -E` 的 `\s`**：macOS 的 `/usr/bin/grep -E` 不认 `\s`，`'util',\s*'errors'` 一类的模式什么也搜不到却不报错（RFC-575 漏过一处分段路径）。
   用 `[[:space:]]`。
+- **检索结果别截断，按名字拼的路径单独搜**（RFC-579 推红，2026-11-25）：按文件名列表拼路径的写法（`for (const f of ['clarify', 'reviews'])
+  SRC(`routes/${f}.ts`)`）里既没有 `routes/clarify` 也没有 `'clarify.ts'`，只剩一个裸名字；它出现在对名字列表的检索里，但那次检索的输出被
+  `head -20` 截掉了。挪文件前把全部检索结果写进文件再逐条看，另搜 `routes/\${`、`` `routes/ `` 一类模板写法；对分成多行的段式路径
+  （`'routes',` 换行 `'developmentConfig.ts'`）用跨行匹配（Python 的 `re.S`）搜。
+- **前端与 shared 的用例也读后端文件**（RFC-579 推红）：`packages/frontend/tests/code-config-api-base.test.ts` 按段拼路径读后端的路由文件，
+  核对前端调用的端点确实挂着。检索范围要包括 `packages/frontend/tests`、`packages/shared/tests`，不能只在 `packages/frontend/src` 里排除前端。
 
 另一半教训是**检索本身没跑**：zsh 里一条命令只要有一个通配没有匹配（`grep -rn pat architecture/ tests/architecture/*.json`，后一个目录下没有
 JSON），整条命令在执行前就中止，只打印一行 `no matches found`，看上去和“没搜到”一样。查空结果时先确认输出里没有这一行；需要通配时用
