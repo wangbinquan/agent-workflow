@@ -220,6 +220,29 @@ export const OPENCODE_PROBE_SUFFIXES = [
   '/runtime-management/infrastructure/drivers/opencode/util.ts',
 ] as const
 
+/**
+ * The backend HTTP surface: `routes/**` and every module's `inbound/**`. RFC-294 W9-D moves the bindings from
+ * `routes/` into their modules' inbound layers (RFC-438 the scheduled tasks, RFC-578 the memories, …), so a release
+ * capability that a route file's path used to witness is read from the endpoints this surface registers.
+ */
+export const HTTP_SURFACE_FILE =
+  /^packages\/backend\/src\/(?:routes\/|modules\/[^/]+\/inbound\/).+\.ts$/
+
+/** Whether the HTTP surface registers `endpoint` (its quoted, exact path); the surface is read once, on first use. */
+export function httpSurfaceRegisters(
+  files: readonly string[],
+  text: (path: string) => string,
+): (endpoint: string) => boolean {
+  let surface: string | undefined
+  return (endpoint) => {
+    surface ??= files
+      .filter((file) => HTTP_SURFACE_FILE.test(file))
+      .map(text)
+      .join('\n')
+    return surface.includes(`'${endpoint}'`)
+  }
+}
+
 export function opencodeProbePath(files: readonly string[]): string | undefined {
   for (const suffix of OPENCODE_PROBE_SUFFIXES) {
     const path = files.find((file) => file.endsWith(suffix))

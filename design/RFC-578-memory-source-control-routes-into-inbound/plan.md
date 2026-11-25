@@ -66,6 +66,14 @@
   PostgreSQL、前端、三个平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的 windows-platform（run 45564962555）与
   git-protocols-e2e（run 45564962640）也通过。
 
+## 收口后补正
+
+- **发布注册表的能力探测**（RFC-579 落地后、下一批调研时查出，本 RFC 引入）：`scripts/release-upgrade/registry.ts` 按 `routes/` 下的文件路径判断
+  一个发布版本有没有 memories 等能力，本 RFC 把 `routes/memories.ts` 迁走之后，下一次登记会把新版本记成“没有记忆能力”，发布升级门随之少验
+  （RFC-438 迁走定时任务路由之后 schedules 同理）。还没有任何发布 tag 含这两个提交，已登记的 80 个版本不受影响。补正：六项按路由文件判的探测在旧
+  路径不在时改读 HTTP 面（`routes/**` 与各模块 `inbound/**`）注册的端点（`lib/model.ts` 的 `httpSurfaceRegisters`），旧路径照旧认；新增
+  `tests/rfc578-release-registry-http-surface.test.ts`；本地 `registry.ts --check` 80 个版本无漂移。
+
 ## 实现门（本会话自审，只审功能）
 
 按路径限定在本 RFC 的改动，只审功能。结论 PASS：

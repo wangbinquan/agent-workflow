@@ -6,6 +6,7 @@ import { LEGACY_MIGRATION_HASHES } from '../../packages/backend/src/platform/per
 import {
   buildIdentity,
   executableName,
+  httpSurfaceRegisters,
   l1Builds,
   opencodeDriverPath,
   opencodeProbePath,
@@ -70,6 +71,9 @@ function runtimeFor(source: TagSource): ReleaseEntry['runtime'] {
   const maximumExclusive =
     /(?:export )?const MAX_OPENCODE_VERSION_EXCLUSIVE\s*=\s*['"]([^'"]+)/.exec(probe)?.[1] ?? null
   const route = (name: string) => source.text(`packages/backend/src/routes/${name}.ts`)
+  // Published layouts keep their route-file checks; layouts whose bindings moved into module inbound layers fall back
+  // to the endpoints the HTTP surface registers (RFC-578, lib/model.ts).
+  const registers = httpSurfaceRegisters([...source.files.keys()], (path) => source.text(path))
   const shared = (name: string) => source.text(`packages/shared/src/schemas/${name}.ts`)
   const workflow = shared('workflow')
   const agent = shared('agent')
@@ -96,21 +100,25 @@ function runtimeFor(source: TagSource): ReleaseEntry['runtime'] {
         : 'token',
     profile: auth.includes('/api/auth/me/profile'),
     profileGitName: /\bgitName:/.test(shared('user')),
-    mcps: source.has('packages/backend/src/routes/mcps.ts'),
+    mcps: source.has('packages/backend/src/routes/mcps.ts') || registers('/api/mcps'),
     schedules:
       source.has('packages/backend/src/routes/scheduled-tasks.ts') ||
-      source.has('packages/backend/src/routes/scheduledTasks.ts'),
+      source.has('packages/backend/src/routes/scheduledTasks.ts') ||
+      registers('/api/scheduled-tasks'),
     scheduleEnvelope: /launchPayload/.test(shared('scheduledTask')),
-    workgroups: source.has('packages/backend/src/routes/workgroups.ts'),
-    memories: [...source.files.keys()].some((file) =>
-      /^packages\/backend\/src\/routes\/memor(?:y|ies)(?:\/|\.ts)/.test(file),
-    ),
+    workgroups:
+      source.has('packages/backend/src/routes/workgroups.ts') || registers('/api/workgroups'),
+    memories:
+      [...source.files.keys()].some((file) =>
+        /^packages\/backend\/src\/routes\/memor(?:y|ies)(?:\/|\.ts)/.test(file),
+      ) || registers('/api/memories'),
     clarify: /['"]clarify['"]/.test(workflow),
     nonce,
     promptNonce,
     agentId: /agentId:/.test(workflow),
-    skillId: route('skills').includes('/api/skills/:id'),
-    workgroupId: route('workgroups').includes('/api/workgroups/:id'),
+    skillId: route('skills').includes('/api/skills/:id') || registers('/api/skills/:id'),
+    workgroupId:
+      route('workgroups').includes('/api/workgroups/:id') || registers('/api/workgroups/:id'),
     repoUrl: /repoUrl:/.test(shared('task')),
     workflowSchema: Number(
       /WORKFLOW_SCHEMA_VERSION\s*=\s*(\d+)/.exec(workflow)?.[1] ??

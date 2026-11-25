@@ -832,6 +832,9 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   public 面的 context 至少 N 个”的下限，是结构决定，先停下另议。同类连带：W9-D 把 legacy 文件迁进模块，只数非模块文件的下限
   （`rfc317-table-ownership` 的非模块语料）随之下降；RFC-310 的 OS 架构清单（`design/RFC-310-…/os-architecture-manifest.json`）记着
   execution-contract / digital-employee / event-center 的顶层目录与模块外依赖，给它们加 `inbound/` 或改 `server.ts` 的取法都要同步。
+  另一处按路径认路由的是发布注册表（RFC-578 补正）：`scripts/release-upgrade/registry.ts` 按 `routes/<name>.ts` 是否存在判断一个版本有没有
+  mcps / schedules / workgroups / memories 等能力，路由迁走后下一次登记会静默记成“没有”，发布门随之少验。现在旧路径不在时读 HTTP 面注册的
+  端点（`lib/model.ts` 的 `httpSurfaceRegisters`）；新增一项按路由判的能力也走这个读法，改完本地跑 `registry.ts --check` 确认已登记版本无漂移。
 - **整族迁入模块后，只数模块文件的门跟着变**（RFC-492 实撞）：`services/` 文件迁入 `modules/<ctx>/` 后，`export-star-barrels`（只数模块内
   的星号转出）、R1 的装配根清单（`census.ts` 的 `BOOTSTRAP_FILES`，新加的 bootstrap 装配文件要登记）、`rfc349-provider-cutover` 的业务层
   provider 债（`services/` 算业务层、`infrastructure/` 不算）都会变。迁移后先跑一次架构报告与 `rfc317-module-boundary`、

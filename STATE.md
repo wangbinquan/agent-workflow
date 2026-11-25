@@ -51,6 +51,9 @@
   说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：RFC-577 的提交 `f21fd1ced`：exact SHA 主 CI run 45548520359 70 / 70 全绿；按路径触发的 windows-platform（run 45548520358）通过，
   RFC-577 转 Done。
+- **收口后补正**（本 RFC 引入，下一批调研时查出）：发布注册表 `scripts/release-upgrade/registry.ts` 按 `routes/memories.ts` 是否存在判断记忆能力，
+  路由迁走后下一次登记会把新版本记成“没有记忆能力”（RFC-438 之后定时任务同理；还没有发布 tag 含这两个提交）。六项按路由文件判的探测在旧路径不在
+  时改读 HTTP 面注册的端点，旧路径照旧认；新增回归用例；本地 `registry.ts --check` 80 个版本无漂移。详见 plan「收口后补正」。
 
 ## 2026-11-25 RFC-577 execution-contract 与 integration 的路由归入模块 inbound（Done，`f21fd1ced`；`design/RFC-577-single-route-families-into-inbound/`）
 
