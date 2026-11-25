@@ -33,11 +33,20 @@ const ROOTS = [
 // it was outside these roots before, so exactly its directory stays outside. The MR use cases that
 // call it (application/mrEnsure, application/mrFacts) remain scanned.
 const GENERIC_EXECUTOR = join(import.meta.dir, '../src/modules/integration/infrastructure/codeHost')
+// RFC-593: the generic git primitives (worktrees, snapshots and rollback, submodules, merge trees, diffs — no push) moved from
+// util/git.ts into source-control's infrastructure/local/gitRepository.ts. They were outside these roots before, so exactly
+// that file stays outside, as RFC-450 did for the generic executor; it constructs no git push (locked below), so the mission
+// chain's push constructions (deliverCandidate, repositoryCommit) stay the scanned ones. Its `args.push('--force')` is
+// `git worktree remove --force`, which the per-line `push` filter cannot tell from a git push.
+const GENERIC_GIT_PRIMITIVES = join(
+  import.meta.dir,
+  '../src/modules/source-control/infrastructure/local/gitRepository.ts',
+)
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name)
-    if (p === GENERIC_EXECUTOR) continue
+    if (p === GENERIC_EXECUTOR || p === GENERIC_GIT_PRIMITIVES) continue
     if (statSync(p).isDirectory()) walk(p, acc)
     else if (p.endsWith('.ts')) acc.push(p)
   }
@@ -84,6 +93,13 @@ describe('rfc310 pr7 T84 — no merge/approve/resolve/force-push reachability', 
       (line) => /push/i.test(line),
     )
     expect(offenders).toEqual([])
+  })
+
+  test('RFC-593: the git primitives left outside the scan construct no git push', () => {
+    // A `'push'` / `"push"` string is how every git push argv in these modules names the subcommand; if one appears here,
+    // the exclusion above no longer holds and the file must be scanned like the rest.
+    expect(readFileSync(GENERIC_GIT_PRIMITIVES, 'utf8')).not.toMatch(/['"]push['"]/)
+    expect("const args = ['push', remote, '--force']").toMatch(/['"]push['"]/)
   })
 
   test('decision union and capability catalog carry no merge/approve/resolve arm', () => {

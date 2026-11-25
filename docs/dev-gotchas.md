@@ -886,7 +886,10 @@ RFC-454 删 30 个 `services/` 一跳转出，tsc / eslint 全过，集中验证
   的 `selections.x ?? 造本机的`。改共享助手前，先全仓搜经它传入被改那一项的用例并逐个跑；抽样用到助手的用例照不到这种覆盖。
 - **定式**：删转出前按文件名本身全仓搜（含路径片段），读转出内容的锁改读实现文件（断言因此落到实处）；被转出挂住的 oracle 在同一个
   RFC 里决定去留并登记；经 public 导出的类型给闭合类型；往模块里挪函数前 grep 该模块的目录扫描守卫（`.nodeIds`、
-  `DOMAIN_FORBIDDEN_PACKAGES` 等）；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。
+  `DOMAIN_FORBIDDEN_PACKAGES` 等）——以模块根目录为根走文件的扫描（`walk(join(…, '../src/modules/<模块>'))`）既不写被迁文件的路径也不写它的名字，
+  按改动路径 / 名字选用例永远选不到：RFC-593 把 `util/git.ts` 迁进 source-control，`rfc310-pr7-no-merge-capability-scan`（以 source-control 等三个
+  模块为根、逐行找 `push` 与 force 形态）把 `worktree remove` 的 `args.push('--force')` 认成强推，主 CI 一个分片才红（`f48df41c2`）。迁入前按目标模块
+  的根目录写法 grep 用例；改到被 sha 钉住的文件就重钉并把复核写进该条 `why`。
 - **删光一个目录时，本地导出仓库会骗人**：在导出仓库里按路径逐个删文件，目录本身留成空目录；`rfc217` 的 G5 / G7 用 `readdirSync`
   扫 resource-catalog 的 `legacy/workgroup/`，导出里扫到空目录照样绿，CI 的干净 checkout 里没有这个目录，直接 ENOENT 红
   （主 CI 一个后端分片）。导出仓库删文件后要连带删掉变空的目录；删光目录前 grep 用例里按目录扫描的写法（`readdirSync` / `walk(` 加该目录名）。

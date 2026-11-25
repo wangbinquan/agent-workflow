@@ -45,7 +45,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `f48df41c2`（实现）：主 CI 第 16/44 片红 1 条——`rfc310-pr7-no-merge-capability-scan` 的“git push 参数不带 force 形态”。归因：**本人缺陷**。这条扫描以
+  development-automation、integration、source-control 三个模块为根逐行找“含 `push` 且含 force 形态”的行；`util/git.ts` 原在根外，迁进 source-control 后
+  `removeWorktree` 的 `args.push('--force')`（`git worktree remove --force`，不是 push）被它认作强推。集中验证按改动路径与名字选用例，这条按模块根目录走
+  文件的扫描选不到（`docs/dev-gotchas.md` 已补一句）。补正（下一提交）：照 RFC-450 排除通用执行器目录的做法，把迁入的 git 原语文件排除在扫描之外，并加
+  一条锁：该文件不出现 `'push'` 子命令（往里加 push 就得重新纳入扫描）；变异验证（往该文件加一行 push 参数）会红。其余 job 在跑。
 
 ## 实现门（本会话自审，只审功能）
 
