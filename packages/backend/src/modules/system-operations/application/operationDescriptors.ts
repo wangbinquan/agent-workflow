@@ -9,7 +9,9 @@ import {
   HostedBackupCatalogSchema,
   HostedBackupVerificationSchema,
   HostedBackupIdSchema,
+  type HostedBackupCatalog,
   type HostedBackupId,
+  type HostedBackupVerification,
 } from '@agent-workflow/shared'
 import {
   databaseMigrationArtifactInputSchema,
@@ -28,21 +30,31 @@ import {
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import { operationId } from '@/platform/operations/catalog'
 import { zodOperationCodec } from '@/platform/operations/codecs'
-import type { OperationId, VersionedExactCodec } from '@/platform/operations/contracts'
-import type { DatabaseMigrationCommands } from '../public/commands'
 import type {
-  DatabaseMigrationOperationDescriptors,
-  SystemOperationDescriptors,
-} from '../public/operations'
+  CommandOperationDescriptor,
+  IdempotentCommandOperationDescriptor,
+  OperationId,
+  QueryOperationDescriptor,
+  VersionedExactCodec,
+} from '@/platform/operations/contracts'
+import type { DatabaseMigrationCommands } from '../public/commands'
 import type { DatabaseMigrationQueries } from '../public/queries'
 import type {
+  BackupResultView,
   DatabaseMigrationArtifactInput,
+  DatabaseMigrationArtifactView,
   DatabaseMigrationLegacyChunkInput,
   DatabaseMigrationLegacyTableInput,
+  DatabaseMigrationLegacyTableView,
+  DatabaseMigrationListView,
   DatabaseMigrationOperationInput,
   DatabaseMigrationPreflightInput,
+  DatabaseMigrationPreflightView,
+  DatabaseMigrationStatusView,
+  DatabaseRuntimeOverview,
   RequestBackupInput,
   StageRestoreInput,
+  StageRestoreResult,
   StartDatabaseMigrationInput,
 } from '../public/types'
 import {
@@ -51,8 +63,107 @@ import {
   recoveryStatusViewSchema,
   requestBackupInputSchema,
   stageRestoreResultSchema,
+  type CancelStagedRestoreResult,
+  type RecoveryStatusView,
 } from './systemOperationContracts'
 import type { SystemOperationCommands, SystemOperationQueries } from './systemOperationPorts'
+
+/** RFC-576: the descriptor contracts of the online administration operations; this module's HTTP bindings consume them. */
+export interface SystemOperationDescriptors {
+  readonly hostedBackupCatalog?: QueryOperationDescriptor<
+    Record<never, never>,
+    HostedBackupCatalog,
+    QueryContext
+  >
+  readonly verifyHostedBackup?: QueryOperationDescriptor<
+    HostedBackupId,
+    HostedBackupVerification,
+    QueryContext
+  >
+  readonly requestBackup: CommandOperationDescriptor<
+    RequestBackupInput,
+    BackupResultView,
+    CommandContext
+  >
+  readonly getRecoveryStatus: QueryOperationDescriptor<
+    Record<never, never>,
+    RecoveryStatusView,
+    QueryContext
+  >
+  readonly cancelStagedRestore: CommandOperationDescriptor<
+    Record<never, never>,
+    CancelStagedRestoreResult,
+    CommandContext
+  >
+  readonly stageRestore: CommandOperationDescriptor<
+    StageRestoreInput,
+    StageRestoreResult,
+    CommandContext
+  >
+}
+
+export interface DatabaseMigrationOperationDescriptors {
+  readonly overview: QueryOperationDescriptor<
+    Record<never, never>,
+    DatabaseRuntimeOverview,
+    QueryContext
+  >
+  readonly preflight: CommandOperationDescriptor<
+    DatabaseMigrationPreflightInput,
+    DatabaseMigrationPreflightView,
+    CommandContext
+  >
+  readonly start: IdempotentCommandOperationDescriptor<
+    StartDatabaseMigrationInput,
+    DatabaseMigrationStatusView,
+    CommandContext
+  >
+  readonly resume: CommandOperationDescriptor<
+    DatabaseMigrationOperationInput,
+    DatabaseMigrationStatusView,
+    CommandContext
+  >
+  readonly cancel: CommandOperationDescriptor<
+    DatabaseMigrationOperationInput,
+    DatabaseMigrationStatusView,
+    CommandContext
+  >
+  readonly rollback: CommandOperationDescriptor<
+    DatabaseMigrationOperationInput,
+    DatabaseMigrationStatusView,
+    CommandContext
+  >
+  readonly finalize: CommandOperationDescriptor<
+    DatabaseMigrationOperationInput,
+    DatabaseMigrationStatusView,
+    CommandContext
+  >
+  readonly get: QueryOperationDescriptor<
+    DatabaseMigrationOperationInput,
+    DatabaseMigrationStatusView,
+    QueryContext
+  >
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    DatabaseMigrationListView,
+    QueryContext
+  >
+  readonly readArtifact: QueryOperationDescriptor<
+    DatabaseMigrationArtifactInput,
+    DatabaseMigrationArtifactView,
+    QueryContext
+  >
+  readonly inspectLegacyTable: QueryOperationDescriptor<
+    DatabaseMigrationLegacyTableInput,
+    DatabaseMigrationLegacyTableView,
+    QueryContext
+  >
+  readonly readLegacyChunk: QueryOperationDescriptor<
+    DatabaseMigrationLegacyChunkInput,
+    DatabaseMigrationArtifactView,
+    QueryContext
+  >
+}
 
 const emptyInputSchema = z.object({}).strict()
 const PUBLIC_ERRORS = Object.freeze(['validation-failed', 'internal-error'] as const)

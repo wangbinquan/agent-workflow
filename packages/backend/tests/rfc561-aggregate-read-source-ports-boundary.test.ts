@@ -219,8 +219,9 @@ describe('RFC-561 —— 端口归聚合方', () => {
   })
 
   test('两个聚合从自己的端口取来源类型', () => {
-    expect(read('system-operations/application/overview.ts')).toContain(
-      "import type { SystemOverviewSources } from './ports/systemOverviewSources'",
+    // RFC-576: the same import also brings `SystemOverviewAuthority`, which moved into that port with the overview route.
+    expect(read('system-operations/application/overview.ts')).toMatch(
+      /import type \{[^}]*\bSystemOverviewSources\b[^}]*\} from '\.\/ports\/systemOverviewSources'/,
     )
     expect(read('intent/application/platformInventoryParticipant.ts')).toContain(
       "} from './ports/platformInventorySources'",

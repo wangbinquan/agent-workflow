@@ -45,11 +45,11 @@ import { liveSqlitePath } from './storage'
 //   packages/frontend/src/routes/settings.tsx:1570-1614   NetworkTab：GET /api/daemon 的有效绑定读数与「Pin current port」
 //   packages/frontend/src/components/tasks/RecoverySection.tsx:74-85    recovery-events 查询 + clear-recovery-suspension 变更
 //   packages/frontend/src/components/tasks/RecoverySection.tsx:44-55    RECOVERY_EVENT_KINDS 十种 kind 的中英标签映射
-//   packages/backend/src/routes/backup.ts:11-31           POST /api/backup —— backup:run
-//   packages/backend/src/routes/restore.ts:30-115         /api/restore 三端点 —— backup:run；无 db.sqlite 的包 400 且不 arm
-//   packages/backend/src/routes/maintenanceDisk.ts:13-38  /api/maintenance/disk{,/cleanup} —— settings:write
+//   packages/backend/src/modules/system-operations/inbound/http/backupRoutes.ts:11-31  POST /api/backup —— backup:run
+//   packages/backend/src/modules/system-operations/inbound/http/restoreRoutes.ts:30-115  /api/restore 三端点 —— backup:run；无 db.sqlite 的包 400 且不 arm
+//   packages/backend/src/modules/system-operations/inbound/http/maintenanceDiskRoutes.ts:13-38  /api/maintenance/disk{,/cleanup} —— settings:write
 //   packages/backend/src/routes/taskArchive.ts:39-104     POST /api/tasks/archive —— settings:write，`dryRun !== false` 即预览
-//   packages/backend/src/routes/daemon.ts:14-31           GET /api/daemon —— 有效绑定来自 run-info 文件，不是 config
+//   packages/backend/src/modules/system-operations/inbound/http/daemonRoutes.ts:14-31  GET /api/daemon —— 有效绑定来自 run-info 文件，不是 config
 //   packages/backend/src/services/maintenanceDisk.ts:73-113  盘点只读 / 清理不可逆
 //   packages/backend/src/services/taskArchive.ts:288-326  可归档树的判据：整树全终态 ∧ max(finishedAt) ≤ cutoff
 //   packages/backend/src/services/taskArchive.ts:495-520  归档审计行（source/actor/tree_count/task_count）
@@ -349,7 +349,7 @@ function seedTaskSql(row: SeedTask): string {
 
 /**
  * 手搓一个 ustar tar.gz。**故意不带 `db.sqlite`**，用来打
- * `routes/restore.ts` → `validateBackupForStage`（restore.ts:226-229）那条
+ * `restoreRoutes.ts`（system-operations 的 inbound）→ `validateBackupForStage`（restore.ts:226-229）那条
  * "不是备份包"的拒绝分支——它是产品自己的校验，而不是 tar 解包失败。
  * 不调外部 `tar`：Playwright 跑在 Node 侧，Windows runner 上的 tar 形态另说。
  */

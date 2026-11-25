@@ -10,7 +10,7 @@ import {
 import { createDatabaseMigrationApplication } from '@/modules/system-operations/application/databaseMigrationApplication'
 import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
 import type { DatabaseMigrationStatusView } from '@/modules/system-operations/public/types'
-import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
+import { mountDatabaseMigrationRoutes } from '@/modules/system-operations/inbound/http/databaseMigrationRoutes'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/application/operationDescriptors'
 

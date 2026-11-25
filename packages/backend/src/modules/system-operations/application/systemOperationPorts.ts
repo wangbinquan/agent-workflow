@@ -12,7 +12,7 @@ import type {
   HostedBackupVerification,
 } from '@agent-workflow/shared'
 import type { PlanLocalRestoreQuery } from '../public/queries'
-import type { CancelStagedRestoreResult, RecoveryStatusView } from '../public/types'
+import type { CancelStagedRestoreResult, RecoveryStatusView } from './systemOperationContracts'
 
 export interface SystemOperationCommands {
   readonly requestBackup: RequestBackupCommand

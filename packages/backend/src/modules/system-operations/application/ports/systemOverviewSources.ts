@@ -2,8 +2,19 @@
 // each owner's query (the same objects as before), so system-operations names no other business context.
 import type { MemorySummary, OverviewResources, OverviewTasks } from '@agent-workflow/shared'
 
-import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
-import type { SystemOverviewAuthority } from '../../public/queries'
+import type {
+  AuthenticatedAuthoritySnapshot,
+  RequestAuthority,
+} from '@/modules/identity-access/public/participants'
+
+/**
+ * Who asks for the overview. RFC-576: it left `public/queries` with `SystemOverviewQuery` once the overview route moved into
+ * this module's inbound layer; only this module uses it.
+ */
+export interface SystemOverviewAuthority {
+  readonly actor: AuthenticatedAuthoritySnapshot
+  readonly authority: RequestAuthority
+}
 
 /** The six resource kinds the overview counts; a kind the requester may not list is `null`. */
 export type SystemOverviewResourceCounts = Pick<

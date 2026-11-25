@@ -7,7 +7,7 @@ import type {
   DirectCommandContextFactory,
   DirectQueryContextFactory,
 } from '@/modules/identity-access/public/participants'
-import type { DatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/operations'
+import type { DatabaseMigrationOperationDescriptors } from '../../application/operationDescriptors'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'

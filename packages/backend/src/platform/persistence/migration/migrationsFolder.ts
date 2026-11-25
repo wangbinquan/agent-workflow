@@ -25,7 +25,7 @@ import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface ResolveMigrationsOptions {
   /**
-   * 即使目录已存在也重新解包。恢复链路（cli/restore.ts、routes/restore.ts）
+   * 即使目录已存在也重新解包。恢复链路（cli/restore.ts、system-operations 的 inbound/http/restoreRoutes.ts）
    * 用它：那两处要在**校验一个外来 tarball 的迁移代次**之前保证本地这份是完整的。
    */
   readonly force?: boolean

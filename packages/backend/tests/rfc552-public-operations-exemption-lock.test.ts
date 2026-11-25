@@ -148,11 +148,8 @@ const LEDGER: Readonly<Record<string, ModuleLedger>> = {
   },
   'system-operations': {
     entries: {
-      'descriptor contract': [
-        'DatabaseMigrationOperationDescriptors',
-        'SYSTEM_OPERATION_ALIASES',
-        'SystemOperationDescriptors',
-      ],
+      // RFC-576: the two descriptor contracts moved into `application/operationDescriptors.ts` with the HTTP bindings.
+      'descriptor contract': ['SYSTEM_OPERATION_ALIASES'],
       'handle contract': ['MaintenanceDiskOperations'],
     },
   },

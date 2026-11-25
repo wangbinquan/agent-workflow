@@ -545,7 +545,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const memoryRoute = readFileSync(resolve(sourceRoot, 'routes/memories.ts'), 'utf8')
-    const overviewRoute = readFileSync(resolve(sourceRoot, 'routes/overview.ts'), 'utf8')
+    const overviewRoute = readFileSync(
+      resolve(sourceRoot, 'modules/system-operations/inbound/http/overviewRoutes.ts'),
+      'utf8',
+    )
     const fusionRoute = readFileSync(
       resolve(sourceRoot, 'modules/knowledge-evolution/inbound/fusionRoutes.ts'),
       'utf8',

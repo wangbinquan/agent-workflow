@@ -1,4 +1,29 @@
-## 2026-11-25 RFC-575 `util/errors`、`util/hash` 与 `util/log` 归 platform（In Progress；`design/RFC-575-util-errors-hash-log-into-platform/`）
+## 2026-11-25 RFC-576 system-operations 的七个路由归入模块 inbound（In Progress；`design/RFC-576-system-operations-routes-into-inbound/`）
+
+- **来由**：`util/` 只剩安全相邻的一族之后，legacy 横向目录里最大的是 `routes/`（50 个）；RFC-294 design §2 要它们逐步成为各模块 `inbound/` 的薄绑定。
+  前面的 S9 / S10 已经让全部路由不碰 `@/db`、不深引模块内部；system-operations 的七个最整齐，作为 `routes/` → 模块 `inbound/` 的第一批。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10
+  「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为
+  已批准，不派 Codex。
+- **范围**：`routes/backup`、`restore`、`databaseMigrations`、`overview`、`daemon`、`maintenance`、`maintenanceDisk` 原样迁入
+  `modules/system-operations/inbound/http/`（统一叫 `<name>Routes.ts`），`composition/routes.ts` 只转出七个挂载函数，`server.ts` 改从那里取（RFC-439
+  的做法）；挂载调用与顺序不变。绑定进模块后有六个 public 类型不再有模块外的消费者（两个描述合同、`SystemOverviewQuery`，以及它们引用的
+  `SystemOverviewAuthority`、`CancelStagedRestoreResult`、`RecoveryStatusView`），撤回 application，与各自的工厂、实现或 schema 放在一起。随改：
+  归属表七行、`rfc305` 的 identity-access 消费者账本、读源码的几处用例、`rfc552` 的导出清单、`rfc561` 的一条 import 断言与 e2e 指针；新增
+  RFC-576 用例。
+- **不做**：路由传输工具（`routes/registry`、`operationRoute`、`operationAuthority`、`resourceAcl`）归位；其他模块的路由；`routes/health.ts`。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 public 面收窄六个只被本模块
+  用的类型；C12 RFC-576 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、七个绑定、`composition/routes.ts` 与 `server.ts`；C13
+  `legacy-horizontal-files` 98 → 91，未消费 public 符号保持 0，其余计数不升。
+- **集中验证**（基于 `8f236d5bb`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出三处本人缺陷（未消费 public 符号两轮 0 → 3、
+  `rfc305` 账本一条、`rfc561` 的 import 原文断言），均已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 281 个用例文件，修后全部通过；
+  读已提交源码的 204 个用例文件在候选导出里通过（含只能在提交上跑的 `route-error-code-coverage`）；七种变异都被认出；架构报告 60 个计数里只有
+  legacy 横向文件数变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、
+  已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-575 的提交 `8f236d5bb`：exact SHA 主 CI run 45538990157 70 / 70 全绿；按路径触发的 windows-platform、integration-opencode、
+  git-protocols-e2e、visual-regression-nightly 与 maintenance-soak-nightly 通过，RFC-575 转 Done。
+
+## 2026-11-25 RFC-575 `util/errors`、`util/hash` 与 `util/log` 归 platform（Done，`8f236d5bb`；`design/RFC-575-util-errors-hash-log-into-platform/`）
 
 - **来由**：W9-D 的第五批。`util/` 余下 13 个文件里，除了安全相邻的一族（10 个），就是读者最多的三个基础原语。RFC-294 design 的目标表给它们的去向
   是 `platform/errors` 与“platform 观测”（W9-C），plan 写明逐族搬迁可以先于 W9-C 的语义改造。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优
@@ -17,6 +42,10 @@
   路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：RFC-574 的实现提交 `fd3126d20` 两格红（`design/` 的一条链接、`rfc437` 的泛化放行）都由本会话引入并修复：`9083e8331`
   修链接（它的 run 里 `rfc437` 那格仍红，同一原因），`62a3f20a4` 修放行表，主 CI run 45529694453 70 / 70 全绿，RFC-574 转 Done。
+- **CI**：`8f236d5bb` exact SHA 主 CI run 45538990157 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、ubuntu / windows / macOS
+  的全部 e2e 分片。同一提交按路径触发的另五个工作流也全部通过：windows-platform（run 45538990106）、integration-opencode
+  （run 45538989925）、git-protocols-e2e（run 45538990126）、visual-regression-nightly（run 45538989923）与 maintenance-soak-nightly
+  （run 45538990056）。
 
 ## 2026-11-25 RFC-574 `util/paths` 与 `util/http` 归 platform（Done，`fd3126d20` + 两个修正；`design/RFC-574-util-paths-and-http-into-platform/`）
 

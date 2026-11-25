@@ -10,7 +10,7 @@ import { ExecutionStatusSchema, type ExecutionStatus } from '@agent-workflow/sha
 import type { Actor } from '../src/auth/actor'
 import { errorHandler, DomainError } from '../src/platform/errors/domainErrors'
 import { registerRoute } from '../src/routes/registry'
-import { mountDaemonRoutes } from '../src/routes/daemon'
+import { mountDaemonRoutes } from '../src/modules/system-operations/inbound/http/daemonRoutes'
 import { lookupDeclaredHttpOperation } from '../src/platform/operations/catalog'
 import { createBoundOperationInvoker } from '../src/platform/operations/boundOperationInvoker'
 import {

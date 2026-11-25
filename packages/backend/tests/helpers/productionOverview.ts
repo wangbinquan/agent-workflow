@@ -24,7 +24,7 @@ import {
   composeRepositoryWorkspaceStore,
 } from '../../src/modules/source-control/composition'
 import { composeSystemOverviewQuery } from '../../src/modules/system-operations/application/overview'
-import type { SystemOverviewQuery } from '../../src/modules/system-operations/public/queries'
+import type { SystemOverviewQuery } from '../../src/modules/system-operations/application/overview'
 import { createTaskOverviewQuery } from '../../src/modules/task-execution/composition/taskOverview'
 import { assertNotBuiltin } from '../../src/modules/resource-catalog/domain/systemResources'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'

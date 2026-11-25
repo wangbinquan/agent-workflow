@@ -16,7 +16,7 @@
 - [x] AC-1 三个旧路径不存在、没有说明符再解析到它们；`hash.ts`、`logger.ts` 逐字节相同，`domainErrors.ts` 只差一行说明符
 - [x] AC-2 行为不变
 - [x] AC-3 `legacy-horizontal-files` 上限 101 → 98；归属表删去三行；钉着旧路径的判据、账本与指针随改；新增 RFC-575 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`8f236d5bb`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -60,7 +60,10 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `8f236d5bb`（实现，父提交是 `62a3f20a4`；同一提交记 RFC-574 转 Done）：exact SHA 主 CI run 45538990157 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、ubuntu / windows / macOS
+  的全部 e2e 分片。同一提交按路径触发的另五个工作流也全部通过：windows-platform（run 45538990106）、integration-opencode
+  （run 45538989925）、git-protocols-e2e（run 45538990126）、visual-regression-nightly（run 45538989923）与 maintenance-soak-nightly
+  （run 45538990056）。
 
 ## 实现门（本会话自审，只审功能）
 

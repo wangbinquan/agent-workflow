@@ -18,7 +18,7 @@ import type {
   DirectCommandContextFactory,
   DirectQueryContextFactory,
 } from '@/modules/identity-access/public/participants'
-import type { SystemOperationDescriptors } from '@/modules/system-operations/public/operations'
+import type { SystemOperationDescriptors } from '../../application/operationDescriptors'
 import type { RestoreArtifactRef } from '@/modules/system-operations/public/types'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import { registerOperationRoute } from '@/routes/operationRoute'

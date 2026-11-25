@@ -134,7 +134,7 @@ import type {
   RequestBackupCommand,
   StageRestoreCommand,
 } from './public/commands'
-import { type SystemOperationDescriptors } from './public/operations'
+import { type SystemOperationDescriptors } from './application/operationDescriptors'
 import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 import type { MaintenanceSystemOperations } from './application/ports/maintenanceSystemOperations'

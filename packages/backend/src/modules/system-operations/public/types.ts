@@ -4,9 +4,7 @@ import type { z } from 'zod'
 import type {
   activateLocalRestoreOptionsSchema,
   backupResultViewSchema,
-  cancelStagedRestoreResultSchema,
   localRestoreActivationSchema,
-  recoveryStatusViewSchema,
   requestBackupInputSchema,
   restorePlanOptionsSchema,
   restorePlanViewSchema,
@@ -75,14 +73,12 @@ export interface StageRestoreInput extends StageRestoreOptions {
   readonly artifactRef: RestoreArtifactRef
 }
 export type StageRestoreResult = z.infer<typeof stageRestoreResultSchema>
-export type CancelStagedRestoreResult = z.infer<typeof cancelStagedRestoreResultSchema>
 export type ActivateLocalRestoreOptions = z.infer<typeof activateLocalRestoreOptionsSchema>
 
 export interface ActivateLocalRestoreInput extends ActivateLocalRestoreOptions {
   readonly artifactRef: RestoreArtifactRef
 }
 export type LocalRestoreActivationResult = z.infer<typeof localRestoreActivationSchema>
-export type RecoveryStatusView = z.infer<typeof recoveryStatusViewSchema>
 export type { DaemonRuntimeInfo } from '../domain/daemonRuntime'
 
 import type {

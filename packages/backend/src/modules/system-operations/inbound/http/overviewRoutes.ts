@@ -7,7 +7,7 @@ import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
-import type { SystemOverviewQuery } from '@/modules/system-operations/public/queries'
+import type { SystemOverviewQuery } from '../../application/overview'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 export interface OverviewRouteAuthorization {

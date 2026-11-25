@@ -27,13 +27,19 @@ import { createBoundOperationInvoker } from '@/platform/operations/boundOperatio
 import { directMcpOperationAuthority } from '@/routes/operationAuthority'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
-import { mountBackupRoutes } from '@/routes/backup'
-import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
-import { mountRestoreRoutes } from '@/routes/restore'
+// RFC-576: the system-operations HTTP bindings moved from routes/ into the module's inbound layer.
+import {
+  mountBackupRoutes,
+  mountDaemonRoutes,
+  mountDatabaseMigrationRoutes,
+  mountMaintenanceDiskRoutes,
+  mountMaintenanceRoutes,
+  mountOverviewRoutes,
+  mountRestoreRoutes,
+} from '@/modules/system-operations/composition/routes'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountRepoGroupRoutes } from '@/routes/repoGroups'
 import { mountConfigRoutes } from '@/routes/config'
-import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { type IdentityAccessRuntime } from '@/modules/identity-access/composition'
@@ -45,7 +51,6 @@ import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import { type RepositoryMirrors } from '@/modules/source-control/composition'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
-import { mountOverviewRoutes } from '@/routes/overview'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPlantumlRoutes } from '@/routes/plantuml'
@@ -78,8 +83,6 @@ import {
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/composition/routes'
 import { mountReviewRoutes } from '@/routes/reviews'
-import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
-import { mountMaintenanceRoutes } from '@/routes/maintenance'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'

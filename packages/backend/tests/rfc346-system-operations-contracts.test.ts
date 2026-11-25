@@ -336,8 +336,15 @@ describe('RFC-346 System Operations contracts', () => {
   })
 
   test('HTTP routes are thin descriptor adapters and bootstrap composes one module root', () => {
-    const backup = readFileSync(join(SOURCE_ROOT, 'routes/backup.ts'), 'utf8')
-    const restore = readFileSync(join(SOURCE_ROOT, 'routes/restore.ts'), 'utf8')
+    // RFC-576: the two bindings moved from routes/ into the module's inbound layer.
+    const backup = readFileSync(
+      join(SOURCE_ROOT, 'modules/system-operations/inbound/http/backupRoutes.ts'),
+      'utf8',
+    )
+    const restore = readFileSync(
+      join(SOURCE_ROOT, 'modules/system-operations/inbound/http/restoreRoutes.ts'),
+      'utf8',
+    )
     const server = readFileSync(join(SOURCE_ROOT, 'server.ts'), 'utf8')
     for (const source of [backup, restore]) {
       expect(source).toContain('registerOperationRoute')
@@ -346,7 +353,8 @@ describe('RFC-346 System Operations contracts', () => {
         /from ['"]@\/modules\/[^/'"]+\/(?:application|composition|domain|infrastructure)(?:\/|['"])/,
       )
       expect(source).toContain('@/modules/identity-access/public/participants')
-      expect(source).toContain('@/modules/system-operations/public/operations')
+      // RFC-576: inside the module the bindings take the descriptor contract from the application layer.
+      expect(source).toContain("from '../../application/operationDescriptors'")
       expect(source).not.toContain('AppDeps')
       expect(source).not.toContain('registerRoute(')
     }

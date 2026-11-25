@@ -8,7 +8,7 @@ import type {
   DirectCommandContextFactory,
   DirectQueryContextFactory,
 } from '@/modules/identity-access/public/participants'
-import type { SystemOperationDescriptors } from '@/modules/system-operations/public/operations'
+import type { SystemOperationDescriptors } from '../../application/operationDescriptors'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'

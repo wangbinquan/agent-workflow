@@ -1,4 +1,4 @@
-import type { Config, OverviewResponse } from '@agent-workflow/shared'
+import type { Config } from '@agent-workflow/shared'
 import type {
   DatabaseMigrationArtifactInput,
   DatabaseMigrationArtifactView,
@@ -14,21 +14,7 @@ import type {
   PlanLocalRestoreInput,
   RestorePlanView,
 } from './types'
-import type {
-  AuthenticatedAuthoritySnapshot,
-  QueryContext,
-  RequestAuthority,
-} from '@/modules/identity-access/public/participants'
-
-export interface SystemOverviewAuthority {
-  readonly actor: AuthenticatedAuthoritySnapshot
-  readonly authority: RequestAuthority
-}
-
-/** Closed aggregate consumed by the HTTP overview route. */
-export interface SystemOverviewQuery {
-  execute(authority: SystemOverviewAuthority): Promise<OverviewResponse>
-}
+import type { QueryContext } from '@/modules/identity-access/public/participants'
 
 export interface PlanLocalRestoreQuery {
   execute(

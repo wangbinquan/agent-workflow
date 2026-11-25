@@ -1,5 +1,6 @@
 // RFC-550 (RFC-294 S9): the runtime contracts of the backup / restore DTOs. They sat on `public/types` without any other
-// module reading them; the DTO types inferred from them stay public.
+// module reading them; the DTO types inferred from them stay public, except the two only this module consumes
+// (`CancelStagedRestoreResult`, `RecoveryStatusView`), which RFC-576 infers here.
 import { z } from 'zod'
 
 const restoredComponentsSchema = z
@@ -64,6 +65,8 @@ export const stageRestoreResultSchema = z
   .strict()
 
 export const cancelStagedRestoreResultSchema = z.object({ cleared: z.boolean() }).strict()
+/** RFC-576: inferred here, not on `public/types` — only this module's operations and HTTP bindings use it. */
+export type CancelStagedRestoreResult = z.infer<typeof cancelStagedRestoreResultSchema>
 
 export const activateLocalRestoreOptionsSchema = z
   .object({
@@ -93,3 +96,5 @@ export const recoveryStatusViewSchema = z
     failed: z.array(failedRestoreViewSchema),
   })
   .strict()
+/** RFC-576: inferred here, not on `public/types` — only this module's operations and HTTP bindings use it. */
+export type RecoveryStatusView = z.infer<typeof recoveryStatusViewSchema>

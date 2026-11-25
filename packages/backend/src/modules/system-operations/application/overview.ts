@@ -1,11 +1,15 @@
 import type { OverviewResponse } from '@agent-workflow/shared'
 
-import type {
-  SystemOverviewAuthority,
-  SystemOverviewQuery,
-} from '@/modules/system-operations/public/queries'
 import { createInFlightCoalescer } from '@/platform/contracts/inFlight'
-import type { SystemOverviewSources } from './ports/systemOverviewSources'
+import type { SystemOverviewAuthority, SystemOverviewSources } from './ports/systemOverviewSources'
+
+/**
+ * Closed aggregate consumed by the HTTP overview route. RFC-576: it left `public/queries` once that route moved into this
+ * module's inbound layer; no other module consumes it.
+ */
+export interface SystemOverviewQuery {
+  execute(authority: SystemOverviewAuthority): Promise<OverviewResponse>
+}
 
 const WINDOW_7D_MS = 7 * 86_400_000
 

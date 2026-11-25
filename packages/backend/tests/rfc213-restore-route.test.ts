@@ -24,7 +24,7 @@ import {
   hasPendingRestore,
   stagePendingRestore,
 } from '../src/modules/system-operations/infrastructure/local/filePendingRestore'
-import { mountRestoreRoutes } from '../src/routes/restore'
+import { mountRestoreRoutes } from '../src/modules/system-operations/inbound/http/restoreRoutes'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

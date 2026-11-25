@@ -98,7 +98,7 @@ test('both HTTP roots consume the host query rather than reading the info file i
     'composeProviderAppComposition',
     'daemonRuntime:input.daemonRuntime,',
   )
-  const route = source('routes/daemon.ts')
+  const route = source('modules/system-operations/inbound/http/daemonRoutes.ts')
   const current = calls(declaration(route, 'mountDaemonRoutes'), route, 'deps.runtime.readCurrent')
   expect(current).toHaveLength(1)
   expect(ts.isAwaitExpression(current[0]!.parent)).toBe(true)
