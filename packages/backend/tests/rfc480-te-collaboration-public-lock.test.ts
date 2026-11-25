@@ -378,7 +378,8 @@ describe('RFC-480 —— 减速带按 context 分项', () => {
     expect(counts['unconsumed-public-symbols-task-execution']?.max).toBe(0)
     expect(counts['unconsumed-public-symbols-collaboration']?.max).toBe(0)
     const ids = Object.keys(counts).filter((id) => id.startsWith('unconsumed-public-symbols-'))
-    expect(ids.length).toBeGreaterThanOrEqual(19)
+    // RFC-590: one per context with a public surface; task-catalog has none any more.
+    expect(ids.length).toBeGreaterThanOrEqual(18)
   })
 })
 

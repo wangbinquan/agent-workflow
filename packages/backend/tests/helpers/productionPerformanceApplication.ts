@@ -73,7 +73,7 @@ import { mountHealthRoutes } from '@/modules/system-operations/inbound/http/heal
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mountOverviewRoutes } from '@/modules/system-operations/inbound/http/overviewRoutes'
 import { mountReviewRoutes } from '@/modules/collaboration/inbound/http/reviewRoutes'
-import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
+import { mountTaskCatalogRoutes } from '@/modules/task-catalog/inbound/http/taskCatalogRoutes'
 import { mountWebhookIngressRoutes } from '@/modules/integration/inbound/http/webhookIngressRoutes'
 import { mountWorkgroupTaskRoutes } from '@/modules/resource-catalog/inbound/http/workgroupTaskRoutes'
 import { createHttpRequestApp, type AppHttpProviderCore } from '@/server'

@@ -354,7 +354,8 @@ describe('RFC-551 —— 减速带', () => {
     for (const context of CONTEXTS)
       expect([context, counts[`unconsumed-public-symbols-${context}`]?.max]).toEqual([context, 0])
     const all = Object.entries(counts).filter(([id]) => id.startsWith('unconsumed-public-symbols-'))
-    expect(all.length).toBeGreaterThanOrEqual(19)
+    // RFC-590: one per context with a public surface; task-catalog has none any more.
+    expect(all.length).toBeGreaterThanOrEqual(18)
     expect(all.filter(([, entry]) => entry.max !== 0).map(([id]) => id)).toEqual([])
   })
 })

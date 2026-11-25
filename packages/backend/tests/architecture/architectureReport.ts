@@ -271,7 +271,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/routes/operationRoute.ts': 'platform',
   'packages/backend/src/routes/registry.ts': 'platform',
   'packages/backend/src/routes/resourceAcl.ts': 'resource-catalog',
-  'packages/backend/src/routes/taskCatalog.ts': 'task-catalog',
   'packages/backend/src/routes/users.ts': 'identity-access',
   'packages/backend/src/server.ts': 'bootstrap',
   'packages/backend/src/services/accountAuthPolicy.ts': 'identity-access',

@@ -194,7 +194,8 @@ describe('RFC-479 —— 登记', () => {
     const unconsumed = Object.keys(counts).filter((id) =>
       id.startsWith('unconsumed-public-symbols-'),
     )
-    expect(unconsumed.length).toBeGreaterThanOrEqual(19)
+    // RFC-590: task-catalog has no public surface any more, so it has no unconsumed count (18 contexts with one).
+    expect(unconsumed.length).toBeGreaterThanOrEqual(18)
     for (const id of unconsumed)
       expect([id, counts[id]!.reason.includes('unconsumedPublicSymbols')]).toEqual([id, true])
     expect(counts['public-surface-deviations']?.reason).toContain('publicSurfaceDeviations')

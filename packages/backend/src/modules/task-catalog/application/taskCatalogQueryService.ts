@@ -10,7 +10,7 @@ import {
 
 import { ForbiddenError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskCatalogSource } from '../composition/required-ports'
-import type { TaskCatalogListQuery, TaskCatalogViewer } from '../public/types'
+import type { TaskCatalogListQuery, TaskCatalogViewer } from './ports/taskCatalogQueries'
 import type { TaskCatalogQueries } from './ports/taskCatalogQueries'
 
 export class TaskCatalogQueryService implements TaskCatalogQueries {

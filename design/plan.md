@@ -620,6 +620,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-587](./RFC-587-health-archive-feedback-routes-into-owner-modules/proposal.md) | 健康探测、任务归档与任务反馈三个路由按 owner 归入模块 inbound（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第九批）：`health` 归 system-operations、`taskArchive` 归 task-execution、`taskFeedback` 归 collaboration；原来取别的模块的三处改为本绑定声明的窄形状或本模块已有的端口类型，不新增 DAG 边；撤回 4 个 public 符号；legacy 横向文件 62 → 59。无用户可见变化。 | Done |
 | [RFC-588](./RFC-588-task-routes-split-by-owner/proposal.md) | 任务路由按端点 owner 拆进 task-execution 与 workspace-insight 的 inbound（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十批）：`routes/tasks.ts` 迁入 task-execution，其中结构化 diff、变更叙述、文件内容 / 符号与代码智能的七个端点迁入 workspace-insight；可见性中间件照旧先挂；不新增 DAG 边；legacy 横向文件 59 → 58。无用户可见变化。 | Done |
 | [RFC-589](./RFC-589-agent-workgroup-routes-split-by-owner/proposal.md) | 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十一批）：`routes/agents.ts`、`routes/workgroups.ts` 迁入 resource-catalog，两个启动端点（`POST …/:id/tasks`）迁入 task-execution；不新增 DAG 边；legacy 横向文件 58 → 56。无用户可见变化。 | In Progress |
+| [RFC-590](./RFC-590-task-catalog-route-into-inbound/proposal.md) | 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十二批）：`routes/taskCatalog.ts` 迁入模块，三个 public 符号撤回、`public/` 删掉；R3 的判据改准为“public 为空的模块要么入账、要么由装配根经 composition 取用”；legacy 横向文件 56 → 55。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

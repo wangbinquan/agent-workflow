@@ -34,10 +34,13 @@ import ts from 'typescript'
 import {
   backendUnits,
   BOOTSTRAP_FILES,
+  importEdges,
   inboundBoundaryEdges,
   moduleShapes,
   outboundBoundaryEdges,
   sourceUnit,
+  targetModule,
+  type SourceUnit,
 } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
@@ -159,6 +162,29 @@ function trackedFileCount(context: string): number {
 const MODULES_WITHOUT_PUBLIC: Readonly<Record<string, { why: string; removeAfterWave: string }>> =
   {}
 
+/**
+ * RFC-590：public 面为空、由装配根经 composition 取用的模块不是债。RFC-294 里 public 就是“别的模块消费的东西”；一个只经自己的入站
+ * 绑定对外、由装配根装配的模块（如 task-catalog）没有别的模块消费，public 为空是这条规定的直接结果。别的取用路径照旧由 R1（装配根
+ * 之外的非模块文件不得取模块内部与 composition）与跨 context 的规则拦住；这里只判它不是死模块：至少一个 `BOOTSTRAP_FILES` 里的文件
+ * 取它的 composition。返回被装配根这样取用的 context。
+ */
+function assembledViaComposition(units: readonly SourceUnit[]): Set<string> {
+  const bootstrap = new Set<string>(BOOTSTRAP_FILES)
+  const out = new Set<string>()
+  for (const unit of units) {
+    if (!bootstrap.has(unit.path)) continue
+    for (const edge of importEdges(unit)) {
+      const target = targetModule(edge)
+      if (
+        target !== null &&
+        (target.rest === 'composition' || target.rest.startsWith('composition/'))
+      )
+        out.add(target.context)
+    }
+  }
+  return out
+}
+
 /** 非 exact public 入口。与 rfc294-architecture-preflight 的 PUBLIC_SURFACE_PILOT_DEBT 同源。 */
 // RFC-434: the last three non-exact entrypoints were folded into the exact ones; none may come back.
 const NON_EXACT_PUBLIC: Readonly<Record<string, readonly string[]>> = {}
@@ -194,15 +220,34 @@ describe('RFC-317 T24 —— R3：模块目录形状', () => {
     ).toEqual(NON_EXACT_PUBLIC as Record<string, string[]>)
   })
 
-  test('public 面为空的模块恰好是已入账的那些', () => {
+  test('public 面为空的模块：要么已入账（债），要么由装配根经 composition 取用（RFC-590）', () => {
     const empty = SHAPES.filter((shape) => trackedFileCount(shape.context) > 0)
       .filter((shape) => shape.publicEntries.length === 0)
       .map((shape) => shape.context)
       .sort()
+    const ledger = Object.keys(MODULES_WITHOUT_PUBLIC).sort()
+    const assembled = assembledViaComposition(UNITS)
     expect(
-      empty,
-      '模块没有 public 合同 = 它对外不可用，或者消费者正在走内部路径（后者正是 R1 抓的形态）',
-    ).toEqual(Object.keys(MODULES_WITHOUT_PUBLIC).sort())
+      empty.filter((context) => !ledger.includes(context) && !assembled.has(context)),
+      '模块没有 public 合同、装配根也不取它的 composition = 它对外不可用（死模块），或者消费者正在走内部路径（后者正是 R1 抓的形态）',
+    ).toEqual([])
+    // 销账不改账本 ⇒ 红：账本里的每一条都必须仍是 public 为空的模块。
+    expect(ledger.filter((context) => !empty.includes(context))).toEqual([])
+  })
+
+  test('负对照：只有装配根取 composition 才算被装配；装配根之外的取用、取内部都不算', () => {
+    const assembled = assembledViaComposition([
+      sourceUnit(
+        'packages/backend/src/server.ts',
+        "import { mountProbeRoutes } from '@/modules/assembled-probe/composition'\n" +
+          "import type { Probe } from '@/modules/internal-probe/application/probe'\n",
+      ),
+      sourceUnit(
+        'packages/backend/src/routes/probe.ts',
+        "import { composeOrphan } from '@/modules/orphan-probe/composition'\n",
+      ),
+    ])
+    expect([...assembled].sort()).toEqual(['assembled-probe'])
   })
 
   test('零文件的模块目录必然是**未追踪残留**（git 追踪不了空目录）', () => {

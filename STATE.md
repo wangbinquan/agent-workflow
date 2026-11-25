@@ -1,3 +1,21 @@
+## 2026-11-25 RFC-590 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（In Progress；`design/RFC-590-task-catalog-route-into-inbound/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」。RFC-577 design §5 把“一个模块可不可以只有入站
+  绑定、没有 public 合同”留给单独的 RFC，本 RFC 自行裁定：可以——RFC-294 里 public 就是“别的模块消费的东西”，只经自己的入站绑定对外、由装配根经
+  composition 取用的模块没有别的模块消费，public 为空是这条规定的直接结果，不是债。
+- **范围**：`routes/taskCatalog.ts` → `modules/task-catalog/inbound/http/taskCatalogRoutes.ts`（只改一行 import），挂载函数经 task-catalog 的 composition
+  转出；它是 task-catalog public 面唯一的消费者，`TaskCatalogQueries` 与两个参数类型撤回到 `application/ports/taskCatalogQueries.ts`，`public/` 删掉。
+  `rfc317-module-boundary` 的 R3 改准：public 为空的模块要么在债务账本里，要么至少一个装配根文件（`BOOTSTRAP_FILES`）取它的 composition（死模块照旧报红，
+  绕路取用照旧由 R1 报红），带负对照。随改：归属表一行、`counts.json`（`legacy-horizontal-files` 56 → 55，`unconsumed-public-symbols-task-catalog` 随
+  public 面退场）、四处“有 public 面的 context 至少 19 个”的非空下限改为 18、`rfc310` 的路径；新增 RFC-590 用例。task-execution 与 digital-employee 对
+  `TaskCatalogSource` 的实现照旧经 `composition/required-ports`（RFC-556 指定的入口）。
+- **收口对账**（RFC-294 C10～C13）：C10 入站绑定进 owner 模块；C11 task-catalog 的 public 面收窄到空；C12 RFC-590 用例覆盖全部说明符、绑定、模块形状与
+  `server.ts`；C13 `legacy-horizontal-files` 56 → 55，其余计数不升。`routes/` 余 9 个，全是暂缓的那一组。
+- **集中验证**（基于 `24d4e0a9f`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出里
+  280 个用例文件、2513 条全部通过；变异见 plan；架构报告只有 legacy 横向文件数变了、task-catalog 的未消费计数随 public 面退场。实现门 PASS（本会话按路径
+  限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（In Progress；`design/RFC-589-agent-workgroup-routes-split-by-owner/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；落位按 RFC-587 条目里已裁定的“余下两批的落位”，

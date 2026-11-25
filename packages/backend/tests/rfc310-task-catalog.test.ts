@@ -380,7 +380,8 @@ describe('RFC-310 unified task catalog', () => {
 
   test('the route rejects an unknown source with the stable task-source-invalid code', () => {
     const routeSource = readFileSync(
-      resolve(import.meta.dir, '../src/routes/taskCatalog.ts'),
+      // RFC-590: the task catalog route moved into task-catalog's inbound layer.
+      resolve(import.meta.dir, '../src/modules/task-catalog/inbound/http/taskCatalogRoutes.ts'),
       'utf8',
     )
     expect(routeSource).toContain('!isTaskSourceId(rawSource)')

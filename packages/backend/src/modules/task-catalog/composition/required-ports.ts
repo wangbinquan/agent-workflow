@@ -4,7 +4,7 @@ import type {
   TaskSourceId,
 } from '@agent-workflow/shared'
 
-import type { TaskCatalogViewer } from '../public/types'
+import type { TaskCatalogViewer } from '../application/ports/taskCatalogQueries'
 
 /** Consumer-owned input shared by every registered task source. */
 export interface TaskCatalogSourceListInput {

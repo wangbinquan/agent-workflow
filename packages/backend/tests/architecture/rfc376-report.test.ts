@@ -332,7 +332,8 @@ describe('RFC-376 committed report contract', () => {
     )
     expect(Object.keys(first.counts).length - compositionIds.length - unconsumedIds.length).toBe(22)
     const publicContexts = new Set(first.publicSurfaces.map((entry) => entry.context))
-    expect(publicContexts.size).toBeGreaterThanOrEqual(19)
+    // RFC-590: task-catalog is assembled through its composition only and has no public surface (19 modules, 18 with one).
+    expect(publicContexts.size).toBeGreaterThanOrEqual(18)
     expect(unconsumedIds.sort()).toEqual(
       [...publicContexts].map((context) => `unconsumed-public-symbols-${context}`).sort(),
     )

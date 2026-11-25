@@ -2,7 +2,7 @@ import { isTaskSourceId } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
-import type { TaskCatalogQueries } from '@/modules/task-catalog/public/queries'
+import type { TaskCatalogQueries } from '../../application/ports/taskCatalogQueries'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/platform/errors/domainErrors'
 import { jsonDocumentResponse } from '@/platform/http/jsonDocument'

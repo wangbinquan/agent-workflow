@@ -84,7 +84,7 @@ import {
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/composition/routes'
 import { mountTaskWorkspaceInsightRoutes } from '@/modules/workspace-insight/composition'
-import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
+import { mountTaskCatalogRoutes } from '@/modules/task-catalog/composition'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
 import {
   mountCapabilityTemplateRoutes,
