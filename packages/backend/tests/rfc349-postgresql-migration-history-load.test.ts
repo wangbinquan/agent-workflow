@@ -27,7 +27,7 @@ import {
 } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
-import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
+import { resolvePostgresqlMigrationsFolder } from '@/platform/persistence/migration/migrationsFolder'
 
 test('default callers share one checked runtime history; explicit folders read fresh', async () => {
   const first = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })

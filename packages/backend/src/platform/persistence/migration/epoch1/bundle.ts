@@ -2,7 +2,10 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
-import { resolveMigrationsFolder, resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
+import {
+  resolveMigrationsFolder,
+  resolvePostgresqlMigrationsFolder,
+} from '@/platform/persistence/migration/migrationsFolder'
 import { sha256Hex } from '@/util/hash'
 import { readPostgresqlMigrationHistoryPrefix } from '../legacy/postgresqlMigrationHistory'
 import type { PostgresqlMigrationHistory } from '../legacy/postgresqlMigrationSequence'

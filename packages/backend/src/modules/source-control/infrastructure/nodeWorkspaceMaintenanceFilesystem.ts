@@ -3,7 +3,7 @@ import { isSingleRootRepository } from '@agent-workflow/shared'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { removeDirectoryWithRetry } from '@/util/fsReclaim'
+import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import { deleteSnapshotRefs, removeWorktree, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type {

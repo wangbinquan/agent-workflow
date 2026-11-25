@@ -1,4 +1,4 @@
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 import type { CrewStationMutationFence } from './mutationFence'
 import { createCrewStationPlatformApi, CrewStationApiError } from './platformApi'
 import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'

@@ -102,7 +102,10 @@ test('both HTTP roots consume the host query rather than reading the info file i
   const current = calls(declaration(route, 'mountDaemonRoutes'), route, 'deps.runtime.readCurrent')
   expect(current).toHaveLength(1)
   expect(ts.isAwaitExpression(current[0]!.parent)).toBe(true)
-  expect(route.text).not.toContain("from '@/util/daemonInfo'")
+  // RFC-573 moved the file read into system-operations' file implementation of this query; the route still reads
+  // only through `deps.runtime` and names neither the reader nor its file.
+  expect(route.text).not.toContain('readDaemonInfoFile')
+  expect(route.text).not.toContain('fileDaemonRuntimeQueries')
 })
 
 test('the single listener composes one host application with the original selected receiver', () => {

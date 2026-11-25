@@ -4,7 +4,7 @@
 // the callback handler can render a friendly 400.
 
 import { jwtVerify, type createRemoteJWKSet, type JWTPayload } from 'jose'
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 export interface TokenResponse {
   access_token: string
@@ -135,7 +135,7 @@ export interface FetchUserinfoInput {
 export async function fetchUserinfo(input: FetchUserinfoInput): Promise<unknown> {
   const fetcher = input.fetcher ?? globalThis.fetch
   // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows Bun
-  // when the loop is otherwise idle (see util/timeoutSignal.ts).
+  // when the loop is otherwise idle (see platform/contracts/timeoutSignal.ts).
   const deadline = timeoutSignal(USERINFO_TIMEOUT_MS)
   const request: RequestInit =
     input.requestStyle === 'post_json'

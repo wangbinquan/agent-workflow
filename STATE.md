@@ -1,4 +1,28 @@
-## 2026-11-24 RFC-571 补迁：`util/inFlight` 与 `util/sqlChunk` 归 platform（等 CI；`design/RFC-571-util-primitives-into-platform-1/` design §7、plan「补迁」一节）
+## 2026-11-24 RFC-573 `util/` 的四个余下小文件归位（In Progress；`design/RFC-573-util-small-files-placement/`）
+
+- **来由**：W9-D 的第三批。`util/` 余下的 19 个文件里，扣掉读者数百处的五个与 git、凭据、文件信任一族，还有四个小文件：三个是平台机制，第四个
+  （读 daemon 运行信息文件）其实是 system-operations 里 `DaemonRuntimeQueries` 端口的文件实现的内容，只是住在 `util/`，`status` 命令绕过端口直接
+  取它。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、
+  2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：`timeoutSignal` 进 `platform/contracts/`，`fsReclaim` 进 `platform/workspace/local/`，`migrationsFolder` 进
+  `platform/persistence/migration/`，逐字节不变，15 个生产读者、5 个用例文件与 1 个助手改指；`daemonInfo` 的读取并入 system-operations 的
+  `infrastructure/local/fileDaemonRuntimeQueries.ts`（改名 `readDaemonInfoFile`），`statusCommand` 改成收 `DaemonRuntimeQueries`、由
+  `bootstrap/commandBootstraps.ts` 的 `composeStatusCommandDaemonRuntime()` 交入文件实现。随改：`windows-platform.yml` 两份路径清单、架构报告的
+  归属表、`rfc377` 的 `util/git` 叶子锁、几处钉着旧路径的用例与 `docs/dev-gotchas.md` 的一句现行指引；新增 RFC-573 用例。
+- **不做**：`util/` 余下的 15 个——`errors` / `hash` / `log` / `paths` / `http` 另立；git、凭据、文件信任、Windows ACL、OIDC、脱敏与安全路径一族
+  不动。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 三个平台机制进 platform，运行信息文件的读取进它的 owner、命令入口经端口取；C11 不改 public 的
+  形状；C12 RFC-573 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、三个新文件、`status` 命令的接线（含行为断言）与工作流的两份路径清单；C13
+  `legacy-horizontal-files` 107 → 103，其余计数不升。
+- **集中验证**（基于 `1db8cc54f`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。没有查出缺陷；迁入 platform 的三个文件迁移前后
+  逐字节相同。tsc 0 错，eslint / promises / prettier 无告警；选出 596 个用例文件，一次全部通过；读已提交源码的 203 个用例文件在候选导出里通过；
+  十五种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数变了，没有新的跨 context 内部 import。实现门 PASS（本会话按路径限定自审，只审
+  功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-571 补迁的提交 `1db8cc54f`：exact SHA 主 CI run 45512993334 70 / 70 全绿；同一提交按路径触发的 windows-platform（run 45512993314）与
+  maintenance-soak-nightly（run 45512993436）通过。
+
+## 2026-11-24 RFC-571 补迁：`util/inFlight` 与 `util/sqlChunk` 归 platform（Done，`1db8cc54f`；`design/RFC-571-util-primitives-into-platform-1/` design §7、plan「补迁」一节）
 
 - **来由**：RFC-571 动手前把这两个零依赖的原语留在了 `util/`，因为读者里有两个身份认证文件与任务授权文件。RFC-572 对同类情形（读者里有凭据与
   工作区边界的文件）的做法是只改 import 说明符那一行；按同样的做法补上。两个文件的原样搬迁，按“纯重命名”处理、不另立 RFC，记在 RFC-571 里。
@@ -11,6 +35,8 @@
 - **`util/` 余 19 个**：`errors` / `hash` / `log` / `paths` / `http` 读者数百处的另立；git、凭据、文件信任、Windows ACL、OIDC、脱敏与安全路径一族
   不动；`fsReclaim`（Windows 工作流的路径清单里有它）、`migrationsFolder`（`rfc359-w5-same-file-provider-pairs` 按路径钉着它）、`daemonInfo` 与
   `timeoutSignal` 是下一批的候选。
+- **CI**：`1db8cc54f` exact SHA 主 CI run 45512993334 70 / 70 全绿；同一提交按路径触发的 windows-platform（run 45512993314）与
+  maintenance-soak-nightly（run 45512993436）通过。
 
 ## 2026-11-24 RFC-572 `util/` 的进程 / 执行一族归 platform（Done；`design/RFC-572-util-process-family-into-platform/`）
 

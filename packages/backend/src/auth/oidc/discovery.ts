@@ -5,7 +5,7 @@
 // and /test moved to the resolver-backed probe (auth/oidc/providers.ts).
 // Pure HTTP; no DB writes.
 
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 export interface OidcMetadata {
   issuer: string
@@ -37,7 +37,7 @@ export async function fetchDiscoveryDocument(
   const trimmed = issuerUrl.replace(/\/$/, '')
   const url = `${trimmed}/.well-known/openid-configuration`
   // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows Bun
-  // when the loop is otherwise idle (see util/timeoutSignal.ts). Covers the
+  // when the loop is otherwise idle (see platform/contracts/timeoutSignal.ts). Covers the
   // body read too, hence cancelled only after json() settles.
   const deadline = timeoutSignal(DISCOVERY_TIMEOUT_MS)
   let json: unknown

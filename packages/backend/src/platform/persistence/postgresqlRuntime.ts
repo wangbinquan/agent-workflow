@@ -5,7 +5,7 @@
 import { SQL } from 'bun'
 import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 import type { DatabaseHealth, DatabaseRuntime } from './runtime'
 
 type PostgresqlConfig = Extract<DatabaseConfig, { provider: 'postgresql' }>

@@ -75,7 +75,7 @@ fetch / ff / push。推送后按 exact SHA 跟 CI。
 - [x] 两个旧路径不存在、没有说明符再解析到它们；新文件与原文件逐字节相同
 - [x] 行为不变；两个身份认证文件只改 import 说明符一行
 - [x] `legacy-horizontal-files` 上限 109 → 107；归属表删去两行；RFC-571 用例的迁移清单扩到十个
-- [ ] 受影响用例全部通过；exact SHA CI 全绿
+- [x] 受影响用例全部通过；exact SHA CI 全绿（`1db8cc54f`，主 CI 70 / 70）
 
 **集中验证**（做法同上文；本地只跑 SQLite；基于 `9507dea6e`，工作树里只有本会话的改动，共享 index 为空）。没有查出缺陷。
 
@@ -101,4 +101,6 @@ fetch / ff / push。推送后按 exact SHA 跟 CI。
 
 **CI**
 
-- 【待补：补迁提交】
+- `1db8cc54f`（补迁，父提交是 `9507dea6e`；同一提交记 RFC-572 转 Done）：exact SHA 主 CI run 45512993334 的 70 个 job 全部成功——全部后端
+  分片、真实 PostgreSQL、前端、三个平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的 windows-platform
+  （run 45512993314）与 maintenance-soak-nightly（run 45512993436）通过。

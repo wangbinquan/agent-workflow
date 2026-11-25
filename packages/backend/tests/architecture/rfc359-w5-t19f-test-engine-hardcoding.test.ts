@@ -550,7 +550,7 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
      *
      * 为什么它该是 sanctioned 而不是债：这类用例测的是**迁移自己的回填口径**
      * （「0095 之前的行，回填之后应该长什么样」），所以它必须把库停在那一条迁移**之前**。
-     * 迁移链是**两套各自落盘的工件**（§5fq ②，与 `util/migrationsFolder.ts` / `embed.ts`
+     * 迁移链是**两套各自落盘的工件**（§5fq ②，与 `platform/persistence/migration/migrationsFolder.ts` / `embed.ts`
      * 同一条理由），SQLite 那条链上的第 N 条回填，按定义只能在 SQLite 的链上验。
      *
      * 为什么原来的 `migration-chain` 判据漏了它：那一条按**文件名**匹配

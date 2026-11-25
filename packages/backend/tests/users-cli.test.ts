@@ -27,7 +27,7 @@ async function createUserCommandFixture() {
     import('../src/db/client'),
     import('../src/modules/identity-access/composition'),
     import('../src/modules/identity-access/composition/userOperations'),
-    import('../src/util/migrationsFolder'),
+    import('../src/platform/persistence/migration/migrationsFolder'),
     import('../src/util/paths'),
   ])
   const migrationsFolder = await resolveMigrationsFolder()

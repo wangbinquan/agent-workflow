@@ -17,6 +17,7 @@ import {
   formatDoctor,
 } from '@/modules/system-operations/composition/doctorDiagnostics'
 import { composeFileCliConfiguration } from '@/modules/system-operations/composition/cliConfiguration'
+import { createFileDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import { composeLegacyAssetMigrationReport } from '@/modules/development-automation/composition/migrationReport'
 import {
   composeLocalSystemOperations,
@@ -240,6 +241,11 @@ export function composeLocalDatabaseMigrationCommandOperations() {
 /** `config get|set` (RFC-474): the installation's configuration file; the daemon need not run. */
 export function composeConfigCommandPersistence() {
   return composeFileCliConfiguration(Paths.config)
+}
+
+/** `status` (RFC-573): the installation's run-info file, read through system-operations' query port; the daemon need not run. */
+export function composeStatusCommandDaemonRuntime() {
+  return createFileDaemonRuntimeQueries()
 }
 
 /** `migration-report` (RFC-474): the schema contract and the legacy asset analysis over the client the command opens. */

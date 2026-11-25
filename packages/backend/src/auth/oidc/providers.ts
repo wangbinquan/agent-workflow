@@ -17,7 +17,7 @@ import {
   type OidcProviderRepository,
 } from '@/modules/identity-access/public/operations'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 type OidcProviderDatabase = ConstructorParameters<typeof DrizzleOidcProviderRepository>[0]
 type OidcProviderPersistenceRecord = NonNullable<
@@ -228,7 +228,7 @@ export function createOidcProvidersService(
       let jwksReachable: boolean | undefined
       if (!subjectMode && eff.jwksUri !== null) {
         // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows
-        // Bun when the loop is otherwise idle (see util/timeoutSignal.ts).
+        // Bun when the loop is otherwise idle (see platform/contracts/timeoutSignal.ts).
         const deadline = timeoutSignal(10_000)
         try {
           const res = await fetcher(eff.jwksUri, {

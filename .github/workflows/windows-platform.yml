@@ -29,7 +29,7 @@ on:
     paths:
       - 'packages/backend/src/util/fileTrust.ts'
       - 'packages/backend/src/util/git.ts'
-      - 'packages/backend/src/util/fsReclaim.ts'
+      - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/isolation.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/merge.ts'
@@ -494,7 +494,7 @@ on:
     paths:
       - 'packages/backend/src/util/fileTrust.ts'
       - 'packages/backend/src/util/git.ts'
-      - 'packages/backend/src/util/fsReclaim.ts'
+      - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/isolation.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/merge.ts'

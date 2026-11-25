@@ -63,7 +63,7 @@ describe('单二进制上的迁移目录解析', () => {
   test('那段 IS_EMBEDDED 解包前置只剩解析器一份实现', () => {
     const inlined = FILES.filter(
       (f) =>
-        rel(f.path) !== 'util/migrationsFolder.ts' &&
+        rel(f.path) !== 'platform/persistence/migration/migrationsFolder.ts' &&
         f.text.includes("join(Paths.root, 'runtime', 'migrations')"),
     )
     expect(

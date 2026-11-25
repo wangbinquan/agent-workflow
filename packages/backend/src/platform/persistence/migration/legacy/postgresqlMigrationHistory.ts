@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
+import { resolvePostgresqlMigrationsFolder } from '@/platform/persistence/migration/migrationsFolder'
 import { OBSERVATION_SOURCE_REVISION } from './observationSourceRevisionSchema'
 import {
   buildPostgresqlSchemaPlan,

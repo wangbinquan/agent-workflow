@@ -15,7 +15,7 @@ import {
   createCanonicalFragmentCache,
   withCanonicalFragmentCache,
 } from '@/platform/persistence/schemaContract'
-import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
+import { resolvePostgresqlMigrationsFolder } from '@/platform/persistence/migration/migrationsFolder'
 
 const cachedJson = (cache: ReturnType<typeof createCanonicalFragmentCache>, value: unknown) =>
   withCanonicalFragmentCache(cache, () => canonicalSchemaJson(value))

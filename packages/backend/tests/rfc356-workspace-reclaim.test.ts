@@ -19,7 +19,10 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync 
 import { utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_RECLAIM_DELAYS_MS, removeDirectoryWithRetry } from '../src/util/fsReclaim'
+import {
+  DEFAULT_RECLAIM_DELAYS_MS,
+  removeDirectoryWithRetry,
+} from '../src/platform/workspace/local/fsReclaim'
 import {
   reclaimStaleRefLocks,
   reclaimWorktreePath,

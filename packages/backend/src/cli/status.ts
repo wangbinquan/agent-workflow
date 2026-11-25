@@ -1,6 +1,7 @@
 // `agent-workflow status` — print daemon state.
 
-import { type DaemonInfo, readDaemonInfo } from '@/util/daemonInfo'
+import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
+import type { DaemonRuntimeInfo } from '@/modules/system-operations/public/types'
 import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/util/paths'
 
@@ -15,20 +16,24 @@ export interface HealthReport {
 export interface StatusResult {
   state: 'running' | 'not-running' | 'stale-lock'
   pid?: number
-  info?: DaemonInfo
+  info?: DaemonRuntimeInfo
   /** Result of fetching /health, if reachable. */
   health?: HealthReport
   /** Error string when /health probe failed. */
   healthError?: string
 }
 
-export async function statusCommand(): Promise<StatusResult> {
+/**
+ * RFC-573: the run-info comes through system-operations' query port. `main.ts` hands in the file implementation that
+ * bootstrap composes — the same one `GET /api/daemon` reads through.
+ */
+export async function statusCommand(daemonRuntime: DaemonRuntimeQueries): Promise<StatusResult> {
   const pid = readPidFromLock(Paths.lock)
   if (pid === null) return { state: 'not-running' }
   if (!isProcessAlive(pid)) return { state: 'stale-lock', pid }
 
   // info file missing/garbled → undefined; still report 'running' via PID.
-  const info: DaemonInfo | undefined = readDaemonInfo() ?? undefined
+  const info: DaemonRuntimeInfo | undefined = (await daemonRuntime.readCurrent()) ?? undefined
 
   let health: HealthReport | undefined
   let healthError: string | undefined

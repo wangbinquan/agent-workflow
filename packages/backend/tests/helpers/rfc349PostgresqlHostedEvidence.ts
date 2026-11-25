@@ -41,7 +41,7 @@ import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresq
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 import {
   defaultBinaryPath,

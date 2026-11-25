@@ -19,7 +19,7 @@ import {
 } from '@/platform/persistence/migration/epoch1/sqliteChain'
 import { parseEpochSwitchJournal } from '@/modules/system-operations/domain/epochSwitch/model'
 import { readAutoUpgradeSessions } from '@/modules/system-operations/infrastructure/local/autoUpgradeState'
-import { readDaemonInfo } from '@/util/daemonInfo'
+import { readDaemonInfoFile } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { isProcessAlive } from '@/platform/execution/local/process'
 import { frozenValues } from './rfc395V2/contentFixtures'
 
@@ -199,9 +199,9 @@ export async function autoUpgradeFixture(
     },
     async ready() {
       // The daemon writes `.daemon.info` in place, not atomically (system-operations nativeDaemonHostLifecycle.ts), so a read
-      // can land between create and write. `readDaemonInfo` treats an unparseable file as "not ready yet", as `status` does;
+      // can land between create and write. `readDaemonInfoFile` treats an unparseable file as "not ready yet", as `status` does;
       // parsing it here directly failed the wait on a half-written file ("JSON Parse error: Unexpected EOF", RFC-500 full run).
-      const info = await wait(() => readDaemonInfo(join(home, '.daemon.info')))
+      const info = await wait(() => readDaemonInfoFile(join(home, '.daemon.info')))
       return info
     },
     async close() {

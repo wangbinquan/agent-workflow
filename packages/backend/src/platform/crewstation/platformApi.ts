@@ -17,7 +17,7 @@
 // and the error surfaces after the bounded attempts; the authority loop observes
 // the loss on its own (RFC-370 acceptance, 2026-10-17).
 
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 export const CREWSTATION_PLATFORM_API_URL_ENV = 'CS_PLATFORM_API_URL'
 

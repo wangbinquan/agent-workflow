@@ -28,6 +28,7 @@ import {
   composeMigrationReportCommandDependencies,
   composePackageCommandBootstrap,
   composeRestoreCommandOperations,
+  composeStatusCommandDaemonRuntime,
   composeUserCommandBootstrap,
   runDoctorCommand,
 } from './bootstrap/commandBootstraps'
@@ -183,7 +184,7 @@ async function main(): Promise<void> {
     }
 
     case 'status': {
-      const result = await statusCommand()
+      const result = await statusCommand(composeStatusCommandDaemonRuntime())
       process.stdout.write(formatStatus(result))
       if (result.state !== 'running') process.exit(1)
       break

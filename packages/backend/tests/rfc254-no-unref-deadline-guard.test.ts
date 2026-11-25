@@ -109,12 +109,12 @@ describe('RFC-254 — no unref on deadline timers', () => {
     // `AbortSignal.timeout()`'s internal timer carries unref semantics, so the
     // whole hazard above applies with no handle to keep ref'd — measured: a
     // test awaiting only its abort wedges bun test on Windows exactly like the
-    // unref'd race. `util/timeoutSignal.ts` is the ref'd replacement; it also
+    // unref'd race. `platform/contracts/timeoutSignal.ts` is the ref'd replacement; it also
     // fixes production ("a fetch against a black-holed host never times out on
     // an idle daemon"), which is the pinning these timeouts exist to prevent.
     const offenders: string[] = []
     for (const f of files) {
-      if (f.endsWith(join('util', 'timeoutSignal.ts'))) continue
+      if (f.endsWith(join('platform', 'contracts', 'timeoutSignal.ts'))) continue
       const src = readFileSync(f, 'utf-8')
       for (const [i, line] of src.split(/\r?\n/).entries()) {
         if (line.includes('AbortSignal.timeout')) {

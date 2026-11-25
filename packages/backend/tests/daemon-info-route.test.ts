@@ -4,7 +4,8 @@
 // (which is blank for an ephemeral port and is overridden, without being written
 // back, by the --host/--port launch flags). Regression guard for the Network
 // settings tab "current actual binding" readout: locks the endpoint's presence,
-// its null-on-absent behaviour, auth gating, and the shared readDaemonInfo parse.
+// its null-on-absent behaviour, auth gating, and the shared run-info file parse (RFC-573: `readDaemonInfoFile`,
+// system-operations' file implementation of the daemon runtime query port).
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -15,11 +16,12 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { readDaemonInfo, type DaemonInfo } from '../src/util/daemonInfo'
+import { readDaemonInfoFile } from '../src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
+import type { DaemonRuntimeInfo } from '../src/modules/system-operations/public/types'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-const SAMPLE: DaemonInfo = {
+const SAMPLE: DaemonRuntimeInfo = {
   pid: 4321,
   host: '127.0.0.1',
   port: 52341,
@@ -64,17 +66,17 @@ function authedGet(app: Hono, path: string) {
   )
 }
 
-describe('readDaemonInfo util', () => {
+describe('readDaemonInfoFile', () => {
   test('parses a present run-info file', () => {
-    expect(readDaemonInfo(tmpInfoFile(JSON.stringify(SAMPLE)))).toEqual(SAMPLE)
+    expect(readDaemonInfoFile(tmpInfoFile(JSON.stringify(SAMPLE)))).toEqual(SAMPLE)
   })
 
   test('returns null when the file is absent', () => {
-    expect(readDaemonInfo(join(tmpdir(), 'aw-nope-does-not-exist.info'))).toBeNull()
+    expect(readDaemonInfoFile(join(tmpdir(), 'aw-nope-does-not-exist.info'))).toBeNull()
   })
 
   test('returns null on garbled JSON rather than throwing', () => {
-    expect(readDaemonInfo(tmpInfoFile('{ not json'))).toBeNull()
+    expect(readDaemonInfoFile(tmpInfoFile('{ not json'))).toBeNull()
   })
 })
 

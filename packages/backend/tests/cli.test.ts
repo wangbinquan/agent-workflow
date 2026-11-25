@@ -13,7 +13,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
-import { composeConfigCommandPersistence } from '../src/bootstrap/commandBootstraps'
+import {
+  composeConfigCommandPersistence,
+  composeStatusCommandDaemonRuntime,
+} from '../src/bootstrap/commandBootstraps'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { formatDoctor } from '../src/modules/system-operations/domain/doctorDiagnostics'
 import { doctorCommand } from '../src/bootstrap/doctorDiagnostics'
@@ -217,9 +220,11 @@ describe('CLI subcommands (P-1-05)', () => {
   })
 
   // --- status / stop (require a real daemon subprocess) ---
+  // RFC-573: `status` takes the run-info query `main.ts` injects — the installation's run-info file, composed by bootstrap
+  // at each call (so it follows this test's AGENT_WORKFLOW_HOME).
 
   test('status: when daemon not running', async () => {
-    const result = await statusCommand()
+    const result = await statusCommand(composeStatusCommandDaemonRuntime())
     expect(result.state).toBe('not-running')
     const text = formatStatus(result)
     expect(text).toContain('not running')
@@ -296,7 +301,7 @@ describe('CLI subcommands (P-1-05)', () => {
         await waitForReady(child.stdout, 10_000, child.stderr, child)
 
         // status sees the daemon, /health is reachable.
-        const status = await statusCommand()
+        const status = await statusCommand(composeStatusCommandDaemonRuntime())
         expect(status.state).toBe('running')
         expect(status.pid).toBe(child.pid ?? -1)
         expect(status.info?.host).toBe('127.0.0.1')

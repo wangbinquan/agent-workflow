@@ -116,7 +116,7 @@ export const SAME_FILE_PROVIDER_PAIRS: readonly string[] = [
   'platform/persistence/capabilities.ts::createCapabilities = createPostgresqlCapabilities + createSqliteCapabilities — ①：能力矩阵本身——「这个引擎有没有同步读」这类问题按定义每个引擎一个答案',
   'platform/persistence/databaseOperationalAdapter.ts::createDatabaseOperationalAdapter = createPostgresqlDatabaseOperationalAdapter + createSqliteDatabaseOperationalAdapter — ①：运维体检本来就只能问引擎自己。SQLite 那份 `new Database(<文件>, {readonly:true})` 再跑 `PRAGMA quick_check` / `page_count` / `page_size`——三个都是 SQLite 独有原语；PostgreSQL 那份问的是**一台服务器**的 `runtime.health()` 加逻辑 schema 合同。连入参都不是一回事（`{path, generationId}` vs `{runtime, contract, openLogicalSource}`），这不是同一件事的两种写法。',
   'platform/persistence/databaseTransaction.ts::createDatabaseSession = createPostgresqlDatabaseSession + createSqliteDatabaseSession — ①：事务原语：SQLite 走 bun:sqlite 的同步事务，PostgreSQL 走 SERIALIZABLE + 40001 退避',
-  'util/migrationsFolder.ts::resolveMigrationsFolder = resolveMigrationsFolder + resolvePostgresqlMigrationsFolder — ②：两条迁移链各有各的目录——迁移文件是**落盘工件**，不是同一份 SQL 的两种渲染',
+  'platform/persistence/migration/migrationsFolder.ts::resolveMigrationsFolder = resolveMigrationsFolder + resolvePostgresqlMigrationsFolder — ②：两条迁移链各有各的目录——迁移文件是**落盘工件**，不是同一份 SQL 的两种渲染',
 ]
 
 describe('RFC-359 AC-1 —— 同文件 provider 孪生（高水位，只降不升）', () => {

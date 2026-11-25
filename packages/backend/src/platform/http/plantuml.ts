@@ -15,7 +15,7 @@
 // "is this a PlantUML diagnostic" check to stop the fallback chain.
 
 import { deflateRawSync } from 'node:zlib'
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 /** Max source bytes accepted by the proxy (defensive abuse cap). */
 export const PLANTUML_SOURCE_MAX = 100 * 1024
@@ -117,7 +117,7 @@ export async function renderPlantuml(opts: {
   // and then stop, leaving `.text()` waiting on an EOF that never comes.
   // RFC-254: the per-attempt abort is a ref'd timeoutSignal — the platform
   // one-liner never fires on Windows Bun when the loop is otherwise idle (see
-  // util/timeoutSignal.ts; this exact function's never-settling-endpoint test
+  // platform/contracts/timeoutSignal.ts; this exact function's never-settling-endpoint test
   // is the one that froze the Windows suite).
   const doFetch = (async (url: string, init?: RequestInit) => {
     const deadline = timeoutSignal(attemptMs)

@@ -6,7 +6,7 @@
 
 import { RepositoryEndpointCandidateSchema, type CodeHostProvider } from '@agent-workflow/shared'
 
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 export interface RepositoryEndpointConnection {
   readonly provider: CodeHostProvider

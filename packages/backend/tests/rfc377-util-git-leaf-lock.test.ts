@@ -18,6 +18,12 @@ const PROCESS_LEAVES = new Set([
   '@/platform/execution/local/platformExec',
   '@/platform/execution/local/process',
 ])
+/**
+ * RFC-573 moved the directory reclaim (`removeDirectoryWithRetry`) from `util/` into the workspace directory of
+ * platform. It imports only the logger, so it is still a leaf below the git primitives; its neighbour `isolation`
+ * imports those primitives and stays an upper layer.
+ */
+const WORKSPACE_LEAVES = new Set(['@/platform/workspace/local/fsReclaim'])
 
 function forbiddenEdges(text: string): string[] {
   return importEdges(sourceUnit('packages/backend/src/util/git.ts', text))
@@ -32,7 +38,8 @@ function forbiddenEdges(text: string): string[] {
         specifier !== '@agent-workflow/shared' &&
         !specifier.startsWith('@/util/') &&
         !specifier.startsWith('./') &&
-        !PROCESS_LEAVES.has(specifier)
+        !PROCESS_LEAVES.has(specifier) &&
+        !WORKSPACE_LEAVES.has(specifier)
       )
     })
 }
@@ -78,6 +85,14 @@ describe('RFC-377 util/git leaf', () => {
       '@/platform/execution/local/managedProcess',
       '@/platform/execution/local/daemonLock',
     ])
+    // RFC-573: of the workspace directory only the reclaim leaf is admitted.
+    expect(
+      forbiddenEdges(
+        "import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'\n" +
+          "import { gitVersionCaps } from '@/platform/workspace/local/gitVersion'\n" +
+          "import { removeDirectoryWithRetry as viaRelative } from '../platform/workspace/local/fsReclaim'",
+      ),
+    ).toEqual(['@/platform/workspace/local/gitVersion', '../platform/workspace/local/fsReclaim'])
   })
 
   test('accepts shared, sibling utilities and external primitives', () => {
@@ -87,6 +102,7 @@ describe('RFC-377 util/git leaf', () => {
         import { sha1Hex } from '@/util/hash'
         import { killProcessTree } from '@/platform/execution/local/process'
         import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
+        import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
         export { run } from './process'
         import type { Logger } from './log'
         import { existsSync } from 'node:fs'

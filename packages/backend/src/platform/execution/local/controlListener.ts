@@ -41,7 +41,7 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { platformSpawnOptions } from '@/platform/execution/local/platformExec'
-import { timeoutSignal } from '@/util/timeoutSignal'
+import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 /** What the control file carries. Written by `start`, read by `stop`. */
 export interface ControlEndpoint {
@@ -205,7 +205,7 @@ export async function requestShutdown(
   timeoutMs = 5_000,
 ): Promise<'accepted' | 'unauthorized' | 'unreachable'> {
   // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows Bun
-  // when the loop is otherwise idle (see util/timeoutSignal.ts). This is the
+  // when the loop is otherwise idle (see platform/contracts/timeoutSignal.ts). This is the
   // `stop` CLI's channel, exactly the process most likely to have an idle loop.
   const deadline = timeoutSignal(timeoutMs)
   try {

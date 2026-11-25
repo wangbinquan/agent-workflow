@@ -20,7 +20,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import { ConflictError, diagnosticTextOf } from '@/util/errors'
-import { removeDirectoryWithRetry } from '@/util/fsReclaim'
+import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type {

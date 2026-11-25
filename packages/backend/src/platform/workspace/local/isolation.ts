@@ -24,7 +24,7 @@ import { join } from 'node:path'
 import { isoWorktreePathFor } from './isolationReferences'
 
 export { isoKeyOf, isoWorktreePathFor } from './isolationReferences'
-import { removeDirectoryWithRetry } from '@/util/fsReclaim'
+import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import {
   alignWorktreeGitlinks,
   AW_INTERNAL_GIT_IDENTITY,
