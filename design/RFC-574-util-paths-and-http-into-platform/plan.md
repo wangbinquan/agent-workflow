@@ -58,7 +58,12 @@
   报 `design/RFC-370-crewstation-hosted-deployment/evidence.md:16` 的链接指向的 `packages/backend/src/util/paths.ts#L12` 不存在。**本 RFC 引入**：
   检索时把 `design/` 当成历史记录不改，没有查它的 Markdown 链接，而 CI 会逐条解析这些链接。修正提交把这条链接改指
   `platform/configuration/installationPaths.ts#L12`（第 12 行在新旧文件里都是 `export const Paths = {`）；`design/` 与 `docs/` 里再没有指向
-  `src/util/` 的 Markdown 链接。其余 job 的结果见修正提交的记录。
+  `src/util/` 的 Markdown 链接。
+- 同一个 run 的 `Backend tests (ubuntu-latest shard 41/44)`（job 138897881503）也红：`rfc437-integration-webhook-family` 的“四个绑定只 import 本模块
+  application 与传输工具”用 `/^@\/(?:…|util\/[A-Za-z]+)$/` 放行 webhook 绑定取 `@/util/` 下的任何文件，`util/http` 迁走后两个绑定取
+  `@/platform/http/requestParsing`，不再被放行。**本 RFC 引入**：动手前按“正则里出现被挪文件的名字”找正则判据，这一条放行的是整个目录、不提
+  任何文件名，没被找到。第二个修正提交在放行表里加上 `platform/http/requestParsing`（在 HEAD 上先复现 1 红、改后 36 / 36）；全仓再没有别的泛化
+  `util/` 放行。`9083e8331` 的 run 里这一格同样会红，归同一原因。其余 job 的结果见修正提交的记录。
 
 ## 实现门（本会话自审，只审功能）
 

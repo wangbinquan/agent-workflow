@@ -130,7 +130,8 @@ describe('RFC-437 —— Webhook 家族的位置与依赖', () => {
         const allowed =
           (specifier.startsWith('.') && specifier.startsWith('../../application/')) ||
           /^@\/modules\/(?:task-execution|identity-access)\/public\/[a-z]+$/.test(specifier) ||
-          /^@\/(?:auth\/actor|routes\/registry|routes\/operationAuthority|util\/[A-Za-z]+)$/.test(
+          // RFC-574 moved the request-parsing helpers from util/http into platform's http directory.
+          /^@\/(?:auth\/actor|routes\/registry|routes\/operationAuthority|util\/[A-Za-z]+|platform\/http\/requestParsing)$/.test(
             specifier,
           ) ||
           /^(?:hono|zod|@agent-workflow\/shared)$/.test(specifier)

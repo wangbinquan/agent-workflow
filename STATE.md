@@ -19,7 +19,9 @@
   都被认出（层数那一种起初配错了证人，换成读第一代迁移历史的用例后同红，design §6 随之改正）；架构报告 60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定
   自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI**：`fd3126d20` 主 CI 的 `Markdown link check (design/)` 红：RFC-370 的 evidence 里一条 Markdown 链接指向被挪走的 `util/paths.ts`，
-  **本 RFC 引入**（检索没查 `design/` 的链接），修正提交改指新路径；其余 job 见修正提交的记录。
+  **本 RFC 引入**（检索没查 `design/` 的链接），修正提交改指新路径。分片 41/44 的 `rfc437-integration-webhook-family` 也红：它用
+  `util\/[A-Za-z]+` 放行 webhook 绑定取整个 `util/`，`util/http` 迁走后就不放行了，**本 RFC 引入**，第二个修正提交补上新位置；其余 job 见修正
+  提交的记录。
 - **CI 侧**：RFC-573 的提交 `3a9a99e64`：exact SHA 主 CI run 45518146982 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
   ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的另三个工作流也全部通过：windows-platform（run 45518147036，`fsReclaim` 的
   新位置在它的路径清单里）、integration-opencode（run 45518146958）与 git-protocols-e2e（run 45518146932）。
