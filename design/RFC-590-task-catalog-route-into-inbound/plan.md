@@ -16,7 +16,7 @@
 - [x] AC-2 任务目录的路由用例通过
 - [x] AC-3 task-catalog 没有 `public/`，R3 新判据通过且有负对照；`legacy-horizontal-files` 上限 56 → 55；未消费 public 符号 0；DAG 之外的边不增加；
       新增 RFC-590 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红已归因为本人缺陷并在后继提交里修复（见「CI」）
 
 ## 集中验证
 
@@ -41,7 +41,7 @@
 
 - `3f07d748a`（实现）：exact SHA 主 CI run 45657867610 的后端第 16/44 片红——`rfc317-runtime-spawn-capability-guard` 把“`routes/` 的文件加一个显式列入的应用
   文件”合计要求 `> 10`，RFC-590 把 `routes/` 缩到 9 个就红了。**本人缺陷**（RFC-590 引入；按名字选用例选不到它），已在 RFC-592 的提交里改为单独证明
-  `routes/` 的枚举非空。转 Done 等 RFC-592 提交的 CI 作后继证据。
+  `routes/` 的枚举非空。后继证据：RFC-592 的提交 `12d8cfb6c`（以本提交为祖先、本提交的内容原样保留）的主 CI run 45669279496 里第 16/44 片 828 条全部通过，含 `rfc317-runtime-spawn-capability-guard` 的三条。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

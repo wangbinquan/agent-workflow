@@ -52,7 +52,7 @@
   限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：在跑（实现提交）。
 
-## 2026-11-25 RFC-592 两个只读 git 查询归 platform，协作的回滚经装配绑定交进来（In Progress；`design/RFC-592-git-queries-and-collaboration-rollback-port/`）
+## 2026-11-25 RFC-592 两个只读 git 查询归 platform，协作的回滚经装配绑定交进来（Done；`design/RFC-592-git-queries-and-collaboration-rollback-port/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；沿 RFC-591 裁定的方案（b）。`util/git.ts` 的仓库
   语义下一步归 source-control，而 collaboration 与 runtime-management 到 source-control 都没有 DAG 边，这一步先断开它们对 `util/git` 的取用。
@@ -69,9 +69,11 @@
   第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **下一步**：`util/git.ts` 余下的仓库语义整体归 source-control；task-execution 取的 `withWorktreeRegistryLock`、`worktreeFilesChanged`、
   `rollbackToSnapshot`、`reclaimStaleRefLocks` 经 source-control 的 public（DAG 有这条边），装配根改从 source-control 取回滚。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-592 的提交 `12d8cfb6c`：主 CI run 45669279496 70 个 job 里 68 个成功（含修 RFC-590 下限的第 16/44 片），同 SHA 的 windows-platform、
+  git-protocols-e2e、integration-opencode 与两个夜间 workflow 通过；后端第 41/44 片的 `rfc398-start-auto-upgrade-takeover` 一个次序在 184.8 秒时超时（CI required
+  随之红），归因环境性时序，后继证据为 `f48df41c2` 的 run 45678070550 第 41/44 片 1349 条全过（同一用例两个次序 29.0 / 26.3 秒）。2026-11-25 转 Done。
 
-## 2026-11-25 RFC-591 git 进程运行器归 platform（In Progress；`design/RFC-591-git-process-runner-into-platform/`）
+## 2026-11-25 RFC-591 git 进程运行器归 platform（Done；`design/RFC-591-git-process-runner-into-platform/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」——对本会话列出的待定事项（含 W5 的 `util/git` 怎么拆）
   的回复。本会话按 RFC-294 总纲裁定为 RFC-586 条目里的方案（b）：通用的 git 进程运行器是厂商命令行客户端，进 platform；仓库语义归 source-control。这一条
@@ -88,9 +90,10 @@
 - **下一步**：`util/git.ts` 余下的仓库语义整体归 source-control；其中跨模块的 6 个名字（`gitMetaDirsFor`、`withWorktreeRegistryLock`、
   `worktreeFilesChanged`、`gitCommitExists`、`rollbackToSnapshot`、`reclaimStaleRefLocks`）要定 collaboration 与 runtime-management 怎么取。
 - **CI 侧**：RFC-591 的提交 `992ae6140`：主 CI run 45663835428 的后端第 16/44 片红在同一处（RFC-590 引入、本提交继承的 `routes/` 枚举下限），已在 RFC-592
-  的提交里修；按路径触发的 windows-platform 与 git-protocols-e2e 通过。转 Done 等 RFC-592 提交的 CI。
+  的提交里修；按路径触发的 windows-platform 与 git-protocols-e2e 通过。后继证据：`12d8cfb6c` 的 run 45669279496 第 16/44 片 828 条全过（含该守卫三条）。
+  2026-11-25 转 Done。
 
-## 2026-11-25 RFC-590 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（In Progress；`design/RFC-590-task-catalog-route-into-inbound/`）
+## 2026-11-25 RFC-590 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（Done；`design/RFC-590-task-catalog-route-into-inbound/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」。RFC-577 design §5 把“一个模块可不可以只有入站
   绑定、没有 public 合同”留给单独的 RFC，本 RFC 自行裁定：可以——RFC-294 里 public 就是“别的模块消费的东西”，只经自己的入站绑定对外、由装配根经
@@ -108,7 +111,8 @@
   限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：RFC-590 的提交 `3f07d748a`：主 CI run 45657867610 的后端第 16/44 片红——`rfc317-runtime-spawn-capability-guard` 把“`routes/` 的文件加一个
   显式列入的应用文件”合计要求 `> 10`，本 RFC 把 `routes/` 缩到 9 个就红了。**本人缺陷**（按名字选用例选不到它），已在 RFC-592 的提交里改为单独证明
-  `routes/` 的枚举非空；macOS e2e 第 3/4 片 141 条全部通过（RFC-588 / RFC-589 那两次取消的后继证据）。转 Done 等 RFC-592 提交的 CI。
+  `routes/` 的枚举非空；macOS e2e 第 3/4 片 141 条全部通过（RFC-588 / RFC-589 那两次取消的后继证据）。后继证据：`12d8cfb6c` 的 run 45669279496
+  第 16/44 片 828 条全过（含该守卫三条）。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（Done，`24d4e0a9f`；`design/RFC-589-agent-workgroup-routes-split-by-owner/`）
 

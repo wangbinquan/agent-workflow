@@ -15,7 +15,7 @@
 - [x] AC-1 五个名字只在新文件定义，`util/git.ts` 不再导出它们；新文件与原来那几段逐字相同
 - [x] AC-2 没有 import 再从 `util/git` 取这五个名字；git 相关用例通过
 - [x] AC-3 计数不升；DAG 之外的边不增加；新增 RFC-591 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红是 RFC-590 引入的缺陷、在后继提交里修复（见「CI」）
 
 ## 集中验证
 
@@ -38,7 +38,7 @@
 
 - `992ae6140`（实现）：exact SHA 主 CI run 45663835428 的后端第 16/44 片红（RFC-590 的提交引入、本提交继承）——`rfc317-runtime-spawn-capability-guard` 把“`routes/` 的文件加一个显式列入的应用
   文件”合计要求 `> 10`，RFC-590 把 `routes/` 缩到 9 个就红了。**本人缺陷**（RFC-590 引入；按名字选用例选不到它），已在 RFC-592 的提交里改为单独证明
-  `routes/` 的枚举非空。转 Done 等 RFC-592 提交的 CI 作后继证据。
+  `routes/` 的枚举非空。本提交的其余 job 与按路径触发的 windows-platform、git-protocols-e2e 都通过。后继证据：RFC-592 的提交 `12d8cfb6c`（以本提交为祖先、本提交的内容原样保留）的主 CI run 45669279496 里第 16/44 片 828 条全部通过，含 `rfc317-runtime-spawn-capability-guard` 的三条。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

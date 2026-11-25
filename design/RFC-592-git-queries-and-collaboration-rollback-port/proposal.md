@@ -1,6 +1,6 @@
 # RFC-592 两个只读 git 查询归 platform，协作的回滚经端口注入（RFC-294 W5 余项第四步：`util/git` 归 source-control 之前先断开 collaboration 与 runtime-management）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：沿 RFC-591 裁定的方案（b），
+- **状态**：Done（2026-11-25，落地 `12d8cfb6c`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：沿 RFC-591 裁定的方案（b），
   本会话自行裁定落位（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §8 / §15 与 plan W5；上一步见
   [RFC-591](../RFC-591-git-process-runner-into-platform/proposal.md)。

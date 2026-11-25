@@ -1,6 +1,6 @@
 # RFC-590 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十二批）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（此前多次同样下达）：
+- **状态**：Done（2026-11-25，落地 `3f07d748a`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（此前多次同样下达）：
   RFC-577 design §5 把“一个模块可不可以只有入站绑定、没有 public 合同”留给单独的 RFC，本 RFC 按 RFC-294 总纲自行裁定（见 design §0）；设计门免、不派
   Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §2、§3 与 plan §4.6 W9-D；上一批见

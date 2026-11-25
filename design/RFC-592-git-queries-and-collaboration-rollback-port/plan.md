@@ -15,7 +15,7 @@
 - [x] AC-1 两个查询只在新文件定义，`util/git.ts` 不再导出它们；新文件与原来那两段逐字相同；没有 import 再从 `util/git` 取它们
 - [x] AC-2 collaboration 与 runtime-management 不 import `util/git`；执行器经绑定里的回滚函数回滚；评审回滚与沙箱放行的用例通过
 - [x] AC-3 计数不升；DAG 之外的边不增加；新增 RFC-592 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红已归因为环境性（见「CI」）
 
 ## 集中验证
 
@@ -38,7 +38,12 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `12d8cfb6c`（实现）：exact SHA 主 CI run 45669279496 的 70 个 job 里 68 个成功——全部后端分片（含修 RFC-590 那条下限的第 16/44 片，828 条全过）、真实
+  PostgreSQL、前端、三个平台的构建与检查、e2e；同 SHA 的 windows-platform、git-protocols-e2e、integration-opencode 与两个夜间 workflow 都通过。
+- 没过的两格是同一件事：后端第 41/44 片的 `rfc398-start-auto-upgrade-takeover`（“N acquires after takeover”）在 184.8 秒时报 barrier / readiness 超时（子进程
+  输出不是完整的 JSON），CI required 因它而红。归因：环境性（时序），不是本提交引入——同一文件的另一个次序（before）在同一次运行里通过，多进程接管用例
+  平时 26～29 秒跑完；本提交没有改到接管与升级路径。后继证据：RFC-593 的提交 `f48df41c2`（以本提交为祖先、本提交的内容原样保留）的 run 45678070550 里第
+  41/44 片 1349 条全部通过，这条用例两个次序分别 29.0 秒、26.3 秒通过。没有改测试、没有重跑。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 
