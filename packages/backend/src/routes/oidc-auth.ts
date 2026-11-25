@@ -6,7 +6,7 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 
 import type { Context, Hono } from 'hono'
 import type { OidcProvider } from '@agent-workflow/shared'
-import { publicOriginOf } from '@/routes/publicOrigin'
+import { publicOriginOf } from '@/platform/http/publicOrigin'
 import { resolveEndpoints } from '@/auth/oidc/endpoints'
 import { acquireIdentityClaims, resolveOidcProfileNames } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'

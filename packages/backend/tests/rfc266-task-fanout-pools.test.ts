@@ -142,7 +142,16 @@ describe('RFC-266 task fan-out pool registry', () => {
     expect(read('composition', 'taskEngineApplication.ts')).not.toContain('gcTaskFanoutSem')
     // HTTP 侧绝不允许 gc（会与调度器缓存的引用竞争 ⇒ 裂池）。
     const routes = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'config.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'system-operations',
+        'inbound',
+        'http',
+        'configRoutes.ts',
+      ),
       'utf8',
     )
     expect(routes).not.toContain('gcTaskFanoutSem')

@@ -3,10 +3,10 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { DEFAULT_CONFIG, type Config, type MaintenanceStatus } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { mountMaintenanceRoutes } from '@/modules/system-operations/inbound/http/maintenanceRoutes'
-import { mountPlantumlRoutes } from '@/routes/plantuml'
+import { mountPlantumlRoutes } from '@/modules/system-operations/inbound/http/plantumlRoutes'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
-import { mountWellKnownRoutes } from '@/routes/docs'
-import { publicOriginOf } from '@/routes/publicOrigin'
+import { mountWellKnownRoutes } from '@/modules/system-operations/inbound/http/docsRoutes'
+import { publicOriginOf } from '@/platform/http/publicOrigin'
 
 function app() {
   const result = new Hono()

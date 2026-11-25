@@ -673,7 +673,8 @@ describe('RFC-305 permission catalog architecture', () => {
       // The identity-access writer copies the initial preset into its audit
       // record; it never branches authorization behavior on the role.
       'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
-      'packages/backend/src/routes/docs.ts',
+      // RFC-583: the documentation binding moved into system-operations' inbound layer (the same read).
+      'packages/backend/src/modules/system-operations/inbound/http/docsRoutes.ts',
       'packages/backend/src/server.ts',
     ])
     expect(filesReadingAccountRole(FRONTEND_SRC)).toEqual([

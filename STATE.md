@@ -1,3 +1,30 @@
+## 2026-11-25 RFC-583 system-operations 的配置、文档与 PlantUML 路由归入模块 inbound，两个 HTTP 传输小工具归入 platform（In Progress；`design/RFC-583-system-operations-config-docs-plantuml-routes-and-http-helpers/`）
+
+- **来由**：RFC-582 之后 `routes/` 余 21 个文件，归属表把其中 8 个记为 platform；而 RFC-294 design §3 规定 platform 不依赖任何模块，这 8 个里只有
+  `verifiedBodyLimit` 现在就满足。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、
+  2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」、2026-11-25「继续」：
+  本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`config`、`docs`、`plantuml` 三个绑定原样迁入 `modules/system-operations/inbound/http/`（`configRoutes.ts`、`docsRoutes.ts`、
+  `plantumlRoutes.ts`；它们读的正是 system-operations 的配置命令 / 查询），挂载函数经 `composition/routes.ts` 转出；`verifiedBodyLimit` 与 `publicOrigin`
+  迁入 `platform/http/`，`publicOrigin` 改取自己声明的中性配置形状（只有 `publicBaseUrl`，配置查询结构上满足它）。`config` 删去为旧路径保留的两个类型
+  转出，装配根改从 public 取；`ApplicationConfigurationCommands` 随绑定撤回 application（带走一条 open-type 记录）。随改：归属表五行、`counts.json`
+  两个上限、偏差账本、RFC-576 用例的名单与六个读源码或列清单的用例；新增 RFC-583 用例。
+- **不做**：`registry` / `operationRoute`（进 platform 前得先让 HTTP 鉴权门不再从 identity-access 取 actor，与 identity-access 的路由一起另立）；`health`
+  （读 task-execution 的运行任务计数，放进 system-operations 会产生 DAG 之外的边，并入 RFC-582 汇总的待用户定事项）；identity-access 与凭据相邻的路由；
+  task-catalog。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，中性的 HTTP 机制进 platform；C11 system-operations 的 public
+  面收窄一个只被本模块用的端口；C12 RFC-583 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、三个绑定、platform 的两个文件、撤回的端口与 `server.ts`；
+  C13 `legacy-horizontal-files` 69 → 64、public 类型偏差 29 → 28，其余计数不升。
+- **集中验证**（基于 `1c5d5947e`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出两处本人缺陷（中性形状没收同步的 `read()`；
+  `rfc441` 按名字表拼的旧路径，钉点检索漏了表中间的名字），均已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 1365 个用例文件，修后
+  全部通过（11280 条）；读已提交源码的 295 个用例文件、2888 条在候选导出里通过；七种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数与
+  public 类型偏差变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、
+  已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：`ad64ba6e5` 的主 CI 收尾为 cancelled（macOS e2e 分片 3/4 的作业时限，见 RFC-581 条目），其余 68 格通过；它的后继 `8a0d8516e`（RFC-580）与
+  `2f5dcbe3f`（RFC-581）的主 CI 各 69 格通过（含 macOS e2e 分片 3/4），只剩汇总的 `CI required` 在排队等运行器；`1c5d5947e`（RFC-582）在跑。发布注册表
+  补正 `d6a26069b` 的三格红按日志核对过：后端分片 11/44 是 `rfc143` 读 `routes/clarify.ts`、前端分片 1/3 是 `code-config-api-base` 读
+  `routes/developmentConfig.ts`，都是 RFC-579 漏改的钉点，由 `ad64ba6e5` 补正。RFC-579 / RFC-580 / RFC-581 待汇总格出结果后转 Done。
+
 ## 2026-11-25 RFC-582 task-execution 的端口产物与工作树文件路由归入模块 inbound（In Progress；`design/RFC-582-task-execution-port-artifact-worktree-file-routes-into-inbound/`）
 
 - **来由**：RFC-581 之后 `routes/` 还剩 23 个文件。task-execution 的五个里逐个推算（边的角色一起核对）：`port-artifacts`、`worktree-files` 撤回 0 个、

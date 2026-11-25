@@ -22,7 +22,7 @@
 import type { Hono } from 'hono'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { actorOf } from '@/auth/actor'
-import { publicOriginOf } from '@/routes/publicOrigin'
+import { publicOriginOf } from '@/platform/http/publicOrigin'
 import { registerRoute } from '@/routes/registry'
 import { buildApiDocs, clientSnippets, wellKnownMcp } from '@/platform/operations/apiDocs'
 import { isMcpSurfaceEnabled } from '@/platform/configuration/mcpSurface'

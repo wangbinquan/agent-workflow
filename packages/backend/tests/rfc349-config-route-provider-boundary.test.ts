@@ -12,9 +12,9 @@ import { buildActor } from '@/auth/actor'
 import { loadConfig } from '@/config'
 import {
   mountConfigRoutes,
-  type ConfigConcurrencyHotApplyInput,
   type ConfigRouteDependencies,
-} from '@/routes/config'
+} from '@/modules/system-operations/inbound/http/configRoutes'
+import type { ConfigConcurrencyHotApplyInput } from '@/modules/system-operations/public/commands'
 
 const roots: string[] = []
 
@@ -136,7 +136,16 @@ describe('RFC-349 config route provider boundary', () => {
 
   test('route source owns no provider client or service construction', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'config.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'system-operations',
+        'inbound',
+        'http',
+        'configRoutes.ts',
+      ),
       'utf8',
     )
     expect(source).not.toContain("from '@/server'")

@@ -9,7 +9,7 @@
 // 见决策 24 / AC-7d 的反向锁）。
 
 import type { Context, Hono } from 'hono'
-import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
+import { verifiedBodyLimit } from '@/platform/http/verifiedBodyLimit'
 import {
   BUNDLE_RESOURCE_TYPES,
   PackageImportReceiptSchema,
@@ -123,7 +123,7 @@ function packageBodyTooLarge(c: Context): Response {
 }
 
 // RFC-326: the understated/malformed Content-Length guard is shared with the
-// review write routes (routes/verifiedBodyLimit.ts); the semantics are unchanged.
+// review write routes (platform/http/verifiedBodyLimit.ts); the semantics are unchanged.
 const resourcePackageBodyLimit = verifiedBodyLimit({
   maxSize: RESOURCE_PACKAGE_BODY_MAX_BYTES,
   onError: packageBodyTooLarge,

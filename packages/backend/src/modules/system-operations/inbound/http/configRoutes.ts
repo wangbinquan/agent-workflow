@@ -1,13 +1,7 @@
 // RFC-370: configuration HTTP transport delegates to the storage-neutral owner.
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
-import type { ApplicationConfigurationCommands } from '@/modules/system-operations/public/commands'
-
-// Keep the former transport type imports source compatible.
-export type {
-  ConfigConcurrencyHotApplyInput,
-  ConfigConcurrencyHotApplyCommand,
-} from '@/modules/system-operations/public/commands'
+import type { ApplicationConfigurationCommands } from '../../application/applicationConfiguration'
 
 export interface ConfigRouteDependencies {
   readonly configuration: ApplicationConfigurationCommands

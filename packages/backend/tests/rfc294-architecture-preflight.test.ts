@@ -424,7 +424,7 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/system-operations/domain/epochSwitch/autoUpgrade.ts#AutoUpgradeConclusion: unsafe/open type UnknownKeyword',
   // RFC-562: the hosted object publication journal is the content owner's contract (platform/content) and the restore
   // normalization participant is a System Operations required port; neither is on a module's public surface any more.
-  'modules/system-operations/public/commands.ts#ApplicationConfigurationCommands: unsafe/open type UnknownKeyword',
+  // RFC-583: the configuration command port left the public surface with its HTTP binding (now in system-operations' application).
   'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/platform/logging/logger#Logger',
   // RFC-399 A8: the clarify directive route port moved from TE public/types into TE application/ports
   // (public/types re-exports it); same Actor debt, new declaration site.

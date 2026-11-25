@@ -14,7 +14,7 @@
 // callback moves with it, which is exactly why they must stay one function.
 
 import { describe, expect, test } from 'bun:test'
-import { derivePublicOrigin } from '../src/routes/publicOrigin'
+import { derivePublicOrigin } from '../src/platform/http/publicOrigin'
 
 const INTERNAL = 'http://127.0.0.1:7777/api/docs/api'
 

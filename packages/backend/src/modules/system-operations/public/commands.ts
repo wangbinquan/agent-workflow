@@ -86,12 +86,6 @@ export interface DatabaseMigrationCommands {
   }
 }
 
-// RFC-370: settings transport consumes the application, not a file path.
-export interface ApplicationConfigurationCommands {
-  read(): Promise<Config>
-  update(patch: unknown): Promise<Config>
-}
-
 export type ConfigConcurrencyHotApplyInput = Pick<
   Config,
   | 'maxConcurrentNodes'

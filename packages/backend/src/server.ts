@@ -27,18 +27,20 @@ import { createBoundOperationInvoker } from '@/platform/operations/boundOperatio
 import { directMcpOperationAuthority } from '@/routes/operationAuthority'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
-// RFC-576: the system-operations HTTP bindings moved from routes/ into the module's inbound layer.
+// RFC-576 / RFC-583: the system-operations HTTP bindings moved from routes/ into the module's inbound layer.
 import {
   mountBackupRoutes,
+  mountConfigRoutes,
   mountDaemonRoutes,
   mountDatabaseMigrationRoutes,
+  mountDocsRoutes,
   mountMaintenanceDiskRoutes,
   mountMaintenanceRoutes,
   mountOverviewRoutes,
+  mountPlantumlRoutes,
   mountRestoreRoutes,
+  mountWellKnownRoutes,
 } from '@/modules/system-operations/composition/routes'
-import { mountConfigRoutes } from '@/routes/config'
-import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { type IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
@@ -54,7 +56,6 @@ import {
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
-import { mountPlantumlRoutes } from '@/routes/plantuml'
 import { mountUserRoutes } from '@/routes/users'
 import {
   mountRuntimeRoutes,

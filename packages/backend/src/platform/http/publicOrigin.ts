@@ -23,14 +23,19 @@
 // are already talking to — so falling back to the forwarded/Host origin is the
 // correct answer rather than a guess. Same config key, different failure cost.
 //
-// RFC-294 note: this is an inbound-HTTP transport concern, so its target home
-// is `adapters/inbound/http/` (§2). It sits in `routes/` next to `registry.ts`
-// (the other transport-owned shared module) and moves with the rest of the
-// route layer in W4; it deliberately does not become a `services/` module,
-// because a service reaching for request headers is the coupling W4 removes.
+// RFC-583: an inbound-HTTP transport mechanism with no module behind it, so it
+// lives in `platform/http/` (RFC-294 design §3: platform takes no module). It
+// used to take the system-operations configuration query for the one field it
+// reads; `PublicBaseUrlConfiguration` below names just that field, and the
+// configuration query satisfies it unchanged.
 
 import type { Context } from 'hono'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
+import type { Config } from '@agent-workflow/shared'
+
+/** What the request-bound wrapper reads from the daemon configuration: only `publicBaseUrl` (read may be sync or async). */
+export interface PublicBaseUrlConfiguration {
+  read(): Pick<Config, 'publicBaseUrl'> | Promise<Pick<Config, 'publicBaseUrl'>>
+}
 
 export interface PublicOriginInputs {
   /** `publicBaseUrl` from config.json, when the operator has set one. */
@@ -96,7 +101,7 @@ export function derivePublicOrigin(inputs: PublicOriginInputs): string {
 /** Request-bound wrapper: reads config (best-effort) and the forwarded headers. */
 export async function publicOriginOf(
   c: Context,
-  configuration: ApplicationConfigurationQueries,
+  configuration: PublicBaseUrlConfiguration,
 ): Promise<string> {
   let configuredBaseUrl: string | undefined
   try {

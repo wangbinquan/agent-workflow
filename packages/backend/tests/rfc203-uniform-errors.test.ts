@@ -147,7 +147,7 @@ describe('RFC-203 T6 — uniform error bodies (source locks)', () => {
   })
 
   test('plantuml guards use DomainError, no bare {error:string} bodies', () => {
-    const src = read('src/routes/plantuml.ts')
+    const src = read('src/modules/system-operations/inbound/http/plantumlRoutes.ts')
     // Format-agnostic: prettier may wrap the DomainError(...) call across
     // lines, so match the code + DomainError presence separately rather than
     // a single-line literal.

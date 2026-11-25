@@ -1,11 +1,17 @@
 // RFC-370: settings validation and hot-apply ordering are storage independent.
-import type { ApplicationConfigurationCommands } from '../public/commands'
 import type {
   ApplicationConfigurationDependencies,
   ApplicationConfigurationPersistencePort,
 } from './ports/applicationConfiguration'
-import type { RuntimeStatusEntry } from '@agent-workflow/shared'
+import type { Config, RuntimeStatusEntry } from '@agent-workflow/shared'
 import { ValidationError } from '@/platform/errors/domainErrors'
+
+// RFC-370: settings transport consumes the application, not a file path. RFC-583: only this module's HTTP binding
+// consumes it, so it is declared here with its factory rather than on the public surface.
+export interface ApplicationConfigurationCommands {
+  read(): Promise<Config>
+  update(patch: unknown): Promise<Config>
+}
 
 export function createApplicationConfiguration(
   deps: ApplicationConfigurationDependencies,

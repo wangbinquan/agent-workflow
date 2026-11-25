@@ -47,7 +47,7 @@ import { type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/modules/integration/composition/scheduledTasks'
 import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
-import { type ConfigConcurrencyHotApplyCommand } from '@/routes/config'
+import { type ConfigConcurrencyHotApplyCommand } from '@/modules/system-operations/public/commands'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import {
   composeWorkgroupTaskRoom,

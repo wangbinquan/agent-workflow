@@ -1,13 +1,15 @@
 // Bootstrap binds one storage instance to live reads and the Settings owner.
 // A selected source has a logical notification key and needs no local path.
-import { createApplicationConfiguration } from '../application/applicationConfiguration'
+import {
+  createApplicationConfiguration,
+  type ApplicationConfigurationCommands,
+} from '../application/applicationConfiguration'
 import type {
   ApplicationConfigurationDependencies,
   ApplicationConfigurationPersistencePort,
 } from '../application/ports/applicationConfiguration'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import { createFileApplicationConfiguration } from '../infrastructure/local/fileApplicationConfiguration'
-import type { ApplicationConfigurationCommands } from '../public/commands'
 import type { ApplicationConfigurationQueries } from '../public/queries'
 import type { Config } from '@agent-workflow/shared'
 import {

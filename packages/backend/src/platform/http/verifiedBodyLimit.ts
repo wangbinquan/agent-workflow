@@ -8,6 +8,8 @@
 // fail-fast branch, then strips an accepted length before delegating so Hono
 // also counts the actual bytes, without duplicating its bounded stream
 // buffering and Request reconstruction.
+//
+// RFC-583: moved from routes/ into platform/http/ — a transport mechanism with no module behind it.
 
 import type { Context, MiddlewareHandler } from 'hono'
 import { bodyLimit } from 'hono/body-limit'

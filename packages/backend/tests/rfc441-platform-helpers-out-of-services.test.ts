@@ -107,7 +107,11 @@ describe('RFC-441 —— 引用与方向', () => {
 
   test('auth、docs、plantuml 三个路由与 mcp/、ws/ 下的文件不 import services/', () => {
     const files = [
-      ...['auth', 'docs', 'plantuml'].map((name) => join(SRC, 'routes', `${name}.ts`)),
+      join(SRC, 'routes', 'auth.ts'),
+      // RFC-583: the documentation and PlantUML bindings moved into system-operations' inbound layer.
+      ...['docsRoutes', 'plantumlRoutes'].map((name) =>
+        join(SRC, 'modules', 'system-operations', 'inbound', 'http', `${name}.ts`),
+      ),
       ...walk(join(SRC, 'mcp')),
       ...walk(join(SRC, 'ws')),
     ]

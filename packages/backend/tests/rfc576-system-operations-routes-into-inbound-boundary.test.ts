@@ -42,6 +42,13 @@ const MOVED: ReadonlyArray<readonly [string, string, string]> = [
   ],
 ]
 const OLD = new Set(MOVED.map(([old]) => old))
+/** RFC-583 added the configuration, API documentation and PlantUML bindings to the same route composition. */
+const LATER_MOUNTS = [
+  'mountConfigRoutes',
+  'mountDocsRoutes',
+  'mountPlantumlRoutes',
+  'mountWellKnownRoutes',
+] as const
 
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return []
@@ -263,7 +270,7 @@ describe('RFC-576 —— 绑定只取本模块与授权的 public 类型', () =>
 })
 
 describe('RFC-576 —— 装配根经 composition 取挂载函数', () => {
-  test('composition/routes.ts 只有转出，且只转出这七个挂载函数', () => {
+  test('composition/routes.ts 只有转出，且只转出这七个挂载函数（加 RFC-583 的四个）', () => {
     const path = join(SRC, SO, 'composition', 'routes.ts')
     const source = ts.createSourceFile(
       path,
@@ -281,10 +288,10 @@ describe('RFC-576 —— 装配根经 composition 取挂载函数', () => {
       if (statement.exportClause !== undefined && ts.isNamedExports(statement.exportClause))
         names.push(...statement.exportClause.elements.map((element) => element.name.text))
     }
-    expect(names.sort()).toEqual(MOVED.map(([, , mount]) => mount).sort())
+    expect(names.sort()).toEqual([...MOVED.map(([, , mount]) => mount), ...LATER_MOUNTS].sort())
   })
 
-  test('server.ts 从 composition/routes 取七个挂载函数，不再取 @/routes/ 下的这七个文件', () => {
+  test('server.ts 从 composition/routes 取七个挂载函数（加 RFC-583 的四个），不再取 @/routes/ 下的这七个文件', () => {
     const text = readFileSync(join(SRC, 'server.ts'), 'utf8')
     const source = ts.createSourceFile('server.ts', text, ts.ScriptTarget.Latest, true)
     const fromComposition: string[] = []
@@ -301,6 +308,8 @@ describe('RFC-576 —— 装配根经 composition 取挂载函数', () => {
       )
         fromComposition.push(...bindings.elements.map((element) => element.name.text))
     }
-    expect(fromComposition.sort()).toEqual(MOVED.map(([, , mount]) => mount).sort())
+    expect(fromComposition.sort()).toEqual(
+      [...MOVED.map(([, , mount]) => mount), ...LATER_MOUNTS].sort(),
+    )
   })
 })

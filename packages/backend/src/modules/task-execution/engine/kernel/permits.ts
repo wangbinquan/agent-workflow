@@ -110,7 +110,7 @@ export function createExecutionPermitRegistry(): TaskExecutionPermitRegistry {
   //   'code-host' — RFC-269 code-host call nodes
   //
   // （RFC-287 五轮门修正：本段头注一直停在 RFC-266 的「two / TWO pools」且只列两项，
-  //  而第三个池自 RFC-269 起就在了——`routes/config.ts` 的保存处三项一起热应用。
+  //  而第三个池自 RFC-269 起就在了——`PUT /api/config` 的保存处三项一起热应用。
   //  过期头注会让接手者按两池推理并发上界。）
   //
   // Why split: a script node is usually a second-scale compute/format step, and
@@ -129,7 +129,7 @@ export function createExecutionPermitRegistry(): TaskExecutionPermitRegistry {
   // independent and collectible. Re-reading a changed setting RESIZES the same
   // object rather than replacing it — replacing would split the budget in two,
   // which is the whole reason this module exists. PUT /api/config resizes here on
-  // save (routes/config.ts), so a settings change applies to running tasks and to
+  // save, so a settings change applies to running tasks and to
   // nodes already queued for a slot — not only to the next task launch.
 
   /** Which independent daemon pool a process node competes in. */

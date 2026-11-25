@@ -107,7 +107,7 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
     const src = (p: string): string =>
       readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
     for (const path of [
-      'routes/config.ts',
+      'modules/system-operations/inbound/http/configRoutes.ts',
       'modules/system-operations/application/applicationConfiguration.ts',
       'modules/intent/application/turnEngine.ts',
       'modules/runtime-management/infrastructure/drivers/types.ts',
