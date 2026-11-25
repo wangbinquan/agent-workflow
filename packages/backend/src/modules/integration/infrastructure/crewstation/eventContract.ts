@@ -19,6 +19,7 @@ import type {
   CrewStationInboundDelivery,
 } from '../../application/ports/crewStationEventInbox'
 import { sha256Hex } from '@/platform/contracts/hash'
+import { eventChannelOfBindingMode } from './eventChannel'
 
 /** The transport receipt of a delivery fact admitted from a frozen CrewStation target. */
 export const CREWSTATION_TARGET_RECEIPT_PREFIX = 'cs-event-target:'
@@ -435,7 +436,7 @@ export function routeCrewStationEvent(
     .map((binding) => ({
       endpointId: binding.endpointId,
       bindingRevision: binding.revision,
-      channel: binding.mode,
+      channel: eventChannelOfBindingMode(binding.mode),
     }))
     .sort((a, b) => (a.endpointId < b.endpointId ? -1 : a.endpointId > b.endpointId ? 1 : 0))
   return {

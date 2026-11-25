@@ -32,7 +32,8 @@ const event: CodeHostEvent = {
 function target(overrides: Partial<CrewStationPendingTarget> = {}): CrewStationPendingTarget {
   return {
     endpointId: 'endpoint-a',
-    channel: 'crewstation',
+    // RFC-596: the business layer's name for the admitting channel (the configuration and the rows say `crewstation`).
+    channel: 'admit',
     endpoint: { enabled: true, provider: 'gitlab' },
     provider: 'gitlab',
     normalized: { ok: true, event },

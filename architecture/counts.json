@@ -107,8 +107,8 @@
       "reason": "max=0: RFC-377 清零"
     },
     "deployment-mode-branch-sites": {
-      "max": 1,
-      "reason": "max=1: RFC-426 删除执行可用性的单机回落（RFC-425 后为 2：执行权端口的部署字面量与 SPA 标记比较已删）；余下 CrewStation 事件收件箱端口的通道字面量；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 0,
+      "reason": "max=0: RFC-596 names the hosted event inbox channel by what it does in Integration's business layer (admit / shadow); the configuration and the inbox rows keep `crewstation`, translated only in infrastructure/crewstation/eventChannel.ts, 1 -> 0, measured; RFC-294 design §14 '业务层部署模式分支 = 0' holds. max=1: RFC-426 删除执行可用性的单机回落（RFC-425 后为 2：执行权端口的部署字面量与 SPA 标记比较已删）；余下 CrewStation 事件收件箱端口的通道字面量；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "direct-setinterval-sites": {
       "max": 7,

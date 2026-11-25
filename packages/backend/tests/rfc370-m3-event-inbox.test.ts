@@ -419,7 +419,8 @@ test('routing freezes sorted targets with their channels, or names why it cannot
     kind: 'routed',
     sourceRevision: 1,
     targets: [
-      { endpointId: 'endpoint-a', bindingRevision: 1, channel: 'crewstation' },
+      // RFC-596: routed targets carry the business-layer channel name; the binding's configured mode is `crewstation`.
+      { endpointId: 'endpoint-a', bindingRevision: 1, channel: 'admit' },
       { endpointId: 'endpoint-b', bindingRevision: 1, channel: 'shadow' },
     ],
   })

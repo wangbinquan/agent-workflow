@@ -15,6 +15,7 @@ import type {
 } from '@/modules/event-center/public/types'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { bindingModeOfEventChannel, eventChannelOfBindingMode } from './eventChannel'
 import type { NormalizeResult } from '../../domain/codeHostNormalization'
 import type {
   CrewStationAdmittedTarget,
@@ -154,7 +155,7 @@ export function createCrewStationEventInbox(input: {
               logicalId: routeId,
               endpointId: target.endpointId,
               bindingRevision: target.bindingRevision,
-              mode: target.channel,
+              mode: bindingModeOfEventChannel(target.channel),
               stage: 'pending',
               nextAttemptAt: timestamp,
               createdAt: timestamp,
@@ -234,7 +235,7 @@ export function createCrewStationEventInbox(input: {
         const rawBodyText = JSON.stringify(envelope.payload)
         const decision = decide({
           endpointId: target.endpointId,
-          channel: target.mode,
+          channel: eventChannelOfBindingMode(target.mode),
           endpoint: endpoint ?? null,
           provider: source.producer,
           normalized: normalizeFrozen(envelope, source, eventUuid),

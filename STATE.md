@@ -1,3 +1,15 @@
+## 2026-11-25 RFC-596 事件收件箱的通道在 integration 的业务层改用中立名字（In Progress；`design/RFC-596-event-channel-neutral-name/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §14 不变量“业务层部署模式分支 = 0”的最后
+  一处（RFC-426 收口时留下的例外）。
+- **范围**：托管事件入站的接纳通道在 integration 的 application 端口里由 `crewstation` 改叫 `admit`（`shadow` 不变）；CrewStation 事件源配置与收件箱表照旧是
+  `crewstation`，互译只在托管适配器新增的 `infrastructure/crewstation/eventChannel.ts` 一对函数里做（配置 → 目标、目标 → 行、行 → 目标三处都经它），不改持久值与
+  外部合同、不需要迁移。随改：`counts.json`（`deployment-mode-branch-sites` 1 → 0）、`rfc376` 的已知清单、两个用例的业务层夹具；新增 RFC-596 用例。
+- **收口对账**（RFC-294 C10～C13）：C10 部署词汇留在托管适配器；C12 RFC-596 用例覆盖 integration 业务层的全部源码；C13 该计数 1 → 0，§14 的这条不变量成立。
+- **集中验证**（基于 `4daf7840b`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 177 个用例
+  文件、1708 条全部通过，`rfc321` 10 / 10；三种变异都被认出。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-595 intent 不再取 resource-catalog 的内部（In Progress；`design/RFC-595-intent-resource-catalog-internals-out/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §14“跨 context 内部文件对 → 0”与

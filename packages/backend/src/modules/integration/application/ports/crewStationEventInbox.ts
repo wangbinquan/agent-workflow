@@ -14,8 +14,12 @@ import type { NormalizeResult } from '../../domain/codeHostNormalization'
 import type { VerifiedWebhookDeliveryInput } from '../acceptVerifiedWebhookDelivery'
 import type { WebhookDeliveryOutcome } from '../webhookDeliveryOutcome'
 
-/** `crewstation` admits the event; `shadow` only records what would have been admitted. */
-export type CrewStationEventChannel = 'crewstation' | 'shadow'
+/**
+ * `admit` admits the event; `shadow` only records what would have been admitted. RFC-596: the hosted event-source
+ * configuration and the inbox rows call the admitting channel `crewstation` (a deployment name); the hosted adapter
+ * translates (`infrastructure/crewstation/eventChannel.ts`), so the business layer names it by what it does.
+ */
+export type CrewStationEventChannel = 'admit' | 'shadow'
 
 export interface CrewStationEventTarget {
   readonly endpointId: string
