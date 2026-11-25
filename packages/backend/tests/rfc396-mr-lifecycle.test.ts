@@ -34,6 +34,8 @@ import {
   validateTypePackage,
 } from '@/modules/digital-employee/domain/model'
 import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
 const graph = composeGraphDeliveryLifecycleRuntimeCodec(graphEmployeeRuntimeCodec)
 const graphPackage = composeGraphDeliveryLifecycleTypePackage(graphEmployeeTypePackage)
@@ -459,6 +461,8 @@ function platformFixture(
     throw new Error('unexpected fixture effect')
   }
   const input: DevelopmentEmployeePlatformWorkItemsCompositionInput = {
+    automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
+    repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
     appHome: '/tmp/rfc396-lifecycle-port-fixture',
     evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({
       appHome: '/tmp/rfc396-lifecycle-port-fixture',

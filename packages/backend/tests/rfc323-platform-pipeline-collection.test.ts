@@ -19,6 +19,8 @@ import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/developme
 import { mergeRequestContextSchema } from '@/modules/development-automation/application/employeeTypePackage'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
 const roots: string[] = []
 let db: PersistenceDb
@@ -156,6 +158,8 @@ function harness(input: {
     },
   }
   const deps = {
+    automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
+    repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
     // The harness lends ONE database per file (truncated between tests); a test
     // that builds two fixtures shares it, which is sound here because the
     // collect-pipeline work item reads no rows — its state lives in the staged

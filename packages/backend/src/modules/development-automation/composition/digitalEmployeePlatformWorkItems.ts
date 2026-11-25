@@ -1,5 +1,6 @@
 // RFC-495 (RFC-294 S10 step 2): the platform work-item use cases live in
-// application/employeePlatformWorkItems.ts. This file only assembles them: it selects the workspace effects,
+// application/employeePlatformWorkItems.ts. This file only assembles them: it checks the workspace effects (RFC-599: the
+// caller states them and the baseline effects — the daemon gives the deployment's, tests the local implementations),
 // takes the evidence store the caller selected (RFC-524: required), binds the business-tree digest and the
 // baseline file reader to their local implementations, and supplies the default clock.
 import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
@@ -23,8 +24,8 @@ export interface DevelopmentEmployeePlatformWorkItemsCompositionInput extends Om
   | 'businessTreeDigest'
   | 'now'
 > {
-  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
-  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
+  readonly repositoryBaselines: RepositoryBaselineEffectsFactory
   readonly evidenceArtifacts: EvidenceArtifactPort
   readonly now?: () => number
 }

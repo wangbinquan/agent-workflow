@@ -110,6 +110,8 @@ import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
 setDefaultTimeout(180_000)
 
@@ -294,6 +296,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           join(appHome, 'artifacts', 'employee-inputs'),
         )
         const workspace = composeDevelopmentEmployeeWorkspace({
+          automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
           db,
           appHome,
           reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -820,6 +823,8 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
             repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
         })
         const platform = composeDevelopmentEmployeePlatformWorkItems({
+          automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
+          repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
           evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),
           reactionRounds: createEmployeeReactionRoundQueries(db),
           db,

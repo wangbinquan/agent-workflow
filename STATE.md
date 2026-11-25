@@ -1,3 +1,15 @@
+## 2026-11-25 RFC-599 员工工作区与平台工作项装配的效果选择必填（In Progress；`design/RFC-599-employee-compositions-stated-effects/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；与 RFC-598 同一做法（RFC-294 S12 第 1 项），落在
+  development-automation 的另两个装配上。
+- **范围**：`composeDevelopmentEmployeeWorkspace` 的 `automationWorkspaceEffects` 与 `composeDevelopmentEmployeePlatformWorkItems` 的 `automationWorkspaceEffects`、
+  `repositoryBaselines` 改为必填，装配照旧只用 `select*` 与基线读取核对、使用它们；daemon 装配不变。调用两个装配的 9 个用例文件里没给的 11 个调用点显式给
+  本机实现（与此前的回落相同）。新增 RFC-599 用例。两个装配继承来的可选 provider（`graphDelivery`、`approvalGateway`、`pipelineEvidence`）另立。
+- **集中验证**（基于 `e98136958`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 503 个
+  用例文件只有 `rfc321` 照例红（主树 10 / 10）；三种运行期变异与一种类型检查变异都被认出；架构报告除来源外完全相同。实现门 PASS（本会话按路径限定自审，
+  只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-598 development-automation 的装配入参全部显式给出（In Progress；`design/RFC-598-development-automation-stated-composition-inputs/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；接 RFC-597 design §5 留下的一项（RFC-294 S12 第 1 项）。

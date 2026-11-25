@@ -1,5 +1,6 @@
-// RFC-496 (RFC-294 S10 step 3): the workspace use case lives in application/employeeWorkspace.ts. Composition only selects the
-// workspace-effects implementation, gives the default clock and binds persistence.
+// RFC-496 (RFC-294 S10 step 3): the workspace use case lives in application/employeeWorkspace.ts. Composition only checks the
+// workspace-effects selection, gives the default clock and binds persistence. RFC-599: the caller states the selection (the
+// daemon gives the deployment's; tests give the local implementation), so the local fallback is never reached here.
 
 import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
 import {
@@ -24,7 +25,7 @@ export interface DevelopmentEmployeeWorkspaceCompositionInput extends Omit<
   DevelopmentEmployeeWorkspaceInput,
   'automationWorkspaceEffects' | 'now'
 > {
-  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
   readonly now?: () => number
 }
 

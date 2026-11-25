@@ -9,6 +9,8 @@ import type { EvidenceArtifactPort } from '@/modules/development-automation/appl
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { describeEachProvider } from './helpers/eachProvider'
 import { held, MemoryPurposeContent } from './helpers/developmentPurpose'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
 const headSha = 'a'.repeat(40),
   targetSha = 'b'.repeat(40)
@@ -41,6 +43,8 @@ describeEachProvider('RFC-370 selected employee pipeline materialization', (harn
       },
     }
     const platform = composeDevelopmentEmployeePlatformWorkItems({
+      automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
+      repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
       db: harness.db,
       appHome,
       evidenceArtifacts: evidence,

@@ -827,6 +827,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   2026-11-25 [RFC-598](../RFC-598-development-automation-stated-composition-inputs/proposal.md)（In Progress）：这 6 个收口——三组效果选择必填，
   三个覆盖（RFC-429 起无人使用）删去，`composition/evidenceReadBinding.ts` 删去；装配入参从此没有可选成员。`select*` 助手对 infrastructure 其他调用方的
   本机回落另立。
+  2026-11-25 [RFC-599](../RFC-599-employee-compositions-stated-effects/proposal.md)（In Progress）：员工工作区与平台工作项两个装配的效果选择同样改为
+  必填；它们继承来的可选 provider（`graphDelivery`、`approvalGateway`、`pipelineEvidence`）与 RFC-597 同类，另立。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。
