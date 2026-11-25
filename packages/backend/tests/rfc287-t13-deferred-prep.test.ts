@@ -1807,7 +1807,8 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
 // task-active。AC-14 原话要求「底层 git 子进程确实终止」。
 describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
   test('syncSubmodules 把 signal 注入每一次 git 调用', async () => {
-    const { syncSubmodules } = await import('@/services/gitSubmodule')
+    const { syncSubmodules } =
+      await import('@/modules/source-control/infrastructure/local/gitSubmodule')
     const seen: Array<{ args: string; signal: AbortSignal | undefined }> = []
     const ac = new AbortController()
     await syncSubmodules('/tmp/does-not-matter', {
@@ -1835,7 +1836,8 @@ describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
   })
 
   test('不给 signal 时行为逐字不变（不得顺手改变既有调用面）', async () => {
-    const { syncSubmodules } = await import('@/services/gitSubmodule')
+    const { syncSubmodules } =
+      await import('@/modules/source-control/infrastructure/local/gitSubmodule')
     const seen: Array<unknown> = []
     await syncSubmodules('/tmp/does-not-matter', {
       mode: 'always',

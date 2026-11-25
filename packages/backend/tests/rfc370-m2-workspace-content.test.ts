@@ -41,7 +41,8 @@ import {
 } from '@/modules/source-control/infrastructure/crewstation/isolationWorkspace'
 import { mergeLocalIsolationWorkspace } from '@/modules/source-control/infrastructure/local/localIsolationWorkspace'
 import { parseHostedWorkspaceReference } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
-import { MergeAgentChildUnreapedError } from '@/platform/workspace/local/isolation'
+// RFC-585: the isolation errors are declared in Source Control's domain and offered through its public types.
+import { MergeAgentChildUnreapedError } from '@/modules/source-control/public/types'
 import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/infrastructure/crewstation/crewstationWorkspace'
 import { materializeActionWorkspace } from '@/modules/development-automation/application/actionWorkspace'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/application/ports/evidenceArtifacts'

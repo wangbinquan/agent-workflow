@@ -299,7 +299,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/execution/taskExecutionResourceDependencies.ts': 'task-execution',
   'packages/backend/src/services/execution/workspaceBoundary.ts': 'task-execution',
   'packages/backend/src/services/freshness.ts': 'task-execution',
-  'packages/backend/src/services/gitSubmodule.ts': 'source-control',
   'packages/backend/src/services/humanGateContinuationRecovery.ts': 'collaboration',
   'packages/backend/src/services/maintenanceDisk.ts': 'platform',
   'packages/backend/src/services/maintenanceRetention.ts': 'platform',

@@ -1,4 +1,5 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 // RFC-370's native ownership split must preserve existing function/class
 // identity. Old direct consumers continue to use the exact native helpers;
 // cleanup alone owns the Task receipt shell.
@@ -7,7 +8,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import * as native from '@/platform/workspace/local/isolation'
+import * as native from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { repoRelForcedPaths as taskPaths } from '@/modules/task-execution/domain/portArtifacts'
 import { runGit } from '@/util/git'
@@ -61,7 +62,7 @@ describe('RFC-370 isolation native compatibility', () => {
           return reads > 1
         },
       })
-      await discardNodeIso(bindIsolationCleanup(), handle)
+      await discardNodeIso(nativeIsolationCleanup(), handle)
       expect(reads).toBe(1)
       expect(existsSync(iso)).toBe(false)
       expect(existsSync(join(canon, 'base.txt'))).toBe(true)

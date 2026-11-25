@@ -1,4 +1,5 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 // RFC-210 T18/T19 — merge-back 不得再吞掉节点在 submodule 里的提交。
 //
 // 这是本 RFC 三处静默数据丢失里最严重的一处，红→绿回归锁。
@@ -30,7 +31,7 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
@@ -142,7 +143,7 @@ describe('RFC-210 merge-back preserves submodule commits', () => {
     expect(unstaged).toContain('vendor')
     expect((await runGit(canon, ['diff', '--cached', '--name-only'])).stdout.trim()).toBe('')
 
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
   }, 120_000)
 
   test('parent-repo edits still merge back alongside the submodule bump', async () => {
@@ -167,7 +168,7 @@ describe('RFC-210 merge-back preserves submodule commits', () => {
     expect((await runGit(join(canon, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(
       nodeSubSha,
     )
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
   }, 120_000)
 
   test('UNCOMMITTED submodule edits are auto-committed through instead of rejected (D22 retired)', async () => {
@@ -199,7 +200,7 @@ describe('RFC-210 merge-back preserves submodule commits', () => {
     // Untracked files ride along too — `add -A` stages them before committing.
     expect(readFileSync(join(canonSub, 'extra.txt'), 'utf8')).toBe('untracked too\n')
 
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
   }, 120_000)
 
   test('a repo whose submodule the node never touched is left exactly as it was', async () => {
@@ -219,7 +220,7 @@ describe('RFC-210 merge-back preserves submodule commits', () => {
 
     expect((await runGit(canonSub, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(before)
     expect(readFileSync(join(canon, 'README.md'), 'utf8')).toBe('only parent\n')
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
   }, 120_000)
 })
 

@@ -16,7 +16,7 @@
 // resolveConflictWithAgent，覆盖那一段。
 
 import { describe, expect, test } from 'bun:test'
-import { resolveConflictWithAgent } from '@/platform/workspace/local/isolation'
+import { resolveConflictWithAgent } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 
 function subConflict(paths: string[], mountPath = '') {
   return {

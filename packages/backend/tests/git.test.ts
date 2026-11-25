@@ -1,7 +1,7 @@
 // Tests for the git util (P-1-12 helpers + parsers shared with P-1-10).
 // Builds a real fixture repo per test via `git init` + a few commits/branches.
 
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

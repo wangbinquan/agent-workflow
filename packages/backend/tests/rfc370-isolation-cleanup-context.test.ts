@@ -1,4 +1,6 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: the seeded handle is a literal (no Source Control scope); the helper binds the native discard on top of
+// Task Execution's cleanup binding, whose receipt selection this test is about.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -160,7 +162,7 @@ describeEachProvider(
         persistence: seeded.persistence,
       })
       await runWithTaskExecutionContext(context, () =>
-        discardNodeIso(bindIsolationCleanup(), seeded.handle),
+        discardNodeIso(nativeIsolationCleanup(), seeded.handle),
       )
       expect(await cleanupEffects(harness.db, seeded.taskId)).toEqual([])
     })
@@ -177,7 +179,7 @@ describeEachProvider(
         db: harness.db,
       })
       await runWithTaskExecutionContext(context, () =>
-        discardNodeIso(bindIsolationCleanup(), seeded.handle),
+        discardNodeIso(nativeIsolationCleanup(), seeded.handle),
       )
       expect(await cleanupEffects(harness.db, seeded.taskId)).toEqual([{ state: 'succeeded' }])
     })

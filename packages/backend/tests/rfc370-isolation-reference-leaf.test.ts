@@ -2,8 +2,8 @@
 import { expect, test } from 'bun:test'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as leaf from '@/platform/workspace/local/isolationReferences'
-import * as native from '@/platform/workspace/local/isolation'
+import * as leaf from '@/modules/source-control/infrastructure/local/isolationReferences'
+import * as native from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import { createFileRepositoryWorkspaceReadQueries } from '@/modules/source-control/composition'
 

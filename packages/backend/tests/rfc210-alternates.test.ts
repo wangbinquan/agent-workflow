@@ -27,7 +27,7 @@ import {
   pushObjectsToPool,
   submoduleGitDir,
   worktreeRefName,
-} from '@/services/gitSubmodule'
+} from '@/modules/source-control/infrastructure/local/gitSubmodule'
 
 function git(cwd: string, args: string[]): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {

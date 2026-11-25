@@ -68,7 +68,7 @@ import {
   persistIsoNodeTree,
 } from '@/modules/task-execution/engine/kernel/isolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
-import { snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
+import { snapshotNodeIsoFinal } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import {
   loadRollbackTarget,
   planNodeRunRollbackTargets,

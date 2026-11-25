@@ -35,7 +35,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'

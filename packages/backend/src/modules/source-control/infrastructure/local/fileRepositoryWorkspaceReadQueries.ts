@@ -1,4 +1,7 @@
-import { isoKeyOf, isoWorktreePathFor } from '@/platform/workspace/local/isolationReferences'
+import {
+  isoKeyOf,
+  isoWorktreePathFor,
+} from '@/modules/source-control/infrastructure/local/isolationReferences'
 import { gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
 import type { RepositoryWorkspaceReadQueries } from '../../application/ports/repositoryWorkspaceReadQueries'
 import { createFileWorkspacePresenceQueries } from './fileWorkspacePresence'

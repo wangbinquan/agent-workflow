@@ -1,4 +1,5 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 // RFC-130 T3 — per-node isolated worktree lifecycle (services/nodeIsolation.ts).
 //
 // Real git fixtures. Asserts the design-model end to end at the node-run level:
@@ -17,7 +18,7 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '../src/util/git'
@@ -74,7 +75,7 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect(await head(canon)).toBe(baseHead)
     const diff = (await runGit(canon, ['diff', '--name-only'])).stdout
     expect(diff).toContain('base.txt')
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
     expect(existsSync(iso)).toBe(false)
     rmSync(canon, { recursive: true, force: true })
   })
@@ -101,8 +102,8 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect((await mergeBackNodeIso(hB, await snapshotNodeIsoFinal(hB))).clean).toBe(true)
     expect(readFileSync(join(canon, 'a.txt'), 'utf8')).toBe('A-edited\n')
     expect(readFileSync(join(canon, 'b.txt'), 'utf8')).toBe('B-edited\n')
-    await discardNodeIso(bindIsolationCleanup(), hA)
-    await discardNodeIso(bindIsolationCleanup(), hB)
+    await discardNodeIso(nativeIsolationCleanup(), hA)
+    await discardNodeIso(nativeIsolationCleanup(), hB)
     rmSync(canon, { recursive: true, force: true })
   })
 
@@ -131,8 +132,8 @@ describe('RFC-130 node isolation lifecycle', () => {
     const canonC = readFileSync(join(canon, 'c.txt'), 'utf8')
     expect(canonC).toBe('A1\nL2\nL3\n')
     expect(canonC).not.toContain('<<<<<<<')
-    await discardNodeIso(bindIsolationCleanup(), hA)
-    await discardNodeIso(bindIsolationCleanup(), hB)
+    await discardNodeIso(nativeIsolationCleanup(), hA)
+    await discardNodeIso(nativeIsolationCleanup(), hB)
     rmSync(canon, { recursive: true, force: true })
   })
 
@@ -150,7 +151,7 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect(res.clean).toBe(true)
     expect(readFileSync(join(r1, 'x.txt'), 'utf8')).toBe('x-edited\n')
     expect(readFileSync(join(r2, 'y.txt'), 'utf8')).toBe('y-edited\n')
-    await discardNodeIso(bindIsolationCleanup(), h)
+    await discardNodeIso(nativeIsolationCleanup(), h)
     rmSync(r1, { recursive: true, force: true })
     rmSync(r2, { recursive: true, force: true })
   })
@@ -165,7 +166,7 @@ describe('RFC-130 node isolation lifecycle', () => {
     })
     // agent wrote something in iso, then "failed" → we never merge back, just discard
     writeFileSync(join(h.repos[0]!.isoWorktreePath, 'f.txt'), 'partial garbage\n')
-    await discardNodeIso(bindIsolationCleanup(), h)
+    await discardNodeIso(nativeIsolationCleanup(), h)
     // canonical never saw the partial write
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('orig\n')
     expect((await runGit(canon, ['status', '--porcelain'])).stdout.trim()).toBe('')

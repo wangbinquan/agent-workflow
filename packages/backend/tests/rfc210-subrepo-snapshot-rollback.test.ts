@@ -25,7 +25,10 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { rollbackSubmodule, rollbackSubmodulesRecursive } from '@/services/gitSubmodule'
+import {
+  rollbackSubmodule,
+  rollbackSubmodulesRecursive,
+} from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { hasDirtySubmoduleContent, snapshotSubmodule, type SubSnapshot } from '@/util/git'
 
 function git(cwd: string, args: string[]): Promise<{ code: number; out: string }> {

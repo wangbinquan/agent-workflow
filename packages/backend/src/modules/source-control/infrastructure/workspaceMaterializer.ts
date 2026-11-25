@@ -4,7 +4,7 @@ import { z } from 'zod'
 // Task admission/row writes remain at the caller; this mechanism receives no DB client.
 import type { SecretBox } from '@/auth/secretBox'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { listAvailableRefs, resolveCachedRepo } from './local/repositoryMirrorCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { resolveRepoGroupLayout } from '../application/repositoryGroups'

@@ -23,7 +23,7 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
 

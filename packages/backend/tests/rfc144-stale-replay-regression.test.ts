@@ -1,4 +1,5 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
@@ -54,7 +55,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createNodeIso, snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
+import {
+  createNodeIso,
+  snapshotNodeIsoFinal,
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
@@ -167,7 +171,7 @@ async function fabricateCrashWindowRow(h: Harness, taskId: string, runId: string
   const handle = await createNodeIso({ appHome: h.appHome, taskId, nodeRunId: runId, canonRepos })
   writeFileSync(join(handle.repos[0]!.isoWorktreePath, 'produced.txt'), 'stale generation\n')
   const nodeTrees = await snapshotNodeIsoFinal(handle)
-  await discardNodeIso(bindIsolationCleanup(), handle)
+  await discardNodeIso(nativeIsolationCleanup(), handle)
   await nodeRunFixture(h.db, {
     id: runId,
     taskId,

@@ -7,10 +7,10 @@ import type {
 } from '../../application/ports/isolationWorkspace'
 import { hostedWorkspaceReference, parseHostedWorkspaceReference } from './workspaceReference'
 import {
-  MergeAgentChildUnreapedError,
   type PreparedConflictResolution,
   type ResolveConflictOutcome,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
+import { MergeAgentChildUnreapedError } from '../../domain/isolationErrors'
 
 /** Only adapter-owned physical descriptions cross the helper boundary. */
 export function mapHostedWorkspacePaths<T>(

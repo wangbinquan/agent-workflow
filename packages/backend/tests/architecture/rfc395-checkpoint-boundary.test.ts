@@ -119,8 +119,9 @@ test('scheduler and workspace view, scene and local effects keep the checkpoint 
     'modules/task-execution/infrastructure/executionWorkspaceSession.ts',
     'modules/task-execution/composition/executionWorkspaceBinding.ts',
     'modules/task-execution/engine/kernel/isolationCleanup.ts',
-    'platform/workspace/local/isolation.ts',
-    'platform/workspace/local/isolationReferences.ts',
+    // RFC-585: the node isolation family moved into source-control's infrastructure.
+    'modules/source-control/infrastructure/local/nodeIsolation.ts',
+    'modules/source-control/infrastructure/local/isolationReferences.ts',
   ]) {
     expect(epochOneCheckpointReads(source(path)), path).toBe(false)
   }

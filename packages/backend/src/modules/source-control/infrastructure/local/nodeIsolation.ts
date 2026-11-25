@@ -52,6 +52,11 @@ import {
   type ResolvedPathState,
 } from '@/services/mergeAgent'
 import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
+// RFC-585: the two isolation errors Task Execution reads are declared in Source Control's domain (offered through public/types).
+import {
+  IsoWorkspaceBlockedError,
+  MergeAgentChildUnreapedError,
+} from '../../domain/isolationErrors'
 
 // RFC-210 / RFC-377: orchestration owns policy; git primitives stay in util/git.
 // Pass the cache service's settings/capability resolver at every entry point.
@@ -69,7 +74,7 @@ import {
   rewriteGitlinkInCommit,
   submoduleGitDir,
   worktreeRefName,
-} from '@/services/gitSubmodule'
+} from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import type { Logger } from '@/platform/logging/logger'
 import { sha256Hex } from '@/platform/contracts/hash'
 
@@ -118,26 +123,6 @@ export interface IsoWorkspaceKeyChoice {
   generation: number
   /** 本次真的回收掉了几处残留（0 = 常态，路径本来就干净）。 */
   reclaimed: number
-}
-
-/** 全部代际都被残留挡住——带上够排障的现场。 */
-export class IsoWorkspaceBlockedError extends Error {
-  readonly code = 'iso-workspace-blocked' as const
-  constructor(
-    readonly detail: {
-      baseKey: string
-      generationsTried: number
-      residualPath: string
-      lastError: string
-    },
-  ) {
-    super(
-      `无法回收残留的隔离工作树（已尝试 ${detail.generationsTried} 代）\n` +
-        `  残留: ${detail.residualPath}\n` +
-        `  最后错误: ${detail.lastError}`,
-    )
-    this.name = 'IsoWorkspaceBlockedError'
-  }
 }
 
 /**
@@ -1464,18 +1449,6 @@ export interface ResolveConflictOutcome {
    * returned for the awaiting_human detail + resume.
    */
   resolveIsoPath: string | null
-}
-
-/**
- * The merge agent process survived its TERM/KILL escalation. This is a hard
- * framework barrier: the resolve worktree must remain intact and no later
- * conflict agent may start while the old writer can still mutate it.
- */
-export class MergeAgentChildUnreapedError extends Error {
-  constructor() {
-    super('merge-agent-child-unreaped')
-    this.name = 'MergeAgentChildUnreapedError'
-  }
 }
 
 /**

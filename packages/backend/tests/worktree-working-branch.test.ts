@@ -12,7 +12,7 @@
 //   - reuse a branch that exists only on the remote → fetch + check out
 //   - invalid branch name → working-branch-invalid
 
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

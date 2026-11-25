@@ -1,6 +1,9 @@
 import { join } from 'node:path'
 import { runGit as defaultRunGit } from '@/util/git'
-import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
+import {
+  detectSubmodules,
+  listEffectiveSubmodules,
+} from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import type { RepositoryGit } from '../../application/repositoryCommit'
 import type {
   RepositoryGitWorkspaceBinding,

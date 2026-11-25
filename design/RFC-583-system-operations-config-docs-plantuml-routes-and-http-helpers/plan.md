@@ -17,7 +17,7 @@
 - [x] AC-2 行为不变：挂载调用与顺序不变，路由用例通过
 - [x] AC-3 `legacy-horizontal-files` 上限 69 → 64；public 类型偏差上限 29 → 28；未消费 public 符号保持 0；DAG 之外的边不增加；归属表删去五行；新增
       RFC-583 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`1e6e2a282`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -60,7 +60,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `1e6e2a282`（实现）：exact SHA 主 CI run 45592907005 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片；按路径触发的 windows-platform（run 45592906991）通过。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

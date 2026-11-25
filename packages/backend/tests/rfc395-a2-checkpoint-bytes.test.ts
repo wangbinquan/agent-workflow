@@ -25,7 +25,7 @@ import { hostedAgentNodeContext } from '@/modules/task-execution/infrastructure/
 import { commitPushNodeId } from '@/modules/task-execution/domain/commitAgent'
 import { toContainerRelative } from '@/modules/task-execution/application/portArtifacts'
 import { repositoryPublicationOrdinal } from '@/modules/task-execution/domain/repositoryExecutionIdentity'
-import { isoWorktreePathFor } from '@/platform/workspace/local/isolationReferences'
+import { isoWorktreePathFor } from '@/modules/source-control/infrastructure/local/isolationReferences'
 import { prepareWorkspaceRollbackPlan } from '@/modules/collaboration/application/prepareWorkspaceRollbackPlan'
 
 const member = {

@@ -20,7 +20,7 @@ import {
   snapshotNodeIsoFinal,
   undoPriorShardDeltaInIso,
   type SubmoduleMergeResolutions,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import { gitBlobHashes, gitChangedFiles, runGit } from '@/util/git'
 

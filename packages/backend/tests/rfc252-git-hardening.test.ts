@@ -25,7 +25,7 @@ import {
   hardenGitArgs,
   withExternalDiffDisabled,
 } from '@/util/gitHardening'
-import { syncSubmodules } from '@/services/gitSubmodule'
+import { syncSubmodules } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 
 let home: string
 let prevHome: string | undefined

@@ -8,13 +8,6 @@ import type {
   IsolationWorkspaceScope,
 } from '@/modules/source-control/public/types'
 import { requireIsolationWorkspaceScope } from '@/modules/source-control/public/participants'
-import {
-  type completeHumanResolvedConflict,
-  discardIsolationWorkspace,
-  mergeBackNodeIso,
-  resolveConflictWithAgent,
-  snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
 import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import type { Logger } from '@/platform/logging/logger'
 
@@ -128,9 +121,9 @@ export async function snapshotIsolatedWorkspace(
   log?: Logger,
   forcedPaths?: string[],
 ): Promise<Record<string, string>> {
-  const record = workspaces.get(handle)
-  // Preserve the old direct helper contract for externally-created native handles.
-  if (record === undefined) return snapshotNodeIsoFinal(handle, log, forcedPaths)
+  // RFC-585: every production handle is created through a Source Control scope (`workspaceView`); the direct native
+  // fallback for externally-created handles left the production tree with the implementation (tests bind it themselves).
+  const record = workspaceRecord(handle)
   passTopology(handle, record)
   try {
     const result = await record.scope.snapshot(record.workspace, log, forcedPaths)
@@ -147,8 +140,7 @@ export async function mergeIsolatedWorkspace(
   log?: Logger,
   resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>,
 ): Promise<{ clean: boolean; conflicts: MergeBackConflict[] }> {
-  const record = workspaces.get(handle)
-  if (record === undefined) return mergeBackNodeIso(handle, trees, log, resolveSubConflict)
+  const record = workspaceRecord(handle)
   passTopology(handle, record)
   try {
     const result = await record.scope.merge(
@@ -172,22 +164,35 @@ export async function mergeIsolatedWorkspace(
 /** This is the admitted act; the Task cleanup shell owns admission and receipts. */
 export async function discardIsolatedWorkspace(
   handle: IsoHandle,
-  ...args: Parameters<typeof discardIsolationWorkspace> extends [IsoHandle, ...infer Rest]
+  ...args: Parameters<IsolationWorkspaceScope['discard']> extends [
+    IsolationWorkspace,
+    ...infer Rest,
+  ]
     ? Rest
     : never
 ): Promise<void | { readonly retained: true }> {
-  const record = workspaces.get(handle)
-  if (record === undefined) return discardIsolationWorkspace(handle, ...args)
+  const record = workspaceRecord(handle)
   passTopology(handle, record)
   return record.scope.discard(record.workspace, ...args)
 }
 
+type ScopeConflictInput = Parameters<IsolationWorkspaceScope['resolveConflict']>[1]
+type ScopeConflictResult = Awaited<ReturnType<IsolationWorkspaceScope['resolveConflict']>>
+
 export async function resolveIsolatedConflict(
   conflict: MergeBackConflict,
-  input: Parameters<typeof resolveConflictWithAgent>[1],
-): Promise<Awaited<ReturnType<typeof resolveConflictWithAgent>>> {
+  input: {
+    readonly containerPath: string
+    readonly runAgent: ScopeConflictInput['runAgent']
+    readonly log?: Logger
+  },
+): Promise<{
+  readonly resolved: boolean
+  readonly unresolved: ScopeConflictResult['unresolved']
+  readonly resolveIsoPath: ScopeConflictResult['resolveWorkspaceRef']
+}> {
   const record = conflicts.get(conflict)
-  if (record === undefined) return resolveConflictWithAgent(conflict, input)
+  if (record === undefined) throw new TypeError('Task isolation conflict has no retained scope')
   const result = await record.scope.resolveConflict(record.value, {
     containerRef: input.containerPath,
     runAgent: input.runAgent,
@@ -204,7 +209,7 @@ export async function completeIsolatedHumanConflict(
   handle: IsoHandle,
   trees: Record<string, string>,
   log?: Logger,
-): Promise<Awaited<ReturnType<typeof completeHumanResolvedConflict>>> {
+): Promise<Awaited<ReturnType<IsolationWorkspaceScope['completeHumanConflict']>>> {
   const record = workspaceRecord(handle)
   passTopology(handle, record)
   return await record.scope.completeHumanConflict(record.workspace, trees, log)

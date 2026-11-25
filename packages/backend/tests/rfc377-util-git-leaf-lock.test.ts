@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { evaluateCruises, isBlocking, KNOWN_VIOLATIONS } from '../../../scripts/depcheck'
-import * as facade from '@/services/gitSubmodule'
+import * as facade from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import * as git from '@/util/git'
 import { importEdges, sourceUnit } from './architecture/census'
 

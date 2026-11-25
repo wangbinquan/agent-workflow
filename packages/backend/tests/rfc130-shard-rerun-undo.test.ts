@@ -36,7 +36,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit, snapshotFullState } from '../src/util/git'
-import { undoPriorShardDeltaInIso } from '@/platform/workspace/local/isolation'
+import { undoPriorShardDeltaInIso } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulidMono = monotonicFactory()

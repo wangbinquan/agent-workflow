@@ -2,7 +2,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 /** RFC-362 test composition only. Maps are process-local characterization state,
  * never a durable seal/journal implementation or a production admission writer. */
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'

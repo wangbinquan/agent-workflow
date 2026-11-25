@@ -1,6 +1,7 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 // Regression lock for the in-submodule merge agent (RFC-210 T25) in the
-// standalone isolation merge-back (`platform/workspace/local/isolation.ts`).
+// standalone isolation merge-back (`modules/source-control/infrastructure/local/nodeIsolation.ts`, RFC-585).
 //
 // The bug: `tryAgentResolveSubmodule` handed the resolver a conflict whose
 // `paths` was `[subPath]` — the gitlink NAME in the superproject (e.g.
@@ -25,7 +26,7 @@ import {
   mergeBackNodeIso,
   resolveConflictWithAgent,
   snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
@@ -145,8 +146,8 @@ test('the in-submodule merge agent sees submodule-relative conflicted paths and 
   // Before the fix this merge-back withheld the repo despite the resolution.
   expect(merged.clean).toBe(true)
   expect(readFileSync(join(canon, 'vendor', 'a.txt'), 'utf8')).toBe('l1-AB\nl2\nl3\n')
-  await discardNodeIso(bindIsolationCleanup(), a)
-  await discardNodeIso(bindIsolationCleanup(), b)
+  await discardNodeIso(nativeIsolationCleanup(), a)
+  await discardNodeIso(nativeIsolationCleanup(), b)
 }, 180_000)
 
 test('a hard submodule merge-tree error withholds the repo instead of throwing', async () => {
@@ -161,6 +162,6 @@ test('a hard submodule merge-tree error withholds the repo instead of throwing',
   })
   expect(merged.clean).toBe(false)
   expect(resolverCalls).toBe(0)
-  await discardNodeIso(bindIsolationCleanup(), a)
-  await discardNodeIso(bindIsolationCleanup(), b)
+  await discardNodeIso(nativeIsolationCleanup(), a)
+  await discardNodeIso(nativeIsolationCleanup(), b)
 }, 180_000)

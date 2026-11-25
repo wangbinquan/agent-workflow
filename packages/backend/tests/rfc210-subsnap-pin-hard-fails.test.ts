@@ -20,9 +20,9 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
-import { subSlug } from '@/services/gitSubmodule'
+import { subSlug } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { runGit, snapshotFullState } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-sp-home-'))

@@ -2,9 +2,12 @@ import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import {
   finishConflictResolution,
   type PreparedConflictResolution,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { listAvailableRefs } from '../local/repositoryMirrorCache'
-import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
+import {
+  detectSubmodules,
+  listEffectiveSubmodules,
+} from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { DomainError } from '@/platform/errors/domainErrors'
 import { gitDiffSnapshot, initScratchRepo, isGitWorkTree, runGit, worktreeDiff } from '@/util/git'
 import { sha1Hex } from '@/platform/contracts/hash'

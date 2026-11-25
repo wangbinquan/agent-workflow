@@ -376,3 +376,6 @@ export interface CandidateDeliveryParticipant {
     readonly publicationSubject?: RepositoryPublicationSubject
   }): Promise<PushCandidateResult>
 }
+
+// RFC-585: the node-isolation errors Task Execution's diagnostics recognise (declared in the domain).
+export { IsoWorkspaceBlockedError, MergeAgentChildUnreapedError } from '../domain/isolationErrors'

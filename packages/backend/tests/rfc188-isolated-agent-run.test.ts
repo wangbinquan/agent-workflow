@@ -5,7 +5,8 @@ import {
   LEAF_NODE_SOURCES,
 } from './helpers/executionMechanismSources'
 import { createTestIsolationBinding } from './helpers/executionKernel'
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -189,7 +190,7 @@ describeEachProvider(
       expect(
         row?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.nodeTree ?? null,
       ).toBeTruthy()
-      await discardNodeIso(bindIsolationCleanup(), iso)
+      await discardNodeIso(nativeIsolationCleanup(), iso)
       rmSync(repo, { recursive: true, force: true })
       rmSync(appHome, { recursive: true, force: true })
     })
@@ -239,7 +240,7 @@ describeEachProvider(
           expect(settle.detail).toContain('f.txt')
           expect(row?.mergeState).toBe('conflict-human')
         }
-        await discardNodeIso(bindIsolationCleanup(), iso)
+        await discardNodeIso(nativeIsolationCleanup(), iso)
         // 复原 canonical，供下一轮。
         await runGit(repo, ['checkout', '--', '.'])
       }
@@ -274,7 +275,7 @@ describeEachProvider(
         { mergeState: 'pending-merge', checkpoints: [{ mountPath: '', nodeTree }] },
       )
       await catchUpLegacySequenceTask(db, taskId)
-      await discardNodeIso(bindIsolationCleanup(), iso)
+      await discardNodeIso(nativeIsolationCleanup(), iso)
 
       const settle = await mergeBackAndSettle({
         binding,

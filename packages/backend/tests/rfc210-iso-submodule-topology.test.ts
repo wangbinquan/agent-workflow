@@ -1,4 +1,5 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 // RFC-210 T14/T15 — iso 创建时记录 submodule 拓扑 + 终态快照前无条件回写对象。
 //
 // 为什么这些测试存在：
@@ -24,7 +25,7 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
@@ -107,7 +108,7 @@ describe('RFC-210 iso submodule topology', () => {
     })
     expect(handle.repos[0]?.subBases).toEqual({})
     expect(handle.repos[0]?.poolDirs).toEqual({})
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
   }, 60_000)
 
   test('records each submodule base head and attaches the shared pool', async () => {
@@ -125,7 +126,7 @@ describe('RFC-210 iso submodule topology', () => {
     // realpath both sides: git reports the resolved path, and on macOS the temp
     // dir arrives as /var/... while git hands back /private/var/....
     expect(realpathSync(repo?.poolDirs['vendor'] as string)).toBe(realpathSync(pool))
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
   }, 90_000)
 
   test('a node commit inside the submodule SURVIVES the iso being discarded', async () => {
@@ -156,7 +157,7 @@ describe('RFC-210 iso submodule topology', () => {
     expect((await runGit(isoSub, ['status', '--porcelain'])).stdout.trim()).toBe('')
 
     await snapshotNodeIsoFinal(handle)
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
 
     // The iso module dir is gone with the worktree; the pool must still have it.
     const inPool = await runGit(pool, ['cat-file', '-t', nodeSha])
@@ -200,7 +201,7 @@ describe('RFC-210 iso submodule topology', () => {
     // held by the longer-lived ref instead.
     await mergeBackNodeIso(handle, await snapshotNodeIsoFinal(handle))
     const landed = (await runGit(join(canon, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()
-    await discardNodeIso(bindIsolationCleanup(), handle)
+    await discardNodeIso(nativeIsolationCleanup(), handle)
 
     await runGit(pool, ['reflog', 'expire', '--expire=now', '--all'])
     await runGit(pool, ['gc', '--prune=now', '--quiet'])

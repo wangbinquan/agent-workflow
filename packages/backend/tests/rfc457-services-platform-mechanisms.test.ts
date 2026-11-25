@@ -97,14 +97,12 @@ describe('RFC-457 —— 平台不取 legacy 与模块', () => {
     ).toEqual([])
   })
 
-  test('platform/ 取 services/ 的边只剩 source-control 一族的 3 条', () => {
+  // RFC-585: the last three (the node isolation family taking services/gitSubmodule and services/mergeAgent) left platform/
+  // with the family for source-control's infrastructure.
+  test('platform/ 不取 services/', () => {
     expect(
       importsMatching(walk(join(SRC, 'platform')), (t) => t.startsWith('services/')).sort(),
-    ).toEqual([
-      'platform/workspace/local/isolation.ts -> services/gitSubmodule',
-      'platform/workspace/local/isolation.ts -> services/mergeAgent',
-      'platform/workspace/local/submoduleParams.ts -> services/gitSubmodule',
-    ])
+    ).toEqual([])
   }, 30_000)
 
   test('负对照：判据认得出平台文件取 legacy', () => {

@@ -17,7 +17,7 @@ import { commitTree, mergeTreeInMemory, runGit, snapshotFullState } from '../src
 import {
   completeHumanResolvedConflict,
   resolveConflictWithAgent,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 
 async function initRepo(seed: Record<string, string>): Promise<string> {

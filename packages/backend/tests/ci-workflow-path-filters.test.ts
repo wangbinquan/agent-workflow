@@ -72,7 +72,7 @@ describe('CI workflow path filters', () => {
         expect.arrayContaining([
           'packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
           'packages/backend/src/modules/source-control/infrastructure/local/repositoryBatchImport.ts',
-          'packages/backend/src/platform/workspace/local/submoduleParams.ts',
+          'packages/backend/src/modules/source-control/infrastructure/local/submoduleParams.ts',
         ]),
       )
     }

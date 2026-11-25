@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 
 import { createRepairEngine } from './helpers/repairEngine'
-import { isoWorktreePathFor } from '@/platform/workspace/local/isolation'
+import { isoWorktreePathFor } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { runGit } from '../src/util/git'
 
 import { withTaskReviewMutationLock } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'

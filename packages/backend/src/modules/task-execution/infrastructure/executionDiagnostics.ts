@@ -1,7 +1,8 @@
+// RFC-585: the two node-isolation errors come from Source Control's public types (declared in its domain).
 import {
   IsoWorkspaceBlockedError,
   MergeAgentChildUnreapedError,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/public/types'
 import { processTreeOwnershipStatus } from '@/platform/execution/local/process'
 import { describeEffectError } from '../domain/effectErrorDescription'
 

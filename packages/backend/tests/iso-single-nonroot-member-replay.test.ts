@@ -44,7 +44,7 @@ import {
 import { mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
 import { type IsolatedAgentRunBinding } from '@/modules/task-execution/application/ports/executionKernel'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
-import { snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
+import { snapshotNodeIsoFinal } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
 import { createLogger } from '@/platform/logging/logger'

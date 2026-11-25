@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { loadConfig } from '@/config'
 import { getCachedGitCapabilities } from '@/platform/workspace/local/gitVersion'
-import type { SubmoduleMode } from '@/services/gitSubmodule'
+import type { SubmoduleMode } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { Paths } from '@/platform/configuration/installationPaths'
 
 /**

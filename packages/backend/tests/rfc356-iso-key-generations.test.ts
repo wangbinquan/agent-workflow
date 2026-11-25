@@ -19,10 +19,11 @@ import {
   createNodeIso,
   isoKeyOf,
   isoWorktreePathFor,
-  IsoWorkspaceBlockedError,
   MAX_ISO_KEY_GENERATIONS,
   rebuildIsoHandle,
-} from '@/platform/workspace/local/isolation'
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
+// RFC-585: the isolation errors are declared in Source Control's domain and offered through its public types.
+import { IsoWorkspaceBlockedError } from '@/modules/source-control/public/types'
 import { runGit } from '../src/util/git'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -191,7 +192,16 @@ describe('RFC-356 · 选键：常态零成本，有残留才回收', () => {
 
   test('容器判空要防 ENOENT：删除与判空之间有竞态，抛出去会变成一次假的 iso-setup 失败', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'nodeIsolation.ts',
+      ),
       'utf8',
     )
     const at = src.indexOf('function containerStillBlocks')
@@ -287,7 +297,16 @@ describe('RFC-356 · 双身份 handle（设计门 P0-1）', () => {
     // 反过来：路径 / ref / resourceKeys 必须继续用物理键。
     expect(body).toMatch(/isolation:\$\{handle\.taskId\}:\$\{handle\.nodeRunId\}/)
     const native = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'nodeIsolation.ts',
+      ),
       'utf8',
     )
     const nativeAt = native.indexOf('export async function discardIsolationWorkspace')
@@ -302,7 +321,16 @@ describe('RFC-356 · 双身份 handle（设计门 P0-1）', () => {
 describe('RFC-356 · handleTaskIdOf 分隔符（AC-14）', () => {
   test('POSIX 与 Windows 两种路径形状都能回读 taskId', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'nodeIsolation.ts',
+      ),
       'utf8',
     )
     const at = src.indexOf('function handleTaskIdOf')

@@ -1,4 +1,5 @@
-import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
+// RFC-585: these handles come straight from createNodeIso (no Source Control scope); the helper binds the native discard.
+import { nativeIsolationCleanup } from './helpers/nativeIsolationCleanup'
 // RFC-130 D15 / T3c2 — crash-safety: the deriveFrontier merge_state gate + the
 // resume-time pending-merge replay.
 //
@@ -24,7 +25,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createNodeIso, snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
+import {
+  createNodeIso,
+  snapshotNodeIsoFinal,
+} from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { deriveFrontier } from './helpers/frontierSelection'
@@ -179,7 +183,7 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
     const handle = await createNodeIso({ appHome: h.appHome, taskId, nodeRunId: 'r-A', canonRepos })
     writeFileSync(join(handle.repos[0]!.isoWorktreePath, 'produced.txt'), 'by node A\n')
     const nodeTrees = await snapshotNodeIsoFinal(handle)
-    await discardNodeIso(bindIsolationCleanup(), handle) // simulate the worktree being gone after a crash
+    await discardNodeIso(nativeIsolationCleanup(), handle) // simulate the worktree being gone after a crash
 
     const nrId = ulid()
     await nodeRunFixture(h.db, {

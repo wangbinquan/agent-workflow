@@ -14,7 +14,7 @@
 - [x] AC-1 七个旧路径不存在、没有说明符再解析到它们；迁走的五个只差 import 与头注；生产源码不取 `tests/`
 - [x] AC-2 生产行为不变；改取新位置的用例与 `rfc234` 的四条维护用例通过
 - [x] AC-3 `unreachable-production-files` 上限 15 → 8、`application-direct-effect-files` 上限 1 → 0；其余计数不升；账本随改；新增 RFC-584 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（实现 `dcbb373c3` 的链接检查红由 `11255a537` 补正；以 `11255a537` 的主 CI 70 / 70 为证据）
 
 ## 集中验证
 
@@ -53,7 +53,10 @@
   的链接指向本 RFC 删除的 `intent/application/maintenance.ts`。**本 RFC 引入**：钉点检索没有查 `design/` 的 Markdown 链接（RFC-574 的教训，
   再犯）。补正提交把那条链接改成反引号里的纯文本并注明删除（那段是 2026-10-14 评审的历史陈述，说的正是这份副本，不改指别的文件）；本地扫
   `design/`、`docs/` 与根目录全部指向 `packages/` 的链接，再没有指向本 RFC 或 RFC-581～RFC-583 迁走、删除文件的链接（余下 4 条是既有的占位
-  写法与 `STATE.md` 的旧记录，不在这个 job 的检查面内）。其余 job 的结果见补正提交的记录。
+  写法与 `STATE.md` 的旧记录，不在这个 job 的检查面内）。实现提交的主 CI 其余 68 格通过（`CI required` 随这一格红），windows-platform
+  （run 45598535589）通过。
+- `11255a537`（补正，父提交是 `dcbb373c3`，只改 7 个文档文件）：exact SHA 主 CI run 45600236490 70 / 70 全绿（含 `Markdown link check (design/)`）；
+  只改文档，没有触发 windows-platform。它包含 `dcbb373c3` 的全部内容，按 CLAUDE.md 作为 RFC-584 的后继证据。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

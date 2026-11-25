@@ -57,8 +57,8 @@
       "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts",
+      "packages/backend/src/modules/source-control/infrastructure/local/gitSubmodule.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts",
-      "packages/backend/src/services/gitSubmodule.ts",
       "packages/backend/src/util/git.ts"
     ],
     "ls-remote": [
@@ -76,7 +76,7 @@
     },
     {
       "id": "submodule-object-pool-copy",
-      "file": "packages/backend/src/services/gitSubmodule.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitSubmodule.ts",
       "reason": "fetches from an already-local git directory into a local object pool"
     },
     {

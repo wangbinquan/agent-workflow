@@ -55,8 +55,12 @@ import { createLogger } from '@/platform/logging/logger'
 import { leaseGitCredential } from '@/util/gitCredentialLease'
 import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/platform/configuration/installationPaths'
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
-import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services/gitSubmodule'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
+import {
+  detectSubmodules,
+  syncSubmodules,
+  type SubmoduleMode,
+} from '@/modules/source-control/infrastructure/local/gitSubmodule'
 // RFC-210 G9 / RFC-377: settings and capability policy remain in this service.
 // util/git.ts imports neither config nor this module; callers inject
 // resolveSubmoduleParams into its submodule-aware entry points.

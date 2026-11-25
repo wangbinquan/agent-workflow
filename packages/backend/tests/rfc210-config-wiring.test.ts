@@ -19,8 +19,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
-import { syncSubmodules } from '@/services/gitSubmodule'
+import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
+import { syncSubmodules } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 import { runGit } from '@/util/git'
 
@@ -157,7 +157,10 @@ describe('RFC-377 production submodule policy wiring', () => {
 
   test('all eight isolation entry calls pass the imported cache policy resolver', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '../src/platform/workspace/local/isolation.ts'),
+      resolve(
+        import.meta.dir,
+        '../src/modules/source-control/infrastructure/local/nodeIsolation.ts',
+      ),
       'utf8',
     )
     // RFC-451: the resolver moved next to isolation (platform/workspace/local/submoduleParams.ts).

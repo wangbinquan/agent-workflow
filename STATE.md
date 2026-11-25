@@ -1,4 +1,30 @@
-## 2026-11-25 RFC-584 RFC-370 收口后的不可达生产文件：契约用例专用的兼容入口迁入 tests/helpers，过时的 Intent 维护副本删除（In Progress；`design/RFC-584-rfc370-closure-unreachable-production-files/`）
+## 2026-11-25 RFC-585 节点隔离工作区的实现一族归 source-control（In Progress；`design/RFC-585-node-isolation-family-into-source-control/`）
+
+- **来由**：RFC-294 W5——source-control 拥有 worktree / submodule，`util/git` 迁为本域 infrastructure 叶子。节点隔离工作区的本机实现停在
+  `platform/workspace/local/`（`isolation`、`isolationReferences`、`submoduleParams`）并取 legacy 的 `services/gitSubmodule`、`services/mergeAgent` 与
+  `@/config`；生产里只有 source-control 用它（RFC-370 的切分）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速
+  推进RFC294」、2026-11-25「继续」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：四个文件原样迁入 `modules/source-control/infrastructure/local/`（`nodeIsolation.ts`、`isolationReferences.ts`、`submoduleParams.ts`、
+  `gitSubmodule.ts`）；`IsoWorkspaceBlockedError`、`MergeAgentChildUnreapedError` 逐字移到 source-control 的 `domain/isolationErrors.ts`，经 `public/types`
+  交给 task-execution 的诊断；task-execution 的隔离视图删去“句柄没有作用域就退回本机函数”的分支（生产句柄全部经作用域创建），这条只有用例在走的
+  退路原样搬进 `tests/helpers/nativeIsolationCleanup.ts`，十一个用例改用它。随改：归属表、`counts.json` 两个上限、`rfc457` / `rfc395` / `rfc377` /
+  `ci-workflow-path-filters` 等用例、`git-protocols-e2e.yml` 的路径过滤与 `repository-publication-call-sites.json`；新增 RFC-585 用例。
+- **能力影响**：生产无；用例经 task-execution 内核清理“没有作用域的本机句柄”的兼容路径改由用例辅助提供。
+- **不做**：`services/mergeAgent.ts`（合并代理模板归 task-execution 的端口用、冲突解析归 source-control 的隔离实现用，拆分是下一步）；`util/git.ts`
+  本身与 platform 里余下的 `runGit` 使用方（W5 后续）。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 隔离实现进 source-control 的 infrastructure、错误类进 domain，platform 不再取 `services/`；C11
+  source-control 的 public 面多两个被消费的错误类；C12 RFC-585 用例覆盖全部说明符、task-execution 与 platform 的全部源码；C13 legacy 横向文件
+  64 → 63、`services/` 业务实现 4 → 3，其余计数不升。
+- **集中验证**（基于 `11255a537`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出一处本人缺陷（`rfc370-isolation-cleanup-context`
+  种的是字面量句柄，开发时只按 `createNodeIso` 找要改用辅助的用例，漏了它），已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 288 个
+  用例文件，修后 2358 条全部通过；读已提交源码的 361 个用例文件在候选导出里 3583 条通过（唯一的红是 `rfc321` 的“记录提交可从 HEAD 到达”，导出仓库
+  没有原历史，主树里 10 / 10）；六种变异都被认出；架构报告 60 个计数里只有上面两项变了，DAG 之外的 context 值对仍为 0、跨 context 内部文件对与
+  platform → modules 不变。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由
+  没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-583（`1e6e2a282`，主 CI 70 / 70）与 RFC-584（以补正 `11255a537` 的主 CI 70 / 70 为后继证据）本提交转 Done。
+
+## 2026-11-25 RFC-584 RFC-370 收口后的不可达生产文件：契约用例专用的兼容入口迁入 tests/helpers，过时的 Intent 维护副本删除（Done，`dcbb373c3`；`design/RFC-584-rfc370-closure-unreachable-production-files/`）
 
 - **来由**：`unreachable-production-files` 是 15，`rfc376` 给其中 8 个登记的后继是“RFC-370 收口”，而 RFC-370 已于 2026-10-19 Done。用户 2026-11-02
   「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的
@@ -18,12 +44,11 @@
   文件的一行改指真正读变量的实现。tsc 0 错，eslint / prettier 无告警；选出 200 个用例文件、1757 条全部通过；读已提交源码的 309 个用例文件、3080 条在
   候选导出里通过；五种变异都被认出；架构报告 60 个计数里只有上面两项变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审
   功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：实现提交 `dcbb373c3` 的主 CI run 45598535599 里 `Markdown link check (design/)` 红：RFC-294 的 `review-2026-10-14.md:120` 链接指向
-  本 RFC 删除的 Intent 维护副本——本 RFC 引入（钉点检索没查 `design/` 的 Markdown 链接），补正提交把它改成纯文本并注明删除，其余 job 的结果见
-  补正提交的记录。RFC-579 / RFC-580 / RFC-581 已转 Done；`1c5d5947e`（RFC-582）主 CI 70 / 70 全绿、windows-platform 通过，随补正提交转 Done；
-  `1e6e2a282`（RFC-583）主 CI 在跑，windows-platform 通过。
+- **CI 侧**：实现提交 `dcbb373c3` 的主 CI 里 `Markdown link check (design/)` 红（RFC-294 的 `review-2026-10-14.md:120` 链接指向本 RFC 删除的
+  Intent 维护副本，本 RFC 引入），其余 68 格与 windows-platform 通过；补正 `11255a537`（只改文档）的主 CI run 45600236490 70 / 70 全绿，作为后继
+  证据，2026-11-25 转 Done。
 
-## 2026-11-25 RFC-583 system-operations 的配置、文档与 PlantUML 路由归入模块 inbound，两个 HTTP 传输小工具归入 platform（In Progress；`design/RFC-583-system-operations-config-docs-plantuml-routes-and-http-helpers/`）
+## 2026-11-25 RFC-583 system-operations 的配置、文档与 PlantUML 路由归入模块 inbound，两个 HTTP 传输小工具归入 platform（Done，`1e6e2a282`；`design/RFC-583-system-operations-config-docs-plantuml-routes-and-http-helpers/`）
 
 - **来由**：RFC-582 之后 `routes/` 余 21 个文件，归属表把其中 8 个记为 platform；而 RFC-294 design §3 规定 platform 不依赖任何模块，这 8 个里只有
   `verifiedBodyLimit` 现在就满足。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、
@@ -45,10 +70,8 @@
   全部通过（11280 条）；读已提交源码的 295 个用例文件、2888 条在候选导出里通过；七种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数与
   public 类型偏差变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、
   已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：`ad64ba6e5` 的主 CI 收尾为 cancelled（macOS e2e 分片 3/4 的作业时限，见 RFC-581 条目），其余 68 格通过；它的后继 `8a0d8516e`（RFC-580）与
-  `2f5dcbe3f`（RFC-581）的主 CI 各 69 格通过（含 macOS e2e 分片 3/4），只剩汇总的 `CI required` 在排队等运行器；`1c5d5947e`（RFC-582）在跑。发布注册表
-  补正 `d6a26069b` 的三格红按日志核对过：后端分片 11/44 是 `rfc143` 读 `routes/clarify.ts`、前端分片 1/3 是 `code-config-api-base` 读
-  `routes/developmentConfig.ts`，都是 RFC-579 漏改的钉点，由 `ad64ba6e5` 补正。RFC-579 / RFC-580 / RFC-581 待汇总格出结果后转 Done。
+- **CI 侧**：RFC-583 的提交 `1e6e2a282`：exact SHA 主 CI run 45592907005 70 / 70 全绿，windows-platform run 45592906991 通过；2026-11-25
+  转 Done。
 
 ## 2026-11-25 RFC-582 task-execution 的端口产物与工作树文件路由归入模块 inbound（Done，`1c5d5947e`；`design/RFC-582-task-execution-port-artifact-worktree-file-routes-into-inbound/`）
 
