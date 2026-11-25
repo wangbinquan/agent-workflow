@@ -866,7 +866,11 @@ describe('RFC-344 single inbound root source locks', () => {
 
   test('pilot transport adapters depend on the narrow database port, not the composition root', () => {
     const routeContracts = new Map([
-      ['src/routes/developmentConfig.ts', 'DevelopmentConfigOperations'],
+      // RFC-579: the development config HTTP binding moved into development-automation's inbound layer.
+      [
+        'src/modules/development-automation/inbound/http/developmentConfigRoutes.ts',
+        'DevelopmentConfigOperations',
+      ],
       // RFC-436: the digital-employee HTTP binding lives in its module's inbound adapter.
       [
         'src/modules/digital-employee/inbound/http/digitalEmployeeRoutes.ts',

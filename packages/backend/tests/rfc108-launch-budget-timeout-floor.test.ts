@@ -78,10 +78,10 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 TaskContinuation
     expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
     expect(bundle).toContain('...runtimeConfigOpts({')
     expect(bundle).toContain('const gateContinuation = createGateContinuationDriver({')
-    expect(src('routes/clarify.ts')).toContain(
+    expect(src('modules/collaboration/inbound/http/clarifyRoutes.ts')).toContain(
       'requireClarifyOperations(operations).submitDecision({',
     )
-    expect(src('routes/reviews.ts')).toContain(
+    expect(src('modules/collaboration/inbound/http/reviewRoutes.ts')).toContain(
       'requireReviewOperations(operations).submitDecision({',
     )
     const providers = src('modules/task-execution/composition/providerRuntime.ts')

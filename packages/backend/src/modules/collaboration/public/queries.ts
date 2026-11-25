@@ -49,4 +49,3 @@ export function resolveCollaborationTaskAccess(
 
 export type { ClarifyAnswerQueries } from '../application/ports/clarifyAnswerQueries'
 export { clarifyAnswerContentForPrompt } from '../domain/clarifyAnswerContent'
-export { isAskingNodeInSnapshot } from '../domain/clarifyAskingNode'

@@ -20,7 +20,7 @@ import { createFactSnapshotReader } from '../infrastructure/reconcilerReaders'
 import { createCutoverStore } from '../infrastructure/cutoverStore'
 import { createMissionInputUploadPersistence } from '../infrastructure/missionInputUploadPersistence'
 import { createMissionPersistence } from '../infrastructure/missionStore'
-import type { DevelopmentMissionOperations } from '../public/operations'
+import type { DevelopmentMissionOperations } from '../application/missionOperations'
 
 export interface DevelopmentMissionOperationCompositionOptions extends Omit<
   DevelopmentMissionOperationsInput,

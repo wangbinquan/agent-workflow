@@ -7,7 +7,7 @@ import type { DirectAuthorityBinding } from '@/modules/identity-access/public/pa
 import {
   createDevelopmentMissionDescriptors,
   type DevelopmentMissionOperations,
-} from '@/modules/development-automation/public/operations'
+} from '../../application/missionOperations'
 import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { DomainError } from '@/platform/errors/domainErrors'

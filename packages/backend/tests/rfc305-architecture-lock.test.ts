@@ -339,6 +339,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/development-automation/application/configOperationHandlers.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/missionOperations.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/development-automation/inbound/http/developmentConfigRoutes.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/development-automation/inbound/http/developmentMissionRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/inbound/http/employeeCaseRoutes.ts -> @/modules/identity-access/public/participants',
       // RFC-517: Intent's platform inventory participant moved from the module root to application.
       'packages/backend/src/modules/digital-employee/application/platformInventoryParticipant.ts -> @/modules/identity-access/public/participants',
@@ -447,8 +449,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/types',
-      'packages/backend/src/routes/developmentConfig.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/routes/developmentMissions.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/mcps.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/operationAuthority.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/resourcePackages.ts -> @/modules/identity-access/public/participants',

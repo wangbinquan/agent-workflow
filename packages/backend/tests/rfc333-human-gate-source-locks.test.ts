@@ -73,21 +73,21 @@ function toolBlock(name: string): string {
 describe('RFC-333 T2 current human-gate inventory', () => {
   const routes = [
     {
-      file: 'packages/backend/src/routes/reviews.ts',
+      file: 'packages/backend/src/modules/collaboration/inbound/http/reviewRoutes.ts',
       command: 'submitDecision',
       path: "path: '/api/reviews/:nodeRunId/decision'",
       tool: 'submit_review',
       toolPath: 'ctx.operations.reviewSubmit({',
     },
     {
-      file: 'packages/backend/src/routes/clarify.ts',
+      file: 'packages/backend/src/modules/collaboration/inbound/http/clarifyRoutes.ts',
       command: 'submitDecision',
       path: "path: '/api/clarify/:nodeRunId/answers'",
       tool: 'answer_clarify',
       toolPath: 'ctx.operations.clarifyAnswer({',
     },
     {
-      file: 'packages/backend/src/routes/taskQuestions.ts',
+      file: 'packages/backend/src/modules/collaboration/inbound/http/taskQuestionRoutes.ts',
       command: 'dispatch',
       path: "path: '/api/tasks/:id/questions/dispatch'",
       tool: 'dispatch_task_questions',
@@ -113,7 +113,7 @@ describe('RFC-333 T2 current human-gate inventory', () => {
   })
 
   test('the AST inventory ignores prose/type references and turns red if direct resume is restored', () => {
-    const file = 'packages/backend/src/routes/reviews.ts'
+    const file = 'packages/backend/src/modules/collaboration/inbound/http/reviewRoutes.ts'
     const source = read(file)
     const mutated = `${source}\nresumeTask()`
     expect(countNamedCalls(file, 'resumeTask', source)).toBe(0)

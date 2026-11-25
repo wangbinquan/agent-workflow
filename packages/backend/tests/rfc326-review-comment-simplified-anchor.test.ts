@@ -47,7 +47,7 @@ import {
   buildReviewAnchorDocument,
   resolveReviewAnchor,
 } from '@/modules/collaboration/domain/reviewAnchor'
-import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/routes/reviews'
+import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/modules/collaboration/inbound/http/reviewRoutes'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'

@@ -14,5 +14,4 @@ export interface DevelopmentAutomationMaintenanceCommands {
   sweepRetention(now: number): Promise<DevelopmentRetentionSweepResult>
 }
 
-// RFC-434: the mission input upload use case the upload routes call.
-export type { MissionInputUploadOperations } from '../application/missionInputUploadOperations'
+// RFC-579: the mission input upload use case left with the upload routes (now this module's inbound layer).

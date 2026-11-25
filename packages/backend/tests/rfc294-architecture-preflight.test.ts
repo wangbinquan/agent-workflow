@@ -363,15 +363,11 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-471: composeSelectedDevelopmentPipelineEvidence is no longer public (its only consumer moved into the module); the
   // same open `object` field of the evidence staging namespace is now first reached through assertEvidenceStagingFactory.
   'modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingFactory: unsafe/open type ObjectKeyword',
-  // RFC-552: visible once the `public/operations` exemption narrowed to descriptor factories (RFC-294 design §3.2) — the
-  // handle contracts the routes take carry open payloads (`Record<string, unknown>`, an index signature) and the evidence
-  // file view's stream openers; successor: close them on the routes' zod schemas (S9 item 2).
-  'modules/development-automation/application/configOperations.ts#DevelopmentConfigIdentityView: unsafe/open type UnknownKeyword',
-  'modules/development-automation/application/configOperations.ts#DevelopmentConfigOperations: unsafe/open type UnknownKeyword',
+  // RFC-579: the three development-automation handle contracts RFC-552 surfaced here (DevelopmentConfigIdentityView,
+  // DevelopmentConfigOperations, DevelopmentMissionOperations) left the public surface with their routes — three settled.
   // RFC-569: five declarations closed — the repair notices reuse TaskLifecycleAlertNotices, the terminal workspace prune
   // policy and the skill version commit hooks are method interfaces, the requirement file view extends the download handle,
   // and the plugin-disabled issue code has a named literal type; five entries settled.
-  'modules/development-automation/application/missionOperations.ts#DevelopmentMissionOperations: unsafe/open type UnknownKeyword',
   // RFC-552: visible once the operations exemption narrowed — the OIDC provider repository re-exported for the legacy
   // `auth/oidc/providers.ts`; successor: that provider management moves into identity-access (W9-D).
   'modules/identity-access/application/ports/oidcProviderPersistence.ts#OidcProviderRepository: forbidden type Partial',
@@ -466,7 +462,8 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/collaboration/infrastructure/clarifyDecision.ts: constructs ClarifySealDecisionParticipantInTx outside owner factory',
   'modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#createWorkgroupTaskRoomClarifyParticipantInTx: factory is outside capability owner',
   'modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts: casts/rewraps WorkgroupTaskRoomClarifyParticipantInTx outside owner factory',
-  'modules/collaboration/public/types.ts: ReviewActor leaks through public/types',
+  // RFC-579: settled — the review / clarify / question-dispatch command contracts that carried ReviewActor through
+  // collaboration's public/types left with the routes (now collaboration's inbound layer).
   // RFC-365：IA 的 event-automation delegated-context adapter 按既有 `delegatedRequests`
   // 形态重包 `Actor`（与 `forSchedule` / `forWebhook` 同族），命中这条历史启发式。
   'modules/identity-access/application/adapters/event-automation-adapter.ts: casts/rewraps Actor outside owner factory',

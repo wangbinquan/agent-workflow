@@ -11,13 +11,13 @@ import type {
   DevelopmentConfigOperations,
   DevelopmentConfigResourceKind,
   DevelopmentConfigResourceOperations,
-} from '@/modules/development-automation/public/operations'
+} from '../../application/configOperations'
 import {
   createDevelopmentConfigResourceDescriptors,
   createDevelopmentConfigSupplementalDescriptors,
   developmentConfigReviseInputSchema,
   developmentEmployeePlaybookInputSchema,
-} from '@/modules/development-automation/public/operations'
+} from '../../application/configOperations'
 import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { NotFoundError } from '@/platform/errors/domainErrors'

@@ -87,7 +87,9 @@ describe('RFC-439 —— B / D 退出门与方向', () => {
     const units = walk(join(SRC, 'routes')).map((path) =>
       sourceUnit(relative(REPO_ROOT, path).split('\\').join('/'), readFileSync(path, 'utf8')),
     )
-    expect(units.length).toBeGreaterThan(30)
+    // RFC-579: W9-D moves the routes into their modules' inbound layers by design (29 left); this floor only proves the
+    // scan is not empty. The bindings that moved are module files, which the R1 ledger covers.
+    expect(units.length).toBeGreaterThan(10)
     const deep = inboundBoundaryEdges(units).map((edge) => `${edge.from} -> ${edge.specifier}`)
     expect(deep).toEqual([])
   })

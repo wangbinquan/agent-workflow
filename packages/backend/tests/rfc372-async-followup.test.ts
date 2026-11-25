@@ -18,7 +18,7 @@ import {
   type ClarifyFollowup,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { mountClarifyRoutes } from '@/routes/clarify'
+import { mountClarifyRoutes } from '@/modules/collaboration/inbound/http/clarifyRoutes'
 import { createClarifyRound } from '@/modules/collaboration/infrastructure/clarify/service'
 import { errorHandler } from '@/platform/errors/domainErrors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -38,7 +38,7 @@ import {
 } from '@/modules/collaboration/infrastructure/clarifyFollowupActivity'
 import { clarifyFollowupEvents } from '@/modules/collaboration/infrastructure/collaborationClarifyDraftEventPublisher'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
-import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/application/ports/collaborationRouteOperations'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const editor = { userId: 'fixture', displayName: 'Reviewer', role: 'owner' as const }

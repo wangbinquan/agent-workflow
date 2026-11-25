@@ -3,24 +3,9 @@
 
 import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
 
-export type { ReviewAnchorRequest } from '../domain/reviewAnchor'
-
-export type { ReviewGateDecision } from '../domain/canonicalGateRequest'
-export type { GateDecisionReceipt, HumanGateIdentity } from '../domain/gateReceipt'
 // RFC-481: `PreparedHumanGateRef` is Task Execution's now (task-execution `public/types`); `HumanGateKind` left with it.
-export type { ReviewAccessDecision } from '../domain/reviewAccess'
-export type {
-  SubmitReviewDecisionCommandInput,
-  SubmitReviewDecisionCommandResult,
-} from '../application/ports/reviewDecisionCommand'
-export type {
-  SubmitClarifyDecisionCommandInput,
-  SubmitClarifyDecisionCommandResult,
-} from '../application/ports/clarifyDecisionCommand'
-export type {
-  DispatchTaskQuestionsCommandInput,
-  DispatchTaskQuestionsCommandResult,
-} from '../application/ports/questionDispatchCommand'
+// RFC-579: the review, clarify and question-dispatch command contracts, the review access decision, the task-question
+// conflict codes and the gate types they reference left this entry with the routes (now this module's inbound layer).
 
 /** Structural identity snapshot consumed by review authorization adapters. */
 export interface ReviewActorUser {
@@ -66,4 +51,3 @@ export type CollaborationRouteContext = CollaborationCommandContext<
 >
 
 export type { ClarifyAnswerContent } from '../domain/clarifyAnswerContent'
-export { TASK_QUESTION_CONFLICT } from '../domain/taskQuestionConflicts'

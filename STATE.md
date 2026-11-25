@@ -1,4 +1,32 @@
-## 2026-11-25 RFC-578 memory 与 source-control 的路由归入模块 inbound（In Progress；`design/RFC-578-memory-source-control-routes-into-inbound/`）
+## 2026-11-25 RFC-579 collaboration 与 development-automation 的路由归入模块 inbound（In Progress；`design/RFC-579-collaboration-development-automation-routes-into-inbound/`）
+
+- **来由**：RFC-578 之后 `routes/` 还剩 36 个文件。按 RFC-578 design §3 的推算，collaboration 与 development-automation 两族迁进 owner 模块之后要撤回
+  47 个 public 符号（四层），多，但几乎全是转出行，作为第四批。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速
+  推进RFC294」、2026-11-25「继续」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`routes/clarify`、`reviews`、`taskClarifyDirective`、`taskQuestions` 迁入 `modules/collaboration/inbound/http/`（`clarifyRoutes.ts`、
+  `reviewRoutes.ts`、`taskClarifyDirectiveRoutes.ts`、`taskQuestionRoutes.ts`），`routes/developmentConfig`、`developmentMissions`、`missionInputUploads`
+  迁入 `modules/development-automation/inbound/http/`（`developmentConfigRoutes.ts`、`developmentMissionRoutes.ts`、`missionInputUploadRoutes.ts`），挂载
+  函数经各模块的 `composition.ts` 转出，`server.ts` 改从那里取；挂载调用与顺序不变。撤回 47 个只被这些路由用的 public 转出（collaboration 的路由
+  操作端口及其参数、三组命令合同、审查访问判定、冲突码、提问节点判定与四个人工门类型；development-automation 的全部 `public/operations` 与上传用例
+  端口），`public/operations.ts` 删除；三条开放类型的 public 偏差随之销账（32 → 29）。随改：归属表七行、`counts.json` 两项、偏差清单与 capability
+  名称账本、`rfc552` 的入口清单、`rfc550` 对后来删掉的入口的处理、`rfc305` 的消费者账本、`rfc331` 的 legacy 消费者清单、`rfc442` 的方向用例与十余个
+  读源码的用例；新增 RFC-579 用例。
+- **不做**：resource-catalog（92 个要撤回的符号里 86 个是 public 文件里的声明，要先设计落位，另立）；task-execution（两条不在 DAG 里的类型边）；
+  identity-access 与凭据相邻的路由；task-catalog（RFC-577 design §5）；路由传输工具归位；e2e 注释里的行号锚点（design §2）。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 两个 public 面收窄 47 个只被
+  本模块用的转出、一个 public 入口退役、三条类型偏差销账；C12 RFC-579 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、七个绑定、四个 public 文件
+  与 `server.ts`；C13 `legacy-horizontal-files` 84 → 77、`public-surface-deviations` 32 → 29，其余计数不升。
+- **集中验证**（基于 `0a5bf21f1`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。撤回的推算与候选报告一致（正是那 47 个）。查出两处
+  本人缺陷（没预先查到的两个账本：capability 名称账本的 `ReviewActor` 一条、`rfc439` 的 `routes/` 非空下限），均已修复并复验。tsc 0 错，eslint /
+  promises / prettier 无告警；选出 653 个用例文件，修后 6372 条全部通过；读已提交源码的 249 个用例文件、2422 条在候选导出里通过（含只能在提交上跑的
+  `route-error-code-coverage`）；十种变异里九种被认出，第十种（ACL 写门守卫委托表的键）在 HEAD 上同样不红、不能当见证，已如实记录；架构报告 60 个
+  计数里只有那两项变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、
+  已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-578 的提交 `0a5bf21f1`：exact SHA 主 CI run 45564962645 70 / 70 全绿；按路径触发的 windows-platform（run 45564962555）与
+  git-protocols-e2e（run 45564962640）通过，RFC-578 转 Done。
+
+## 2026-11-25 RFC-578 memory 与 source-control 的路由归入模块 inbound（Done，`0a5bf21f1`；`design/RFC-578-memory-source-control-routes-into-inbound/`）
 
 - **来由**：RFC-577 之后 `routes/` 还剩 41 个文件。按 RFC-576 / RFC-577 的教训，先按架构报告的消费者表与 public 类型引用把每族迁进 owner 模块之后要
   撤回的 public 符号算到不动点：memory 4、source-control（不含账户仓库的传输凭据）9、collaboration 25、development-automation 22、task-execution 10

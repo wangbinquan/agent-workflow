@@ -74,35 +74,7 @@ interface ModuleLedger {
 
 /** design §3.2: every export of every `public/operations` entry, by class. */
 const LEDGER: Readonly<Record<string, ModuleLedger>> = {
-  'development-automation': {
-    entries: {
-      'descriptor factory': [
-        'createDevelopmentConfigResourceDescriptors',
-        'createDevelopmentConfigSupplementalDescriptors',
-        'createDevelopmentMissionDescriptors',
-      ],
-      'handle contract': [
-        'DevelopmentAssignmentInput',
-        'DevelopmentConfigAclRow',
-        'DevelopmentConfigCreateInput',
-        'DevelopmentConfigIdentityView',
-        'DevelopmentConfigOperations',
-        'DevelopmentConfigResourceKind',
-        'DevelopmentConfigResourceOperations',
-        'DevelopmentConfigReviseInput',
-        'DevelopmentCutoverCommand',
-        'DevelopmentEmployeePlaybookInput',
-        'DevelopmentMissionFileView',
-        'DevelopmentMissionListInput',
-        'DevelopmentMissionOperations',
-        'DevelopmentPipelineEvidenceReadView',
-        'DevelopmentPolicyPreviewInput',
-        'DevelopmentSelectionPreviewInput',
-        'developmentConfigReviseInputSchema',
-        'developmentEmployeePlaybookInputSchema',
-      ],
-    },
-  },
+  // RFC-579: development-automation's public/operations entry retired with its routes (everything in it was theirs).
   'identity-access': {
     entries: {
       'handle contract': ['IdentityUserOperations'],

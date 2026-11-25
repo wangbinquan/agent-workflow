@@ -422,12 +422,12 @@ describe('RFC-339 WrapperRuntime cutover', () => {
 
     const callers = [
       'packages/backend/src/routes/agents.ts',
-      'packages/backend/src/routes/clarify.ts',
-      'packages/backend/src/routes/developmentMissions.ts',
+      'packages/backend/src/modules/collaboration/inbound/http/clarifyRoutes.ts',
+      'packages/backend/src/modules/development-automation/inbound/http/developmentMissionRoutes.ts',
       'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts',
-      'packages/backend/src/routes/reviews.ts',
+      'packages/backend/src/modules/collaboration/inbound/http/reviewRoutes.ts',
       'packages/backend/src/modules/integration/inbound/http/scheduledTaskRoutes.ts',
-      'packages/backend/src/routes/taskQuestions.ts',
+      'packages/backend/src/modules/collaboration/inbound/http/taskQuestionRoutes.ts',
       'packages/backend/src/routes/tasks.ts',
       'packages/backend/src/routes/workgroupTasks.ts',
       'packages/backend/src/routes/workgroups.ts',

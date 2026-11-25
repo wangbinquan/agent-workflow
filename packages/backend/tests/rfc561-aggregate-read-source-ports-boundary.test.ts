@@ -15,7 +15,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
-import type { DevelopmentConfigOperations } from '../src/modules/development-automation/public/operations'
+import type { DevelopmentConfigOperations } from '../src/modules/development-automation/application/configOperations'
 import type { DigitalEmployeePlatformInventoryParticipant } from '../src/modules/digital-employee/application/ports/platformInventory'
 import type { IntegrationOverviewQueries } from '../src/modules/integration/application/ports/scheduledTaskPersistence'
 import type {

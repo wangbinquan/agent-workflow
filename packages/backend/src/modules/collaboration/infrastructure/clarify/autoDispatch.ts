@@ -75,7 +75,7 @@ import {
   replayCommittedClarifyDecision,
   type ClarifyDecisionArgs,
 } from '../clarifyDecision'
-import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
+import type { GateDecisionReceipt } from '../../domain/gateReceipt'
 import type { CollaborationMemoryDistillPort } from '../../application/ports/taskFeedbackMemoryDistill'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '../humanGateDecisionE2eBarrier'

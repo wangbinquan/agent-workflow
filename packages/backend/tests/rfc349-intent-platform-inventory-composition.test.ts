@@ -5,7 +5,7 @@ import type {
   DevelopmentConfigIdentityView,
   DevelopmentConfigResourceKind,
   DevelopmentConfigResourceOperations,
-} from '@/modules/development-automation/public/operations'
+} from '@/modules/development-automation/application/configOperations'
 import {
   composeDigitalEmployeePlatformInventoryParticipant,
   type DigitalEmployeeQueries,

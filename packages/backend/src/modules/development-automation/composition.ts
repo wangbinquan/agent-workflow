@@ -486,6 +486,10 @@ export {
   mountDevelopmentCaseRoutes,
   type DevelopmentCaseRoutes,
 } from './inbound/http/employeeCaseRoutes'
+// RFC-579: the development config, mission and mission-input upload HTTP bindings joined this module's inbound layer.
+export { mountDevelopmentConfigRoutes } from './inbound/http/developmentConfigRoutes'
+export { mountDevelopmentMissionRoutes } from './inbound/http/developmentMissionRoutes'
+export { mountMissionInputUploadRoutes } from './inbound/http/missionInputUploadRoutes'
 
 // RFC-518: the CrewStation / task-image adapters live in infrastructure/crewstation; bootstrap takes them here.
 export { composeCrewStationDevelopmentEvidence } from './infrastructure/crewstation/crewstationEvidence'

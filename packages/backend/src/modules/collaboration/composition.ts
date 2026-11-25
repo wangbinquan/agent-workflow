@@ -167,3 +167,10 @@ export { createTaskDeletionCollaborationParticipantInTx } from './infrastructure
 export function composeHumanGateOpenParticipantFactory() {
   return bindHumanGateOpenParticipantFactory(createHumanGateOpenParticipantScope)
 }
+
+// RFC-579: the review, clarify, task-question and clarify-directive HTTP bindings live in this module's inbound layer;
+// server.ts mounts them through here.
+export { mountClarifyRoutes } from './inbound/http/clarifyRoutes'
+export { mountReviewRoutes } from './inbound/http/reviewRoutes'
+export { mountTaskClarifyDirectiveRoutes } from './inbound/http/taskClarifyDirectiveRoutes'
+export { mountTaskQuestionRoutes } from './inbound/http/taskQuestionRoutes'

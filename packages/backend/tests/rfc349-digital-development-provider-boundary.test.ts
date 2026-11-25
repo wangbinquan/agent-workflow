@@ -45,8 +45,13 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     const candidates = [
       ...businessFiles('digital-employee'),
       ...businessFiles('development-automation'),
-      ...['developmentConfig.ts', 'developmentMissions.ts', 'missionInputUploads.ts'].map((name) =>
-        join(BACKEND, 'src', 'routes', name),
+      // RFC-579: the three HTTP bindings moved into development-automation's inbound layer.
+      ...[
+        'developmentConfigRoutes.ts',
+        'developmentMissionRoutes.ts',
+        'missionInputUploadRoutes.ts',
+      ].map((name) =>
+        join(BACKEND, 'src', 'modules', 'development-automation', 'inbound', 'http', name),
       ),
       // RFC-544: the template module left services/ for development-automation's domain and application, which
       // businessFiles('development-automation') above already covers.

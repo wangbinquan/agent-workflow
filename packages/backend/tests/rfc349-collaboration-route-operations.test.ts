@@ -13,16 +13,17 @@ function source(path: string): string {
 
 describe('RFC-349 collaboration route operations', () => {
   test('review, question and clarify routes consume the closed participant, not a database', () => {
+    // RFC-579: the three routes moved into collaboration's inbound layer and take the port from the module directly.
     for (const path of [
-      'src/routes/reviews.ts',
-      'src/routes/taskQuestions.ts',
-      'src/routes/clarify.ts',
+      'src/modules/collaboration/inbound/http/reviewRoutes.ts',
+      'src/modules/collaboration/inbound/http/taskQuestionRoutes.ts',
+      'src/modules/collaboration/inbound/http/clarifyRoutes.ts',
     ]) {
       const text = source(path)
       expect(text, path).toContain('CollaborationRouteOperations')
       expect(text, path).toContain('operations: CollaborationRouteOperations')
       expect(text, path).not.toContain('operations?: CollaborationRouteOperations')
-      expect(text, path).toContain('@/modules/collaboration/public/participants')
+      expect(text, path).toContain("from '../../application/ports/collaborationRouteOperations'")
       expect(text, path).not.toContain(
         '@/modules/collaboration/application/ports/collaborationRouteOperations',
       )

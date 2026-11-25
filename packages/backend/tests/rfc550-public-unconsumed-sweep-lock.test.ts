@@ -55,6 +55,12 @@ const FIXTURE = JSON.parse(
   readonly withdrawn: Readonly<Record<Context, Partial<Record<Entry, readonly string[]>>>>
 }
 const RETIRED = FIXTURE.retired.map((path) => path.replace(/\.ts$/, ''))
+/**
+ * Public entries a later RFC deleted outright. The fixture is RFC-550's record and stays as it was; a deleted entry
+ * offers nothing, so the names RFC-550 withdrew from it are trivially gone. RFC-579: development-automation's
+ * `public/operations` (everything left in it belonged to the routes that moved into the module's inbound layer).
+ */
+const DELETED_LATER = new Set(['modules/development-automation/public/operations.ts'])
 
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return []
@@ -311,6 +317,10 @@ describe('RFC-550 —— 未消费符号撤出十个 context 的 public', () => 
         if (names.length === 0) continue
         listed += names.length
         const path = publicFile(context, entry)
+        if (DELETED_LATER.has(path)) {
+          expect([path, existsSync(join(SRC, path))]).toEqual([path, false])
+          continue
+        }
         const exported = exportedNames(path, read(path))
         const namespace = (await import(join(SRC, path))) as Record<string, unknown>
         for (const name of names) {
@@ -325,11 +335,6 @@ describe('RFC-550 —— 未消费符号撤出十个 context 的 public', () => 
 
   test('正对照：同一读法看得见每个仍在的 public 文件仍交出的符号', async () => {
     const kept: ReadonlyArray<readonly [string, string, boolean]> = [
-      [
-        'modules/development-automation/public/operations.ts',
-        'createDevelopmentConfigResourceDescriptors',
-        true,
-      ],
       [
         'modules/development-automation/public/types.ts',
         'DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF',
@@ -357,7 +362,7 @@ describe('RFC-550 —— 未消费符号撤出十个 context 的 public', () => 
       ENTRIES.filter((entry) => (FIXTURE.withdrawn[context]?.[entry] ?? []).length > 0).map(
         (entry) => publicFile(context, entry),
       ),
-    )
+    ).filter((path) => !DELETED_LATER.has(path))
     // One control per public file the fixture names.
     expect(kept.map(([path]) => path).sort()).toEqual(withNames.sort())
     for (const [path, name, value] of kept) {

@@ -30,8 +30,8 @@ import type { Context, Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
-import type { ReviewAccessDecision } from '@/modules/collaboration/public/types'
-import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import type { ReviewAccessDecision } from '../../domain/reviewAccess'
+import type { CollaborationRouteOperations } from '../../application/ports/collaborationRouteOperations'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 /**

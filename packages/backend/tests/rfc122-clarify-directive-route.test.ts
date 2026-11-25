@@ -170,7 +170,16 @@ describe('RFC-122 clarify-directive route', () => {
 
   test('write path is member-gated + registered in the contract registry', () => {
     const routeSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'taskClarifyDirective.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'inbound',
+        'http',
+        'taskClarifyDirectiveRoutes.ts',
+      ),
       'utf8',
     )
     expect(routeSrc).toContain('requireTaskMember')

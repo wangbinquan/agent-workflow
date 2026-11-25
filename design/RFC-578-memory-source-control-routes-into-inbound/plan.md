@@ -16,7 +16,7 @@
 - [x] AC-1 五个旧路径不存在、没有说明符再解析到它们；新文件只差说明符
 - [x] AC-2 行为不变：挂载调用与顺序不变，路由用例通过
 - [x] AC-3 `legacy-horizontal-files` 上限 89 → 84；未消费 public 符号保持 0；归属表删去五行；新增 RFC-578 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`0a5bf21f1`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -62,7 +62,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `0a5bf21f1`（实现，父提交是 `f21fd1ced`；同一提交记 RFC-577 转 Done）：exact SHA 主 CI run 45564962645 的 70 个 job 全部成功——全部后端分片、真实
+  PostgreSQL、前端、三个平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的 windows-platform（run 45564962555）与
+  git-protocols-e2e（run 45564962640）也通过。
 
 ## 实现门（本会话自审，只审功能）
 

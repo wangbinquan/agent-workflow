@@ -262,10 +262,12 @@ const CAPABILITY_TEMPLATE_OPERATION_GATES = new Set<string>([
   ...(capabilityTemplateAccessCalls.has('requireGovern') ? ['requireResourceGovern'] : []),
 ])
 const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = {
-  'packages/backend/src/routes/developmentConfig.ts': calledIdentifierNames(
-    CONFIG_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, CONFIG_OPERATION_SOURCE), 'utf8'),
-  ),
+  // RFC-579: the development config HTTP binding moved into development-automation's inbound layer.
+  'packages/backend/src/modules/development-automation/inbound/http/developmentConfigRoutes.ts':
+    calledIdentifierNames(
+      CONFIG_OPERATION_SOURCE,
+      readFileSync(resolve(REPO_ROOT, CONFIG_OPERATION_SOURCE), 'utf8'),
+    ),
   'packages/backend/src/routes/agents.ts': aggregateAndAclGates(AGENT_OPERATION_SOURCE),
   'packages/backend/src/routes/mcps.ts': aggregateAndAclGates(MCP_OPERATION_SOURCE),
   'packages/backend/src/routes/plugins.ts': aggregateAndAclGates(PLUGIN_OPERATION_SOURCE),

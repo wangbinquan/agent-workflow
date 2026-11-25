@@ -23,7 +23,7 @@ import type {
   ReviewAnchorFailure,
   ReviewAnchorSuccess,
 } from '@/modules/collaboration/domain/reviewAnchor'
-import type { ReviewAnchorRequest } from '../src/modules/collaboration/public/types'
+import type { ReviewAnchorRequest } from '../src/modules/collaboration/domain/reviewAnchor'
 
 const DOC = `# Order Service Design
 

@@ -72,9 +72,12 @@ import type {
 } from '@/modules/runtime-management/public/commands'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import { mountSkillRoutes } from '@/routes/skills'
-import { mountClarifyRoutes } from '@/routes/clarify'
-import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
-import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
+import {
+  mountClarifyRoutes,
+  mountReviewRoutes,
+  mountTaskClarifyDirectiveRoutes,
+  mountTaskQuestionRoutes,
+} from '@/modules/collaboration/composition'
 import {
   mountFusionRoutes,
   mountSkillProvenanceRoutes,
@@ -83,7 +86,6 @@ import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/composition/routes'
-import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
@@ -92,16 +94,16 @@ import {
   mountCapabilityTemplateRoutes,
   mountCodeRoutes,
 } from '@/modules/code-capability/composition/routes'
-import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
-import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
 import { mountDigitalEmployeeRoutes } from '@/modules/digital-employee/composition'
 import {
   mountDevelopmentCaseRoutes,
+  mountDevelopmentConfigRoutes,
+  mountDevelopmentMissionRoutes,
+  mountMissionInputUploadRoutes,
   type DevelopmentCaseRoutes,
 } from '@/modules/development-automation/composition'
 import { mountEventCenterRoutes } from '@/modules/event-center/composition'
 import { mountExecutionContractRoutes } from '@/modules/execution-contract/composition'
-import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import {
   mountCodeHostRoutes,
   mountScheduledTaskRoutes,

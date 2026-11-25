@@ -23,7 +23,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { assertExecutionAvailable } from '@/platform/http/executionAvailability'
-import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import type { CollaborationRouteOperations } from '../../application/ports/collaborationRouteOperations'
 import {
   DomainError,
   ForbiddenError,

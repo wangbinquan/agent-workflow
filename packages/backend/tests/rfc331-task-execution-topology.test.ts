@@ -32,9 +32,8 @@ function source(path: string): string {
 
 const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/bootstrap/daemonApplication.ts',
-  'packages/backend/src/routes/clarify.ts',
-  'packages/backend/src/routes/reviews.ts',
-  'packages/backend/src/routes/taskQuestions.ts',
+  // RFC-579: routes/clarify, reviews and taskQuestions moved into collaboration's inbound layer — module files now, which
+  // the module boundary guards cover; they left this legacy-consumer set.
   'packages/backend/src/routes/tasks.ts',
   // RFC-452: services/autoRepair.ts moved into task-execution application/recovery (no longer a legacy consumer).
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',

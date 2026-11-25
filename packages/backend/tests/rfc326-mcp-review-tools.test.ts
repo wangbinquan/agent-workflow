@@ -817,7 +817,19 @@ describeEachProviderHttpApplication(
 
 describe('RFC-326 P16 — the decision route binds the acting user into the collaboration command', () => {
   test('source lock', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes', 'reviews.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'inbound',
+        'http',
+        'reviewRoutes.ts',
+      ),
+      'utf8',
+    )
     const start = src.indexOf("path: '/api/reviews/:nodeRunId/decision'")
     const end = src.indexOf('return c.json({', start)
     expect(start).toBeGreaterThan(0)

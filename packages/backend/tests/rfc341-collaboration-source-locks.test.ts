@@ -13,9 +13,10 @@ function source(path: string): string {
 describe('RFC-341 collaboration owner source locks', () => {
   test('review, clarify and question request surfaces own neither broadcaster nor continuation drive', () => {
     for (const path of [
-      'routes/reviews.ts',
-      'routes/clarify.ts',
-      'routes/taskQuestions.ts',
+      // RFC-579: the three routes moved into collaboration's inbound layer.
+      'modules/collaboration/inbound/http/reviewRoutes.ts',
+      'modules/collaboration/inbound/http/clarifyRoutes.ts',
+      'modules/collaboration/inbound/http/taskQuestionRoutes.ts',
       'modules/collaboration/infrastructure/reviewDecisionCommand.ts',
       'modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
       'modules/collaboration/infrastructure/questionDispatchCommand.ts',

@@ -16,9 +16,9 @@ import type { Context, Hono } from 'hono'
 import { TaskQuestionPhaseSchema, type TaskActorRole } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import type { CollaborationRouteOperations } from '../../application/ports/collaborationRouteOperations'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
-import { TASK_QUESTION_CONFLICT } from '@/modules/collaboration/public/types'
+import { TASK_QUESTION_CONFLICT } from '../../domain/taskQuestionConflicts'
 
 function requireQuestionOperations(
   operations: CollaborationRouteOperations | undefined,

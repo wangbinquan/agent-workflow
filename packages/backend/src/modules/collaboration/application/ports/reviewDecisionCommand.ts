@@ -1,5 +1,5 @@
 import type { ReviewCommentAnchor } from '@agent-workflow/shared'
-import type { ReviewAnchorRequest } from '../../public/types'
+import type { ReviewAnchorRequest } from '../../domain/reviewAnchor'
 import type { GateDecisionReceipt } from '../../domain/gateReceipt'
 import type { ReviewGateDecision } from '../../domain/canonicalGateRequest'
 import type { ReviewActor } from '../../public/types'

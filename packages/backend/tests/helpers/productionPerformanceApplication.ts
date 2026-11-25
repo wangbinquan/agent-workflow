@@ -67,12 +67,12 @@ import {
   composeLocalRepositoryMirrors,
   createRepositoryBatchImports,
 } from '@/modules/source-control/composition'
-import { mountClarifyRoutes } from '@/routes/clarify'
+import { mountClarifyRoutes } from '@/modules/collaboration/inbound/http/clarifyRoutes'
 import { mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mountOverviewRoutes } from '@/modules/system-operations/inbound/http/overviewRoutes'
-import { mountReviewRoutes } from '@/routes/reviews'
+import { mountReviewRoutes } from '@/modules/collaboration/inbound/http/reviewRoutes'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountWebhookIngressRoutes } from '@/modules/integration/inbound/http/webhookIngressRoutes'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'

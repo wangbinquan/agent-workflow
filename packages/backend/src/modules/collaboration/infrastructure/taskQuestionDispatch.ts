@@ -90,7 +90,7 @@ import { sha256Hex } from '@/platform/contracts/hash'
 import { createLogger } from '@/platform/logging/logger'
 import { TASK_QUESTION_CONFLICT } from '../domain/taskQuestionConflicts'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
-import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
+import type { GateDecisionReceipt } from '../domain/gateReceipt'
 
 import {
   appendHumanGateDecisionCommittedEvent,

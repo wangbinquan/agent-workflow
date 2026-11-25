@@ -13,8 +13,8 @@ import { randomUUID } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
 import { errorHandler } from '@/platform/errors/domainErrors'
-import { mountClarifyRoutes } from '@/routes/clarify'
-import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import { mountClarifyRoutes } from '@/modules/collaboration/inbound/http/clarifyRoutes'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/application/ports/collaborationRouteOperations'
 import {
   ClarifyQuestionSchema,
   CLARIFY_MINDMAP_QUESTION_GUIDANCE,

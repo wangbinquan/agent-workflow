@@ -12,8 +12,9 @@ import { join, relative, resolve } from 'node:path'
 
 import { CLARIFY_SOURCE_PORT_NAME } from '@agent-workflow/shared'
 
-import { isAskingNodeInSnapshot } from '@/modules/collaboration/public/queries'
-import { TASK_QUESTION_CONFLICT } from '@/modules/collaboration/public/types'
+// RFC-579: both left collaboration's public with the routes; they are read from their domain files.
+import { isAskingNodeInSnapshot } from '@/modules/collaboration/domain/clarifyAskingNode'
+import { TASK_QUESTION_CONFLICT } from '@/modules/collaboration/domain/taskQuestionConflicts'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -111,20 +112,37 @@ describe('RFC-442 —— 引用与方向', () => {
     expect(isRetired(probe, '@/services/taskFeedbackIndex')).toBe(false)
   })
 
-  test('三个路由不 import services/，对 collaboration 只经 exact public 入口', () => {
+  // RFC-579: taskClarifyDirective and taskQuestions moved into collaboration's inbound layer and take the module's own
+  // application / domain from there; taskFeedback (task-execution's route, still in routes/) reaches collaboration only
+  // through the exact public entries.
+  test('三个路由不 import services/；仍在 routes/ 的 taskFeedback 对 collaboration 只经 exact public 入口', () => {
     const offenders: string[] = []
-    for (const name of ['taskFeedback', 'taskClarifyDirective', 'taskQuestions']) {
-      const path = join(SRC, 'routes', `${name}.ts`)
+    const routes: ReadonlyArray<readonly [string, string, boolean]> = [
+      ['taskFeedback', join(SRC, 'routes', 'taskFeedback.ts'), false],
+      [
+        'taskClarifyDirective',
+        join(COLLABORATION, 'inbound', 'http', 'taskClarifyDirectiveRoutes.ts'),
+        true,
+      ],
+      ['taskQuestions', join(COLLABORATION, 'inbound', 'http', 'taskQuestionRoutes.ts'), true],
+    ]
+    for (const [name, path, insideCollaboration] of routes) {
       const found = specifiersOf(path)
       // 非空对照：三个路由都从 collaboration 取用，一条也提取不到就说明判据失效。
       expect(
-        found.some((specifier) => specifier.startsWith('@/modules/collaboration/')),
+        found.some((specifier) =>
+          (targetOf(path, specifier) ?? '').startsWith('modules/collaboration/'),
+        ),
         name,
       ).toBe(true)
       for (const specifier of found) {
         const target = targetOf(path, specifier) ?? ''
         if (target.startsWith('services/')) offenders.push(`${name} -> ${specifier}`)
-        if (target.startsWith('modules/collaboration/') && !EXACT_PUBLIC.has(specifier)) {
+        if (
+          !insideCollaboration &&
+          target.startsWith('modules/collaboration/') &&
+          !EXACT_PUBLIC.has(specifier)
+        ) {
           offenders.push(`${name} -> ${specifier}`)
         }
       }

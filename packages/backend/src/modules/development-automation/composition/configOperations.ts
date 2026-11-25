@@ -16,7 +16,7 @@ import { createDevelopmentConfigPersistence } from '../infrastructure/developmen
 import type {
   DevelopmentConfigOperations,
   DevelopmentConfigResourceOperations,
-} from '../public/operations'
+} from '../application/configOperations'
 
 /** Resource Catalog binds this closed participant at bootstrap. */
 export type { DevelopmentConfigResourceAccess }

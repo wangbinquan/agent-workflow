@@ -1323,8 +1323,11 @@ describeEachProvider('RFC-128 P5-D lock-B non-reentry', (harness) => {
 // 源锁 — RFC-132 PR-B: route defer=false 恒走 autodispatch（legacy immediate mint 分支已删）
 // ===========================================================================
 describe('RFC-132 PR-B route defer=false routing (source lock)', () => {
-  test('routes/clarify.ts defer=false branch routes EVERY task to autoDispatchClarifyRound (no deferred-flag split, no legacy immediate-mint calls)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
+  test('the clarify route (collaboration inbound/http/clarifyRoutes.ts) defer=false branch routes EVERY task to autoDispatchClarifyRound (no deferred-flag split, no legacy immediate-mint calls)', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '../src/modules/collaboration/inbound/http/clarifyRoutes.ts'),
+      'utf8',
+    )
     expect(src).toContain('autoDispatchClarifyRound')
     // The deferred-flag routing + the legacy immediate-mint calls are REMOVED from the route.
     // (Dead-symbol names concatenated so this guard itself never matches a dead-symbol grep.)
@@ -1655,7 +1658,10 @@ describeEachProvider('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 
   })
 
   test('source — the route has no request-owned answered broadcaster', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(import.meta.dir, '../src/modules/collaboration/inbound/http/clarifyRoutes.ts'),
+      'utf8',
+    )
     expect(src).not.toContain('broadcastClarifyAnsweredForRound')
     expect(src).not.toContain('taskBroadcaster.broadcast')
   })
@@ -1700,7 +1706,10 @@ describeEachProvider(
     })
 
     test('source — the decision service pumps committed refs from a finally path on dispatch error', () => {
-      const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
+      const src = readFileSync(
+        resolve(import.meta.dir, '../src/modules/collaboration/inbound/http/clarifyRoutes.ts'),
+        'utf8',
+      )
       const service = readFileSync(
         resolve(
           import.meta.dir,

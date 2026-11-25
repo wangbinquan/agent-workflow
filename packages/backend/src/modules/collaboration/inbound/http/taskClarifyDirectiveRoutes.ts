@@ -17,7 +17,7 @@ import { ClarifyDirectiveSchema } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import type { TaskClarifyDirectiveRouteOperations } from '@/modules/task-execution/public/types'
-import { isAskingNodeInSnapshot } from '@/modules/collaboration/public/queries'
+import { isAskingNodeInSnapshot } from '../../domain/clarifyAskingNode'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 const SetDirectiveBodySchema = z.object({

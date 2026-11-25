@@ -5,20 +5,7 @@
 import { createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal } from '../infrastructure/workgroupClarifyAskGate'
 // RFC-481: the DAG projection and runtime mechanics ports are Task Execution's required ports (task-execution
 // `public/types`); collaboration implements them and no longer hands them out.
-export type {
-  AddReviewCommentInput,
-  AddedReviewComment,
-  CollaborationRouteActor,
-  CollaborationRouteOperations,
-  ListClarifySummariesInput,
-  ListReviewSummariesInput,
-  ReassignTaskQuestionAction,
-  ReviewCommentWriteAuthority,
-  SaveClarifyDraftInput,
-  SaveClarifyDraftResult,
-  SealClarifyQuestionsInput,
-  SealClarifyQuestionsResult,
-} from '../application/ports/collaborationRouteOperations'
+// RFC-579: the route operations port and its inputs left this entry with the routes (now this module's inbound layer).
 
 // RFC-359：collaboration 的四个**同步** committed-event 参与者
 // （`appendHumanGate{Opened,Decision}` / `appendReview{CommentsChanged,SelectionChanged}` /
