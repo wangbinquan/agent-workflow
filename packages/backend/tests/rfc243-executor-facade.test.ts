@@ -48,7 +48,7 @@ function srcText(rel: string): string {
 
 describe('RFC-243 T2 — launch call faces route through the executor (source lock)', () => {
   const CALL_FACES = [
-    'routes/tasks.ts',
+    'modules/task-execution/inbound/http/taskRoutes.ts',
     'routes/agents.ts',
     'routes/workgroups.ts',
     // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
@@ -72,7 +72,7 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
         expect(text).toContain('taskLaunch.launch')
         expect(text).not.toContain('AppDeps')
         expect(text).not.toContain('deps.db')
-      } else if (rel === 'routes/tasks.ts') {
+      } else if (rel === 'modules/task-execution/inbound/http/taskRoutes.ts') {
         expect(text).toContain('operations.launchMultipart')
         expect(text).toContain('operations.launchWorkflow')
         expect(text).not.toContain('startExecution')

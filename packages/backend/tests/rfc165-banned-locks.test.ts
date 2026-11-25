@@ -139,7 +139,7 @@ describe('RFC-165 — raw-key guard wiring (source lock)', () => {
     // **RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）再改锚**：那个文件整份删除——multipart 路由改走
     // 与 PostgreSQL 共用的启动参与者，raw-key 门随之落在**共用的那条 multipart 编排**上
     //（`launchMultipartTask`，与 JSON 路由各自一处，意图一个字没变）。
-    const routeSrc = read('packages/backend/src/routes/tasks.ts')
+    const routeSrc = read('packages/backend/src/modules/task-execution/inbound/http/taskRoutes.ts')
     expect(countOf(routeSrc, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
     const sharedMultipart = read(
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',

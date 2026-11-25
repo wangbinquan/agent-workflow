@@ -84,7 +84,7 @@ import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/composition/routes'
-import { mountTaskRoutes } from '@/routes/tasks'
+import { mountTaskWorkspaceInsightRoutes } from '@/modules/workspace-insight/composition'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
 import {
@@ -121,6 +121,7 @@ import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import {
   mountPortArtifactRoutes,
   mountTaskArchiveRoutes,
+  mountTaskRoutes,
   mountWorktreeFilesRoutes,
 } from '@/modules/task-execution/composition'
 import { errorHandler } from '@/platform/errors/domainErrors'
@@ -297,7 +298,9 @@ export interface ProviderResourceCatalogRouteComposition {
 }
 
 export interface ProviderTaskExecutionRouteComposition {
-  readonly tasks: Parameters<typeof mountTaskRoutes>[1]
+  // RFC-588: one dependency object for the task routes and workspace-insight's task endpoints (each takes its fields).
+  readonly tasks: Parameters<typeof mountTaskRoutes>[1] &
+    Parameters<typeof mountTaskWorkspaceInsightRoutes>[1]
   readonly catalog: Parameters<typeof mountTaskCatalogRoutes>[1]
   readonly archive: Parameters<typeof mountTaskArchiveRoutes>[1]
   readonly portArtifacts: Parameters<typeof mountPortArtifactRoutes>[1]
@@ -511,7 +514,12 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
     },
     workgroupTasks: (app: Hono) =>
       mountWorkgroupTaskRoutes(app, input.resourceCatalog.workgroupTasks),
-    tasks: (app: Hono) => mountTaskRoutes(app, input.taskExecution.tasks),
+    tasks: (app: Hono) => {
+      // RFC-588: the task routes register the `/api/tasks/:id/*` visibility middleware; workspace-insight's task
+      // endpoints must be registered after it (Hono chains handlers in registration order).
+      mountTaskRoutes(app, input.taskExecution.tasks)
+      mountTaskWorkspaceInsightRoutes(app, input.taskExecution.tasks)
+    },
     taskCatalog: (app: Hono) => mountTaskCatalogRoutes(app, input.taskExecution.catalog),
     taskArchive: (app: Hono) => mountTaskArchiveRoutes(app, input.taskExecution.archive),
     maintenanceDisk: (app: Hono) => mountMaintenanceDiskRoutes(app, input.system.maintenanceDisk),
@@ -643,7 +651,7 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   routes.workgroups(app)
   routes.resourcePackages(app)
   routes.workgroupTasks(app)
-  // `taskArchive` 必须挂在 `tasks` **之前**，这不是审美问题：`routes/tasks.ts` 给任务子资源装了
+  // `taskArchive` 必须挂在 `tasks` **之前**，这不是审美问题：任务路由（RFC-588 起在 task-execution 的 `inbound/http/taskRoutes.ts`）给任务子资源装了
   // 一道可见性中间件 `'/api/tasks/:id/*'`，而 **Hono 的 `*` 能匹配零个段**——它会命中兄弟字面
   // 路由 `POST /api/tasks/archive` 并把 `id` 解成 `'archive'`，然后去查一个叫 archive 的任务、
   // 查不到就 404，路由自己的 `settings:write` 门永远轮不到执行。而 Hono 的中间件与处理器按注册

@@ -877,7 +877,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const CLOSURE_FREEZE_BODY =
       'resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)'
-    const taskRoute = readFileSync(resolve(sourceRoot, 'routes/tasks.ts'), 'utf8')
+    const taskRoute = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/inbound/http/taskRoutes.ts'),
+      'utf8',
+    )
     // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除，
     // multipart 编排与 PostgreSQL 共用一份（`launchMultipartTask`，在这个文件里）。
     const multipart = readFileSync(

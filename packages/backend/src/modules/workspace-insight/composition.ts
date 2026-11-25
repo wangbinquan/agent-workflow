@@ -10,3 +10,5 @@ export {
 } from './composition/crewstationCodeReviewArtifacts'
 export { composeStructuralDeepIndexing } from './composition/structuralDeepIndexing'
 export { composeTaskWorkspaceInsight } from './composition/taskWorkspaceInsight'
+// RFC-588: the task workspace-insight endpoints (structural diff, change narrative, file content / symbols, code intel).
+export { mountTaskWorkspaceInsightRoutes } from './inbound/http/taskWorkspaceInsightRoutes'

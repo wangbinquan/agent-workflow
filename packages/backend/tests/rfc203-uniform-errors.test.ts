@@ -141,7 +141,8 @@ describe('RFC-203 T6 — uniform error bodies (source locks)', () => {
     readFileSync(resolve(import.meta.dir, '..', ...rel.split('/')), 'utf8')
 
   test('call-targets missing methodRef throws the specific ValidationError', () => {
-    const src = read('src/routes/tasks.ts')
+    // RFC-588: the call-targets endpoint moved to workspace-insight's task binding.
+    const src = read('src/modules/workspace-insight/inbound/http/taskWorkspaceInsightRoutes.ts')
     expect(src).toContain("'call-target-method-required'")
     expect(src).not.toContain("{ error: 'methodRef query param required' }")
   })

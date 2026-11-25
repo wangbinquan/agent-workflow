@@ -165,7 +165,7 @@ describe('RFC-569 —— 五个声明是闭合形状', () => {
 
 describe('RFC-569 —— 修复路径与诊断路径用同一个通知对象', () => {
   test('两条路由各传一次 LIFECYCLE_ALERT_NOTICES，修复路由不再拼回调', () => {
-    const route = read('routes/tasks.ts')
+    const route = read('modules/task-execution/inbound/http/taskRoutes.ts')
     const lines = route.split('\n')
     expect(lines).toContain('        notices: LIFECYCLE_ALERT_NOTICES,')
     expect(lines).toContain(

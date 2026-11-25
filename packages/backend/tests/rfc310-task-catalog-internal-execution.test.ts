@@ -202,7 +202,16 @@ describe('task catalog internal execution boundary', () => {
       'utf8',
     )
     const legacyRoute = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'inbound',
+        'http',
+        'taskRoutes.ts',
+      ),
       'utf8',
     )
 

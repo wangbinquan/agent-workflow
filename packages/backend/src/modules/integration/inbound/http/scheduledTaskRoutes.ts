@@ -8,7 +8,7 @@
 //
 // Member-based-private like tasks (owner_user_id + `tasks:read:all` bypass),
 // NOT the RFC-099 five-type ACL. Run history for a schedule = its launched tasks
-// via GET /api/tasks?scheduledTaskId= (see routes/tasks.ts).
+// via GET /api/tasks?scheduledTaskId= (see task-execution's inbound/http/taskRoutes.ts).
 import {
   CreateScheduledTaskSchema,
   rejectRetiredStartTaskKeys,

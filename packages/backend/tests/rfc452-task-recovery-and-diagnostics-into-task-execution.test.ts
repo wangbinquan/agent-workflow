@@ -84,7 +84,12 @@ describe('RFC-452 —— 引用', () => {
   }, 60_000)
 
   test('tasks 路由不再 import 诊断 / 恢复的 7 个模块', () => {
-    expect(importsMatching([join(SRC, 'routes/tasks.ts')], isMovedFile)).toEqual([])
+    expect(
+      importsMatching(
+        [join(SRC, 'modules/task-execution/inbound/http/taskRoutes.ts')],
+        isMovedFile,
+      ),
+    ).toEqual([])
   })
 
   test('负对照：判据认得出别名与相对路径，也不误伤同前缀的文件', () => {

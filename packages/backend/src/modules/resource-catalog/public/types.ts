@@ -741,8 +741,6 @@ export interface ExportResourcePackage {
   readonly submission: StagedResourcePackageSubmission
 }
 
-/** MCP diagnostics retain their existing wire DTOs and request budgets. */
-export type { SessionViewResponse as McpDiagnosticsTranscript } from '@agent-workflow/shared'
 // Durable artifact data consumed by Intent and its owner-specific adapters.
 export type { IntentApplyArtifact } from '../application/intent/artifactOwners'
 export {

@@ -755,7 +755,10 @@ describe('RFC-344 single inbound root source locks', () => {
     expect(invoker).toContain('registerBoundOperationHandler')
     expect(invoker).toContain('registerBoundOperationMiddleware')
 
-    const tasks = readFileSync(join(ROOT, 'src/routes/tasks.ts'), 'utf8')
+    const tasks = readFileSync(
+      join(ROOT, 'src/modules/task-execution/inbound/http/taskRoutes.ts'),
+      'utf8',
+    )
     expect(tasks).not.toContain("app.use('/api/tasks/:id")
     expect(tasks.match(/registerRouteMiddleware\s*\(/g)).toHaveLength(2)
   })

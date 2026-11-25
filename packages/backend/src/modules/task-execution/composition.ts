@@ -10,6 +10,8 @@ export { directTaskInitiatorFromActorSource } from './inbound/directTaskInitiato
 export { mountPortArtifactRoutes } from './inbound/http/portArtifactRoutes'
 // RFC-587: the manual task archive binding.
 export { mountTaskArchiveRoutes } from './inbound/http/taskArchiveRoutes'
+// RFC-588: the task routes (the workspace-insight endpoints are that module's binding, mounted right after).
+export { mountTaskRoutes } from './inbound/http/taskRoutes'
 export { mountWorktreeFilesRoutes } from './inbound/http/worktreeFilesRoutes'
 import {
   bindTaskWorkspaceReadScope,

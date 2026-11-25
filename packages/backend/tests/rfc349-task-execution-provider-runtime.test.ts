@@ -66,20 +66,22 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
   })
 
   test('task transport fails closed when any selected-provider dependency is absent', () => {
-    const route = read('routes/tasks.ts')
-    for (const code of [
-      'task-route-operations-not-composed',
-      'task-workspace-queries-not-composed',
+    const route = read('modules/task-execution/inbound/http/taskRoutes.ts')
+    // RFC-588: the workspace-insight endpoints and their two checks moved to that module's task binding.
+    const insight = read('modules/workspace-insight/inbound/http/taskWorkspaceInsightRoutes.ts')
+    for (const [source, code] of [
+      [route, 'task-route-operations-not-composed'],
+      [route, 'task-workspace-queries-not-composed'],
       // RFC-453: the code workspace, repository workspace and code-review selections are required parameters of
       // `composeTaskWorkspaceInsight`; the route fails closed on the composed surface and on the narrative gate.
-      'task-workspace-insight-not-composed',
-      'task-change-narrative-not-composed',
+      [insight, 'task-workspace-insight-not-composed'],
+      [insight, 'task-change-narrative-not-composed'],
       // RFC-452: the recovery operations and the startup-inventory content (RFC-370 M2: read through the selected
       // owner) are required parameters of `composeTaskDiagnostics` now — RFC-359 W1-T1: "not composed" is not
       // representable there — so the route fails closed on the composed surface instead.
-      'task-diagnostics-not-composed',
-    ]) {
-      expect(route).toContain(`throw new Error('${code}')`)
+      [route, 'task-diagnostics-not-composed'],
+    ] as const) {
+      expect(source).toContain(`throw new Error('${code}')`)
     }
   })
 

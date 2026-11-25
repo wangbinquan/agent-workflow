@@ -34,8 +34,8 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     expect(unsealRepoUrl(sealed, undefined)).toBeNull()
   })
 
-  test('routes/tasks.ts 只调用 provider-neutral operation，SQLite adapter 复用完整 start deps', () => {
-    const route = read('routes/tasks.ts')
+  test('任务路由（RFC-588 起在 task-execution 的 inbound/http/taskRoutes.ts）只调用 provider-neutral operation，SQLite adapter 复用完整 start deps', () => {
+    const route = read('modules/task-execution/inbound/http/taskRoutes.ts')
     // RFC-359 AC-1（第 13 刀）改锚：两个 provider 绑定合成一个中立工厂。
     const routeOperations = read('modules/task-execution/infrastructure/taskRouteOperations.ts')
     expect(route).toContain("path: '/api/tasks/:id/nodes/:nodeRunId/retry'")

@@ -9,8 +9,11 @@ import type {
   McpRuntimeTestMessageRequest,
   McpRuntimeTestMutationReceipt,
   McpRuntimeTestSessionDto,
+  // MCP diagnostics retain their existing wire DTOs and request budgets. RFC-588: the transcript alias left
+  // `public/types` — its one cross-module reference was the task diagnostics surface, which left task-execution's
+  // public surface when the task routes moved into that module.
+  SessionViewResponse as McpDiagnosticsTranscript,
 } from '@agent-workflow/shared'
-import type { McpDiagnosticsTranscript } from '../../public/types'
 
 export interface McpDiagnosticsResourceRef {
   readonly mcpId: string

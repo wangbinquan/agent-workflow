@@ -683,7 +683,10 @@ describeEachProviderHttpApplication(
 
 describe('RFC-104 — source-level guard anchors (regression: do not delete the guards)', () => {
   test('launch + resume/retry + ACL guards are present in source', () => {
-    const tasksSrc = readFileSync(resolve(SRC, 'routes', 'tasks.ts'), 'utf-8')
+    const tasksSrc = readFileSync(
+      resolve(SRC, 'modules', 'task-execution', 'inbound', 'http', 'taskRoutes.ts'),
+      'utf-8',
+    )
     // RFC-345 T4a moved the fresh built-in verdict into the task-execution
     // resource snapshot adapter. Both launch transports consume that frozen
     // snapshot through the same launch gate; neither re-reads the workflow.

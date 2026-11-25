@@ -141,7 +141,10 @@ describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
 })
 
 describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
-  const routesSrc = readFileSync(join(import.meta.dir, '../src/routes/tasks.ts'), 'utf8')
+  const routesSrc = readFileSync(
+    join(import.meta.dir, '../src/modules/task-execution/inbound/http/taskRoutes.ts'),
+    'utf8',
+  )
   // RFC-478: services/task.ts is gone; its content (the runtime-options funnel and its field declarations included) is
   // read from the files that inherited it.
   const taskSrc = readTaskServiceSuccessors()

@@ -329,7 +329,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     // straight to mapping/SaaS URL rules even though RFC-321 requires API first.
     const startTaskDeps = read('packages/backend/tests/helpers/startTaskDeps.ts')
     const cli = read('packages/backend/src/bootstrap/daemonApplication.ts')
-    const taskRoutes = read('packages/backend/src/routes/tasks.ts')
+    const taskRoutes = read(
+      'packages/backend/src/modules/task-execution/inbound/http/taskRoutes.ts',
+    )
     const providerRuntime = read(
       'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
     )

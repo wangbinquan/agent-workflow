@@ -944,7 +944,16 @@ describe('RFC-107 — source anchors', () => {
       'utf8',
     )
     const routeSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'inbound',
+        'http',
+        'taskRoutes.ts',
+      ),
       'utf8',
     )
     expect(kernel).not.toContain(

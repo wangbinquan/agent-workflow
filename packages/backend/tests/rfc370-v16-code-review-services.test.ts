@@ -12,7 +12,7 @@
 //   - file content, call targets and the narrative status use the selections.
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
-import { mountTaskRoutes } from '@/routes/tasks'
+import { mountTaskWorkspaceInsightRoutes } from '@/modules/workspace-insight/inbound/http/taskWorkspaceInsightRoutes'
 import { computeSummary, type ChangeNarrative, type StructuralDiff } from '@agent-workflow/shared'
 import type {
   TaskCodeWorkspaceQueries,
@@ -318,6 +318,7 @@ describe('RFC-370 §10 V16 file content, call targets and narrative through the 
 describe('RFC-370 §10 V16 task routes require the selected code-review reads', () => {
   // RFC-453: the code-review reads are composed into the workspace-insight contract (`workspaceInsight`), and the
   // narrative trigger's member gate is its own dependency (`changeNarrativeAccess`); each missing one is named.
+  // RFC-588: both checks moved with the endpoints to workspace-insight's task binding.
   for (const [missing, code] of [
     ['workspaceInsight', 'task-workspace-insight-not-composed'],
     ['changeNarrativeAccess', 'task-change-narrative-not-composed'],
@@ -329,8 +330,8 @@ describe('RFC-370 §10 V16 task routes require the selected code-review reads', 
       const deps = new Proxy(
         {},
         { get: (_target, key) => (key === missing ? undefined : {}) },
-      ) as Parameters<typeof mountTaskRoutes>[1]
-      expect(() => mountTaskRoutes(new Hono(), deps)).toThrow(code)
+      ) as Parameters<typeof mountTaskWorkspaceInsightRoutes>[1]
+      expect(() => mountTaskWorkspaceInsightRoutes(new Hono(), deps)).toThrow(code)
     })
   }
 })

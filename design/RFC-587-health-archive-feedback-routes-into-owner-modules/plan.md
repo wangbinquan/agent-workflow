@@ -16,7 +16,7 @@
 - [x] AC-2 挂载调用与顺序不变；健康、就绪、归档与反馈的路由用例通过
 - [x] AC-3 `legacy-horizontal-files` 上限 62 → 59；未消费 public 符号保持 0；DAG 之外的边与跨 context 内部文件对不增加；归属表删三行；新增 RFC-587
       用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI（`3469a00e1`）70 个 job 里 68 个成功，红的两格是外部链接 503 的环境性红，已逐格归因（见「CI」）
 
 ## 集中验证
 
@@ -49,7 +49,13 @@ HEAD 的另一份导出。导出之后只改了收口文档（本文件、design
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `3469a00e1`（实现）：exact SHA 主 CI run 45638766643 的 70 个 job 里 68 个成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片；按路径触发的 windows-platform（run 45638766847）与 integration-opencode（run 45638766589）通过。
+- 红的两格是同一件事：Markdown link check (design/)（job 139291278211）在 3339 个链接里只报 1 个错——
+  `design/RFC-378-mindmap-decision-review/research.md` 第 36 行一条指向第三方公开仓库的 github.com 链接返回 503 Service Unavailable；CI required 因汇总
+  它而红。归因：环境性（外部站点一时不可用），不是本提交引入——本提交没有改那份文件（`3c4a3cefb..3469a00e1` 对它无差异），前两个提交（`3c4a3cefb` 的
+  run 45624158433、`035f97026` 的 run 45618436881）的同一 job 对同一链接都通过；链接本身没有失效，那份文档也不是本会话的，不改。后继证据取 RFC-588
+  提交的同一 job。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

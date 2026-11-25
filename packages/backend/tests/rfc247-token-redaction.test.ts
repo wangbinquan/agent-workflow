@@ -177,7 +177,7 @@ describe('RFC-247 — every redactor has an outlet', () => {
   }
 
   test('redactStdout is applied on the node-run stdout route (AC-39)', () => {
-    const tasks = read('routes/tasks.ts')
+    const tasks = read('modules/task-execution/inbound/http/taskRoutes.ts')
     expect(tasks).toContain('redactStdout(text)')
     expect(tasks).toContain('shouldRedactFor(actor.source)')
   })
@@ -315,7 +315,10 @@ describe('RFC-247 impl-gate — redaction covers every door onto node output', (
   })
 
   test('all three node-output doors call a redactor', () => {
-    const tasks = readFileSync(resolve(SRC, 'routes/tasks.ts'), 'utf8')
+    const tasks = readFileSync(
+      resolve(SRC, 'modules/task-execution/inbound/http/taskRoutes.ts'),
+      'utf8',
+    )
     const wsRegistry = readFileSync(resolve(SRC, 'ws/registry.ts'), 'utf8')
     const realtimeChannelAccess = readFileSync(
       resolve(SRC, 'modules/runtime-management/application/realtimeChannelAccess.ts'),
@@ -469,7 +472,10 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
     })
 
     test('serializeTaskFor is wired on every Task-returning outlet', () => {
-      const routes = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes/tasks.ts'), 'utf8')
+      const routes = readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'modules/task-execution/inbound/http/taskRoutes.ts'),
+        'utf8',
+      )
       // get + create(multipart) + create + cancel + resume + retry + sync.
       // The repair endpoints deliberately do NOT appear: their responses carry
       // no definition, and the `T extends Task` constraint rejected them at

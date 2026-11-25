@@ -28,20 +28,7 @@ export { createRunHistorySnapshot } from '../application/runHistory'
 export type { RunHistoryFacts } from '../application/runHistory'
 // RFC-482: the run selection reader reaches collaboration through its participant bindings (`TaskRunSelectionReads`
 // in public/types is the contract); the table reader factory stays inside Task Execution.
-import type { WorktreeTreeEntry } from '@agent-workflow/shared'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
-
-/** The existing Task visibility gate runs before these bound workspace queries. */
-export interface TaskWorkspaceQueries {
-  listDisplay(
-    taskId: string,
-    relativeDirectory: string,
-  ): Promise<{ readonly entries: readonly WorktreeTreeEntry[]; readonly truncated: boolean }>
-  readDisplay(
-    taskId: string,
-    relativeFile: string,
-  ): Promise<{ readonly content: string; readonly size: number; readonly oversized: boolean }>
-}
 
 // RFC-354 — frame primitives offered to the legacy `services/` pickers and
 // predicates (dispatchFrontier / freshness / runLiveness) until they move in.

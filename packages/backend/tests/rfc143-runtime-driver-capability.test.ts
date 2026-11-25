@@ -425,11 +425,15 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     // （T29 路 1 校准）：五个历史路由文件 + util.ts 导出面 + index.ts 再导出
     // ——新址重实现同名函数不在射程内，兜底只剩「对已删导出的 import 必炸
     // typecheck」；真回潮场景（恢复导出/路由再引用）仍即红。
-    const tasksRoute = SRC('routes/tasks.ts')
+    const tasksRoute = SRC('modules/task-execution/inbound/http/taskRoutes.ts')
+    // RFC-588: the structural diff endpoints and their deep-config helper moved to workspace-insight's task binding,
+    // which reads the settings through its own configuration shape (the assembly root passes the same query object).
+    const insightRoute = SRC('modules/workspace-insight/inbound/http/taskWorkspaceInsightRoutes.ts')
     const fusionsRoute = SRC('modules/knowledge-evolution/inbound/fusionRoutes.ts')
     expect(tasksRoute).not.toContain('resolveOpencodeCmd')
-    expect(tasksRoute).toMatch(
-      /resolveStructuralDeepConfig\(\s*configuration: ApplicationConfigurationQueries,/,
+    expect(insightRoute).not.toContain('resolveOpencodeCmd')
+    expect(insightRoute).toMatch(
+      /resolveStructuralDeepConfig\(\s*configuration: TaskWorkspaceInsightConfiguration,/,
     )
     expect(fusionsRoute).not.toContain('resolveOpencodeCmd')
     expect(fusionsRoute).not.toContain('configPath: deps.configPath')

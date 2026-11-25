@@ -34,7 +34,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/bootstrap/daemonApplication.ts',
   // RFC-579: routes/clarify, reviews and taskQuestions moved into collaboration's inbound layer — module files now, which
   // the module boundary guards cover; they left this legacy-consumer set.
-  'packages/backend/src/routes/tasks.ts',
+  // RFC-588: routes/tasks.ts moved into task-execution's inbound layer (a module file now), leaving this set.
   // RFC-452: services/autoRepair.ts moved into task-execution application/recovery (no longer a legacy consumer).
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：`services/multipartTaskStart.ts` 整份删除——
@@ -299,7 +299,8 @@ describe('RFC-331 architecture cuts', () => {
       ),
       sourceUnit(
         // RFC-478: services/task.ts left the legacy consumer set; another registered consumer carries the fixture.
-        'packages/backend/src/routes/tasks.ts',
+        // RFC-588: routes/tasks.ts left it too; the daemon application (still registered) carries the fixture.
+        'packages/backend/src/bootstrap/daemonApplication.ts',
         "import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'\n",
       ),
       sourceUnit(
@@ -312,7 +313,7 @@ describe('RFC-331 architecture cuts', () => {
       ['scheduler-to-task:dynamic-import'],
       ['callgraph-to-task:static-import'],
       [
-        'legacy-deep-import:packages/backend/src/routes/tasks.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
+        'legacy-deep-import:packages/backend/src/bootstrap/daemonApplication.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
       ],
       ['production-test-topology:packages/backend/src/services/task.ts'],
     ])

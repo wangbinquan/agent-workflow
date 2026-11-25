@@ -145,7 +145,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // 装配方解析一次交给协调器——路由仍然一个字都不自解析（下面那条负锁不变）。
     const startTaskDeps = read('packages/backend/tests/helpers/startTaskDeps.ts')
     expect(startTaskDeps).toContain('resolveSubagentLiveCapture(configPath)')
-    const route = read('packages/backend/src/routes/tasks.ts')
+    const route = read('packages/backend/src/modules/task-execution/inbound/http/taskRoutes.ts')
     expect(route).not.toContain('DbClient')
     expect(route).not.toContain('buildStartTaskDeps(')
   })

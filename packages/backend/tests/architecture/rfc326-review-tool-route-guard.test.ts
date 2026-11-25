@@ -20,7 +20,7 @@ import { Hono } from 'hono'
 import { ALL_TOOLS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountReviewRoutes } from '@/modules/collaboration/inbound/http/reviewRoutes'
-import { mountTaskRoutes } from '@/routes/tasks'
+import { mountTaskRoutes } from '@/modules/task-execution/inbound/http/taskRoutes'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/application/ports/collaborationRouteOperations'
 import {
   recordingOperationHandles,

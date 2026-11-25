@@ -299,7 +299,8 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
       '../modules/resource-catalog/inbound/http/pluginRoutes.ts',
       deleteHandlerRe('/api/plugins/:id'),
     ],
-    ['tasks.ts', deleteHandlerRe('/api/tasks/:id')], // PR-3 lights this up
+    // RFC-588: the task routes moved into task-execution's inbound layer.
+    ['../modules/task-execution/inbound/http/taskRoutes.ts', deleteHandlerRe('/api/tasks/:id')], // PR-3 lights this up
   ]
 
   for (const [file, deleteRe] of GATED) {
@@ -311,7 +312,7 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
       if (!deleteRe.test(src)) {
         // tasks.ts DELETE lands in PR-3 — tolerate its absence until then, but
         // the moment the handler exists it MUST be gated.
-        if (file === 'tasks.ts') return
+        if (file === '../modules/task-execution/inbound/http/taskRoutes.ts') return
         throw new Error(`${file}: expected a gated DELETE handler matching ${deleteRe}`)
       }
       expect(src.includes('assertDeleteConfirm')).toBe(true)

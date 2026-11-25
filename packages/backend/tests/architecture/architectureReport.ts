@@ -273,7 +273,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/routes/registry.ts': 'platform',
   'packages/backend/src/routes/resourceAcl.ts': 'resource-catalog',
   'packages/backend/src/routes/taskCatalog.ts': 'task-catalog',
-  'packages/backend/src/routes/tasks.ts': 'task-execution',
   'packages/backend/src/routes/users.ts': 'identity-access',
   'packages/backend/src/routes/workgroups.ts': 'resource-catalog',
   'packages/backend/src/server.ts': 'bootstrap',
@@ -2011,7 +2010,8 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
           sourceToken: "col('catalog_visibility')",
         }),
         anchor({
-          file: 'packages/backend/src/routes/tasks.ts',
+          // RFC-588: the task routes moved into task-execution's inbound layer.
+          file: 'packages/backend/src/modules/task-execution/inbound/http/taskRoutes.ts',
           symbol: '$file',
           sourceToken: "catalogVisibility: 'public'",
         }),

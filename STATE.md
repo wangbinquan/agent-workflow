@@ -1,4 +1,25 @@
-## 2026-11-25 RFC-587 健康探测、任务归档与任务反馈三个路由按 owner 归入模块 inbound（In Progress；`design/RFC-587-health-archive-feedback-routes-into-owner-modules/`）
+## 2026-11-25 RFC-588 任务路由按端点 owner 拆进 task-execution 与 workspace-insight 的 inbound（In Progress；`design/RFC-588-task-routes-split-by-owner/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；落位按 RFC-587 条目里已裁定的“余下两批的落位”，
+  不新增 DAG 边。
+- **范围**：`routes/tasks.ts` → task-execution 的 `inbound/http/taskRoutes.ts`；其中结构化 diff、变更叙述（读与触发）、文件内容、文件符号、代码智能与
+  调用目标七个端点连同深度配置的小函数逐字迁入 workspace-insight 的 `inbound/http/taskWorkspaceInsightRoutes.ts`（DAG 只有 workspace-insight →
+  task-execution），配置改为本绑定声明的 `TaskWorkspaceInsightConfiguration`，取任务的两个操作经 task-execution public 的 `TaskRouteOperations`
+  （`Pick`）。`server.ts` 的 `tasks` 一步先挂任务路由（`/api/tasks/:id/*` 的可见性中间件在那里注册）、紧接着挂工作区洞察绑定，两者收同一个依赖对象。
+  撤回 13 个 public 符号：task-execution 的 `TaskWorkspaceQueries`（移进 `application/ports/taskWorkspaceQueries.ts`）与 `TaskDiagnostics` 的转出、
+  workspace-insight 的 `TaskWorkspaceInsight` 与只经它可达的九个类型的转出、resource-catalog 的 `McpDiagnosticsTranscript`（只经 `TaskDiagnostics`
+  的返回类型可达；别名移进它唯一的读者）。随改：归属表一行与 `catalogVisibility` 锚点、`counts.json`、钉着旧路径的用例、断言随端点迁走的
+  `rfc143` / `rfc203` / `rfc349` / `rfc453` / `rfc370-v16`、`rfc303` 的读取范围；新增 RFC-588 用例。
+- **收口对账**（RFC-294 C10～C13）：C10 入站绑定按端点 owner 进模块；C11 三个模块的 public 面共收窄 13 个符号；C12 RFC-588 用例覆盖全部说明符、两个
+  绑定与 `server.ts`；C13 `legacy-horizontal-files` 59 → 58，其余计数不升。`routes/` 余 12 个（下一批 `agents` / `workgroups`）。
+- **集中验证**（基于 `3469a00e1`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出三处本人缺陷（`rfc143` / `rfc203` / `rfc349`
+  断言的内容随端点迁走了，用例还读任务路由），已改读工作区洞察绑定并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 646 个用例文件；撤回之后
+  候选导出里 462 个用例文件、4701 条全部通过（含读已提交源码的用例与按改动面另选的 266 个），`rfc321` 在主树里 10 / 10；五种变异都被认出；架构报告
+  60 个计数里只有 legacy 横向文件数变了，未消费 public 符号 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）
+  已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：在跑（实现提交）。
+
+## 2026-11-25 RFC-587 健康探测、任务归档与任务反馈三个路由按 owner 归入模块 inbound（Done，`3469a00e1`；`design/RFC-587-health-archive-feedback-routes-into-owner-modules/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」——对本会话列出的待定事项（六个路由的落位、W5 的
   `util/git`）的回复：落位由本会话按 RFC-294 总纲裁定，不新增 DAG 边。`health`、`taskArchive`、`taskFeedback` 三个都只取别的模块的一个窄读取或一个
@@ -18,7 +39,9 @@
   文件、5316 条全部通过，撤回之后另选 219 个、1767 条全部通过；读已提交源码的 370 个用例文件、3666 条在候选导出里通过；六种变异都被认出；架构报告
   60 个计数里只有 legacy 横向文件数变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0
   第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-587 的提交 `3469a00e1`：exact SHA 主 CI run 45638766643 70 个 job 里 68 个成功，windows-platform run 45638766847、
+  integration-opencode run 45638766589 通过。红的两格（Markdown link check 与汇总它的 CI required）是 RFC-378 `research.md` 第 36 行一条第三方
+  github.com 链接返回 503——环境性：本提交没改那份文件，前两个提交的同一 job 对同一链接都通过。后继证据取 RFC-588 提交的同一 job。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-586 合并冲突解决的纯逻辑归 source-control 的 domain（Done，`035f97026`；`design/RFC-586-merge-conflict-resolution-into-source-control/`）
 

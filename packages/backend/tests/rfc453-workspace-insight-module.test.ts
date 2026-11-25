@@ -352,7 +352,11 @@ describe('RFC-453 —— 深度索引端口', () => {
 
 describe('RFC-453 —— 路由与新入口', () => {
   test('叙述的成员门在配置读取之后、紧挨触发调用', () => {
-    const route = readFileSync(join(SRC, 'routes', 'tasks.ts'), 'utf8')
+    // RFC-588: the change narrative endpoints moved with the other workspace-insight endpoints into this module's binding.
+    const route = readFileSync(
+      join(SRC, 'modules', 'workspace-insight', 'inbound', 'http', 'taskWorkspaceInsightRoutes.ts'),
+      'utf8',
+    )
     expect(route).toMatch(
       /const narrativeCfg = await deps\.configuration\.read\(\)\n\s*await changeNarrativeAccess\.requireMember\(actorOf\(c\), task\.id\)\n\s*const state = await workspaceInsight\.triggerChangeNarrative\(task, \{/,
     )

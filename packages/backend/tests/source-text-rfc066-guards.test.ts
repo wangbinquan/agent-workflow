@@ -32,7 +32,16 @@ const TASK_SRC =
     'utf8',
   )
 const ROUTES_TASKS_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'inbound',
+    'http',
+    'taskRoutes.ts',
+  ),
   'utf-8',
 )
 const MIGRATIONS_DIR = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -114,7 +123,7 @@ describe('RFC-066 PR-A — source guards', () => {
     expect(TASK_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)
     expect(TASK_SRC.includes("'multi-repo-upload-unsupported'")).toBe(false)
     for (const rel of [
-      'src/routes/tasks.ts',
+      'src/modules/task-execution/inbound/http/taskRoutes.ts',
       // RFC-477: agentLaunch.ts moved into task-execution's domain.
       'src/modules/task-execution/domain/agentHostWorkflow.ts',
       'src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',

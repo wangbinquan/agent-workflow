@@ -58,7 +58,22 @@ describe('RFC-303 architecture locks', () => {
   test('task HTTP wire schemas expose no internal binding, fence, capability, or effect revision', () => {
     const sources = [
       readFileSync(SHARED_TASK, 'utf8'),
-      readFileSync(join(SRC, 'routes', 'tasks.ts'), 'utf8'),
+      readFileSync(
+        join(SRC, 'modules', 'task-execution', 'inbound', 'http', 'taskRoutes.ts'),
+        'utf8',
+      ),
+      // RFC-588: the task workspace-insight endpoints (split out of the task routes) are task HTTP too.
+      readFileSync(
+        join(
+          SRC,
+          'modules',
+          'workspace-insight',
+          'inbound',
+          'http',
+          'taskWorkspaceInsightRoutes.ts',
+        ),
+        'utf8',
+      ),
     ].join('\n')
     for (const internalName of [
       'sourceTerminationBinding',

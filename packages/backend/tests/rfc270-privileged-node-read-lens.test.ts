@@ -240,8 +240,8 @@ describe('RFC-270 · 接线：每个定义出口都过镜头', () => {
     expect(lensCalls.length).toBe(calls.length)
   })
 
-  test('routes/tasks.ts 的每次 serializeTaskFor 都传 workflowReadLensFor', () => {
-    const routes = src('routes/tasks.ts')
+  test('任务路由（RFC-588 起在 task-execution 的 inbound/http/taskRoutes.ts）的每次 serializeTaskFor 都传 workflowReadLensFor', () => {
+    const routes = src('modules/task-execution/inbound/http/taskRoutes.ts')
     const calls =
       routes.match(/serializeTaskFor\(\w+, workflowReadLensFor\((?:actorOf\(c\)|actor)\)\)/g) ?? []
     // get + create(multipart) + create + cancel + resume + retry + sync

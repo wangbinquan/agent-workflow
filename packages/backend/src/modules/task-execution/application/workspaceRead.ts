@@ -1,5 +1,5 @@
 import type { TaskWorkspaceReadPort, WorkspaceReadCapability } from './ports/workspaceLaunch'
-import type { TaskWorkspaceQueries } from '../public/queries'
+import type { TaskWorkspaceQueries } from './ports/taskWorkspaceQueries'
 import { WORKTREE_DIR_MAX_ENTRIES, WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
 
 interface WorkspaceQueries extends TaskWorkspaceQueries {
