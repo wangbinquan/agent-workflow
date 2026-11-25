@@ -50,7 +50,7 @@
 //   packages/frontend/src/components/workflow-editor/WorkflowDraftStatus.tsx:232-284  inaccessible / deleted 两块终态区
 //   packages/frontend/src/routes/workflows.edit.tsx:940-949               `workflow-launch-cancel` 只在 preparingLaunch 时渲染，点它 = abort
 //   packages/frontend/src/routes/workflows.edit.tsx:681-690               AbortError ⇒ setActionError(null)（取消不算错误）
-//   packages/backend/src/routes/executionContracts.ts:32-60               目录端点剔除 guideJson；精确端点回整份 guideJson
+//   packages/backend/src/modules/execution-contract/inbound/http/executionContractRoutes.ts:32-60  目录端点剔除 guideJson；精确端点回整份 guideJson
 //   packages/backend/src/modules/execution-contract/domain/model.ts:427-438  ref 形如 `<contractId>@<version>`
 //   packages/backend/src/modules/execution-contract/application/executionContractService.ts:95-101  未知 ref ⇒ 404 execution-contract-not-found
 //   packages/frontend/src/components/IntentEntryButton.tsx:38-50          create 变体带 hint、modify 变体带 mountType/mountId

@@ -28,3 +28,6 @@ export function composeExecutionContract(input: {
     validateEnvelope: (request) => service.validateEnvelope(request),
   }
 }
+
+// RFC-577: the HTTP binding lives in this module's inbound layer; server.ts mounts it through here.
+export { mountExecutionContractRoutes } from './inbound/http/executionContractRoutes'

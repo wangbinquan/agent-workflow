@@ -15,7 +15,7 @@ import {
   type CodeHostProvider,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
-import type { CodeHostConnectionAdministration } from '@/modules/integration/public/types'
+import type { CodeHostConnectionAdministration } from '../../application/ports/codeHostConnections'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'

@@ -63,7 +63,7 @@ describe('RFC-349 source-control Promise contract', () => {
     const connections = read(
       'packages/backend/src/modules/integration/infrastructure/codeHost/connections.ts',
     )
-    const routes = read('packages/backend/src/routes/codeHosts.ts')
+    const routes = read('packages/backend/src/modules/integration/inbound/http/codeHostRoutes.ts')
     // RFC-450: the test-connection orchestration (and its stored-value read) moved into the use case.
     const connectionTest = read(
       'packages/backend/src/modules/integration/application/codeHostConnectionTest.ts',

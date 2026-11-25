@@ -729,9 +729,12 @@ const horizontalDelta = (sourceUnits: typeof units) =>
 
 describe('RFC-395 II-a A7 part 2 横向全表引用闭合', () => {
   test('扫描全部非模块源文件，基础设施与债务恰好覆盖每一个引用', () => {
+    // The non-module corpus shrinks by design: RFC-294 W9-D moves legacy files into modules (RFC-576 / RFC-577 took it below 600).
+    // This floor only proves the scan is not empty; it is not the guard's ledgered floor (`units.length > 700` above,
+    // `minCorpusFiles` in guard-manifest.json), which is unchanged. Lower it with the corpus, never below what an empty scan rules out.
     expect(
       units.filter((unit) => !unit.path.startsWith('packages/backend/src/modules/')).length,
-    ).toBeGreaterThan(600)
+    ).toBeGreaterThan(500)
     expect(horizontalDelta(units)).toEqual({ unexpected: [], stale: [], duplicates: [] })
     for (const entry of Object.values(GLOBAL_INFRASTRUCTURE)) {
       expect(entry.why.length).toBeGreaterThan(20)

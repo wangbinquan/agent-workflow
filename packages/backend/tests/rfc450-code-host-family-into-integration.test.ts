@@ -65,9 +65,11 @@ describe('RFC-450 —— 引用', () => {
   }, 60_000)
 
   test('两个代码平台路由不再 import services/', () => {
-    const routes = ['routes/codeHosts.ts', 'routes/accountRepositoryTransportCredentials.ts'].map(
-      (route) => join(SRC, route),
-    )
+    // RFC-577: the code-host binding moved into integration's inbound layer.
+    const routes = [
+      'modules/integration/inbound/http/codeHostRoutes.ts',
+      'routes/accountRepositoryTransportCredentials.ts',
+    ].map((route) => join(SRC, route))
     expect(importsMatching(routes, (target) => target.startsWith('services/'))).toEqual([])
   })
 

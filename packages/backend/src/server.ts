@@ -86,7 +86,6 @@ import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
-import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
 import {
   mountCapabilityTemplateRoutes,
@@ -100,9 +99,10 @@ import {
   type DevelopmentCaseRoutes,
 } from '@/modules/development-automation/composition'
 import { mountEventCenterRoutes } from '@/modules/event-center/composition'
-import { mountExecutionContractRoutes } from '@/routes/executionContracts'
+import { mountExecutionContractRoutes } from '@/modules/execution-contract/composition'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import {
+  mountCodeHostRoutes,
   mountScheduledTaskRoutes,
   mountWebhookDeliveryRoutes,
   mountWebhookEndpointRoutes,

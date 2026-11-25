@@ -2,7 +2,7 @@ import type { Hono } from 'hono'
 import { z } from 'zod'
 
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import { parseExecutionContractRef } from '@/modules/execution-contract/public/types'
+import { parseExecutionContractRef } from '../../domain/model'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/platform/errors/domainErrors'
 

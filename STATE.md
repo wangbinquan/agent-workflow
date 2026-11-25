@@ -1,4 +1,29 @@
-## 2026-11-25 RFC-576 system-operations 的七个路由归入模块 inbound（In Progress；`design/RFC-576-system-operations-routes-into-inbound/`）
+## 2026-11-25 RFC-577 execution-contract 与 integration 的路由归入模块 inbound（In Progress；`design/RFC-577-single-route-families-into-inbound/`）
+
+- **来由**：RFC-576 之后 `routes/` 还剩 43 个文件；按 owner 分族，只有一个路由的三族（execution-contract、integration、task-catalog）最简单，作为
+  `routes/` → 模块 `inbound/` 的第二批。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、
+  2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话
+  调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`routes/executionContracts.ts`、`routes/codeHosts.ts` 原样迁入各自模块的 `inbound/http/`（`executionContractRoutes.ts`、
+  `codeHostRoutes.ts`），挂载函数经各模块的 `composition.ts` 转出，`server.ts` 改从那里取；挂载调用与顺序不变。只被这两个路由用的 public 转出撤回：
+  execution-contract 的 `parseExecutionContractRef`，integration 的 `CodeHostConnectionAdministration` 与它连带的三个端口类型。随改：归属表两行、
+  `counts.json`、`rfc450` / `rfc349` 读源码的路径、RFC-310 的 OS 架构清单、e2e 指针与 `rfc317-table-ownership` 的非模块下限（600 → 500，W9-D 让这份
+  语料按设计缩小；guard-manifest 记的语料下限不变）；新增 RFC-577 用例。
+- **不做**：task-catalog 的路由——它一进模块，task-catalog 就没有 public 面了，要先定 `rfc317-module-boundary` R3 里“没有 public 合同的模块”怎么
+  入账，留给单独的 RFC；路由传输工具归位；其他模块的路由。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 两个 public 面收窄五个只被
+  本模块用的转出；C12 RFC-577 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、两个绑定、两个 public 文件与 `server.ts`；C13
+  `legacy-horizontal-files` 91 → 89，未消费 public 符号保持 0，其余计数不升。
+- **集中验证**（基于 `23bd6b03a`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出三处本人缺陷（检索漏了
+  `rfc317-table-ownership` 的下限与 OS 架构清单；public 撤回的第二层连带，task-catalog 因此移出范围、改动全部还原；integration public 的文件头过时），
+  均已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 198 个用例文件，修后 2018 条全部通过；读已提交源码的 210 个用例文件、2002 条在
+  候选导出里通过（含只能在提交上跑的 `route-error-code-coverage`）；九种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数变了，DAG 之外的
+  context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有
+  实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-576 的提交 `23bd6b03a`：exact SHA 主 CI run 45543647592 70 / 70 全绿；按路径触发的 windows-platform（run 45543647963）通过，
+  RFC-576 转 Done。
+
+## 2026-11-25 RFC-576 system-operations 的七个路由归入模块 inbound（Done，`23bd6b03a`；`design/RFC-576-system-operations-routes-into-inbound/`）
 
 - **来由**：`util/` 只剩安全相邻的一族之后，legacy 横向目录里最大的是 `routes/`（50 个）；RFC-294 design §2 要它们逐步成为各模块 `inbound/` 的薄绑定。
   前面的 S9 / S10 已经让全部路由不碰 `@/db`、不深引模块内部；system-operations 的七个最整齐，作为 `routes/` → 模块 `inbound/` 的第一批。用户
