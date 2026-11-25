@@ -736,7 +736,8 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
 
 - **`design/` 里的 Markdown 链接**（RFC-574 推红，2026-11-25）：`design/**` 的正文是历史记录、不随改，但其中写成 `[…](../../packages/…/x.ts#L12)`
   的**链接**会被 CI 的 `Markdown link check (design/)`（lychee）逐条解析，目标文件挪走就红。挪文件前用
-  `grep -rnoE "\]\([^)]*<旧路径>[^)]*\)" design docs` 查链接，有就只改链接目标（行号对一下新文件），不动正文。
+  `grep -rnoE "\]\([^)]*<旧路径>[^)]*\)" design docs` 查链接，有就只改链接目标（行号对一下新文件），不动正文。删文件同理（RFC-584 再犯）：
+  没有新位置可指时，把链接改成反引号里的纯文本并注明删除，历史陈述本身不改。
 
 - **源码摘要锁**（RFC-575 查出）：`tests/fixtures/*.json` 里有按 SHA-256 钉住的已审读源码（例如 `rfc395-serialized-insert-source-locks.json`），
   被挪文件的读者哪怕只改了 import 一行，摘要也失效，判据会把那几处当成新债。挪之前扫一遍 fixtures 里 `path` + `sha256` 的条目，对改动文件重算；

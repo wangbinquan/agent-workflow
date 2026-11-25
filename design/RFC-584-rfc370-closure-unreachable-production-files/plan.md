@@ -49,7 +49,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `dcbb373c3`（实现）：主 CI run 45598535599 的 `Markdown link check (design/)` 红——`design/RFC-294-backend-layered-target-architecture/review-2026-10-14.md:120`
+  的链接指向本 RFC 删除的 `intent/application/maintenance.ts`。**本 RFC 引入**：钉点检索没有查 `design/` 的 Markdown 链接（RFC-574 的教训，
+  再犯）。补正提交把那条链接改成反引号里的纯文本并注明删除（那段是 2026-10-14 评审的历史陈述，说的正是这份副本，不改指别的文件）；本地扫
+  `design/`、`docs/` 与根目录全部指向 `packages/` 的链接，再没有指向本 RFC 或 RFC-581～RFC-583 迁走、删除文件的链接（余下 4 条是既有的占位
+  写法与 `STATE.md` 的旧记录，不在这个 job 的检查面内）。其余 job 的结果见补正提交的记录。
 
 ## 实现门（本会话自审，只审功能）
 

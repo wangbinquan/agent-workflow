@@ -18,8 +18,10 @@
   文件的一行改指真正读变量的实现。tsc 0 错，eslint / prettier 无告警；选出 200 个用例文件、1757 条全部通过；读已提交源码的 309 个用例文件、3080 条在
   候选导出里通过；五种变异都被认出；架构报告 60 个计数里只有上面两项变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审
   功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：RFC-579 / RFC-580 / RFC-581 本提交转 Done（证据见各自 plan：`8a0d8516e` 与 `2f5dcbe3f` 的主 CI 各 70 / 70，RFC-579 以 `8a0d8516e` 为后继
-  证据）。`1c5d5947e`（RFC-582）主 CI 69 格通过、汇总格排队，windows-platform 通过；`1e6e2a282`（RFC-583）主 CI 在跑，windows-platform 通过。
+- **CI 侧**：实现提交 `dcbb373c3` 的主 CI run 45598535599 里 `Markdown link check (design/)` 红：RFC-294 的 `review-2026-10-14.md:120` 链接指向
+  本 RFC 删除的 Intent 维护副本——本 RFC 引入（钉点检索没查 `design/` 的 Markdown 链接），补正提交把它改成纯文本并注明删除，其余 job 的结果见
+  补正提交的记录。RFC-579 / RFC-580 / RFC-581 已转 Done；`1c5d5947e`（RFC-582）主 CI 70 / 70 全绿、windows-platform 通过，随补正提交转 Done；
+  `1e6e2a282`（RFC-583）主 CI 在跑，windows-platform 通过。
 
 ## 2026-11-25 RFC-583 system-operations 的配置、文档与 PlantUML 路由归入模块 inbound，两个 HTTP 传输小工具归入 platform（In Progress；`design/RFC-583-system-operations-config-docs-plantuml-routes-and-http-helpers/`）
 
@@ -48,7 +50,7 @@
   补正 `d6a26069b` 的三格红按日志核对过：后端分片 11/44 是 `rfc143` 读 `routes/clarify.ts`、前端分片 1/3 是 `code-config-api-base` 读
   `routes/developmentConfig.ts`，都是 RFC-579 漏改的钉点，由 `ad64ba6e5` 补正。RFC-579 / RFC-580 / RFC-581 待汇总格出结果后转 Done。
 
-## 2026-11-25 RFC-582 task-execution 的端口产物与工作树文件路由归入模块 inbound（In Progress；`design/RFC-582-task-execution-port-artifact-worktree-file-routes-into-inbound/`）
+## 2026-11-25 RFC-582 task-execution 的端口产物与工作树文件路由归入模块 inbound（Done，`1c5d5947e`；`design/RFC-582-task-execution-port-artifact-worktree-file-routes-into-inbound/`）
 
 - **来由**：RFC-581 之后 `routes/` 还剩 23 个文件。task-execution 的五个里逐个推算（边的角色一起核对）：`port-artifacts`、`worktree-files` 撤回 0 个、
   只取 source-control 的 `public/types`（DAG 有），作为第七批；`taskArchive`、`taskFeedback`、`tasks` 取 system-operations / collaboration / memory /
@@ -68,8 +70,8 @@
   认出（其中一种证明 `rfc294-review-offered-edge-dag` 也看着 task-execution 的 inbound）；架构报告 60 个计数里只有 legacy 横向文件数变了，DAG 之外的
   context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施
   被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：`ad64ba6e5` 的主 CI 除 macOS e2e 分片 3/4 的作业时限取消（见 RFC-581 条目）外 68 格通过；RFC-580（`8a0d8516e`）与 RFC-581
-  （`2f5dcbe3f`）的 windows-platform 通过、主 CI 在跑。RFC-579 / RFC-580 / RFC-581 的转 Done 记在后继提交里。
+- **CI 侧**：RFC-582 的提交 `1c5d5947e`：exact SHA 主 CI run 45585966466 70 / 70 全绿，windows-platform run 45585966454 通过；2026-11-25
+  转 Done。
 
 ## 2026-11-25 RFC-581 resource-catalog 的 MCP、技能与插件路由归入模块 inbound（Done，`2f5dcbe3f`；`design/RFC-581-resource-catalog-mcp-skill-plugin-routes-into-inbound/`）
 
