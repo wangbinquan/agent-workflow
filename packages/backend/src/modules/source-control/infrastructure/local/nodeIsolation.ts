@@ -33,7 +33,6 @@ import {
   commitTree,
   createIsolatedWorktree,
   deleteIsoRefs,
-  gitCommitExists,
   isGitWorkTree,
   isoRefName,
   materializeTree,
@@ -42,6 +41,7 @@ import {
   snapshotFullState,
   usableSubmodules,
 } from '@/util/git'
+import { gitCommitExists } from '@/platform/workspace/local/gitQueries'
 import { runGit } from '@/platform/execution/local/gitProcess'
 import {
   buildMergeResolvePrompt,

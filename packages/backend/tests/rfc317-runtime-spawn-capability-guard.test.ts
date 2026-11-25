@@ -152,12 +152,15 @@ describeEachProviderHttpApplication(
 // 只会把同一份 AST 扫描跑两遍，双引擎对它毫无信息量（pre-flight 的 PURE-DESCRIBE）。
 describe('RFC-317 T71 —— spawn 能力门的源码棘轮与 matcher 自证', () => {
   test('源码棘轮：route/application 下每一处 smokeRuntime( 的同一函数体内必须先有能力门', () => {
+    const routeFiles = readdirRecursive(ROUTES_DIR).filter((p) => p.endsWith('.ts'))
+    // RFC-590 补正：RFC-294 W9-D 按设计把绑定逐批迁出 routes/（只剩 9 个），这里只证明 routes/ 的枚举没断（非空）；
+    // 原来对“routes/ 加上下面那个应用文件”的总数要求 > 10，routes/ 缩到 9 个时就红了。
+    expect(routeFiles.length, 'src/routes 枚举断了，本条棘轮失去意义').toBeGreaterThan(0)
     const files = [
-      ...readdirRecursive(ROUTES_DIR).filter((p) => p.endsWith('.ts')),
+      ...routeFiles,
       // RFC-360 relocates the unchanged three management use cases behind their HTTP adapters.
       resolve(ROUTES_DIR, '../modules/runtime-management/application/runtimeManagement.ts'),
     ]
-    expect(files.length, 'src/routes 枚举断了，本条棘轮失去意义').toBeGreaterThan(10)
 
     const offenders: string[] = []
     let smokeSites = 0

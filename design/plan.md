@@ -622,6 +622,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-589](./RFC-589-agent-workgroup-routes-split-by-owner/proposal.md) | 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十一批）：`routes/agents.ts`、`routes/workgroups.ts` 迁入 resource-catalog，两个启动端点（`POST …/:id/tasks`）迁入 task-execution；不新增 DAG 边；legacy 横向文件 58 → 56。无用户可见变化。 | Done |
 | [RFC-590](./RFC-590-task-catalog-route-into-inbound/proposal.md) | 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（RFC-294 W9-D：`routes/` → 模块 `inbound/` 第十二批）：`routes/taskCatalog.ts` 迁入模块，三个 public 符号撤回、`public/` 删掉；R3 的判据改准为“public 为空的模块要么入账、要么由装配根经 composition 取用”；legacy 横向文件 56 → 55。无用户可见变化。 | In Progress |
 | [RFC-591](./RFC-591-git-process-runner-into-platform/proposal.md) | git 进程运行器归 platform（RFC-294 W5 余项第三步：`util/git` 拆成通用运行器与仓库语义）：`runGit`、`nonInteractiveGitEnv`、`GitRunResult` 与两个退出码逐字迁入 `platform/execution/local/gitProcess.ts`，读者改取新位置；偏离 design §8 / §15（经用户授权裁定）。无用户可见变化。 | In Progress |
+| [RFC-592](./RFC-592-git-queries-and-collaboration-rollback-port/proposal.md) | 两个只读 git 查询归 platform，协作的回滚经端口注入（RFC-294 W5 余项第四步）：`gitMetaDirsFor`、`gitCommitExists` 迁入 `platform/workspace/local/gitQueries.ts`；collaboration 的评审门回滚执行器经 `TaskExecutionParticipantBindings` 取`rollbackToSnapshot`，装配根给出实现；collaboration 与 runtime-management 不再 import `util/git`。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

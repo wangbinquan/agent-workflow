@@ -25,7 +25,11 @@ const PROCESS_LEAVES = new Set([
  * platform. It imports only the logger, so it is still a leaf below the git primitives; its neighbour `isolation`
  * imports those primitives and stays an upper layer.
  */
-const WORKSPACE_LEAVES = new Set(['@/platform/workspace/local/fsReclaim'])
+const WORKSPACE_LEAVES = new Set([
+  '@/platform/workspace/local/fsReclaim',
+  // RFC-592: the two read-only git queries (meta directories, object existence); they import only the git runner.
+  '@/platform/workspace/local/gitQueries',
+])
 /**
  * RFC-575 moved the three base primitives — the domain error family, the logger and the digest helpers — from
  * `util/` into platform. They import nothing above them (the error family takes only the logger), so the git primitives

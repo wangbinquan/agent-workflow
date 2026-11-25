@@ -39,7 +39,7 @@ import { pickRuntimeHead } from '../drivers/head'
 import { toBusinessCtx, toSystemCtx } from '../drivers/spawnCtx'
 import { captureClaudeSessions, claudeUserConfigRoots } from '../drivers/claudeCode/sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from '../drivers/claudeCode/permissionMap'
-import { gitMetaDirsFor } from '@/util/git'
+import { gitMetaDirsFor } from '@/platform/workspace/local/gitQueries'
 import { scanSiblingTaskRoots, toolchainCacheDirs } from '../drivers/workspaceBoundary'
 import {
   claudeExpressibleAuthorDirs,

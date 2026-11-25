@@ -7,7 +7,8 @@ import type { TaskRollbackCheckpointRun } from '../domain/taskCheckpointRollback
 import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
 import type { RollbackOutcome } from '../domain/nodeRunRollbackOutcome'
 import { taskRollbackPlan } from './taskRollbackCodec'
-import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
+import { rollbackToSnapshot } from '@/util/git'
+import { gitCommitExists } from '@/platform/workspace/local/gitQueries'
 import type { Logger } from '@/platform/logging/logger'
 import { sha256Hex } from '@/platform/contracts/hash'
 import {

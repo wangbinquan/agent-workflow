@@ -1,4 +1,4 @@
-import { gitCommitExists } from '@/util/git'
+import { gitCommitExists } from '@/platform/workspace/local/gitQueries'
 import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
 
 export class GitWorkspaceRollbackSnapshotInspector implements WorkspaceRollbackSnapshotInspector {

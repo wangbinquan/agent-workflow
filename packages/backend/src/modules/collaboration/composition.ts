@@ -155,6 +155,7 @@ export function composeGateContinuationSupport(
     new GateWorkspaceRollbackExecutorAdapter(
       operations,
       input.taskExecutionParticipants.executionPermits,
+      input.taskExecutionParticipants.rollbackWorkspaceToSnapshot,
     ),
     clarifyConvergence,
   )

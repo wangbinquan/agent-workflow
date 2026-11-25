@@ -1,3 +1,22 @@
+## 2026-11-25 RFC-592 两个只读 git 查询归 platform，协作的回滚经装配绑定交进来（In Progress；`design/RFC-592-git-queries-and-collaboration-rollback-port/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；沿 RFC-591 裁定的方案（b）。`util/git.ts` 的仓库
+  语义下一步归 source-control，而 collaboration 与 runtime-management 到 source-control 都没有 DAG 边，这一步先断开它们对 `util/git` 的取用。
+- **范围**：`gitMetaDirsFor`（工作树的共享 / admin git 目录，给运行时沙箱放行）与 `gitCommitExists`（对象在不在）逐字迁入
+  `platform/workspace/local/gitQueries.ts`（与 `gitVersion.ts` 同层，只经 RFC-591 的运行器问 git）；读者改指新位置。collaboration 的评审门工作区回滚执行器
+  要的 `rollbackToSnapshot` 作为 `TaskExecutionParticipantBindings` 的一项（`rollbackWorkspaceToSnapshot`）由装配根给出——RFC-477 立的形状（节点回滚也这样
+  交进来），`composeGateContinuationSupport` 与调用方不改。随改：`rfc377` 的叶子清单、用例的绑定 helper 与 `rfc359-w55` 的手写绑定；新增 RFC-592 用例。
+- **随本提交修的 RFC-590 遗留缺陷**：`rfc317-runtime-spawn-capability-guard` 对“`routes/` 加一个应用文件”的合计下限 `> 10`（`3f07d748a`、`992ae6140` 的
+  后端第 16/44 片红）改为单独证明 `routes/` 枚举非空，guard-manifest 的语料下限随之记为 3 并写明理由；通用教训记入 `docs/dev-gotchas.md`。
+- **收口对账**（RFC-294 C10～C13）：C10 通用查询进 platform、协作经装配绑定取回滚；C12 RFC-592 用例覆盖全部说明符与两个模块目录；C13 计数全部不变。
+- **集中验证**（基于 `992ae6140`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出本人缺陷两处（`rfc377` 叶子清单漏收新文件；修 T71
+  下限时 guard-manifest 的语料下限没同步），已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；候选导出里 594 个用例文件，复跑 26 个全部通过，
+  `rfc321` 在主树里 10 / 10；五种变异都被认出；架构报告 60 个计数全部不变。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0
+  第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **下一步**：`util/git.ts` 余下的仓库语义整体归 source-control；task-execution 取的 `withWorktreeRegistryLock`、`worktreeFilesChanged`、
+  `rollbackToSnapshot`、`reclaimStaleRefLocks` 经 source-control 的 public（DAG 有这条边），装配根改从 source-control 取回滚。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-591 git 进程运行器归 platform（In Progress；`design/RFC-591-git-process-runner-into-platform/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」——对本会话列出的待定事项（含 W5 的 `util/git` 怎么拆）
@@ -14,7 +33,8 @@
   执行，不阻塞本 RFC。
 - **下一步**：`util/git.ts` 余下的仓库语义整体归 source-control；其中跨模块的 6 个名字（`gitMetaDirsFor`、`withWorktreeRegistryLock`、
   `worktreeFilesChanged`、`gitCommitExists`、`rollbackToSnapshot`、`reclaimStaleRefLocks`）要定 collaboration 与 runtime-management 怎么取。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-591 的提交 `992ae6140`：主 CI run 45663835428 的后端第 16/44 片红在同一处（RFC-590 引入、本提交继承的 `routes/` 枚举下限），已在 RFC-592
+  的提交里修；按路径触发的 windows-platform 与 git-protocols-e2e 通过。转 Done 等 RFC-592 提交的 CI。
 
 ## 2026-11-25 RFC-590 任务目录路由归入 task-catalog 的 inbound，模块不再有 public 面（In Progress；`design/RFC-590-task-catalog-route-into-inbound/`）
 
@@ -32,7 +52,9 @@
 - **集中验证**（基于 `24d4e0a9f`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出里
   280 个用例文件、2513 条全部通过；变异见 plan；架构报告只有 legacy 横向文件数变了、task-catalog 的未消费计数随 public 面退场。实现门 PASS（本会话按路径
   限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-590 的提交 `3f07d748a`：主 CI run 45657867610 的后端第 16/44 片红——`rfc317-runtime-spawn-capability-guard` 把“`routes/` 的文件加一个
+  显式列入的应用文件”合计要求 `> 10`，本 RFC 把 `routes/` 缩到 9 个就红了。**本人缺陷**（按名字选用例选不到它），已在 RFC-592 的提交里改为单独证明
+  `routes/` 的枚举非空；macOS e2e 第 3/4 片 141 条全部通过（RFC-588 / RFC-589 那两次取消的后继证据）。转 Done 等 RFC-592 提交的 CI。
 
 ## 2026-11-25 RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（Done，`24d4e0a9f`；`design/RFC-589-agent-workgroup-routes-split-by-owner/`）
 

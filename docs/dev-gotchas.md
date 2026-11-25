@@ -756,6 +756,11 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   里要挪的是后两个，只认表头位置的正则会漏。按“表里任意位置有这个名字、前后几百字以内出现目录名”搜。
 - **workflow 的路径过滤也逐条列文件**（RFC-584 查出）：`windows-platform.yml` 的 `push` / `pull_request` 两份 `paths:` 都列具体文件，`rfc473`、
   `rfc474` 与 `test-suite-policy` 校验它们都在；挪或删文件时检索范围要含 `.github/`。
+- **别处对“这个目录有多少文件”的非空下限**（RFC-589 / RFC-590 推红，2026-11-25）：搬空一个目录时，钉的不只是路径——`rfc439` 要求
+  `routes/` 下的文件数 `> 10`，`rfc317-runtime-spawn-capability-guard` 要求“`routes/` 的文件加一个显式列入的应用文件”合计 `> 10`。这类断言只是在证明
+  枚举没断，却写成了数字，目录按设计缩到下限以下就红；它们既不提被挪的路径也不提被挪的符号，按名字选用例选不到它们。挪文件前搜一遍
+  `toBeGreaterThan(` / `toBeGreaterThanOrEqual(` 与目录名（`routes`、`ROUTES_DIR` 一类）出现在同一用例里的地方；改的时候把“这个目录的枚举非空”单独断言，
+  别再跟别的文件合计。
 
 另一半教训是**检索本身没跑**：zsh 里一条命令只要有一个通配没有匹配（`grep -rn pat architecture/ tests/architecture/*.json`，后一个目录下没有
 JSON），整条命令在执行前就中止，只打印一行 `no matches found`，看上去和“没搜到”一样。查空结果时先确认输出里没有这一行；需要通配时用

@@ -9,7 +9,7 @@ import type { HumanGateOperationStore } from '../application/ports/humanGateOper
 import type { ValidatedWorkspaceRollbackPlan } from '../domain/workspaceRollbackPlan'
 import { decodeReviewDecisionManifest } from '../domain/reviewDecision'
 import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
-import { rollbackToSnapshot } from '@/util/git'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 
 function clippedError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 2_000)
@@ -21,6 +21,8 @@ export class GateWorkspaceRollbackExecutorAdapter implements GateWorkspaceRollba
   constructor(
     private readonly operations: Pick<HumanGateOperationStore, 'get'>,
     private readonly executionPermits: TaskExecutionPermits,
+    // RFC-592: the per-target rollback arrives with the task-execution bindings (was a direct `util/git` import).
+    private readonly rollbackWorkspaceToSnapshot: TaskExecutionParticipantBindings['rollbackWorkspaceToSnapshot'],
   ) {}
 
   async loadValidatedPlan(ref: GateWorkspaceRollbackRef): Promise<GateWorkspaceRollbackPlanView> {
@@ -52,7 +54,7 @@ export class GateWorkspaceRollbackExecutorAdapter implements GateWorkspaceRollba
       const targets: GateWorkspaceRollbackTargetReceipt[] = []
       for (const target of plan.targets) {
         try {
-          await rollbackToSnapshot(target.worktreePath, target.snapshot)
+          await this.rollbackWorkspaceToSnapshot(target.worktreePath, target.snapshot)
           targets.push({
             sourceNodeRunId: target.sourceNodeRunId,
             worktreeDirName: target.worktreeDirName,

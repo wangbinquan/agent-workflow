@@ -32,6 +32,7 @@ const taskExecutionParticipants: TaskExecutionParticipantBindings = {
   createTaskAuthorizationQueries: unusedParticipant,
   createTaskAuthorizationParticipantInTx: unusedParticipant,
   createNodeRunWorkspaceRollback: unusedParticipant,
+  rollbackWorkspaceToSnapshot: unusedParticipant,
   createHumanGatePersistenceParticipantInTx: unusedParticipant,
   createConsumedInputsParticipantInTx: unusedParticipant,
   createTaskClarifyDirectivePersistence: unusedParticipant,

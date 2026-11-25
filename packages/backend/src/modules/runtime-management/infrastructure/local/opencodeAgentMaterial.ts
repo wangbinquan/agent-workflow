@@ -46,7 +46,7 @@ import { machineSkillRoots, opencodeDataDir } from '../drivers/opencode/boundary
 import { pickRuntimeHead } from '../drivers/head'
 import { toBusinessCtx, toSystemCtx } from '../drivers/spawnCtx'
 import { stageSkills } from '../drivers/stageSkills'
-import { gitMetaDirsFor } from '@/util/git'
+import { gitMetaDirsFor } from '@/platform/workspace/local/gitQueries'
 import { getOpencodeBinaryVersion } from '../drivers/opencode/versionRegistry'
 import {
   captureChildSessions,

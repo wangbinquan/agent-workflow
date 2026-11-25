@@ -59,6 +59,12 @@ export interface TaskExecutionParticipantBindings {
   ) => AsyncTaskAuthorizationParticipantInTx
   /** RFC-477: node-run workspace rollback (review rerun planning, clarify self-rollback). */
   readonly createNodeRunWorkspaceRollback: (db: PersistenceDb) => NodeRunWorkspaceRollbackPort
+  /**
+   * RFC-592: roll one task worktree back to a node-run snapshot — the review gate's workspace rollback executor runs it
+   * for each validated target. Same shape as the node rollback above: the assembly root passes the git implementation,
+   * so collaboration names no git module.
+   */
+  readonly rollbackWorkspaceToSnapshot: (worktreePath: string, snapshot: string) => Promise<void>
   // RFC-482: the remaining task-execution participants and small reads collaboration uses. Each call site still passes
   // the handle it holds (a transaction stays a transaction), so these are factory references, not prebuilt instances.
   readonly createHumanGatePersistenceParticipantInTx: (
