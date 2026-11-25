@@ -337,8 +337,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
   // RFC-558: webhook ingress types the Event Center through its own narrow port (event-center public types only).
   'packages/backend/src/modules/integration/composition/webhookTerminalControl.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',
-  'packages/backend/src/modules/intent/composition/apply.ts -> packages/backend/src/modules/resource-catalog/composition/intentApply.ts',
-  'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
+  // RFC-595: Intent's compositions take Resource Catalog's pieces from bootstrap and the apply engine drives the resource
+  // session through Intent's own port; both intent -> resource-catalog pairs are settled.
   // RFC-553: both knowledge-evolution -> task-execution pairs are settled (the launch initiator type through public/types,
   // the projection through the fusion routes' own port).
   // RFC-556: four provider implementations take the consumer's port only through their designated adapter (task-catalog's

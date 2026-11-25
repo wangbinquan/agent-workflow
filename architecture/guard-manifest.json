@@ -3992,7 +3992,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc523-intent-code-history-memory-required-selections-boundary.test.ts",
       "id": "rfc523-intent-code-history-memory-required-selections-boundary",
-      "lines": 297,
+      "lines": 301,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -4052,7 +4052,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc528-standalone-maintenance-worker-effects-boundary.test.ts",
       "id": "rfc528-standalone-maintenance-worker-effects-boundary",
-      "lines": 244,
+      "lines": 246,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
@@ -4823,6 +4823,18 @@
       "lines": 220,
       "mechanism": "ast",
       "minCorpusFiles": 6000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc595-intent-resource-catalog-internals-boundary.test.ts",
+      "id": "rfc595-intent-resource-catalog-internals-boundary",
+      "lines": 249,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
       "negativeFixture": true,
       "runner": "bun"
     }

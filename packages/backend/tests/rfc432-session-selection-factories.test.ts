@@ -11,7 +11,6 @@ import { standaloneSelections } from '@/bootstrap/standalone'
 import { createLocalRuntimeContent } from '@/bootstrap/contentRuntime'
 import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
 import { createFileResourcePackageSkillArtifactOwner } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { composeLocalIntentArtifacts } from '@/modules/intent/composition/apply'
 import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/composition'
 import { createRepositoryPublicationTransport } from '@/modules/source-control/composition'
 import {
@@ -69,7 +68,9 @@ test('the standalone session factories are the modules’ own local constructors
   const selections = standaloneSelections({ appHome: home() })
   expect(selections.reviewArtifacts).toBe(createLocalReviewArtifacts)
   expect(selections.resourcePackageSkillArtifacts).toBe(createFileResourcePackageSkillArtifactOwner)
-  expect(selections.intentArtifacts).toBe(composeLocalIntentArtifacts)
+  // RFC-595: the intent selection is bootstrap's assembly of Resource Catalog's standalone half with Intent's family (two
+  // modules' constructors), so it is not one module's constructor; the behaviour case below builds it per session and the
+  // RFC-595 boundary test pins the assembly.
   expect(selections.databaseBackup).toBe(createPostgresqlAdminBackupCoordinator)
   expect(selections.repositoryPublicationTransport).toBe(createRepositoryPublicationTransport)
   expect(selections.developmentWorkspaceRepositoryPreparation).toBe(

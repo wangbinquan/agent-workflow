@@ -1,3 +1,22 @@
+## 2026-11-25 RFC-595 intent 不再取 resource-catalog 的内部（In Progress；`design/RFC-595-intent-resource-catalog-internals-out/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §14“跨 context 内部文件对 → 0”与
+  “bootstrap 唯一装配”，S9 的 consumer 自有端口先例（RFC-559 / RFC-563）。
+- **范围**：intent 的三个装配函数不再自己造 resource-catalog 的本机插件 / 技能工件属主、技能工件补偿与技能内容定位查询，改为必填入参，bootstrap 的
+  四个装配点（standalone、单机维护 worker、维护 worker 图、守护进程 intent 模块）从 resource-catalog 的装配根取来交入；本机一族照托管一族的形状收 intent
+  声明的 `LocalIntentResourceArtifacts`，由 resource-catalog 新增的 `composeLocalIntentResourceArtifacts` 造出（构造与参数与原来逐一相同）。apply 引擎驱动的
+  资源会话改用 intent 自己的端口形状（`application/ports/intentApplyResourceSession.ts`，只写引擎调用的七个方法与传的值）；经 resource-catalog 的 public 交出会把
+  平台事务类型带进 public 合同、偏差会升，所以不走那条路。resource-catalog 的实现不改，在 bootstrap 绑定处由编译器核对，RFC-595 用例再加两条编译期断言。
+  随改：`rfc376` 的已知清单与 `rfc294-architecture-preflight`、`rfc355` 两本账销掉两行，`counts.json`（跨 context 内部文件对 6 → 4），调这三个函数与钉调用
+  参数的用例（`rfc384`、`rfc370-intent-artifact-content`、`rfc523`、`rfc528`、`rfc432` 与两个测试 helper）；新增 RFC-595 用例。
+- **收口对账**（RFC-294 C10～C13）：C10 跨模块装配回到 bootstrap、consumer 自有端口；C12 RFC-595 用例覆盖 intent 全部源码与全部生产文件；C13 跨 context
+  内部文件对 6 → 4、其余计数不变。余下四对：integration → task-execution 的效果能力（能力合同，暂缓）、code-capability → resource-catalog 的写入参与者
+  （W4-E8 兼容岛并入 development-automation 时处理）。
+- **集中验证**（基于 `7dfc0423e`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 315 个
+  用例文件红 2 条，都是本人遗漏的两行陈旧账，删去后复跑 24 个文件全部通过，`rfc321` 10 / 10，文档用例 46 / 46；四种用例变异与一种端口漂移的
+  typecheck 变异都被认出（后者 `tsc` 报 21 处，含 bootstrap 绑定处与编译期断言）。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-594 code-round 的合同叶归 task-execution 的 domain（In Progress；`design/RFC-594-code-round-contract-into-task-execution/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §2“`services/` 按 owner 迁入模块后删除”、

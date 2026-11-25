@@ -59,7 +59,9 @@ const LOCAL_CONSTRUCTIONS: Readonly<Record<string, readonly string[]>> = {
   ],
   createPluginGenerationFilesystemGcPort: ["join(appHome,'plugins')"],
   composeLocalIntentScratch: ['{appHome}'],
-  composeLocalIntentArtifactContent: ["{appHome,pluginsDir:join(appHome,'plugins')}"],
+  composeLocalIntentArtifactContent: [
+    "{appHome,pluginsDir:join(appHome,'plugins'),skillArtifacts:composePostgresqlSkillArtifactCompensation()}",
+  ],
 }
 
 const squash = (value: string) => value.replace(/\s+/g, '').replace(/,(?=[)\]}])/g, '')

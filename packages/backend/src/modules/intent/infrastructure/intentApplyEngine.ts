@@ -35,7 +35,7 @@ import type {
   IntentApplyOperations,
   IntentApplyReceipt,
 } from '@/modules/intent/application/ports/intentApplyOperations'
-import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
+import type { IntentApplyResourceSession } from '@/modules/intent/application/ports/intentApplyResourceSession'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'

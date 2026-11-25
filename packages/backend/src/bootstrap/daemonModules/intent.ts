@@ -23,6 +23,7 @@ import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/com
 import {
   composeIntentApplyResourceBinding,
   composeLegacyIntentSkillArtifactCompat,
+  createSkillContentLocationQuery,
 } from '@/modules/resource-catalog/composition/intentApply'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
@@ -103,11 +104,14 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
   })
   // RFC-523: the daemon composes what intent apply used to build when given none — the legacy skill artifact binding, and
   // the resource session binding over the selected artifact owners (a fresh MCP transaction lifecycle, as before).
+  // RFC-595: the lifecycle takes Resource Catalog's skill content-location query from here, not from inside Intent's
+  // composition.
   const artifacts = composeIntentApplyArtifactLifecycle({
     db,
     appHome,
     content: input.adapters.intentArtifacts.artifactContent,
     legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+    skillContentLocations: createSkillContentLocationQuery(db),
   })
   const applyOperations = composeIntentApplyOperations({
     db,

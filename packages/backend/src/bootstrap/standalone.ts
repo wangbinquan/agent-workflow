@@ -82,6 +82,7 @@ import { createFileSkillContentBinding } from '@/modules/resource-catalog/compos
 import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
 import { createFileResourcePackageSkillArtifactOwner } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { composeLocalIntentArtifacts } from '@/modules/intent/composition/apply'
+import { composeLocalIntentResourceArtifacts } from '@/modules/resource-catalog/composition/intentApply'
 import {
   composeLocalExecutionAuthority,
   createPostgresqlAdminBackupCoordinator,
@@ -174,7 +175,16 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     skillContent: (session) => createFileSkillContentBinding(session.db, session.appHome),
     reviewArtifacts: createLocalReviewArtifacts,
     resourcePackageSkillArtifacts: createFileResourcePackageSkillArtifactOwner,
-    intentArtifacts: composeLocalIntentArtifacts,
+    // RFC-595: Resource Catalog composes the standalone family's owners and compensation; Intent assembles them with its
+    // artifact content. The same constructions as before, now assembled here instead of inside Intent's composition.
+    intentArtifacts: (session) =>
+      composeLocalIntentArtifacts({
+        appHome: session.appHome,
+        resources: composeLocalIntentResourceArtifacts({
+          db: session.db,
+          appHome: session.appHome,
+        }),
+      }),
     databaseBackup: createPostgresqlAdminBackupCoordinator,
     repositoryPublicationTransport: createRepositoryPublicationTransport,
     developmentWorkspaceRepositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation,

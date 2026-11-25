@@ -33,7 +33,10 @@ import { createTokenCallAudit } from '@/auth/composition'
 import { openDb } from '@/db/client'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { composeIntentApplyArtifactLifecycle } from '@/modules/intent/composition/apply'
-import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
+import {
+  composeLegacyIntentSkillArtifactCompat,
+  createSkillContentLocationQuery,
+} from '@/modules/resource-catalog/composition/intentApply'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
@@ -343,6 +346,8 @@ export const composeMaintenanceWorkerGraph = async (
     log: createLogger('intentMaintenance'),
   })
   const intentPluginsDir = join(appHome, 'plugins')
+  // RFC-595: the artifact lifecycle takes Resource Catalog's skill content-location query from here, not from inside
+  // Intent's composition.
   const atomicApply = createAtomicApplyRecovery([
     composeIntentApplyRecoveryScene({
       db: client,
@@ -352,6 +357,7 @@ export const composeMaintenanceWorkerGraph = async (
         pluginsDir: intentPluginsDir,
         content: effects.intentArtifactContent,
         legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+        skillContentLocations: createSkillContentLocationQuery(client),
       }),
       log: createLogger('intentMaintenance'),
     }),

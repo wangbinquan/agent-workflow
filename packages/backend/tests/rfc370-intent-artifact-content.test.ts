@@ -47,7 +47,10 @@ import {
   composeStandaloneIntentApply,
   composeStandaloneIntentArtifacts,
 } from './helpers/intentApply'
-import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
+import {
+  composeLegacyIntentSkillArtifactCompat,
+  createSkillContentLocationQuery,
+} from '@/modules/resource-catalog/composition/intentApply'
 
 const ownerId = 'intent-storage-owner'
 const hash = 'a'.repeat(64)
@@ -657,6 +660,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         },
       }),
       legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+      // RFC-595: Resource Catalog's query, handed over by the caller as bootstrap does.
+      skillContentLocations: createSkillContentLocationQuery(harness.db),
     })
     const { skillVersions, skills } = tablesOf(harness.db)
     await harness.db.delete(skillVersions)
@@ -719,6 +724,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         },
       }),
       legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+      // RFC-595: Resource Catalog's query, handed over by the caller as bootstrap does.
+      skillContentLocations: createSkillContentLocationQuery(harness.db),
     })
     // RFC-395 II-a A6：已删除技能完成处置，暂存内容仍交给 storage owner 丢弃。
     const converted = intentApplyArtifactCodecs.decode(

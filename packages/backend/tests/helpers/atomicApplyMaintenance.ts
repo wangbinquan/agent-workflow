@@ -18,7 +18,11 @@ import {
 import type { IntentArtifactContentPort } from '@/modules/intent/application/ports/intentArtifactContent'
 import type { IntentScratchStore } from '@/modules/intent/application/ports/intentScratchStore'
 import type { IntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/intentApplyEngine'
-import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
+import {
+  composeLegacyIntentSkillArtifactCompat,
+  composePostgresqlSkillArtifactCompensation,
+  createSkillContentLocationQuery,
+} from '@/modules/resource-catalog/composition/intentApply'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Input = {
@@ -61,8 +65,14 @@ export function composeIntentMaintenanceCommandsForDatabase(input: Input) {
             pluginsDir,
             content:
               input.content ??
-              composeLocalIntentArtifactContent({ appHome: input.appHome, pluginsDir }),
+              composeLocalIntentArtifactContent({
+                appHome: input.appHome,
+                pluginsDir,
+                skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+              }),
             legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+            // RFC-595: Resource Catalog's query, handed over by the caller as bootstrap does.
+            skillContentLocations: createSkillContentLocationQuery(input.db),
           }),
         ...(input.now === undefined ? {} : { now: input.now }),
         ...(input.log === undefined ? {} : { log: input.log }),

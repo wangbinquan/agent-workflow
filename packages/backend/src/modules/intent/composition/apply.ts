@@ -8,18 +8,16 @@ import {
   type IntentApplyResourceBinding,
 } from '../infrastructure/intentApplyEngine'
 import { createIntentApplyArtifactLifecycle } from '../infrastructure/intentApplyArtifactLifecycle'
-import {
-  composePostgresqlSkillArtifactCompensation,
-  createFileIntentPluginArtifactOwner,
-  createFileIntentSkillArtifactOwner,
-  createSkillContentLocationQuery,
-} from '@/modules/resource-catalog/composition/intentApply'
+import type { SkillContentLocationQuery } from '@/platform/content/contentStore'
 import type {
   IntentPluginArtifactOwner,
   IntentSkillArtifactOwner,
 } from '@/modules/resource-catalog/public/participants'
 import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
-import type { LegacyIntentSkillArtifactCompat } from '../ports/skillArtifactCompensation'
+import type {
+  LegacyIntentSkillArtifactCompat,
+  PostgresqlSkillArtifactCompensation,
+} from '../ports/skillArtifactCompensation'
 import { createFileIntentArtifactContent } from '../infrastructure/local/fileIntentArtifactContent'
 
 import type { IntentApplyOperations } from '../application/ports/intentApplyOperations'
@@ -62,18 +60,34 @@ export interface IntentArtifactSelection {
 }
 
 /**
+ * RFC-595: what the standalone family takes from Resource Catalog — its file artifact owners and the skill artifact
+ * compensation. Resource Catalog composes them (`composeLocalIntentResourceArtifacts`) and bootstrap hands them over, as
+ * the hosted family takes `HostedIntentResourceArtifacts`.
+ */
+export interface LocalIntentResourceArtifacts {
+  readonly pluginArtifacts: IntentPluginArtifactOwner
+  readonly skillArtifacts: IntentSkillArtifactOwner
+  readonly skillArtifactCompensation: PostgresqlSkillArtifactCompensation
+}
+
+/**
  * RFC-432: the standalone family for one session — the same three local constructions each member falls back
  * to when a composition is given none (plugins under `appHome/plugins`, skills in the session's database).
+ * RFC-595: the two Resource Catalog owners arrive built (bootstrap takes them from Resource Catalog's composition); this
+ * assembles them with the local artifact content.
  */
 export function composeLocalIntentArtifacts(input: {
-  readonly db: PersistenceDb
   readonly appHome: string
+  readonly resources: LocalIntentResourceArtifacts
 }): IntentArtifactSelection {
-  const pluginsDir = join(input.appHome, 'plugins')
   return Object.freeze({
-    pluginArtifacts: createFileIntentPluginArtifactOwner({ pluginsDir }),
-    skillArtifacts: createFileIntentSkillArtifactOwner({ appHome: input.appHome, db: input.db }),
-    artifactContent: composeLocalIntentArtifactContent({ appHome: input.appHome, pluginsDir }),
+    pluginArtifacts: input.resources.pluginArtifacts,
+    skillArtifacts: input.resources.skillArtifacts,
+    artifactContent: composeLocalIntentArtifactContent({
+      appHome: input.appHome,
+      pluginsDir: join(input.appHome, 'plugins'),
+      skillArtifacts: input.resources.skillArtifactCompensation,
+    }),
   })
 }
 
@@ -81,11 +95,13 @@ export function composeLocalIntentArtifacts(input: {
 export function composeLocalIntentArtifactContent(input: {
   readonly appHome: string
   readonly pluginsDir: string
+  /** RFC-595: Resource Catalog's skill artifact compensation, handed over by bootstrap. */
+  readonly skillArtifacts: PostgresqlSkillArtifactCompensation
 }): IntentArtifactContentPort {
   return createFileIntentArtifactContent({
     appHome: input.appHome,
     pluginsDir: input.pluginsDir,
-    skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+    skillArtifacts: input.skillArtifacts,
   })
 }
 
@@ -100,6 +116,8 @@ export function composeIntentApplyArtifactLifecycle(input: {
   /** RFC-523: the caller states the artifact content and the legacy skill artifact binding. */
   readonly content: IntentArtifactContentPort
   readonly legacySkillArtifacts: LegacyIntentSkillArtifactCompat
+  /** RFC-595: Resource Catalog's skill content-location query, handed over by bootstrap. */
+  readonly skillContentLocations: SkillContentLocationQuery
 }): IntentApplyArtifactLifecycle {
   const pluginsDir = input.pluginsDir ?? join(input.appHome, 'plugins')
   return createIntentApplyArtifactLifecycle({
@@ -107,7 +125,7 @@ export function composeIntentApplyArtifactLifecycle(input: {
     appHome: input.appHome,
     pluginsDir,
     content: input.content,
-    skillContentLocations: createSkillContentLocationQuery(input.db),
+    skillContentLocations: input.skillContentLocations,
     legacySkillArtifacts: input.legacySkillArtifacts,
   })
 }

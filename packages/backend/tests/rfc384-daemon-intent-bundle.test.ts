@@ -1,6 +1,7 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-384: pin one passive Intent graph, live defaults, maintenance activity and isolated run families on both providers.
 import { composeLocalIntentArtifacts } from '@/modules/intent/composition/apply'
+import { composeLocalIntentResourceArtifacts } from '@/modules/resource-catalog/composition/intentApply'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
@@ -125,8 +126,12 @@ function fixture(harness: ProviderDatabaseHarness) {
     observation: { intentSystemAgentBinding: worker, intentHttpSystemAgentBinding: http },
     digitalEmployee: f.employee,
     adapters: {
-      // RFC-432: the standalone intent artifact family for this session.
-      intentArtifacts: composeLocalIntentArtifacts({ db: harness.db, appHome }),
+      // RFC-432: the standalone intent artifact family for this session (RFC-595: Resource Catalog's half handed over, as
+      // the standalone bootstrap does).
+      intentArtifacts: composeLocalIntentArtifacts({
+        appHome,
+        resources: composeLocalIntentResourceArtifacts({ db: harness.db, appHome }),
+      }),
       httpTurnFixture: async (opts) => {
         calls.http.push(opts)
         return output(opts)

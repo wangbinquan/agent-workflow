@@ -15,6 +15,7 @@ import {
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { invalidateCallGraphIndex } from '@/modules/workspace-insight/composition'
 import { composeLocalIntentArtifactContent } from '@/modules/intent/composition/apply'
+import { composePostgresqlSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
 import { composeLocalIntentScratch } from '@/modules/intent/composition/maintenance'
 
 export const standaloneMaintenanceWorkerEffects: StandaloneMaintenanceWorkerEffects = Object.freeze(
@@ -46,7 +47,13 @@ export const standaloneMaintenanceWorkerEffects: StandaloneMaintenanceWorkerEffe
     pluginGenerationGc: ({ appHome }) =>
       createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
     intentScratch: ({ appHome }) => composeLocalIntentScratch({ appHome }),
+    // RFC-595: the artifact content takes Resource Catalog's skill artifact compensation from here, not from inside
+    // Intent's composition.
     intentArtifactContent: ({ appHome }) =>
-      composeLocalIntentArtifactContent({ appHome, pluginsDir: join(appHome, 'plugins') }),
+      composeLocalIntentArtifactContent({
+        appHome,
+        pluginsDir: join(appHome, 'plugins'),
+        skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+      }),
   },
 )

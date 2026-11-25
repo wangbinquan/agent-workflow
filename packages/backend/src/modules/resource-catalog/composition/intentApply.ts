@@ -25,6 +25,12 @@ import {
   createIntentApplyResourcePortFactory,
   type IntentApplyResourcePortFactoryDependencies,
 } from '../infrastructure/aggregateAdapters/intentApplyResourcePorts'
+import { join } from 'node:path'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import {
+  createFileIntentPluginArtifactOwner,
+  createFileIntentSkillArtifactOwner,
+} from '../infrastructure/local/fileIntentApplyArtifactOwners'
 
 export interface IntentApplyResourceCompositionDependencies extends IntentApplyResourcePortFactoryDependencies {
   readonly aclIdentities: ResourceCatalogAclIdentityReadPort
@@ -111,3 +117,22 @@ export function composeLegacyIntentSkillArtifactCompat() {
 }
 
 export { createSkillContentLocationQuery } from '../infrastructure/databaseSkillTrees'
+
+/**
+ * RFC-595 — the standalone Intent artifact family's Resource Catalog half, from the same three local constructions Intent's
+ * composition used to make itself: the plugin owner under `appHome/plugins`, the skill owner on the session's database and
+ * the skill artifact compensation. Bootstrap hands it to Intent's `composeLocalIntentArtifacts`, as the hosted family's
+ * half comes from `composeCrewStationResourceArtifacts`.
+ */
+export function composeLocalIntentResourceArtifacts(input: {
+  readonly db: PersistenceDb
+  readonly appHome: string
+}) {
+  return Object.freeze({
+    pluginArtifacts: createFileIntentPluginArtifactOwner({
+      pluginsDir: join(input.appHome, 'plugins'),
+    }),
+    skillArtifacts: createFileIntentSkillArtifactOwner({ appHome: input.appHome, db: input.db }),
+    skillArtifactCompensation: composePostgresqlSkillArtifactCompensation(),
+  })
+}

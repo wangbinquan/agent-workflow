@@ -166,12 +166,12 @@ describe('RFC-355 T6 —— intent 深取 resource-catalog 内部实现的账本
     // 两个 ArtifactLifecycle 的运行时深取改为经 `ports/skillArtifactCompensation` 注入。
     //
     // RFC-370：中立工件合同已归 RC application，并从 exact public/types 提供；
-    // lifecycle 的那条类型边销账。engine 仍消费原 resource session 协议，保留其
-    // 一条已入账纯类型边，不将 provider 实现类型扩到 public 面。
+    // lifecycle 的那条类型边销账。
+    //
+    // RFC-595：engine 驱动的资源会话改用 intent 自己的端口形状（`application/ports/intentApplyResourceSession.ts`），
+    // RC 的实现在 bootstrap 绑定处按结构满足它；engine 那条纯类型边销账，provider 实现类型仍不进 public 面。
     'intentApplyArtifactLifecycle.ts': [],
-    'intentApplyEngine.ts': [
-      '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants',
-    ],
+    'intentApplyEngine.ts': [],
   }
 
   test.each(Object.keys(DEEP_IMPORT_DEBT))('%s 的深取与账本逐条相等', (file: string) => {

@@ -144,10 +144,12 @@ describe('RFC-523 ① 选项的形状', () => {
       ['now', true],
     ])
     const lifecycle = members(APPLY, text(APPLY), 'composeIntentApplyArtifactLifecycle')
-    expect([lifecycle.get('content'), lifecycle.get('legacySkillArtifacts')]).toEqual([
-      false,
-      false,
-    ])
+    // RFC-595: the content-location query is a required input too (bootstrap hands it over).
+    expect([
+      lifecycle.get('content'),
+      lifecycle.get('legacySkillArtifacts'),
+      lifecycle.get('skillContentLocations'),
+    ]).toEqual([false, false, false])
     const recovery = members(RECOVERY, text(RECOVERY), 'composeIntentApplyRecoveryScene')
     expect([...recovery.keys()].sort()).toEqual(['artifacts', 'db', 'log', 'now'])
     expect(recovery.get('artifacts')).toBe(false)
@@ -247,7 +249,7 @@ describe('RFC-523 ③ 显式构造用的是此前回落的同一组工厂', () =
     const source = text(DAEMON_INTENT)
     expect(callArguments(DAEMON_INTENT, source, 'composeIntentApplyArtifactLifecycle')).toEqual([
       [
-        '{db,appHome,content:input.adapters.intentArtifacts.artifactContent,legacySkillArtifacts:composeLegacyIntentSkillArtifactCompat()}',
+        '{db,appHome,content:input.adapters.intentArtifacts.artifactContent,legacySkillArtifacts:composeLegacyIntentSkillArtifactCompat(),skillContentLocations:createSkillContentLocationQuery(db)}',
       ],
     ])
     expect(callArguments(DAEMON_INTENT, source, 'composeIntentApplyResourceBinding')).toEqual([
@@ -265,7 +267,7 @@ describe('RFC-523 ③ 显式构造用的是此前回落的同一组工厂', () =
     const lifecycle = callArguments(WORKER, source, 'composeIntentApplyArtifactLifecycle')
     expect(lifecycle).toEqual([
       [
-        '{db:client,appHome,pluginsDir:intentPluginsDir,content:effects.intentArtifactContent,legacySkillArtifacts:composeLegacyIntentSkillArtifactCompat()}',
+        '{db:client,appHome,pluginsDir:intentPluginsDir,content:effects.intentArtifactContent,legacySkillArtifacts:composeLegacyIntentSkillArtifactCompat(),skillContentLocations:createSkillContentLocationQuery(client)}',
       ],
     ])
     const compact = source.replace(/\s+/g, '')
@@ -281,14 +283,16 @@ describe('RFC-523 ③ 显式构造用的是此前回落的同一组工厂', () =
     ])
     expect(
       callArguments(STANDALONE_WORKER, standalone, 'composeLocalIntentArtifactContent'),
-    ).toEqual([["{appHome,pluginsDir:join(appHome,'plugins')}"]])
+    ).toEqual([
+      [
+        "{appHome,pluginsDir:join(appHome,'plugins'),skillArtifacts:composePostgresqlSkillArtifactCompensation()}",
+      ],
+    ])
   })
 
   test('两个单机选择：同一个工厂、同一组参数', () => {
     expect(callArguments(APPLY, text(APPLY), 'createFileIntentArtifactContent')).toEqual([
-      [
-        '{appHome:input.appHome,pluginsDir:input.pluginsDir,skillArtifacts:composePostgresqlSkillArtifactCompensation()}',
-      ],
+      ['{appHome:input.appHome,pluginsDir:input.pluginsDir,skillArtifacts:input.skillArtifacts}'],
     ])
     expect(callArguments(MAINTENANCE, text(MAINTENANCE), 'createFileIntentScratchStore')).toEqual([
       ['{appHome:input.appHome,directoryName:input.directoryName??INTENT_SCRATCH_DIRNAME}'],

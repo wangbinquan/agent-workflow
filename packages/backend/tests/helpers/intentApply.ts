@@ -16,8 +16,10 @@ import type { ResourceCatalogAclIdentityReadPort } from '../../src/modules/resou
 import {
   composeIntentApplyResourceBinding,
   composeLegacyIntentSkillArtifactCompat,
+  composePostgresqlSkillArtifactCompensation,
   createFileIntentPluginArtifactOwner,
   createFileIntentSkillArtifactOwner,
+  createSkillContentLocationQuery,
 } from '../../src/modules/resource-catalog/composition/intentApply'
 import { createMcpTransactionLifecycle } from '../../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { createResourceCatalogAclIdentityReadPort } from '../../src/modules/resource-catalog/infrastructure/aclReadRepository'
@@ -43,8 +45,15 @@ export function composeStandaloneIntentArtifacts(input: {
     appHome: input.appHome,
     pluginsDir,
     content:
-      input.content ?? composeLocalIntentArtifactContent({ appHome: input.appHome, pluginsDir }),
+      input.content ??
+      composeLocalIntentArtifactContent({
+        appHome: input.appHome,
+        pluginsDir,
+        skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+      }),
     legacySkillArtifacts: input.legacySkillArtifacts ?? composeLegacyIntentSkillArtifactCompat(),
+    // RFC-595: the composition takes Resource Catalog's query from its caller, as bootstrap hands it over.
+    skillContentLocations: createSkillContentLocationQuery(input.db),
   })
 }
 
