@@ -5,9 +5,9 @@ import type {
   AgentOperationDescriptors,
   PluginOperationDescriptors,
   SkillOperationDescriptors,
-  WorkflowOperationDescriptors,
   WorkgroupOperationDescriptors,
 } from '../public/operations'
+import type { WorkflowOperationDescriptors } from './workflows/operationContracts'
 import type { SkillZipImportParticipant } from '../public/participants'
 import type {
   AgentDependencyQueries,

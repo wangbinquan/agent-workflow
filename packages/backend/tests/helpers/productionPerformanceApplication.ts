@@ -75,7 +75,7 @@ import { mountOverviewRoutes } from '@/modules/system-operations/inbound/http/ov
 import { mountReviewRoutes } from '@/modules/collaboration/inbound/http/reviewRoutes'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountWebhookIngressRoutes } from '@/modules/integration/inbound/http/webhookIngressRoutes'
-import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
+import { mountWorkgroupTaskRoutes } from '@/modules/resource-catalog/inbound/http/workgroupTaskRoutes'
 import { createHttpRequestApp, type AppHttpProviderCore } from '@/server'
 import { createProductionOverviewQuery } from './productionOverview'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'

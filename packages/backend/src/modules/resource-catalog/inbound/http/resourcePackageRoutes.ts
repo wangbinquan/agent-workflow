@@ -26,9 +26,9 @@ import type {
   ApplyResourcePackage,
   ExportResourcePackage,
   InspectResourcePackage,
-  PackageResourceKind,
   PackageResourceRef,
 } from '@/modules/resource-catalog/public/types'
+import type { PackageResourceKind } from '../../domain/resourceKinds'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { ValidationError } from '@/platform/errors/domainErrors'

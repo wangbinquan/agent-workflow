@@ -15,7 +15,7 @@ import type {
   DeleteWorkflowCatalogReceipt,
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
-} from '../../public/types'
+} from './operationContracts'
 import type { WorkflowOperationContext } from '../../public/participants'
 import type { WorkflowQueries } from '../../public/queries'
 import type { GetWorkflowCatalogInput, WorkflowCatalogDetail } from '../../public/types'

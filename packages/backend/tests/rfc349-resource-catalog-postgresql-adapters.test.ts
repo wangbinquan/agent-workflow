@@ -399,7 +399,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(testBinding).toContain('createResourcePackageReadPort')
     expect(testBinding).toContain('readPackageSkillTree')
 
-    const route = source('src/routes/resourcePackages.ts')
+    const route = source('src/modules/resource-catalog/inbound/http/resourcePackageRoutes.ts')
     expect(route).toContain('resourceType: z.enum(BUNDLE_RESOURCE_TYPES)')
     expect(route).not.toContain('resourceType: z.string()')
   })

@@ -28,9 +28,29 @@ const read = (p: string): string => readFileSync(p, 'utf8')
 
 describe('C1 · 单文件 YAML 导出端点已下线', () => {
   test('路由没了，且取代它的那条在', () => {
-    const src = read(resolve(BACKEND, 'src', 'routes', 'workflows.ts'))
+    const src = read(
+      resolve(
+        BACKEND,
+        'src',
+        'modules',
+        'resource-catalog',
+        'inbound',
+        'http',
+        'workflowRoutes.ts',
+      ),
+    )
     expect(src).not.toContain("path: '/api/workflows/:id/export'")
-    const pkg = read(resolve(BACKEND, 'src', 'routes', 'resourcePackages.ts'))
+    const pkg = read(
+      resolve(
+        BACKEND,
+        'src',
+        'modules',
+        'resource-catalog',
+        'inbound',
+        'http',
+        'resourcePackageRoutes.ts',
+      ),
+    )
     expect(pkg).toContain("path: '/api/workflows/:id/export-package'")
   })
 
@@ -40,16 +60,36 @@ describe('C1 · 单文件 YAML 导出端点已下线', () => {
   })
 
   test('只服务它的 helper 一并删掉（不留死码）', () => {
-    const src = read(resolve(BACKEND, 'src', 'routes', 'workflows.ts'))
+    const src = read(
+      resolve(
+        BACKEND,
+        'src',
+        'modules',
+        'resource-catalog',
+        'inbound',
+        'http',
+        'workflowRoutes.ts',
+      ),
+    )
     expect(src).not.toContain('parseExactPositiveInteger')
   })
 })
 
 describe('C2 · 裸 YAML 导入已下线', () => {
   test('后端端点与前端对话框都没了', () => {
-    expect(read(resolve(BACKEND, 'src', 'routes', 'workflows.ts'))).not.toContain(
-      "path: '/api/workflows/import'",
-    )
+    expect(
+      read(
+        resolve(
+          BACKEND,
+          'src',
+          'modules',
+          'resource-catalog',
+          'inbound',
+          'http',
+          'workflowRoutes.ts',
+        ),
+      ),
+    ).not.toContain("path: '/api/workflows/import'")
     expect(existsSync(resolve(FRONTEND, 'src', 'components', 'WorkflowImportDialog.tsx'))).toBe(
       false,
     )

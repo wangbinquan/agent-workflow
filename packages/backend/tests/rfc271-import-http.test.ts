@@ -24,7 +24,7 @@ import type {
   CommandContext,
   QueryContext,
 } from '../src/modules/identity-access/public/participants'
-import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
+import { registerResourcePackageRoutes } from '../src/modules/resource-catalog/inbound/http/resourcePackageRoutes'
 import { errorHandler } from '../src/platform/errors/domainErrors'
 import { encodeZip } from '../src/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'

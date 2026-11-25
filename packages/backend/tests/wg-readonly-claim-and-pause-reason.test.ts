@@ -37,7 +37,7 @@ import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/wor
 // RFC-359 W4-D19c-tail：「只读成员」判据（edit 与 write 均显式 deny）合一后住在中立的
 // 回合持久化里，由它算出 `memberAgents[].readonly` 交给驱动。
 import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
-import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
+import { resolveRoomPauseReason } from '../src/modules/resource-catalog/inbound/http/workgroupTaskRoutes'
 import { loadWorkgroupTaskState, setPauseReason } from './helpers/legacyWorkgroupState'
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 async function deriveWake(input: WakeInput) {

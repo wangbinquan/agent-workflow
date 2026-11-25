@@ -112,10 +112,12 @@ import {
   mountWebhookIngressRoutes,
   mountWebhookTriggerRoutes,
 } from '@/modules/integration/composition'
-import { mountWorkflowRoutes } from '@/routes/workflows'
+import {
+  mountWorkflowRoutes,
+  mountWorkgroupTaskRoutes,
+  registerResourcePackageRoutes,
+} from '@/modules/resource-catalog/composition'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
-import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
-import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler } from '@/platform/errors/domainErrors'

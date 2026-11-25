@@ -9,7 +9,7 @@ import {
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { createLogger } from '@/platform/logging/logger'
-import type { WorkgroupTaskRoomCommands } from '../public/commands'
+import type { WorkgroupTaskRoomCommands } from '../application/workgroups/taskRoomContracts'
 import {
   ConfigPatchSchema,
   ConfirmSchema,

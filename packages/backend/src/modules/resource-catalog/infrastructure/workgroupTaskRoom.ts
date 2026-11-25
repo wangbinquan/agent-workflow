@@ -31,7 +31,7 @@ import type {
   WorkgroupTaskRoomDynamicWorkflowOperations,
 } from '../application/workgroups/ports'
 import type { WorkgroupOperationContext } from '../public/participants'
-import type { WorkgroupTaskJsonDocument } from '../public/types'
+import type { WorkgroupTaskJsonDocument } from '../application/workgroups/taskRoomContracts'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,

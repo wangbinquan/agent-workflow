@@ -114,7 +114,11 @@ describe('RFC-440 —— 引用与方向', () => {
       ['skills', join(SRC, 'routes', 'skills.ts')],
       ['memories', join(SRC, 'modules', 'memory', 'inbound', 'http', 'memoryRoutes.ts')],
       ['workgroups', join(SRC, 'routes', 'workgroups.ts')],
-      ['workflows', join(SRC, 'routes', 'workflows.ts')],
+      // RFC-580: the workflow HTTP binding moved into resource-catalog's inbound layer.
+      [
+        'workflows',
+        join(SRC, 'modules', 'resource-catalog', 'inbound', 'http', 'workflowRoutes.ts'),
+      ],
       ['plugins', join(SRC, 'routes', 'plugins.ts')],
     ]
     for (const [name, path] of routes) {

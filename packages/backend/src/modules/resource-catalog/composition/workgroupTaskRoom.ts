@@ -5,7 +5,7 @@ import {
 } from '../infrastructure/workgroupTaskRoom'
 import { createWorkgroupTaskRoomCommands } from '../infrastructure/workgroupTaskRoomCommands'
 import { createWorkgroupTaskRoomQueries } from '../infrastructure/workgroupTaskRoomQueries'
-import type { WorkgroupTaskRoomModule } from '../public/operations'
+import type { WorkgroupTaskRoomModule } from '../application/workgroups/taskRoomContracts'
 
 // RFC-504: the room's active-user directory and dynamic-workflow revalidation / save-as are application use cases
 // (application/workgroups/taskRoomCollaborators.ts); bootstrap takes them here together with the room assembly.

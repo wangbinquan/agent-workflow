@@ -1,3 +1,34 @@
+## 2026-11-25 RFC-580 resource-catalog 的工作流、工作组任务房间与资源包路由归入模块 inbound（In Progress；`design/RFC-580-resource-catalog-workflow-workgroup-routes-into-inbound/`）
+
+- **来由**：RFC-579 之后 `routes/` 还剩 29 个文件，resource-catalog 的八个最多，一起迁要撤回 92 个 public 符号，其中 86 个是 public 文件里的声明，要给
+  它们找落位。按资源分批，先做工作流、工作组任务房间与资源包。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我
+  审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速
+  推进RFC294」、2026-11-25「继续」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`routes/workflows`、`workgroupTasks`、`resourcePackages` 迁入 `modules/resource-catalog/inbound/http/`（`workflowRoutes.ts`、
+  `workgroupTaskRoutes.ts`、`resourcePackageRoutes.ts`），挂载函数经 `composition.ts` 转出，`server.ts` 改从那里取；挂载调用与顺序不变。22 个只被它们用的
+  public 声明逐字移进 `application/workflows/operationContracts.ts`、`application/workgroups/taskRoomContracts.ts` 与 `domain/resourceKinds.ts`（后者
+  本来就有一份相同的 `PackageResourceKind`）；两个共用形状（`ResourceAclOperationDescriptors`、`JsonBodySubmission`）就地转出。随改：归属表三行、
+  `counts.json`、`rfc552` / `rfc305` 账本、ACL 写门守卫的委托表、`rfc345` 的两张路由表与三处读 public 文本的断言、十余个读源码的用例；新增 RFC-580 用例。
+- **待用户定**：`workgroups` 与 `agents` 两个路由取 task-execution `public/commands` 的启动合同（`WorkgroupRouteTaskLaunchOperations`、
+  `AgentRouteTaskLaunchOperations`）。留在 `routes/` 时是 legacy 入边；迁进 resource-catalog 就是 DAG 之外的 offered 边（DAG 里 resource-catalog →
+  task-execution 只有 required-implementation），`rfc294-review-offered-edge-dag` 会红。可选：补 DAG 边；或 resource-catalog 自持启动端口、装配根把
+  task-execution 的实现接上（要在 resource-catalog 里重述上传限额与 multipart 文件两类形状）；或换落位。在定之前这两个路由不迁。
+- **不做**：上一条两个路由；MCP、技能与插件（下一批，撤回 42 个，DAG 没问题）；task-execution 的路由；identity-access 与凭据相邻的路由；task-catalog；
+  路由传输工具归位。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 resource-catalog 的 public 面
+  收窄 22 个只被本模块用的声明；C12 RFC-580 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、三个绑定、四个 public 文件与三个落位文件、`server.ts`；
+  C13 `legacy-horizontal-files` 77 → 74，其余计数不升。
+- **集中验证**（基于 `ad64ba6e5`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。第一次按四个路由、30 个声明实施，选用例四条红：
+  一条是上面的 offered 边（推算时没看边的角色），`workgroups` 退出；一条是 `public/operations` 不许取 application（共用形状改为就地转出）；两条是
+  `rfc345` 读 public 文本的断言（按意图改读落位文件）。按缩小后的计划从干净的树重做。tsc 0 错，eslint / promises / prettier 无告警；选出 507 个用例
+  文件、4800 条全部通过；读已提交源码的 272 个用例文件、2715 条在候选导出里通过（含只能在提交上跑的 `route-error-code-coverage`）；九种变异都被认出；
+  架构报告 60 个计数里只有 legacy 横向文件数变了，撤回的正是计划的 22 个，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审
+  功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-579 的提交 `58ab43d1f`：主 CI run 45570161148 三格红（后端分片 11/44、前端分片 1/3 的 ubuntu 与 windows）、windows-platform
+  run 45570161411 红，都归因于 RFC-579 漏改的两个按路径读路由源码的用例（`rfc143`、前端的 `code-config-api-base`），由 `ad64ba6e5` 补正；
+  `ad64ba6e5` 的 windows-platform（run 45574363127）与 visual-regression-nightly（run 45574363167）已通过，主 CI 在跑，RFC-579 待它全绿后转 Done。
+  发布注册表补正 `d6a26069b` 的主 CI 继承了同样的三格红（不由它引起）。
+
 ## 2026-11-25 RFC-579 collaboration 与 development-automation 的路由归入模块 inbound（In Progress；`design/RFC-579-collaboration-development-automation-routes-into-inbound/`）
 
 - **来由**：RFC-578 之后 `routes/` 还剩 36 个文件。按 RFC-578 design §3 的推算，collaboration 与 development-automation 两族迁进 owner 模块之后要撤回

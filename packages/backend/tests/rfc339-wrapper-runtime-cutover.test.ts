@@ -429,7 +429,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/modules/integration/inbound/http/scheduledTaskRoutes.ts',
       'packages/backend/src/modules/collaboration/inbound/http/taskQuestionRoutes.ts',
       'packages/backend/src/routes/tasks.ts',
-      'packages/backend/src/routes/workgroupTasks.ts',
+      'packages/backend/src/modules/resource-catalog/inbound/http/workgroupTaskRoutes.ts',
       'packages/backend/src/routes/workgroups.ts',
       'packages/backend/tests/helpers/startTaskDeps.ts',
       'packages/backend/src/modules/integration/application/webhookDispatch.ts',

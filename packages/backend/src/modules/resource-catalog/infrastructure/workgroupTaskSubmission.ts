@@ -13,7 +13,7 @@
 // 判据只留这一份。RFC-352 在 memory 侧撞到过同形状的漂移（`canManage` 在两个 provider
 // 上一个是「只有 owner」、一个是 `write|own`），凡是「两个 provider 各抄一遍业务判据」
 // 的地方都有同样的风险。
-import type { WorkgroupTaskJsonSubmission } from '../public/types'
+import type { WorkgroupTaskJsonSubmission } from '../application/workgroups/taskRoomContracts'
 
 export function workgroupTaskSubmissionBody(submission: WorkgroupTaskJsonSubmission): unknown {
   try {

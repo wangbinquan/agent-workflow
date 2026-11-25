@@ -1,6 +1,6 @@
-import type { WorkgroupTaskRoomCommands } from '../../public/commands'
-import type { WorkgroupTaskRoomModule } from '../../public/operations'
-import type { WorkgroupTaskRoomQueries } from '../../public/queries'
+import type { WorkgroupTaskRoomCommands } from './taskRoomContracts'
+import type { WorkgroupTaskRoomModule } from './taskRoomContracts'
+import type { WorkgroupTaskRoomQueries } from './taskRoomContracts'
 
 /**
  * Provider-facing application driver.  It is deliberately identical to the

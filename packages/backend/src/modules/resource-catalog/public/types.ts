@@ -9,6 +9,7 @@ export type {
 } from '../domain/nativeAgentMaterialContents'
 
 import type {
+  BundleResourceType,
   McpRuntimeTestCancelRequest,
   McpRuntimeTestCreateRequest,
   McpRuntimeTestMessageRequest,
@@ -25,8 +26,6 @@ export { canEditAccess, canGovernAccess } from '../domain/resourceAccess'
 
 import type {
   Agent,
-  BundleResourceType,
-  CopyWorkflowRequest,
   CopyWorkgroupRequest,
   CreateAgent,
   CreateMcp,
@@ -50,7 +49,6 @@ import type {
   RenameMcpRequest,
   RenamePluginRequest,
   RenameWorkgroup,
-  SaveWorkflowReceipt,
   SaveWorkgroupReceipt,
   Skill,
   SkillContent,
@@ -74,15 +72,13 @@ import type {
 
 /** Closed public kind rosters alias the shared wire contracts directly. */
 export type CatalogSelectorKind = IntentResourceType
-export type PackageResourceKind = BundleResourceType
-
 /** Closed identity-only references owned by the Resource Catalog public surface. */
 export interface ResourceRef<K extends GrantResourceType = GrantResourceType> {
   readonly kind: K
   readonly id: string
 }
 
-export type PackageResourceRef<K extends PackageResourceKind = PackageResourceKind> = ResourceRef<K>
+export type PackageResourceRef<K extends BundleResourceType = BundleResourceType> = ResourceRef<K>
 export type CatalogResourceRef<K extends CatalogSelectorKind = CatalogSelectorKind> = ResourceRef<K>
 
 interface ResourceSummaryRevisionByKind {
@@ -138,7 +134,8 @@ export interface ResourceSummaryPage {
   readonly nextCursor: ResourceCatalogCursor | null
 }
 
-interface JsonBodySubmission {
+/** RFC-580: exported for the workflow contracts that moved into `application/`; the kept inputs here use it too. */
+export interface JsonBodySubmission {
   readonly kind: 'json-body'
   readonly body: string
 }
@@ -190,39 +187,6 @@ export interface DeleteSkillCatalogInput {
 
 export interface DeleteSkillCatalogReceipt {
   readonly deleted: Skill
-}
-
-export interface CreateWorkflowCatalogInput {
-  readonly submission: JsonBodySubmission
-}
-
-export interface CopyWorkflowCatalogInput {
-  readonly id: string
-  readonly copy: CopyWorkflowRequest
-}
-
-export interface UpdateWorkflowCatalogInput {
-  readonly id: string
-  readonly submission: JsonBodySubmission
-}
-
-export interface DeleteWorkflowCatalogInput {
-  readonly id: string
-  readonly submission: JsonBodySubmission
-}
-
-export type UpdateWorkflowCatalogReceipt = SaveWorkflowReceipt
-
-export interface DeleteWorkflowCatalogReceipt {
-  readonly deleted: Readonly<{
-    readonly id: string
-    readonly name: string
-    readonly ownerUserId: string | null
-    readonly visibility: 'public' | 'private'
-    readonly builtin: boolean
-  }>
-  readonly clientMutationId: string
-  readonly deletedVersion: number
 }
 
 export type CreateMcpCatalogInput = CreateMcp
@@ -902,62 +866,6 @@ export interface InspectResourcePackage {
 export interface ApplyResourcePackage {
   readonly submission: StagedResourcePackageSubmission
   readonly idempotencyKey: string
-}
-
-/**
- * Closed transport envelopes for the task-scoped Workgroup room.  The room
- * projection intentionally remains serialized here: it contains historical
- * template metadata whose JSON vocabulary is wider than the public Resource
- * Catalog contract, while the HTTP adapter must preserve the existing wire
- * byte-for-byte without exposing an open object or a persistence row.
- */
-export interface WorkgroupTaskJsonSubmission {
-  readonly kind: 'json-body'
-  readonly body: string
-}
-
-export interface WorkgroupTaskJsonDocument {
-  readonly kind: 'json-document'
-  readonly body: string
-}
-
-export interface WorkgroupTaskRef {
-  readonly taskId: string
-}
-
-export interface WorkgroupTaskAssignmentRef extends WorkgroupTaskRef {
-  readonly assignmentId: string
-}
-
-export interface WorkgroupTaskSubmission extends WorkgroupTaskRef {
-  readonly submission: WorkgroupTaskJsonSubmission
-}
-
-export interface WorkgroupTaskAssignmentSubmission extends WorkgroupTaskAssignmentRef {
-  readonly submission: WorkgroupTaskJsonSubmission
-}
-
-export interface WorkgroupTaskMessageReceipt {
-  readonly messageId: string
-  readonly assignmentIds: readonly string[]
-}
-
-export interface WorkgroupTaskDeliveryReceipt {
-  readonly messageId: string
-}
-
-export interface WorkgroupTaskDecisionReceipt {
-  readonly decision: 'approve' | 'reject'
-  readonly exhausted?: true
-}
-
-export interface WorkgroupTaskWorkflowReceipt {
-  readonly id: string
-  readonly name: string
-}
-
-export interface WorkgroupTaskConfigReceipt {
-  readonly changes: readonly string[]
 }
 
 export interface ExportResourcePackage {

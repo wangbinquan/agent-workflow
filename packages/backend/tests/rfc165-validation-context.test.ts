@@ -40,7 +40,7 @@ describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
       // RFC-478: services/task.ts's sync preview (its only validator call) moved here; the validation is injected.
       'src/modules/task-execution/application/workflowSyncPreviewQuery.ts',
       'src/routes/tasks.ts',
-      'src/routes/workflows.ts',
+      'src/modules/resource-catalog/inbound/http/workflowRoutes.ts',
       // RFC-470: the `services/workflow.validator.ts` re-export is gone; the launch-resource seam and the scheduled-task
       // snapshot gate (both resource-catalog now) are the remaining validator callers outside the validator itself.
       'src/modules/resource-catalog/infrastructure/agentLaunchResourceOperations.ts',

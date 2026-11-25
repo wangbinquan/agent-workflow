@@ -46,7 +46,16 @@ afterEach(async () => {
 
 const TOKEN = 'a'.repeat(64)
 
-const ROUTE_SOURCE = resolve(import.meta.dir, '..', 'src', 'routes', 'workflows.ts')
+const ROUTE_SOURCE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'resource-catalog',
+  'inbound',
+  'http',
+  'workflowRoutes.ts',
+)
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,
   inputs: [],

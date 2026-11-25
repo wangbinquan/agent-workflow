@@ -8,7 +8,7 @@ import {
   roundedModeOf,
 } from '../application/workgroups/workgroupRoomProjection'
 import type { WorkgroupOperationContext } from '../public/participants'
-import type { WorkgroupTaskRoomQueries } from '../public/queries'
+import type { WorkgroupTaskRoomQueries } from '../application/workgroups/taskRoomContracts'
 import {
   document,
   loadVisibleTask,

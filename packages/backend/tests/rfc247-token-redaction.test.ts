@@ -477,7 +477,12 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
 
   test('both workflow projections are wired on every outlet', () => {
     const routes = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes/workflows.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules/resource-catalog/inbound/http/workflowRoutes.ts',
+      ),
       'utf8',
     )
     // RFC-271 C1/C2 显式改判：6 → 4、2 → 1。YAML 导出与导入两条端点下线，随之少掉

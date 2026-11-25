@@ -81,3 +81,9 @@ export { createBuiltinWorkflowCatalog } from './infrastructure/builtinWorkflowCa
 export { composeCrewStationResourceArtifacts } from './infrastructure/crewstation/crewstationArtifacts'
 export { createHostedNativePluginReader } from './infrastructure/crewstation/crewstationNativePlugin'
 export { executeTaskImagePlugin } from './infrastructure/crewstation/taskImagePlugin'
+
+// RFC-580: the workflow, workgroup task-room and resource-package HTTP bindings live in this module's inbound layer;
+// server.ts mounts them through here.
+export { mountWorkflowRoutes } from './inbound/http/workflowRoutes'
+export { mountWorkgroupTaskRoutes } from './inbound/http/workgroupTaskRoutes'
+export { registerResourcePackageRoutes } from './inbound/http/resourcePackageRoutes'

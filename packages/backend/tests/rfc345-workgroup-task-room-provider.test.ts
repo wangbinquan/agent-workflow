@@ -11,7 +11,7 @@ const read = (path: string): string =>
 
 describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
   test('the route consumes one required closed module binding', () => {
-    const route = read('routes/workgroupTasks.ts')
+    const route = read('modules/resource-catalog/inbound/http/workgroupTaskRoutes.ts')
     expect(route).toContain('readonly module: WorkgroupTaskRoomModule')
     expect(route).toContain('readonly authorityFor: (actor: Actor) => WorkgroupOperationContext')
     expect(route).not.toContain('AppDeps')
@@ -23,10 +23,15 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
   test('the public contract is closed and provider clients remain private', () => {
     const types = read('modules/resource-catalog/public/types.ts')
     const operations = read('modules/resource-catalog/public/operations.ts')
+    // RFC-580: the room's closed envelopes and its route module moved into the task-room contracts with the binding.
+    const room = read('modules/resource-catalog/application/workgroups/taskRoomContracts.ts')
     expect(types).toContain("readonly kind: 'json-body'")
-    expect(types).toContain("readonly kind: 'json-document'")
-    expect(operations).toContain('export interface WorkgroupTaskRoomModule')
-    for (const source of [types, operations]) {
+    expect(room).toContain("readonly kind: 'json-body'")
+    expect(room).toContain("readonly kind: 'json-document'")
+    expect(room).toContain('export interface WorkgroupTaskRoomModule')
+    expect(types).not.toContain("readonly kind: 'json-document'")
+    expect(operations).not.toContain('export interface WorkgroupTaskRoomModule')
+    for (const source of [types, operations, room]) {
       expect(source).not.toContain('PostgresqlDatabaseClient')
       expect(source).not.toContain('DbClient')
     }

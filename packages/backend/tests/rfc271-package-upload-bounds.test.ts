@@ -14,7 +14,7 @@ import type { ResourcePackageExecutionAdapter } from '../src/modules/resource-ca
 import {
   registerResourcePackageRoutes,
   RESOURCE_PACKAGE_BODY_MAX_BYTES,
-} from '../src/routes/resourcePackages'
+} from '../src/modules/resource-catalog/inbound/http/resourcePackageRoutes'
 import { decodeZip, ZIP_LIMITS } from '../src/modules/resource-catalog/domain/zipArchive'
 import { errorHandler, ValidationError } from '../src/platform/errors/domainErrors'
 

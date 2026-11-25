@@ -28,13 +28,13 @@ import {
   type FrozenTaskExecutionResourceSnapshot,
   type IntegrationTriggerResourceRequest,
   type McpCatalogResource,
-  type PackageResourceKind,
   type PluginCatalogResource,
   type ResourceMemoryScopeRef,
   type SkillCatalogResource,
   type TaskExecutionResourceRequest,
   type VersionedIntentResourceChangesetPlan,
 } from '../src/modules/resource-catalog/public/types'
+import { type PackageResourceKind } from '@/modules/resource-catalog/domain/resourceKinds'
 import {
   ACL_CATALOG_KINDS,
   CATALOG_SELECTOR_KINDS,
@@ -77,9 +77,9 @@ import type {
   ResourcePackageCatalogModule,
   ResourcePackageOperationDescriptors,
   SkillOperationDescriptors,
-  WorkflowOperationDescriptors,
   WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
+import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/application/workflows/operationContracts'
 import type { PostgresqlResourcePackageTransactionParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type {
   AgentCatalogModule,
@@ -1392,7 +1392,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(publicTypes).not.toContain('readonly submission: unknown')
     expect(publicTypes).toContain("readonly kind: 'json-body'")
     expect(publicTypes).toContain('readonly body: string')
-    expect(publicTypes).toContain('readonly builtin: boolean')
+    // RFC-580: the workflow delete receipt (its closed `builtin` flag) moved into the workflow operation contracts.
+    expect(
+      readFileSync(
+        resolve(sourceRoot, 'modules/resource-catalog/application/workflows/operationContracts.ts'),
+        'utf8',
+      ),
+    ).toContain('readonly builtin: boolean')
     expect(publicTypes).toContain('interface AgentReferenceLabel {')
     expect(publicTypes).not.toContain('export interface AgentReferenceLabel {')
     expect(route).not.toContain('UpdateAgentRequestSchema')
@@ -1623,7 +1629,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('T5-WF active HTTP binding executes the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const route = readFileSync(resolve(sourceRoot, 'routes/workflows.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/workflowRoutes.ts'),
+      'utf8',
+    )
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/workflows/workflowApplication.ts'),
       'utf8',
@@ -1754,7 +1763,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageProvider.ts'),
       'utf8',
     )
-    const route = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/resourcePackageRoutes.ts'),
+      'utf8',
+    )
     const cli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
 
     expect(postgresqlEngine).toContain('resourceBundleApplies')
@@ -1910,7 +1922,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         .sort()
     const routeCases = [
       [
-        'agents.ts',
+        'routes/agents.ts',
         'agent',
         [
           'operations.list|GET|/api/agents',
@@ -1924,7 +1936,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'mcps.ts',
+        'routes/mcps.ts',
         'mcp',
         [
           'operations.list|GET|/api/mcps',
@@ -1938,7 +1950,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'plugins.ts',
+        'routes/plugins.ts',
         'plugin',
         [
           'operations.list|GET|/api/plugins',
@@ -1954,7 +1966,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'skills.ts',
+        'routes/skills.ts',
         'skill',
         [
           'operations.list|GET|/api/skills',
@@ -1976,7 +1988,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'workflows.ts',
+        'modules/resource-catalog/inbound/http/workflowRoutes.ts',
         'workflow',
         [
           'operations.list|GET|/api/workflows',
@@ -1990,7 +2002,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'workgroups.ts',
+        'routes/workgroups.ts',
         'workgroup',
         [
           'operations.list|GET|/api/workgroups',
@@ -2006,7 +2018,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       ],
     ] as const
     for (const [file, resource, expectedBindings] of routeCases) {
-      const route = readFileSync(resolve(sourceRoot, 'routes', file), 'utf8')
+      const route = readFileSync(resolve(sourceRoot, file), 'utf8')
       expect(operationBindings(route), file).toEqual([...expectedBindings].sort())
       expect(route.split('registerOperationRoute(app, {').length - 1).toBe(expectedBindings.length)
       expect(route).toContain('descriptor: operations.getAcl')
@@ -2023,7 +2035,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(operations).toContain(`${operationPrefix}.update-${resource}-acl.v1`)
     }
 
-    const packageRoute = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
+    const packageRoute = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/resourcePackageRoutes.ts'),
+      'utf8',
+    )
     const packageCli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
     const bindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
     const aclApplication = readFileSync(
@@ -2183,7 +2198,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .join('\n')
     const routeConsumerContracts = new Map<string, readonly string[]>([
       [
-        'agents.ts',
+        'routes/agents.ts',
         [
           'CreateAgentCatalogInput',
           'UpdateAgentCatalogInput',
@@ -2195,7 +2210,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'skills.ts',
+        'routes/skills.ts',
         [
           'CreateSkillCatalogInput',
           'SaveSkillCatalogInput',
@@ -2204,7 +2219,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'mcps.ts',
+        'routes/mcps.ts',
         [
           'CreateMcpCatalogInput',
           'UpdateMcpCatalogInput',
@@ -2214,7 +2229,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'plugins.ts',
+        'routes/plugins.ts',
         [
           'CreatePluginCatalogInput',
           'UpdatePluginCatalogInput',
@@ -2228,7 +2243,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'workflows.ts',
+        'modules/resource-catalog/inbound/http/workflowRoutes.ts',
         [
           'CreateWorkflowCatalogInput',
           'CopyWorkflowCatalogInput',
@@ -2239,7 +2254,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'workgroups.ts',
+        'routes/workgroups.ts',
         [
           'CreateWorkgroupCatalogInput',
           'CopyWorkgroupCatalogInput',
@@ -2326,7 +2341,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(publicTypes).not.toContain(`export type ${internalLeaf}`)
     }
     for (const [route, contracts] of routeConsumerContracts) {
-      const routeSource = readFileSync(resolve(sourceRoot, 'routes', route), 'utf8')
+      const routeSource = readFileSync(resolve(sourceRoot, route), 'utf8')
       for (const contract of contracts) expect(routeSource).toContain(contract)
     }
     expect(maintenanceWorker).toContain('createAtomicApplyRecovery')

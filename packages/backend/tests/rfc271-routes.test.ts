@@ -21,7 +21,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'routes', 'resourcePackages.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'resource-catalog',
+    'inbound',
+    'http',
+    'resourcePackageRoutes.ts',
+  ),
   'utf8',
 )
 const OPERATIONS = readFileSync(

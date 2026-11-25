@@ -1,7 +1,7 @@
 // RFC-550 (RFC-294 S9): the package mutations a bundle apply prepares — the per-resource mutation and prepared types,
 // their union, its kind guards and the per-resource receipt. They sat on `public/types` without any other module
 // consuming them.
-import type { PackageResourceKind } from '../../public/types'
+import type { PackageResourceKind } from '../../domain/resourceKinds'
 import type { BundleOp } from '@agent-workflow/shared'
 
 export interface ResourcePackageMutationReceipt<

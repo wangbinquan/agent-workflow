@@ -45,7 +45,7 @@ import {
 } from './helpers/legacyWorkgroupState'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { resolveMentions } from '../src/routes/workgroupTasks'
+import { resolveMentions } from '../src/modules/resource-catalog/inbound/http/workgroupTaskRoutes'
 import { createLogger } from '../src/platform/logging/logger'
 import { createAgent } from './helpers/model/resourceWrites'
 

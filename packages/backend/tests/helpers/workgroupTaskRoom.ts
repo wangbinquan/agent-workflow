@@ -14,7 +14,7 @@ import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/col
 import { composeWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import type { WorkgroupTaskRoomDynamicWorkflowOperations } from '@/modules/resource-catalog/application/workgroups/ports'
 import type { WorkgroupTaskRoomContinuationDriver } from '@/modules/resource-catalog/infrastructure/workgroupTaskRoom'
-import type { WorkgroupTaskRoomModule } from '@/modules/resource-catalog/public/operations'
+import type { WorkgroupTaskRoomModule } from '@/modules/resource-catalog/application/workgroups/taskRoomContracts'
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 
 export interface TestWorkgroupTaskRoomOptions {

@@ -1,35 +1,31 @@
 // RFC-345 closed, data-only Resource Catalog operation descriptor and module contracts.
 
-import type { FileNode, ResourceAcl, Workflow, Workgroup } from '@agent-workflow/shared'
+import type { FileNode, ResourceAcl, Workgroup } from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type {
   CommandOperationDescriptor,
   IdempotentCommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
-import type { WorkgroupTaskRoomCommands } from './commands'
 import type {
   AgentOperationContext,
   McpAclIdentityParticipant,
   McpOperationContext,
   PluginOperationContext,
   SkillOperationContext,
-  WorkflowOperationContext,
   WorkgroupOperationContext,
 } from './participants'
-import type { McpQueries, WorkgroupTaskRoomQueries } from './queries'
+import type { McpQueries } from './queries'
 import type {
   AgentCatalogResource,
   ApplyResourcePackage,
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
-  CopyWorkflowCatalogInput,
   CopyWorkgroupCatalogInput,
   CreateAgentCatalogInput,
   CreateMcpCatalogInput,
   CreatePluginCatalogInput,
   CreateSkillCatalogInput,
-  CreateWorkflowCatalogInput,
   CreateWorkgroupCatalogInput,
   DeleteAgentCatalogInput,
   DeleteAgentCatalogReceipt,
@@ -41,8 +37,6 @@ import type {
   DeleteSkillCatalogReceipt,
   DeleteSkillFileCatalogInput,
   DeleteSkillFileCatalogReceipt,
-  DeleteWorkflowCatalogInput,
-  DeleteWorkflowCatalogReceipt,
   DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   DiffSkillVersionsCatalogInput,
@@ -54,7 +48,6 @@ import type {
   GetSkillCatalogInput,
   GetSkillContentCatalogInput,
   GetSkillVersionContentCatalogInput,
-  GetWorkflowCatalogInput,
   GetWorkgroupCatalogInput,
   InspectResourcePackage,
   ListSkillFilesCatalogInput,
@@ -78,19 +71,17 @@ import type {
   UpdateMcpCatalogInput,
   UpdatePluginCatalogInput,
   UpdateResourceAclCatalogInput,
-  UpdateWorkflowCatalogInput,
-  UpdateWorkflowCatalogReceipt,
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
-  WorkflowCatalogDetail,
   WorkgroupCatalogDetail,
   WriteSkillFileCatalogInput,
   WriteSkillFileCatalogReceipt,
 } from './types'
 
-interface ResourceAclOperationDescriptors<Context> {
+/** RFC-580: exported for the workflow descriptors that moved into `application/`; every ACL-governed descriptor here extends it. */
+export interface ResourceAclOperationDescriptors<Context> {
   readonly getAcl: QueryOperationDescriptor<GetResourceAclCatalogInput, ResourceAcl, Context>
   readonly updateAcl: CommandOperationDescriptor<
     UpdateResourceAclCatalogInput,
@@ -289,39 +280,6 @@ export interface PluginOperationDescriptors extends ResourceAclOperationDescript
   >
 }
 
-export interface WorkflowOperationDescriptors extends ResourceAclOperationDescriptors<WorkflowOperationContext> {
-  readonly list: QueryOperationDescriptor<
-    Record<never, never>,
-    Workflow[],
-    WorkflowOperationContext
-  >
-  readonly get: QueryOperationDescriptor<
-    GetWorkflowCatalogInput,
-    WorkflowCatalogDetail | null,
-    WorkflowOperationContext
-  >
-  readonly create: CommandOperationDescriptor<
-    CreateWorkflowCatalogInput,
-    WorkflowCatalogDetail,
-    WorkflowOperationContext
-  >
-  readonly copy: CommandOperationDescriptor<
-    CopyWorkflowCatalogInput,
-    WorkflowCatalogDetail,
-    WorkflowOperationContext
-  >
-  readonly update: CommandOperationDescriptor<
-    UpdateWorkflowCatalogInput,
-    UpdateWorkflowCatalogReceipt,
-    WorkflowOperationContext
-  >
-  readonly delete: CommandOperationDescriptor<
-    DeleteWorkflowCatalogInput,
-    DeleteWorkflowCatalogReceipt,
-    WorkflowOperationContext
-  >
-}
-
 export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescriptors<WorkgroupOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
@@ -358,12 +316,6 @@ export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescr
     UpdateWorkgroupCatalogReceipt,
     WorkgroupOperationContext
   >
-}
-
-/** Required route binding for the task-scoped room/config/action aggregate. */
-export interface WorkgroupTaskRoomModule {
-  readonly commands: WorkgroupTaskRoomCommands
-  readonly queries: WorkgroupTaskRoomQueries
 }
 
 interface ResourcePackagePreviewReceipt {

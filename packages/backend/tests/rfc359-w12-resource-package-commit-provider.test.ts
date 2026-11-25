@@ -40,7 +40,7 @@ import type { PostgresqlResourcePackageApplyReceipt } from '@/modules/resource-c
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
+import { registerResourcePackageRoutes } from '@/modules/resource-catalog/inbound/http/resourcePackageRoutes'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { errorHandler } from '@/platform/errors/domainErrors'
 import { encodeZip } from '@/platform/content/zip'

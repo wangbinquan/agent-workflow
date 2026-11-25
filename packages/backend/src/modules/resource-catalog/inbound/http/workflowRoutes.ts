@@ -19,7 +19,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/public/operations'
+import type { WorkflowOperationDescriptors } from '../../application/workflows/operationContracts'
 import type { WorkflowOperationContext } from '@/modules/resource-catalog/public/participants'
 import type {
   WorkflowQueries,
@@ -32,7 +32,7 @@ import type {
   DeleteWorkflowCatalogReceipt,
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
-} from '@/modules/resource-catalog/public/types'
+} from '../../application/workflows/operationContracts'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'

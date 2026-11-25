@@ -83,7 +83,10 @@ const EXTENDED_FILES: Readonly<Record<string, readonly string[]>> = {
 const LOCATIONS = [...Object.keys(NEW_FILES), ...Object.keys(EXTENDED_FILES)]
 /** Declarations that share a moved name and predate RFC-504, pinned one by one (design §3). */
 const HOMONYMS: Readonly<Record<string, readonly string[]>> = {
-  ResourcePackageExportFence: [`${COMP}/resourcePackageExecution`, 'routes/resourcePackages'],
+  ResourcePackageExportFence: [
+    `${COMP}/resourcePackageExecution`,
+    'modules/resource-catalog/inbound/http/resourcePackageRoutes',
+  ],
   ResourcePackageExecutionAdapter: [`${COMP}/resourcePackageExecution`],
   ResourcePackageInspectExecutionInput: [`${COMP}/resourcePackageExecution`],
   ResourcePackageApplyExecutionInput: [`${COMP}/resourcePackageExecution`],

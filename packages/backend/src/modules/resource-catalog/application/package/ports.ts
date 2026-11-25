@@ -1,7 +1,7 @@
 import type { BundleResourceType, ResourceVisibility } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
-import type { PackageResourceKind } from '../../public/types'
+import type { PackageResourceKind } from '../../domain/resourceKinds'
 
 export interface ResourcePackageExportReceipt {
   readonly packageId: string

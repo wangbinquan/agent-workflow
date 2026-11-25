@@ -8,7 +8,7 @@ import type {
   StartMcpDiagnosticsInput,
   SubmitMcpDiagnosticsTurnInput,
 } from './types'
-import type { SkillOperationContext, WorkgroupOperationContext } from './participants'
+import type { SkillOperationContext } from './participants'
 import type {
   DeleteSkillFileCatalogInput,
   DeleteSkillFileCatalogReceipt,
@@ -16,14 +16,6 @@ import type {
   RestoreSkillVersionCatalogReceipt,
   WriteSkillFileCatalogInput,
   WriteSkillFileCatalogReceipt,
-  WorkgroupTaskAssignmentRef,
-  WorkgroupTaskAssignmentSubmission,
-  WorkgroupTaskConfigReceipt,
-  WorkgroupTaskDecisionReceipt,
-  WorkgroupTaskDeliveryReceipt,
-  WorkgroupTaskMessageReceipt,
-  WorkgroupTaskSubmission,
-  WorkgroupTaskWorkflowReceipt,
 } from './types'
 
 export interface SkillFileCommands {
@@ -58,38 +50,6 @@ export interface PluginGenerationGcReceipt {
 /** Provider-neutral maintenance command; persistence and filesystem stay private. */
 export interface PluginGenerationGcCommand {
   run(input: PluginGenerationGcInput): Promise<PluginGenerationGcReceipt>
-}
-
-/** Task-scoped Workgroup mutations; transport parsing and provider clients stay private. */
-export interface WorkgroupTaskRoomCommands {
-  postMessage(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskSubmission,
-  ): Promise<WorkgroupTaskMessageReceipt>
-  deliverAssignment(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskAssignmentSubmission,
-  ): Promise<WorkgroupTaskDeliveryReceipt>
-  confirmGate(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskSubmission,
-  ): Promise<WorkgroupTaskDecisionReceipt>
-  confirmDynamicWorkflow(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskSubmission,
-  ): Promise<WorkgroupTaskDecisionReceipt>
-  saveDynamicWorkflow(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskSubmission,
-  ): Promise<WorkgroupTaskWorkflowReceipt>
-  updateConfig(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskSubmission,
-  ): Promise<WorkgroupTaskConfigReceipt>
-  cancelAssignment(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskAssignmentRef,
-  ): Promise<void>
 }
 
 export interface McpDiagnosticsCommands {

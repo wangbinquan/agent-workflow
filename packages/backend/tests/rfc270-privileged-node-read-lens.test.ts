@@ -223,8 +223,8 @@ describe('RFC-270 · 接线：每个定义出口都过镜头', () => {
   const src = (file: string): string =>
     readFileSync(resolve(import.meta.dir, '..', 'src', file), 'utf8')
 
-  test('routes/workflows.ts 的每次 serialize 调用都传 workflowReadLensFor', () => {
-    const routes = src('routes/workflows.ts')
+  test('工作流路由（resource-catalog inbound/http/workflowRoutes.ts）的每次 serialize 调用都传 workflowReadLensFor', () => {
+    const routes = src('modules/resource-catalog/inbound/http/workflowRoutes.ts')
     const calls = routes.match(/serializeWorkflow(?:Receipt)?For\(/g) ?? []
     // RFC-271 C1/C2 显式改判：8 → 5。YAML 导出与导入两条端点下线，随之少掉三个
     // 出口（export 的 record、import 的 created record 与 overwritten receipt）。

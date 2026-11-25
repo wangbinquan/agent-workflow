@@ -111,7 +111,7 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   })
 
   test('Workflow validation and D15 admission are provider-owned queries', () => {
-    const route = source('routes/workflows.ts')
+    const route = source('modules/resource-catalog/inbound/http/workflowRoutes.ts')
     const application = source(
       'modules/resource-catalog/application/workflows/workflowValidation.ts',
     )
@@ -167,19 +167,20 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   })
 
   test('all classic HTTP routes mount only closed Resource Catalog dependencies', () => {
-    for (const routeName of [
-      'agents',
-      'skills',
-      'mcps',
-      'plugins',
-      'workflows',
-      'workgroups',
-      'resourcePackages',
-      'resourceAcl',
+    // RFC-580: the workflow and resource-package bindings moved into resource-catalog's inbound layer.
+    for (const path of [
+      'routes/agents.ts',
+      'routes/skills.ts',
+      'routes/mcps.ts',
+      'routes/plugins.ts',
+      'modules/resource-catalog/inbound/http/workflowRoutes.ts',
+      'routes/workgroups.ts',
+      'modules/resource-catalog/inbound/http/resourcePackageRoutes.ts',
+      'routes/resourceAcl.ts',
     ]) {
-      const route = source(`routes/${routeName}.ts`)
-      expect(route, routeName).not.toMatch(/\bAppDeps\b|\bDbClient\b|\bdeps\.db\b/)
-      expect(route, routeName).not.toMatch(/from ['"](?:@\/db\/|drizzle-orm)/)
+      const route = source(path)
+      expect(route, path).not.toMatch(/\bAppDeps\b|\bDbClient\b|\bdeps\.db\b/)
+      expect(route, path).not.toMatch(/from ['"](?:@\/db\/|drizzle-orm)/)
     }
   })
 })

@@ -272,7 +272,9 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
   'packages/backend/src/routes/mcps.ts': aggregateAndAclGates(MCP_OPERATION_SOURCE),
   'packages/backend/src/routes/plugins.ts': aggregateAndAclGates(PLUGIN_OPERATION_SOURCE),
   'packages/backend/src/routes/skills.ts': aggregateAndAclGates(SKILL_OPERATION_SOURCE),
-  'packages/backend/src/routes/workflows.ts': aggregateAndAclGates(WORKFLOW_OPERATION_SOURCE),
+  // RFC-580: the workflow HTTP binding moved into resource-catalog's inbound layer.
+  'packages/backend/src/modules/resource-catalog/inbound/http/workflowRoutes.ts':
+    aggregateAndAclGates(WORKFLOW_OPERATION_SOURCE),
   'packages/backend/src/routes/workgroups.ts': aggregateAndAclGates(WORKGROUP_OPERATION_SOURCE),
   [CAPABILITY_TEMPLATE_ROUTE]: CAPABILITY_TEMPLATE_OPERATION_GATES,
 }

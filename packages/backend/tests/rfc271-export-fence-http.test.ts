@@ -33,7 +33,7 @@ import type {
   QueryContext,
 } from '../src/modules/identity-access/public/participants'
 import { errorHandler } from '../src/platform/errors/domainErrors'
-import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
+import { registerResourcePackageRoutes } from '../src/modules/resource-catalog/inbound/http/resourcePackageRoutes'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'

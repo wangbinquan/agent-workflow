@@ -47,9 +47,9 @@ import type {
   PluginOperationDescriptors,
   ResourcePackageOperationDescriptors,
   SkillOperationDescriptors,
-  WorkflowOperationDescriptors,
   WorkgroupOperationDescriptors,
 } from '../public/operations'
+import type { WorkflowOperationDescriptors } from '../application/workflows/operationContracts'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import { operationId } from '@/platform/operations/catalog'
 import { zodOperationCodec } from '@/platform/operations/codecs'
@@ -61,13 +61,11 @@ import type {
 import type {
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
-  CopyWorkflowCatalogInput,
   CopyWorkgroupCatalogInput,
   CreateAgentCatalogInput,
   CreateMcpCatalogInput,
   CreatePluginCatalogInput,
   CreateSkillCatalogInput,
-  CreateWorkflowCatalogInput,
   CreateWorkgroupCatalogInput,
   DeleteAgentCatalogInput,
   DeleteAgentCatalogReceipt,
@@ -77,8 +75,6 @@ import type {
   DeletePluginCatalogReceipt,
   DeleteSkillCatalogInput,
   DeleteSkillCatalogReceipt,
-  DeleteWorkflowCatalogInput,
-  DeleteWorkflowCatalogReceipt,
   DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   GetResourceAclCatalogInput,
@@ -91,13 +87,19 @@ import type {
   UpdateMcpCatalogInput,
   UpdatePluginCatalogInput,
   UpdateResourceAclCatalogInput,
-  UpdateWorkflowCatalogInput,
-  UpdateWorkflowCatalogReceipt,
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
 } from '../public/types'
+import type {
+  CopyWorkflowCatalogInput,
+  CreateWorkflowCatalogInput,
+  DeleteWorkflowCatalogInput,
+  DeleteWorkflowCatalogReceipt,
+  UpdateWorkflowCatalogInput,
+  UpdateWorkflowCatalogReceipt,
+} from '../application/workflows/operationContracts'
 import type { SkillFileCommands, SkillVersionCommands } from '../public/commands'
 import type {
   AgentOperationContext,

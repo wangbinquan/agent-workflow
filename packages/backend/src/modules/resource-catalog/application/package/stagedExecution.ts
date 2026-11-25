@@ -13,12 +13,12 @@ import type {
   ResourcePackageSecretInput,
 } from './ports'
 import {
-  type PackageResourceKind,
   type PackageResourceRef,
   type ApplyResourcePackage,
   type ExportResourcePackage,
   type InspectResourcePackage,
 } from '../../public/types'
+import { type PackageResourceKind } from '../../domain/resourceKinds'
 import { PACKAGE_RESOURCE_KINDS } from '../../domain/resourceKinds'
 
 export interface ResourcePackageExportFence {

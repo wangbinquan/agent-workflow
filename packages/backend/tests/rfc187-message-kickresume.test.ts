@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { isWorkgroupKickResumable } from '../src/routes/workgroupTasks'
+import { isWorkgroupKickResumable } from '../src/modules/resource-catalog/inbound/http/workgroupTaskRoutes'
 
 describe('RFC-187 F2 — isWorkgroupKickResumable', () => {
   test('awaiting_human and interrupted are resumable (message/delivery/patch re-drive)', () => {
@@ -28,7 +28,8 @@ describe('RFC-187 F2 — isWorkgroupKickResumable', () => {
 describe('RFC-187 F2 — source lock (all gated kick sites use the resumable gate)', () => {
   // RFC-217 T4 把写端点（连同它们的 kick 点）从 routes/workgroupTasks.ts 挪进了 Resource Catalog；
   // RFC-359 W4-D19b 又把两个 provider 的房间合成一份中立实现，kick 点随之落在它的命令面里。
-  const SRC = ['routes/workgroupTasks.ts']
+  // RFC-580: the room HTTP binding moved into resource-catalog's inbound layer.
+  const SRC = ['modules/resource-catalog/inbound/http/workgroupTaskRoutes.ts']
     .concat([
       'modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
       'modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',

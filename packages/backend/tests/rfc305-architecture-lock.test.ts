@@ -384,6 +384,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts -> @/modules/identity-access/public/participants',
       // RFC-455: the resource-package execution adapter moved from services/resourcePackage into resource-catalog composition.
       'packages/backend/src/modules/resource-catalog/composition/resourcePackageExecution.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/inbound/http/resourcePackageRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts -> @/modules/identity-access/public/participants',
@@ -451,7 +452,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/routes/mcps.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/operationAuthority.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/routes/resourcePackages.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',

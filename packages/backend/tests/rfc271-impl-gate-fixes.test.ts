@@ -347,7 +347,7 @@ describe('P2-3 · lower 必须预载 payload 内 external 目标的名字', () =
 
 describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
   test('handler 只传 root query；闭包成员由 exporter 内部稳定性复核', () => {
-    const routes = read('src/routes/resourcePackages.ts')
+    const routes = read('src/modules/resource-catalog/inbound/http/resourcePackageRoutes.ts')
     expect(routes).toContain('parseRootFence(c)')
     expect(routes).toContain('expectedVersion')
     const exportSrc = read('src/modules/resource-catalog/application/package/export.ts')
@@ -382,7 +382,7 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
 
   test('写错的数值是拒绝，不是当没给', () => {
     // 静默忽略一个写错的 fence，等于用户以为有保护而实际没有。
-    const routes = read('src/routes/resourcePackages.ts')
+    const routes = read('src/modules/resource-catalog/inbound/http/resourcePackageRoutes.ts')
     // 判据是**逐字段的取值域**，不是一刀切「非负整数」：version / contentVersion 从 1
     // 起（0 是不可能存在的值），aclRevision / metaRevision 从 0 起（0 是合法初值）。
     expect(routes).toContain('must be a decimal integer')
@@ -394,7 +394,7 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     // expectedSnapshotHash —— 即只覆盖 workflow / workgroup。AC-12 的警告写的正是
     // 这个状态：「另一标签修改 agent 正文后，原标签点导出会静默导出新版本而不是
     // 409」。
-    const routes = read('src/routes/resourcePackages.ts')
+    const routes = read('src/modules/resource-catalog/inbound/http/resourcePackageRoutes.ts')
     for (const key of [
       'expectedVersion',
       'expectedUpdatedAt',

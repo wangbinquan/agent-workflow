@@ -326,7 +326,16 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
 
 describe('RFC-209 §1.3 — 路由层不再硬编码 round: 0', () => {
   const ROUTES = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'routes', 'workgroupTasks.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'inbound',
+      'http',
+      'workgroupTaskRoutes.ts',
+    ),
     'utf8',
   )
 

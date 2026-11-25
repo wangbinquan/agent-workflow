@@ -61,8 +61,6 @@ import type {
   ResolveAgentDependencyIdsInput,
   ResolvedAgentDependencyIds,
   ValidateAgentDependenciesInput,
-  WorkgroupTaskJsonDocument,
-  WorkgroupTaskRef,
 } from './types'
 
 /** Provider-neutral classic-six selector shared by Intent selection and dump. */
@@ -208,16 +206,6 @@ export interface WorkgroupQueries {
     authority: WorkgroupOperationContext,
     input: GetWorkgroupCatalogInput,
   ): Promise<WorkgroupCatalogDetail | null>
-}
-
-/** Task-scoped Workgroup room projections encoded as closed JSON documents. */
-export interface WorkgroupTaskRoomQueries {
-  pendingCount(authority: WorkgroupOperationContext): Promise<WorkgroupTaskJsonDocument>
-  pending(authority: WorkgroupOperationContext): Promise<WorkgroupTaskJsonDocument>
-  room(
-    authority: WorkgroupOperationContext,
-    input: WorkgroupTaskRef,
-  ): Promise<WorkgroupTaskJsonDocument>
 }
 
 /** Closed snapshot of apply operations currently owned by this process. */

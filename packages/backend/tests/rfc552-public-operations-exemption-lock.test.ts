@@ -94,14 +94,12 @@ const LEDGER: Readonly<Record<string, ModuleLedger>> = {
         'PluginOperationDescriptors',
         'ResourcePackageOperationDescriptors',
         'SkillOperationDescriptors',
-        'WorkflowOperationDescriptors',
         'WorkgroupOperationDescriptors',
+        // RFC-580: exported for the workflow descriptors that moved into `application/` (every ACL-governed descriptor
+        // here extends it); WorkflowOperationDescriptors and WorkgroupTaskRoomModule moved with their HTTP bindings.
+        'ResourceAclOperationDescriptors',
       ],
-      'handle contract': [
-        'McpCatalogModule',
-        'ResourcePackageCatalogModule',
-        'WorkgroupTaskRoomModule',
-      ],
+      'handle contract': ['McpCatalogModule', 'ResourcePackageCatalogModule'],
     },
   },
   'source-control': {
