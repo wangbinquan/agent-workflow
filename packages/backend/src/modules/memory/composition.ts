@@ -227,3 +227,7 @@ export { schemaContribution } from './composition/schema'
 export { createDistillEventRetentionPhase } from './infrastructure/retentionPhase'
 
 export { composeTaskMemorySnapshotPort } from './application/adapters/task-execution-adapter'
+
+// RFC-578: the two HTTP bindings live in this module's inbound layer; server.ts mounts them through here.
+export { mountMemoryRoutes } from './inbound/http/memoryRoutes'
+export { mountMemoryDistillJobRoutes } from './inbound/http/memoryDistillJobRoutes'

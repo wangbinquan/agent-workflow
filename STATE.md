@@ -1,4 +1,30 @@
-## 2026-11-25 RFC-577 execution-contract 与 integration 的路由归入模块 inbound（In Progress；`design/RFC-577-single-route-families-into-inbound/`）
+## 2026-11-25 RFC-578 memory 与 source-control 的路由归入模块 inbound（In Progress；`design/RFC-578-memory-source-control-routes-into-inbound/`）
+
+- **来由**：RFC-577 之后 `routes/` 还剩 41 个文件。按 RFC-576 / RFC-577 的教训，先按架构报告的消费者表与 public 类型引用把每族迁进 owner 模块之后要
+  撤回的 public 符号算到不动点：memory 4、source-control（不含账户仓库的传输凭据）9、collaboration 25、development-automation 22、task-execution 10
+  （另有两条不在 DAG 里的类型边）、resource-catalog 92。memory 与 source-control 最干净，作为第三批。用户 2026-11-02「好，你继续推进RFC294，过程中你
+  以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的
+  设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`routes/memories`、`memoryDistillJobs` 迁入 `modules/memory/inbound/http/`（`memoryRoutes.ts`、`memoryDistillJobRoutes.ts`），`routes/repos`、
+  `repoGroups`、`cached-repos` 迁入 `modules/source-control/inbound/http/`（`repoRoutes.ts`、`repoGroupRoutes.ts`、`cachedRepoRoutes.ts`），挂载函数经各
+  模块的 `composition.ts` 转出，`server.ts` 改从那里取；挂载调用与顺序不变。撤回 13 个只被这些路由用的 public 转出（memory 的候选收窄判据及其两个
+  参数类型，source-control 的仓库、缓存仓库与仓库组三组端口类型），读者改取声明处。随改：归属表五行、`counts.json`、`rfc305` 的消费者账本、读源码
+  或按路径扫描的十余个用例与两处对照；新增 RFC-578 用例；`docs/dev-gotchas.md` 补“撤回要算到不动点”一条。
+- **不做**：collaboration、development-automation、resource-catalog（撤回多，各自另立）；task-execution（先要定两条不在 DAG 里的类型边）；
+  `routes/accountRepositoryTransportCredentials.ts`（凭据相邻，延后）；task-catalog（RFC-577 design §5）；路由传输工具归位。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 两个 public 面收窄 13 个只被
+  本模块用的转出；C12 RFC-578 用例覆盖 `src` / `tests` / `scripts` 的全部说明符、五个绑定、两个 public 文件与 `server.ts`；C13
+  `legacy-horizontal-files` 89 → 84，未消费 public 符号保持 0，其余计数不升。
+- **集中验证**（基于 `f21fd1ced`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。撤回的推算与候选报告一致（正是那 13 个）。查出本人
+  缺陷两组（`tsc` 报三个用例经 public 取 `RepositoryMirrors`；选用例四条红：一份路径清单漏改、账本一条插错位置、`rfc440` 按名字拼路径、`rfc559` 的
+  非空对照只数转出），均已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 567 个用例文件，修后 4877 条全部通过；读已提交源码的 228 个
+  用例文件、2155 条在候选导出里通过（含只能在提交上跑的 `route-error-code-coverage`）；九种变异都被认出；架构报告 60 个计数里只有 legacy 横向文件数
+  变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户
+  说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-577 的提交 `f21fd1ced`：exact SHA 主 CI run 45548520359 70 / 70 全绿；按路径触发的 windows-platform（run 45548520358）通过，
+  RFC-577 转 Done。
+
+## 2026-11-25 RFC-577 execution-contract 与 integration 的路由归入模块 inbound（Done，`f21fd1ced`；`design/RFC-577-single-route-families-into-inbound/`）
 
 - **来由**：RFC-576 之后 `routes/` 还剩 43 个文件；按 owner 分族，只有一个路由的三族（execution-contract、integration、task-catalog）最简单，作为
   `routes/` → 模块 `inbound/` 的第二批。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、

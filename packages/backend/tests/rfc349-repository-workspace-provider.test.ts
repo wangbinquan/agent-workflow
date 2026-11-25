@@ -91,9 +91,10 @@ describe('RFC-349 repository workspace provider boundary', () => {
       'modules/source-control/infrastructure/local/repositoryMirrorAutoRefresh.ts',
       // RFC-453: moved from services/worktreeFileContent.ts.
       'modules/workspace-insight/application/fileContent.ts',
-      'routes/cached-repos.ts',
-      'routes/repoGroups.ts',
-      'routes/repos.ts',
+      // RFC-578: the three repository routes moved into source-control's inbound layer.
+      'modules/source-control/inbound/http/cachedRepoRoutes.ts',
+      'modules/source-control/inbound/http/repoGroupRoutes.ts',
+      'modules/source-control/inbound/http/repoRoutes.ts',
       'routes/worktree-files.ts',
     ]
     for (const path of production) {

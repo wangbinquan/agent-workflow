@@ -36,7 +36,7 @@ import { mountFusionRoutes } from '@/modules/knowledge-evolution/inbound/fusionR
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountScheduledTaskRoutes } from '@/modules/integration/inbound/http/scheduledTaskRoutes'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
-import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
+import { mountMemoryDistillJobRoutes } from '@/modules/memory/inbound/http/memoryDistillJobRoutes'
 import { mountAgentRoutes } from '@/routes/agents'
 import {
   createAgentOperationDescriptors,

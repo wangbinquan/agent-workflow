@@ -16,7 +16,7 @@ import {
   StartBatchImportRequestSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import type { CachedRepositoryOperations } from '@/modules/source-control/public/types'
+import type { CachedRepositoryOperations } from '../../application/ports/cachedRepositoryOperations'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'

@@ -15,7 +15,7 @@ import { Hono } from 'hono'
 import { ALL_TOOLS, describeResource, type McpToolContext } from '@/mcp/tools'
 import { MCP_OPERATIONS } from '@/mcp/operationBindings'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
-import { mountCachedRepoRoutes } from '@/routes/cached-repos'
+import { mountCachedRepoRoutes } from '@/modules/source-control/inbound/http/cachedRepoRoutes'
 import { ConflictError } from '@/platform/errors/domainErrors'
 import {
   recordingOperationHandles,

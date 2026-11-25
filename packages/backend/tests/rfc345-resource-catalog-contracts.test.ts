@@ -544,7 +544,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/memory/infrastructure/memoryCatalogOperations.ts'),
       'utf8',
     )
-    const memoryRoute = readFileSync(resolve(sourceRoot, 'routes/memories.ts'), 'utf8')
+    const memoryRoute = readFileSync(
+      resolve(sourceRoot, 'modules/memory/inbound/http/memoryRoutes.ts'),
+      'utf8',
+    )
     const overviewRoute = readFileSync(
       resolve(sourceRoot, 'modules/system-operations/inbound/http/overviewRoutes.ts'),
       'utf8',

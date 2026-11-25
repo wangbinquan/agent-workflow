@@ -28,11 +28,8 @@ import type { Memory, MemorySummary } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
-import {
-  isMemoryHiddenCandidate,
-  narrowCandidateRows,
-  type MemoryScopeRef,
-} from '@/modules/memory/public/types'
+import { isMemoryHiddenCandidate, narrowCandidateRows } from '../../domain/candidateVisibility'
+import type { MemoryScopeRef } from '@/modules/memory/public/types'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'

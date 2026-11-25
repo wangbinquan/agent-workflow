@@ -109,8 +109,15 @@ describe('RFC-440 —— 引用与方向', () => {
   })
 
   test('skills、memories、workgroups、workflows、plugins 五个路由不再 import services/', () => {
-    for (const name of ['skills', 'memories', 'workgroups', 'workflows', 'plugins']) {
-      const path = join(SRC, 'routes', `${name}.ts`)
+    // RFC-578: the memory route moved from `routes/memories.ts` into memory's inbound layer.
+    const routes: ReadonlyArray<readonly [string, string]> = [
+      ['skills', join(SRC, 'routes', 'skills.ts')],
+      ['memories', join(SRC, 'modules', 'memory', 'inbound', 'http', 'memoryRoutes.ts')],
+      ['workgroups', join(SRC, 'routes', 'workgroups.ts')],
+      ['workflows', join(SRC, 'routes', 'workflows.ts')],
+      ['plugins', join(SRC, 'routes', 'plugins.ts')],
+    ]
+    for (const [name, path] of routes) {
       const found = specifiersOf(path)
       expect(found.length, name).toBeGreaterThan(3)
       const legacy = found.filter(

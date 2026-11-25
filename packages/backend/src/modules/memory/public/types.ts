@@ -21,16 +21,9 @@
 // 只导出**真的有生产 consumer** 的那几个（RFC-294 design §3.3「无 consumer 不公开」，
 // `rfc294-review-public-consumer-ledger` 逐条钉死）。预算常量、逐档裁剪、token 估算与另外
 // 两个 format 变体都只在 memory 自己内部用，留在 domain 里。
-// RFC-352 AC-6：RFC-285 B7（Q4）候选收窄的唯一判据。路由层是它的生产 consumer——
-// 边界只 decode 一次「这个调用者能不能看未审候选」，收窄本身不再在路由里手写。
+// RFC-578：候选收窄判据（RFC-352 AC-6）唯一的读者是记忆路由，路由进了本模块的 inbound，这里的转出随之撤回，判据仍只在
+// `domain/candidateVisibility` 一处。
 import type { Memory, MemoryPatchField } from '@agent-workflow/shared'
-
-export {
-  isMemoryHiddenCandidate,
-  narrowCandidateRows,
-  type CandidateNarrowable,
-  type CandidateVisibilityOptions,
-} from '../domain/candidateVisibility'
 
 // RFC-559: `ScopeBudget` left this entry point — its only outside reader (task-execution's run options) now uses
 // Task Execution's own `TaskMemoryInjectionBudget`; memory's injection keeps the domain type.

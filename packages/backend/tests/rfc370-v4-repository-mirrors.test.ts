@@ -27,7 +27,7 @@ import { join } from 'node:path'
 import type { RepoRefsResponse } from '@agent-workflow/shared'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '../src/auth/actor'
-import { mountRepoRoutes } from '../src/routes/repos'
+import { mountRepoRoutes } from '../src/modules/source-control/inbound/http/repoRoutes'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import {
   composeRemoteRepositoryMirrors,
@@ -51,7 +51,7 @@ import { DomainError, errorHandler } from '../src/platform/errors/domainErrors'
 import { runGit } from '../src/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
+import type { RepositoryMirrors } from '@/modules/source-control/application/ports/repositoryMirrors'
 
 /** RFC-527: the registration of a remote mirror (the hosted assembly states its kind). */
 function remoteOf(mirrors: RepositoryMirrors) {

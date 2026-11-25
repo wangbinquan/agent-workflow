@@ -19,8 +19,8 @@ import {
   createKnownPathRepositoryReads,
   isKnownRepoPath,
 } from '@/modules/source-control/infrastructure/local/repositoryIntrospection'
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
-import { mountRepoRoutes } from '@/routes/repos'
+import type { RepositoryMirrors } from '@/modules/source-control/application/ports/repositoryMirrors'
+import { mountRepoRoutes } from '@/modules/source-control/inbound/http/repoRoutes'
 import { DomainError, errorHandler } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
@@ -116,14 +116,14 @@ describe('RFC-446 —— 引用', () => {
     expect(targetOf(probe, 'node:path')).toBeNull()
   })
 
-  test('routes/repos.ts 不 import services/，也不再收仓库存储', () => {
-    const targets = targetsOf('routes/repos.ts')
-    // 非空对照：路由仍经 source-control 的 public/types 取 RepositoryMirrors。
-    expect(targets).toContain('modules/source-control/public/types')
+  test('仓库路由（RFC-578 起在 source-control 的 inbound 里）不 import services/，也不再收仓库存储', () => {
+    const targets = targetsOf('modules/source-control/inbound/http/repoRoutes.ts')
+    // 非空对照：路由取本模块端口里的 RepositoryMirrors（RFC-578 之前经 source-control 的 public/types）。
+    expect(targets).toContain('modules/source-control/application/ports/repositoryMirrors')
     expect(targets.filter((target) => target.startsWith('services/'))).toEqual([])
-    expect(readFileSync(join(SRC, 'routes/repos.ts'), 'utf8')).not.toContain(
-      'RepositoryWorkspaceStore',
-    )
+    expect(
+      readFileSync(join(SRC, 'modules/source-control/inbound/http/repoRoutes.ts'), 'utf8'),
+    ).not.toContain('RepositoryWorkspaceStore')
     expect(mountRepoRoutes.length).toBe(2)
   })
 

@@ -61,7 +61,7 @@ import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/com
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { mountCachedRepoRoutes } from '@/routes/cached-repos'
+import { mountCachedRepoRoutes } from '@/modules/source-control/inbound/http/cachedRepoRoutes'
 import {
   composeCachedRepositoryOperations,
   composeLocalRepositoryMirrors,

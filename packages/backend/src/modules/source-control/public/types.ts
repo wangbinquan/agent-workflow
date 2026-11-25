@@ -261,24 +261,8 @@ export interface WorkspaceMaintenanceEffects {
   readonly scratch: ScratchWorkspaceEffects
 }
 
-// RFC-370 §10 V17 — registered repositories' reads, registration and refresh.
-export type {
-  RepositoryMirrors,
-  RepositoryRefresh,
-  RepositoryRegistration,
-} from '../application/ports/repositoryMirrors'
-// RFC-451 — the cached-repository management surface (`/api/cached-repos`).
-export type {
-  CachedRepositoryOperations,
-  CachedRepositoryRefresh,
-} from '../application/ports/cachedRepositoryOperations'
-// RFC-447 — repository-group management operations for the HTTP surface.
-export type {
-  RepositoryGroupDeletion,
-  RepositoryGroupDraft,
-  RepositoryGroupPreview,
-  RepositoryGroups,
-} from '../application/ports/repositoryGroups'
+// RFC-578: the repository, cached-repository and repository-group operations (RFC-370 V17, RFC-451, RFC-447) left this
+// entry point with their HTTP bindings, which now live in this module's inbound layer and read `application/ports`.
 /** RFC-396: effect-free requests shared by employee types. Composition supplies
  * Git/process factories; callers cannot smuggle execution functions in a DTO. */
 export interface EmployeeCaseWorkspaceParticipant {

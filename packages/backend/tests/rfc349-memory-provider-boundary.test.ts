@@ -13,7 +13,10 @@ const SRC = resolve(import.meta.dir, '..', 'src')
 
 describe('RFC-349 Memory provider boundary', () => {
   test('the HTTP route consumes MemoryCatalogOperations without a database client', () => {
-    const source = readFileSync(resolve(SRC, 'routes', 'memories.ts'), 'utf8')
+    const source = readFileSync(
+      resolve(SRC, 'modules', 'memory', 'inbound', 'http', 'memoryRoutes.ts'),
+      'utf8',
+    )
 
     expect(source).toContain('MemoryCatalogOperations')
     expect(source).toContain('catalog.queries')

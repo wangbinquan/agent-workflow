@@ -18,8 +18,8 @@ import type {
   RepositoryGroupRecord,
   RepositoryWorkspaceStore,
 } from '@/modules/source-control/public/operations'
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
-import { mountRepoGroupRoutes } from '@/routes/repoGroups'
+import type { RepositoryMirrors } from '@/modules/source-control/application/ports/repositoryMirrors'
+import { mountRepoGroupRoutes } from '@/modules/source-control/inbound/http/repoGroupRoutes'
 import { DomainError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
@@ -174,10 +174,13 @@ describe('RFC-447 —— 位置与引用', () => {
     expect(targetOf(probe, '@agent-workflow/shared')).toBeNull()
   })
 
-  test('路由不 import services/，对 source-control 只经 public/types，也不再收配置、存储与 mirrors', () => {
-    const targets = targetsOf('routes/repoGroups.ts')
+  test('路由不 import services/，对 source-control 只取本模块端口里的 RepositoryGroups，也不再收配置、存储与 mirrors', () => {
+    // RFC-578: the route lives in this module's inbound layer and reads the port directly (it used public/types before).
+    const targets = targetsOf(`${SC}/inbound/http/repoGroupRoutes.ts`)
     expect(targets.filter((target) => target.startsWith('services/'))).toEqual([])
-    expect(targets.filter((target) => target.startsWith(`${SC}/`))).toEqual([`${SC}/public/types`])
+    expect(targets.filter((target) => target.startsWith(`${SC}/`))).toEqual([
+      `${SC}/application/ports/repositoryGroups`,
+    ])
     expect(targets.filter((target) => target.startsWith('modules/system-operations/'))).toEqual([])
     expect(mountRepoGroupRoutes.length).toBe(2)
   })

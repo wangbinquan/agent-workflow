@@ -13,7 +13,7 @@ import {
   composeCachedRepositoryOperations,
   createRepositoryBatchImports,
 } from '@/modules/source-control/composition'
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
+import type { RepositoryMirrors } from '@/modules/source-control/application/ports/repositoryMirrors'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { NotFoundError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
@@ -61,8 +61,9 @@ describe('RFC-451 —— 引用', () => {
 
   test('cached-repos 路由不再 import services/', () => {
     expect(
-      importsMatching([join(SRC, 'routes/cached-repos.ts')], (target) =>
-        target.startsWith('services/'),
+      importsMatching(
+        [join(SRC, 'modules/source-control/inbound/http/cachedRepoRoutes.ts')],
+        (target) => target.startsWith('services/'),
       ),
     ).toEqual([])
   })

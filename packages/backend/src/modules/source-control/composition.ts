@@ -338,3 +338,9 @@ export {
   repositoryExistsExpression,
 } from './infrastructure/repositoryIdentityQueries'
 export { createHostedWorkspaceOwnerQueries } from './infrastructure/crewstation/workspaceOwnership'
+
+// RFC-578: the repository, repository-group and cached-repository HTTP bindings live in this module's inbound layer;
+// server.ts mounts them through here.
+export { mountRepoRoutes } from './inbound/http/repoRoutes'
+export { mountRepoGroupRoutes } from './inbound/http/repoGroupRoutes'
+export { mountCachedRepoRoutes } from './inbound/http/cachedRepoRoutes'

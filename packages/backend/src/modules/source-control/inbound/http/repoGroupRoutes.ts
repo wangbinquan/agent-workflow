@@ -21,7 +21,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
-import type { RepositoryGroups } from '@/modules/source-control/public/types'
+import type { RepositoryGroups } from '../../application/ports/repositoryGroups'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { ValidationError } from '@/platform/errors/domainErrors'

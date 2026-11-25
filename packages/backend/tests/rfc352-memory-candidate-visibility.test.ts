@@ -20,7 +20,17 @@ import {
   narrowCandidateRows,
 } from '../src/modules/memory/domain/candidateVisibility'
 
-const ROUTE_FILE = resolve(import.meta.dir, '..', 'src', 'routes', 'memories.ts')
+// RFC-578: the memory route moved from `routes/memories.ts` into memory's inbound layer.
+const ROUTE_FILE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'memory',
+  'inbound',
+  'http',
+  'memoryRoutes.ts',
+)
 
 const rows = [
   { id: 'a', status: 'approved' },
@@ -84,7 +94,7 @@ describe('RFC-352 AC-6 — 候选收窄判据', () => {
 describe('RFC-352 AC-6 — 路由不再手写收窄', () => {
   const source = readFileSync(ROUTE_FILE, 'utf8')
 
-  test('routes/memories.ts 里没有手写的 candidate 状态比较', () => {
+  test('记忆路由里没有手写的 candidate 状态比较', () => {
     const handWritten = source
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('//'))
@@ -92,8 +102,10 @@ describe('RFC-352 AC-6 — 路由不再手写收窄', () => {
     expect(handWritten).toEqual([])
   })
 
-  test('收窄经 memory public 的单一判据，ACL 谓词经 resource-catalog public', () => {
-    expect(source).toContain("from '@/modules/memory/public/types'")
+  test('收窄经 memory 的单一判据（domain/candidateVisibility），ACL 谓词经 resource-catalog public', () => {
+    // RFC-578: with the route inside memory, it reads the one predicate from the domain; it went through
+    // memory's public before. The predicate is the same single source either way.
+    expect(source).toContain("from '../../domain/candidateVisibility'")
     expect(source).toContain('narrowCandidateRows')
     expect(source).toContain('isMemoryHiddenCandidate')
     // 同一谓词曾在仓里有两个来源（legacy `@/services/resourceAcl` 与 RC domain 直插）。

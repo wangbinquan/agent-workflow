@@ -12,7 +12,8 @@ const FILES_THAT_TOUCH_URLS = [
   'src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts',
   // RFC-478: services/task.ts's URL-bearing code (task_repos projection, backfill) moved here.
   'src/modules/task-execution/infrastructure/deferredRepositoryPreparation.ts',
-  'src/routes/cached-repos.ts',
+  // RFC-578: the cached-repository route moved into source-control's inbound layer.
+  'src/modules/source-control/inbound/http/cachedRepoRoutes.ts',
 ]
 
 describe('RFC-024 URL redaction source-level coverage', () => {

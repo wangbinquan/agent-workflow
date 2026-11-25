@@ -133,13 +133,26 @@ describe('RFC-559 —— 失去消费方的 memory public 符号撤出', () => {
       ts.ScriptTarget.Latest,
       true,
     )
-    const exported = source.statements.flatMap((statement) =>
-      ts.isExportDeclaration(statement) &&
-      statement.exportClause !== undefined &&
-      ts.isNamedExports(statement.exportClause)
-        ? statement.exportClause.elements.map((element) => element.name.text)
-        : [],
-    )
+    // RFC-578 withdrew the file's last `export { … } from` (the candidate predicate); it now offers only declarations,
+    // so both forms are read — ScopeBudget may come back as either.
+    const exported = source.statements.flatMap((statement) => {
+      if (
+        ts.isExportDeclaration(statement) &&
+        statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause)
+      )
+        return statement.exportClause.elements.map((element) => element.name.text)
+      const isExported =
+        ts.canHaveModifiers(statement) &&
+        (ts
+          .getModifiers(statement)
+          ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
+          false)
+      return isExported &&
+        (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement))
+        ? [statement.name.text]
+        : []
+    })
     expect(exported.length).toBeGreaterThan(0)
     expect(exported).not.toContain('ScopeBudget')
   })

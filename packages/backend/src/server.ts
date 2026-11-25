@@ -37,8 +37,6 @@ import {
   mountOverviewRoutes,
   mountRestoreRoutes,
 } from '@/modules/system-operations/composition/routes'
-import { mountCachedRepoRoutes } from '@/routes/cached-repos'
-import { mountRepoGroupRoutes } from '@/routes/repoGroups'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
@@ -47,16 +45,19 @@ import type { TaskExecutionResourceBinding } from '@/modules/task-execution/publ
 import { executionStatusOf } from '@/modules/system-operations/composition'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
 import { mountMcpRoutes } from '@/routes/mcps'
-import { mountMemoryRoutes } from '@/routes/memories'
-import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
-import { type RepositoryMirrors } from '@/modules/source-control/composition'
+import { mountMemoryDistillJobRoutes, mountMemoryRoutes } from '@/modules/memory/composition'
+import {
+  mountCachedRepoRoutes,
+  mountRepoGroupRoutes,
+  mountRepoRoutes,
+  type RepositoryMirrors,
+} from '@/modules/source-control/composition'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPlantumlRoutes } from '@/routes/plantuml'
 import { mountPluginRoutes } from '@/routes/plugins'
 import { mountUserRoutes } from '@/routes/users'
-import { mountRepoRoutes } from '@/routes/repos'
 import {
   mountRuntimeRoutes,
   mountRuntimesRoutes,

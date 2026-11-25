@@ -16,7 +16,7 @@
 // route no longer takes the repository store.
 
 import type { Hono } from 'hono'
-import type { RepositoryMirrors } from '@/modules/source-control/public/types'
+import type { RepositoryMirrors } from '../../application/ports/repositoryMirrors'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/platform/errors/domainErrors'
 

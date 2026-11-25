@@ -41,7 +41,7 @@ import {
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
-import type { RepositoryRegistration } from '@/modules/source-control/public/types'
+import type { RepositoryRegistration } from '../../application/ports/repositoryMirrors'
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { createLogger } from '@/platform/logging/logger'
