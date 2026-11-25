@@ -1,3 +1,19 @@
+## 2026-11-25 RFC-594 code-round 的合同叶归 task-execution 的 domain（In Progress；`design/RFC-594-code-round-contract-into-task-execution/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §2“`services/` 按 owner 迁入模块后删除”、
+  §14 终局判据“`services/` 下的业务实现 → 0”。
+- **范围**：RFC-310 删掉 code-round 写入方之后，`services/codeRoundContract.ts` 只剩一个生产读者——task-execution 的执行结果投影。`CODE_ROUND_NODE_ID` 逐字迁入
+  `modules/task-execution/domain/codeRoundHistory.ts`（与 agent host、digital-employee host 的合同叶同层，零 import）；只有两个用例用的快照合成函数与输入类型逐字
+  迁到 `tests/helpers/codeRoundHistory.ts`；没有读者的 `CODE_ROUND_SUMMARY_PORT`、`StartCodeRoundInput` 删除；原文件删除。偏离 RFC-294 plan 的 W4-E8 标注
+  （development-automation）：目标 DAG 上 task-execution 不消费 development-automation，节点 id 只能随唯一读者归 task-execution（design §0）。随改：归属表、
+  `counts.json`（legacy 54 → 53，`services/` 业务实现 2 → 1）、RFC-294 plan 的 `services/` 余项表两行（git 一族与 code-round 合同叶的去向）；新增 RFC-594 用例。
+  顺带修正 RFC-593 用例文件头与一条标题里“4 个名字”的措辞（实际 2 个）。
+- **收口对账**（RFC-294 C10～C13）：C10 历史事实进唯一读者的 domain，只有用例用的部分进 `tests/helpers/`；C12 RFC-594 用例覆盖全部说明符与生产文件；C13 两项
+  legacy 计数各降 1、其余不变。此后 `services/` 只剩暂缓的 `repoCredentials.ts`。
+- **集中验证**（基于 `f48df41c2`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 206 个
+  用例文件、2003 条全部通过，`rfc321` 在主树里 10 / 10，文档用例 46 / 46；五种变异都被认出。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-593 `util/git` 的仓库语义整体归 source-control（In Progress；`design/RFC-593-util-git-into-source-control/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；沿 RFC-591 裁定的方案（b）收口，正是 RFC-294 design

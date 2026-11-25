@@ -21,7 +21,7 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
 import { buildAgentHostSnapshot } from '@/modules/task-execution/domain/agentHostWorkflow'
-import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
+import { synthesizeCodeRoundSnapshot } from './helpers/codeRoundHistory'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import {

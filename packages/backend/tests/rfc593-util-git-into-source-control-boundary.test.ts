@@ -1,10 +1,11 @@
 // RFC-593 — `util/git` 的仓库语义整体归 source-control（RFC-294 W5 余项第五步，`util/git` 收口）。
 //
 // 为什么存在：`util/git.ts` 整份迁入 `modules/source-control/infrastructure/local/gitRepository.ts`（通用运行器与两个只读查询在 RFC-591 / RFC-592 已进
-// platform）；task-execution 与装配根要的 4 个名字经 source-control 的 `public/participants` 取。锁四件事：
+// platform）；task-execution 与装配根要的 2 个名字经 source-control 的 `public/participants` 取，task-execution 延后准备要的两步经它自有的准备绑定
+// （source-control 实现）。锁四件事：
 // ① 旧路径不存在；`src` / `tests` / `scripts` 里没有任何说明符再解析到它（判据带负对照）。
 // ② source-control 之外的生产文件不直接取新文件，只经 `public/participants`（判据带负对照）。
-// ③ `public/participants` 转出了那 4 个名字。
+// ③ `public/participants` 转出了那 2 个名字。
 // ④ 新文件只取 platform、shared、node 内置与本模块 domain（判据带负对照）。
 //
 // 覆盖范围（C12）：① ② 覆盖 backend 的 `src`（② 只看生产文件）、`tests`、`scripts` 与仓库根 `scripts` 的全部 TS / MJS 文件；③ ④ 只读两个文件。
@@ -195,7 +196,7 @@ describe('RFC-593 —— util/git 归 source-control', () => {
     ).toEqual([GIT])
   })
 
-  test('public/participants 转出那 4 个名字', () => {
+  test('public/participants 转出那 2 个名字', () => {
     const offered = offeredNames(`${PARTICIPANTS}.ts`, read(PARTICIPANTS))
     for (const name of OFFERED) expect([name, offered.includes(name)]).toEqual([name, true])
   })

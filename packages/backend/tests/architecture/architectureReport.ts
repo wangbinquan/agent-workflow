@@ -283,7 +283,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/clarifySeal.ts': 'collaboration',
   'packages/backend/src/services/codeCapabilityParams.ts': 'development-automation',
   'packages/backend/src/services/codeReviewAgentCaller.ts': 'development-automation',
-  'packages/backend/src/services/codeRoundContract.ts': 'development-automation',
   'packages/backend/src/services/demoSeed.ts': 'bootstrap',
   'packages/backend/src/services/digitalEmployeeAgentTemplates.ts': 'digital-employee',
   'packages/backend/src/services/driverLease.ts': 'runtime-management',

@@ -1,4 +1,4 @@
-// RFC-310 PR-4 T41 —— digital-employee host 的合同叶（镜像 codeRoundContract）。
+// RFC-310 PR-4 T41 —— digital-employee host 的合同叶（镜像 code-round 的合同叶，现为同目录的 `codeRoundHistory.ts`，RFC-594）。
 //
 // 一次 AgentAttempt = 一个 digital-employee host task：builtin FK anchor +
 // 单 agent 节点的 synthesized snapshot，任务本身对下游（cancel/interrupted
@@ -7,8 +7,8 @@
 //
 // 本文件保持叶子：常量 + 纯 snapshot 合成，零 service import——outcome 投影
 // （execution/outcome.ts）与装配（composition/agentActionExecution.ts）都要
-// 引用这里的 id，把它们放进会 import task.ts 的文件就闭环了（codeRoundContract
-// 顶注记录过同一形状的教训）。
+// 引用这里的 id，把它们放进会 import task.ts 的文件就闭环了（原 code-round 合同叶
+// 的顶注记录过同一形状的教训）。
 
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 

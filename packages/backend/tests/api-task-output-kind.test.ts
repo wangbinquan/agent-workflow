@@ -21,7 +21,8 @@ import {
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { taskExecutionKind } from '@agent-workflow/shared'
-import { CODE_ROUND_NODE_ID, synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
+import { CODE_ROUND_NODE_ID } from '@/modules/task-execution/domain/codeRoundHistory'
+import { synthesizeCodeRoundSnapshot } from './helpers/codeRoundHistory'
 import { getExecutionOutcome } from '@/modules/task-execution/infrastructure/executionOutcome'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
