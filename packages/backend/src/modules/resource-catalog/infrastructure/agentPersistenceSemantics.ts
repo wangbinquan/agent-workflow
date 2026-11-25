@@ -16,7 +16,10 @@ import type { ResourceAuthorizationApplication } from '../application/resourceAu
 import { discloseRefsSync, discloseScheduleRefs } from '../domain/resourceAccess'
 import { grantedResourceIdsFor } from './resourceVisibility'
 import type { AgentOperationContext } from '../public/participants'
-import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
+import type {
+  AgentReferenceLabels,
+  AgentReferenceLabelsInput,
+} from '../application/agents/queryContracts'
 import type { AgentPersistenceSemantics } from './agentRepository'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 

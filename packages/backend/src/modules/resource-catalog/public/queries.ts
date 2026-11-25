@@ -1,10 +1,4 @@
-import type {
-  FileNode,
-  ResolveAgentImportRefsRequest,
-  ResolveAgentImportRefsResult,
-  Workflow,
-  Workgroup,
-} from '@agent-workflow/shared'
+import type { FileNode, Workflow, Workgroup } from '@agent-workflow/shared'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
@@ -14,13 +8,6 @@ import type { WorkflowOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
   AgentCatalogResource,
-  AgentDependencyClosureResult,
-  AgentReferenceLabels,
-  AgentReferenceLabelsInput,
-  AgentResourceClosureStatus,
-  AgentResourceStatus,
-  GetAgentResourceClosureStatusInput,
-  GetAgentResourceStatusInput,
   GetAgentCatalogInput,
   GetMcpCatalogInput,
   McpCatalogResource,
@@ -51,10 +38,6 @@ import type {
   CatalogResourceRef,
   ResourceSummaryPage,
   ResourceSummaryQuery,
-  ResolveAgentDependencyClosureInput,
-  ResolveAgentDependencyIdsInput,
-  ResolvedAgentDependencyIds,
-  ValidateAgentDependenciesInput,
 } from './types'
 
 /** Provider-neutral classic-six selector shared by Intent selection and dump. */
@@ -69,46 +52,6 @@ export interface AgentQueries {
     authority: AgentOperationContext,
     input: GetAgentCatalogInput,
   ): Promise<AgentCatalogResource | null>
-}
-
-export interface AgentReferenceQueries {
-  labels(
-    authority: AgentOperationContext,
-    input: AgentReferenceLabelsInput,
-  ): Promise<AgentReferenceLabels>
-}
-
-/** Provider-neutral Agent dependency traversal and reference admission. */
-export interface AgentDependencyQueries {
-  closure(
-    authority: AgentOperationContext,
-    input: ResolveAgentDependencyClosureInput,
-  ): Promise<AgentDependencyClosureResult>
-  resolveUsableIds(
-    authority: AgentOperationContext,
-    input: ResolveAgentDependencyIdsInput,
-  ): Promise<ResolvedAgentDependencyIds>
-  validate(authority: AgentOperationContext, input: ValidateAgentDependenciesInput): Promise<void>
-}
-
-/** Provider-neutral projection used by the Agent authoring surface. */
-export interface AgentResourceIntegrityQueries {
-  status(
-    authority: AgentOperationContext,
-    input: GetAgentResourceStatusInput,
-  ): Promise<AgentResourceStatus>
-  closureStatus(
-    authority: AgentOperationContext,
-    input: GetAgentResourceClosureStatusInput,
-  ): Promise<AgentResourceClosureStatus>
-}
-
-/** Portable Agent import selector resolution bound to the active provider. */
-export interface AgentImportQueries {
-  resolve(
-    authority: AgentOperationContext,
-    input: ResolveAgentImportRefsRequest,
-  ): Promise<ResolveAgentImportRefsResult>
 }
 
 export interface SkillQueries {

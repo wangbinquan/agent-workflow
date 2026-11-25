@@ -30,11 +30,11 @@ import type {
   ChildResumeRuntime,
   SchedulerDriverPort,
 } from '../application/ports/taskExecutionTopology'
+import type { TaskRouteOperations } from '../public/commands'
 import type {
   AgentRouteTaskLaunchOperations,
-  TaskRouteOperations,
   WorkgroupRouteTaskLaunchOperations,
-} from '../public/commands'
+} from '../application/ports/subjectTaskLaunch'
 import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
 import type { TaskOverviewQuery } from '../application/ports/taskOverviewQuery'
 import type { TaskClarifyDirectiveRouteOperations, TaskExecutionReadModels } from '../public/types'

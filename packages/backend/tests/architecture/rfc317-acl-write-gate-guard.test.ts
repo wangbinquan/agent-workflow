@@ -268,7 +268,9 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
       CONFIG_OPERATION_SOURCE,
       readFileSync(resolve(REPO_ROOT, CONFIG_OPERATION_SOURCE), 'utf8'),
     ),
-  'packages/backend/src/routes/agents.ts': aggregateAndAclGates(AGENT_OPERATION_SOURCE),
+  // RFC-589: the agent and workgroup HTTP bindings moved into resource-catalog's inbound layer.
+  'packages/backend/src/modules/resource-catalog/inbound/http/agentRoutes.ts':
+    aggregateAndAclGates(AGENT_OPERATION_SOURCE),
   // RFC-581: the MCP, plugin and skill HTTP bindings moved into resource-catalog's inbound layer.
   'packages/backend/src/modules/resource-catalog/inbound/http/mcpRoutes.ts':
     aggregateAndAclGates(MCP_OPERATION_SOURCE),
@@ -279,7 +281,8 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
   // RFC-580: the workflow HTTP binding moved into resource-catalog's inbound layer.
   'packages/backend/src/modules/resource-catalog/inbound/http/workflowRoutes.ts':
     aggregateAndAclGates(WORKFLOW_OPERATION_SOURCE),
-  'packages/backend/src/routes/workgroups.ts': aggregateAndAclGates(WORKGROUP_OPERATION_SOURCE),
+  'packages/backend/src/modules/resource-catalog/inbound/http/workgroupRoutes.ts':
+    aggregateAndAclGates(WORKGROUP_OPERATION_SOURCE),
   [CAPABILITY_TEMPLATE_ROUTE]: CAPABILITY_TEMPLATE_OPERATION_GATES,
 }
 

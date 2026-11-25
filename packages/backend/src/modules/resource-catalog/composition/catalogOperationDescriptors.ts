@@ -42,11 +42,11 @@ import {
 import { z } from 'zod'
 import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 import type {
-  AgentOperationDescriptors,
   McpOperationDescriptors,
   ResourcePackageOperationDescriptors,
-  WorkgroupOperationDescriptors,
 } from '../public/operations'
+import type { AgentOperationDescriptors } from '../application/agents/operationContracts'
+import type { WorkgroupOperationDescriptors } from '../application/workgroups/operationContracts'
 import type { PluginOperationDescriptors } from '../application/plugins/operationContracts'
 import type { SkillOperationDescriptors } from '../application/skills/operationContracts'
 import type { WorkflowOperationDescriptors } from '../application/workflows/operationContracts'
@@ -59,26 +59,30 @@ import type {
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
 import type {
-  CopyWorkgroupCatalogInput,
-  CreateAgentCatalogInput,
   CreateMcpCatalogInput,
-  CreateWorkgroupCatalogInput,
-  DeleteAgentCatalogInput,
-  DeleteAgentCatalogReceipt,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
-  DeleteWorkgroupCatalogInput,
-  DeleteWorkgroupCatalogReceipt,
   GetResourceAclCatalogInput,
-  RenameAgentCatalogInput,
   RenameMcpCatalogInput,
-  RenameWorkgroupCatalogInput,
-  UpdateAgentCatalogInput,
   UpdateMcpCatalogInput,
   UpdateResourceAclCatalogInput,
+} from '../public/types'
+import type {
+  CopyWorkgroupCatalogInput,
+  CreateWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogReceipt,
+  RenameWorkgroupCatalogInput,
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
-} from '../public/types'
+} from '../application/workgroups/operationContracts'
+import type {
+  CreateAgentCatalogInput,
+  DeleteAgentCatalogInput,
+  DeleteAgentCatalogReceipt,
+  RenameAgentCatalogInput,
+  UpdateAgentCatalogInput,
+} from '../application/agents/operationContracts'
 import type {
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,

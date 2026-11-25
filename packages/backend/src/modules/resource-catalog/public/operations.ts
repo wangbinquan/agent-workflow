@@ -1,48 +1,27 @@
 // RFC-345 closed, data-only Resource Catalog operation descriptor and module contracts.
 
-import type { ResourceAcl, Workgroup } from '@agent-workflow/shared'
+import type { ResourceAcl } from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type {
   CommandOperationDescriptor,
   IdempotentCommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
-import type {
-  AgentOperationContext,
-  McpAclIdentityParticipant,
-  McpOperationContext,
-  WorkgroupOperationContext,
-} from './participants'
+import type { McpAclIdentityParticipant, McpOperationContext } from './participants'
 import type { McpQueries } from './queries'
 import type {
-  AgentCatalogResource,
   ApplyResourcePackage,
-  CopyWorkgroupCatalogInput,
-  CreateAgentCatalogInput,
   CreateMcpCatalogInput,
-  CreateWorkgroupCatalogInput,
-  DeleteAgentCatalogInput,
-  DeleteAgentCatalogReceipt,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
-  DeleteWorkgroupCatalogInput,
-  DeleteWorkgroupCatalogReceipt,
   ExportResourcePackage,
-  GetAgentCatalogInput,
   GetMcpCatalogInput,
   GetResourceAclCatalogInput,
-  GetWorkgroupCatalogInput,
   InspectResourcePackage,
   McpCatalogResource,
-  RenameAgentCatalogInput,
   RenameMcpCatalogInput,
-  RenameWorkgroupCatalogInput,
-  UpdateAgentCatalogInput,
   UpdateMcpCatalogInput,
   UpdateResourceAclCatalogInput,
-  UpdateWorkgroupCatalogInput,
-  UpdateWorkgroupCatalogReceipt,
-  WorkgroupCatalogDetail,
 } from './types'
 
 /** RFC-580: exported for the workflow descriptors that moved into `application/`; every ACL-governed descriptor here extends it. */
@@ -52,39 +31,6 @@ export interface ResourceAclOperationDescriptors<Context> {
     UpdateResourceAclCatalogInput,
     ResourceAcl,
     Context
-  >
-}
-
-export interface AgentOperationDescriptors extends ResourceAclOperationDescriptors<AgentOperationContext> {
-  readonly list: QueryOperationDescriptor<
-    Record<never, never>,
-    AgentCatalogResource[],
-    AgentOperationContext
-  >
-  readonly get: QueryOperationDescriptor<
-    GetAgentCatalogInput,
-    AgentCatalogResource | null,
-    AgentOperationContext
-  >
-  readonly create: CommandOperationDescriptor<
-    CreateAgentCatalogInput,
-    AgentCatalogResource,
-    AgentOperationContext
-  >
-  readonly update: CommandOperationDescriptor<
-    UpdateAgentCatalogInput,
-    AgentCatalogResource,
-    AgentOperationContext
-  >
-  readonly delete: CommandOperationDescriptor<
-    DeleteAgentCatalogInput,
-    DeleteAgentCatalogReceipt,
-    AgentOperationContext
-  >
-  readonly rename: CommandOperationDescriptor<
-    RenameAgentCatalogInput,
-    AgentCatalogResource,
-    AgentOperationContext
   >
 }
 
@@ -127,44 +73,6 @@ export interface McpCatalogModule {
   readonly participants: Readonly<{
     aclIdentity: McpAclIdentityParticipant
   }>
-}
-
-export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescriptors<WorkgroupOperationContext> {
-  readonly list: QueryOperationDescriptor<
-    Record<never, never>,
-    Workgroup[],
-    WorkgroupOperationContext
-  >
-  readonly get: QueryOperationDescriptor<
-    GetWorkgroupCatalogInput,
-    WorkgroupCatalogDetail | null,
-    WorkgroupOperationContext
-  >
-  readonly create: CommandOperationDescriptor<
-    CreateWorkgroupCatalogInput,
-    WorkgroupCatalogDetail,
-    WorkgroupOperationContext
-  >
-  readonly copy: CommandOperationDescriptor<
-    CopyWorkgroupCatalogInput,
-    WorkgroupCatalogDetail,
-    WorkgroupOperationContext
-  >
-  readonly update: CommandOperationDescriptor<
-    UpdateWorkgroupCatalogInput,
-    UpdateWorkgroupCatalogReceipt,
-    WorkgroupOperationContext
-  >
-  readonly delete: CommandOperationDescriptor<
-    DeleteWorkgroupCatalogInput,
-    DeleteWorkgroupCatalogReceipt,
-    WorkgroupOperationContext
-  >
-  readonly rename: CommandOperationDescriptor<
-    RenameWorkgroupCatalogInput,
-    UpdateWorkgroupCatalogReceipt,
-    WorkgroupOperationContext
-  >
 }
 
 interface ResourcePackagePreviewReceipt {

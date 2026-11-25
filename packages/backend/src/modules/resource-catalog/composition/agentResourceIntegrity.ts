@@ -11,7 +11,7 @@ import type {
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentLaunchResourceIntegrityParticipant } from '../public/participants'
-import type { AgentResourceIntegrityQueries } from '../public/queries'
+import type { AgentResourceIntegrityQueries } from '../application/agents/queryContracts'
 import {
   createAgentLaunchResourceIntegrityParticipant,
   createAgentResourceIntegrityQueries,

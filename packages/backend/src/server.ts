@@ -25,7 +25,6 @@ import { mountMcpTransport } from '@/mcp/server'
 import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
 import { directMcpOperationAuthority } from '@/routes/operationAuthority'
-import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 // RFC-576 / RFC-583: the system-operations HTTP bindings moved from routes/ into the module's inbound layer.
 import {
@@ -110,18 +109,21 @@ import {
   mountWebhookTriggerRoutes,
 } from '@/modules/integration/composition'
 import {
+  mountAgentRoutes,
   mountMcpRoutes,
   mountPluginRoutes,
   mountSkillRoutes,
   mountWorkflowRoutes,
+  mountWorkgroupRoutes,
   mountWorkgroupTaskRoutes,
   registerResourcePackageRoutes,
 } from '@/modules/resource-catalog/composition'
-import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import {
+  mountAgentTaskLaunchRoutes,
   mountPortArtifactRoutes,
   mountTaskArchiveRoutes,
   mountTaskRoutes,
+  mountWorkgroupTaskLaunchRoutes,
   mountWorktreeFilesRoutes,
 } from '@/modules/task-execution/composition'
 import { errorHandler } from '@/platform/errors/domainErrors'
@@ -278,7 +280,9 @@ export interface ProviderPlatformRouteComposition {
 }
 
 export interface ProviderResourceCatalogRouteComposition {
-  readonly agents: Parameters<typeof mountAgentRoutes>[1]
+  // RFC-589: one dependency object for the agent binding and task-execution's agent launch binding.
+  readonly agents: Parameters<typeof mountAgentRoutes>[1] &
+    Parameters<typeof mountAgentTaskLaunchRoutes>[1]
   readonly mcps: Parameters<typeof mountMcpRoutes>[1]
   readonly plugins: Parameters<typeof mountPluginRoutes>[1]
   readonly skills: Parameters<typeof mountSkillRoutes>[1]
@@ -292,7 +296,9 @@ export interface ProviderResourceCatalogRouteComposition {
     readonly runtime: Parameters<typeof mountWorkflowRoutes>[1]
     readonly module: Parameters<typeof mountWorkflowRoutes>[2]
   }>
-  readonly workgroups: Parameters<typeof mountWorkgroupRoutes>[1]
+  // RFC-589: one dependency object for the workgroup binding and task-execution's workgroup launch binding.
+  readonly workgroups: Parameters<typeof mountWorkgroupRoutes>[1] &
+    Parameters<typeof mountWorkgroupTaskLaunchRoutes>[1]
   readonly resourcePackages: Parameters<typeof registerResourcePackageRoutes>[1]
   readonly workgroupTasks: Parameters<typeof mountWorkgroupTaskRoutes>[1]
 }
@@ -493,7 +499,11 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
         input.platform.overview.authorization,
         input.platform.overview.query,
       ),
-    agents: (app: Hono) => mountAgentRoutes(app, input.resourceCatalog.agents),
+    agents: (app: Hono) => {
+      // RFC-589: the agent catalog binding, then task-execution's agent launch (`POST /api/agents/:id/tasks`).
+      mountAgentRoutes(app, input.resourceCatalog.agents)
+      mountAgentTaskLaunchRoutes(app, input.resourceCatalog.agents)
+    },
     mcps: (app: Hono) => mountMcpRoutes(app, input.resourceCatalog.mcps),
     plugins: (app: Hono) => mountPluginRoutes(app, input.resourceCatalog.plugins),
     skills: (app: Hono) => mountSkillRoutes(app, input.resourceCatalog.skills),
@@ -508,7 +518,11 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
         input.resourceCatalog.workflows.runtime,
         input.resourceCatalog.workflows.module,
       ),
-    workgroups: (app: Hono) => mountWorkgroupRoutes(app, input.resourceCatalog.workgroups),
+    workgroups: (app: Hono) => {
+      // RFC-589: the workgroup catalog binding, then task-execution's workgroup launch (`POST /api/workgroups/:id/tasks`).
+      mountWorkgroupRoutes(app, input.resourceCatalog.workgroups)
+      mountWorkgroupTaskLaunchRoutes(app, input.resourceCatalog.workgroups)
+    },
     resourcePackages: (app: Hono) => {
       registerResourcePackageRoutes(app, input.resourceCatalog.resourcePackages)
     },

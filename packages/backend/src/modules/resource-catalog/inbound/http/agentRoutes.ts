@@ -11,50 +11,42 @@ import {
   type AgentClosureSummary,
   AgentNameSchema,
   CreateAgentSchema,
-  rejectRetiredStartTaskKeys,
   ResolveAgentImportRefsRequestSchema,
   RenameAgentRequestSchema,
   ResourceRefSchema,
-  StartAgentTaskSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { AgentOperationDescriptors } from '@/modules/resource-catalog/public/operations'
+import type { AgentOperationDescriptors } from '../../application/agents/operationContracts'
 import type { AgentOperationContext } from '@/modules/resource-catalog/public/participants'
+import type { AgentQueries } from '@/modules/resource-catalog/public/queries'
 import type {
   AgentDependencyQueries,
   AgentImportQueries,
-  AgentQueries,
   AgentReferenceQueries,
   AgentResourceIntegrityQueries,
-} from '@/modules/resource-catalog/public/queries'
+} from '../../application/agents/queryContracts'
 import type {
   AgentCatalogResource,
-  AgentReferenceLabels,
+  GetResourceAclCatalogInput,
+  UpdateResourceAclCatalogInput,
+} from '@/modules/resource-catalog/public/types'
+import type { AgentReferenceLabels } from '../../application/agents/queryContracts'
+import type {
   CreateAgentCatalogInput,
   DeleteAgentCatalogInput,
   DeleteAgentCatalogReceipt,
-  GetResourceAclCatalogInput,
   RenameAgentCatalogInput,
   UpdateAgentCatalogInput,
-  UpdateResourceAclCatalogInput,
-} from '@/modules/resource-catalog/public/types'
+} from '../../application/agents/operationContracts'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { SKILL_MERGER_AGENT_ID } from '@/modules/resource-catalog/public/types'
-// RFC-243 T2: agent launches go through the unified executor facade — this
-// route must not call startAgentTask directly (source-text lock).
-import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
 import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { Agent } from '@agent-workflow/shared'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
-import type {
-  AgentRouteTaskLaunchOperations,
-  TaskRouteMultipartFilePart,
-  TaskRouteUploadLimits,
-} from '@/modules/task-execution/public/commands'
 
 export interface AgentRouteDependencies {
   readonly queries: AgentQueries
@@ -65,15 +57,9 @@ export interface AgentRouteDependencies {
   readonly operations: AgentOperationDescriptors
   readonly authorityFor: (actor: Actor) => AgentOperationContext
   readonly listDigitalEmployeeTemplates: () => Promise<readonly AgentCatalogResource[]>
-  readonly taskLaunch: AgentRouteTaskLaunchOperations
+  // RFC-589: the agent launch (`POST /api/agents/:id/tasks`) is task-execution's binding (`mountAgentTaskLaunchRoutes`),
+  // mounted right after this one in the same step.
 }
-
-/**
- * TaskExecution-owned launch boundary consumed by the Agent transport.  The
- * route never receives a database client or reconstructs provider-specific
- * launch dependencies.
- */
-export type { AgentRouteTaskLaunchOperations }
 
 interface ClosureRefNameMaps {
   readonly skill: ReadonlyMap<string, string>
@@ -304,89 +290,6 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
       return c.body(null, 204)
     },
   })
-
-  // RFC-165 §4 — launch a SINGLE-AGENT task (POST /api/agents/:id/tasks).
-  // Service-layer entry for an agent subject; POST /api/tasks starts catalog
-  // workflows. Permission-wise this
-  // is a LAUNCH, gated by tasks:launch in server.ts (F15) — deliberately
-  // exempt from the agents:write method gate. The schema only ever declared
-  // modern space fields, so no raw-key gate is needed (workgroup precedent).
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/agents/:id/tasks',
-      executionGroup: 'task',
-      // RFC-165 F15/N1: launching is a TASK operation on every subject face —
-      // all three launch endpoints gate uniformly on the task execute point,
-      // and the agent launch path is explicitly EXEMPT from the agent method
-      // gate. Adding `agents:execute` here would silently reverse that
-      // decision (and break its named regression, A9). RFC-247 D15 is "do not
-      // change reach"; a mechanical `${resource}:execute` would have done
-      // exactly that.
-      permissions: ['tasks:execute'],
-      tokenAccess: 'allow',
-      summary: 'Launch a task from an agent',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const existing = await loadVisibleAgent(actor, c.req.param('id'))
-      // RFC-218: path<ext> input ports bind files via multipart — same parser
-      // family as POST /api/tasks (platform/http/multipartLaunch). JSON stays the
-      // only shape for text-port / zero-port launches.
-      const ct = c.req.header('content-type') ?? ''
-      let body: unknown
-      let uploads:
-        | { parts: TaskRouteMultipartFilePart[]; limits: TaskRouteUploadLimits }
-        | undefined
-      if (ct.toLowerCase().startsWith('multipart/form-data')) {
-        const parsedForm = await parseMultipartLaunch(c.req.raw)
-        body = parsedForm.payloadJson
-        uploads = { parts: parsedForm.parts, limits: await module.taskLaunch.uploadLimits() }
-      } else {
-        try {
-          body = await c.req.raw.json()
-        } catch {
-          body = {}
-        }
-      }
-      // 实现门 P2 修复（F1 同型）：schema 非 strict，{scratch:true, repoPath}
-      // 会被静默剥键降级成 scratch 启动——退役键必须在 parse 前整体拒收。
-      const retired = rejectRetiredStartTaskKeys(body)
-      if (retired !== null) {
-        const clientOwnedGitIdentity = retired === 'gitUserName' || retired === 'gitUserEmail'
-        throw new ValidationError(
-          clientOwnedGitIdentity ? 'task-git-identity-client-owned' : 'start-task-path-retired',
-          clientOwnedGitIdentity
-            ? `RFC-320 derives Git commit identity from the task creator; remove '${retired}'`
-            : `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
-        )
-      }
-
-      // RFC-248 H9（实现门 P1）：`sourceTaskId` 由调用方控制。重放前先确认
-      // 他**看得见**那个任务——否则「能启动某工作流但看不见任务 X」的用户可以
-      // 传 X 的 id，让服务端读出 X 冻结的仓库构成并按它物化，而且泄漏形式是
-      // 「任务成功启动」，完全不像一次越权。不可见与不存在同形（都 404）。
-      {
-        const src = (body as { sourceTaskId?: unknown }).sourceTaskId
-        if (typeof src === 'string' && src.length > 0) {
-          await module.taskLaunch.assertReplayVisible(actor, src)
-        }
-      }
-      const parsed = StartAgentTaskSchema.safeParse(body)
-      if (!parsed.success) {
-        throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      const task = await module.taskLaunch.launch(actor, {
-        agentId: existing.id,
-        payload: parsed.data,
-        ...(uploads === undefined ? {} : { uploads }),
-      })
-      return c.json(task, 201)
-    },
-  )
 
   registerOperationRoute(app, {
     descriptor: operations.rename,

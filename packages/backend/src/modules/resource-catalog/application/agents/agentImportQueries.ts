@@ -10,7 +10,7 @@ import {
 } from '@agent-workflow/shared'
 import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type { AgentOperationContext } from '../../public/participants'
-import type { AgentImportQueries } from '../../public/queries'
+import type { AgentImportQueries } from './queryContracts'
 import type { AgentImportReferenceReadPort } from './importPorts'
 
 function selectionKey(type: ImportRefType, resourceId: string): string {

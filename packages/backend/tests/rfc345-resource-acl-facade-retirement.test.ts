@@ -690,7 +690,11 @@ test('workflow ACL identity is application-owned and agents consume the exact pu
     resolve(sourceRoot, 'modules/resource-catalog/application/workflows/workflowApplication.ts'),
     'utf8',
   )
-  const agentRoutes = readFileSync(resolve(sourceRoot, 'routes/agents.ts'), 'utf8')
+  // RFC-589: the agent HTTP binding moved into resource-catalog's inbound layer.
+  const agentRoutes = readFileSync(
+    resolve(sourceRoot, 'modules/resource-catalog/inbound/http/agentRoutes.ts'),
+    'utf8',
+  )
 
   expect(publicTypes).not.toMatch(/\bexport interface WorkflowAclIdentity\b/)
   expect(workflowPorts).toMatch(/\bexport interface WorkflowAclIdentity\b/)

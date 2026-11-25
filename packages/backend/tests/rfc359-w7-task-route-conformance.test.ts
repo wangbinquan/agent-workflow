@@ -52,11 +52,11 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskRouteLaunchOperations } from '@/modules/task-execution/application/launch/taskRouteLaunchOperations'
+import type { TaskRouteOperations } from '@/modules/task-execution/public/commands'
 import type {
   AgentRouteTaskLaunchOperations,
-  TaskRouteOperations,
   WorkgroupRouteTaskLaunchOperations,
-} from '@/modules/task-execution/public/commands'
+} from '@/modules/task-execution/application/ports/subjectTaskLaunch'
 import { DEFAULT_UPLOAD_LIMITS } from '@/modules/task-execution/domain/uploads'
 import {
   REPO_PREP_NODE_ID,

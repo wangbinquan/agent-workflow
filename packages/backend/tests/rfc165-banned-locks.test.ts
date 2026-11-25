@@ -153,17 +153,22 @@ describe('RFC-165 — raw-key guard wiring (source lock)', () => {
     expect(countOf(src, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(2)
   })
 
-  test('routes/workgroups.ts launch gates raw keys too (exemption revoked)', () => {
+  // RFC-589: both launch endpoints moved into task-execution's launch bindings.
+  test('the workgroup launch binding gates raw keys too (exemption revoked)', () => {
     // Implementation-gate P2 (PR-2 review): the original exemption reasoning
     // ("schema never declared the keys") missed the F1 silent-degrade shape —
     // a {scratch:true, repoPath} body strips to a scratch launch. All four
     // launch entrances now carry the raw-key gate uniformly.
-    const src = read('packages/backend/src/routes/workgroups.ts')
+    const src = read(
+      'packages/backend/src/modules/task-execution/inbound/http/workgroupTaskLaunchRoutes.ts',
+    )
     expect(countOf(src, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })
 
-  test('routes/agents.ts launch gates raw keys (same F1 shape)', () => {
-    const src = read('packages/backend/src/routes/agents.ts')
+  test('the agent launch binding gates raw keys (same F1 shape)', () => {
+    const src = read(
+      'packages/backend/src/modules/task-execution/inbound/http/agentTaskLaunchRoutes.ts',
+    )
     expect(countOf(src, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })
 

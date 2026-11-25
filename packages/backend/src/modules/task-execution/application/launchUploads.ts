@@ -11,7 +11,7 @@
 
 import { DomainError, ValidationError } from '@/platform/errors/domainErrors'
 import type { UploadFile, UploadInputDef } from '../domain/uploads'
-import type { TaskRouteMultipartFilePart } from '../public/commands'
+import type { TaskRouteMultipartFilePart } from './ports/subjectTaskLaunch'
 
 /**
  * Membership-check every bound part against the declared upload inputs, THEN

@@ -15,13 +15,13 @@ import type {
   AgentResourceInventorySkill as InventorySkill,
   AgentResourceInventorySource,
 } from './ports'
+import type { GetAgentResourceClosureStatusInput } from '../../public/types'
 import type {
   AgentResourceClosureStatus,
   AgentResourceStatus,
   GetAgentResourceStatusInput,
-  GetAgentResourceClosureStatusInput,
-} from '../../public/types'
-import type { AgentResourceIntegrityQueries } from '../../public/queries'
+} from './queryContracts'
+import type { AgentResourceIntegrityQueries } from './queryContracts'
 import type {
   AgentLaunchResourceIntegrityParticipant,
   AgentOperationContext,
@@ -29,7 +29,7 @@ import type {
 import { agentLaunchResourceIntegrityParticipantBrand } from '../../domain/participantBrands'
 import { ValidationError } from '@/platform/errors/domainErrors'
 
-export type { AgentResourceStatus } from '../../public/types'
+export type { AgentResourceStatus } from './queryContracts'
 
 type AgentResourceDisplayRef = AgentResourceStatus['references'][number]
 type AgentResourceDisplayIssue = AgentResourceStatus['issues'][number]

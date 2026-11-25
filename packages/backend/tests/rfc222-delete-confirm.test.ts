@@ -320,7 +320,11 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
   }
 
   test('agents DELETE delegates to the application-owned confirm gate', () => {
-    const route = readFileSync(resolve(ROUTES_DIR, 'agents.ts'), 'utf8')
+    // RFC-589: the agent HTTP binding moved into resource-catalog's inbound layer.
+    const route = readFileSync(
+      resolve(ROUTES_DIR, '../modules/resource-catalog/inbound/http/agentRoutes.ts'),
+      'utf8',
+    )
     expect(deleteHandlerRe('/api/agents/:id').test(route)).toBe(true)
     expect(route).toContain('descriptor: operations.delete')
     expect(route).not.toContain('assertDeleteConfirm')
@@ -402,7 +406,11 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
   })
 
   test('workgroups DELETE delegates to the application-owned confirm gate', () => {
-    const route = readFileSync(resolve(ROUTES_DIR, 'workgroups.ts'), 'utf8')
+    // RFC-589: the workgroup HTTP binding moved into resource-catalog's inbound layer.
+    const route = readFileSync(
+      resolve(ROUTES_DIR, '../modules/resource-catalog/inbound/http/workgroupRoutes.ts'),
+      'utf8',
+    )
     expect(deleteHandlerRe('/api/workgroups/:id').test(route)).toBe(true)
     expect(route).toContain('descriptor: operations.delete')
     expect(route).not.toContain('assertDeleteConfirm')

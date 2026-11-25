@@ -44,7 +44,7 @@ export {
 export type {
   AgentRouteTaskLaunchOperations,
   WorkgroupRouteTaskLaunchOperations,
-} from '../public/commands'
+} from '../application/ports/subjectTaskLaunch'
 
 type TaskAutomationWorkStartProviderInput = Parameters<
   typeof bindTaskAutomationWorkStartProvider

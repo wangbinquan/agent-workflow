@@ -49,8 +49,9 @@ function srcText(rel: string): string {
 describe('RFC-243 T2 — launch call faces route through the executor (source lock)', () => {
   const CALL_FACES = [
     'modules/task-execution/inbound/http/taskRoutes.ts',
-    'routes/agents.ts',
-    'routes/workgroups.ts',
+    // RFC-589: the agent and workgroup launch endpoints moved into task-execution's launch bindings.
+    'modules/task-execution/inbound/http/agentTaskLaunchRoutes.ts',
+    'modules/task-execution/inbound/http/workgroupTaskLaunchRoutes.ts',
     // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
     // ——定时启动改走与路由同一份编排（启动参与者 → 根内核），本条锁的「不得直调
     // start* 服务」由那条路自己的形状保证：参与者里压根没有那三个函数的 import。
@@ -66,7 +67,10 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
       expect(/\bstartTask\(/.test(text)).toBe(false)
       expect(/\bstartAgentTask\(/.test(text)).toBe(false)
       expect(/\bstartWorkgroupTask\(/.test(text)).toBe(false)
-      if (rel === 'routes/agents.ts' || rel === 'routes/workgroups.ts') {
+      if (
+        rel.endsWith('/agentTaskLaunchRoutes.ts') ||
+        rel.endsWith('/workgroupTaskLaunchRoutes.ts')
+      ) {
         // RFC-345/T8 provider cutover: classic Resource Catalog routes receive
         // the same executor through a required closed binding instead of a DB.
         expect(text).toContain('taskLaunch.launch')

@@ -8,7 +8,7 @@ import { DEFAULT_UPLOAD_LIMITS } from '../../domain/uploads'
 import type {
   AgentRouteTaskLaunchOperations,
   WorkgroupRouteTaskLaunchOperations,
-} from '../../public/commands'
+} from '../ports/subjectTaskLaunch'
 
 import type { TaskAuthorizationQueries } from '../ports/taskAuthorization'
 import type { TaskExecutionLaunchParticipantDependencies } from './taskExecutionLaunchParticipant'

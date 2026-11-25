@@ -14,22 +14,18 @@ import type {
   DeleteAgentCatalogReceipt,
   RenameAgentCatalogInput,
   UpdateAgentCatalogInput,
-} from '../../public/types'
+} from './operationContracts'
 import type { AgentOperationContext } from '../../public/participants'
+import type { AgentQueries } from '../../public/queries'
+import type { AgentDependencyQueries, AgentReferenceQueries } from './queryContracts'
+import type { AgentCatalogResource, GetAgentCatalogInput } from '../../public/types'
 import type {
-  AgentDependencyQueries,
-  AgentQueries,
-  AgentReferenceQueries,
-} from '../../public/queries'
-import type {
-  AgentCatalogResource,
-  GetAgentCatalogInput,
   AgentReferenceLabelsInput,
   ResolveAgentDependencyClosureInput,
   ResolveAgentDependencyIdsInput,
   ResolvedAgentDependencyIds,
   ValidateAgentDependenciesInput,
-} from '../../public/types'
+} from './queryContracts'
 import type { AgentAccessPort, AgentPolicyPort, AgentRepository } from './ports'
 import {
   resolveAgentDependencyClosure,

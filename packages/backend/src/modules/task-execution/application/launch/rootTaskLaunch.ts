@@ -32,7 +32,8 @@ import {
 } from '../../domain/taskLaunchOrigin'
 import type { collectUploadInputDefs } from '../../domain/uploads'
 import { validateUploadPlan } from '../../domain/uploads'
-import type { ExecutionInvoker, TaskRouteMultipartFilePart } from '../../public/commands'
+import type { ExecutionInvoker } from '../../public/commands'
+import type { TaskRouteMultipartFilePart } from '../ports/subjectTaskLaunch'
 import type { SourceTerminationSnapshot } from '../../domain/sourceTermination'
 
 import type {

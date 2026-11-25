@@ -12,7 +12,7 @@ import type {
   CopyWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   UpdateWorkgroupCatalogInput,
-} from '../../public/types'
+} from './operationContracts'
 
 export interface WorkgroupDeletedAudience {
   readonly kind: 'workgroup.deleted-audience'

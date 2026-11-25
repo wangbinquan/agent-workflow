@@ -53,7 +53,6 @@ import type {
 } from '@/modules/resource-catalog/application/skills/operationContracts'
 import type {
   AgentQueries,
-  AgentReferenceQueries,
   McpQueries,
   PluginQueries,
   SkillFileQueries,
@@ -63,6 +62,7 @@ import type {
   WorkflowValidationQueries,
   WorkgroupQueries,
 } from '../src/modules/resource-catalog/public/queries'
+import type { AgentReferenceQueries } from '@/modules/resource-catalog/application/agents/queryContracts'
 import type {
   McpAclIdentityParticipant,
   TaskExecutionResourceSnapshotInTx,
@@ -70,13 +70,13 @@ import type {
 import type { SkillZipImportParticipant } from '@/modules/resource-catalog/application/skills/operationContracts'
 import type { MemoryResourceScopeAccessParticipant } from '../src/modules/memory/application/ports/resourceScopeAccess'
 import type {
-  AgentOperationDescriptors,
   McpCatalogModule,
   McpOperationDescriptors,
   ResourcePackageCatalogModule,
   ResourcePackageOperationDescriptors,
-  WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
+import type { AgentOperationDescriptors } from '@/modules/resource-catalog/application/agents/operationContracts'
+import type { WorkgroupOperationDescriptors } from '@/modules/resource-catalog/application/workgroups/operationContracts'
 import type { PluginOperationDescriptors } from '@/modules/resource-catalog/application/plugins/operationContracts'
 import type { SkillOperationDescriptors } from '@/modules/resource-catalog/application/skills/operationContracts'
 import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/application/workflows/operationContracts'
@@ -1234,7 +1234,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('T5-WG active HTTP binding executes the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const route = readFileSync(resolve(sourceRoot, 'routes/workgroups.ts'), 'utf8')
+    // RFC-589: the workgroup HTTP binding moved into resource-catalog's inbound layer.
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/workgroupRoutes.ts'),
+      'utf8',
+    )
     const application = readFileSync(
       resolve(
         sourceRoot,
@@ -1356,7 +1360,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('T5-A active HTTP binding executes the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const route = readFileSync(resolve(sourceRoot, 'routes/agents.ts'), 'utf8')
+    // RFC-589: the agent HTTP binding moved into resource-catalog's inbound layer.
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/inbound/http/agentRoutes.ts'),
+      'utf8',
+    )
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/agents/agentApplication.ts'),
       'utf8',
@@ -1408,8 +1416,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         'utf8',
       ),
     ).toContain('readonly builtin: boolean')
-    expect(publicTypes).toContain('interface AgentReferenceLabel {')
-    expect(publicTypes).not.toContain('export interface AgentReferenceLabel {')
+    // RFC-589: the reference-label helper moved with the agent query contracts; it stays a closed (unexported) shape.
+    const agentQueryContracts = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/agents/queryContracts.ts'),
+      'utf8',
+    )
+    expect(agentQueryContracts).toContain('interface AgentReferenceLabel {')
+    expect(agentQueryContracts).not.toContain('export interface AgentReferenceLabel {')
+    expect(publicTypes).not.toContain('interface AgentReferenceLabel {')
     expect(route).not.toContain('UpdateAgentRequestSchema')
     expect(route).not.toContain('DeleteAgentSchema')
     expect(route).not.toContain('readDeleteBody')
@@ -1934,7 +1948,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         .sort()
     const routeCases = [
       [
-        'routes/agents.ts',
+        // RFC-589: the agent and workgroup bindings moved into resource-catalog's inbound layer.
+        'modules/resource-catalog/inbound/http/agentRoutes.ts',
         'agent',
         [
           'operations.list|GET|/api/agents',
@@ -2014,7 +2029,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/workgroups.ts',
+        'modules/resource-catalog/inbound/http/workgroupRoutes.ts',
         'workgroup',
         [
           'operations.list|GET|/api/workgroups',
@@ -2210,7 +2225,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .join('\n')
     const routeConsumerContracts = new Map<string, readonly string[]>([
       [
-        'routes/agents.ts',
+        // RFC-589: the agent and workgroup bindings moved into resource-catalog's inbound layer.
+        'modules/resource-catalog/inbound/http/agentRoutes.ts',
         [
           'CreateAgentCatalogInput',
           'UpdateAgentCatalogInput',
@@ -2266,7 +2282,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         ],
       ],
       [
-        'routes/workgroups.ts',
+        'modules/resource-catalog/inbound/http/workgroupRoutes.ts',
         [
           'CreateWorkgroupCatalogInput',
           'CopyWorkgroupCatalogInput',

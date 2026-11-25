@@ -90,11 +90,10 @@ const LEDGER: Readonly<Record<string, ModuleLedger>> = {
   'resource-catalog': {
     entries: {
       'descriptor contract': [
-        'AgentOperationDescriptors',
+        // RFC-589: the agent and workgroup descriptors moved into `application/` with their HTTP bindings.
         'McpOperationDescriptors',
         // RFC-581: the skill and plugin descriptors moved into `application/` with their HTTP bindings.
         'ResourcePackageOperationDescriptors',
-        'WorkgroupOperationDescriptors',
         // RFC-580: exported for the workflow descriptors that moved into `application/` (every ACL-governed descriptor
         // here extends it); WorkflowOperationDescriptors and WorkgroupTaskRoomModule moved with their HTTP bindings.
         'ResourceAclOperationDescriptors',

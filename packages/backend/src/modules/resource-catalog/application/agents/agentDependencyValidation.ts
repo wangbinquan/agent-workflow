@@ -9,7 +9,7 @@ import { DomainError } from '@/platform/errors/domainErrors'
 import type {
   AgentDependencyClosureResult,
   ResolveAgentDependencyClosureInput,
-} from '../../public/types'
+} from './queryContracts'
 
 export interface AgentDependencyReader {
   get(id: string): Promise<Agent | null>

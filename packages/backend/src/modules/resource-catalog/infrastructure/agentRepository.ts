@@ -8,7 +8,10 @@ import { ConflictError, NotFoundError, staleConflictError } from '@/platform/err
 import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import type { AgentRepository } from '../application/agents/ports'
 import type { AgentOperationContext } from '../public/participants'
-import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
+import type {
+  AgentReferenceLabels,
+  AgentReferenceLabelsInput,
+} from '../application/agents/queryContracts'
 import { loadAgentPersistenceRow, loadAgentPersistenceRows } from './agentPersistence'
 import {
   createAgentMutationParticipant,

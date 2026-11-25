@@ -349,7 +349,8 @@ describe('RFC-550 —— 未消费符号撤出十个 context 的 public', () => 
       [IN + 'public/participants.ts', 'AdapterConfigurationReference', false],
       // RFC-578: isMemoryHiddenCandidate left memory's public with the memory route; MemoryScopeRef (a type) stays.
       ['modules/memory/public/types.ts', 'MemoryScopeRef', false],
-      [RC + 'public/operations.ts', 'AgentOperationDescriptors', false],
+      // RFC-589: AgentOperationDescriptors left with the agent HTTP binding; the MCP descriptors stay.
+      [RC + 'public/operations.ts', 'McpOperationDescriptors', false],
       [RC + 'public/participants.ts', 'acquireAgentLaunch', true],
       [RC + 'public/types.ts', 'DISABLED_RESOURCE_POLICY', true],
       ['modules/runtime-management/public/participants.ts', 'objectOf', true],

@@ -18,7 +18,8 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   })
 
   test('Agent ancillary transport consumes named provider-neutral queries', () => {
-    const route = source('routes/agents.ts')
+    // RFC-589: the agent HTTP binding moved into resource-catalog's inbound layer.
+    const route = source('modules/resource-catalog/inbound/http/agentRoutes.ts')
 
     expect(route).toContain('readonly dependencyQueries: AgentDependencyQueries')
     expect(route).toContain('readonly resourceIntegrityQueries: AgentResourceIntegrityQueries')
@@ -40,7 +41,8 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   test('Agent dependency traversal is application-owned and provider-neutral', () => {
     const application = source('modules/resource-catalog/application/agents/agentApplication.ts')
     const composition = source('modules/resource-catalog/composition/agentOperations.ts')
-    const queryContract = source('modules/resource-catalog/public/queries.ts')
+    // RFC-589: the agent query contracts left `public/queries` with the agent HTTP binding.
+    const queryContract = source('modules/resource-catalog/application/agents/queryContracts.ts')
 
     expect(queryContract).toContain('export interface AgentDependencyQueries')
     expect(application).toContain('const dependencyQueries: AgentDependencyQueries')
@@ -151,8 +153,9 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   })
 
   test('Agent and Workgroup launch transports consume required provider-neutral task bindings', () => {
-    const agent = source('routes/agents.ts')
-    const workgroup = source('routes/workgroups.ts')
+    // RFC-589: the two launch endpoints moved into task-execution's launch bindings.
+    const agent = source('modules/task-execution/inbound/http/agentTaskLaunchRoutes.ts')
+    const workgroup = source('modules/task-execution/inbound/http/workgroupTaskLaunchRoutes.ts')
 
     expect(agent).toContain('readonly taskLaunch: AgentRouteTaskLaunchOperations')
     expect(agent).toContain('module.taskLaunch.assertReplayVisible(')
@@ -169,13 +172,17 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   test('all classic HTTP routes mount only closed Resource Catalog dependencies', () => {
     // RFC-580: the workflow and resource-package bindings moved into resource-catalog's inbound layer.
     for (const path of [
-      'routes/agents.ts',
+      // RFC-589: the agent and workgroup bindings moved into resource-catalog's inbound layer; their launch endpoints
+      // (task-execution's launch bindings now) keep the same closed-dependency check.
+      'modules/resource-catalog/inbound/http/agentRoutes.ts',
+      'modules/task-execution/inbound/http/agentTaskLaunchRoutes.ts',
       // RFC-581: the skill, MCP and plugin bindings moved into resource-catalog's inbound layer.
       'modules/resource-catalog/inbound/http/skillRoutes.ts',
       'modules/resource-catalog/inbound/http/mcpRoutes.ts',
       'modules/resource-catalog/inbound/http/pluginRoutes.ts',
       'modules/resource-catalog/inbound/http/workflowRoutes.ts',
-      'routes/workgroups.ts',
+      'modules/resource-catalog/inbound/http/workgroupRoutes.ts',
+      'modules/task-execution/inbound/http/workgroupTaskLaunchRoutes.ts',
       'modules/resource-catalog/inbound/http/resourcePackageRoutes.ts',
       'routes/resourceAcl.ts',
     ]) {

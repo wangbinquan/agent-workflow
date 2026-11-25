@@ -25,8 +25,6 @@ import type {
   ClarifyDirective,
   FailureCode,
   NodeRunStatus,
-  StartAgentTask,
-  StartWorkgroupTask,
   Task,
   TaskStatus,
   TriggerContext,
@@ -228,45 +226,6 @@ export interface WorkgroupTaskRoomTaskParticipantInTx {
     closedHolderIds: readonly string[]
     eventRef: CommittedEventRef | null
   }> | null>
-}
-
-export interface TaskRouteUploadLimits {
-  readonly perFile: number
-  readonly perRequest: number
-  readonly perCount: number
-}
-
-export interface TaskRouteMultipartFilePart {
-  readonly inputKey: string
-  readonly filename: string
-  readonly declaredMime: string
-  readonly blob: Blob
-}
-
-/** TaskExecution-owned launch boundary consumed by the Agent route. */
-export interface AgentRouteTaskLaunchOperations {
-  uploadLimits(): TaskRouteUploadLimits | Promise<TaskRouteUploadLimits>
-  assertReplayVisible(actor: AuthenticatedAuthoritySnapshot, sourceTaskId: string): Promise<void>
-  launch(
-    actor: AuthenticatedAuthoritySnapshot,
-    input: Readonly<{
-      agentId: string
-      payload: StartAgentTask
-      uploads?: Readonly<{
-        parts: readonly TaskRouteMultipartFilePart[]
-        limits: TaskRouteUploadLimits
-      }>
-    }>,
-  ): Promise<Task>
-}
-
-/** TaskExecution-owned launch boundary consumed by the Workgroup route. */
-export interface WorkgroupRouteTaskLaunchOperations {
-  assertReplayVisible(actor: AuthenticatedAuthoritySnapshot, sourceTaskId: string): Promise<void>
-  launch(
-    actor: AuthenticatedAuthoritySnapshot,
-    input: Readonly<{ workgroupId: string; payload: StartWorkgroupTask }>,
-  ): Promise<Task>
 }
 
 /** Bootstrap must supply one daemon-scoped driver to every command caller. */

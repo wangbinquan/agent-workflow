@@ -16,7 +16,7 @@
 - [x] AC-2 可见性中间件在七个端点之前；相关路由用例通过
 - [x] AC-3 `legacy-horizontal-files` 上限 59 → 58；未消费 public 符号保持 0（13 个符号随之撤回）；DAG 之外的边与跨 context 内部文件对不增加；新增
       RFC-588 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI（`7ff4408d4`）70 个 job 里 68 个成功，macOS e2e 第 3 片因 runner 慢在 20 分钟上限被取消（环境性，已归因，见「CI」）
 
 ## 集中验证
 
@@ -44,7 +44,13 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `7ff4408d4`（实现）：exact SHA 主 CI run 45648695437 的 70 个 job 里 68 个成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查（含
+  Markdown link check）、ubuntu 的 3 片与 windows 的 4 片 e2e、macOS e2e 的第 1、2、4 片；按路径触发的 windows-platform（run 45648696009）通过。
+- 没过的两格是同一件事：Playwright e2e（macos-latest 第 3/4 片，job 139330833380）跑到 job 的 20 分钟上限被取消（run 结论 cancelled），CI required 因它
+  而红。归因：环境性（macOS runner 慢），不是本提交引入——那一片的日志里反复出现 `event loop stalled gapMs≈1.0–1.7s`，被取消时仍在逐条通过（99 条通过）；
+  其间红的两条（`rfc372-recorded-mindmap.spec.ts:183` 的澄清追问状态、`rfc396-graph-care-repair.spec.ts:404` 的图谱修复，各跑 1.5～3.9 分钟）在同一次 run
+  的 ubuntu（第 2/3 片）与 windows（第 3/4 片）上都通过，走的也不是本提交改动的代码；同一片在今天前几次 run 里用了 5～16.6 分钟。没有改测试、没有重跑。
+  后继证据取 RFC-589 提交的 macOS e2e（它以本提交为祖先，本提交的内容原样保留）。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

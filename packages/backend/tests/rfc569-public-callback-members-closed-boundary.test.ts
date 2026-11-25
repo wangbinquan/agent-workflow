@@ -89,7 +89,8 @@ const CLOSED: ReadonlyArray<readonly [string, string]> = [
   ['modules/resource-catalog/public/participants.ts', 'SkillVersionCommitHooks'],
   ['modules/development-automation/application/missionOperations.ts', 'DevelopmentMissionFileView'],
   ['modules/development-automation/application/evidenceDownloads.ts', 'EvidenceDownloadHandle'],
-  ['modules/resource-catalog/public/types.ts', 'AgentResourceIssueCode'],
+  // RFC-589: the integrity issue union moved with the agent query contracts.
+  ['modules/resource-catalog/application/agents/queryContracts.ts', 'AgentResourceIssueCode'],
   ['modules/resource-catalog/domain/disabledResourcePolicy.ts', 'PluginDisabledErrorCode'],
 ]
 

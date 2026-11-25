@@ -114,7 +114,11 @@ describe('RFC-440 —— 引用与方向', () => {
       // RFC-581: the skill and plugin HTTP bindings moved into resource-catalog's inbound layer.
       ['skills', join(SRC, 'modules', 'resource-catalog', 'inbound', 'http', 'skillRoutes.ts')],
       ['memories', join(SRC, 'modules', 'memory', 'inbound', 'http', 'memoryRoutes.ts')],
-      ['workgroups', join(SRC, 'routes', 'workgroups.ts')],
+      // RFC-589: the workgroup HTTP binding moved into resource-catalog's inbound layer.
+      [
+        'workgroups',
+        join(SRC, 'modules', 'resource-catalog', 'inbound', 'http', 'workgroupRoutes.ts'),
+      ],
       // RFC-580: the workflow HTTP binding moved into resource-catalog's inbound layer.
       [
         'workflows',

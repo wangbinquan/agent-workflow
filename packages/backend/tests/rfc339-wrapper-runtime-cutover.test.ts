@@ -421,7 +421,9 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(cli).not.toContain('@/modules/task-execution/public/topology')
 
     const callers = [
-      'packages/backend/src/routes/agents.ts',
+      // RFC-589: the agent and workgroup bindings moved into resource-catalog, their launch endpoints into task-execution.
+      'packages/backend/src/modules/resource-catalog/inbound/http/agentRoutes.ts',
+      'packages/backend/src/modules/task-execution/inbound/http/agentTaskLaunchRoutes.ts',
       'packages/backend/src/modules/collaboration/inbound/http/clarifyRoutes.ts',
       'packages/backend/src/modules/development-automation/inbound/http/developmentMissionRoutes.ts',
       'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts',
@@ -430,7 +432,8 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/modules/collaboration/inbound/http/taskQuestionRoutes.ts',
       'packages/backend/src/modules/task-execution/inbound/http/taskRoutes.ts',
       'packages/backend/src/modules/resource-catalog/inbound/http/workgroupTaskRoutes.ts',
-      'packages/backend/src/routes/workgroups.ts',
+      'packages/backend/src/modules/resource-catalog/inbound/http/workgroupRoutes.ts',
+      'packages/backend/src/modules/task-execution/inbound/http/workgroupTaskLaunchRoutes.ts',
       'packages/backend/tests/helpers/startTaskDeps.ts',
       'packages/backend/src/modules/integration/application/webhookDispatch.ts',
     ]

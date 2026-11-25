@@ -420,6 +420,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
       // RFC-420: the call node's delegated owner actor resolves through the public delegated factory type.
       'packages/backend/src/modules/task-execution/application/childCallInheritance.ts -> @/modules/identity-access/public/participants',
+      // RFC-589: the agent / workgroup launch contracts (and their authority import) moved here from public/commands.
+      'packages/backend/src/modules/task-execution/application/ports/subjectTaskLaunch.ts -> @/modules/identity-access/public/participants',
       // RFC-370 §9.2 V4: recovery requests act as the requesting platform user's AW account.
       'packages/backend/src/modules/task-execution/application/ports/taskClarifyDirectiveRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts -> @/modules/identity-access/public/participants',

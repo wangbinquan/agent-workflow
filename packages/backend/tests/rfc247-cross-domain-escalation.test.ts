@@ -35,9 +35,12 @@ import { lookupRouteMeta, routeMetaGate, type RouteMeta } from '@/routes/registr
 import { mountFusionRoutes } from '@/modules/knowledge-evolution/inbound/fusionRoutes'
 import { mountWorkgroupTaskRoutes } from '@/modules/resource-catalog/inbound/http/workgroupTaskRoutes'
 import { mountScheduledTaskRoutes } from '@/modules/integration/inbound/http/scheduledTaskRoutes'
-import { mountWorkgroupRoutes } from '@/routes/workgroups'
+import { mountWorkgroupRoutes } from '@/modules/resource-catalog/inbound/http/workgroupRoutes'
 import { mountMemoryDistillJobRoutes } from '@/modules/memory/inbound/http/memoryDistillJobRoutes'
-import { mountAgentRoutes } from '@/routes/agents'
+import { mountAgentRoutes } from '@/modules/resource-catalog/inbound/http/agentRoutes'
+// RFC-589: the two launch endpoints moved to task-execution's launch bindings.
+import { mountAgentTaskLaunchRoutes } from '@/modules/task-execution/inbound/http/agentTaskLaunchRoutes'
+import { mountWorkgroupTaskLaunchRoutes } from '@/modules/task-execution/inbound/http/workgroupTaskLaunchRoutes'
 import {
   createAgentOperationDescriptors,
   createWorkgroupOperationDescriptors,
@@ -103,6 +106,16 @@ function mountAll(): void {
         deps as unknown as Parameters<typeof mountMemoryDistillJobRoutes>[1],
       ),
     () => mountAgentRoutes(sink, agentModule),
+    () =>
+      mountAgentTaskLaunchRoutes(
+        sink,
+        agentModule as unknown as Parameters<typeof mountAgentTaskLaunchRoutes>[1],
+      ),
+    () =>
+      mountWorkgroupTaskLaunchRoutes(
+        sink,
+        workgroupModule as unknown as Parameters<typeof mountWorkgroupTaskLaunchRoutes>[1],
+      ),
   ]
   for (const m of mounts) {
     try {

@@ -15,19 +15,16 @@
 import {
   CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
-  rejectRetiredStartTaskKeys,
   RenameWorkgroupSchema,
-  StartWorkgroupTaskSchema,
   UpdateWorkgroupSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { WorkgroupOperationDescriptors } from '@/modules/resource-catalog/public/operations'
+import type { WorkgroupOperationDescriptors } from '../../application/workgroups/operationContracts'
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
-import type {
-  AgentResourceIntegrityQueries,
-  WorkgroupQueries,
-} from '@/modules/resource-catalog/public/queries'
+import type { WorkgroupQueries } from '@/modules/resource-catalog/public/queries'
+import type { AgentResourceIntegrityQueries } from '../../application/agents/queryContracts'
+import type { WorkgroupCatalogDetail } from '@/modules/resource-catalog/public/types'
 import type {
   CopyWorkgroupCatalogInput,
   CreateWorkgroupCatalogInput,
@@ -36,27 +33,21 @@ import type {
   RenameWorkgroupCatalogInput,
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
-  WorkgroupCatalogDetail,
-} from '@/modules/resource-catalog/public/types'
+} from '../../application/workgroups/operationContracts'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
-// RFC-243 T2: workgroup launches go through the unified executor facade — this
-// route must not call startWorkgroupTask directly (source-text lock).
 import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
-import type { WorkgroupRouteTaskLaunchOperations } from '@/modules/task-execution/public/commands'
 
 export interface WorkgroupRouteDependencies {
   readonly queries: WorkgroupQueries
   readonly operations: WorkgroupOperationDescriptors
   readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
   readonly authorityFor: (actor: Actor) => WorkgroupOperationContext
-  readonly taskLaunch: WorkgroupRouteTaskLaunchOperations
+  // RFC-589: the workgroup launch (`POST /api/workgroups/:id/tasks`) is task-execution's binding
+  // (`mountWorkgroupTaskLaunchRoutes`), mounted right after this one in the same step.
 }
-
-/** Required TaskExecution launch seam; no provider client crosses the route. */
-export type { WorkgroupRouteTaskLaunchOperations }
 
 export function mountWorkgroupRoutes(app: Hono, module: WorkgroupRouteDependencies): void {
   const { queries, operations } = module
@@ -214,63 +205,6 @@ export function mountWorkgroupRoutes(app: Hono, module: WorkgroupRouteDependenci
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, renamed) => c.json(renamed),
   })
-
-  // RFC-164 PR-3 — launch a workgroup task. Service-layer entry (the builtin
-  // host workflow would 403 assertWorkflowLaunchable by design); the group
-  // itself is the launch permission surface (view ⇒ launch, RFC-099 D3).
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workgroups/:id/tasks',
-      executionGroup: 'task',
-      // RFC-165 F15/N1 — see routes/agents.ts: all three launch endpoints gate
-      // uniformly on the task execute point.
-      permissions: ['tasks:execute'],
-      tokenAccess: 'allow',
-      summary: 'Launch a workgroup task',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const existing = await loadVisibleWorkgroup(actor, c.req.param('id'))
-      const body = await safeJsonOrEmpty(c.req.raw)
-      // RFC-165 实现门 P2 修复：即便本 schema 从未声明退役键，非 strict parse
-      // 仍会把 {scratch:true, repoPath} 静默剥键降级成 scratch 启动（F1
-      // silent-degrade 同型）——四个 launch 入口一致挂 raw-key 拒收。
-      const retired = rejectRetiredStartTaskKeys(body)
-      if (retired !== null) {
-        const clientOwnedGitIdentity = retired === 'gitUserName' || retired === 'gitUserEmail'
-        throw new ValidationError(
-          clientOwnedGitIdentity ? 'task-git-identity-client-owned' : 'start-task-path-retired',
-          clientOwnedGitIdentity
-            ? `RFC-320 derives Git commit identity from the task creator; remove '${retired}'`
-            : `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
-        )
-      }
-
-      // RFC-248 H9（实现门 P1）：`sourceTaskId` 由调用方控制。重放前先确认
-      // 他**看得见**那个任务——否则「能启动某工作流但看不见任务 X」的用户可以
-      // 传 X 的 id，让服务端读出 X 冻结的仓库构成并按它物化，而且泄漏形式是
-      // 「任务成功启动」，完全不像一次越权。不可见与不存在同形（都 404）。
-      {
-        const src = (body as { sourceTaskId?: unknown }).sourceTaskId
-        if (typeof src === 'string' && src.length > 0) {
-          await module.taskLaunch.assertReplayVisible(actor, src)
-        }
-      }
-      const parsed = StartWorkgroupTaskSchema.safeParse(body)
-      if (!parsed.success) {
-        throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      const task = await module.taskLaunch.launch(actor, {
-        workgroupId: existing.id,
-        payload: parsed.data,
-      })
-      return c.json(task, 201)
-    },
-  )
 
   // RFC-099 / RFC-223 — GET/PUT /api/workgroups/:id/acl
   registerOperationRoute(app, {

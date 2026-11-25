@@ -691,7 +691,13 @@ describe('RFC-223 PR-1 P1-2 — single-pass resolution (source guard)', () => {
     // The old two-step shape (route assertNewRefsUsable → service re-resolves)
     // is the TOCTOU; create/update now resolve+check in ONE pass inside the
     // service, so these routes must not call assertNewRefsUsable at all.
-    expect(read('routes/agents.ts')).not.toContain('assertNewRefsUsable')
-    expect(read('routes/workgroups.ts')).not.toContain('assertNewRefsUsable')
+    // RFC-589: the two bindings moved into resource-catalog's inbound layer (their launch endpoints into
+    // task-execution's launch bindings, which create nothing).
+    expect(read('modules/resource-catalog/inbound/http/agentRoutes.ts')).not.toContain(
+      'assertNewRefsUsable',
+    )
+    expect(read('modules/resource-catalog/inbound/http/workgroupRoutes.ts')).not.toContain(
+      'assertNewRefsUsable',
+    )
   })
 })

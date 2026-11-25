@@ -14,7 +14,10 @@ import { createAgentPersistenceSemantics } from '../infrastructure/agentPersiste
 import type { AgentRuntimeProfileLookup } from '../infrastructure/agentMutationParticipant'
 import { createAgentOperationDescriptors } from './catalogOperationDescriptors'
 import type { AgentOperationContext } from '../public/participants'
-import type { AgentImportQueries, AgentResourceIntegrityQueries } from '../public/queries'
+import type {
+  AgentImportQueries,
+  AgentResourceIntegrityQueries,
+} from '../application/agents/queryContracts'
 import type { AgentCatalogModule } from '../application/catalogModules'
 
 type AgentAclOperationApplication = Parameters<typeof createAgentOperationDescriptors>[2]

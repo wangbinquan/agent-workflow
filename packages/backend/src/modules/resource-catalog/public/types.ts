@@ -21,10 +21,7 @@ export { canEditAccess, canGovernAccess } from '../domain/resourceAccess'
 
 import type {
   Agent,
-  CopyWorkgroupRequest,
-  CreateAgent,
   CreateMcp,
-  CreateWorkgroup,
   DeleteMcp,
   IntentOp,
   IntentResourceType,
@@ -35,17 +32,13 @@ import type {
   GrantResourceType,
   ResourceAccess,
   ResourceVisibility,
-  RenameAgentRequest,
   RenameMcpRequest,
-  RenameWorkgroup,
-  SaveWorkgroupReceipt,
   Skill,
   SkillContent,
   SkillVersion,
   SkillVersionContent,
   SkillVersionDiff,
   UpdateMcpRequest,
-  UpdateWorkgroup,
   WorkflowCandidateHash,
   WorkflowDetail,
   WorkflowDefinition,
@@ -135,27 +128,6 @@ export interface UpdateResourceAclCatalogInput {
   readonly submission: JsonBodySubmission
 }
 
-export type CreateAgentCatalogInput = CreateAgent
-
-export interface UpdateAgentCatalogInput {
-  readonly id: string
-  readonly submission: JsonBodySubmission
-}
-
-export interface DeleteAgentCatalogInput {
-  readonly id: string
-  readonly submission: JsonBodySubmission
-}
-
-export interface RenameAgentCatalogInput {
-  readonly id: string
-  readonly rename: RenameAgentRequest
-}
-
-export interface DeleteAgentCatalogReceipt {
-  readonly deleted: Agent
-}
-
 export type CreateMcpCatalogInput = CreateMcp
 
 export interface UpdateMcpCatalogInput {
@@ -177,37 +149,6 @@ export interface DeleteMcpCatalogReceipt {
   readonly deleted: McpOperationResource
 }
 
-export type CreateWorkgroupCatalogInput = CreateWorkgroup
-
-export interface CopyWorkgroupCatalogInput {
-  readonly id: string
-  readonly copy: CopyWorkgroupRequest
-}
-
-export interface UpdateWorkgroupCatalogInput {
-  readonly id: string
-  readonly update: UpdateWorkgroup
-}
-
-export interface DeleteWorkgroupCatalogInput {
-  readonly id: string
-  readonly deletion: JsonBodySubmission
-}
-
-export interface RenameWorkgroupCatalogInput {
-  readonly id: string
-  readonly rename: RenameWorkgroup
-}
-
-export type UpdateWorkgroupCatalogReceipt = SaveWorkgroupReceipt
-
-export interface DeleteWorkgroupCatalogReceipt {
-  readonly id: string
-  readonly deletedVersion: number
-  readonly clientMutationId: string
-  readonly deleted: WorkgroupDetail
-}
-
 /** T5-A aggregate contract. SQLite rows and raw transport values stay private. */
 export type AgentCatalogResource = Agent
 
@@ -215,111 +156,15 @@ export interface GetAgentCatalogInput {
   readonly id: string
 }
 
-export interface AgentReferenceLabelsInput {
-  readonly agents: readonly AgentCatalogResource[]
-  readonly visibleAgentIds: readonly string[]
-}
-
-interface AgentReferenceLabel {
-  readonly id: string
-  readonly name: string
-}
-
-export interface AgentReferenceLabels {
-  readonly skills: readonly AgentReferenceLabel[]
-  readonly mcps: readonly AgentReferenceLabel[]
-  readonly plugins: readonly AgentReferenceLabel[]
-}
-
-export interface ResolveAgentDependencyClosureInput {
-  readonly root: AgentCatalogResource
-  readonly onMissing: 'fail' | 'skip'
-}
-
-export type AgentDependencyClosureResult =
-  | { readonly ok: true; readonly agents: readonly AgentCatalogResource[] }
-  | { readonly ok: false; readonly cyclePath: readonly string[] }
-
-export interface ResolveAgentDependencyIdsInput {
-  readonly ids: readonly string[]
-}
-
-export interface ResolvedAgentDependencyIds {
-  readonly ids: readonly string[]
-  readonly missing: readonly {
-    readonly type: 'agent'
-    readonly name: string
-  }[]
-}
-
-export interface ValidateAgentDependenciesInput {
-  readonly selfId: string
-  readonly dependsOn: readonly string[]
-}
-
-type AgentResourceRefKind = 'skill' | 'mcp' | 'plugin' | 'agent'
-// RFC-477: the exact wire code shared by every disabled-plugin integrity emitter is declared with the disabled-resource
-// policy (`domain/disabledResourcePolicy.ts`); the issue union below names it by type.
-import type { PluginDisabledErrorCode } from '../domain/disabledResourcePolicy'
 /** RFC-477 — the disabled MCP / plugin disposition table (the runtime self-check reports it); was services/execution/resourcePolicy.ts. */
 export {
   DISABLED_RESOURCE_POLICY,
   notModeledDisabledKinds,
   type DisableableResourceKind,
 } from '../domain/disabledResourcePolicy'
-type AgentResourceIssueCode =
-  | 'agent-dependency-not-found'
-  | 'agent-dependency-cycle'
-  | 'skill-not-found'
-  | 'skill-unavailable'
-  | 'mcp-not-found'
-  | 'plugin-not-found'
-  | PluginDisabledErrorCode
-type AgentResourceDisplayState = 'available' | 'hidden' | 'missing' | 'unavailable'
-
-interface AgentResourceDisplayRef {
-  readonly kind: AgentResourceRefKind
-  readonly refId: string
-  readonly name: string | null
-  readonly state: AgentResourceDisplayState
-}
-
-interface AgentResourceDisplayIssue {
-  readonly code: AgentResourceIssueCode
-  readonly refKind: AgentResourceRefKind
-  readonly state: AgentResourceDisplayState
-  readonly refId: string | null
-  readonly refName: string | null
-  readonly ownerAgentId: string | null
-  readonly ownerAgentName: string | null
-  readonly direct: boolean
-}
-
-export interface AgentResourceStatus {
-  readonly ok: boolean
-  readonly references: readonly AgentResourceDisplayRef[]
-  readonly issues: readonly AgentResourceDisplayIssue[]
-}
-
-export interface GetAgentResourceStatusInput {
-  readonly root: AgentCatalogResource
-}
-
 /** Closed multi-root integrity projection used by Workgroup authoring. */
 export interface GetAgentResourceClosureStatusInput {
   readonly rootAgentIds: readonly string[]
-}
-
-interface AgentResourceClosureIssue {
-  readonly code: AgentResourceIssueCode
-  readonly rootAgentId: string
-  readonly refKind: AgentResourceRefKind
-  readonly direct: boolean
-}
-
-export interface AgentResourceClosureStatus {
-  readonly ok: boolean
-  readonly issues: readonly AgentResourceClosureIssue[]
 }
 
 /** Closed provider persistence projection for one MCP probe. */

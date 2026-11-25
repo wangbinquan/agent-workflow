@@ -120,7 +120,11 @@ describe('RFC-445 —— 引用', () => {
   test('agents 与 health 路由不 import services/', () => {
     // 非空对照：每个路由都解析出了本地目标（含本 RFC 改到的新位置），判据不是空集上的恒真。
     const expectedNewTarget = {
-      'routes/agents.ts': 'platform/http/multipartLaunch',
+      // RFC-589: the agent launch (and its multipart parse) moved into task-execution's launch binding; the rest of
+      // the agent binding moved into resource-catalog's inbound layer.
+      'modules/task-execution/inbound/http/agentTaskLaunchRoutes.ts':
+        'platform/http/multipartLaunch',
+      'modules/resource-catalog/inbound/http/agentRoutes.ts': 'platform/http/deleteSnapshot',
       // RFC-587: the health probes moved into system-operations' inbound layer.
       'modules/system-operations/inbound/http/healthRoutes.ts': COUNTERS,
     } as const

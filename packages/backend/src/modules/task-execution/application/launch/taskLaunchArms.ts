@@ -33,11 +33,11 @@ import {
 import type { AgentLaunchResourceOperations } from '../ports/agentLaunchResourceOperations'
 import type { TaskExecutionResourceAuthority } from '../ports/taskExecutionResourceSnapshots'
 import { collectUploadInputDefs } from '../../domain/uploads'
+import type { ExecutionInvoker } from '../../public/commands'
 import type {
   AgentRouteTaskLaunchOperations,
-  ExecutionInvoker,
   WorkgroupRouteTaskLaunchOperations,
-} from '../../public/commands'
+} from '../ports/subjectTaskLaunch'
 
 import type { UploadLimits } from '../../domain/uploads'
 import {

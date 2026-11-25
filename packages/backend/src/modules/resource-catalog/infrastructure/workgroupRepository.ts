@@ -25,7 +25,7 @@ import {
   canViewAccess,
   discloseScheduleRefs,
 } from '../domain/resourceAccess'
-import type { UpdateWorkgroupCatalogInput } from '../public/types'
+import type { UpdateWorkgroupCatalogInput } from '../application/workgroups/operationContracts'
 import type { WorkgroupOperationContext } from '../public/participants'
 import type {
   ValidatedWorkgroupDeleteInput,

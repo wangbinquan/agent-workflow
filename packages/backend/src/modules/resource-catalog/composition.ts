@@ -91,3 +91,6 @@ export { registerResourcePackageRoutes } from './inbound/http/resourcePackageRou
 export { mountMcpRoutes } from './inbound/http/mcpRoutes'
 export { mountPluginRoutes } from './inbound/http/pluginRoutes'
 export { mountSkillRoutes } from './inbound/http/skillRoutes'
+// RFC-589: the agent and workgroup bindings (their launch endpoints are task-execution's bindings).
+export { mountAgentRoutes } from './inbound/http/agentRoutes'
+export { mountWorkgroupRoutes } from './inbound/http/workgroupRoutes'

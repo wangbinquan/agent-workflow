@@ -1,4 +1,26 @@
-## 2026-11-25 RFC-588 任务路由按端点 owner 拆进 task-execution 与 workspace-insight 的 inbound（In Progress；`design/RFC-588-task-routes-split-by-owner/`）
+## 2026-11-25 RFC-589 代理与工作组路由按端点 owner 拆进 resource-catalog 与 task-execution 的 inbound（In Progress；`design/RFC-589-agent-workgroup-routes-split-by-owner/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；落位按 RFC-587 条目里已裁定的“余下两批的落位”，
+  不新增 DAG 边。
+- **范围**：`routes/agents.ts`、`routes/workgroups.ts` → resource-catalog 的 `inbound/http/{agentRoutes,workgroupRoutes}.ts`；两个启动端点
+  （`POST /api/agents/:id/tasks`、`POST /api/workgroups/:id/tasks`，鉴权点 `tasks:execute`）逐字迁入 task-execution 的
+  `inbound/http/{agentTaskLaunchRoutes,workgroupTaskLaunchRoutes}.ts`，各带一份同码同文的“看不见即 404”小函数，经 resource-catalog public 的查询读代理 /
+  工作组（task-execution → resource-catalog 是 offered-consumption；反方向会成环，RFC-580 / RFC-581 因此把这两个文件留到这一批）。`server.ts` 的
+  `agents`、`workgroups` 两步各先挂资源目录的绑定、再挂启动绑定，收同一个依赖对象。撤回 32 个 public 符号：resource-catalog 的代理 / 工作组操作描述与
+  输入 / 回执、只给代理绑定用的四个查询合同与它们的输入 / 结果（连同 7 个未导出的小类型）移进 `application/{agents,workgroups}/`；task-execution 的
+  两个路由启动合同与两个上传形状移进 `application/ports/subjectTaskLaunch.ts`。随改：归属表两行、`counts.json`、钉着旧路径的用例（`rfc243` 的启动调用面、
+  `rfc165` 的退役键检查、`rfc345` 的经典门面与合同、`rfc247` 的启动鉴权一致性等）与撤回连带的六个账本用例；新增 RFC-589 用例。
+- **收口对账**（RFC-294 C10～C13）：C10 入站绑定按端点 owner 进模块；C11 两个模块的 public 面共收窄 32 个符号；C12 RFC-589 用例覆盖全部说明符、四个
+  绑定与 `server.ts`；C13 `legacy-horizontal-files` 58 → 56，其余计数不升。`routes/` 余 10 个：暂缓的那一组（`registry`、`operationRoute`、
+  identity-access 的路由、`accountRepositoryTransportCredentials`、`resourceAcl`）与 `taskCatalog`。
+- **集中验证**（基于 `7ff4408d4`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出本人缺陷：开发期 tsc 查出搬迁工具漏了 7 个未导出的
+  小类型，已一并移动；集中验证里 7 个用例钉着被撤回符号的声明位置或 `routes/` 文件数，已逐个改正并复验。tsc 0 错，eslint / promises / prettier 无告警；
+  候选导出里 782 个用例文件（改正之后复跑的 9 个与读 guard-manifest 的 23 个全部通过），`rfc321` 在主树里 10 / 10；六种变异都被认出；架构报告 60 个
+  计数里只有 legacy 横向文件数变了，未消费 public 符号 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、
+  已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：在跑（实现提交）。
+
+## 2026-11-25 RFC-588 任务路由按端点 owner 拆进 task-execution 与 workspace-insight 的 inbound（Done，`7ff4408d4`；`design/RFC-588-task-routes-split-by-owner/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；落位按 RFC-587 条目里已裁定的“余下两批的落位”，
   不新增 DAG 边。
@@ -17,7 +39,9 @@
   候选导出里 462 个用例文件、4701 条全部通过（含读已提交源码的用例与按改动面另选的 266 个），`rfc321` 在主树里 10 / 10；五种变异都被认出；架构报告
   60 个计数里只有 legacy 横向文件数变了，未消费 public 符号 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）
   已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-588 的提交 `7ff4408d4`：exact SHA 主 CI run 45648695437 70 个 job 里 68 个成功（含 Markdown link check），windows-platform run 45648696009
+  通过。macOS e2e 第 3/4 片跑到 20 分钟上限被取消（run 结论 cancelled，CI required 随之红）——环境性：日志反复 `event loop stalled`，被取消时仍在逐条通过；
+  其间红的两条在同一次 run 的 ubuntu 与 windows 上都通过，走的也不是本提交改动的代码。后继证据取 RFC-589 提交的 macOS e2e。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-587 健康探测、任务归档与任务反馈三个路由按 owner 归入模块 inbound（Done，`3469a00e1`；`design/RFC-587-health-archive-feedback-routes-into-owner-modules/`）
 
@@ -41,7 +65,7 @@
   第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：RFC-587 的提交 `3469a00e1`：exact SHA 主 CI run 45638766643 70 个 job 里 68 个成功，windows-platform run 45638766847、
   integration-opencode run 45638766589 通过。红的两格（Markdown link check 与汇总它的 CI required）是 RFC-378 `research.md` 第 36 行一条第三方
-  github.com 链接返回 503——环境性：本提交没改那份文件，前两个提交的同一 job 对同一链接都通过。后继证据取 RFC-588 提交的同一 job。2026-11-25 转 Done。
+  github.com 链接返回 503——环境性：本提交没改那份文件，前两个提交的同一 job 对同一链接都通过；后继证据：RFC-588 提交的 run 45648695437 里同一 job 通过。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-586 合并冲突解决的纯逻辑归 source-control 的 domain（Done，`035f97026`；`design/RFC-586-merge-conflict-resolution-into-source-control/`）
 

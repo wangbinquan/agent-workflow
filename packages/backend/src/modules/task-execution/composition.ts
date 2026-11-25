@@ -12,6 +12,9 @@ export { mountPortArtifactRoutes } from './inbound/http/portArtifactRoutes'
 export { mountTaskArchiveRoutes } from './inbound/http/taskArchiveRoutes'
 // RFC-588: the task routes (the workspace-insight endpoints are that module's binding, mounted right after).
 export { mountTaskRoutes } from './inbound/http/taskRoutes'
+// RFC-589: the agent and workgroup launch endpoints (mounted right after resource-catalog's agent / workgroup bindings).
+export { mountAgentTaskLaunchRoutes } from './inbound/http/agentTaskLaunchRoutes'
+export { mountWorkgroupTaskLaunchRoutes } from './inbound/http/workgroupTaskLaunchRoutes'
 export { mountWorktreeFilesRoutes } from './inbound/http/worktreeFilesRoutes'
 import {
   bindTaskWorkspaceReadScope,

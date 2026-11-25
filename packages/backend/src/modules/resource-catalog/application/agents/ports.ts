@@ -9,7 +9,7 @@ import type {
   UpdateAgent,
 } from '@agent-workflow/shared'
 import type { AgentOperationContext } from '../../public/participants'
-import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../../public/types'
+import type { AgentReferenceLabels, AgentReferenceLabelsInput } from './queryContracts'
 
 export interface AgentMutationFence {
   readonly expectedUpdatedAt: number

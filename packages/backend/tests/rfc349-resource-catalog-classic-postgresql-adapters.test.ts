@@ -113,7 +113,8 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
   })
 
   test('agent visibility projection consumes AgentQueries rather than a legacy ACL facade', () => {
-    const route = source('src/routes/agents.ts')
+    // RFC-589: the agent HTTP binding moved into resource-catalog's inbound layer.
+    const route = source('src/modules/resource-catalog/inbound/http/agentRoutes.ts')
     expect(route).toContain('queries.get(authority, { id: row.id })')
     expect(route).toContain('module.listDigitalEmployeeTemplates()')
     expect(route).not.toContain('filterVisibleRows')

@@ -13,7 +13,8 @@ import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/public/qu
 import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionResourceAuthority } from '../ports/taskExecutionResourceSnapshots'
 import { collectUploadInputDefs, DEFAULT_UPLOAD_LIMITS } from '../../domain/uploads'
-import type { ExecutionInvoker, TaskRouteMultipartFilePart } from '../../public/commands'
+import type { ExecutionInvoker } from '../../public/commands'
+import type { TaskRouteMultipartFilePart } from '../ports/subjectTaskLaunch'
 
 import type { TaskLaunchGuard } from '../ports/taskLaunchGuard'
 import { createRootTaskLaunchKernel } from './rootTaskLaunch'
